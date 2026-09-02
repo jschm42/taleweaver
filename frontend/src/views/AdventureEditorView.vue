@@ -737,13 +737,14 @@ async function fetchAdventure() {
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
     form.value.clock_enabled = data.clock_enabled ?? false
-    form.value.time_system = data.time_system || 'calendar'
+    form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'
     form.value.time_config = data.time_config && typeof data.time_config === 'object'
       ? { ...data.time_config }
-      : { start_date: '2026-01-01', start_time: '08:00', day_label: 'Day', unit_name: 'Blobs', initial_value: 0 }
-    if (!form.value.time_config.start_date) form.value.time_config.start_date = '2026-01-01'
+      : { start_time: '08:00', day_label: 'Day', initial_day: 1, time_format: '24h', unit_name: 'Blobs', initial_value: 0 }
     if (!form.value.time_config.start_time) form.value.time_config.start_time = '08:00'
     if (!form.value.time_config.day_label) form.value.time_config.day_label = 'Day'
+    if (form.value.time_config.initial_day === undefined) form.value.time_config.initial_day = 1
+    if (!form.value.time_config.time_format) form.value.time_config.time_format = '24h'
     if (!form.value.time_config.unit_name) form.value.time_config.unit_name = 'Blobs'
     if (form.value.time_config.initial_value === undefined) form.value.time_config.initial_value = 0
     if (!form.value.time_config.calendar_pacing_unit) {
@@ -2279,6 +2280,8 @@ watch(
               @update:start-date="form.time_config = { ...(form.time_config || {}), start_date: $event }"
               @update:start-time="form.time_config = { ...(form.time_config || {}), start_time: $event }"
               @update:day-label="form.time_config = { ...(form.time_config || {}), day_label: $event }"
+              @update:initial-day="form.time_config = { ...(form.time_config || {}), initial_day: $event }"
+              @update:time-format="form.time_config = { ...(form.time_config || {}), time_format: $event }"
               @update:unit-name="form.time_config = { ...(form.time_config || {}), unit_name: $event }"
               @update:initial-value="form.time_config = { ...(form.time_config || {}), initial_value: $event }"
               @update:calendar-pacing-value="form.time_config = { ...(form.time_config || {}), calendar_pacing_value: $event }"

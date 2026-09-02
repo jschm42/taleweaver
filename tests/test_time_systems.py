@@ -2,9 +2,8 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.memory_manager import MemoryManager
 
 
-def test_format_game_time_calendar():
-    # Default is calendar
-    # Base hour is 8
+def test_format_game_time_default_relative():
+    # Default is relative Day 1, 08:00
     res = MemoryManager.format_game_time(0)
     assert res == "Day 1, 08:00"
     
@@ -21,6 +20,14 @@ def test_format_game_time_relative():
     
     res = MemoryManager.format_game_time(1440, time_system="relative", time_config=config)
     assert res == "Sol 2, 08:00"
+
+def test_format_game_time_relative_12h():
+    config = {"day_label": "Tag", "start_time": "14:30", "time_format": "12h"}
+    res = MemoryManager.format_game_time(0, time_system="relative", time_config=config)
+    assert res == "Tag 1, 02:30 PM"
+
+    res = MemoryManager.format_game_time(600, time_system="relative", time_config=config) # 14:30 + 10h = 00:30 next day
+    assert res == "Tag 2, 12:30 AM"
 
 def test_format_game_time_custom_start():
     config = {"start_time": "10:00", "day_label": "Cycle"}

@@ -361,6 +361,10 @@ class MemoryManager:
                 pass
 
         day_label = time_config.get("day_label", "Day")
+        try:
+            initial_day = int(time_config.get("initial_day", 1))
+        except (TypeError, ValueError):
+            initial_day = 1
         base_minutes_of_day = 8 * 60  # default 08:00
         
         # If there's a start_time in config, use it instead of 08:00
@@ -377,7 +381,12 @@ class MemoryManager:
         current_hour = rem_minutes // 60
         current_minute = rem_minutes % 60
         
-        return f"{day_label} {1 + days_passed}, {current_hour:02d}:{current_minute:02d}"
+        if time_config.get("time_format") == "12h":
+            h12 = current_hour % 12 or 12
+            ampm = "PM" if current_hour >= 12 else "AM"
+            return f"{day_label} {initial_day + days_passed}, {h12:02d}:{current_minute:02d} {ampm}"
+        
+        return f"{day_label} {initial_day + days_passed}, {current_hour:02d}:{current_minute:02d}"
 
     @staticmethod
     def build_system_prompt(

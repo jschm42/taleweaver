@@ -30,11 +30,14 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
   const clockTick = ref(false)
 
   const gameTime = computed(() => {
+    if (!(sheet.value as any)?.clock_enabled) {
+      return null
+    }
+
     const elapsedMinutes = (sheet.value as any)?.in_game_time ?? 0
-    const timeSystem = (sheet.value as any)?.time_system || 'calendar'
+    const timeSystem = (sheet.value as any)?.time_system === 'units' ? 'units' : 'relative'
     const timeConfig = (sheet.value as any)?.time_config || {}
-    const dayLabel = timeConfig.day_label || 'Day'
-    const startDatetimeRaw = (sheet.value as any)?.start_datetime
+    const dayLabel = (timeConfig.day_label || 'Day').trim()
 
     if (timeSystem === 'units') {
       const unitName = timeConfig.unit_name || timeConfig.unit || 'Units'
@@ -42,7 +45,7 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
       const currentVal = (isNaN(initialVal) ? 0 : initialVal) + (Number(elapsedMinutes) || 0)
       const formattedVal = Number.isInteger(currentVal)
         ? currentVal.toString()
-        : currentVal.toLocaleString('de-DE', { maximumFractionDigits: 2 })
+        : currentVal.toLocaleString('en-US', { maximumFractionDigits: 2 })
       return {
         isUnits: true,
         unitName,
@@ -53,89 +56,36 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
       }
     }
 
-    if (timeSystem === 'relative' || !startDatetimeRaw) {
-      const totalMinutes = elapsedMinutes
-      let baseHour = 8
-      let baseMin = 0
-      if (timeConfig.start_time) {
-        const [h, m] = String(timeConfig.start_time).split(':').map(Number)
-        if (!isNaN(h)) baseHour = h
-        if (!isNaN(m)) baseMin = m
-      }
-
-      const totalMinsCombined = baseHour * 60 + baseMin + totalMinutes
-      const daysPassed = Math.floor(totalMinsCombined / (24 * 60))
-      const remDayMins = ((totalMinsCombined % (24 * 60)) + (24 * 60)) % (24 * 60)
-      const currentHour = Math.floor(remDayMins / 60)
-      const currentMin = remDayMins % 60
-
-      const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`
-      return {
-        isUnits: false,
-        unitName: undefined,
-        value: undefined,
-        date: `${dayLabel} ${1 + daysPassed}`,
-        dateShort: `${dayLabel} ${1 + daysPassed}`,
-        time: timeStr,
-      }
+    const initialDay = Number(timeConfig.initial_day ?? 1) || 1
+    const totalMinutes = elapsedMinutes
+    let baseHour = 8
+    let baseMin = 0
+    if (timeConfig.start_time) {
+      const [h, m] = String(timeConfig.start_time).split(':').map(Number)
+      if (!isNaN(h)) baseHour = h
+      if (!isNaN(m)) baseMin = m
     }
 
-    const start = new Date(startDatetimeRaw)
-    if (Number.isNaN(start.getTime())) {
-      const totalMinutes = elapsedMinutes
-      const daysPassed = Math.floor(totalMinutes / (24 * 60))
-      const currentHour = Math.floor((totalMinutes % (24 * 60)) / 60)
-      const currentMin = totalMinutes % 60
-      return {
-        isUnits: false,
-        date: `${dayLabel} ${1 + daysPassed}`,
-        dateShort: `${dayLabel} ${1 + daysPassed}`,
-        time: `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`,
-      }
+    const totalMinsCombined = baseHour * 60 + baseMin + totalMinutes
+    const daysPassed = Math.floor(totalMinsCombined / (24 * 60))
+    const remDayMins = ((totalMinsCombined % (24 * 60)) + (24 * 60)) % (24 * 60)
+    const currentHour = Math.floor(remDayMins / 60)
+    const currentMin = remDayMins % 60
+
+    let timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`
+    if (timeConfig.time_format === '12h') {
+      const h12 = currentHour % 12 || 12
+      const ampm = currentHour >= 12 ? 'PM' : 'AM'
+      timeStr = `${h12.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')} ${ampm}`
     }
-
-    const current = new Date(start.getTime() + elapsedMinutes * 60_000)
-
-    const date = current.toLocaleDateString('de-DE', {
-      weekday: 'long',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-
-    const dateShort = (() => {
-      const d = current.getDate().toString().padStart(2, '0')
-      const m = (current.getMonth() + 1).toString().padStart(2, '0')
-      const y = current.getFullYear().toString()
-      const yShort = y.slice(-2)
-
-      switch (gameSettings.value.date_format) {
-        case 'MM/DD/YY':
-          return `${m}/${d}/${yShort}`
-        case 'YY-MM-DD':
-          return `${yShort}-${m}-${d}`
-        default:
-          return `${d}.${m}.${y}`
-      }
-    })()
-
-    const time = current.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: !gameSettings.value.clock_24h,
-    }).replace(/^0/, '')
-
-    const time24 = current.toLocaleTimeString('de-DE', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-
+    const currentDay = initialDay + daysPassed
     return {
       isUnits: false,
-      date,
-      dateShort,
-      time: gameSettings.value.clock_24h ? time24 : time,
+      unitName: undefined,
+      value: undefined,
+      date: `${dayLabel} ${currentDay}`,
+      dateShort: `${dayLabel} ${currentDay}`,
+      time: timeStr,
     }
   })
 

@@ -299,6 +299,10 @@ class AdventureLogic:
             for k, v in manifest_time_config.items():
                 merged_time_config.setdefault(k, v)
 
+        time_sys = merged_time_config.get("time_system") or target_manifest.get("time_system")
+        if time_sys in ("relative", "units"):
+            return None
+
         # Check explicit start_datetime in time_config
         config_start_dt = merged_time_config.get("start_datetime")
         if isinstance(config_start_dt, str) and config_start_dt.strip():
@@ -829,7 +833,8 @@ class AdventureLogic:
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else (session_snapshot.get("adventure") or {}).get("rule_enforcement_mode", "rpg"),
             "adventure_tone": adventure.selected_tone if adventure else (session_snapshot.get("adventure") or {}).get("selected_tone"),
-            "time_system": state.time_system or (adventure.time_system if adventure else (session_snapshot.get("adventure") or {}).get("time_system", "calendar")),
+            "clock_enabled": bool(adventure.clock_enabled) if adventure else bool((session_snapshot.get("adventure") or {}).get("clock_enabled", False)),
+            "time_system": state.time_system or (adventure.time_system if adventure else (session_snapshot.get("adventure") or {}).get("time_system", "relative")),
             "time_config": state.time_config or (adventure.time_config if adventure else (session_snapshot.get("adventure") or {}).get("time_config")),
             "time_per_turn": adventure.time_per_turn if adventure else (session_snapshot.get("adventure") or {}).get("time_per_turn", 5),
             "max_time_per_turn": adventure.max_time_per_turn if adventure else (session_snapshot.get("adventure") or {}).get("max_time_per_turn"),
