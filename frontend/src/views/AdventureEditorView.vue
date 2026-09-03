@@ -234,6 +234,69 @@ function openCreateItem(itemType?: string) {
   }
 }
 
+function openCreateNpc(targetSceneId?: string) {
+  const sceneId = String(targetSceneId || activeMapSceneId.value || debugData.value?.adventure?.start_scene_id || debugData.value?.scenes?.[0]?.id || '').trim()
+  if (!sceneId) {
+    addNotification('No scene available to place the NPC in.', 'error')
+    return
+  }
+  createEntitySceneId.value = sceneId
+  createEntityType.value = 'npc'
+  isCreateEntityMode.value = true
+  editEntityContext.value = { type: 'npc', id: 'NEW_NPC' }
+
+  let candidateId = ''
+  const takenIds = new Set(referenceOptions.value.map((entry) => String(entry.id || '').toUpperCase()))
+  for (let i = 0; i < 20; i++) {
+    const randomSuffix = Math.random().toString(36).slice(2, 8).toUpperCase()
+    const testId = `NPC_${randomSuffix}`
+    if (!takenIds.has(testId)) {
+      candidateId = testId
+      break
+    }
+  }
+  if (!candidateId) {
+    candidateId = `NPC_${Date.now().toString(36).toUpperCase()}`
+  }
+
+  editForm.value = {
+    name: 'New NPC',
+    description: 'A mysterious inhabitant of this scene.',
+    teaser: '',
+    hp: 20,
+    stamina: 20,
+    mana: 20,
+    goal: '',
+    character: '',
+    is_killable: true,
+    item_type: 'DEFAULT',
+    is_portable: true,
+    locked: false,
+    code_to_unlock: '',
+    item_to_unlock: '',
+    inventory_input: [],
+    text_log_content: '',
+    text_log_format: 'DOCUMENT',
+    entity_id: candidateId,
+    wearable_slots_input: [],
+    combination_ingredients_input: [],
+    reveal_rule: '',
+    is_hidden: false,
+    spatial_position: '',
+    reveals_item_id: '',
+    switch_states_json: JSON.stringify(['OFF', 'ON'], null, 2),
+    switch_initial_state: 'OFF',
+    switch_transitions_json: JSON.stringify([], null, 2),
+    effects_hp: 0,
+    effects_stamina: 0,
+    effects_mana: 0,
+    stat_modifier_strength: 0,
+    is_item_type_fixed: false,
+    is_wearable_slots_fixed: false,
+  }
+  showEditModal.value = true
+}
+
 function createNewItemForProtagonist(target: { type: 'equipment' | 'inventory'; key?: string; index?: number }) {
   const startSceneId = debugData.value?.adventure?.start_scene_id || (debugData.value?.scenes?.[0]?.id)
   if (!startSceneId) {
@@ -884,6 +947,19 @@ async function handleCreateScene(data: { sceneId: string; name: string; descript
 }
 
 function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
+  if (type === 'npc' && (id === 'NEW_NPC' || id.startsWith('NEW_'))) {
+    openCreateNpc()
+    return
+  }
+  if (type === 'object' && id.startsWith('NEW_')) {
+    openCreateItem()
+    return
+  }
+
+  isCreateEntityMode.value = false
+  createEntityType.value = null
+  createEntitySceneId.value = null
+
   const selectedObject = type === 'object'
     ? ([...(editorObjects.value || []), ...(editorTextLogs.value || []), ...(editorSwitches.value || []), ...(editorContainers.value || [])]).find((entry: any) => String(entry.id) === String(id))
     : null
@@ -1006,6 +1082,7 @@ async function saveEntityText(data: any) {
           is_hidden: Boolean(data.is_hidden),
           reveal_rule: String(data.reveal_rule || '').trim() || undefined,
           spatial_position: String(data.spatial_position || '').trim() || undefined,
+          inventory: data.inventory || [],
         })
       } else {
         const itemType = String(data.item_type || 'DEFAULT').toUpperCase()
@@ -2369,6 +2446,7 @@ watch(
               @handle-hover="handleHover"
               @clear-hover="clearHover"
               @request-move-npc-to-scene="requestMoveNpcToScene"
+              @open-create-npc="() => openCreateNpc()"
             />
 
             <ScenesTab
@@ -2420,6 +2498,7 @@ watch(
               @back="closeSceneEditorDialog"
               @open-text-edit="openTextEdit"
               @open-create-item="openCreateItem"
+              @open-create-npc="() => openCreateNpc()"
               @open-add-existing="openAddExistingItem"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"

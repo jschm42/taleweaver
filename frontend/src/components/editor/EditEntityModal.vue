@@ -474,8 +474,8 @@ const textLogPreviewClass = computed(() => {
           <!-- Fixed Header -->
           <div class="px-8 py-5 flex justify-between items-center border-b border-white/5">
             <div class="space-y-1">
-              <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">Editing {{ context.type }}</h3>
-              <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">ID: {{ context.id }}</p>
+              <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">{{ isCreateEntityMode ? ('Create ' + (context.type === 'npc' ? 'NPC' : context.type.toUpperCase())) : ('Editing ' + context.type) }}</h3>
+              <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">{{ isCreateEntityMode ? 'New Entity' : 'ID: ' + context.id }}</p>
             </div>
             <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
               <i class="ra ra-cancel text-xl"></i>
@@ -1383,7 +1383,7 @@ const textLogPreviewClass = computed(() => {
             <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
             <button @click="handleSave" :disabled="isSaving || isFormInvalid" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
               <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
-              <span>{{ isSaving ? 'Saving...' : 'Apply Changes' }}</span>
+              <span>{{ isSaving ? 'Saving...' : (isCreateEntityMode ? ('Create ' + (context.type === 'npc' ? 'NPC' : context.type.toUpperCase())) : 'Apply Changes') }}</span>
             </button>
           </div>
         </div>

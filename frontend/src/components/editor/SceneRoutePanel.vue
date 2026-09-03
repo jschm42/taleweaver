@@ -31,6 +31,7 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'open-text-edit', type: string, id: string, name: string, description: string, teaser?: string, hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean): void
   (e: 'open-create-item', itemType?: string): void
+  (e: 'open-create-npc'): void
   (e: 'open-add-existing', kind: 'items' | 'switch' | 'container' | 'text-log' | 'npc'): void
   (e: 'open-regen-dialog', kind: string, id: string, label: string): void
   (e: 'open-upload-picker', kind: string, id: string, label: string): void
@@ -696,7 +697,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <button @click="emit('regen-all', 'npc', false)" :disabled="isBatchGenerating['npc']" title="Re-render portrait images for every NPC in this scene (does not create new NPCs)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-text-edit', 'npc', 'NEW_NPC', 'New NPC', 'A mysterious inhabitant of this scene.', '', 20, 20, 20, '', '', true)">+ Create</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-npc')">+ Create</button>
             <button
               class="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               :disabled="availableNpcsForType.length === 0"

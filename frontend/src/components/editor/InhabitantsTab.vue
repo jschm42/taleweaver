@@ -25,6 +25,7 @@ const emit = defineEmits<{
   (e: 'handle-hover', entity: any, event: MouseEvent): void
   (e: 'clear-hover'): void
   (e: 'request-move-npc-to-scene', npcId: string, name: string, currentSceneId: string): void
+  (e: 'open-create-npc'): void
 }>()
 
 function buildVisualImageUrl(imagePath?: string | null) {
@@ -51,6 +52,9 @@ function getSceneLabel(sceneId?: string | null): string {
           </button>
           <button @click="emit('regen-all', 'npc', false)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
             <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
+          </button>
+          <button @click="emit('open-create-npc')" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-1.5 uppercase tracking-widest transition-colors">
+            <i class="ra ra-player"></i> + Create NPC
           </button>
         </div>
       </div>
@@ -122,7 +126,18 @@ function getSceneLabel(sceneId?: string | null): string {
       </div>
     </section>
 
-    
+    <section v-else class="py-16 flex flex-col items-center justify-center text-center space-y-4 bg-slate-900/40 rounded-3xl border border-white/5 p-8">
+      <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-2xl">
+        <i class="ra ra-player"></i>
+      </div>
+      <div class="space-y-1">
+        <h4 class="text-base font-black text-white uppercase tracking-wider">No Inhabitants Yet</h4>
+        <p class="text-xs text-slate-400 max-w-sm">This world has no notable inhabitants. Create an NPC to bring your scenes to life.</p>
+      </div>
+      <button @click="emit('open-create-npc')" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95">
+        <i class="ra ra-player"></i> + Create First NPC
+      </button>
+    </section>
   </div>
 </template>
 
