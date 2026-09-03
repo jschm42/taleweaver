@@ -45,6 +45,7 @@ const emit = defineEmits<{
   (e: 'request-delete-exit', exitId: string): void
   (e: 'request-delete-entity', entityId: string): void
   (e: 'clone-entity', entityType: 'npc' | 'object', entityId: string): void
+  (e: 'request-move-entity-to-scene', entityType: 'npc' | 'object', entityId: string, name: string, currentSceneId: string): void
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'refresh'): void
@@ -743,6 +744,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name || npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                 <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                 <button @click="emit('clone-entity', 'npc', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="emit('request-move-entity-to-scene', 'npc', npc.id, npc.name || npc.id, npc.current_scene_id || props.sceneId || '')" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
                 <button @click="editRouteEntity('npc', npc)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
                 <button @click="emit('request-delete-entity', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
@@ -810,6 +812,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                 <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                 <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="emit('request-move-entity-to-scene', 'object', obj.id, obj.name || obj.id, obj.current_scene_id || props.sceneId || '')" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
                 <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
                 <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>

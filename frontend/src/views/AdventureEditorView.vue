@@ -354,7 +354,7 @@ const itemTypeChangeTarget = ref<{ id: string; name: string; currentItemType: st
 const isChangingItemType = ref(false)
 
 const showMoveItemModal = ref(false)
-const moveItemTarget = ref<{ id: string; name: string; currentSceneId: string } | null>(null)
+const moveEntityTarget = ref<{ type: 'npc' | 'object'; id: string; name: string; currentSceneId: string } | null>(null)
 const isMovingItem = ref(false)
 const isUploading = ref(false)
 const isSettingStartScene = ref(false)
@@ -1932,12 +1932,21 @@ async function confirmChangeItemType(newItemType: string) {
 }
 
 function requestMoveItemToScene(itemId: string, itemName: string, currentSceneId: string) {
-  const normalized = String(itemId || '').trim()
+  requestMoveEntityToScene('object', itemId, itemName, currentSceneId)
+}
+
+function requestMoveNpcToScene(npcId: string, npcName: string, currentSceneId: string) {
+  requestMoveEntityToScene('npc', npcId, npcName, currentSceneId)
+}
+
+function requestMoveEntityToScene(type: 'npc' | 'object', entityId: string, entityName: string, currentSceneId: string) {
+  const normalized = String(entityId || '').trim()
   if (!normalized) return
   activeMenuId.value = null
-  moveItemTarget.value = {
+  moveEntityTarget.value = {
+    type,
     id: normalized,
-    name: String(itemName || normalized),
+    name: String(entityName || normalized),
     currentSceneId: String(currentSceneId || '').trim().toUpperCase(),
   }
   showMoveItemModal.value = true
@@ -1946,11 +1955,11 @@ function requestMoveItemToScene(itemId: string, itemName: string, currentSceneId
 function closeMoveItemModal() {
   if (isMovingItem.value) return
   showMoveItemModal.value = false
-  moveItemTarget.value = null
+  moveEntityTarget.value = null
 }
 
-async function confirmMoveItemToScene(targetSceneId: string) {
-  const target = moveItemTarget.value
+async function confirmMoveEntityToScene(targetSceneId: string) {
+  const target = moveEntityTarget.value
   if (!target) return
   const normalizedSceneId = String(targetSceneId || '').trim().toUpperCase()
   if (
@@ -1962,15 +1971,16 @@ async function confirmMoveItemToScene(targetSceneId: string) {
   isMovingItem.value = true
   try {
     await entityService.saveEntityText(props.adventureId, {
-      target_type: 'object',
+      target_type: target.type,
       target_id: target.id,
       current_scene_id: normalizedSceneId,
     })
     await fetchDebugInfo()
-    addNotification(`Item "${target.name}" moved to ${normalizedSceneId}.`, 'success')
+    const label = target.type === 'npc' ? 'NPC' : 'Item'
+    addNotification(`${label} "${target.name}" moved to ${normalizedSceneId}.`, 'success')
     closeMoveItemModal()
   } catch (error: any) {
-    addNotification(error?.message || 'Failed to move item.', 'error')
+    addNotification(error?.message || `Failed to move ${target.type === 'npc' ? 'NPC' : 'item'}.`, 'error')
   } finally {
     isMovingItem.value = false
   }
@@ -2348,6 +2358,7 @@ watch(
               :editor-npcs="editorNpcs"
               :rule-enforcement-mode="form.rule_enforcement_mode"
               :visuals-cache-version="visualsCacheVersion"
+              :editor-scenes="editorScenes"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -2357,6 +2368,7 @@ watch(
               @toggle-menu="toggleMenu"
               @handle-hover="handleHover"
               @clear-hover="clearHover"
+              @request-move-npc-to-scene="requestMoveNpcToScene"
             />
 
             <ScenesTab
@@ -2422,6 +2434,7 @@ watch(
               @request-delete-exit="requestDeleteRouteExit"
               @request-delete-entity="requestDeleteRouteEntity"
               @clone-entity="handleCloneRouteEntity"
+              @request-move-entity-to-scene="requestMoveEntityToScene"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @refresh="refreshData"
@@ -2580,13 +2593,14 @@ watch(
 
     <MoveItemToSceneModal
       :show="showMoveItemModal"
-      :item-id="moveItemTarget?.id || ''"
-      :item-name="moveItemTarget?.name || ''"
-      :current-scene-id="moveItemTarget?.currentSceneId || ''"
+      :entity-type="moveEntityTarget?.type || 'item'"
+      :item-id="moveEntityTarget?.id || ''"
+      :item-name="moveEntityTarget?.name || ''"
+      :current-scene-id="moveEntityTarget?.currentSceneId || ''"
       :scene-options="sceneReferenceOptions"
       :is-saving="isMovingItem"
       @close="closeMoveItemModal"
-      @confirm="confirmMoveItemToScene"
+      @confirm="confirmMoveEntityToScene"
     />
 
     <EditExitModal

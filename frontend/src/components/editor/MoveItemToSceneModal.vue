@@ -9,14 +9,23 @@ interface SceneOption {
   type?: string
 }
 
-const props = defineProps<{
-  show: boolean
-  itemName: string
-  itemId: string
-  currentSceneId: string
-  sceneOptions: SceneOption[]
-  isSaving: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    show: boolean
+    itemName: string
+    itemId: string
+    currentSceneId: string
+    sceneOptions: SceneOption[]
+    isSaving: boolean
+    entityType?: 'npc' | 'item' | 'object'
+  }>(),
+  {
+    entityType: 'item',
+  },
+)
+
+const isNpc = computed(() => props.entityType === 'npc')
+const entityLabel = computed(() => (isNpc.value ? 'NPC' : 'Item'))
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -35,12 +44,13 @@ watch(
 )
 
 const currentSceneName = computed(() => {
-  const match = props.sceneOptions.find((s) => String(s.id) === String(props.currentSceneId || ''))
-  return match?.name || props.currentSceneId || 'Unknown'
+  if (!props.currentSceneId) return 'Unassigned'
+  const match = props.sceneOptions.find((s) => String(s.id).toUpperCase() === String(props.currentSceneId || '').toUpperCase())
+  return match?.name || props.currentSceneId || 'Unassigned'
 })
 
 const availableSceneOptions = computed(() => {
-  return props.sceneOptions.filter((s) => String(s.id) !== String(props.currentSceneId || ''))
+  return props.sceneOptions.filter((s) => String(s.id).toUpperCase() !== String(props.currentSceneId || '').toUpperCase())
 })
 
 const canConfirm = computed(
@@ -68,9 +78,11 @@ function handleConfirm() {
           <div class="p-6 border-b border-white/5">
             <div class="flex items-start justify-between gap-4">
               <div class="space-y-1">
-                <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">Move Item to Scene</h3>
+                <h3 class="text-xs font-black uppercase tracking-widest" :class="isNpc ? 'text-cyan-400' : 'text-emerald-500'">
+                  Move {{ entityLabel }} to Scene
+                </h3>
                 <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">
-                  Item: <span class="text-slate-200">{{ itemName || itemId }}</span>
+                  {{ entityLabel }}: <span class="text-slate-200">{{ itemName || itemId }}</span>
                 </p>
               </div>
               <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
@@ -84,7 +96,7 @@ function handleConfirm() {
               <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Currently in</p>
               <div class="px-4 py-3 rounded-xl bg-slate-950/60 border border-white/5">
                 <div class="text-sm text-slate-300 font-mono">{{ currentSceneName }}</div>
-                <div class="text-[10px] text-slate-500 mt-0.5 font-mono">{{ currentSceneId }}</div>
+                <div v-if="currentSceneId" class="text-[10px] text-slate-500 mt-0.5 font-mono">{{ currentSceneId }}</div>
               </div>
             </div>
 
@@ -107,7 +119,11 @@ function handleConfirm() {
               role="note"
             >
               <i class="ra ra-info text-sky-400 mt-0.5 shrink-0"></i>
-              <span>
+              <span v-if="isNpc">
+                The NPC keeps their portrait, stats, dialogue, and inventory. Only the
+                <code class="text-sky-100">current_scene_id</code> column is updated.
+              </span>
+              <span v-else>
                 The item keeps its type, image, name, and metadata. Only the
                 <code class="text-sky-100">current_scene_id</code> column is updated.
               </span>
@@ -128,12 +144,12 @@ function handleConfirm() {
               class="px-5 py-2 rounded-lg font-black uppercase text-xs tracking-widest transition-colors"
               :class="
                 canConfirm
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg'
+                  ? (isNpc ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg')
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               "
             >
               <i v-if="isSaving" class="ra ra-cycle animate-spin mr-1"></i>
-              Move Item
+              Move {{ entityLabel }}
             </button>
           </div>
         </div>

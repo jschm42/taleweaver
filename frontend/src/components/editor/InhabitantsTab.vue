@@ -11,6 +11,7 @@ const props = defineProps<{
   editorNpcs: any[]
   ruleEnforcementMode: string
   visualsCacheVersion: number
+  editorScenes?: any[]
 }>()
 
 const emit = defineEmits<{
@@ -23,11 +24,18 @@ const emit = defineEmits<{
   (e: 'toggle-menu', id: string, event: MouseEvent): void
   (e: 'handle-hover', entity: any, event: MouseEvent): void
   (e: 'clear-hover'): void
+  (e: 'request-move-npc-to-scene', npcId: string, name: string, currentSceneId: string): void
 }>()
 
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
   return `${imagePath}?v=${props.visualsCacheVersion}`
+}
+
+function getSceneLabel(sceneId?: string | null): string {
+  if (!sceneId) return 'Unassigned'
+  const match = props.editorScenes?.find((s: any) => String(s.id).toUpperCase() === String(sceneId).toUpperCase())
+  return match?.name || match?.label || sceneId
 }
 </script>
 
@@ -67,6 +75,10 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div class="absolute bottom-0 left-0 right-0 p-3">
               <div class="text-xs font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ npc.name }}</div>
               <div v-if="npc.role" class="text-[9px] text-slate-300 font-bold uppercase tracking-tighter truncate opacity-70">{{ npc.role }}</div>
+              <div v-if="npc.current_scene_id" class="text-[9px] text-sky-400 font-bold uppercase tracking-tighter truncate opacity-90 mt-1 flex items-center gap-1" :title="`Current Scene: ${getSceneLabel(npc.current_scene_id)} (${npc.current_scene_id})`">
+                <i class="ra ra-compass text-[10px]"></i>
+                <span>{{ getSceneLabel(npc.current_scene_id) }}</span>
+              </div>
               <div v-if="ruleEnforcementMode !== 'chat' && npc.stats" class="flex gap-1.5 mt-1.5">
                 <template v-if="npc.stats.hp !== undefined">
                   <div class="flex items-center gap-1 text-[8px] font-black text-red-500 bg-red-500/10 px-1 py-0.5 rounded border border-red-500/20"><i class="ra ra-heart"></i> {{ npc.stats.hp }}</div>
@@ -102,6 +114,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
               <button @click="emit('open-regen-dialog', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
               <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
               <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+              <button @click="emit('request-move-npc-to-scene', npc.id, npc.name, npc.current_scene_id || '')" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
               <button @click="emit('open-text-edit', 'npc', npc.id, npc.name, npc.description, '', npc.hp, npc.stamina, npc.mana, npc.goal, npc.character, npc.is_killable)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
             </div>
           </div>
