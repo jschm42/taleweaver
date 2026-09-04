@@ -53,11 +53,18 @@ export const gameViewService = {
 
   async fetchFullWorldDebug(gameId: string): Promise<any | null> {
     try {
-      const res = await fetch(`${API_BASE}/adventures/${gameId}/chat?include_full_world=true`, {
+      const res = await fetch(`${API_BASE}/adventures/${gameId}/session-debug`, {
         headers: authHeaders(false),
       })
-      if (!res.ok) return null
-      const data = await res.json()
+      if (res.ok) {
+        return await res.json()
+      }
+      // Fallback to chat endpoint with include_full_world
+      const fallbackRes = await fetch(`${API_BASE}/adventures/${gameId}/chat?include_full_world=true`, {
+        headers: authHeaders(false),
+      })
+      if (!fallbackRes.ok) return null
+      const data = await fallbackRes.json()
       return data.full_world || null
     } catch {
       return null

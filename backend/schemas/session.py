@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class SessionStateBase(BaseModel):
     current_scene_id: str
     in_game_time: int = 0
-    max_memory_turns: int = 30
+    max_memory_turns: int = 10
     enable_history_compression: bool = True
     inventory: list[str] = []
     entity_states: dict[str, Any] = {}

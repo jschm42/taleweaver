@@ -47,7 +47,12 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
   }
 
   const openDebugInspector = async () => {
-    showDebug.value = true
+    if (!sheet.value?.debug_mode) {
+      const msg = 'Debug mode is disabled. Type /debug on to activate.'
+      addNotification(msg, 'info')
+      emitSystemMessage(msg)
+      return
+    }
 
     if (!routeId.value) {
       fullWorldDebug.value = null
@@ -55,6 +60,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     }
 
     fullWorldDebug.value = await gameViewService.fetchFullWorldDebug(routeId.value)
+    showDebug.value = true
   }
 
   const loadWalkthrough = async () => {

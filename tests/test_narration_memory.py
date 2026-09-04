@@ -79,6 +79,57 @@ async def test_build_narration_messages_default_30(setup_test_db):
         assert messages[2] == {"role": "assistant", "content": "Narrator response 1"}
 
 
+async def test_build_narration_messages_default_10(setup_test_db):
+    """Verifies that the default memory turns is now 10 when unset."""
+    from tests.conftest import TestSessionLocal
+    async with TestSessionLocal() as db:
+        user = User(username="defaultplayer", hashed_password="pw", role="user")
+        adv = AdventureTemplate(
+            id="adv-default-10",
+            title="Default 10 Adventure",
+            owner_id="admin",
+            time_per_turn=5,
+            strict_rules=False,
+        )
+        db.add_all([user, adv])
+        await db.flush()
+
+        avatar = Avatar(
+            id="av-default-10",
+            template_id=adv.id,
+            user_id=user.id,
+            name="Hero",
+            role="Mage",
+            hp=100,
+            stats={},
+        )
+        db.add(avatar)
+        await db.flush()
+
+        state = SessionState(
+            session_id="session-default-10",
+            template_id=adv.id,
+            avatar_id=avatar.id,
+            user_id=user.id,
+            current_scene_id="START",
+            in_game_time=0,
+        )
+        db.add(state)
+        await db.commit()
+
+        # Both model defaults should be 10
+        assert adv.max_memory_turns == 10
+        assert state.max_memory_turns == 10
+
+        manager = GameTurnManager(db, "session-default-10", user)
+        manager.state = state
+        manager.adventure = adv
+        manager.avatar = avatar
+
+        messages, turns = await manager._build_narration_messages("System instruction", "Current user action")
+        assert turns == 10
+
+
 async def test_build_narration_messages_limits_to_configured_turns(setup_test_db):
     """Verifies that only the last N turns are included when max_memory_turns is set."""
     from tests.conftest import TestSessionLocal

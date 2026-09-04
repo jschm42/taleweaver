@@ -205,10 +205,12 @@ defineExpose({
       :clock-tick="props.clockTick"
       :exp="props.exp"
       :mode="props.mode"
+      :debug-mode="!!props.sheet?.debug_mode"
       @open-chronicles="emit('openChronicles')"
       @open-quests="emit('openQuests')"
       @open-memories="emit('openMemories')"
       @open-settings="emit('openSettings')"
+      @open-debug="emit('openDebug')"
       @toggle-mobile-interact="showMobileInteract = !showMobileInteract"
     />
 
@@ -218,6 +220,7 @@ defineExpose({
       <ImmersiveCharacterStage
         :npcs="npcs"
         :active-speakers="activeSpeakers"
+        :active-turn-index="activeTurnIndex"
         @npc-click="handleNpcClick"
         @npc-hover="(npc, event) => emit('npcHover', getEntityForHover(npc), event)"
         @npc-leave="emit('npcLeave')"
@@ -281,12 +284,14 @@ defineExpose({
         :prompt-suggestions="props.promptSuggestions"
         :world-memories="props.worldMemories"
         :can-send-input="canSendInput"
+        :debug-mode="!!props.sheet?.debug_mode"
         @open-quests="emit('openQuests')"
         @open-map="emit('openMap')"
         @open-sheet="emit('openSheet')"
         @open-chronicles="emit('openChronicles')"
         @open-walkthrough="emit('openWalkthrough')"
         @open-memories="emit('openMemories')"
+        @open-debug="emit('openDebug')"
         @select-suggestion="handleSuggestionSelect"
       />
 

@@ -799,7 +799,7 @@ async def create_adventure(
         time_per_turn=payload.time_per_turn,
         pacing_minutes=pacing_minutes,
         max_time_per_turn=payload.max_time_per_turn,
-        max_memory_turns=payload.max_memory_turns if payload.max_memory_turns is not None else 30,
+        max_memory_turns=payload.max_memory_turns if payload.max_memory_turns is not None else 10,
         clock_enabled=payload.clock_enabled or False,
         time_system=payload.time_system or "calendar",
         time_config=payload.time_config,

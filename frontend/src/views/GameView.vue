@@ -31,6 +31,7 @@ import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import SessionSettingsModal from '@/components/game/SessionSettingsModal.vue'
 import WorldMemoriesModal from '@/components/game/WorldMemoriesModal.vue'
+import DebugModal from '@/components/game/DebugModal.vue'
 import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
@@ -1523,7 +1524,7 @@ watch(
     />
     <SessionSettingsModal
       v-if="showSettingsModal"
-      :initial-turns="sheet?.max_memory_turns ?? 30"
+      :initial-turns="sheet?.max_memory_turns ?? 10"
       :initial-compression="sheet?.enable_history_compression ?? true"
       :is-saving="isSavingSettings"
       @close="showSettingsModal = false"
@@ -1577,6 +1578,9 @@ watch(
         adventureImage,
         fullWorld: fullWorldDebug
       }" 
+      :map-data="mapData"
+      :nodes="nodes"
+      @execute-command="sendMessage"
       @close="showDebug = false" 
     />
 

@@ -473,6 +473,9 @@ export function useGameSocket(): UseGameSocket {
           timestamp: new Date().toLocaleTimeString(),
           content: `Turn-ID: ${turnId}`
         })
+        if (sheet.value?.debug_mode) {
+          _pushMessage('system', `[DEBUG] Turn-ID: ${turnId}`, undefined, true)
+        }
       }
 
       if (res.status === 401 && authState.isAuthenticated) {

@@ -5,12 +5,13 @@
  * Displays portraits of the protagonist and scene NPCs with active speaker auras,
  * health status, defeat tags, and quick click/hover interactions.
  */
-import { ref } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   npcs: any[]
   activeSpeakers: Set<string>
+  activeTurnIndex?: number
 }>()
 
 const emit = defineEmits<{
@@ -20,7 +21,37 @@ const emit = defineEmits<{
   npcContextmenu: [npc: any, event: MouseEvent]
 }>()
 
+const stageContainerRef = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
+
+function scrollToTop() {
+  if (!stageContainerRef.value) return
+  stageContainerRef.value.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  })
+}
+
+const activeSpeakersSignature = computed(() => {
+  if (!props.activeSpeakers || props.activeSpeakers.size === 0) return ''
+  return Array.from(props.activeSpeakers).sort().join(',')
+})
+
+const hasSpeakingNpc = computed(() => {
+  if (!props.activeSpeakers || props.activeSpeakers.size === 0) return false
+  return (props.npcs || []).some((npc) => isNpcSpeaking(npc))
+})
+
+watch(
+  [() => props.activeTurnIndex, activeSpeakersSignature],
+  () => {
+    if (hasSpeakingNpc.value) {
+      nextTick(() => {
+        scrollToTop()
+      })
+    }
+  }
+)
 
 function handleImageError(path?: string | null) {
   if (!path) return
@@ -50,7 +81,10 @@ function isNpcSpeaking(npc: any): boolean {
 </script>
 
 <template>
-  <aside class="flex flex-col gap-2 shrink-0 overflow-y-auto w-20 sm:w-28 md:w-36 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full">
+  <aside
+    ref="stageContainerRef"
+    class="flex flex-col gap-2 shrink-0 overflow-y-auto w-20 sm:w-28 md:w-36 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full"
+  >
     <TransitionGroup name="npc-stage" tag="div" class="flex flex-col gap-2 w-full">
       <div
         v-for="npc in props.npcs"

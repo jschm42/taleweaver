@@ -3761,4 +3761,39 @@ def test_world_generator_does_not_create_fallback_item_when_no_candidates():
     assert container.get("inventory") == []
 
 
+async def test_session_debug_endpoint_guard_and_payload(setup_test_db, monkeypatch):
+    """Verifies that /session-debug enforces debug mode guard and returns full debug model when enabled."""
+    from fastapi import HTTPException
+    from backend.api.routes.adventures.gameplay import get_session_debug
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+
+        # 1. When debug is disabled, ensure 403 HTTPException is raised
+        state.is_debug_enabled = False
+        await db.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_session_debug(game_id="session-1", db=db, current_user=user)
+        assert exc_info.value.status_code == 403
+        assert "Debug mode is not enabled" in exc_info.value.detail
+
+        # 2. When debug is enabled, ensure comprehensive debug payload is returned
+        state.is_debug_enabled = True
+        await db.commit()
+
+        payload = await get_session_debug(game_id="session-1", db=db, current_user=user)
+        assert "npcs" in payload
+        assert "scene_npcs" in payload
+        assert "items" in payload
+        assert "map" in payload
+        assert "blueprint" in payload
+        assert "runtime" in payload
+        assert "raw" in payload
+        assert payload["session"]["id"] == "session-1"
+        assert payload["runtime"]["is_debug_enabled"] is True
+
+
+
 

@@ -413,13 +413,13 @@ function discardClockConfig() {
 }
 
 const memoryConfigChanged = computed(() => {
-  const advMem = props.adventure?.max_memory_turns ?? 30
-  const formMem = props.form?.max_memory_turns ?? 30
+  const advMem = props.adventure?.max_memory_turns ?? 10
+  const formMem = props.form?.max_memory_turns ?? 10
   return advMem !== formMem
 })
 
 function discardMemoryConfig() {
-  emit('update:max-memory-turns', props.adventure?.max_memory_turns ?? 30)
+  emit('update:max-memory-turns', props.adventure?.max_memory_turns ?? 10)
 }
 
 const previewGameTime = computed(() => {
@@ -578,8 +578,8 @@ const licenseUrlInvalid = computed(() => {
               type="number"
               min="1"
               max="100"
-              :value="form.max_memory_turns ?? 30"
-              @input="emit('update:max-memory-turns', Math.min(100, Math.max(1, Number(($event.target as HTMLInputElement).value) || 30)))"
+              :value="form.max_memory_turns ?? 10"
+              @input="emit('update:max-memory-turns', Math.min(100, Math.max(1, Number(($event.target as HTMLInputElement).value) || 10)))"
               class="w-12 bg-transparent text-center text-white font-mono font-bold text-sm focus:outline-none"
             />
             <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Turns</span>
@@ -592,14 +592,14 @@ const licenseUrlInvalid = computed(() => {
           type="range"
           min="1"
           max="100"
-          :value="form.max_memory_turns ?? 30"
+          :value="form.max_memory_turns ?? 10"
           @input="emit('update:max-memory-turns', Number(($event.target as HTMLInputElement).value))"
           class="w-full accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
         />
         <div class="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest pt-1 border-t border-white/5">
-          <span>Low Token Cost (1–15)</span>
-          <span class="text-emerald-400 font-bold">Recommended Default (30)</span>
-          <span>Extended Memory (50–100)</span>
+          <span>Low Token Cost (1–5)</span>
+          <span class="text-emerald-400 font-bold">Recommended Default (10)</span>
+          <span>Extended Memory (30–100)</span>
         </div>
       </div>
     </div>

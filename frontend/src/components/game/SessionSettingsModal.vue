@@ -13,7 +13,7 @@ const emit = defineEmits<{
   (e: 'save', payload: { turns: number; enableCompression: boolean }): void
 }>()
 
-const turns = ref(30)
+const turns = ref(10)
 const enableCompression = ref(true)
 
 onMounted(() => {
@@ -26,24 +26,24 @@ onMounted(() => {
 })
 
 const tokenProfile = computed(() => {
-  if (turns.value <= 15) {
+  if (turns.value <= 10) {
     return {
-      label: 'Low Token Cost',
-      class: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
-      description: 'Minimum token consumption per turn. Great for lightweight sessions with fast responses, but older details will fade quickly.'
+      label: 'Balanced Default (10 turns)',
+      class: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+      description: 'Default setting (10 turns). Balances rich narrative continuity across scenes with efficient token usage before compacting.'
     }
   }
-  if (turns.value <= 40) {
+  if (turns.value <= 30) {
     return {
-      label: 'Balanced (Standard)',
-      class: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
-      description: 'Default setting (30 turns). Balances rich narrative continuity across scenes with moderate, predictable token usage.'
+      label: 'Extended Memory',
+      class: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+      description: 'Retains more uncompacted turns. Moderately increased token consumption per turn.'
     }
   }
   return {
     label: 'Deep Memory',
     class: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
-    description: 'Extensive narrative recall over many turns. Best for intricate plots, but will consume significantly more LLM tokens each turn.'
+    description: 'Extensive narrative recall over many turns. Best for intricate plots, but consumes significantly more LLM tokens each turn.'
   }
 })
 
@@ -114,7 +114,7 @@ function handleInput(event: Event) {
             />
             <div class="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest">
               <span>1 Turn</span>
-              <span class="text-amber-400 font-bold">30 Default</span>
+              <span class="text-amber-400 font-bold">10 Default</span>
               <span>100 Turns</span>
             </div>
           </div>

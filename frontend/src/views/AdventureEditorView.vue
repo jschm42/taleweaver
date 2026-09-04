@@ -613,7 +613,7 @@ const form = ref({
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
   max_time_per_turn: null as number | null,
-  max_memory_turns: 30,
+  max_memory_turns: 10,
   clock_enabled: false,
   time_system: 'calendar' as string,
   time_config: { start_date: '2026-01-01', start_time: '08:00', day_label: 'Day', unit_name: 'Blobs', initial_value: 0 } as Record<string, any>,
@@ -800,7 +800,7 @@ async function fetchAdventure() {
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
-    form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 30
+    form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 10
     form.value.clock_enabled = data.clock_enabled ?? false
     form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'
     form.value.time_config = data.time_config && typeof data.time_config === 'object'

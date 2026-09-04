@@ -28,12 +28,14 @@ const props = defineProps<{
   clockTick?: boolean
   exp?: number
   mode?: 'rpg' | 'story' | 'chat'
+  debugMode?: boolean
 }>()
 
 const emit = defineEmits<{
   openChronicles: []
   openQuests: []
   openSettings: []
+  openDebug: []
   toggleMobileInteract: []
 }>()
 </script>
@@ -82,6 +84,18 @@ const emit = defineEmits<{
 
     <!-- Right: Status & Audio Controls -->
     <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+      <!-- Debug Mode Active Indicator -->
+      <button
+        v-if="props.debugMode"
+        type="button"
+        @click="emit('openDebug')"
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 hover:border-cyan-400 transition-all cursor-pointer shadow-sm animate-pulse"
+        title="Debug Mode Active — Click to open Debug Inspector"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+        <span>DEBUG</span>
+      </button>
+
       <!-- In-Game Clock -->
       <GameClockWidget :game-time="props.gameTime || null" :clock-tick="props.clockTick || false" />
 

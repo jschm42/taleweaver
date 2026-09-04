@@ -3,11 +3,13 @@ import logging
 from typing import Any, AsyncGenerator, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.config import settings
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -62,9 +64,369 @@ def _terminal_flags_from_state(state: SessionState) -> tuple[bool, bool]:
     input_locked = status == "game_over" and game_over_sent
     return pending_terminal_epilogue, input_locked
 
+async def _build_session_debug_payload(
+    db: AsyncSession,
+    state: SessionState,
+    adventure: AdventureTemplate | None,
+    avatar: Avatar | None,
+    current_user: User,
+) -> dict[str, Any]:
+    """Assembles unified debug data including all NPCs with stats/locations, full map with NPC indicators, and complete items matrix."""
+    # 1. Scenes
+    scenes_res = await db.execute(
+        select(WorldScene).where(
+            or_(
+                WorldScene.session_id == state.session_id,
+                and_(WorldScene.template_id == state.template_id, WorldScene.session_id.is_(None)),
+            )
+        ).order_by(WorldScene.id)
+    )
+    scenes_all = scenes_res.scalars().all()
+    scene_lookup: dict[str, WorldScene] = {}
+    for s in scenes_all:
+        if s.id not in scene_lookup or s.session_id == state.session_id:
+            scene_lookup[s.id] = s
+
+    scene_names: dict[str, str] = {s.id: (s.label or s.id) for s in scene_lookup.values()}
+
+    # 2. Exits
+    exits_res = await db.execute(
+        select(WorldExit).where(
+            or_(
+                WorldExit.session_id == state.session_id,
+                and_(WorldExit.template_id == state.template_id, WorldExit.session_id.is_(None)),
+            )
+        )
+    )
+    exits_all = exits_res.scalars().all()
+    exit_lookup: dict[str, WorldExit] = {}
+    for ex in exits_all:
+        key = f"{ex.from_scene_id}->{ex.to_scene_id}"
+        if key not in exit_lookup or ex.session_id == state.session_id:
+            exit_lookup[key] = ex
+
+    exit_overrides = state.exit_states or {}
+    exits_data = []
+    for ex in exit_lookup.values():
+        over = exit_overrides.get(ex.id, {})
+        exits_data.append({
+            "id": ex.id,
+            "from_scene_id": ex.from_scene_id,
+            "to_scene_id": ex.to_scene_id,
+            "label": ex.label or "Passage",
+            "is_locked": bool(over.get("is_locked", ex.is_locked)),
+            "is_secret": bool(over.get("is_secret", getattr(ex, "is_secret", False))),
+            "lock_description": ex.lock_description,
+        })
+
+    # 3. Entities
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            or_(
+                WorldEntity.session_id == state.session_id,
+                and_(WorldEntity.template_id == state.template_id, WorldEntity.session_id.is_(None)),
+            )
+        ).order_by(WorldEntity.id)
+    )
+    entities_all = ent_res.scalars().all()
+    entity_lookup: dict[str, WorldEntity] = {}
+    for ent in entities_all:
+        if ent.id not in entity_lookup or ent.session_id == state.session_id:
+            entity_lookup[ent.id] = ent
+
+    entity_overrides = state.entity_states or {}
+
+    # 4. NPCs & scene_npcs mapping
+    npcs_data = []
+    scene_npcs: dict[str, list[dict[str, Any]]] = {}
+    for s_id in scene_lookup.keys():
+        scene_npcs[s_id] = []
+
+    for ent in entity_lookup.values():
+        if ent.entity_type != "NPC":
+            continue
+        over = entity_overrides.get(ent.id, {})
+        loc_id = over.get("current_scene_id") or getattr(ent, "current_scene_id", None) or getattr(ent, "start_scene_id", None) or "UNKNOWN"
+        loc_name = scene_names.get(loc_id, loc_id)
+        hp = over.get("hp", getattr(ent, "hp", 100) if getattr(ent, "hp", None) is not None else 100)
+        max_hp = over.get("max_hp", getattr(ent, "max_hp", 100) if getattr(ent, "max_hp", None) is not None else 100)
+        stamina = over.get("stamina", getattr(ent, "stamina", 50) if getattr(ent, "stamina", None) is not None else 50)
+        max_stamina = over.get("max_stamina", getattr(ent, "max_stamina", 50) if getattr(ent, "max_stamina", None) is not None else 50)
+        mana = over.get("mana", getattr(ent, "mana", 50) if getattr(ent, "mana", None) is not None else 50)
+        max_mana = over.get("max_mana", getattr(ent, "max_mana", 50) if getattr(ent, "max_mana", None) is not None else 50)
+        is_defeated = bool(over.get("is_defeated", False))
+        is_alive = not is_defeated and hp > 0
+        is_hidden = bool(over.get("is_hidden", getattr(ent, "is_hidden", False)))
+        is_hostile = bool(over.get("is_hostile", getattr(ent, "is_hostile", False)))
+        inv = over.get("inventory", getattr(ent, "inventory", None) or [])
+
+        npc_info = {
+            "id": ent.id,
+            "name": ent.name,
+            "description": getattr(ent, "description", "") or "",
+            "role": getattr(ent, "role", None) or getattr(ent, "npc_type", None) or (getattr(ent, "metadata_json", None) or {}).get("role") or "NPC",
+            "image_url": getattr(ent, "image_url", None),
+            "current_scene_id": loc_id,
+            "current_scene_name": loc_name,
+            "start_scene_id": getattr(ent, "start_scene_id", None) or getattr(ent, "current_scene_id", "UNKNOWN"),
+            "hp": hp,
+            "max_hp": max_hp,
+            "stamina": stamina,
+            "max_stamina": max_stamina,
+            "mana": mana,
+            "max_mana": max_mana,
+            "is_alive": is_alive,
+            "is_defeated": is_defeated,
+            "is_hidden": is_hidden,
+            "is_hostile": is_hostile,
+            "inventory": inv,
+            "is_in_current_scene": loc_id == state.current_scene_id,
+            "stats": {
+                "strength": getattr(ent, "stat_modifier_strength", 0) or 10,
+                "dexterity": getattr(ent, "stat_modifier_dexterity", 0) or 10,
+                "intelligence": getattr(ent, "stat_modifier_intelligence", 0) or 10,
+                "wisdom": getattr(ent, "stat_modifier_wisdom", 0) or 10,
+                "charisma": getattr(ent, "stat_modifier_charisma", 0) or 10,
+                "armor_class": getattr(ent, "stat_modifier_armor_class", 0) or 10,
+            },
+        }
+        npcs_data.append(npc_info)
+
+        if loc_id not in scene_npcs:
+            scene_npcs[loc_id] = []
+        scene_npcs[loc_id].append({
+            "id": ent.id,
+            "name": ent.name,
+            "image_url": ent.image_url,
+            "hp": hp,
+            "max_hp": max_hp,
+            "is_alive": is_alive,
+            "is_hidden": is_hidden,
+        })
+
+    # 5. Items Matrix (Avatar, Scenes, Containers, NPCs)
+    items_data = []
+
+    # A) Avatar inventory
+    if avatar and avatar.inventory:
+        for itm in avatar.inventory:
+            if isinstance(itm, dict):
+                items_data.append({
+                    "id": itm.get("id") or itm.get("key") or itm.get("name"),
+                    "name": itm.get("name") or "Unnamed Item",
+                    "description": itm.get("description") or "",
+                    "item_type": itm.get("item_type") or "PICKABLE",
+                    "slot": itm.get("slot"),
+                    "image_url": itm.get("image_url"),
+                    "location_type": "avatar",
+                    "location_id": avatar.id,
+                    "location_name": f"Hero ({avatar.name})",
+                    "is_hidden": False,
+                    "is_portable": True,
+                    "is_locked": False,
+                    "switch_state": None,
+                    "is_open": False,
+                    "metadata": itm.get("metadata_json") or {},
+                })
+
+    # B) Scene entities (non-NPC)
+    for ent in entity_lookup.values():
+        if ent.entity_type == "NPC":
+            continue
+        over = entity_overrides.get(ent.id, {})
+        loc_id = over.get("current_scene_id") or getattr(ent, "current_scene_id", None) or getattr(ent, "start_scene_id", None) or "UNKNOWN"
+        loc_name = scene_names.get(loc_id, loc_id)
+        is_hidden = bool(over.get("is_hidden", getattr(ent, "is_hidden", False)))
+        is_locked = bool(over.get("is_locked", getattr(ent, "is_locked", False)))
+        switch_state = over.get("switch_state", getattr(ent, "switch_state", None))
+        is_open = bool(over.get("is_open", getattr(ent, "is_open", False)))
+        is_portable = getattr(ent, "is_portable", True) if getattr(ent, "is_portable", None) is not None else True
+
+        items_data.append({
+            "id": ent.id,
+            "name": ent.name,
+            "description": ent.description or "",
+            "item_type": ent.item_type or ent.entity_type or "OBJECT",
+            "slot": getattr(ent, "slot", None),
+            "image_url": ent.image_url,
+            "location_type": "scene",
+            "location_id": loc_id,
+            "location_name": loc_name,
+            "is_hidden": is_hidden,
+            "is_portable": is_portable,
+            "is_locked": is_locked,
+            "switch_state": switch_state,
+            "is_open": is_open,
+            "metadata": ent.metadata_json or {},
+        })
+
+        # Items inside containers
+        ent_inv = over.get("inventory", getattr(ent, "inventory", None) or [])
+        if ent_inv and isinstance(ent_inv, list):
+            for c_itm in ent_inv:
+                if isinstance(c_itm, dict):
+                    items_data.append({
+                        "id": c_itm.get("id") or c_itm.get("name"),
+                        "name": c_itm.get("name") or "Unnamed Item",
+                        "description": c_itm.get("description") or "",
+                        "item_type": c_itm.get("item_type") or "PICKABLE",
+                        "slot": c_itm.get("slot"),
+                        "image_url": c_itm.get("image_url"),
+                        "location_type": "container",
+                        "location_id": ent.id,
+                        "location_name": f"{ent.name} (in {loc_name})",
+                        "is_hidden": is_hidden,
+                        "is_portable": True,
+                        "is_locked": False,
+                        "switch_state": None,
+                        "is_open": False,
+                        "metadata": c_itm.get("metadata_json") or {},
+                    })
+
+    # C) NPC inventory items
+    for npc in npcs_data:
+        for n_itm in npc["inventory"]:
+            if isinstance(n_itm, dict):
+                items_data.append({
+                    "id": n_itm.get("id") or n_itm.get("name"),
+                    "name": n_itm.get("name") or "Unnamed Item",
+                    "description": n_itm.get("description") or "",
+                    "item_type": n_itm.get("item_type") or "PICKABLE",
+                    "slot": n_itm.get("slot"),
+                    "image_url": n_itm.get("image_url"),
+                    "location_type": "npc",
+                    "location_id": npc["id"],
+                    "location_name": f"{npc['name']} (in {npc['current_scene_name']})",
+                    "is_hidden": npc["is_hidden"],
+                    "is_portable": True,
+                    "is_locked": False,
+                    "switch_state": None,
+                    "is_open": False,
+                    "metadata": n_itm.get("metadata_json") or {},
+                })
+
+    # 6. Map nodes structure
+    nodes_data = {}
+    for s in scene_lookup.values():
+        nodes_data[s.id] = {
+            "id": s.id,
+            "label": s.label or s.id,
+            "description": s.description or "",
+            "image_url": s.image_url,
+            "is_current": s.id == state.current_scene_id,
+            "npcs": scene_npcs.get(s.id, []),
+        }
+
+    blueprint_data = None
+    try:
+        from backend.api.routes.adventures.editor import _build_adventure_editor_assets
+        blueprint_obj = await _build_adventure_editor_assets(state.template_id, db)
+        blueprint_data = blueprint_obj.model_dump()
+    except Exception as exc:
+        logger.warning("Could not build blueprint assets for debug: %s", exc)
+
+    return {
+        "session": {
+            "id": state.session_id,
+            "template_id": state.template_id,
+            "adventure_title": adventure.title if adventure else (state.session.adventure_title if state.session else "Adventure"),
+            "current_scene_id": state.current_scene_id,
+            "current_scene_name": scene_names.get(state.current_scene_id, state.current_scene_id),
+            "in_game_time": state.in_game_time,
+            "time_system": state.time_system,
+            "is_debug_enabled": state.is_debug_enabled,
+            "status": state.session.status if state.session else "active",
+            "status_note": state.session.status_note if state.session else None,
+        },
+        "avatar": {
+            "id": avatar.id if avatar else None,
+            "name": avatar.name if avatar else "Protagonist",
+            "hp": avatar.hp if avatar else 100,
+            "max_hp": avatar.max_hp if avatar else 100,
+            "stamina": avatar.stamina if avatar else 50,
+            "max_stamina": avatar.max_stamina if avatar else 50,
+            "mana": avatar.mana if avatar else 50,
+            "max_mana": avatar.max_mana if avatar else 50,
+            "exp": avatar.exp if avatar else 0,
+            "stats": {
+                "strength": getattr(avatar, "strength", 10) if avatar else 10,
+                "dexterity": getattr(avatar, "dexterity", 10) if avatar else 10,
+                "intelligence": getattr(avatar, "intelligence", 10) if avatar else 10,
+                "wisdom": getattr(avatar, "wisdom", 10) if avatar else 10,
+                "charisma": getattr(avatar, "charisma", 10) if avatar else 10,
+                "armor_class": getattr(avatar, "armor_class", 10) if avatar else 10,
+            },
+        },
+        "npcs": npcs_data,
+        "scene_npcs": scene_npcs,
+        "items": items_data,
+        "map": {
+            "nodes": nodes_data,
+            "exits": exits_data,
+            "current_scene_id": state.current_scene_id,
+            "scene_npcs": scene_npcs,
+        },
+        "blueprint": blueprint_data,
+        "runtime": {
+            "current_scene_id": state.current_scene_id,
+            "in_game_time": state.in_game_time,
+            "is_debug_enabled": state.is_debug_enabled,
+            "entity_overrides": entity_overrides,
+            "exit_overrides": exit_overrides,
+            "quests": state.quests or [],
+            "world_memories": state.world_memories or [],
+        },
+        "raw": {
+            "session_id": state.session_id,
+            "template_id": state.template_id,
+            "current_scene_id": state.current_scene_id,
+            "in_game_time": state.in_game_time,
+            "is_debug_enabled": state.is_debug_enabled,
+            "entity_states": state.entity_states or {},
+            "exit_states": state.exit_states or {},
+            "quests": state.quests or [],
+            "world_memories": state.world_memories or [],
+            "avatar_stats": {
+                "hp": avatar.hp if avatar else None,
+                "mana": avatar.mana if avatar else None,
+                "stamina": avatar.stamina if avatar else None,
+                "exp": avatar.exp if avatar else None,
+            },
+        },
+    }
+
+
+@router.get("/{game_id}/session-debug")
+async def get_session_debug(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Unified debug inspector endpoint for active game sessions. Requires debug mode to be enabled."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    is_debug = bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled)
+    if not is_debug:
+        raise HTTPException(
+            status_code=403,
+            detail="Debug mode is not enabled for this session. Type /debug on to activate.",
+        )
+
+    adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == state.template_id))
+    adventure = adv_res.scalars().first()
+
+    cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = cv_res.scalars().first()
+
+    return await _build_session_debug_payload(db, state, adventure, avatar, current_user)
+
+
 @router.get("/{game_id}/chat", response_model=ChatResponse)
 async def get_chat_history(
     game_id: str,
+    include_full_world: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -109,6 +471,14 @@ async def get_chat_history(
     scene_image = await AdventureLogic.resolve_scene_image(db, state, state.current_scene_id)
     pending_terminal_epilogue, input_locked = _terminal_flags_from_state(state)
 
+    full_world_debug = None
+    if include_full_world and (settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled):
+        try:
+            from backend.api.routes.adventures.editor import _build_adventure_editor_assets
+            full_world_debug = await _build_adventure_editor_assets(state.template_id, db)
+        except Exception as exc:
+            logger.warning("Could not build full_world debug payload: %s", exc)
+
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
@@ -143,6 +513,7 @@ async def get_chat_history(
         prompt_suggestions=GameTurnManager.extract_prompt_suggestions(state.exit_states or {}),
         world_memories=state.world_memories or [],
         world_rumors=state.world_rumors or [],
+        full_world=full_world_debug,
     )
 
 @router.post("/{game_id}/chat")

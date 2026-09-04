@@ -12,6 +12,7 @@ import {
   History,
   Lightbulb,
   BrainCircuit,
+  Terminal,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -23,6 +24,7 @@ const props = defineProps<{
   questGlow?: boolean
   promptSuggestions?: string[]
   canSendInput?: boolean
+  debugMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -32,6 +34,7 @@ const emit = defineEmits<{
   openChronicles: []
   openWalkthrough: []
   openMemories: []
+  openDebug: []
   selectSuggestion: [suggestion: string]
 }>()
 </script>
@@ -114,6 +117,18 @@ const emit = defineEmits<{
         <span v-if="props.worldMemories?.length" class="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 text-[9px] font-black rounded-full">
           {{ props.worldMemories.length }}
         </span>
+      </button>
+
+      <!-- Debug Panel Button (Debug Mode Only) -->
+      <button
+        v-if="props.debugMode"
+        type="button"
+        @click="emit('openDebug')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-cyan-500/60 hover:border-cyan-400 hover:bg-cyan-500/10 text-cyan-300 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer shadow-cyan-950/30"
+        title="Open Unified Debug Inspector"
+      >
+        <Terminal class="w-4 h-4 text-cyan-400" />
+        <span class="hidden sm:inline uppercase tracking-wider">Debug</span>
       </button>
     </div>
 

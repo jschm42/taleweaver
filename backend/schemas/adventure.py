@@ -35,7 +35,7 @@ class AdventureTemplateBase(BaseModel):
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     max_time_per_turn: Optional[int] = None
-    max_memory_turns: Optional[int] = 30
+    max_memory_turns: Optional[int] = 10
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
     time_config: Optional[dict[str, Any]] = None

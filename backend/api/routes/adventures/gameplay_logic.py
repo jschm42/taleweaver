@@ -381,9 +381,9 @@ class GameTurnManager:
         """
         max_turns = getattr(self.state, "max_memory_turns", None)
         if max_turns is None and self.adventure:
-            max_turns = getattr(self.adventure, "max_memory_turns", 30)
+            max_turns = getattr(self.adventure, "max_memory_turns", 10)
         if max_turns is None:
-            max_turns = 30
+            max_turns = 10
         max_turns = max(0, int(max_turns))
 
         # Query all session messages in order
@@ -1073,6 +1073,14 @@ class GameTurnManager:
             user_input_chars=len(actual_user_input or ""),
         )
         logger.debug(f"[Turn {self.game_id}] Total turn processing took {turn_end - turn_start:.4f}s")
+        if settings.TALEWEAVER_DEBUG_ENABLED or bool(self.state and self.state.is_debug_enabled):
+            duration_ms = round((turn_end - turn_start) * 1000, 1)
+            dbg_msg = (
+                f"[DEBUG LOG] Turn completed in {duration_ms}ms | Scene: {self.state.current_scene_id} | "
+                f"Hero HP: {self.avatar.hp}/{self.avatar.max_hp} | In-Game Time: {self.state.in_game_time}m"
+            )
+            dbg_cm = await self._save_chat_message("system", dbg_msg)
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': dbg_msg, 'is_debug': True, 'id': str(dbg_cm.id)})}\n\n"
 
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: str | None = None) -> AsyncGenerator[str, None]:
         _ = auto_visualize
@@ -2025,9 +2033,9 @@ class GameTurnManager:
 
         max_turns = getattr(self.state, "max_memory_turns", None)
         if max_turns is None and self.adventure:
-            max_turns = getattr(self.adventure, "max_memory_turns", 30)
+            max_turns = getattr(self.adventure, "max_memory_turns", 10)
         if max_turns is None:
-            max_turns = 30
+            max_turns = 10
         max_turns = max(1, int(max_turns))
 
         from backend.models.chat import ChatMessage

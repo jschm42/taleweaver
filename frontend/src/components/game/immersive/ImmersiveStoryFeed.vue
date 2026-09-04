@@ -132,6 +132,13 @@ function getEntityForHover(nameOrEntity: any) {
   if (resolved) return resolved
   return { name, entity_type: 'NPC', description: 'A character in this adventure.' }
 }
+
+function isDebugSystemMessage(msg: any): boolean {
+  if (!msg) return false
+  if (msg.is_debug) return true
+  const c = String(msg.content || '').trim()
+  return c.startsWith('[DEBUG') || c.startsWith('DEBUG:') || c.startsWith('--- DEBUG')
+}
 </script>
 
 <template>
@@ -159,12 +166,14 @@ function getEntityForHover(nameOrEntity: any) {
               'relative rounded-r-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl border-y border-r text-slate-100 transition-all',
               props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
                 ? 'bg-red-950/80 border-l-4 border-l-red-500 border-red-500/40 shadow-red-950/40'
-                : 'bg-slate-900/95 border-l-4 border-emerald-500 border-emerald-500/30'
+                : isDebugSystemMessage(sysMsg)
+                  ? 'bg-slate-950/90 border-l-4 border-l-cyan-400 border-cyan-500/30 shadow-cyan-950/20'
+                  : 'bg-slate-900/95 border-l-4 border-emerald-500 border-emerald-500/30'
             ]"
           >
             <!-- Overlay TTS Button -->
             <button
-              v-if="configState.isTtsEnabled"
+              v-if="configState.isTtsEnabled && !isDebugSystemMessage(sysMsg)"
               type="button"
               @click.stop="speakBubble(sysMsg.content, 'System')"
               class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-400/60 text-emerald-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
@@ -181,7 +190,9 @@ function getEntityForHover(nameOrEntity: any) {
                 'comic-narration-text text-sm sm:text-base leading-relaxed',
                 props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
                   ? 'text-red-100'
-                  : 'text-emerald-100'
+                  : isDebugSystemMessage(sysMsg)
+                    ? 'text-cyan-100'
+                    : 'text-emerald-100'
               ]"
             >
               <span
@@ -189,12 +200,15 @@ function getEntityForHover(nameOrEntity: any) {
                   'inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm',
                   props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
                     ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    : isDebugSystemMessage(sysMsg)
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                 ]"
               >
-                {{ props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message) ? 'Error' : 'System' }}
+                {{ props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message) ? 'Error' : isDebugSystemMessage(sysMsg) ? 'Debug' : 'System' }}
               </span>
-              <span class="italic font-medium" v-html="renderFormattedHtml(sysMsg.content)"></span>
+              <pre v-if="isDebugSystemMessage(sysMsg) && (sysMsg.content.includes('\n') || sysMsg.content.length > 90)" class="mt-2 p-3 rounded-xl bg-black/60 border border-cyan-500/20 text-cyan-300/90 text-xs font-mono whitespace-pre-wrap break-all custom-scrollbar">{{ sysMsg.content }}</pre>
+              <span v-else class="italic font-medium" :class="{ 'font-mono text-xs text-cyan-200/90 not-italic': isDebugSystemMessage(sysMsg) }" v-html="renderFormattedHtml(sysMsg.content)"></span>
             </div>
 
             <!-- Inline Action Buttons (Retry & Cancel) -->
