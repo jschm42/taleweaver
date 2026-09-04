@@ -15,6 +15,7 @@ import {
   Volume2,
   VolumeX,
   Map as MapIcon,
+  Sliders,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   openChronicles: []
   openQuests: []
+  openSettings: []
   toggleMobileInteract: []
 }>()
 </script>
@@ -110,6 +112,16 @@ const emit = defineEmits<{
       </div>
 
       <BableFishSelector />
+
+      <!-- Session Settings (Memory & Configuration) -->
+      <button
+        type="button"
+        @click="emit('openSettings')"
+        class="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-900/80 border border-slate-700/60 text-slate-400 hover:text-white hover:border-amber-500/50 hover:bg-amber-500/10 transition-all cursor-pointer"
+        title="Session Settings & Turn Memory"
+      >
+        <Sliders class="w-4 h-4" />
+      </button>
 
       <!-- Experience XP -->
       <div v-if="props.exp !== undefined && props.mode !== 'chat'" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-black tracking-wider">

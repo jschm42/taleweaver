@@ -54,14 +54,18 @@ const props = defineProps<{
   isCheckpointSaving?: boolean
   exitTraversalBusy?: string
   exitUnlockBusy?: boolean
+  turnError?: { message: string; action: string } | null
 }>()
 
 const emit = defineEmits<{
   send: [content: string]
+  retryTurn: []
+  cancelTurnError: []
   openSheet: []
   openMap: []
   openQuests: []
   openChronicles: []
+  openSettings: []
   openDebug: []
   openWalkthrough: []
   npcHover: [entityOrName: any, event: MouseEvent]
@@ -201,6 +205,7 @@ defineExpose({
       :mode="props.mode"
       @open-chronicles="emit('openChronicles')"
       @open-quests="emit('openQuests')"
+      @open-settings="emit('openSettings')"
       @toggle-mobile-interact="showMobileInteract = !showMobileInteract"
     />
 
@@ -246,8 +251,11 @@ defineExpose({
           :current-scene-description="props.currentSceneDescription"
           :npc-metadata="props.npcMetadata"
           :game-id="props.gameId"
+          :turn-error="props.turnError"
           @go-to-turn="goToTurn"
           @go-to-latest-turn="goToLatestTurn"
+          @retry-turn="emit('retryTurn')"
+          @cancel-turn-error="emit('cancelTurnError')"
           @open-sheet="emit('openSheet')"
           @npc-click="(name) => emit('npcClick', name)"
           @item-click="(item) => emit('itemClick', item)"
@@ -284,7 +292,10 @@ defineExpose({
         :status-text="props.statusText"
         :agent-active="props.sheet?.agent_active"
         :debug-mode="!!props.sheet?.debug_mode"
+        :turn-error="props.turnError"
         @send="handleSend"
+        @retry-turn="emit('retryTurn')"
+        @cancel-turn-error="emit('cancelTurnError')"
       />
     </footer>
   </div>

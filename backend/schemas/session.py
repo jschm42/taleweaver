@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class SessionStateBase(BaseModel):
     current_scene_id: str
     in_game_time: int = 0
+    max_memory_turns: int = 30
     inventory: list[str] = []
     entity_states: dict[str, Any] = {}
     exit_states: dict[str, Any] = {}
@@ -20,6 +21,7 @@ class SessionStateUpdate(BaseModel):
     scene_id: Optional[str] = None
     current_scene_id: Optional[str] = None
     in_game_time: Optional[int] = None
+    max_memory_turns: Optional[int] = None
     inventory: Optional[list[str]] = None
     entity_states: Optional[dict[str, Any]] = None
     exit_states: Optional[dict[str, Any]] = None
@@ -40,6 +42,7 @@ class GameSessionCreate(GameSessionBase):
 class GameSessionUpdate(BaseModel):
     status: Optional[str] = None
     status_note: Optional[str] = None
+    max_memory_turns: Optional[int] = None
 
 class GameSession(GameSessionBase):
     id: str

@@ -651,7 +651,9 @@ async def start_session_for_template(
 
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
-        current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
+        current_scene_id=first_scene_id, in_game_time=0,
+        max_memory_turns=getattr(adventure, "max_memory_turns", 30) or 30,
+        quests=deepcopy(adventure.quests or []),
         entity_states=initial_entity_states,
         time_system=adventure.time_system or "calendar",
         time_config=deepcopy(adventure.time_config) if adventure.time_config else None,
@@ -1040,6 +1042,7 @@ async def copy_session(
             avatar_id=cloned_avatar.id,
             current_scene_id=original_state.current_scene_id,
             in_game_time=original_state.in_game_time,
+            max_memory_turns=getattr(original_state, "max_memory_turns", 30) or 30,
             time_system=original_state.time_system,
             time_config=deepcopy(original_state.time_config),
             inventory=deepcopy(original_state.inventory),
@@ -1362,6 +1365,7 @@ async def _get_session_response(db: AsyncSession, game_id: str, current_user_id:
         status=g.status,
         status_note=g.status_note,
         copied_from_id=g.copied_from_id,
+        max_memory_turns=getattr(s, "max_memory_turns", 30) if s else 30,
     )
 
 
@@ -1383,6 +1387,13 @@ async def update_session(
         game_session.status = payload.status
     if payload.status_note is not None:
         game_session.status_note = payload.status_note
+    if payload.max_memory_turns is not None:
+        state_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == game_id)
+        )
+        session_state = state_res.scalars().first()
+        if session_state:
+            session_state.max_memory_turns = max(1, min(100, int(payload.max_memory_turns)))
 
     await db.commit()
 

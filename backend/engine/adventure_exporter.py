@@ -320,6 +320,7 @@ class AdventureExporter:
                 "time_per_turn": adv.time_per_turn,
                 "pacing_minutes": adv.pacing_minutes,
                 "max_time_per_turn": adv.max_time_per_turn,
+                "max_memory_turns": getattr(adv, "max_memory_turns", 30) or 30,
                 "clock_enabled": adv.clock_enabled,
                 "selected_tone": adv.selected_tone,
                 "selected_image_styles": adv.selected_image_styles,

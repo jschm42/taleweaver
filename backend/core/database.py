@@ -437,6 +437,12 @@ async def apply_sqlite_compat_migrations() -> None:
                 )
                 logger.info("SQLite migration: added adventure_templates.max_time_per_turn")
 
+            if "max_memory_turns" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN max_memory_turns INTEGER NOT NULL DEFAULT 30"
+                )
+                logger.info("SQLite migration: added adventure_templates.max_memory_turns")
+
             if "generation_logs" not in template_cols:
                 await conn.exec_driver_sql(
                     "ALTER TABLE adventure_templates ADD COLUMN generation_logs TEXT"
@@ -480,6 +486,12 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE session_states ADD COLUMN time_system TEXT NOT NULL DEFAULT 'calendar'"
             )
             logger.info("SQLite migration: added session_states.time_system")
+
+        if "max_memory_turns" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN max_memory_turns INTEGER NOT NULL DEFAULT 30"
+            )
+            logger.info("SQLite migration: added session_states.max_memory_turns")
 
         if "time_config" not in session_state_cols:
             await conn.exec_driver_sql(

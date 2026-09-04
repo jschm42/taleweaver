@@ -47,6 +47,7 @@ const emit = defineEmits<{
   (e: 'update:calendar-pacing-unit', val: string): void
   (e: 'update:calendar-max-value', val: number | null): void
   (e: 'update:calendar-max-unit', val: string): void
+  (e: 'update:max-memory-turns', val: number): void
 }>()
 
 const CALENDAR_UNIT_FACTORS: Record<string, number> = {
@@ -411,6 +412,16 @@ function discardClockConfig() {
   }
 }
 
+const memoryConfigChanged = computed(() => {
+  const advMem = props.adventure?.max_memory_turns ?? 30
+  const formMem = props.form?.max_memory_turns ?? 30
+  return advMem !== formMem
+})
+
+function discardMemoryConfig() {
+  emit('update:max-memory-turns', props.adventure?.max_memory_turns ?? 30)
+}
+
 const previewGameTime = computed(() => {
   const sys = props.form?.time_system === 'units' ? 'units' : 'relative'
   const timeConfig = props.form?.time_config || {}
@@ -529,6 +540,66 @@ const licenseUrlInvalid = computed(() => {
           >
             Chat
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Narrator Memory & Context Window Panel -->
+    <div class="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl space-y-4">
+      <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <label class="block text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Narrator Turn Memory</label>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Controls how many past player & GM turns are passed into the narration LLM context window. Higher values provide richer narrative continuity, but consume more LLM tokens.
+          </p>
+        </div>
+        <div class="flex items-center gap-3 self-end sm:self-auto">
+          <div v-if="memoryConfigChanged" class="flex items-center gap-2 animate-fade-in mr-2">
+            <button
+              @click="emit('save-changes')"
+              :disabled="isSaving"
+              class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+              title="Save memory turns setting"
+            >
+              <i v-if="isSaving" class="ra ra-cycle animate-spin text-sm"></i>
+              <Save v-else class="w-4 h-4" />
+            </button>
+            <button
+              @click="discardMemoryConfig"
+              :disabled="isSaving"
+              class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all flex items-center justify-center"
+              title="Discard changes"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="flex items-center gap-2 bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl">
+            <input
+              type="number"
+              min="1"
+              max="100"
+              :value="form.max_memory_turns ?? 30"
+              @input="emit('update:max-memory-turns', Math.min(100, Math.max(1, Number(($event.target as HTMLInputElement).value) || 30)))"
+              class="w-12 bg-transparent text-center text-white font-mono font-bold text-sm focus:outline-none"
+            />
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Turns</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <input
+          type="range"
+          min="1"
+          max="100"
+          :value="form.max_memory_turns ?? 30"
+          @input="emit('update:max-memory-turns', Number(($event.target as HTMLInputElement).value))"
+          class="w-full accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+        />
+        <div class="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest pt-1 border-t border-white/5">
+          <span>Low Token Cost (1–15)</span>
+          <span class="text-emerald-400 font-bold">Recommended Default (30)</span>
+          <span>Extended Memory (50–100)</span>
         </div>
       </div>
     </div>

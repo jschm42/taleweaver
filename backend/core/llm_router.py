@@ -48,8 +48,15 @@ class GameMasterLLM:
         return (
             "timeout" in err_type
             or "connection" in err_type
+            or "apiconnectionerror" in err_type
+            or "timeouterror" in err_type
+            or "connecterror" in err_type
+            or "readtimeout" in err_type
+            or "connecttimeout" in err_type
+            or ("deepseekexception" in err_type and ("timeout" in err_msg or "connection" in err_msg))
             or "disconnected" in err_msg
             or "connection reset" in err_msg
+            or "connection timed out" in err_msg
             or "time taken=0." in err_msg
             or "time taken=0" in err_msg
             or "serverdisconnected" in err_msg
@@ -92,8 +99,8 @@ class GameMasterLLM:
         return retry_kwargs
 
     def _completion_with_openrouter_fallback(self, kwargs: dict):
-        """Call LiteLLM completion and retry for OpenRouter provider-order mismatches and transient connection drops."""
-        max_transient_retries = 2
+        """Call LiteLLM completion and retry for OpenRouter provider-order mismatches and transient connection drops (up to 3 retries)."""
+        max_transient_retries = 4
         for attempt in range(max_transient_retries):
             try:
                 return self._get_litellm().completion(**kwargs, request_timeout=self.request_timeout)
@@ -110,20 +117,25 @@ class GameMasterLLM:
                         return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
+                    backoff_delay = 0.75 * (attempt + 1)
                     logger.warning(
-                        "Transient LLM connection/timeout error on attempt %d (%s: %s). Retrying with fresh connection...",
+                        "Transient LLM connection/timeout error on attempt %d/%d (retry %d/%d) (%s: %s). Retrying with fresh connection in %.2fs...",
                         attempt + 1,
+                        max_transient_retries,
+                        attempt + 1,
+                        max_transient_retries - 1,
                         type(exc).__name__,
                         exc,
+                        backoff_delay,
                     )
-                    time.sleep(0.5)
+                    time.sleep(backoff_delay)
                     continue
 
                 raise
 
     async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
-        """Async variant of completion retry for OpenRouter provider-order mismatches and transient connection drops."""
-        max_transient_retries = 2
+        """Async variant of completion retry for OpenRouter provider-order mismatches and transient connection drops (up to 3 retries)."""
+        max_transient_retries = 4
         for attempt in range(max_transient_retries):
             try:
                 logger.info(
@@ -152,13 +164,18 @@ class GameMasterLLM:
                         return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
+                    backoff_delay = 0.75 * (attempt + 1)
                     logger.warning(
-                        "Transient LLM connection/timeout error on attempt %d (%s: %s). Retrying with fresh connection...",
+                        "Transient LLM connection/timeout error on attempt %d/%d (retry %d/%d) (%s: %s). Retrying with fresh connection in %.2fs...",
                         attempt + 1,
+                        max_transient_retries,
+                        attempt + 1,
+                        max_transient_retries - 1,
                         type(exc).__name__,
                         exc,
+                        backoff_delay,
                     )
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(backoff_delay)
                     continue
 
                 raise
@@ -1097,6 +1114,7 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
+        messages: Optional[list[dict[str, Any]]] = None,
         adventure_id: Optional[str] = None,
         game_id: Optional[str] = None,
         operation: Optional[str] = None,
@@ -1106,10 +1124,11 @@ class GameMasterLLM:
         """
         Streams a free narrative task.
         """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
+        if messages is None:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
         
         normalized_model = self._normalize_model(model)
 

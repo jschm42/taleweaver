@@ -51,6 +51,7 @@ export interface CharacterSheet {
   unlocked_actions?: string[]
   agent_active?: boolean
   agent_monkey_mode?: boolean
+  max_memory_turns?: number
 }
 
 export interface InventoryItem {
@@ -159,6 +160,7 @@ export interface GameSession {
   status?: 'active' | 'archived' | 'completed' | 'game_over' | null
   status_note?: string | null
   copied_from_id?: string | null
+  max_memory_turns?: number
 }
 
 export interface SessionCheckpoint {
@@ -251,6 +253,7 @@ export interface CreateAdventurePayload {
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
   skip_generation?: boolean
+  max_memory_turns?: number
 }
 
 export interface CatalogTile {
@@ -299,6 +302,7 @@ export interface AdventureImportPayload {
     notes?: string
   }
   time_per_turn?: number
+  max_memory_turns?: number
   start_date?: string
   start_time?: string
   start_datetime?: string

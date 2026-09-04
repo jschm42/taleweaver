@@ -1189,6 +1189,8 @@ async def apply_manifest(
             adventure.pacing_minutes = int(manifest_dict["pacing_minutes"])  # type: ignore[assignment]
         if manifest_dict.get("max_time_per_turn") is not None:
             adventure.max_time_per_turn = int(manifest_dict["max_time_per_turn"])  # type: ignore[assignment]
+        if manifest_dict.get("max_memory_turns") is not None:
+            adventure.max_memory_turns = int(manifest_dict["max_memory_turns"])  # type: ignore[assignment]
         if manifest_dict.get("clock_enabled") is not None:
             adventure.clock_enabled = bool(manifest_dict["clock_enabled"])  # type: ignore[assignment]
         if manifest_dict.get("time_system"):

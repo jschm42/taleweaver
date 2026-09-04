@@ -11,6 +11,11 @@ import type { ChatMessage, CharacterSheet, CombatState } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
+export interface TurnErrorState {
+  message: string
+  action: string
+}
+
 export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
   sheet: Ref<CharacterSheet | null>
@@ -44,12 +49,15 @@ export interface UseGameSocket {
   isCheckpointSaving: Ref<boolean>
   generatorProposal: Ref<any | null>
   showGeneratorModal: Ref<boolean>
+  turnError: Ref<TurnErrorState | null>
   openGeneratorModal: (proposal?: any) => void
   closeGeneratorModal: () => void
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   haltActiveOperations: () => void
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (content: string, isRetry?: boolean) => Promise<void>
+  retryLastAction: () => Promise<void>
+  cancelTurnError: () => void
   emitSystemMessage: (content: string) => void
   runAgentTurn: () => Promise<void>
   createTerminalEpilogue: () => Promise<void>
@@ -103,6 +111,8 @@ export function useGameSocket(): UseGameSocket {
   let checkpointPulseTimer: number | null = null
   const generatorProposal = ref<any | null>(null)
   const showGeneratorModal = ref(false)
+  const turnError = ref<TurnErrorState | null>(null)
+  const lastUserAction = ref<string>('')
 
   function openGeneratorModal(proposal?: any): void {
     if (proposal) generatorProposal.value = proposal
@@ -375,10 +385,12 @@ export function useGameSocket(): UseGameSocket {
   /**
    * Posts a player message and processes the GM response.
    */
-  async function sendMessage(content: string): Promise<void> {
+  async function sendMessage(content: string, isRetry: boolean = false): Promise<void> {
     const normalizedContent = normalizeUiActionInput(content)
     const isAgentOff = normalizedContent.trim().toLowerCase() === '/agent off'
     const hadActiveChat = !!activeChatController
+
+    turnError.value = null
 
     if (activeChatController) {
       activeChatController.abort()
@@ -419,7 +431,17 @@ export function useGameSocket(): UseGameSocket {
     const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions', '/traverse_exit']
     const isSilent = silentCommands.some(cmd => normalizedContent.toLowerCase().startsWith(cmd))
 
-    if (normalizedContent && !isSilent) _pushMessage('user', normalizedContent)
+    if (normalizedContent && !isSilent) {
+      lastUserAction.value = normalizedContent
+      if (!isRetry) {
+        _pushMessage('user', normalizedContent)
+      } else {
+        const lastMsg = messages.value[messages.value.length - 1]
+        if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== normalizedContent) {
+          _pushMessage('user', normalizedContent)
+        }
+      }
+    }
     const preTurnMessageCount = messages.value.length
 
     if (!isAgentOff) {
@@ -553,6 +575,9 @@ export function useGameSocket(): UseGameSocket {
             const detail = data.detail || 'An error occurred.'
             _pushMessage('system', detail)
             addNotification(detail, 'error')
+            if (lastUserAction.value) {
+              turnError.value = { message: detail, action: lastUserAction.value }
+            }
             if (status.value === 'connecting' || status.value === 'loading') {
               status.value = 'connected'
               statusText.value = ''
@@ -574,6 +599,8 @@ export function useGameSocket(): UseGameSocket {
       }
 
       if (receivedFinalEvent) {
+        turnError.value = null
+        lastUserAction.value = ''
         const snapshot = await fetchSessionSnapshot(currentGameId)
         if (snapshot) {
           // After a scene transition the SSE stream already built the new-scene
@@ -604,6 +631,9 @@ export function useGameSocket(): UseGameSocket {
             const fallbackMsg = 'The turn ended unexpectedly without a response. Please try your action again.'
             _pushMessage('system', fallbackMsg)
             addNotification(fallbackMsg, 'error')
+            if (lastUserAction.value) {
+              turnError.value = { message: fallbackMsg, action: lastUserAction.value }
+            }
           }
         }
 
@@ -614,7 +644,12 @@ export function useGameSocket(): UseGameSocket {
         console.log('Chat/deactivation fetch request was aborted.')
       } else {
         console.error('[Session] Chat error:', err)
-        _pushMessage('system', 'The Game Master did not respond in time. Please try again.')
+        const errMsg = 'The Game Master did not respond in time. Please try again.'
+        _pushMessage('system', errMsg)
+        addNotification(errMsg, 'error')
+        if (lastUserAction.value) {
+          turnError.value = { message: errMsg, action: lastUserAction.value }
+        }
         if (status.value === 'connecting' || status.value === 'loading') {
           status.value = 'connected'
           statusText.value = ''
@@ -629,6 +664,21 @@ export function useGameSocket(): UseGameSocket {
         status.value = 'connected'
         statusText.value = ''
       }
+    }
+  }
+
+  async function retryLastAction(): Promise<void> {
+    if (!turnError.value?.action) return
+    const actionToRetry = turnError.value.action
+    turnError.value = null
+    await sendMessage(actionToRetry, true)
+  }
+
+  function cancelTurnError(): void {
+    turnError.value = null
+    if (status.value === 'connecting' || status.value === 'loading') {
+      status.value = 'connected'
+      statusText.value = ''
     }
   }
 
@@ -849,6 +899,7 @@ export function useGameSocket(): UseGameSocket {
     isCheckpointSaving,
     generatorProposal,
     showGeneratorModal,
+    turnError,
     openGeneratorModal,
     closeGeneratorModal,
     connect,
@@ -856,6 +907,8 @@ export function useGameSocket(): UseGameSocket {
     haltActiveOperations,
     refreshSession,
     sendMessage,
+    retryLastAction,
+    cancelTurnError,
     emitSystemMessage,
     runAgentTurn,
     createTerminalEpilogue,

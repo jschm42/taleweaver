@@ -9,7 +9,7 @@ import { ref, computed, watch, nextTick, toRef } from 'vue'
 import CommandPopup from '@/components/game/CommandPopup.vue'
 import { getFilteredCommands } from '@/utils/commands'
 import { useVoiceInput } from '@/composables/useVoiceInput'
-import { Mic, SendHorizontal } from 'lucide-vue-next'
+import { Mic, SendHorizontal, AlertTriangle, RotateCcw } from 'lucide-vue-next'
 
 const props = defineProps<{
   canSendInput?: boolean
@@ -17,10 +17,13 @@ const props = defineProps<{
   statusText?: string
   agentActive?: boolean
   debugMode?: boolean
+  turnError?: { message: string; action: string } | null
 }>()
 
 const emit = defineEmits<{
   send: [content: string]
+  retryTurn: []
+  cancelTurnError: []
 }>()
 
 const inputText = ref('')
@@ -198,6 +201,41 @@ defineExpose({
 
 <template>
   <div class="p-3 sm:p-4">
+    <!-- Turn Error / Retry Banner -->
+    <div
+      v-if="props.turnError"
+      class="mb-2.5 p-3 rounded-2xl border border-red-500/50 bg-red-950/85 backdrop-blur-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xl animate-fade-in"
+    >
+      <div class="flex items-center gap-2.5 text-red-200 min-w-0">
+        <div class="w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center shrink-0">
+          <AlertTriangle class="w-4 h-4 text-red-400" />
+        </div>
+        <div class="flex flex-col min-w-0">
+          <span class="font-black text-red-300 uppercase tracking-wider text-[10px]">Action Failed</span>
+          <span class="truncate font-medium text-slate-200">{{ props.turnError.message }}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+        <button
+          type="button"
+          @click="emit('retryTurn')"
+          class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider text-[11px] transition-all flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer"
+          title="Retry this action"
+        >
+          <RotateCcw class="w-3.5 h-3.5" />
+          Retry
+        </button>
+        <button
+          type="button"
+          @click="emit('cancelTurnError')"
+          class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold uppercase tracking-wider text-[11px] transition-all border border-white/10 active:scale-95 cursor-pointer"
+          title="Cancel error and continue"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+
     <!-- Voice Recording Overlay -->
     <div
       v-if="isRecording || isTranscribing"

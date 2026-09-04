@@ -715,8 +715,8 @@ export const api = {
     })
   },
 
-  /** Updates a session note or status. */
-  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null }): Promise<GameSession> {
+  /** Updates a session note, status, or memory turn limit. */
+  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number }): Promise<GameSession> {
     return request(`/adventures/sessions/${gameId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),

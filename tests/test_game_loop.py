@@ -637,7 +637,7 @@ async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monke
                 new_inventory_items=[]
             )
 
-        async def _mock_stream_simple(system_prompt, _user_prompt, _model):
+        async def _mock_stream_simple(system_prompt, _user_prompt, _model=None, **_kwargs):
             captured["narration_prompt"] = system_prompt
 
             async def _stream():

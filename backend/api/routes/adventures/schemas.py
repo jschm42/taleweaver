@@ -29,6 +29,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     time_per_turn: int = 5
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
+    max_memory_turns: int = 30
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
     time_config: Optional[dict[str, Any]] = None
@@ -276,6 +277,7 @@ class AdventureTemplateResponse(BaseModel):
     time_per_turn: int
     pacing_minutes: int
     max_time_per_turn: Optional[int] = None
+    max_memory_turns: int = 30
     clock_enabled: bool
     time_system: str = "calendar"
     time_config: Optional[dict[str, Any]] = None
@@ -368,6 +370,7 @@ class GameSessionResponse(BaseModel):
     status: str = "active"
     status_note: Optional[str] = None
     copied_from_id: Optional[str] = None
+    max_memory_turns: Optional[int] = 30
 
     @field_validator("selected_tone", mode="before")
     @classmethod
@@ -551,6 +554,7 @@ class AdventureTemplateUpdate(BaseModel):
     time_system: Optional[str] = None
     time_config: Optional[dict[str, Any]] = None
     max_time_per_turn: Optional[int] = None
+    max_memory_turns: Optional[int] = None
     allow_dynamic_items: Optional[bool] = None
     can_damage_npcs: Optional[bool] = None
     npcs_can_damage_protagonist: Optional[bool] = None

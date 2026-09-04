@@ -19,7 +19,8 @@ import {
   VolumeX,
   Brain,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RotateCcw,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -34,11 +35,14 @@ const props = defineProps<{
   currentSceneDescription?: string | null
   npcMetadata: Record<string, any>
   gameId?: string
+  turnError?: { message: string; action: string } | null
 }>()
 
 const emit = defineEmits<{
   goToTurn: [index: number]
   goToLatestTurn: []
+  retryTurn: []
+  cancelTurnError: []
   openSheet: []
   npcClick: [name: string]
   itemClick: [item: any]
@@ -150,7 +154,14 @@ function getEntityForHover(nameOrEntity: any) {
           :key="sIdx"
           class="animate-fade-in relative group my-1"
         >
-          <div class="relative bg-slate-900/95 border-l-4 border-emerald-500 rounded-r-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl border-y border-r border-emerald-500/30 text-slate-100">
+          <div
+            :class="[
+              'relative rounded-r-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl border-y border-r text-slate-100 transition-all',
+              props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
+                ? 'bg-red-950/80 border-l-4 border-l-red-500 border-red-500/40 shadow-red-950/40'
+                : 'bg-slate-900/95 border-l-4 border-emerald-500 border-emerald-500/30'
+            ]"
+          >
             <!-- Overlay TTS Button -->
             <button
               v-if="configState.isTtsEnabled"
@@ -165,13 +176,49 @@ function getEntityForHover(nameOrEntity: any) {
             </button>
 
             <!-- System Header & Content -->
-            <div class="comic-narration-text text-sm sm:text-base leading-relaxed text-emerald-100">
+            <div
+              :class="[
+                'comic-narration-text text-sm sm:text-base leading-relaxed',
+                props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
+                  ? 'text-red-100'
+                  : 'text-emerald-100'
+              ]"
+            >
               <span
-                class="inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm"
+                :class="[
+                  'inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm',
+                  props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                ]"
               >
-                System
+                {{ props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message) ? 'Error' : 'System' }}
               </span>
               <span class="italic font-medium" v-html="renderFormattedHtml(sysMsg.content)"></span>
+            </div>
+
+            <!-- Inline Action Buttons (Retry & Cancel) -->
+            <div
+              v-if="props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)"
+              class="mt-3.5 pt-3 border-t border-red-500/25 flex items-center gap-2.5 not-italic"
+            >
+              <button
+                type="button"
+                @click.stop="emit('retryTurn')"
+                class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider text-[11px] transition-all flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+                title="Retry this action"
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+                Retry
+              </button>
+              <button
+                type="button"
+                @click.stop="emit('cancelTurnError')"
+                class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold uppercase tracking-wider text-[11px] transition-all border border-white/10 active:scale-95 cursor-pointer"
+                title="Cancel error"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

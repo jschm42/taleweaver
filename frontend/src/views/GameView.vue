@@ -29,6 +29,7 @@ import CheckpointRestoreConfirmModal from '@/components/game/CheckpointRestoreCo
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
+import SessionSettingsModal from '@/components/game/SessionSettingsModal.vue'
 import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
@@ -121,6 +122,25 @@ const saveSessionNote = async (note: string) => {
     isSavingNote.value = false
   }
 }
+
+const showSettingsModal = ref(false)
+const isSavingSettings = ref(false)
+
+const saveSessionSettings = async (turns: number) => {
+  isSavingSettings.value = true
+  try {
+    await api.updateSession(props.id, { max_memory_turns: turns })
+    if (sheet.value) {
+      sheet.value.max_memory_turns = turns
+    }
+    addNotification('Session memory settings updated.', 'success')
+    showSettingsModal.value = false
+  } catch (err) {
+    addNotification('Failed to update session settings.', 'error')
+  } finally {
+    isSavingSettings.value = false
+  }
+}
 const { notifications, removeNotification, addNotification } = useNotifications()
 const gameSettings = ref<GameSettings>({
   clock_24h: false,
@@ -166,7 +186,10 @@ const {
   sendMessage,
   emitSystemMessage,
   runAgentTurn,
-  createTerminalEpilogue
+  createTerminalEpilogue,
+  turnError,
+  retryLastAction,
+  cancelTurnError,
 } = useGameSocket()
 
 const displayAdventureTitle = computed(() => {
@@ -1422,11 +1445,15 @@ watch(
       :is-checkpoint-saving="isCheckpointSaving"
       :exit-traversal-busy="exitTraversalBusy"
       :exit-unlock-busy="exitUnlockBusy"
+      :turn-error="turnError"
       @send="handlePlayerInput"
+      @retry-turn="retryLastAction"
+      @cancel-turn-error="cancelTurnError"
       @open-sheet="showSheet = true"
       @open-map="showMap = true"
       @open-quests="showQuests = true"
       @open-chronicles="openChroniclesModal"
+      @open-settings="showSettingsModal = true"
       @open-debug="openDebugInspector"
       @open-walkthrough="openWalkthroughPanel"
       @npc-hover="(ent, event) => typeof ent === 'object' && ent !== null ? handleHover(ent, event) : handleChatNpcHover(ent, event)"
@@ -1485,6 +1512,13 @@ watch(
       :is-saving="isSavingNote"
       @close="showNoteModal = false"
       @save="saveSessionNote"
+    />
+    <SessionSettingsModal
+      v-if="showSettingsModal"
+      :initial-turns="sheet?.max_memory_turns ?? 30"
+      :is-saving="isSavingSettings"
+      @close="showSettingsModal = false"
+      @save="saveSessionSettings"
     />
     <ChroniclesModal
       :open="showChroniclesModal"

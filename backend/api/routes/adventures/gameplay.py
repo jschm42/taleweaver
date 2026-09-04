@@ -176,7 +176,7 @@ async def post_chat_message(
                 yield (
                     f"id: {turn_id}\n"
                     "event: error\n"
-                    f"data: {json.dumps({'detail': _CLIENT_ERROR_DETAIL})}\n\n"
+                    f"data: {json.dumps({'detail': _CLIENT_ERROR_DETAIL, 'retryable': True})}\n\n"
                 )
 
         try:

@@ -370,6 +370,72 @@ class GameTurnManager:
             logger.exception("Failed to unhide entities for message")
         return cm
 
+    async def _build_narration_messages(
+        self, narration_prompt: str, user_msg: str
+    ) -> tuple[list[dict[str, str]], int]:
+        """
+        Builds the multi-turn messages array for Pass 2 (narration).
+        Includes the system prompt, up to max_memory_turns previous turns of context,
+        and the current turn's player action with any intermediate system events.
+        Returns (messages, max_turns_configured).
+        """
+        max_turns = getattr(self.state, "max_memory_turns", None)
+        if max_turns is None and self.adventure:
+            max_turns = getattr(self.adventure, "max_memory_turns", 30)
+        if max_turns is None:
+            max_turns = 30
+        max_turns = max(0, int(max_turns))
+
+        # Query all session messages in order
+        res = await self.db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == self.state.session_id)
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+        )
+        all_msgs = list(res.scalars().all())
+
+        # Identify turn boundaries (each player action starts with role == "user")
+        user_indices = [i for i, m in enumerate(all_msgs) if m.role == "user"]
+
+        if not user_indices:
+            return [
+                {"role": "system", "content": narration_prompt},
+                {"role": "user", "content": user_msg},
+            ], max_turns
+
+        # The last user message index corresponds to the current turn
+        curr_turn_idx = user_indices[-1]
+        prev_user_indices = user_indices[:-1]
+
+        if max_turns == 0 or not prev_user_indices:
+            start_msg_idx = curr_turn_idx
+        elif len(prev_user_indices) <= max_turns:
+            start_msg_idx = prev_user_indices[0]
+        else:
+            start_msg_idx = prev_user_indices[-max_turns]
+
+        selected_db_msgs = all_msgs[start_msg_idx:]
+
+        messages: list[dict[str, str]] = [{"role": "system", "content": narration_prompt}]
+        for m in selected_db_msgs:
+            if m.role == "user":
+                messages.append({"role": "user", "content": m.content})
+            elif m.role == "assistant":
+                messages.append({"role": "assistant", "content": m.content})
+            elif m.role == "system":
+                # Ensure compatibility with Anthropic Claude & Gemini:
+                # Merge or attach system messages into the user turn as game events
+                if messages and messages[-1]["role"] == "user":
+                    messages[-1]["content"] += f"\n\n[Game Event: {m.content}]"
+                else:
+                    messages.append({"role": "user", "content": f"[Game Event: {m.content}]"})
+
+        # Safety check: ensure last message is role="user" so the LLM responds as assistant
+        if not messages or messages[-1]["role"] != "user":
+            messages.append({"role": "user", "content": user_msg})
+
+        return messages, max_turns
+
     @staticmethod
     def _compact_json(payload: object) -> str:
         return TurnProgressionBuilder.compact_json(payload)
@@ -988,7 +1054,7 @@ class GameTurnManager:
             if not user_safe_error:
                 logger.exception("[Turn %s] Turn pipeline aborted unexpectedly", self.game_id)
                 user_safe_error = _friendly_llm_unexpected_error_message()
-            yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'detail': user_safe_error, 'retryable': True})}\n\n"
             return
             
         turn_end = time.perf_counter()
@@ -1636,12 +1702,17 @@ class GameTurnManager:
             narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
             
         pass2_start = time.perf_counter()
-        logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
+        narration_messages, memory_turns = await self._build_narration_messages(narration_prompt, user_msg)
+        logger.debug(
+            f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider} "
+            f"(memory_turns={memory_turns}, messages={len(narration_messages)})"
+        )
         try:
             stream = await llm.stream_simple_task(
                 narration_prompt,
                 user_msg,
                 complex_model,
+                messages=narration_messages,
             )
 
             async for chunk in stream:
@@ -1659,18 +1730,16 @@ class GameTurnManager:
 
         try:
             import litellm
-            prompt_tokens = litellm.token_counter(model=complex_model, messages=[
-                {"role": "system", "content": narration_prompt},
-                {"role": "user", "content": user_msg}
-            ])
+            prompt_tokens = litellm.token_counter(model=complex_model, messages=narration_messages)
             completion_tokens = litellm.token_counter(model=complex_model, text=response_text)
         except Exception:
-            prompt_tokens = int(len(narration_prompt + user_msg) / 4)
+            prompt_tokens = int(sum(len(m.get("content", "")) for m in narration_messages) / 4)
             completion_tokens = int(len(response_text) / 4)
 
         print(
             f"\n>>> [TOKEN USAGE] Phase: narration | Model: {complex_model} | "
-            f"Prompt: {prompt_tokens} | Completion: {completion_tokens} | Total: {prompt_tokens + completion_tokens}\n",
+            f"Prompt: {prompt_tokens} | Completion: {completion_tokens} | Total: {prompt_tokens + completion_tokens} | "
+            f"Memory Turns: {memory_turns} (Messages: {len(narration_messages)})\n",
             flush=True
         )
         
@@ -1684,6 +1753,8 @@ class GameTurnManager:
             duration_ms=round(pass2_duration * 1000, 2),
             model=complex_model,
             provider=complex_model_provider,
+            memory_turns=memory_turns,
+            history_messages_count=len(narration_messages),
         )
         logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
 

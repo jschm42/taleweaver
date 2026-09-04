@@ -168,6 +168,7 @@ class SessionImporter:
                     avatar_id=new_avatar_id,
                     current_scene_id=session_state_data.get("current_scene_id", "START"),
                     in_game_time=session_state_data.get("in_game_time", 0),
+                    max_memory_turns=session_state_data.get("max_memory_turns", 30),
                     time_system=session_state_data.get("time_system", "calendar"),
                     time_config=session_state_data.get("time_config"),
                     inventory=session_state_data.get("inventory", []),

@@ -14,6 +14,7 @@ export interface Adventure {
   time_per_turn: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
+  max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string
   time_config?: Record<string, any> | null
@@ -63,6 +64,7 @@ export interface AdventureFormData {
   time_per_turn: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
+  max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string
   time_config?: Record<string, any> | null
