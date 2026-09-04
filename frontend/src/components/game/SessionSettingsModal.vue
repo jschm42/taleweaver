@@ -4,19 +4,24 @@ import { Sliders, X, BrainCircuit, Sparkles } from 'lucide-vue-next'
 
 const props = defineProps<{
   initialTurns?: number
+  initialCompression?: boolean
   isSaving?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'save', turns: number): void
+  (e: 'save', payload: { turns: number; enableCompression: boolean }): void
 }>()
 
 const turns = ref(30)
+const enableCompression = ref(true)
 
 onMounted(() => {
   if (typeof props.initialTurns === 'number' && props.initialTurns >= 1) {
     turns.value = Math.min(100, Math.max(1, props.initialTurns))
+  }
+  if (typeof props.initialCompression === 'boolean') {
+    enableCompression.value = props.initialCompression
   }
 })
 
@@ -129,6 +134,27 @@ function handleInput(event: Event) {
           </div>
         </div>
 
+        <!-- Automatic History Compression Checkbox/Toggle -->
+        <div class="flex items-start justify-between gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition-all">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <label class="block text-xs font-black uppercase tracking-widest text-slate-200 cursor-pointer" @click="enableCompression = !enableCompression">
+                Automatic History Compression
+              </label>
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                English
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              When turns exceed the memory limit, older turns are automatically compressed into an English chronicle summary and passed to the narrator.
+            </p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+            <input type="checkbox" v-model="enableCompression" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 peer-checked:after:bg-white"></div>
+          </label>
+        </div>
+
         <!-- Helpful tip note -->
         <div class="flex items-start gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-400 text-xs leading-relaxed">
           <Sparkles class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -149,9 +175,9 @@ function handleInput(event: Event) {
         </button>
         <button
           type="button"
-          class="px-5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-amber-500/20"
+          class="px-5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
           :disabled="props.isSaving"
-          @click="emit('save', turns)"
+          @click="emit('save', { turns, enableCompression })"
         >
           <span v-if="props.isSaving" class="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin"></span>
           {{ props.isSaving ? 'Saving...' : 'Save Settings' }}

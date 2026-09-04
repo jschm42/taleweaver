@@ -55,6 +55,7 @@ const props = defineProps<{
   exitTraversalBusy?: string
   exitUnlockBusy?: boolean
   turnError?: { message: string; action: string } | null
+  worldMemories?: any[]
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +66,7 @@ const emit = defineEmits<{
   openMap: []
   openQuests: []
   openChronicles: []
+  openMemories: []
   openSettings: []
   openDebug: []
   openWalkthrough: []
@@ -205,6 +207,7 @@ defineExpose({
       :mode="props.mode"
       @open-chronicles="emit('openChronicles')"
       @open-quests="emit('openQuests')"
+      @open-memories="emit('openMemories')"
       @open-settings="emit('openSettings')"
       @toggle-mobile-interact="showMobileInteract = !showMobileInteract"
     />
@@ -276,12 +279,14 @@ defineExpose({
         :map-glow="props.mapGlow"
         :quest-glow="props.questGlow"
         :prompt-suggestions="props.promptSuggestions"
+        :world-memories="props.worldMemories"
         :can-send-input="canSendInput"
         @open-quests="emit('openQuests')"
         @open-map="emit('openMap')"
         @open-sheet="emit('openSheet')"
         @open-chronicles="emit('openChronicles')"
         @open-walkthrough="emit('openWalkthrough')"
+        @open-memories="emit('openMemories')"
         @select-suggestion="handleSuggestionSelect"
       />
 

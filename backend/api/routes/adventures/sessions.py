@@ -1366,6 +1366,7 @@ async def _get_session_response(db: AsyncSession, game_id: str, current_user_id:
         status_note=g.status_note,
         copied_from_id=g.copied_from_id,
         max_memory_turns=getattr(s, "max_memory_turns", 30) if s else 30,
+        enable_history_compression=getattr(s, "enable_history_compression", True) if s else True,
     )
 
 
@@ -1387,13 +1388,16 @@ async def update_session(
         game_session.status = payload.status
     if payload.status_note is not None:
         game_session.status_note = payload.status_note
-    if payload.max_memory_turns is not None:
+    if payload.max_memory_turns is not None or payload.enable_history_compression is not None:
         state_res = await db.execute(
             select(SessionState).where(SessionState.session_id == game_id)
         )
         session_state = state_res.scalars().first()
         if session_state:
-            session_state.max_memory_turns = max(1, min(100, int(payload.max_memory_turns)))
+            if payload.max_memory_turns is not None:
+                session_state.max_memory_turns = max(1, min(100, int(payload.max_memory_turns)))
+            if payload.enable_history_compression is not None:
+                session_state.enable_history_compression = payload.enable_history_compression
 
     await db.commit()
 

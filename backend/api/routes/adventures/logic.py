@@ -839,6 +839,8 @@ class AdventureLogic:
             "time_per_turn": adventure.time_per_turn if adventure else (session_snapshot.get("adventure") or {}).get("time_per_turn", 5),
             "max_time_per_turn": adventure.max_time_per_turn if adventure else (session_snapshot.get("adventure") or {}).get("max_time_per_turn"),
             "max_memory_turns": getattr(state, "max_memory_turns", None) if getattr(state, "max_memory_turns", None) is not None else (getattr(adventure, "max_memory_turns", 30) if adventure else 30),
+            "enable_history_compression": bool(getattr(state, "enable_history_compression", True)),
+            "compressed_history": getattr(state, "compressed_history", None),
             "agent_active": bool((state.entity_states or {}).get("__agent__", {}).get("active", False)),
             "agent_monkey_mode": bool((state.entity_states or {}).get("__agent__", {}).get("monkey_mode", False)),
             "is_debug_enabled": bool(state.is_debug_enabled),

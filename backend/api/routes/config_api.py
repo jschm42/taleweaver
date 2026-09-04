@@ -393,6 +393,7 @@ async def _build_available_constants(llm_settings: Optional[dict], t2i_settings:
             "complex_model_provider",
             "generator_model_provider",
             "play_agent_model_provider",
+            "compression_model_provider",
             "preferred_provider",
         )
         return any(
@@ -453,6 +454,10 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "play_agent_model_provider": "openai",
         "play_agent_monkey_mode": False,
         "play_agent_openrouter_provider": "",
+        "compression_model": "",
+        "compression_model_provider": "openai",
+        "compression_max_tokens": 4096,
+        "compression_openrouter_provider": "",
         "preferred_provider": "openai",  # Legacy/Default
         "openrouter_provider": "",
         "ollama_url": "http://localhost:11434",
@@ -559,6 +564,21 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     if "play_agent_monkey_mode" not in normalized:
         normalized["play_agent_monkey_mode"] = False
 
+    # Compression model normalization (fallback to small model if not set)
+    if "compression_model_provider" not in normalized:
+        normalized["compression_model_provider"] = (
+            normalized.get("small_model_provider") or "openai"
+        )
+    if "compression_openrouter_provider" not in normalized:
+        normalized["compression_openrouter_provider"] = (
+            normalized.get("small_openrouter_provider") or ""
+        )
+    if "compression_max_tokens" not in normalized:
+        normalized["compression_max_tokens"] = 4096
+    # If compression model is empty, silently fall back to small_model at call time
+    if "compression_model" not in normalized:
+        normalized["compression_model"] = ""
+
     # OpenRouter normalization
     if normalized.get("small_model_provider") == "openrouter":
         normalized["small_model"] = _normalize_openrouter_model(normalized.get("small_model"))
@@ -568,6 +588,8 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         normalized["generator_model"] = _normalize_openrouter_model(normalized.get("generator_model"))
     if normalized.get("play_agent_model_provider") == "openrouter":
         normalized["play_agent_model"] = _normalize_openrouter_model(normalized.get("play_agent_model"))
+    if normalized.get("compression_model_provider") == "openrouter":
+        normalized["compression_model"] = _normalize_openrouter_model(normalized.get("compression_model"))
 
     return normalized
 

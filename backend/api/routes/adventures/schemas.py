@@ -371,6 +371,7 @@ class GameSessionResponse(BaseModel):
     status_note: Optional[str] = None
     copied_from_id: Optional[str] = None
     max_memory_turns: Optional[int] = 30
+    enable_history_compression: Optional[bool] = True
 
     @field_validator("selected_tone", mode="before")
     @classmethod

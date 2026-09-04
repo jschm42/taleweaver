@@ -668,6 +668,9 @@ class GameTurnManager:
         current_scene_id = self.state.current_scene_id if self.state else "START"
         return self._session_helper.build_world_memories_prompt_block(current_scene_id)
 
+    def _build_compressed_history_prompt_block(self) -> str:
+        return self._session_helper.build_compressed_history_prompt_block()
+
     @staticmethod
     def _build_progression_event(intent: AdventureGeneratorToolIntent) -> GameEvent:
         return TurnProgressionBuilder.build_progression_event(intent)
@@ -1974,6 +1977,9 @@ class GameTurnManager:
 
         await self.db.commit()
 
+        async for comp_event in self._compress_history_if_needed():
+            yield comp_event
+
         checkpoint_events = await self._persist_pending_checkpoints()
         if checkpoint_events:
             yield f"event: status\ndata: {json.dumps({'content': 'Saving chronicle...'})}\n\n"
@@ -1999,6 +2005,7 @@ class GameTurnManager:
             'awards': await self._build_awards_payload(adventure),
             'world_memories': self.state.world_memories or [],
             'world_rumors': self.state.world_rumors or [],
+            'compressed_history': self.state.compressed_history,
             **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status': 'success'
@@ -2006,6 +2013,144 @@ class GameTurnManager:
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         if pending_generator_proposal:
             yield f"event: adventure_generator_proposal\ndata: {json.dumps(pending_generator_proposal)}\n\n"
+
+    async def _compress_history_if_needed(self) -> AsyncGenerator[str, None]:
+        """
+        Automatically compresses turns that have fallen outside max_memory_turns
+        into self.state.compressed_history using the configured compression model.
+        Emits a system message into the chat and stream when compression occurs.
+        """
+        if not bool(getattr(self.state, "enable_history_compression", True)):
+            return
+
+        max_turns = getattr(self.state, "max_memory_turns", None)
+        if max_turns is None and self.adventure:
+            max_turns = getattr(self.adventure, "max_memory_turns", 30)
+        if max_turns is None:
+            max_turns = 30
+        max_turns = max(1, int(max_turns))
+
+        from backend.models.chat import ChatMessage
+        res = await self.db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == self.state.session_id)
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+        )
+        all_msgs = list(res.scalars().all())
+        user_indices = [i for i, m in enumerate(all_msgs) if m.role == "user"]
+
+        if len(user_indices) <= max_turns:
+            return
+
+        cutoff_user_idx = len(user_indices) - max_turns
+        cutoff_msg_idx = user_indices[cutoff_user_idx]
+
+        msgs_outside_memory = all_msgs[:cutoff_msg_idx]
+        if not msgs_outside_memory:
+            return
+
+        compressed_data = self.state.compressed_history
+        current_summary = ""
+        last_compressed_msg_id = None
+        if isinstance(compressed_data, dict):
+            current_summary = str(compressed_data.get("summary") or "")
+            last_compressed_msg_id = compressed_data.get("last_compressed_msg_id")
+        elif isinstance(compressed_data, str):
+            current_summary = compressed_data
+
+        start_idx = 0
+        if last_compressed_msg_id:
+            for idx, msg in enumerate(msgs_outside_memory):
+                if msg.id == last_compressed_msg_id:
+                    start_idx = idx + 1
+                    break
+
+        new_msgs_to_compress = msgs_outside_memory[start_idx:]
+        if not new_msgs_to_compress:
+            return
+
+        formatted_lines = []
+        for m in new_msgs_to_compress:
+            role_label = "Player" if m.role == "user" else ("Game Master" if m.role == "assistant" else "System")
+            content = (m.content or "").strip()
+            if content:
+                formatted_lines.append(f"[{role_label}]: {content}")
+
+        if not formatted_lines:
+            return
+
+        formatted_events = "\n\n".join(formatted_lines)
+
+        llm_settings = self.user.llm_settings or {}
+        compression_provider = (
+            llm_settings.get("compression_model_provider")
+            or llm_settings.get("small_model_provider")
+            or "openai"
+        )
+        compression_model = (
+            llm_settings.get("compression_model")
+            or llm_settings.get("small_model")
+            or "gpt-4o-mini"
+        )
+
+        compression_system_prompt = (
+            "You are an expert narrative archivist for an interactive RPG adventure. "
+            "Your task is to maintain a concise, chronological, and coherent summary of past events that have fallen outside the active memory window.\n\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "1. Output MUST be entirely in English, regardless of the language used in the adventure or player messages.\n"
+            "2. Preserve essential facts: key plot discoveries, quests started or completed, major player decisions, important NPC relationships or grudges, major injuries/curses, and significant items acquired or lost.\n"
+            "3. Omit routine turn-by-turn mechanics, repeated dice rolls, minor room transitions, or small talk.\n"
+            "4. Keep the summary dense, factual, and strictly in narrative past tense."
+        )
+
+        if current_summary.strip():
+            compression_user_prompt = (
+                f"Existing Chronicle Summary (English):\n{current_summary.strip()}\n\n"
+                f"New Past Events to Integrate (chronologically subsequent):\n{formatted_events}\n\n"
+                "Provide an updated, comprehensive English chronicle summary incorporating both the existing summary and the new events."
+            )
+        else:
+            compression_user_prompt = (
+                f"Past Events to Summarize:\n{formatted_events}\n\n"
+                "Provide a concise, comprehensive English chronicle summary of these past events."
+            )
+
+        try:
+            router = GameMasterLLM(
+                self.user,
+                provider=compression_provider,
+                model_category="compression",
+            )
+            updated_summary = await router.aexecute_simple_task(
+                system_prompt=compression_system_prompt,
+                user_prompt=compression_user_prompt,
+                model=compression_model,
+                adventure_id=self.state.template_id,
+                game_id=self.game_id,
+                operation="history_compression",
+            )
+            if updated_summary and updated_summary.strip():
+                last_msg = msgs_outside_memory[-1]
+                from datetime import timezone
+                self.state.compressed_history = {
+                    "summary": updated_summary.strip(),
+                    "last_compressed_msg_id": last_msg.id,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                flag_modified(self.state, "compressed_history")
+                await self.db.commit()
+
+                notify_msg = "Past turns exceeding the memory limit were automatically compressed into the chronicle memory."
+                await self._save_chat_message("system", notify_msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': notify_msg})}\n\n"
+                logger.info(
+                    "[Turn %s] History compression successful (%d msgs compressed, summary length %d chars)",
+                    self.game_id,
+                    len(new_msgs_to_compress),
+                    len(updated_summary),
+                )
+        except Exception as e:
+            logger.warning("[Turn %s] Failed to compress history: %s", self.game_id, e)
 
     async def _emit_system_message(
         self,

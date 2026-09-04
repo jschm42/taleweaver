@@ -11,11 +11,13 @@ import {
   User,
   History,
   Lightbulb,
+  BrainCircuit,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
   inventory?: any[]
   trackedQuest?: any
+  worldMemories?: any[]
   inventoryGlow?: boolean
   mapGlow?: boolean
   questGlow?: boolean
@@ -29,6 +31,7 @@ const emit = defineEmits<{
   openSheet: []
   openChronicles: []
   openWalkthrough: []
+  openMemories: []
   selectSuggestion: [suggestion: string]
 }>()
 </script>
@@ -96,7 +99,21 @@ const emit = defineEmits<{
         title="Adventure Hints & Walkthrough"
       >
         <Lightbulb class="w-4 h-4 text-amber-400" />
-        <span class="hidden md:inline uppercase tracking-wider">Hints</span>
+        <span class="hidden sm:inline uppercase tracking-wider">Hints</span>
+      </button>
+
+      <!-- World Memories & Chronicle -->
+      <button
+        type="button"
+        @click="emit('openMemories')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 hover:border-purple-400 hover:bg-purple-500/10 text-slate-200 hover:text-purple-300 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+        title="World Memories & Chronicle"
+      >
+        <BrainCircuit class="w-4 h-4 text-purple-400" />
+        <span class="hidden sm:inline uppercase tracking-wider">Memories</span>
+        <span v-if="props.worldMemories?.length" class="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 text-[9px] font-black rounded-full">
+          {{ props.worldMemories.length }}
+        </span>
       </button>
     </div>
 

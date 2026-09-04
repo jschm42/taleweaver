@@ -33,6 +33,9 @@ class TurnLlmContext:
     complex_model_provider: str
     small_model: str
     complex_model: str
+    compression_model_provider: str = "openai"
+    compression_model: str = ""
+    compression_max_tokens: int = 4096
 
 
 class TurnLlmContextBuilder:
@@ -330,6 +333,10 @@ class TurnLlmContextBuilder:
         mechanics_system_prompt += notes_prompt_block
         narration_system_prompt += notes_prompt_block
 
+        compressed_history_prompt_block = self.manager._build_compressed_history_prompt_block()
+        mechanics_system_prompt += compressed_history_prompt_block
+        narration_system_prompt += compressed_history_prompt_block
+
         memories_prompt_block = self.manager._build_world_memories_prompt_block()
         mechanics_system_prompt += memories_prompt_block
         narration_system_prompt += memories_prompt_block
@@ -410,6 +417,17 @@ class TurnLlmContextBuilder:
         )
         small_model = llm_settings.get("small_model") or "gpt-4o-mini"
         complex_model = llm_settings.get("complex_model") or "gpt-4o"
+        compression_model_provider = (
+            llm_settings.get("compression_model_provider")
+            or llm_settings.get("small_model_provider")
+            or "openai"
+        )
+        compression_model = (
+            llm_settings.get("compression_model")
+            or llm_settings.get("small_model")
+            or "gpt-4o-mini"
+        )
+        compression_max_tokens = int(llm_settings.get("compression_max_tokens") or 4096)
 
         return TurnLlmContext(
             history=history,
@@ -425,4 +443,7 @@ class TurnLlmContextBuilder:
             complex_model_provider=complex_model_provider,
             small_model=small_model,
             complex_model=complex_model,
+            compression_model_provider=compression_model_provider,
+            compression_model=compression_model,
+            compression_max_tokens=compression_max_tokens,
         )

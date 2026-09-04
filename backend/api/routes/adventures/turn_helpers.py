@@ -332,6 +332,19 @@ class TurnSessionStateHelper:
         lines = "\n".join(f"- {m['description']} (Emotion: {m['emotion']})" for m in active_memories)
         return "\n\nWORLD MEMORIES (LONG-TERM CONSEQUENCES):\n" + lines
 
+    def build_compressed_history_prompt_block(self) -> str:
+        data = getattr(self.manager.state, "compressed_history", None)
+        if not data:
+            return ""
+        if isinstance(data, dict):
+            summary_text = data.get("summary") or ""
+        else:
+            summary_text = str(data)
+        summary_text = summary_text.strip()
+        if not summary_text:
+            return ""
+        return f"\n\nPRIOR STORY SUMMARY (COMPRESSED HISTORY):\n{summary_text}\n"
+
 
 class TurnCombatStateHelper:
     """Encapsulates combat state persistence and log appends."""

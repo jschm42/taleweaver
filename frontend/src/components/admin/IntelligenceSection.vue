@@ -18,6 +18,7 @@ const missingProviders = computed(() => {
     localForm.value.complex_model_provider,
     localForm.value.generator_model_provider,
     localForm.value.play_agent_model_provider,
+    localForm.value.compression_model_provider,
   ])
   const missing: string[] = []
   for (const p of providers) {
@@ -94,11 +95,16 @@ watch(() => localForm.value.play_agent_model_provider, (provider, oldProvider) =
   localForm.value.play_agent_model = resolveModelOnProviderChange(localForm.value.play_agent_model, provider, oldProvider)
 })
 
+watch(() => localForm.value.compression_model_provider, (provider, oldProvider) => {
+  localForm.value.compression_model = resolveModelOnProviderChange(localForm.value.compression_model, provider, oldProvider)
+})
+
 const hasOllamaProviderSelected = computed(() => (
   localForm.value.small_model_provider === 'ollama'
   || localForm.value.complex_model_provider === 'ollama'
   || localForm.value.generator_model_provider === 'ollama'
   || localForm.value.play_agent_model_provider === 'ollama'
+  || localForm.value.compression_model_provider === 'ollama'
 ))
 
 const hasMinimaxProviderSelected = computed(() => (
@@ -106,6 +112,7 @@ const hasMinimaxProviderSelected = computed(() => (
   || localForm.value.complex_model_provider === 'minimax'
   || localForm.value.generator_model_provider === 'minimax'
   || localForm.value.play_agent_model_provider === 'minimax'
+  || localForm.value.compression_model_provider === 'minimax'
 ))
 
 const ollamaModelCount = computed(() => {
@@ -553,11 +560,92 @@ const handleSave = () => {
         </div>
       </div>
 
+      <!-- HISTORY COMPRESSION MODEL -->
+      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10 shadow-inner">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
+            <i class="ra ra-quill-ink"></i> History Compression Model (Chronicle Summary)
+          </h3>
+          <button
+            @click="emit('test', { key: 'compression', model: localForm.compression_model, provider: localForm.compression_model_provider, openrouterProvider: localForm.compression_openrouter_provider })"
+            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+          >
+            <i class="ra ra-gear-hammer"></i> Test Connection
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+            <select v-model="localForm.compression_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+              <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </div>
+          <div class="space-y-2 min-w-0">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+            <div class="flex gap-2 min-w-0">
+              <select
+                :value="isModelCustom(localForm.compression_model, localForm.compression_model_provider) ? 'custom' : localForm.compression_model"
+                @change="(e) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  if (val !== 'custom') localForm.compression_model = val;
+                  else if (!isModelCustom(localForm.compression_model, localForm.compression_model_provider)) localForm.compression_model = '';
+                }"
+                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+              >
+                <option value="" disabled>-- Please Select --</option>
+                <option v-for="m in availableConstants.predefined_llm_models[localForm.compression_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.compression_model_provider, m) }}</option>
+                <option value="custom">-- Custom Model String --</option>
+              </select>
+              <button
+                v-if="isLlmDiscoveryProvider(localForm.compression_model_provider)"
+                type="button"
+                @click="refreshLlmProviderModels(localForm.compression_model_provider)"
+                :disabled="isLlmProviderLoading(localForm.compression_model_provider)"
+                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
+                :title="`Fetch ${localForm.compression_model_provider} models from API`"
+              >
+                <i class="ra ra-recycle"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isModelCustom(localForm.compression_model, localForm.compression_model_provider) || localForm.compression_model === ''" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+          <input v-model="localForm.compression_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        </div>
+
+        <div v-if="localForm.compression_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
+          <input v-model="localForm.compression_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. \"Together\", \"alibaba\", \"grok\"). Disables fallbacks to unlisted providers.</p>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+          <input v-model.number="localForm.compression_max_tokens" type="number" min="256" max="32768" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+          <p class="text-xxs text-slate-500">Max tokens allocated for chronicle summary generation (default: 4096).</p>
+        </div>
+
+        <p class="text-xxs text-slate-500">Used when turns exceed the active turn memory to maintain an English chronicle summary. Falls back to Simple Model if left empty.</p>
+
+        <div v-if="testResults.compression" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.compression.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.compression.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <div v-if="testResults.compression.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+              <i v-else :class="testResults.compression.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+              {{ testResults.compression.message }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="pt-6 border-t border-slate-800 space-y-6">
         <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Global Infrastructure</h4>
         
         <div class="space-y-4">
-          <div v-if="localForm.small_model_provider === 'ollama' || localForm.complex_model_provider === 'ollama' || localForm.generator_model_provider === 'ollama' || localForm.play_agent_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
+          <div v-if="localForm.small_model_provider === 'ollama' || localForm.complex_model_provider === 'ollama' || localForm.generator_model_provider === 'ollama' || localForm.play_agent_model_provider === 'ollama' || localForm.compression_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
             <div class="flex items-center justify-between gap-3">
               <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
               <button

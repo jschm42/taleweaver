@@ -38,6 +38,7 @@ class GameMasterLLM:
     DEFAULT_SMALL_MAX_TOKENS = 4096
     DEFAULT_COMPLEX_MAX_TOKENS = 8192
     DEFAULT_GENERATOR_MAX_TOKENS = 16384
+    DEFAULT_COMPRESSION_MAX_TOKENS = 4096
 
 
     @staticmethod
@@ -712,6 +713,8 @@ class GameMasterLLM:
             prefix = "generator_"
         elif model_category == "complex":
             prefix = "complex_"
+        elif model_category == "compression":
+            prefix = "compression_"
         else:
             prefix = "small_"
 
@@ -761,6 +764,8 @@ class GameMasterLLM:
             default_max_tokens = self.DEFAULT_GENERATOR_MAX_TOKENS
         elif model_category == "complex":
             default_max_tokens = self.DEFAULT_COMPLEX_MAX_TOKENS
+        elif model_category == "compression":
+            default_max_tokens = self.DEFAULT_COMPRESSION_MAX_TOKENS
         else:
             default_max_tokens = self.DEFAULT_SMALL_MAX_TOKENS
             

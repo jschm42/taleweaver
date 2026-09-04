@@ -32,6 +32,8 @@ class SessionState(Base, TimestampMixin):
     quests = Column(JSON, nullable=True, default=[])
     world_memories = Column(JSON, nullable=True, default=[])
     world_rumors = Column(JSON, nullable=True, default=[])
+    compressed_history = Column(JSON, nullable=True, default=None)
+    enable_history_compression = Column(Boolean, default=True, nullable=False)
     start_datetime = Column(String(36), nullable=True)
     
     # Session-specific overrides/copies from template

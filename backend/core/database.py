@@ -565,6 +565,18 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added session_states.allow_dynamic_items")
 
+        if "compressed_history" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN compressed_history TEXT"
+            )
+            logger.info("SQLite migration: added session_states.compressed_history")
+
+        if "enable_history_compression" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN enable_history_compression BOOLEAN NOT NULL DEFAULT 1"
+            )
+            logger.info("SQLite migration: added session_states.enable_history_compression")
+
         if "is_paused" in session_state_cols:
             try:
                 await conn.exec_driver_sql("ALTER TABLE session_states DROP COLUMN is_paused")

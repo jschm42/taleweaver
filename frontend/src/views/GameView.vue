@@ -30,6 +30,7 @@ import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import SessionSettingsModal from '@/components/game/SessionSettingsModal.vue'
+import WorldMemoriesModal from '@/components/game/WorldMemoriesModal.vue'
 import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
@@ -124,14 +125,19 @@ const saveSessionNote = async (note: string) => {
 }
 
 const showSettingsModal = ref(false)
+const showMemoriesModal = ref(false)
 const isSavingSettings = ref(false)
 
-const saveSessionSettings = async (turns: number) => {
+const saveSessionSettings = async (payload: { turns: number; enableCompression?: boolean }) => {
   isSavingSettings.value = true
   try {
-    await api.updateSession(props.id, { max_memory_turns: turns })
+    await api.updateSession(props.id, {
+      max_memory_turns: payload.turns,
+      enable_history_compression: payload.enableCompression,
+    })
     if (sheet.value) {
-      sheet.value.max_memory_turns = turns
+      sheet.value.max_memory_turns = payload.turns
+      sheet.value.enable_history_compression = payload.enableCompression
     }
     addNotification('Session memory settings updated.', 'success')
     showSettingsModal.value = false
@@ -1439,6 +1445,7 @@ watch(
       :current-scene-name="sheet?.current_scene"
       :current-scene-description="currentSceneDescription"
       :prompt-suggestions="promptSuggestions"
+      :world-memories="worldMemories"
       :exp="sheet?.exp || 0"
       :game-time="gameTime"
       :clock-tick="clockTick"
@@ -1453,6 +1460,7 @@ watch(
       @open-map="showMap = true"
       @open-quests="showQuests = true"
       @open-chronicles="openChroniclesModal"
+      @open-memories="showMemoriesModal = true"
       @open-settings="showSettingsModal = true"
       @open-debug="openDebugInspector"
       @open-walkthrough="openWalkthroughPanel"
@@ -1516,9 +1524,16 @@ watch(
     <SessionSettingsModal
       v-if="showSettingsModal"
       :initial-turns="sheet?.max_memory_turns ?? 30"
+      :initial-compression="sheet?.enable_history_compression ?? true"
       :is-saving="isSavingSettings"
       @close="showSettingsModal = false"
       @save="saveSessionSettings"
+    />
+    <WorldMemoriesModal
+      v-if="showMemoriesModal"
+      :memories="worldMemories"
+      :compressed-history="sheet?.compressed_history"
+      @close="showMemoriesModal = false"
     />
     <ChroniclesModal
       :open="showChroniclesModal"

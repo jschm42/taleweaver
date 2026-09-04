@@ -52,6 +52,8 @@ export interface CharacterSheet {
   agent_active?: boolean
   agent_monkey_mode?: boolean
   max_memory_turns?: number
+  enable_history_compression?: boolean
+  compressed_history?: any
 }
 
 export interface InventoryItem {
@@ -161,6 +163,16 @@ export interface GameSession {
   status_note?: string | null
   copied_from_id?: string | null
   max_memory_turns?: number
+  enable_history_compression?: boolean
+}
+
+export interface WorldMemory {
+  description: string
+  emotion?: 'positive' | 'negative' | 'neutral'
+  scope?: 'local' | 'global'
+  npc_id?: string
+  scene_id?: string
+  [key: string]: unknown
 }
 
 export interface SessionCheckpoint {
