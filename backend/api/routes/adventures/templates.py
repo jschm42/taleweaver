@@ -1619,7 +1619,7 @@ async def export_adventure_manifest(
     """Exports the raw/original manifest stored in the template with minor backfills if needed."""
     from copy import deepcopy
     from typing import Any
-    from backend.models.world_entity import WorldEntity
+    from backend.models.world_entity import WorldEntity, WorldExit
 
     result = await db.execute(
         select(AdventureTemplate).where(
@@ -1803,6 +1803,29 @@ async def export_adventure_manifest(
         manifest["objects"] = objects_res
     elif "objects" in manifest:
         manifest.pop("objects")
+
+    # Sync exits from world_exits table to reflect world editor updates
+    exit_res = await db.execute(
+        select(WorldExit).where(WorldExit.template_id == template_id)
+    )
+    db_exits = exit_res.scalars().all()
+    if db_exits:
+        manifest["exits"] = [
+            {
+                "id": x.id,
+                "from_scene_id": x.from_scene_id,
+                "to_scene_id": x.to_scene_id,
+                "label": x.label,
+                "exit_type": str(x.exit_type or "one_way").strip().lower(),
+                "is_bidirectional": (str(x.exit_type or "").strip().lower() == "bidirectional"),
+                "is_locked": x.is_locked,
+                "lock_description": x.lock_description,
+                "code_to_unlock": x.code_to_unlock,
+                "item_to_unlock": x.item_to_unlock,
+                "rule_to_unlock": x.rule_to_unlock,
+            }
+            for x in db_exits
+        ]
 
     return manifest
 

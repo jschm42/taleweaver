@@ -190,7 +190,7 @@ const handleSave = () => {
           <i class="ra ra-crystal-ball text-purple-400"></i>
           Intelligence Routing
         </h1>
-        <p class="text-xs text-slate-400 mt-0.5">Konfiguration von Modellen für Mechanik, Storytelling, Weltengenerierung & Gedächtnis.</p>
+        <p class="text-xs text-slate-400 mt-0.5">Configure model assignments for mechanics, storytelling, world generation & memory.</p>
       </div>
       <button
         type="button"
@@ -200,7 +200,7 @@ const handleSave = () => {
       >
         <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
         <i v-else class="ra ra-save"></i>
-        {{ isSubmitting ? 'Wird gespeichert...' : 'Einstellungen speichern' }}
+        {{ isSubmitting ? 'Saving...' : 'Save Settings' }}
       </button>
     </div>
 
@@ -210,10 +210,10 @@ const handleSave = () => {
         <i class="ra ra-warning text-lg"></i>
       </div>
       <div class="min-w-0">
-        <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-0.5">Fehlende Provider API-Keys</h4>
+        <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-0.5">Missing Provider API Keys</h4>
         <p class="text-xs text-amber-500/80 leading-relaxed">
-          Fehlende Schlüssel für: <strong v-for="(p, i) in missingProviders" :key="p" class="text-amber-300">{{ getProviderName(p) }}{{ i < missingProviders.length - 1 ? ', ' : '' }}</strong>.
-          Bitte in der Rubrik <button @click="emit('switchSection', 'keys')" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> hinterlegen.
+          Missing keys for: <strong v-for="(p, i) in missingProviders" :key="p" class="text-amber-300">{{ getProviderName(p) }}{{ i < missingProviders.length - 1 ? ', ' : '' }}</strong>.
+          Please configure them in the <button @click="emit('switchSection', 'keys')" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> section.
         </p>
       </div>
     </div>
@@ -229,9 +229,9 @@ const handleSave = () => {
             <div>
               <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
                 Simple Model
-                <span class="text-[10px] font-semibold text-purple-400 bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30 uppercase tracking-wider">Pass 1: Mechanik</span>
+                <span class="text-[10px] font-semibold text-purple-400 bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30 uppercase tracking-wider">Pass 1: Mechanics</span>
               </h3>
-              <p class="text-[11px] text-slate-400">Regeldurchsetzung, Inventar und Aktionsanalyse.</p>
+              <p class="text-[11px] text-slate-400">Rule enforcement, inventory operations, and mechanics reasoning.</p>
             </div>
           </div>
           <button 
@@ -239,7 +239,7 @@ const handleSave = () => {
             @click="emit('test', { key: 'simple', model: localForm.small_model, provider: localForm.small_model_provider, openrouterProvider: localForm.small_openrouter_provider })"
             class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-player"></i> Testen
+            <i class="ra ra-player"></i> Test
           </button>
         </div>
 
@@ -251,7 +251,7 @@ const handleSave = () => {
             </select>
           </div>
           <div class="min-w-0">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Model Selection</label>
             <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.small_model, localForm.small_model_provider) ? 'custom' : localForm.small_model"
@@ -262,9 +262,9 @@ const handleSave = () => {
                 }"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono truncate"
               >
-                <option value="" disabled>-- Bitte wählen --</option>
+                <option value="" disabled>-- Please Select --</option>
                 <option v-for="m in availableConstants.predefined_llm_models?.[localForm.small_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.small_model_provider, m) }}</option>
-                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
+                <option value="custom">-- Custom Model String --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.small_model_provider)"
@@ -272,7 +272,7 @@ const handleSave = () => {
                 @click="refreshLlmProviderModels(localForm.small_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.small_model_provider)"
                 class="shrink-0 px-2 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs rounded-lg border border-purple-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                title="Modellliste aktualisieren"
+                title="Fetch models from API"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -281,11 +281,11 @@ const handleSave = () => {
         </div>
 
         <div v-if="isModelCustom(localForm.small_model, localForm.small_model_provider) || localForm.small_model === ''">
-          <input v-model="localForm.small_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
+          <input v-model="localForm.small_model" type="text" maxlength="100" placeholder="Model ID e.g. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
         </div>
 
         <div v-if="localForm.small_model_provider === 'openrouter'">
-          <input v-model="localForm.small_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
+          <input v-model="localForm.small_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Provider Routing (e.g. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-xs">
@@ -319,9 +319,9 @@ const handleSave = () => {
             <div>
               <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
                 Complex Model
-                <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase tracking-wider">Pass 2: Erzählung</span>
+                <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase tracking-wider">Pass 2: Narration</span>
               </h3>
-              <p class="text-[11px] text-slate-400">Atmosphärische Beschreibungen, Dialoge und Narrative Progression.</p>
+              <p class="text-[11px] text-slate-400">Rich storytelling, complex world-building, and high-fidelity prose.</p>
             </div>
           </div>
           <button 
@@ -329,7 +329,7 @@ const handleSave = () => {
             @click="emit('test', { key: 'complex', model: localForm.complex_model, provider: localForm.complex_model_provider, openrouterProvider: localForm.complex_openrouter_provider })"
             class="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[11px] font-bold rounded-lg border border-indigo-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-player"></i> Testen
+            <i class="ra ra-player"></i> Test
           </button>
         </div>
 
@@ -341,7 +341,7 @@ const handleSave = () => {
             </select>
           </div>
           <div class="min-w-0">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Model Selection</label>
             <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.complex_model, localForm.complex_model_provider) ? 'custom' : localForm.complex_model"
@@ -352,9 +352,9 @@ const handleSave = () => {
                 }"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono truncate"
               >
-                <option value="" disabled>-- Bitte wählen --</option>
+                <option value="" disabled>-- Please Select --</option>
                 <option v-for="m in availableConstants.predefined_llm_models?.[localForm.complex_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.complex_model_provider, m) }}</option>
-                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
+                <option value="custom">-- Custom Model String --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.complex_model_provider)"
@@ -362,7 +362,7 @@ const handleSave = () => {
                 @click="refreshLlmProviderModels(localForm.complex_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.complex_model_provider)"
                 class="shrink-0 px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-xs rounded-lg border border-indigo-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                title="Modellliste aktualisieren"
+                title="Fetch models from API"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -371,11 +371,11 @@ const handleSave = () => {
         </div>
 
         <div v-if="isModelCustom(localForm.complex_model, localForm.complex_model_provider) || localForm.complex_model === ''">
-          <input v-model="localForm.complex_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
+          <input v-model="localForm.complex_model" type="text" maxlength="100" placeholder="Model ID e.g. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
         </div>
 
         <div v-if="localForm.complex_model_provider === 'openrouter'">
-          <input v-model="localForm.complex_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
+          <input v-model="localForm.complex_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Provider Routing (e.g. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-xs">
@@ -411,7 +411,7 @@ const handleSave = () => {
                 Adventure Generator Model
                 <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider">World Creation</span>
               </h3>
-              <p class="text-[11px] text-slate-400">Erstellung von Szenen, Rätseln, Manifesten & Entitäten.</p>
+              <p class="text-[11px] text-slate-400">Generates complete adventures, blueprints, scenes, and complex manifests.</p>
             </div>
           </div>
           <button 
@@ -419,7 +419,7 @@ const handleSave = () => {
             @click="emit('test', { key: 'generator', model: localForm.generator_model, provider: localForm.generator_model_provider, openrouterProvider: localForm.generator_openrouter_provider })"
             class="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 text-[11px] font-bold rounded-lg border border-emerald-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-player"></i> Testen
+            <i class="ra ra-player"></i> Test
           </button>
         </div>
 
@@ -431,7 +431,7 @@ const handleSave = () => {
             </select>
           </div>
           <div class="min-w-0">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Model Selection</label>
             <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.generator_model, localForm.generator_model_provider) ? 'custom' : localForm.generator_model"
@@ -442,9 +442,9 @@ const handleSave = () => {
                 }"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono truncate"
               >
-                <option value="" disabled>-- Bitte wählen --</option>
+                <option value="" disabled>-- Please Select --</option>
                 <option v-for="m in availableConstants.predefined_llm_models?.[localForm.generator_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.generator_model_provider, m) }}</option>
-                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
+                <option value="custom">-- Custom Model String --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.generator_model_provider)"
@@ -452,7 +452,7 @@ const handleSave = () => {
                 @click="refreshLlmProviderModels(localForm.generator_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.generator_model_provider)"
                 class="shrink-0 px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 text-xs rounded-lg border border-emerald-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                title="Modellliste aktualisieren"
+                title="Fetch models from API"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -461,11 +461,11 @@ const handleSave = () => {
         </div>
 
         <div v-if="isModelCustom(localForm.generator_model, localForm.generator_model_provider) || localForm.generator_model === ''">
-          <input v-model="localForm.generator_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
+          <input v-model="localForm.generator_model" type="text" maxlength="100" placeholder="Model ID e.g. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
         </div>
 
         <div v-if="localForm.generator_model_provider === 'openrouter'">
-          <input v-model="localForm.generator_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
+          <input v-model="localForm.generator_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Provider Routing (e.g. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-xs">
@@ -501,7 +501,7 @@ const handleSave = () => {
                 Play Agent Model
                 <span class="text-[10px] font-semibold text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30 uppercase tracking-wider">Autonomous Mode</span>
               </h3>
-              <p class="text-[11px] text-slate-400">Autonomes Test-Spielen & Stress-Testing per Agent.</p>
+              <p class="text-[11px] text-slate-400">Autonomous gameplay testing and engine stress-testing agent.</p>
             </div>
           </div>
           <button 
@@ -509,7 +509,7 @@ const handleSave = () => {
             @click="emit('test', { key: 'play_agent', model: localForm.play_agent_model, provider: localForm.play_agent_model_provider, openrouterProvider: localForm.play_agent_openrouter_provider })"
             class="px-2.5 py-1 bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 text-[11px] font-bold rounded-lg border border-sky-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-player"></i> Testen
+            <i class="ra ra-player"></i> Test
           </button>
         </div>
 
@@ -521,7 +521,7 @@ const handleSave = () => {
             </select>
           </div>
           <div class="min-w-0">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Model Selection</label>
             <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) ? 'custom' : localForm.play_agent_model"
@@ -532,9 +532,9 @@ const handleSave = () => {
                 }"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono truncate"
               >
-                <option value="" disabled>-- Bitte wählen --</option>
+                <option value="" disabled>-- Please Select --</option>
                 <option v-for="m in availableConstants.predefined_llm_models?.[localForm.play_agent_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.play_agent_model_provider, m) }}</option>
-                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
+                <option value="custom">-- Custom Model String --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.play_agent_model_provider)"
@@ -542,7 +542,7 @@ const handleSave = () => {
                 @click="refreshLlmProviderModels(localForm.play_agent_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.play_agent_model_provider)"
                 class="shrink-0 px-2 py-1 bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 text-xs rounded-lg border border-sky-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                title="Modellliste aktualisieren"
+                title="Fetch models from API"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -551,19 +551,19 @@ const handleSave = () => {
         </div>
 
         <div v-if="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) || localForm.play_agent_model === ''">
-          <input v-model="localForm.play_agent_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
+          <input v-model="localForm.play_agent_model" type="text" maxlength="100" placeholder="Model ID e.g. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
         </div>
 
         <div v-if="localForm.play_agent_model_provider === 'openrouter'">
-          <input v-model="localForm.play_agent_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
+          <input v-model="localForm.play_agent_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Provider Routing (e.g. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
         </div>
 
         <div class="flex items-center justify-between gap-3 p-2.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
           <div>
             <div class="text-xs font-bold text-amber-200 flex items-center gap-1.5">
-              <i class="ra ra-perspective-dice-random text-amber-400"></i> Monkey Mode Standard
+              <i class="ra ra-perspective-dice-random text-amber-400"></i> Monkey Mode Default
             </div>
-            <p class="text-[11px] text-amber-300/70">Startet /agent on standardmäßig im destruktiven Chaos-Test-Modus.</p>
+            <p class="text-[11px] text-amber-300/70">If enabled, /agent on starts directly in chaos-testing mode to stress-test engine robustness.</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer shrink-0">
             <input type="checkbox" v-model="localForm.play_agent_monkey_mode" class="sr-only peer">
@@ -587,10 +587,10 @@ const handleSave = () => {
             </span>
             <div>
               <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
-                History Compression & Gedächtnis
+                History Compression & Memory
                 <span class="text-[10px] font-semibold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 uppercase tracking-wider">Chronicle & Compacting</span>
               </h3>
-              <p class="text-[11px] text-slate-400">Verdichtet vergangene Spielrunden in eine fortlaufende englische Chronik-Zusammenfassung.</p>
+              <p class="text-[11px] text-slate-400">Compresses older gameplay turns into an ongoing English chronicle summary.</p>
             </div>
           </div>
           <button 
@@ -599,7 +599,7 @@ const handleSave = () => {
             :disabled="!localForm.compression_model"
             class="px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 text-[11px] font-bold rounded-lg border border-amber-600/30 transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40 cursor-pointer"
           >
-            <i class="ra ra-player"></i> Testen
+            <i class="ra ra-player"></i> Test
           </button>
         </div>
 
@@ -610,13 +610,13 @@ const handleSave = () => {
             <div>
               <div class="flex items-center gap-1.5">
                 <label class="text-xs font-bold text-slate-200 cursor-pointer" @click="localForm.enable_history_compression = !localForm.enable_history_compression">
-                  Automatisches Compacting
+                  Automatic Compacting
                 </label>
                 <span :class="['text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider', localForm.enable_history_compression ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700']">
-                  {{ localForm.enable_history_compression ? 'Aktiv' : 'Inaktiv' }}
+                  {{ localForm.enable_history_compression ? 'Active' : 'Inactive' }}
                 </span>
               </div>
-              <p class="text-[11px] text-slate-400 mt-0.5">Komprimiert ältere Spielzüge automatisch für den Erzähler.</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Automatically compresses older turns for narrator continuity.</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer shrink-0">
               <input type="checkbox" v-model="localForm.enable_history_compression" class="sr-only peer">
@@ -627,7 +627,7 @@ const handleSave = () => {
           <!-- Turns before Compacting Slider & Number Input -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Turns vor Compacting</label>
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Turns before Compacting</label>
               <div class="flex items-center gap-1 bg-black/50 border border-white/10 px-2 py-0.5 rounded-md">
                 <input
                   type="number"
@@ -656,12 +656,12 @@ const handleSave = () => {
           </div>
         </div>
 
-        <!-- WARNHINWEIS: Compacting aktiv, aber kein Modell ausgewählt -->
+        <!-- WARNING: Compacting enabled, but no model chosen -->
         <div v-if="isCompressionModelMissingWarning" class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-amber-300 animate-fade-in">
           <i class="ra ra-warning text-base shrink-0 mt-0.5 text-amber-400"></i>
           <div class="text-xs leading-relaxed">
-            <strong class="font-bold text-amber-200">Kein Kompressions-Modell ausgewählt:</strong>
-            Compacting ist aktiviert, aber es wurde kein Modell hinterlegt. Als Fallback wird das Simple Model genutzt. Für konsistente Chronik-Zusammenfassungen empfiehlt sich ein separates Modell.
+            <strong class="font-bold text-amber-200">No Compression Model Selected:</strong>
+            Compacting is enabled, but no dedicated model is chosen. TaleWeaver will fall back to the Simple Model. A dedicated model is recommended for optimal chronicle summaries.
           </div>
         </div>
 
@@ -674,7 +674,7 @@ const handleSave = () => {
             </select>
           </div>
           <div class="min-w-0">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Model Selection</label>
             <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.compression_model, localForm.compression_model_provider) ? 'custom' : localForm.compression_model"
@@ -685,9 +685,9 @@ const handleSave = () => {
                 }"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono truncate"
               >
-                <option value="">-- Kein separates Modell (Fallback) --</option>
+                <option value="">-- No Dedicated Model (Fallback) --</option>
                 <option v-for="m in availableConstants.predefined_llm_models?.[localForm.compression_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.compression_model_provider, m) }}</option>
-                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
+                <option value="custom">-- Custom Model String --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.compression_model_provider)"
@@ -695,7 +695,7 @@ const handleSave = () => {
                 @click="refreshLlmProviderModels(localForm.compression_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.compression_model_provider)"
                 class="shrink-0 px-2 py-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 text-xs rounded-lg border border-amber-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                title="Modellliste aktualisieren"
+                title="Fetch models from API"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -704,15 +704,15 @@ const handleSave = () => {
         </div>
 
         <div v-if="isModelCustom(localForm.compression_model, localForm.compression_model_provider)">
-          <input v-model="localForm.compression_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
+          <input v-model="localForm.compression_model" type="text" maxlength="100" placeholder="Model ID e.g. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
         </div>
 
         <div v-if="localForm.compression_model_provider === 'openrouter'">
-          <input v-model="localForm.compression_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
+          <input v-model="localForm.compression_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Provider Routing (e.g. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
         </div>
 
         <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80 text-xs">
-          <span class="text-[10px] font-bold text-slate-400 uppercase">Max Tokens (Zusammenfassung):</span>
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Max Tokens (Summary):</span>
           <input v-model.number="localForm.compression_max_tokens" type="number" min="256" max="32768" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
         </div>
 
@@ -737,12 +737,12 @@ const handleSave = () => {
               class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-1 cursor-pointer"
             >
               <i class="ra ra-recycle"></i>
-              {{ isLoadingOllamaModels ? 'Laden...' : 'Modelle laden' }}
+              {{ isLoadingOllamaModels ? 'Loading...' : 'Fetch Models' }}
             </button>
           </div>
           <input v-model="localForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
           <div v-if="!isLoadingOllamaModels && ollamaModelCount === 0" class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] leading-relaxed">
-            Keine lokalen Ollama-Modelle gefunden. Bitte zuerst per Terminal herunterladen (z.B. <code class="bg-black/40 px-1 py-0.5 rounded text-amber-200">ollama pull llama3.2</code>) und erneut prüfen.
+            No local Ollama models found. Please download a model first via terminal (e.g. <code class="bg-black/40 px-1 py-0.5 rounded text-amber-200">ollama pull llama3.2</code>) and click Fetch Models.
           </div>
         </div>
 
@@ -758,12 +758,12 @@ const handleSave = () => {
               class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-1 cursor-pointer"
             >
               <i class="ra ra-recycle"></i>
-              {{ isLoadingMinimaxModels ? 'Laden...' : 'Modelle laden' }}
+              {{ isLoadingMinimaxModels ? 'Loading...' : 'Fetch Models' }}
             </button>
           </div>
           <input v-model="localForm.minimax_url" type="text" placeholder="https://api.minimax.chat/v1" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
           <div v-if="!isLoadingMinimaxModels && minimaxModelCount === 0" class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] leading-relaxed">
-            Keine MiniMax-Modelle gefunden. Prüfe den API-Key unter Provider Keys und die angegebene URL.
+            No MiniMax models found. Please verify your API key in Provider Keys and check the configured URL.
           </div>
         </div>
       </div>
@@ -778,7 +778,7 @@ const handleSave = () => {
         >
           <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
           <i v-else class="ra ra-save"></i>
-          {{ isSubmitting ? 'Wird optimiert & gespeichert...' : 'Intelligence-Konfiguration speichern' }}
+          {{ isSubmitting ? 'Saving...' : 'Save Intelligence Settings' }}
         </button>
       </div>
     </div>

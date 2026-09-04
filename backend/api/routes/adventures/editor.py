@@ -2565,6 +2565,23 @@ async def create_editor_exit(
         rule_to_unlock=rule or None,
     )
     db.add(world_exit)
+    if isinstance(adv.original_manifest, dict) and isinstance(adv.original_manifest.get("exits"), list):
+        manifest = deepcopy(adv.original_manifest)
+        manifest["exits"].append({
+            "id": world_exit.id,
+            "from_scene_id": world_exit.from_scene_id,
+            "to_scene_id": world_exit.to_scene_id,
+            "label": world_exit.label,
+            "exit_type": world_exit.exit_type,
+            "is_bidirectional": (world_exit.exit_type == "bidirectional"),
+            "is_locked": world_exit.is_locked,
+            "lock_description": world_exit.lock_description,
+            "code_to_unlock": world_exit.code_to_unlock,
+            "item_to_unlock": world_exit.item_to_unlock,
+            "rule_to_unlock": world_exit.rule_to_unlock,
+        })
+        adv.original_manifest = manifest
+        flag_modified(adv, "original_manifest")
     await db.commit()
     return {"status": "success", "exit": _serialize_model(world_exit)}
 
@@ -2576,7 +2593,7 @@ async def delete_editor_exit(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
     exit_res = await db.execute(
         select(WorldExit).where(
@@ -2590,6 +2607,14 @@ async def delete_editor_exit(
         raise HTTPException(status_code=404, detail="Exit not found")
 
     await db.delete(world_exit)
+    if isinstance(adv.original_manifest, dict) and isinstance(adv.original_manifest.get("exits"), list):
+        manifest = deepcopy(adv.original_manifest)
+        manifest["exits"] = [
+            ex for ex in manifest["exits"]
+            if isinstance(ex, dict) and ex.get("id") != exit_id
+        ]
+        adv.original_manifest = manifest
+        flag_modified(adv, "original_manifest")
     await db.commit()
     return {"status": "success", "deleted_exit_id": exit_id}
 
@@ -3063,6 +3088,27 @@ async def update_editor_entity(
                 world_exit.code_to_unlock = code
                 world_exit.item_to_unlock = item
                 world_exit.rule_to_unlock = rule
+
+            if isinstance(adv.original_manifest, dict) and isinstance(adv.original_manifest.get("exits"), list):
+                manifest = deepcopy(adv.original_manifest)
+                for ex_item in manifest.get("exits", []):
+                    if isinstance(ex_item, dict) and (
+                        ex_item.get("id") == world_exit.id
+                        or (
+                            ex_item.get("from_scene_id") == world_exit.from_scene_id
+                            and ex_item.get("to_scene_id") == world_exit.to_scene_id
+                        )
+                    ):
+                        ex_item["label"] = world_exit.label
+                        ex_item["exit_type"] = world_exit.exit_type
+                        ex_item["is_bidirectional"] = (world_exit.exit_type == "bidirectional")
+                        ex_item["is_locked"] = world_exit.is_locked
+                        ex_item["lock_description"] = world_exit.lock_description
+                        ex_item["code_to_unlock"] = world_exit.code_to_unlock
+                        ex_item["item_to_unlock"] = world_exit.item_to_unlock
+                        ex_item["rule_to_unlock"] = world_exit.rule_to_unlock
+                adv.original_manifest = manifest
+                flag_modified(adv, "original_manifest")
     else:
         en_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None), WorldEntity.id == payload.target_id))
         ent = en_res.scalars().first()

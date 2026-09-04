@@ -297,6 +297,10 @@ class AdventureExporter:
                 if not isinstance(decor, list):
                     decor = []
                 data["decorative_objects"] = [str(d) for d in decor if isinstance(d, (str, int, float))]
+            if isinstance(obj, WorldExit):
+                exit_type = str(getattr(obj, "exit_type", "one_way") or "one_way").strip().lower()
+                data["exit_type"] = exit_type
+                data["is_bidirectional"] = (exit_type == "bidirectional")
             return data
 
         # Build standard manifest structure according to docs/specs/adventure_format.md

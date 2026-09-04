@@ -236,7 +236,9 @@ async def cmd_show_adventure(args):
             _print_header(f"World Exits ({len(exits)})", char="-")
             for x in exits:
                 lock_tag = f"\033[1;31m[LOCKED by {x.item_to_unlock or x.code_to_unlock or 'rule'}]\033[0m" if x.is_locked else "\033[1;32m[OPEN]\033[0m"
-                print(f"  • {x.from_scene_id} ➔ {x.to_scene_id} | \"{x.label}\" {lock_tag}")
+                arrow = "<->" if getattr(x, "exit_type", "one_way") == "bidirectional" else "->"
+                type_tag = f"[{getattr(x, 'exit_type', 'one_way').upper()}]"
+                print(f"  * {x.from_scene_id} {arrow} {x.to_scene_id} {type_tag} | \"{x.label}\" {lock_tag}")
                 if x.rule_to_unlock:
                     print(f"    Rule to unlock: {x.rule_to_unlock}")
 

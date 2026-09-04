@@ -625,7 +625,13 @@ def _persist_exits(
     for e in exits:
         from_id = e["from_scene_id"]
         to_id = e["to_scene_id"]
-        is_bidirectional = bool(e.get("is_bidirectional", False))
+        exit_type_raw = str(e.get("exit_type") or "").strip().lower()
+        if exit_type_raw in ("bidirectional", "one_way"):
+            is_bidirectional = (exit_type_raw == "bidirectional")
+        elif "is_bidirectional" in e:
+            is_bidirectional = bool(e["is_bidirectional"])
+        else:
+            is_bidirectional = True
 
         code_to_unlock, item_to_unlock, rule_to_unlock = _normalize_unlock_requirements(
             e.get("code_to_unlock"), e.get("item_to_unlock"), e.get("rule_to_unlock")
@@ -648,7 +654,7 @@ def _persist_exits(
             to_scene_id=to_id,
             label=e["label"],
             exit_type="bidirectional" if is_bidirectional else "one_way",
-            is_locked=e["is_locked"],
+            is_locked=bool(e.get("is_locked", False)),
             lock_description=e.get("lock_description"),
             code_to_unlock=code_to_unlock,
             item_to_unlock=item_to_unlock,
