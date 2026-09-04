@@ -437,118 +437,61 @@ const onClose = () => {
                 </div>
               </div>
 
-              <!-- Desktop & Tablet Layout: Silhouette + Slot Detail List -->
-              <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                <!-- Silhouette Display (Left on LG, centered) -->
-                <div class="lg:col-span-7 flex flex-col items-center">
-                  <div class="relative w-full max-w-sm sm:max-w-md h-[340px] sm:h-[420px] silhouette-container bg-slate-950/40 rounded-3xl border border-slate-800/60 shadow-inner flex items-center justify-center overflow-hidden">
-                    <img 
-                      src="@/assets/svg/full-body-human-silhouette.svg" 
-                      class="h-full w-full object-contain opacity-45 filter brightness-[300%] contrast-75 drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]" 
-                    />
+              <!-- Centered Silhouette Display -->
+              <div class="flex flex-col items-center justify-center my-auto">
+                <div class="relative w-full max-w-md sm:max-w-lg h-[360px] sm:h-[440px] silhouette-container bg-slate-950/40 rounded-3xl border border-slate-800/60 shadow-inner flex items-center justify-center overflow-hidden">
+                  <img 
+                    src="@/assets/svg/full-body-human-silhouette.svg" 
+                    class="h-full w-full object-contain opacity-45 filter brightness-[300%] contrast-75 drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]" 
+                  />
 
-                    <!-- Equipment Slot Badges on Silhouette -->
+                  <!-- Equipment Slot Badges on Silhouette -->
+                  <div 
+                    v-for="(pos, slot) in slotPositions" 
+                    :key="slot"
+                    class="absolute -translate-x-1/2 -translate-y-1/2 group/slot"
+                    :style="{ top: pos.top, left: pos.left }"
+                    @mouseenter="equipment[slot] && emit('itemHover', { ...equipment[slot], entity_type: 'ITEM' }, $event)"
+                    @mouseleave="emit('itemLeave')"
+                  >
                     <div 
-                      v-for="(pos, slot) in slotPositions" 
-                      :key="slot"
-                      class="absolute -translate-x-1/2 -translate-y-1/2 group/slot"
-                      :style="{ top: pos.top, left: pos.left }"
-                      @mouseenter="equipment[slot] && emit('itemHover', { ...equipment[slot], entity_type: 'ITEM' }, $event)"
-                      @mouseleave="emit('itemLeave')"
-                    >
-                      <div 
-                        class="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center transition-all relative shadow-xl backdrop-blur-md"
-                        :class="[
-                          equipment[slot] 
-                            ? 'bg-slate-900 border-amber-500/70 shadow-amber-500/20 scale-105 z-10 cursor-pointer' 
-                            : 'bg-slate-950/60 border-slate-800 hover:border-slate-600'
-                        ]"
-                        @click="equipment[slot] && handleUnequip(slot)"
-                        @contextmenu.prevent="equipment[slot] && emit('itemContextmenu', { ...equipment[slot], equipped_slot: slot, entity_type: 'ITEM' }, $event)"
-                      >
-                        <!-- Tooltip with slot name -->
-                        <div class="absolute -top-7 left-1/2 -translate-x-1/2 text-xxs font-black uppercase tracking-widest text-slate-300 opacity-0 group-hover/slot:opacity-100 transition-opacity bg-slate-800/95 px-2 py-0.5 rounded border border-slate-700 z-20 shadow-xl whitespace-nowrap pointer-events-none">
-                          {{ slot.replace('_', ' ') }}
-                        </div>
-
-                        <!-- Equipped Item Display -->
-                        <template v-if="equipment[slot]">
-                          <div v-if="showImage(equipment[slot]!.image_url)" class="w-full h-full p-1">
-                            <img 
-                              :src="getImageUrl(equipment[slot]!.image_url)" 
-                              class="w-full h-full object-cover object-top rounded-lg" 
-                              @error="handleImageError(equipment[slot]!.image_url)" 
-                            />
-                          </div>
-                          <i v-else :class="['ra text-sm sm:text-xl', getItemIcon(equipment[slot]!.item_type), getTypeColor(equipment[slot]!.item_type)]"></i>
-                        </template>
-
-                        <!-- Empty Slot Placeholder -->
-                        <div v-else class="opacity-20 group-hover/slot:opacity-40 transition-opacity">
-                          <i :class="['ra text-xs sm:text-base text-slate-400', getSlotPlaceholderIcon(slot)]"></i>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <span class="text-xxs text-slate-500 mt-2">
-                    Click equipped slot to unequip · Right-click for options
-                  </span>
-                </div>
-
-                <!-- Equipped Items List (Right on LG, full list for easy mobile/desktop access) -->
-                <div class="lg:col-span-5 flex flex-col gap-2">
-                  <div class="flex items-center justify-between mb-1">
-                    <h5 class="text-xs font-black text-slate-400 uppercase tracking-widest">Gear Overview</h5>
-                    <span class="text-xxs text-amber-400 font-mono">{{ equippedCount }} equipped</span>
-                  </div>
-
-                  <div class="space-y-1.5 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
-                    <div 
-                      v-for="slot in SLOTS_LIST" 
-                      :key="slot.key"
-                      class="flex items-center justify-between p-2 rounded-xl border transition-colors"
+                      class="w-12 h-12 sm:w-15 sm:h-15 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center transition-all relative shadow-xl backdrop-blur-md"
                       :class="[
-                        equipment[slot.key]
-                          ? 'bg-slate-950/80 border-slate-700/60 hover:border-amber-500/50'
-                          : 'bg-slate-900/30 border-slate-800/40 opacity-50'
+                        equipment[slot] 
+                          ? 'bg-slate-900 border-amber-500/70 shadow-amber-500/20 scale-105 z-10 cursor-pointer' 
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-600'
                       ]"
+                      @click="equipment[slot] && handleUnequip(slot)"
+                      @contextmenu.prevent="equipment[slot] && emit('itemContextmenu', { ...equipment[slot], equipped_slot: slot, entity_type: 'ITEM' }, $event)"
                     >
-                      <div class="flex items-center gap-2.5 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center shrink-0">
-                          <template v-if="equipment[slot.key]">
-                            <img 
-                              v-if="showImage(equipment[slot.key]!.image_url)" 
-                              :src="getImageUrl(equipment[slot.key]!.image_url)" 
-                              class="w-full h-full object-cover rounded-md" 
-                              @error="handleImageError(equipment[slot.key]!.image_url)" 
-                            />
-                            <i v-else :class="['ra text-sm', getItemIcon(equipment[slot.key]!.item_type), getTypeColor(equipment[slot.key]!.item_type)]"></i>
-                          </template>
-                          <i v-else :class="['ra text-xs text-slate-500', slot.icon]"></i>
-                        </div>
-
-                        <div class="min-w-0">
-                          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ slot.label }}</div>
-                          <div class="text-xs font-bold truncate" :class="equipment[slot.key] ? 'text-white' : 'text-slate-600'">
-                            {{ equipment[slot.key]?.name || 'Empty' }}
-                          </div>
-                        </div>
+                      <!-- Tooltip with slot name -->
+                      <div class="absolute -top-7 left-1/2 -translate-x-1/2 text-xxs font-black uppercase tracking-widest text-slate-300 opacity-0 group-hover/slot:opacity-100 transition-opacity bg-slate-800/95 px-2 py-0.5 rounded border border-slate-700 z-20 shadow-xl whitespace-nowrap pointer-events-none">
+                        {{ slot.replace('_', ' ') }}
                       </div>
 
-                      <button
-                        v-if="equipment[slot.key]"
-                        class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-red-900/50 border border-slate-700 hover:border-red-500/50 text-[10px] font-bold text-slate-300 hover:text-red-300 transition-colors shrink-0"
-                        @click="handleUnequip(slot.key)"
-                        title="Unequip this item"
-                      >
-                        Unequip
-                      </button>
+                      <!-- Equipped Item Display -->
+                      <template v-if="equipment[slot]">
+                        <div v-if="showImage(equipment[slot]!.image_url)" class="w-full h-full p-1">
+                          <img 
+                            :src="getImageUrl(equipment[slot]!.image_url)" 
+                            class="w-full h-full object-cover object-top rounded-lg" 
+                            @error="handleImageError(equipment[slot]!.image_url)" 
+                          />
+                        </div>
+                        <i v-else :class="['ra text-base sm:text-xl', getItemIcon(equipment[slot]!.item_type), getTypeColor(equipment[slot]!.item_type)]"></i>
+                      </template>
+
+                      <!-- Empty Slot Placeholder -->
+                      <div v-else class="opacity-20 group-hover/slot:opacity-40 transition-opacity">
+                        <i :class="['ra text-sm sm:text-base text-slate-400', getSlotPlaceholderIcon(slot)]"></i>
+                      </div>
                     </div>
                   </div>
                 </div>
 
+                <span class="text-xxs text-slate-500 mt-3">
+                  Click equipped slot to unequip · Right-click for options
+                </span>
               </div>
             </div>
 
