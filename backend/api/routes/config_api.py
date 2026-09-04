@@ -458,6 +458,8 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "compression_model_provider": "openai",
         "compression_max_tokens": 4096,
         "compression_openrouter_provider": "",
+        "turns_before_compacting": 10,
+        "enable_history_compression": True,
         "preferred_provider": "openai",  # Legacy/Default
         "openrouter_provider": "",
         "ollama_url": "http://localhost:11434",
@@ -578,6 +580,18 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     # If compression model is empty, silently fall back to small_model at call time
     if "compression_model" not in normalized:
         normalized["compression_model"] = ""
+
+    # Compacting / memory turns defaults
+    if "turns_before_compacting" not in normalized:
+        normalized["turns_before_compacting"] = normalized.get("default_max_memory_turns", 10)
+    try:
+        normalized["turns_before_compacting"] = max(1, min(100, int(normalized["turns_before_compacting"])))
+    except (ValueError, TypeError):
+        normalized["turns_before_compacting"] = 10
+
+    if "enable_history_compression" not in normalized:
+        normalized["enable_history_compression"] = normalized.get("enable_compacting", True)
+    normalized["enable_history_compression"] = bool(normalized["enable_history_compression"])
 
     # OpenRouter normalization
     if normalized.get("small_model_provider") == "openrouter":
@@ -837,6 +851,14 @@ class SettingsPayload(BaseModel):
     play_agent_model_provider: Optional[str] = "openai"
     play_agent_monkey_mode: bool = False
     play_agent_openrouter_provider: Optional[str] = ""
+
+    compression_model: Optional[str] = ""
+    compression_model_provider: Optional[str] = "openai"
+    compression_max_tokens: int = 4096
+    compression_openrouter_provider: Optional[str] = ""
+
+    turns_before_compacting: int = 10
+    enable_history_compression: bool = True
     
     preferred_provider: str # Legacy
     openrouter_provider: Optional[str] = ""

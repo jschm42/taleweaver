@@ -29,7 +29,6 @@ const missingProviders = computed(() => {
   return missing
 })
 
-
 const emit = defineEmits<{
   (e: 'save', payload: any): void
   (e: 'test', payload: { key: string, model: string, provider: string, openrouterProvider?: string }): void
@@ -39,15 +38,21 @@ const emit = defineEmits<{
   (e: 'switchSection', section: string): void
 }>()
 
-const localForm = ref({ ...props.llmForm })
+const normalizeLocalForm = (data: any) => ({
+  ...data,
+  turns_before_compacting: typeof data?.turns_before_compacting === 'number' ? data.turns_before_compacting : 10,
+  enable_history_compression: typeof data?.enable_history_compression === 'boolean' ? data.enable_history_compression : true,
+})
+
+const localForm = ref(normalizeLocalForm(props.llmForm))
 
 watch(() => props.llmForm, (newVal) => {
-  localForm.value = { ...newVal }
+  localForm.value = normalizeLocalForm(newVal)
 }, { deep: true })
 
 const isModelCustom = (model: string, provider: string) => {
   if (!model) return false
-  const predefined = props.availableConstants.predefined_llm_models[provider]
+  const predefined = props.availableConstants.predefined_llm_models?.[provider]
   if (!predefined) return true
   return !predefined.includes(model)
 }
@@ -65,7 +70,7 @@ const resolveModelOnProviderChange = (
 ) => {
   const getPredefined = (provider: string | undefined) => {
     if (!provider) return [] as string[]
-    return (props.availableConstants.predefined_llm_models[provider] || [])
+    return (props.availableConstants.predefined_llm_models?.[provider] || [])
   }
 
   const nextPredefined = getPredefined(newProvider)
@@ -159,9 +164,17 @@ const refreshLlmProviderModels = (provider: string) => {
   }
 }
 
-watch(localForm, () => {
-  // Sync back to parent if needed, but since we have a save button, maybe we just emit the whole form on save.
-}, { deep: true })
+// Warning: Compacting is enabled but no compression model is chosen
+const isCompressionModelMissingWarning = computed(() => {
+  return !!localForm.value.enable_history_compression && !localForm.value.compression_model?.trim()
+})
+
+const handleTurnsInput = (e: Event) => {
+  const val = Number((e.target as HTMLInputElement).value)
+  if (!isNaN(val)) {
+    localForm.value.turns_before_compacting = Math.min(100, Math.max(1, val))
+  }
+}
 
 const handleSave = () => {
   emit('save', localForm.value)
@@ -169,51 +182,77 @@ const handleSave = () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in">
-    <div>
-      <h1 class="text-4xl font-extrabold text-white mb-2">Intelligence Routing</h1>
-      <p class="text-slate-400">Configure how the game handles simple narrative vs complex mechanics.</p>
+  <div class="space-y-4 animate-fade-in max-w-5xl">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+          <i class="ra ra-crystal-ball text-purple-400"></i>
+          Intelligence Routing
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">Konfiguration von Modellen für Mechanik, Storytelling, Weltengenerierung & Gedächtnis.</p>
+      </div>
+      <button
+        type="button"
+        @click="handleSave"
+        :disabled="isSubmitting"
+        class="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-purple-900/30 disabled:opacity-50 flex items-center gap-2 shrink-0 cursor-pointer"
+      >
+        <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
+        <i v-else class="ra ra-save"></i>
+        {{ isSubmitting ? 'Wird gespeichert...' : 'Einstellungen speichern' }}
+      </button>
     </div>
 
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
-      <!-- API KEY WARNING -->
-      <div v-if="missingProviders.length > 0" class="p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4">
-        <div class="p-3 bg-amber-500/20 rounded-xl text-amber-500">
-          <i class="ra ra-warning text-xl"></i>
-        </div>
-        <div>
-          <h4 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-1">API Keys Missing</h4>
-          <p class="text-xs text-amber-500/70 leading-relaxed">
-            Missing keys for: <strong v-for="(p, i) in missingProviders" :key="p">{{ getProviderName(p) }}{{ i < missingProviders.length - 1 ? ', ' : '' }}</strong>.
-            Please add them in the <button @click="emit('switchSection', 'keys')" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> section.
-          </p>
-        </div>
+    <!-- API KEY WARNING -->
+    <div v-if="missingProviders.length > 0" class="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3">
+      <div class="p-2 bg-amber-500/20 rounded-lg text-amber-400 shrink-0">
+        <i class="ra ra-warning text-lg"></i>
       </div>
-      
-      <!-- SIMPLE MODEL -->
-      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-            <i class="ra ra-gear-hammer"></i> Simple Model (Mechanics)
-          </h3>
+      <div class="min-w-0">
+        <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-0.5">Fehlende Provider API-Keys</h4>
+        <p class="text-xs text-amber-500/80 leading-relaxed">
+          Fehlende Schlüssel für: <strong v-for="(p, i) in missingProviders" :key="p" class="text-amber-300">{{ getProviderName(p) }}{{ i < missingProviders.length - 1 ? ', ' : '' }}</strong>.
+          Bitte in der Rubrik <button @click="emit('switchSection', 'keys')" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> hinterlegen.
+        </p>
+      </div>
+    </div>
+
+    <div class="space-y-3.5">
+      <!-- 1. SIMPLE MODEL -->
+      <div class="p-4 bg-slate-900/90 border border-purple-500/15 rounded-xl shadow-lg space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 text-xs">
+              <i class="ra ra-gear-hammer"></i>
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                Simple Model
+                <span class="text-[10px] font-semibold text-purple-400 bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30 uppercase tracking-wider">Pass 1: Mechanik</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Regeldurchsetzung, Inventar und Aktionsanalyse.</p>
+            </div>
+          </div>
           <button 
+            type="button"
             @click="emit('test', { key: 'simple', model: localForm.small_model, provider: localForm.small_model_provider, openrouterProvider: localForm.small_openrouter_provider })"
-            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+            class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-gear-hammer"></i> Test Connection
+            <i class="ra ra-player"></i> Testen
           </button>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
-            <select v-model="localForm.small_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Provider</label>
+            <select v-model="localForm.small_model_provider" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500">
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2 min-w-0">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <div class="flex gap-2 min-w-0">
+          <div class="min-w-0">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.small_model, localForm.small_model_provider) ? 'custom' : localForm.small_model"
                 @change="(e) => {
@@ -221,19 +260,19 @@ const handleSave = () => {
                   if(val !== 'custom') localForm.small_model = val;
                   else if(!isModelCustom(localForm.small_model, localForm.small_model_provider)) localForm.small_model = '';
                 }"
-                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono truncate"
               >
-                <option value="" disabled>-- Please Select --</option>
-                <option v-for="m in availableConstants.predefined_llm_models[localForm.small_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.small_model_provider, m) }}</option>
-                <option value="custom">-- Custom Model String --</option>
+                <option value="" disabled>-- Bitte wählen --</option>
+                <option v-for="m in availableConstants.predefined_llm_models?.[localForm.small_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.small_model_provider, m) }}</option>
+                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.small_model_provider)"
                 type="button"
                 @click="refreshLlmProviderModels(localForm.small_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.small_model_provider)"
-                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
-                :title="`Fetch ${localForm.small_model_provider} models from API`"
+                class="shrink-0 px-2 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs rounded-lg border border-purple-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                title="Modellliste aktualisieren"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -241,72 +280,69 @@ const handleSave = () => {
           </div>
         </div>
 
-        <div v-if="isModelCustom(localForm.small_model, localForm.small_model_provider) || localForm.small_model === ''" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
-          <input v-model="localForm.small_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        <div v-if="isModelCustom(localForm.small_model, localForm.small_model_provider) || localForm.small_model === ''">
+          <input v-model="localForm.small_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
         </div>
 
-        <div v-if="localForm.small_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
-          <input v-model="localForm.small_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
-        </div>
-        <p class="text-xxs text-slate-500">Efficient logic for rule enforcement and mechanical reasoning (Pass 1).</p>
-
-        <div v-if="testResults.simple" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.simple.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.simple.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
-           <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2">
-                <div v-if="testResults.simple.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                <i v-else :class="testResults.simple.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
-                {{ testResults.simple.message }}
-              </div>
-           </div>
+        <div v-if="localForm.small_model_provider === 'openrouter'">
+          <input v-model="localForm.small_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
-          <div class="space-y-2">
-            <div class="flex items-center h-6">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
-            </div>
-            <input v-model.number="localForm.small_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">Max Tokens:</span>
+            <input v-model.number="localForm.small_max_tokens" type="number" step="1024" min="128" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
           </div>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between h-6">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
-              <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
-                <input type="checkbox" v-model="localForm.small_enable_thinking" class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
-              </label>
-            </div>
-            <input v-if="localForm.small_enable_thinking" v-model.number="localForm.small_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Thinking tokens" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+          <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 text-xs select-none">
+              <input type="checkbox" v-model="localForm.small_enable_thinking" class="rounded bg-slate-950 border-slate-800 text-purple-600 focus:ring-0">
+              <span class="text-[11px] font-medium">Thinking Mode</span>
+            </label>
+            <input v-if="localForm.small_enable_thinking" v-model.number="localForm.small_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Tokens" class="w-20 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono" />
           </div>
+        </div>
+
+        <div v-if="testResults.simple" :class="['p-2.5 rounded-lg text-xs font-medium border animate-fade-in flex items-center gap-2', testResults.simple.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.simple.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div v-if="testResults.simple.status === 'loading'" class="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+          <i v-else :class="testResults.simple.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+          <span>{{ testResults.simple.message }}</span>
         </div>
       </div>
 
-      <!-- COMPLEX MODEL -->
-      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-            <i class="ra ra-feather-wing"></i> Complex Model (Narratives & World Gen)
-          </h3>
+      <!-- 2. COMPLEX MODEL -->
+      <div class="p-4 bg-slate-900/90 border border-purple-500/15 rounded-xl shadow-lg space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 text-xs">
+              <i class="ra ra-feather-wing"></i>
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                Complex Model
+                <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase tracking-wider">Pass 2: Erzählung</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Atmosphärische Beschreibungen, Dialoge und Narrative Progression.</p>
+            </div>
+          </div>
           <button 
+            type="button"
             @click="emit('test', { key: 'complex', model: localForm.complex_model, provider: localForm.complex_model_provider, openrouterProvider: localForm.complex_openrouter_provider })"
-            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+            class="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[11px] font-bold rounded-lg border border-indigo-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-gear-hammer"></i> Test Connection
+            <i class="ra ra-player"></i> Testen
           </button>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
-            <select v-model="localForm.complex_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Provider</label>
+            <select v-model="localForm.complex_model_provider" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500">
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2 min-w-0">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <div class="flex gap-2 min-w-0">
+          <div class="min-w-0">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.complex_model, localForm.complex_model_provider) ? 'custom' : localForm.complex_model"
                 @change="(e) => {
@@ -314,19 +350,19 @@ const handleSave = () => {
                   if(val !== 'custom') localForm.complex_model = val;
                   else if(!isModelCustom(localForm.complex_model, localForm.complex_model_provider)) localForm.complex_model = '';
                 }"
-                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono truncate"
               >
-                <option value="" disabled>-- Please Select --</option>
-                <option v-for="m in availableConstants.predefined_llm_models[localForm.complex_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.complex_model_provider, m) }}</option>
-                <option value="custom">-- Custom Model String --</option>
+                <option value="" disabled>-- Bitte wählen --</option>
+                <option v-for="m in availableConstants.predefined_llm_models?.[localForm.complex_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.complex_model_provider, m) }}</option>
+                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.complex_model_provider)"
                 type="button"
                 @click="refreshLlmProviderModels(localForm.complex_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.complex_model_provider)"
-                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
-                :title="`Fetch ${localForm.complex_model_provider} models from API`"
+                class="shrink-0 px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-xs rounded-lg border border-indigo-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                title="Modellliste aktualisieren"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -334,72 +370,69 @@ const handleSave = () => {
           </div>
         </div>
 
-        <div v-if="isModelCustom(localForm.complex_model, localForm.complex_model_provider) || localForm.complex_model === ''" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
-          <input v-model="localForm.complex_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        <div v-if="isModelCustom(localForm.complex_model, localForm.complex_model_provider) || localForm.complex_model === ''">
+          <input v-model="localForm.complex_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
         </div>
 
-        <div v-if="localForm.complex_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
-          <input v-model="localForm.complex_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
-        </div>
-        <p class="text-xxs text-slate-500">Rich storytelling, complex world-building, and high-fidelity prose (Pass 2).</p>
-
-        <div v-if="testResults.complex" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.complex.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.complex.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
-           <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2">
-                <div v-if="testResults.complex.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                <i v-else :class="testResults.complex.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
-                {{ testResults.complex.message }}
-              </div>
-           </div>
+        <div v-if="localForm.complex_model_provider === 'openrouter'">
+          <input v-model="localForm.complex_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
-          <div class="space-y-2">
-            <div class="flex items-center h-6">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
-            </div>
-            <input v-model.number="localForm.complex_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">Max Tokens:</span>
+            <input v-model.number="localForm.complex_max_tokens" type="number" step="1024" min="128" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
           </div>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between h-6">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
-              <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
-                <input type="checkbox" v-model="localForm.complex_enable_thinking" class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
-              </label>
-            </div>
-            <input v-if="localForm.complex_enable_thinking" v-model.number="localForm.complex_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Thinking tokens" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+          <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 text-xs select-none">
+              <input type="checkbox" v-model="localForm.complex_enable_thinking" class="rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0">
+              <span class="text-[11px] font-medium">Thinking Mode</span>
+            </label>
+            <input v-if="localForm.complex_enable_thinking" v-model.number="localForm.complex_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Tokens" class="w-20 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono" />
           </div>
+        </div>
+
+        <div v-if="testResults.complex" :class="['p-2.5 rounded-lg text-xs font-medium border animate-fade-in flex items-center gap-2', testResults.complex.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.complex.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div v-if="testResults.complex.status === 'loading'" class="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+          <i v-else :class="testResults.complex.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+          <span>{{ testResults.complex.message }}</span>
         </div>
       </div>
 
-      <!-- GENERATOR MODEL -->
-      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10 shadow-inner">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-            <i class="ra ra-world"></i> Adventure Generator Model
-          </h3>
+      <!-- 3. ADVENTURE GENERATOR MODEL -->
+      <div class="p-4 bg-slate-900/90 border border-purple-500/15 rounded-xl shadow-lg space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-300 text-xs">
+              <i class="ra ra-world"></i>
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                Adventure Generator Model
+                <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider">World Creation</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Erstellung von Szenen, Rätseln, Manifesten & Entitäten.</p>
+            </div>
+          </div>
           <button 
+            type="button"
             @click="emit('test', { key: 'generator', model: localForm.generator_model, provider: localForm.generator_model_provider, openrouterProvider: localForm.generator_openrouter_provider })"
-            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+            class="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 text-[11px] font-bold rounded-lg border border-emerald-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-gear-hammer"></i> Test Connection
+            <i class="ra ra-player"></i> Testen
           </button>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
-            <select v-model="localForm.generator_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Provider</label>
+            <select v-model="localForm.generator_model_provider" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500">
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2 min-w-0">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <div class="flex gap-2 min-w-0">
+          <div class="min-w-0">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.generator_model, localForm.generator_model_provider) ? 'custom' : localForm.generator_model"
                 @change="(e) => {
@@ -407,19 +440,19 @@ const handleSave = () => {
                   if(val !== 'custom') localForm.generator_model = val;
                   else if(!isModelCustom(localForm.generator_model, localForm.generator_model_provider)) localForm.generator_model = '';
                 }"
-                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono truncate"
               >
-                <option value="" disabled>-- Please Select --</option>
-                <option v-for="m in availableConstants.predefined_llm_models[localForm.generator_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.generator_model_provider, m) }}</option>
-                <option value="custom">-- Custom Model String --</option>
+                <option value="" disabled>-- Bitte wählen --</option>
+                <option v-for="m in availableConstants.predefined_llm_models?.[localForm.generator_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.generator_model_provider, m) }}</option>
+                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.generator_model_provider)"
                 type="button"
                 @click="refreshLlmProviderModels(localForm.generator_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.generator_model_provider)"
-                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
-                :title="`Fetch ${localForm.generator_model_provider} models from API`"
+                class="shrink-0 px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 text-xs rounded-lg border border-emerald-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                title="Modellliste aktualisieren"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -427,92 +460,89 @@ const handleSave = () => {
           </div>
         </div>
 
-        <div v-if="isModelCustom(localForm.generator_model, localForm.generator_model_provider) || localForm.generator_model === ''" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
-          <input v-model="localForm.generator_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        <div v-if="isModelCustom(localForm.generator_model, localForm.generator_model_provider) || localForm.generator_model === ''">
+          <input v-model="localForm.generator_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
         </div>
 
-        <div v-if="localForm.generator_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
-          <input v-model="localForm.generator_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
-        </div>
-        <p class="text-xxs text-slate-500">Highest reasoning models for creating complete adventures, logic blueprints and complex manifests (World Generation).</p>
-
-        <div v-if="testResults.generator" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.generator.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.generator.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
-           <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2">
-                <div v-if="testResults.generator.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                <i v-else :class="testResults.generator.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
-                {{ testResults.generator.message }}
-              </div>
-           </div>
+        <div v-if="localForm.generator_model_provider === 'openrouter'">
+          <input v-model="localForm.generator_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
-          <div class="space-y-2">
-            <div class="flex items-center h-6">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
-            </div>
-            <input v-model.number="localForm.generator_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">Max Tokens:</span>
+            <input v-model.number="localForm.generator_max_tokens" type="number" step="1024" min="128" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-500 font-mono" />
           </div>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between h-6">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
-              <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
-                <input type="checkbox" v-model="localForm.generator_enable_thinking" class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
-              </label>
-            </div>
-            <input v-if="localForm.generator_enable_thinking" v-model.number="localForm.generator_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Thinking tokens" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+          <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 text-xs select-none">
+              <input type="checkbox" v-model="localForm.generator_enable_thinking" class="rounded bg-slate-950 border-slate-800 text-emerald-600 focus:ring-0">
+              <span class="text-[11px] font-medium">Thinking Mode</span>
+            </label>
+            <input v-if="localForm.generator_enable_thinking" v-model.number="localForm.generator_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Tokens" class="w-20 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono" />
           </div>
+        </div>
+
+        <div v-if="testResults.generator" :class="['p-2.5 rounded-lg text-xs font-medium border animate-fade-in flex items-center gap-2', testResults.generator.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.generator.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div v-if="testResults.generator.status === 'loading'" class="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+          <i v-else :class="testResults.generator.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+          <span>{{ testResults.generator.message }}</span>
         </div>
       </div>
 
-      <!-- GLOBAL LLM SETTINGS -->
-      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10 shadow-inner">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-            <i class="ra ra-player"></i> Play Agent Model (Autonomous Gameplay)
-          </h3>
-          <button
+      <!-- 4. PLAY AGENT MODEL -->
+      <div class="p-4 bg-slate-900/90 border border-purple-500/15 rounded-xl shadow-lg space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-300 text-xs">
+              <i class="ra ra-player"></i>
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                Play Agent Model
+                <span class="text-[10px] font-semibold text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30 uppercase tracking-wider">Autonomous Mode</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Autonomes Test-Spielen & Stress-Testing per Agent.</p>
+            </div>
+          </div>
+          <button 
+            type="button"
             @click="emit('test', { key: 'play_agent', model: localForm.play_agent_model, provider: localForm.play_agent_model_provider, openrouterProvider: localForm.play_agent_openrouter_provider })"
-            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+            class="px-2.5 py-1 bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 text-[11px] font-bold rounded-lg border border-sky-600/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <i class="ra ra-gear-hammer"></i> Test Connection
+            <i class="ra ra-player"></i> Testen
           </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
-            <select v-model="localForm.play_agent_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Provider</label>
+            <select v-model="localForm.play_agent_model_provider" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500">
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2 min-w-0">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <div class="flex gap-2 min-w-0">
+          <div class="min-w-0">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) ? 'custom' : localForm.play_agent_model"
                 @change="(e) => {
                   const val = (e.target as HTMLSelectElement).value;
-                  if (val !== 'custom') localForm.play_agent_model = val;
-                  else if (!isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider)) localForm.play_agent_model = '';
+                  if(val !== 'custom') localForm.play_agent_model = val;
+                  else if(!isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider)) localForm.play_agent_model = '';
                 }"
-                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono truncate"
               >
-                <option value="" disabled>-- Please Select --</option>
-                <option v-for="m in availableConstants.predefined_llm_models[localForm.play_agent_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.play_agent_model_provider, m) }}</option>
-                <option value="custom">-- Custom Model String --</option>
+                <option value="" disabled>-- Bitte wählen --</option>
+                <option v-for="m in availableConstants.predefined_llm_models?.[localForm.play_agent_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.play_agent_model_provider, m) }}</option>
+                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.play_agent_model_provider)"
                 type="button"
                 @click="refreshLlmProviderModels(localForm.play_agent_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.play_agent_model_provider)"
-                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
-                :title="`Fetch ${localForm.play_agent_model_provider} models from API`"
+                class="shrink-0 px-2 py-1 bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 text-xs rounded-lg border border-sky-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                title="Modellliste aktualisieren"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -520,90 +550,152 @@ const handleSave = () => {
           </div>
         </div>
 
-        <div v-if="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) || localForm.play_agent_model === ''" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
-          <input v-model="localForm.play_agent_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        <div v-if="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) || localForm.play_agent_model === ''">
+          <input v-model="localForm.play_agent_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
         </div>
 
-        <div v-if="localForm.play_agent_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
-          <input v-model="localForm.play_agent_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
+        <div v-if="localForm.play_agent_model_provider === 'openrouter'">
+          <input v-model="localForm.play_agent_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
         </div>
 
-        <p class="text-xxs text-slate-500">Used when Autonomous Agent Mode is active. Falls back to the Simple Model if left empty.</p>
-
-        <div class="pt-4 border-t border-slate-900">
-          <div class="flex items-start justify-between gap-4 p-4 bg-amber-500/10 rounded-xl border border-amber-500/30">
-            <div>
-              <label class="block text-sm font-semibold text-amber-200">Monkey Mode Default</label>
-              <p class="text-xxs text-amber-300/80 mt-1">
-                If enabled, /agent on starts directly in chaos-testing mode. The play-agent will intentionally try invalid,
-                nonsensical, or rule-breaking actions to stress-test engine robustness.
-              </p>
+        <div class="flex items-center justify-between gap-3 p-2.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
+          <div>
+            <div class="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+              <i class="ra ra-perspective-dice-random text-amber-400"></i> Monkey Mode Standard
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="localForm.play_agent_monkey_mode" class="sr-only peer">
-              <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 peer-checked:after:bg-white"></div>
-            </label>
+            <p class="text-[11px] text-amber-300/70">Startet /agent on standardmäßig im destruktiven Chaos-Test-Modus.</p>
           </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0">
+            <input type="checkbox" v-model="localForm.play_agent_monkey_mode" class="sr-only peer">
+            <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500 peer-checked:after:bg-white"></div>
+          </label>
         </div>
 
-        <div v-if="testResults.play_agent" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.play_agent.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.play_agent.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <div v-if="testResults.play_agent.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-              <i v-else :class="testResults.play_agent.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
-              {{ testResults.play_agent.message }}
-            </div>
-          </div>
+        <div v-if="testResults.play_agent" :class="['p-2.5 rounded-lg text-xs font-medium border animate-fade-in flex items-center gap-2', testResults.play_agent.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.play_agent.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div v-if="testResults.play_agent.status === 'loading'" class="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+          <i v-else :class="testResults.play_agent.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+          <span>{{ testResults.play_agent.message }}</span>
         </div>
       </div>
 
-      <!-- HISTORY COMPRESSION MODEL -->
-      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10 shadow-inner">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-            <i class="ra ra-quill-ink"></i> History Compression Model (Chronicle Summary)
-          </h3>
-          <button
+      <!-- 5. HISTORY COMPRESSION & COMPACTING CONFIGURATION -->
+      <div class="p-4 bg-slate-900/90 border border-purple-500/20 rounded-xl shadow-lg space-y-3.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 text-xs">
+              <i class="ra ra-quill-ink"></i>
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                History Compression & Gedächtnis
+                <span class="text-[10px] font-semibold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 uppercase tracking-wider">Chronicle & Compacting</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Verdichtet vergangene Spielrunden in eine fortlaufende englische Chronik-Zusammenfassung.</p>
+            </div>
+          </div>
+          <button 
+            type="button"
             @click="emit('test', { key: 'compression', model: localForm.compression_model, provider: localForm.compression_model_provider, openrouterProvider: localForm.compression_openrouter_provider })"
-            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+            :disabled="!localForm.compression_model"
+            class="px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 text-[11px] font-bold rounded-lg border border-amber-600/30 transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40 cursor-pointer"
           >
-            <i class="ra ra-gear-hammer"></i> Test Connection
+            <i class="ra ra-player"></i> Testen
           </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
-            <select v-model="localForm.compression_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+        <!-- COMPACTING CONFIGURATION BAR (Toggle & Slider) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-slate-950/60 rounded-xl border border-white/5">
+          <!-- Toggle Compacting -->
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <label class="text-xs font-bold text-slate-200 cursor-pointer" @click="localForm.enable_history_compression = !localForm.enable_history_compression">
+                  Automatisches Compacting
+                </label>
+                <span :class="['text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider', localForm.enable_history_compression ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700']">
+                  {{ localForm.enable_history_compression ? 'Aktiv' : 'Inaktiv' }}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5">Komprimiert ältere Spielzüge automatisch für den Erzähler.</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+              <input type="checkbox" v-model="localForm.enable_history_compression" class="sr-only peer">
+              <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500 peer-checked:after:bg-white"></div>
+            </label>
+          </div>
+
+          <!-- Turns before Compacting Slider & Number Input -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Turns vor Compacting</label>
+              <div class="flex items-center gap-1 bg-black/50 border border-white/10 px-2 py-0.5 rounded-md">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  :value="localForm.turns_before_compacting"
+                  @input="handleTurnsInput"
+                  class="w-8 bg-transparent text-center text-white font-mono font-bold text-xs focus:outline-none"
+                />
+                <span class="text-[10px] font-bold text-amber-400">Turns</span>
+              </div>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="100"
+              :value="localForm.turns_before_compacting"
+              @input="handleTurnsInput"
+              class="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+            />
+            <div class="flex justify-between text-[9px] text-slate-500 uppercase tracking-wider font-mono">
+              <span>1</span>
+              <span class="text-amber-400 font-bold">10 Default</span>
+              <span>100</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- WARNHINWEIS: Compacting aktiv, aber kein Modell ausgewählt -->
+        <div v-if="isCompressionModelMissingWarning" class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-amber-300 animate-fade-in">
+          <i class="ra ra-warning text-base shrink-0 mt-0.5 text-amber-400"></i>
+          <div class="text-xs leading-relaxed">
+            <strong class="font-bold text-amber-200">Kein Kompressions-Modell ausgewählt:</strong>
+            Compacting ist aktiviert, aber es wurde kein Modell hinterlegt. Als Fallback wird das Simple Model genutzt. Für konsistente Chronik-Zusammenfassungen empfiehlt sich ein separates Modell.
+          </div>
+        </div>
+
+        <!-- MODEL SELECTION -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Provider</label>
+            <select v-model="localForm.compression_model_provider" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500">
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2 min-w-0">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <div class="flex gap-2 min-w-0">
+          <div class="min-w-0">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Modellauswahl</label>
+            <div class="flex gap-1.5 min-w-0">
               <select
                 :value="isModelCustom(localForm.compression_model, localForm.compression_model_provider) ? 'custom' : localForm.compression_model"
                 @change="(e) => {
                   const val = (e.target as HTMLSelectElement).value;
-                  if (val !== 'custom') localForm.compression_model = val;
-                  else if (!isModelCustom(localForm.compression_model, localForm.compression_model_provider)) localForm.compression_model = '';
+                  if(val !== 'custom') localForm.compression_model = val;
+                  else if(!isModelCustom(localForm.compression_model, localForm.compression_model_provider)) localForm.compression_model = '';
                 }"
-                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono truncate"
               >
-                <option value="" disabled>-- Please Select --</option>
-                <option v-for="m in availableConstants.predefined_llm_models[localForm.compression_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.compression_model_provider, m) }}</option>
-                <option value="custom">-- Custom Model String --</option>
+                <option value="">-- Kein separates Modell (Fallback) --</option>
+                <option v-for="m in availableConstants.predefined_llm_models?.[localForm.compression_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.compression_model_provider, m) }}</option>
+                <option value="custom">-- Benutzerdefinierte Model-ID --</option>
               </select>
               <button
                 v-if="isLlmDiscoveryProvider(localForm.compression_model_provider)"
                 type="button"
                 @click="refreshLlmProviderModels(localForm.compression_model_provider)"
                 :disabled="isLlmProviderLoading(localForm.compression_model_provider)"
-                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
-                :title="`Fetch ${localForm.compression_model_provider} models from API`"
+                class="shrink-0 px-2 py-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 text-xs rounded-lg border border-amber-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                title="Modellliste aktualisieren"
               >
                 <i class="ra ra-recycle"></i>
               </button>
@@ -611,91 +703,94 @@ const handleSave = () => {
           </div>
         </div>
 
-        <div v-if="isModelCustom(localForm.compression_model, localForm.compression_model_provider) || localForm.compression_model === ''" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
-          <input v-model="localForm.compression_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        <div v-if="isModelCustom(localForm.compression_model, localForm.compression_model_provider)">
+          <input v-model="localForm.compression_model" type="text" maxlength="100" placeholder="Modell-ID z.B. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
         </div>
 
-        <div v-if="localForm.compression_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
-          <input v-model="localForm.compression_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. \"Together\", \"alibaba\", \"grok\"). Disables fallbacks to unlisted providers.</p>
+        <div v-if="localForm.compression_model_provider === 'openrouter'">
+          <input v-model="localForm.compression_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Routing (z.B. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
         </div>
 
-        <div class="space-y-2">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
-          <input v-model.number="localForm.compression_max_tokens" type="number" min="256" max="32768" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-          <p class="text-xxs text-slate-500">Max tokens allocated for chronicle summary generation (default: 4096).</p>
+        <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80 text-xs">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Max Tokens (Zusammenfassung):</span>
+          <input v-model.number="localForm.compression_max_tokens" type="number" min="256" max="32768" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-amber-500 font-mono" />
         </div>
 
-        <p class="text-xxs text-slate-500">Used when turns exceed the active turn memory to maintain an English chronicle summary. Falls back to Simple Model if left empty.</p>
+        <div v-if="testResults.compression" :class="['p-2.5 rounded-lg text-xs font-medium border animate-fade-in flex items-center gap-2', testResults.compression.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.compression.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div v-if="testResults.compression.status === 'loading'" class="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+          <i v-else :class="testResults.compression.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+          <span>{{ testResults.compression.message }}</span>
+        </div>
+      </div>
 
-        <div v-if="testResults.compression" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.compression.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.compression.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <div v-if="testResults.compression.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-              <i v-else :class="testResults.compression.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
-              {{ testResults.compression.message }}
-            </div>
+      <!-- PROVIDER ENDPOINTS (OLLAMA / MINIMAX - NO "Global Infrastructure" label) -->
+      <div v-if="hasOllamaProviderSelected || hasMinimaxProviderSelected" class="space-y-2.5 pt-2 border-t border-slate-800">
+        <!-- Ollama Endpoint -->
+        <div v-if="hasOllamaProviderSelected" class="p-3 bg-slate-900/70 border border-purple-500/20 rounded-xl space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <label class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <i class="ra ra-reactor text-purple-400"></i> Ollama API Base URL
+            </label>
+            <button
+              type="button"
+              @click="refreshOllamaModels"
+              class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <i class="ra ra-recycle"></i>
+              {{ isLoadingOllamaModels ? 'Laden...' : 'Modelle laden' }}
+            </button>
+          </div>
+          <input v-model="localForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
+          <div v-if="!isLoadingOllamaModels && ollamaModelCount === 0" class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] leading-relaxed">
+            Keine lokalen Ollama-Modelle gefunden. Bitte zuerst per Terminal herunterladen (z.B. <code class="bg-black/40 px-1 py-0.5 rounded text-amber-200">ollama pull llama3.2</code>) und erneut prüfen.
+          </div>
+        </div>
+
+        <!-- MiniMax Endpoint -->
+        <div v-if="hasMinimaxProviderSelected" class="p-3 bg-slate-900/70 border border-purple-500/20 rounded-xl space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <label class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <i class="ra ra-reactor text-purple-400"></i> MiniMax API Base URL
+            </label>
+            <button
+              type="button"
+              @click="refreshMinimaxModels"
+              class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <i class="ra ra-recycle"></i>
+              {{ isLoadingMinimaxModels ? 'Laden...' : 'Modelle laden' }}
+            </button>
+          </div>
+          <input v-model="localForm.minimax_url" type="text" placeholder="https://api.minimax.chat/v1" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
+          <div v-if="!isLoadingMinimaxModels && minimaxModelCount === 0" class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] leading-relaxed">
+            Keine MiniMax-Modelle gefunden. Prüfe den API-Key unter Provider Keys und die angegebene URL.
           </div>
         </div>
       </div>
 
-      <div class="pt-6 border-t border-slate-800 space-y-6">
-        <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Global Infrastructure</h4>
-        
-        <div class="space-y-4">
-          <div v-if="localForm.small_model_provider === 'ollama' || localForm.complex_model_provider === 'ollama' || localForm.generator_model_provider === 'ollama' || localForm.play_agent_model_provider === 'ollama' || localForm.compression_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
-            <div class="flex items-center justify-between gap-3">
-              <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
-              <button
-                type="button"
-                @click="refreshOllamaModels"
-                class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all"
-              >
-                {{ isLoadingOllamaModels ? 'Loading models...' : 'Refresh Models' }}
-              </button>
-            </div>
-            <input v-model="localForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-            <p class="text-xxs text-slate-500">Local endpoint used for local model execution. The model lists above show installed Ollama models.</p>
-            <div v-if="!isLoadingOllamaModels && ollamaModelCount === 0" class="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
-              No local Ollama models were found for this URL. Download one first (for example: ollama pull llama3.2), then click Refresh Models.
-            </div>
-          </div>
-
-          <div v-if="localForm.small_model_provider === 'minimax' || localForm.complex_model_provider === 'minimax' || localForm.generator_model_provider === 'minimax' || localForm.play_agent_model_provider === 'minimax'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
-            <div class="flex items-center justify-between gap-3">
-              <label class="block text-sm font-semibold text-slate-300">MiniMax API Base URL</label>
-              <button
-                type="button"
-                @click="refreshMinimaxModels"
-                class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all"
-              >
-                {{ isLoadingMinimaxModels ? 'Loading models...' : 'Refresh Models' }}
-              </button>
-            </div>
-            <input v-model="localForm.minimax_url" type="text" placeholder="https://api.minimax.chat/v1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-            <p class="text-xxs text-slate-500">API endpoint for MiniMax. Click Refresh Models to fetch available models from your configured API key.</p>
-            <div v-if="!isLoadingMinimaxModels && minimaxModelCount === 0" class="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
-              No MiniMax models were found. Make sure your API key is configured in Provider Keys and the URL is correct.
-            </div>
-          </div>
-        </div>
+      <!-- Save Button -->
+      <div class="pt-2">
+        <button 
+          type="button" 
+          @click="handleSave" 
+          :disabled="isSubmitting" 
+          class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-purple-900/30 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
+          <i v-else class="ra ra-save"></i>
+          {{ isSubmitting ? 'Wird optimiert & gespeichert...' : 'Intelligence-Konfiguration speichern' }}
+        </button>
       </div>
-
-      <button type="button" @click="handleSave" :disabled="isSubmitting" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
-         {{ isSubmitting ? 'Optimizing...' : 'Update Intelligence Paths' }}
-      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .animate-fade-in {
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.3s ease-out;
 }
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 </style>

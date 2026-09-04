@@ -649,10 +649,17 @@ async def start_session_for_template(
             if isinstance(locked, bool):
                 initial_entity_states[ent.id] = {"locked": locked}
 
+    user_llm_settings = getattr(current_user, "llm_settings", None) or {}
+    configured_turns = user_llm_settings.get("turns_before_compacting") or user_llm_settings.get("default_max_memory_turns")
+    adv_turns = getattr(adventure, "max_memory_turns", None)
+    initial_turns = adv_turns if adv_turns is not None else (configured_turns or 10)
+    initial_compression = bool(user_llm_settings.get("enable_history_compression", True))
+
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0,
-        max_memory_turns=getattr(adventure, "max_memory_turns", 10) or 10,
+        max_memory_turns=initial_turns or 10,
+        enable_history_compression=initial_compression,
         quests=deepcopy(adventure.quests or []),
         entity_states=initial_entity_states,
         time_system=adventure.time_system or "calendar",

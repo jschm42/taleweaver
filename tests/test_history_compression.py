@@ -110,3 +110,24 @@ async def test_compress_history_if_needed_triggers_compression():
     assert manager.state.compressed_history["summary"] == "The hero entered a glowing cave and gathered sweet-smelling mushrooms."
     assert manager.state.compressed_history["last_compressed_msg_id"] == "m4"
     manager.db.commit.assert_awaited()
+
+
+def test_normalize_llm_settings_compacting_defaults():
+    from backend.api.routes.config_api import _normalize_llm_settings
+
+    # Default fallback
+    norm = _normalize_llm_settings({})
+    assert norm["turns_before_compacting"] == 10
+    assert norm["enable_history_compression"] is True
+
+    # Custom valid values
+    norm2 = _normalize_llm_settings({"turns_before_compacting": 25, "enable_history_compression": False})
+    assert norm2["turns_before_compacting"] == 25
+    assert norm2["enable_history_compression"] is False
+
+    # Clamping out-of-range values
+    norm3 = _normalize_llm_settings({"turns_before_compacting": 999, "enable_history_compression": True})
+    assert norm3["turns_before_compacting"] == 100
+    norm4 = _normalize_llm_settings({"turns_before_compacting": 0, "enable_history_compression": True})
+    assert norm4["turns_before_compacting"] == 1
+

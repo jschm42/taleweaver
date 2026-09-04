@@ -48,6 +48,14 @@ class SettingsService {
     play_agent_monkey_mode: false,
     play_agent_openrouter_provider: '',
 
+    compression_model: '',
+    compression_model_provider: 'openai',
+    compression_max_tokens: 4096,
+    compression_openrouter_provider: '',
+
+    turns_before_compacting: 10,
+    enable_history_compression: true,
+
     preferred_provider: 'openai',
     ollama_url: 'http://localhost:11434',
     minimax_url: 'https://api.minimax.chat/v1',
