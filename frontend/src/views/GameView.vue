@@ -199,6 +199,10 @@ const {
   cancelTurnError,
 } = useGameSocket()
 
+if (import.meta.env.DEV) {
+  ;(window as any).__openGeneratorModal = openGeneratorModal
+}
+
 const displayAdventureTitle = computed(() => {
   return sheet.value?.adventure_title || (route.query.title as string) || 'your adventure'
 })

@@ -3,24 +3,24 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Sparkles,
-  Palette,
-  Flame,
-  Layers,
-  ShieldAlert,
   CheckCircle2,
+  ShieldAlert,
   Play,
   Edit3,
   X,
   Wand2,
-  Image as ImageIcon,
-  Brain,
-  ChevronDown,
-  ChevronUp,
-  BarChart3,
-  ZoomIn,
 } from 'lucide-vue-next'
 import { api, GENERATION_SAYINGS } from '@/composables/useApi'
 import type { CatalogTile } from '@/types'
+
+// Modular Subcomponents
+import GeneratorBasicInfo from './generator/GeneratorBasicInfo.vue'
+import GeneratorStyleTone from './generator/GeneratorStyleTone.vue'
+import GeneratorTimeSettings from './generator/GeneratorTimeSettings.vue'
+import GeneratorAdvancedSettings from './generator/GeneratorAdvancedSettings.vue'
+import GeneratorProgressStream, { type LogEntry } from './generator/GeneratorProgressStream.vue'
+import GeneratorAssetStats, { type AssetStatsMap } from './generator/GeneratorAssetStats.vue'
+import GeneratorLightbox from './generator/GeneratorLightbox.vue'
 
 const props = defineProps<{
   open: boolean
@@ -34,21 +34,13 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
-// View states: 'form' | 'progress'
+// View state: 'form' | 'progress'
 const viewState = ref<'form' | 'progress'>('form')
-
-interface LogEntry {
-  timestamp: string
-  type: 'status' | 'thinking' | 'image_generation'
-  content: string
-  image_url?: string
-}
 
 const logs = ref<LogEntry[]>([])
 const isLoadingLogs = ref(true)
-const isExpandedMap = ref<Record<string, boolean>>({})
-const chatContainer = ref<HTMLDivElement | null>(null)
 const previewImageUrl = ref<string | null>(null)
+const streamComponent = ref<InstanceType<typeof GeneratorProgressStream> | null>(null)
 
 const isReady = ref(false)
 const hasError = ref(false)
@@ -59,10 +51,6 @@ let sayingTimer: number | null = null
 function updateSaying() {
   const randomIndex = Math.floor(Math.random() * GENERATION_SAYINGS.length)
   currentSaying.value = GENERATION_SAYINGS[randomIndex]
-}
-
-function toggleExpand(timestamp: string) {
-  isExpandedMap.value[timestamp] = !isExpandedMap.value[timestamp]
 }
 
 const lastStatusIndex = computed(() => {
@@ -76,8 +64,8 @@ const lastStatusIndex = computed(() => {
   return lastIdx
 })
 
-const assetStats = computed(() => {
-  const stats = {
+const assetStats = computed<AssetStatsMap>(() => {
+  const stats: AssetStatsMap = {
     cover: { generated: 0, reused: 0 },
     protagonist: { generated: 0, reused: 0 },
     scene: { generated: 0, reused: 0 },
@@ -85,7 +73,7 @@ const assetStats = computed(() => {
     item: { generated: 0, reused: 0 },
   }
 
-  const detectAssetType = (text: string): keyof typeof stats | null => {
+  const detectAssetType = (text: string): keyof AssetStatsMap | null => {
     const lower = text.toLowerCase()
     if (lower.includes('adventure cover')) return 'cover'
     if (lower.includes('protagonist')) return 'protagonist'
@@ -103,7 +91,7 @@ const assetStats = computed(() => {
       const assetType = detectAssetType(log.content)
       if (assetType) stats[assetType].reused++
     } else {
-      let assetType: keyof typeof stats | null = null
+      let assetType: keyof AssetStatsMap | null = null
       for (let i = index - 1; i >= 0; i--) {
         if (logs.value[i].type === 'status') {
           const statusLower = logs.value[i].content.toLowerCase()
@@ -138,6 +126,7 @@ const totalStats = computed(() => {
   return { generated, reused }
 })
 
+// Comprehensive generator form state including time handling
 const form = ref({
   title: '',
   storyIdea: '',
@@ -162,9 +151,21 @@ const form = ref({
   max_awards: 4 as number | null,
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   language: '',
+  // Time Handling
+  clock_enabled: true,
+  time_system: 'calendar' as 'calendar' | 'units',
+  day_label: 'Day',
+  initial_day: 1,
+  start_time: '08:00',
+  time_format: '24h' as '24h' | '12h',
+  pacing_minutes: 5,
+  max_time_per_turn: null as number | null,
+  unit_name: 'Units',
+  initial_units: 0,
+  units_per_turn: 1,
+  max_units_per_turn: null as number | null,
 })
 
-const showAdvancedOptions = ref(false)
 const imageStyles = ref<CatalogTile[]>([])
 const tones = ref<CatalogTile[]>([])
 const isLoadingCatalogs = ref(false)
@@ -212,14 +213,14 @@ function populateFromProposal(p: any) {
   form.value.title = (p.title || 'A New Reality').slice(0, 50)
   form.value.storyIdea = p.prompt || p.storyIdea || ''
 
-  // Selected tone
+  // Tone
   if (typeof p.selected_tone === 'string') {
     form.value.selected_tone_id = p.selected_tone
   } else if (p.selected_tone?.id || p.selected_tone?.name) {
     form.value.selected_tone_id = p.selected_tone.id || p.selected_tone.name
   }
 
-  // Selected style
+  // Style
   if (Array.isArray(p.selected_image_styles) && p.selected_image_styles.length > 0) {
     const s = p.selected_image_styles[0]
     form.value.selected_style_id = typeof s === 'string' ? s : (s?.id || s?.name || '')
@@ -227,10 +228,12 @@ function populateFromProposal(p: any) {
     form.value.selected_style_id = p.selected_style
   }
 
+  // Image flags
   if (p.generate_scene_images !== undefined) form.value.generate_scene_images = !!p.generate_scene_images
   if (p.generate_npc_images !== undefined) form.value.generate_npc_images = !!p.generate_npc_images
   if (p.generate_item_images !== undefined) form.value.generate_item_images = !!p.generate_item_images
 
+  // Bounds & feature toggles
   if (p.min_scenes !== undefined && p.min_scenes !== null) form.value.min_scenes = p.min_scenes
   if (p.max_scenes !== undefined && p.max_scenes !== null) form.value.max_scenes = p.max_scenes
 
@@ -252,6 +255,27 @@ function populateFromProposal(p: any) {
 
   if (p.rule_enforcement_mode) form.value.rule_enforcement_mode = p.rule_enforcement_mode
   if (p.language) form.value.language = p.language
+
+  // TIME HANDLING FROM PROPOSAL
+  if (p.clock_enabled !== undefined) form.value.clock_enabled = !!p.clock_enabled
+  if (p.time_system) {
+    form.value.time_system = p.time_system === 'units' ? 'units' : 'calendar'
+  }
+  if (p.pacing_minutes !== undefined && p.pacing_minutes !== null) form.value.pacing_minutes = p.pacing_minutes
+  if (p.time_per_turn !== undefined && p.time_per_turn !== null) form.value.pacing_minutes = p.time_per_turn
+
+  const tc = p.time_config || {}
+  if (tc.day_label) form.value.day_label = tc.day_label
+  if (tc.initial_day !== undefined) form.value.initial_day = Number(tc.initial_day) || 1
+  if (tc.start_time) form.value.start_time = tc.start_time
+  if (tc.time_format) form.value.time_format = tc.time_format === '12h' ? '12h' : '24h'
+  if (tc.pacing_minutes !== undefined) form.value.pacing_minutes = Number(tc.pacing_minutes) || 5
+  if (tc.max_time_per_turn !== undefined) form.value.max_time_per_turn = tc.max_time_per_turn ? Number(tc.max_time_per_turn) : null
+
+  if (tc.unit_name) form.value.unit_name = tc.unit_name
+  if (tc.initial_units !== undefined) form.value.initial_units = Number(tc.initial_units) || 0
+  if (tc.units_per_turn !== undefined) form.value.units_per_turn = Number(tc.units_per_turn) || 1
+  if (tc.max_units_per_turn !== undefined) form.value.max_units_per_turn = tc.max_units_per_turn ? Number(tc.max_units_per_turn) : null
 }
 
 async function loadCatalogs() {
@@ -296,9 +320,7 @@ async function fetchLogs(advId: string) {
     logs.value = data.logs || []
     if (logs.value.length !== prevCount) {
       await nextTick()
-      if (chatContainer.value) {
-        chatContainer.value.scrollTop = chatContainer.value.scrollHeight
-      }
+      streamComponent.value?.scrollToBottom()
     }
   } catch (error) {
     console.error('Error fetching generation logs:', error)
@@ -331,6 +353,27 @@ async function startGeneration() {
     name: form.value.selected_tone_id,
   }
 
+  // Construct structured time_config
+  const time_config: Record<string, any> = form.value.time_system === 'units'
+    ? {
+        time_system: 'units',
+        unit_name: form.value.unit_name || 'Units',
+        initial_units: form.value.initial_units || 0,
+        units_per_turn: form.value.units_per_turn || 1,
+        max_units_per_turn: form.value.max_units_per_turn || null,
+      }
+    : {
+        time_system: 'calendar',
+        day_label: form.value.day_label || 'Day',
+        initial_day: form.value.initial_day || 1,
+        start_time: form.value.start_time || '08:00',
+        time_format: form.value.time_format || '24h',
+        pacing_minutes: form.value.pacing_minutes || 5,
+        max_time_per_turn: form.value.max_time_per_turn || null,
+      }
+
+  const pacingVal = form.value.time_system === 'units' ? form.value.units_per_turn : form.value.pacing_minutes
+
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
@@ -338,6 +381,13 @@ async function startGeneration() {
     original_prompt: form.value.storyIdea.trim(),
     selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
     selected_tone: form.value.selected_tone_id ? fullToneObj : null,
+    // Time & Pacing
+    clock_enabled: form.value.clock_enabled,
+    time_system: form.value.time_system,
+    pacing_minutes: pacingVal,
+    time_per_turn: pacingVal,
+    max_time_per_turn: form.value.time_system === 'units' ? form.value.max_units_per_turn : form.value.max_time_per_turn,
+    time_config,
   }
 
   try {
@@ -449,27 +499,28 @@ onBeforeUnmount(() => {
     <Transition name="modal-fade">
       <div
         v-if="open"
-        class="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+        class="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto"
         @click.self="viewState !== 'progress' && emit('close')"
       >
         <div
-          class="w-full max-w-3xl bg-slate-900/95 border border-cyan-500/30 rounded-3xl shadow-[0_0_50px_rgba(6,182,212,0.15)] overflow-hidden flex flex-col my-auto transition-all animate-modal-pop"
-          :class="[viewState === 'progress' ? 'h-[82vh]' : 'max-h-[90vh]']"
+          class="w-full max-w-3xl bg-slate-900/95 border border-cyan-500/30 rounded-2xl sm:rounded-3xl shadow-[0_0_50px_rgba(6,182,212,0.15)] overflow-hidden flex flex-col my-auto transition-all animate-modal-pop h-[92dvh] sm:h-auto sm:max-h-[90vh]"
         >
-          <!-- HEADER -->
-          <div class="px-6 py-5 border-b border-white/10 bg-slate-950/60 flex items-center justify-between relative shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-500/40 flex items-center justify-center shadow-lg shadow-cyan-500/10">
-                <Wand2 class="w-5 h-5 text-cyan-400 animate-pulse" />
+          <!-- MODAL HEADER -->
+          <div class="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-white/10 bg-slate-950/70 flex items-center justify-between relative shrink-0">
+            <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-500/40 flex items-center justify-center shadow-lg shadow-cyan-500/10 shrink-0">
+                <Wand2 class="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 animate-pulse" />
               </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400">The Construct • Reality Loom</span>
-                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 uppercase">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                  <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400 truncate">
+                    The Construct
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 uppercase shrink-0">
                     Adventure Generator
                   </span>
                 </div>
-                <h3 class="text-lg sm:text-xl font-black text-white tracking-tight mt-0.5">
+                <h3 class="text-sm sm:text-lg font-black text-white tracking-tight mt-0.5 truncate">
                   <template v-if="viewState === 'form'">Weave New Adventure</template>
                   <template v-else-if="viewState === 'progress' && isReady">Reality Manifestation Complete!</template>
                   <template v-else-if="viewState === 'progress' && hasError">World Weaving Interrupted</template>
@@ -480,456 +531,147 @@ onBeforeUnmount(() => {
 
             <button
               v-if="viewState !== 'progress' || isReady || hasError"
-              class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
               @click="emit('close')"
+              title="Close Dialog"
             >
               <X class="w-5 h-5" />
             </button>
           </div>
 
           <!-- BODY: FORM / CONFIGURATION -->
-          <div v-if="viewState === 'form'" class="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-            <!-- Title & Prompt -->
-            <div class="space-y-4 bg-slate-950/40 p-5 rounded-2xl border border-white/5">
-              <div>
-                <label class="block text-xs font-black uppercase tracking-widest text-slate-300 mb-1.5 flex items-center gap-2">
-                  <span>Adventure Title</span>
-                  <span class="text-cyan-400">*</span>
-                </label>
-                <input
-                  v-model="form.title"
-                  type="text"
-                  maxlength="50"
-                  placeholder="e.g., Orbital Void: Protocol Omega"
-                  class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-white font-bold placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all text-sm"
-                />
-              </div>
-
-              <div>
-                <label class="block text-xs font-black uppercase tracking-widest text-slate-300 mb-1.5 flex items-center justify-between">
-                  <span>Story Blueprint & World Vision</span>
-                </label>
-                <textarea
-                  v-model="form.storyIdea"
-                  rows="3"
-                  placeholder="Describe the atmosphere, mystery, factions, and world setting..."
-                  class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-white text-xs sm:text-sm placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all resize-none custom-scrollbar"
-                ></textarea>
-              </div>
+          <div
+            v-if="viewState === 'form'"
+            class="p-4 sm:p-6 space-y-4 sm:space-y-5 flex-1 overflow-y-auto custom-scrollbar"
+          >
+            <!-- Error Banner -->
+            <div
+              v-if="errorMessage"
+              class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center gap-2"
+            >
+              <ShieldAlert class="w-4 h-4 shrink-0" />
+              <span>{{ errorMessage }}</span>
             </div>
 
-            <!-- TONE & STYLE -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <!-- Tone Selector -->
-              <div class="bg-slate-950/40 p-4 rounded-2xl border border-white/5 space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
-                    <Flame class="w-3.5 h-3.5 text-amber-400" /> Tone
-                  </span>
-                  <span class="text-[10px] text-slate-500 uppercase font-bold">{{ form.selected_tone_id || 'Select' }}</span>
-                </div>
-                <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
-                  <button
-                    v-for="t in displayTones"
-                    :key="t.id"
-                    type="button"
-                    @click="form.selected_tone_id = t.id"
-                    :class="[
-                      'px-2.5 py-1 rounded-lg text-xs font-bold transition-all',
-                      form.selected_tone_id === t.id
-                        ? 'bg-amber-500/20 border border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/20'
-                        : 'bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10'
-                    ]"
-                  >
-                    {{ t.name }}
-                  </button>
-                </div>
-              </div>
+            <!-- 1. Basic Info (Title & Story Blueprint) -->
+            <GeneratorBasicInfo
+              v-model:title="form.title"
+              v-model:story-idea="form.storyIdea"
+            />
 
-              <!-- Style Selector -->
-              <div class="bg-slate-950/40 p-4 rounded-2xl border border-white/5 space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
-                    <Palette class="w-3.5 h-3.5 text-violet-400" /> Visual Style
-                  </span>
-                  <span class="text-[10px] text-slate-500 uppercase font-bold">{{ form.selected_style_id || 'Select' }}</span>
-                </div>
-                <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
-                  <button
-                    v-for="s in displayStyles"
-                    :key="s.id"
-                    type="button"
-                    @click="form.selected_style_id = s.id"
-                    :class="[
-                      'px-2.5 py-1 rounded-lg text-xs font-bold transition-all capitalize',
-                      form.selected_style_id === s.id
-                        ? 'bg-violet-500/20 border border-violet-500/60 text-violet-300 shadow-sm shadow-violet-500/20'
-                        : 'bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10'
-                    ]"
-                  >
-                    {{ s.name }}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <!-- 2. Style, Tone & Visual Generation Toggles -->
+            <GeneratorStyleTone
+              v-model:selected-tone-id="form.selected_tone_id"
+              v-model:selected-style-id="form.selected_style_id"
+              v-model:generate-scene-images="form.generate_scene_images"
+              v-model:generate-npc-images="form.generate_npc_images"
+              v-model:generate-item-images="form.generate_item_images"
+              :display-tones="displayTones"
+              :display-styles="displayStyles"
+            />
 
-            <!-- VISUAL GENERATION TOGGLES -->
-            <div class="bg-slate-950/40 p-4 rounded-2xl border border-white/5 space-y-3">
-              <span class="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
-                <ImageIcon class="w-3.5 h-3.5 text-emerald-400" /> AI Visual Manifestation
-              </span>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  @click="form.generate_scene_images = !form.generate_scene_images"
-                  :class="[
-                    'p-3 rounded-xl border flex items-center justify-between transition-all text-left',
-                    form.generate_scene_images
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                      : 'bg-white/5 border-white/5 text-slate-500'
-                  ]"
-                >
-                  <span class="text-xs font-bold">Scene Illustrations</span>
-                  <div :class="['w-2 h-2 rounded-full', form.generate_scene_images ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-slate-700']"></div>
-                </button>
+            <!-- 3. NEW: Time Handling & World Pacing -->
+            <GeneratorTimeSettings
+              v-model:clock-enabled="form.clock_enabled"
+              v-model:time-system="form.time_system"
+              v-model:day-label="form.day_label"
+              v-model:initial-day="form.initial_day"
+              v-model:start-time="form.start_time"
+              v-model:time-format="form.time_format"
+              v-model:pacing-minutes="form.pacing_minutes"
+              v-model:max-time-per-turn="form.max_time_per_turn"
+              v-model:unit-name="form.unit_name"
+              v-model:initial-units="form.initial_units"
+              v-model:units-per-turn="form.units_per_turn"
+              v-model:max-units-per-turn="form.max_units_per_turn"
+            />
 
-                <button
-                  type="button"
-                  @click="form.generate_npc_images = !form.generate_npc_images"
-                  :class="[
-                    'p-3 rounded-xl border flex items-center justify-between transition-all text-left',
-                    form.generate_npc_images
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                      : 'bg-white/5 border-white/5 text-slate-500'
-                  ]"
-                >
-                  <span class="text-xs font-bold">NPC Portraits</span>
-                  <div :class="['w-2 h-2 rounded-full', form.generate_npc_images ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-slate-700']"></div>
-                </button>
-
-                <button
-                  type="button"
-                  @click="form.generate_item_images = !form.generate_item_images"
-                  :class="[
-                    'p-3 rounded-xl border flex items-center justify-between transition-all text-left',
-                    form.generate_item_images
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                      : 'bg-white/5 border-white/5 text-slate-500'
-                  ]"
-                >
-                  <span class="text-xs font-bold">Item Icons</span>
-                  <div :class="['w-2 h-2 rounded-full', form.generate_item_images ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-slate-700']"></div>
-                </button>
-              </div>
-            </div>
-
-            <!-- ADVANCED GENERATION TOGGLE -->
-            <div class="space-y-3">
-              <button
-                type="button"
-                @click="showAdvancedOptions = !showAdvancedOptions"
-                class="text-xs font-bold text-slate-400 hover:text-cyan-400 flex items-center gap-1.5 transition-colors"
-              >
-                <Layers class="w-3.5 h-3.5" />
-                <span>{{ showAdvancedOptions ? 'Hide Advanced World Settings' : 'Show Advanced World Settings (Scenes, Quests, Items, Rules)' }}</span>
-              </button>
-
-              <div v-if="showAdvancedOptions" class="p-4 bg-slate-950/50 border border-white/5 rounded-2xl space-y-4">
-                <!-- Scene Count -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Min Scenes</label>
-                    <input
-                      v-model.number="form.min_scenes"
-                      type="number"
-                      min="1"
-                      max="15"
-                      class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Max Scenes</label>
-                    <input
-                      v-model.number="form.max_scenes"
-                      type="number"
-                      min="1"
-                      max="20"
-                      class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Min Quests</label>
-                    <input
-                      v-model.number="form.min_quests"
-                      type="number"
-                      min="0"
-                      max="10"
-                      class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Max Quests</label>
-                    <input
-                      v-model.number="form.max_quests"
-                      type="number"
-                      min="0"
-                      max="10"
-                      class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-bold"
-                    />
-                  </div>
-                </div>
-
-                <!-- Mechanics toggles -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
-                  <label class="flex items-center gap-2 text-xs font-semibold text-slate-300 cursor-pointer">
-                    <input type="checkbox" v-model="form.quest_generation_enabled" class="rounded bg-slate-800 border-slate-700 text-cyan-500" />
-                    Quests
-                  </label>
-                  <label class="flex items-center gap-2 text-xs font-semibold text-slate-300 cursor-pointer">
-                    <input type="checkbox" v-model="form.container_generation_enabled" class="rounded bg-slate-800 border-slate-700 text-cyan-500" />
-                    Containers
-                  </label>
-                  <label class="flex items-center gap-2 text-xs font-semibold text-slate-300 cursor-pointer">
-                    <input type="checkbox" v-model="form.text_log_generation_enabled" class="rounded bg-slate-800 border-slate-700 text-cyan-500" />
-                    Lore / Logs
-                  </label>
-                  <label class="flex items-center gap-2 text-xs font-semibold text-slate-300 cursor-pointer">
-                    <input type="checkbox" v-model="form.award_generation_enabled" class="rounded bg-slate-800 border-slate-700 text-cyan-500" />
-                    Awards
-                  </label>
-                </div>
-              </div>
-            </div>
+            <!-- 4. Advanced Settings (Bounds, Rules, Modules) -->
+            <GeneratorAdvancedSettings
+              v-model:min-scenes="form.min_scenes"
+              v-model:max-scenes="form.max_scenes"
+              v-model:min-quests="form.min_quests"
+              v-model:max-quests="form.max_quests"
+              v-model:quest-generation-enabled="form.quest_generation_enabled"
+              v-model:min-containers="form.min_containers"
+              v-model:max-containers="form.max_containers"
+              v-model:container-generation-enabled="form.container_generation_enabled"
+              v-model:min-text-logs="form.min_text_logs"
+              v-model:max-text-logs="form.max_text_logs"
+              v-model:text-log-generation-enabled="form.text_log_generation_enabled"
+              v-model:min-awards="form.min_awards"
+              v-model:max-awards="form.max_awards"
+              v-model:award-generation-enabled="form.award_generation_enabled"
+              v-model:rule-enforcement-mode="form.rule_enforcement_mode"
+            />
           </div>
 
           <!-- BODY: PROGRESS VIEW -->
           <div
             v-else-if="viewState === 'progress'"
-            ref="chatContainer"
-            class="flex-1 overflow-y-auto p-6 flex flex-col gap-4 bg-[#04080f]/50 scroll-smooth custom-scrollbar"
+            class="flex-1 flex flex-col min-h-0 overflow-hidden"
           >
-            <!-- Loading indicator -->
-            <div v-if="isLoadingLogs && logs.length === 0" class="flex-1 flex flex-col items-center justify-center gap-3 py-12">
-              <div class="w-10 h-10 border-2 border-cyan-500/10 border-t-cyan-400 rounded-full animate-spin"></div>
-              <span class="text-xs text-cyan-400 font-bold uppercase tracking-widest animate-pulse">Contacting The Reality Loom...</span>
-            </div>
+            <GeneratorProgressStream
+              ref="streamComponent"
+              :logs="logs"
+              :is-loading-logs="isLoadingLogs"
+              :is-ready="isReady"
+              :has-error="hasError"
+              :last-status-index="lastStatusIndex"
+              @preview-image="previewImageUrl = $event"
+            />
 
-            <div v-else-if="logs.length === 0" class="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs py-12">
-              No logs recorded yet. World generation starting...
-            </div>
-
-            <!-- Log Entries Stream -->
-            <div v-else class="flex flex-col gap-4">
-              <div
-                v-for="(log, index) in logs"
-                :key="log.timestamp"
-                class="flex flex-col"
-              >
-                <!-- 1. Status Update -->
-                <div v-if="log.type === 'status'" class="flex justify-center my-1.5">
-                  <div class="px-4 py-1.5 rounded-full bg-slate-900/90 border border-white/10 text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 shadow-sm">
-                    <span
-                      v-if="index === lastStatusIndex && !isReady && !hasError"
-                      class="relative flex h-1.5 w-1.5 shrink-0"
-                    >
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-500"></span>
-                    </span>
-                    {{ log.content }}
-                  </div>
-                </div>
-
-                <!-- 2. Thinking Log -->
-                <div v-else-if="log.type === 'thinking'" class="flex justify-center w-full max-w-[90%] self-center my-1 animate-fade-in">
-                  <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col gap-2 w-full items-center">
-                    <button
-                      type="button"
-                      class="flex items-center justify-center gap-2 text-xs font-black text-amber-400 uppercase tracking-widest select-none cursor-pointer w-full hover:text-amber-300 transition-colors"
-                      @click="toggleExpand(log.timestamp)"
-                    >
-                      <Brain class="w-4 h-4 shrink-0" />
-                      <span>LLM Thinking / Reasoning Process</span>
-                      <component :is="isExpandedMap[log.timestamp] ? ChevronUp : ChevronDown" class="w-4 h-4" />
-                    </button>
-                    <div
-                      v-if="isExpandedMap[log.timestamp]"
-                      class="text-xs text-amber-300/80 leading-relaxed font-mono whitespace-pre-wrap mt-2 p-3.5 bg-black/60 rounded-xl border border-amber-500/10 w-full text-left custom-scrollbar"
-                    >
-                      {{ log.content }}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 3. Image Generation / Reused Log -->
-                <div v-else-if="log.type === 'image_generation'" class="flex justify-center w-full max-w-[90%] self-center my-1 animate-fade-in">
-                  <div class="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 flex flex-col gap-3 items-center w-full">
-                    <div class="flex items-center justify-center gap-2 text-xs font-black text-cyan-400 uppercase tracking-widest">
-                      <ImageIcon class="w-4 h-4 shrink-0" />
-                      <span>{{ log.content.includes('Reused source asset') ? 'Visual Asset Reused' : 'Envisioned Asset Generated' }}</span>
-                    </div>
-                    <p class="text-xs text-slate-300 italic bg-black/40 p-2.5 rounded-xl border border-white/5 leading-relaxed self-stretch text-center">
-                      "{{ log.content }}"
-                    </p>
-                    <div
-                      v-if="log.image_url"
-                      class="relative group w-64 h-64 overflow-hidden rounded-xl border border-cyan-500/30 bg-[#030712] flex items-center justify-center cursor-pointer shadow-lg hover:border-cyan-400/60 transition-all"
-                      @click="previewImageUrl = log.image_url"
-                      title="Click to view full image"
-                    >
-                      <img
-                        :src="log.image_url"
-                        alt="Visual Asset"
-                        class="max-w-full max-h-full object-contain p-1 transition-transform duration-500 group-hover:scale-105"
-                      />
-                      <div class="absolute inset-0 bg-cyan-500/0 group-hover:bg-cyan-500/10 transition-colors flex items-end justify-end p-2">
-                        <span class="text-[10px] font-bold text-cyan-300 bg-black/70 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                          <ZoomIn class="w-3 h-3" /> Zoom
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Statistics Summary (shown when generation is complete or errored) -->
-              <div v-if="isReady || hasError" class="mt-6 p-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 backdrop-blur-md flex flex-col gap-4 self-center w-full max-w-[90%] shadow-[0_0_20px_rgba(6,182,212,0.05)] animate-fade-in">
-                <div class="flex items-center justify-between border-b border-white/10 pb-3">
-                  <div class="flex items-center gap-2">
-                    <BarChart3 class="w-4 h-4 text-cyan-400 shrink-0" />
-                    <h4 class="text-xs font-black text-white uppercase tracking-widest">Generation Summary</h4>
-                  </div>
-                  <span
-                    class="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded border"
-                    :class="isReady ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border-rose-500/30'"
-                  >
-                    {{ isReady ? 'Success' : 'Failed / Cancelled' }}
-                  </span>
-                </div>
-
-                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <!-- Cover Stat -->
-                  <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Cover</span>
-                    <div class="flex flex-col gap-1 w-full text-[9px] font-black">
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">
-                        <span>Created</span>
-                        <span>{{ assetStats.cover.generated }}</span>
-                      </div>
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
-                        <span>Reused</span>
-                        <span>{{ assetStats.cover.reused }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Protagonist Stat -->
-                  <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Hero</span>
-                    <div class="flex flex-col gap-1 w-full text-[9px] font-black">
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">
-                        <span>Created</span>
-                        <span>{{ assetStats.protagonist.generated }}</span>
-                      </div>
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
-                        <span>Reused</span>
-                        <span>{{ assetStats.protagonist.reused }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Scenes Stat -->
-                  <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Scenes</span>
-                    <div class="flex flex-col gap-1 w-full text-[9px] font-black">
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">
-                        <span>Created</span>
-                        <span>{{ assetStats.scene.generated }}</span>
-                      </div>
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
-                        <span>Reused</span>
-                        <span>{{ assetStats.scene.reused }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- NPCs Stat -->
-                  <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">NPCs</span>
-                    <div class="flex flex-col gap-1 w-full text-[9px] font-black">
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">
-                        <span>Created</span>
-                        <span>{{ assetStats.npc.generated }}</span>
-                      </div>
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
-                        <span>Reused</span>
-                        <span>{{ assetStats.npc.reused }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Items Stat -->
-                  <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Items</span>
-                    <div class="flex flex-col gap-1 w-full text-[9px] font-black">
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">
-                        <span>Created</span>
-                        <span>{{ assetStats.item.generated }}</span>
-                      </div>
-                      <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
-                        <span>Reused</span>
-                        <span>{{ assetStats.item.reused }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-white/10 pt-3">
-                  <div class="flex items-center gap-4">
-                    <span>Total Created: <span class="text-cyan-400 font-black">{{ totalStats.generated }}</span></span>
-                    <span>Total Reused: <span class="text-purple-400 font-black">{{ totalStats.reused }}</span></span>
-                  </div>
-                  <div class="text-slate-400">
-                    Total Assets: <span class="text-white font-black">{{ totalStats.generated + totalStats.reused }}</span>
-                  </div>
-                </div>
-              </div>
+            <!-- Stats Summary card inside scrollable area or at bottom of stream -->
+            <div v-if="isReady || hasError" class="p-3 sm:p-4 bg-slate-950/60 border-t border-white/5 overflow-y-auto max-h-48 custom-scrollbar">
+              <GeneratorAssetStats
+                :asset-stats="assetStats"
+                :total-stats="totalStats"
+                :is-ready="isReady"
+              />
             </div>
           </div>
 
           <!-- FOOTER: PROGRESS VIEW -->
-          <div v-if="viewState === 'progress'" class="px-6 py-4 border-t border-white/10 bg-slate-950/90 flex flex-wrap gap-3 items-center justify-between shrink-0">
-            <div class="flex items-center gap-2 text-xs font-bold">
+          <div
+            v-if="viewState === 'progress'"
+            class="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-white/10 bg-slate-950/90 flex flex-col sm:flex-row gap-3 items-center justify-between shrink-0"
+          >
+            <!-- Status message -->
+            <div class="flex items-center gap-2 text-xs font-bold w-full sm:w-auto">
               <span v-if="isReady" class="text-emerald-400 flex items-center gap-2 font-black uppercase tracking-wider">
-                <CheckCircle2 class="w-4 h-4 text-emerald-400" /> Reality Manifestation Complete!
+                <CheckCircle2 class="w-4 h-4 text-emerald-400 shrink-0" />
+                <span class="truncate">Reality Manifestation Complete!</span>
               </span>
-              <span v-else-if="hasError" class="text-rose-400 flex items-center gap-2 font-black uppercase tracking-wider">
-                <ShieldAlert class="w-4 h-4 text-rose-400" />
-                <span class="max-w-[400px] truncate">{{ errorMessage || 'World generation interrupted.' }}</span>
+              <span v-else-if="hasError" class="text-rose-400 flex items-center gap-2 font-black uppercase tracking-wider min-w-0">
+                <ShieldAlert class="w-4 h-4 text-rose-400 shrink-0" />
+                <span class="truncate max-w-[280px] sm:max-w-[360px]">{{ errorMessage || 'World generation interrupted.' }}</span>
               </span>
-              <span v-else class="text-cyan-400 flex items-center gap-2 max-w-[480px]">
+              <span v-else class="text-cyan-400 flex items-center gap-2 w-full min-w-0">
                 <span class="w-2.5 h-2.5 border-2 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin shrink-0"></span>
-                <span class="line-clamp-1 italic text-slate-300 font-medium text-[11px]">{{ currentSaying }}</span>
+                <span class="truncate italic text-slate-300 font-medium text-[11px]">{{ currentSaying }}</span>
               </span>
             </div>
 
             <!-- Action buttons -->
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+              <!-- In-progress cancel -->
               <template v-if="!isReady && !hasError">
                 <button
                   type="button"
                   @click="cancelActiveGeneration"
                   :disabled="isCancelling"
-                  class="px-4 py-2 rounded-xl text-xs font-bold text-rose-400/80 hover:text-rose-300 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                  class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-rose-400/80 hover:text-rose-300 hover:bg-rose-500/10 transition-colors disabled:opacity-50 text-center"
                 >
                   {{ isCancelling ? 'Cancelling...' : 'Cancel Generation' }}
                 </button>
               </template>
 
+              <!-- Success actions -->
               <template v-else-if="isReady">
                 <button
                   type="button"
                   @click="handlePlayNow"
-                  class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all hover:scale-105"
+                  class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-95"
                 >
                   <Play class="w-3.5 h-3.5 fill-current" />
                   <span>Play Adventure</span>
@@ -938,7 +680,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   @click="handleOpenEditor"
-                  class="px-4 py-2.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition-all"
+                  class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Edit3 class="w-3.5 h-3.5 text-cyan-400" />
                   <span>Open in Editor</span>
@@ -947,24 +689,25 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   @click="handleStayInConstruct"
-                  class="px-4 py-2.5 rounded-xl text-slate-400 hover:text-white transition-colors text-xs font-bold"
+                  class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-slate-400 hover:text-white transition-colors text-xs font-bold text-center"
                 >
                   Stay in The Construct
                 </button>
               </template>
 
+              <!-- Error retry/close -->
               <template v-else-if="hasError">
                 <button
                   type="button"
                   @click="viewState = 'form'"
-                  class="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider transition-all"
+                  class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider transition-all text-center"
                 >
                   Review Parameters & Retry
                 </button>
                 <button
                   type="button"
                   @click="emit('close')"
-                  class="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-400 hover:text-white transition-colors text-xs font-bold"
+                  class="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-700 text-slate-400 hover:text-white transition-colors text-xs font-bold text-center"
                 >
                   Close
                 </button>
@@ -972,12 +715,15 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- FOOTER: ONLY ON FORM STEP -->
-          <div v-if="viewState === 'form'" class="px-6 py-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-between shrink-0">
+          <!-- FOOTER: FORM VIEW -->
+          <div
+            v-if="viewState === 'form'"
+            class="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-white/10 bg-slate-950/80 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 sm:gap-3 shrink-0"
+          >
             <button
               type="button"
               @click="emit('close')"
-              class="px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-xs font-bold"
+              class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-xs font-bold text-center"
             >
               Cancel
             </button>
@@ -985,7 +731,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               @click="startGeneration"
-              class="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95"
+              class="w-full sm:w-auto px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-95"
             >
               <Sparkles class="w-4 h-4 text-emerald-200 animate-pulse" />
               <span>Weave Reality (Generate)</span>
@@ -994,25 +740,10 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Artwork Lightbox Modal -->
-        <div
-          v-if="previewImageUrl"
-          class="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer animate-fade-in"
-          @click="previewImageUrl = null"
-        >
-          <div class="relative max-w-3xl max-h-[85vh] p-2 bg-slate-900 border border-cyan-500/30 rounded-2xl shadow-2xl flex flex-col items-center">
-            <button
-              class="absolute top-4 right-4 p-2 rounded-xl bg-black/60 text-white hover:bg-white/20 transition-colors z-10"
-              @click.stop="previewImageUrl = null"
-            >
-              <X class="w-5 h-5" />
-            </button>
-            <img
-              :src="previewImageUrl"
-              alt="Enlarged Artwork"
-              class="max-w-full max-h-[80vh] object-contain rounded-xl"
-            />
-          </div>
-        </div>
+        <GeneratorLightbox
+          :image-url="previewImageUrl"
+          @close="previewImageUrl = null"
+        />
       </div>
     </Transition>
   </Teleport>
@@ -1034,7 +765,7 @@ onBeforeUnmount(() => {
 @keyframes modalPop {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(10px);
+    transform: scale(0.94) translateY(8px);
   }
   to {
     opacity: 1;

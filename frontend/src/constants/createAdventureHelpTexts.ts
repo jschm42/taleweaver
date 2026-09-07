@@ -5,6 +5,8 @@ export const CREATE_ADVENTURE_HELP_TEXTS = {
     'Defines how strict mechanics are applied. RPG is strictest, Story balances narrative and rules, Chat focuses on free roleplay.',
   pacing:
     'Controls in-game time progression per action. Higher pacing values move time faster and can trigger world events more often.',
+  timeSystem:
+    'Controls in-game time tracking and pacing. Choose between a day/clock calendar system or custom units, or leave on Auto Mode to let the AI architect determine the timing.',
   sceneComplexity:
     'Sets the scene range for world generation. Larger worlds create more locations to explore, but do not automatically scale up the walkthrough length or entity count due to AI model token limits.',
   questGeneration:

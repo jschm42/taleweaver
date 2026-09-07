@@ -46,14 +46,17 @@ const form = ref({
   text_log_generation_enabled: true,
   min_text_logs: null as number | null,
   max_text_logs: null as number | null,
-  can_damage_npcs: true,
-  npcs_can_damage_protagonist: true,
+  can_damage_npcs: false,
+  npcs_can_damage_protagonist: false,
   award_generation_enabled: true,
   min_awards: null as number | null,
   max_awards: null as number | null,
   language: '',
   cover_similarity_percent: 50,
   allow_reuse_source_assets: true,
+  time_auto: true,
+  time_system: 'calendar' as 'calendar' | 'units',
+  time_config: null as any,
 })
 
 const sourceAdventure = ref<any | null>(null)
@@ -165,12 +168,53 @@ async function handleCreate() {
   const fullStyleObj = imageStyles.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
   const fullToneObj = tones.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
 
+  // Enforce combat permissions only if RPG mode is active
+  const isRpg = form.value.rule_enforcement_mode === 'rpg'
+  const canDamageNpcs = isRpg ? form.value.can_damage_npcs : false
+  const npcsCanDamageProtagonist = isRpg ? form.value.npcs_can_damage_protagonist : false
+
+  // Construct structured time_config
+  let timeConfigPayload: any = null
+  let pacingVal = form.value.pacing_minutes || 5
+  let timeSystemVal = form.value.time_system || 'calendar'
+
+  if (!form.value.time_auto && form.value.time_config) {
+    const tc = form.value.time_config
+    if (form.value.time_system === 'units') {
+      timeConfigPayload = {
+        time_system: 'units',
+        unit_name: tc.unit_name || 'Units',
+        initial_units: tc.initial_units ?? 0,
+        units_per_turn: tc.units_per_turn ?? 1,
+        max_units_per_turn: tc.max_units_per_turn ?? null,
+      }
+      pacingVal = tc.units_per_turn ?? 1
+    } else {
+      timeConfigPayload = {
+        time_system: 'calendar',
+        day_label: tc.day_label || 'Day',
+        initial_day: tc.initial_day ?? 1,
+        start_time: tc.start_time || '08:00',
+        time_format: tc.time_format || '24h',
+        pacing_minutes: tc.pacing_minutes ?? 5,
+        max_time_per_turn: tc.max_time_per_turn ?? null,
+      }
+      pacingVal = tc.pacing_minutes ?? 5
+    }
+  }
+
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: (form.value.title.trim() || 'Untitled Odyssey').slice(0, 50),
     original_prompt: form.value.storyIdea.trim(),
-    time_per_turn: form.value.pacing_minutes,
+    clock_enabled: form.value.clock_enabled,
+    time_system: timeSystemVal,
+    time_per_turn: pacingVal,
+    pacing_minutes: pacingVal,
+    time_config: timeConfigPayload,
+    can_damage_npcs: canDamageNpcs,
+    npcs_can_damage_protagonist: npcsCanDamageProtagonist,
     selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
     selected_tone: form.value.selected_tone_id ? fullToneObj : null,
     cover_source_adventure_id: isCoverMode.value ? coverSourceId.value : undefined,
@@ -248,6 +292,17 @@ async function loadCoverSource() {
     const sourceRuleMode = resolveRuleModeFromAdventure(source)
     if (sourceRuleMode) {
       form.value.rule_enforcement_mode = sourceRuleMode
+    }
+
+    if (source.clock_enabled !== undefined) {
+      form.value.clock_enabled = !!source.clock_enabled
+    }
+    if (source.time_system) {
+      form.value.time_system = source.time_system === 'units' ? 'units' : 'calendar'
+    }
+    if (source.time_config) {
+      form.value.time_config = source.time_config
+      form.value.time_auto = false
     }
   } catch (error: any) {
     sourceAdventure.value = null
