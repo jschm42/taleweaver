@@ -9,6 +9,8 @@ import {
   Edit3,
   X,
   Wand2,
+  Dices,
+  Loader2,
 } from 'lucide-vue-next'
 import { api, GENERATION_SAYINGS } from '@/composables/useApi'
 import type { CatalogTile } from '@/types'
@@ -313,6 +315,76 @@ const displayStyles = computed(() => {
   return DEFAULT_STYLES.map(s => ({ id: s, name: s.replace(/-/g, ' ') }))
 })
 
+const isSurprising = ref(false)
+
+async function handleSurpriseMe() {
+  if (isSurprising.value) return
+  isSurprising.value = true
+  errorMessage.value = ''
+
+  try {
+    const available_tones = displayTones.value.map(t => t.name || t.id)
+    const available_styles = displayStyles.value.map(s => s.id)
+
+    const preset = await api.generateSurprisePreset({
+      available_tones,
+      available_styles,
+      language: form.value.language || undefined,
+    })
+
+    if (preset) {
+      if (preset.title) form.value.title = preset.title.slice(0, 50)
+      if (preset.story_idea) form.value.storyIdea = preset.story_idea
+
+      // Match tone ID or name
+      if (preset.selected_tone) {
+        const foundTone = tones.value.find(
+          t => t.id.toLowerCase() === preset.selected_tone!.toLowerCase() ||
+               (t.name && t.name.toLowerCase() === preset.selected_tone!.toLowerCase())
+        )
+        form.value.selected_tone_id = foundTone ? foundTone.id : preset.selected_tone
+      }
+
+      // Match style ID or name
+      if (preset.selected_style) {
+        const foundStyle = imageStyles.value.find(
+          s => s.id.toLowerCase() === preset.selected_style!.toLowerCase() ||
+               (s.name && s.name.toLowerCase() === preset.selected_style!.toLowerCase())
+        )
+        form.value.selected_style_id = foundStyle ? foundStyle.id : preset.selected_style
+      }
+
+      if (preset.rule_enforcement_mode) form.value.rule_enforcement_mode = preset.rule_enforcement_mode
+      if (preset.generate_scene_images !== undefined) form.value.generate_scene_images = preset.generate_scene_images
+      if (preset.generate_npc_images !== undefined) form.value.generate_npc_images = preset.generate_npc_images
+      if (preset.generate_item_images !== undefined) form.value.generate_item_images = preset.generate_item_images
+
+      // Time settings
+      if (preset.clock_enabled !== undefined) form.value.clock_enabled = preset.clock_enabled
+      if (preset.time_system) form.value.time_system = preset.time_system
+      if (preset.day_label) form.value.day_label = preset.day_label
+      if (preset.initial_day !== undefined) form.value.initial_day = preset.initial_day
+      if (preset.start_time) form.value.start_time = preset.start_time
+      if (preset.time_format) form.value.time_format = preset.time_format
+      if (preset.pacing_minutes !== undefined) form.value.pacing_minutes = preset.pacing_minutes
+      if (preset.unit_name) form.value.unit_name = preset.unit_name
+      if (preset.initial_units !== undefined) form.value.initial_units = preset.initial_units
+      if (preset.units_per_turn !== undefined) form.value.units_per_turn = preset.units_per_turn
+
+      // World constraints / bounds if present
+      if (preset.min_scenes !== undefined && preset.min_scenes !== null) form.value.min_scenes = preset.min_scenes
+      if (preset.max_scenes !== undefined && preset.max_scenes !== null) form.value.max_scenes = preset.max_scenes
+      if (preset.min_quests !== undefined && preset.min_quests !== null) form.value.min_quests = preset.min_quests
+      if (preset.max_quests !== undefined && preset.max_quests !== null) form.value.max_quests = preset.max_quests
+    }
+  } catch (err: any) {
+    console.error('Failed to generate surprise preset:', err)
+    errorMessage.value = err?.message || 'Could not generate surprise preset.'
+  } finally {
+    isSurprising.value = false
+  }
+}
+
 async function fetchLogs(advId: string) {
   try {
     const data = await api.getAdventureGenerationLogs(advId)
@@ -529,14 +601,29 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <button
-              v-if="viewState !== 'progress' || isReady || hasError"
-              class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
-              @click="emit('close')"
-              title="Close Dialog"
-            >
-              <X class="w-5 h-5" />
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                v-if="viewState === 'form'"
+                type="button"
+                :disabled="isSurprising"
+                @click="handleSurpriseMe"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 hover:text-purple-100 text-xs font-bold transition-all shadow-sm shadow-purple-900/20 active:scale-95 disabled:opacity-50"
+                title="Randomly pre-fill the entire dialog using the world-gen LLM"
+              >
+                <Dices v-if="!isSurprising" class="w-3.5 h-3.5 text-purple-400" />
+                <Loader2 v-else class="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                <span class="hidden xs:inline">{{ isSurprising ? 'Weaving...' : 'Surprise Me' }}</span>
+              </button>
+
+              <button
+                v-if="viewState !== 'progress' || isReady || hasError"
+                class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                @click="emit('close')"
+                title="Close Dialog"
+              >
+                <X class="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           <!-- BODY: FORM / CONFIGURATION -->
@@ -728,14 +815,29 @@ onBeforeUnmount(() => {
               Cancel
             </button>
 
-            <button
-              type="button"
-              @click="startGeneration"
-              class="w-full sm:w-auto px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-95"
-            >
-              <Sparkles class="w-4 h-4 text-emerald-200 animate-pulse" />
-              <span>Weave Reality (Generate)</span>
-            </button>
+            <div class="flex items-center gap-2.5 w-full sm:w-auto">
+              <button
+                type="button"
+                :disabled="isSurprising"
+                @click="handleSurpriseMe"
+                class="flex-1 sm:flex-none px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 hover:text-purple-100 font-bold text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-950/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                title="Randomly pre-fill the entire dialog using the world-gen LLM"
+              >
+                <Dices v-if="!isSurprising" class="w-4 h-4 text-purple-400" />
+                <Loader2 v-else class="w-4 h-4 text-purple-400 animate-spin" />
+                <span>{{ isSurprising ? 'Weaving Surprise...' : 'Surprise Me' }}</span>
+              </button>
+
+              <button
+                type="button"
+                :disabled="isSurprising"
+                @click="startGeneration"
+                class="flex-1 sm:flex-none px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+              >
+                <Sparkles class="w-4 h-4 text-emerald-200 animate-pulse" />
+                <span>Weave Reality</span>
+              </button>
+            </div>
           </div>
         </div>
 

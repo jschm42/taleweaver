@@ -173,3 +173,34 @@ class AdventureTemplateDebugResponse(BaseModel):
     objects: list[dict[str, Any]]
     exits: list[dict[str, Any]]
     entities_all: Optional[list[dict[str, Any]]] = None
+
+
+class GeneratorSurprisePresetRequest(BaseModel):
+    available_tones: Optional[list[str]] = None
+    available_styles: Optional[list[str]] = None
+    language: Optional[str] = None
+
+
+class GeneratorSurprisePresetResponse(BaseModel):
+    title: str = Field(..., max_length=50)
+    story_idea: str
+    selected_tone: Optional[str] = None
+    selected_style: Optional[str] = None
+    rule_enforcement_mode: Literal["rpg", "story", "chat"] = "story"
+    generate_scene_images: bool = True
+    generate_npc_images: bool = True
+    generate_item_images: bool = True
+    clock_enabled: bool = True
+    time_system: Literal["calendar", "units"] = "calendar"
+    day_label: str = "Day"
+    initial_day: int = 1
+    start_time: str = "08:00"
+    time_format: Literal["24h", "12h"] = "24h"
+    pacing_minutes: int = 5
+    unit_name: str = "Units"
+    initial_units: int = 0
+    units_per_turn: int = 1
+    min_scenes: Optional[int] = None
+    max_scenes: Optional[int] = None
+    min_quests: Optional[int] = None
+    max_quests: Optional[int] = None

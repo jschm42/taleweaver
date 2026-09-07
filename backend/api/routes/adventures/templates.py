@@ -24,6 +24,10 @@ from backend.api.routes.adventures.schemas import (
     TemplateFieldGenerationRequest,
     TemplateFieldGenerationResponse,
 )
+from backend.schemas.adventure import (
+    GeneratorSurprisePresetRequest,
+    GeneratorSurprisePresetResponse,
+)
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import AsyncSessionLocal, get_db
@@ -469,6 +473,193 @@ async def suggest_story_idea(
         title=final_title,
         story_idea=suggestion.story_idea.strip(),
     )
+
+
+def _generate_fallback_surprise_preset(
+    available_tones: list[str],
+    available_styles: list[str],
+    language: str = "English",
+) -> GeneratorSurprisePresetResponse:
+    import random
+
+    archetypes = [
+        {
+            "title": "Orbital Void: Protocol Omega",
+            "story_idea": (
+                "Deep within the derelict orbital spire Aegis-7, an ancient quarantined AI has reawakened. "
+                "You are an atmospheric scavenger dispatched to recover the core mainframe before automated security glass cleanses the station."
+            ),
+            "tone_candidates": ["Sci-Fi", "Cyberpunk", "Mystery", "Grimdark"],
+            "style_candidates": ["cinematic-realism", "pixel-art", "dark-fantasy"],
+            "rule_enforcement_mode": "story",
+            "time_system": "calendar",
+            "day_label": "Sol",
+            "initial_day": 42,
+            "start_time": "06:30",
+            "time_format": "24h",
+            "pacing_minutes": 5,
+        },
+        {
+            "title": "Whispers of the Sunken Hollow",
+            "story_idea": (
+                "Beneath the mist-choked marshes of Oakhaven, a submerged cathedral rings its drowned bells. "
+                "Strange glowing ichor seeps through ancient masonry as local villagers begin sleepwalking into the dark waters."
+            ),
+            "tone_candidates": ["Horror", "Mystery", "Grimdark"],
+            "style_candidates": ["dark-fantasy", "watercolor", "vintage-comic"],
+            "rule_enforcement_mode": "rpg",
+            "time_system": "calendar",
+            "day_label": "Day",
+            "initial_day": 1,
+            "start_time": "21:00",
+            "time_format": "24h",
+            "pacing_minutes": 10,
+        },
+        {
+            "title": "Chronos Drift: The Broken Horizon",
+            "story_idea": (
+                "A localized temporal storm has fractured the frontier mining settlement of New Caelum into overlapping epochs. "
+                "To restore chronological coherence, you must navigate shifting paradox corridors and locate the harmonic dampeners."
+            ),
+            "tone_candidates": ["Sci-Fi", "Mystery", "Heroic"],
+            "style_candidates": ["anime", "cinematic-realism", "vintage-comic"],
+            "rule_enforcement_mode": "story",
+            "time_system": "units",
+            "unit_name": "Cycles",
+            "initial_units": 0,
+            "units_per_turn": 1,
+        },
+        {
+            "title": "The Gilded Bazaar of Never-Was",
+            "story_idea": (
+                "Hidden in an alleyway that only appears at twilight, the Bazaar of Never-Was trades in forgotten memories and bottled desires. "
+                "A mischievous collector has stolen your true name, and you have until dawn to bargain it back before it is sold at auction."
+            ),
+            "tone_candidates": ["Whimsical", "Mystery", "Heroic", "Satirical"],
+            "style_candidates": ["watercolor", "anime", "vintage-comic"],
+            "rule_enforcement_mode": "chat",
+            "time_system": "calendar",
+            "day_label": "Night",
+            "initial_day": 1,
+            "start_time": "19:45",
+            "time_format": "12h",
+            "pacing_minutes": 15,
+        },
+    ]
+
+    choice = random.choice(archetypes)
+    matched_tone = next((t for t in choice["tone_candidates"] if t in available_tones), available_tones[0] if available_tones else "Mystery")
+    matched_style = next((s for s in choice["style_candidates"] if s in available_styles), available_styles[0] if available_styles else "dark-fantasy")
+
+    return GeneratorSurprisePresetResponse(
+        title=choice["title"],
+        story_idea=choice["story_idea"],
+        selected_tone=matched_tone,
+        selected_style=matched_style,
+        rule_enforcement_mode=choice.get("rule_enforcement_mode", "story"),
+        generate_scene_images=True,
+        generate_npc_images=True,
+        generate_item_images=True,
+        clock_enabled=True,
+        time_system=choice.get("time_system", "calendar"),
+        day_label=choice.get("day_label", "Day"),
+        initial_day=choice.get("initial_day", 1),
+        start_time=choice.get("start_time", "08:00"),
+        time_format=choice.get("time_format", "24h"),
+        pacing_minutes=choice.get("pacing_minutes", 5),
+        unit_name=choice.get("unit_name", "Units"),
+        initial_units=choice.get("initial_units", 0),
+        units_per_turn=choice.get("units_per_turn", 1),
+        min_scenes=3,
+        max_scenes=6,
+        min_quests=2,
+        max_quests=4,
+    )
+
+
+@router.post("/generator/surprise-me", response_model=GeneratorSurprisePresetResponse)
+async def generate_surprise_preset(
+    payload: Optional[GeneratorSurprisePresetRequest] = None,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generates a coherent, creative, and completely randomized adventure preset
+    using the world-generation LLM (model_category="generator").
+    """
+    req = payload or GeneratorSurprisePresetRequest()
+    llm_settings = current_user.llm_settings or {}
+    provider = (
+        llm_settings.get("generator_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("small_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    model = (
+        llm_settings.get("generator_model")
+        or llm_settings.get("complex_model")
+        or llm_settings.get("small_model")
+        or "gpt-4o"
+    )
+
+    available_tones = req.available_tones or [
+        "Heroic", "Grimdark", "Whimsical", "Mystery", "Cyberpunk", "Horror", "Sci-Fi", "Satirical"
+    ]
+    available_styles = req.available_styles or [
+        "cinematic-realism", "dark-fantasy", "anime", "pixel-art", "vintage-comic", "watercolor"
+    ]
+    language = req.language or current_user.default_language or "English"
+
+    system_prompt = (
+        "You are the Master Reality Architect of TaleWeaver, an advanced AI interactive fiction engine. "
+        "Your role is to design an evocative, original, and deeply atmospheric adventure blueprint that pre-fills "
+        "the world generator parameters. Create an inventive story vision across any genre (fantasy, sci-fi, horror, "
+        "cyberpunk, mystery, surrealism, solarpunk, etc.). Specify the title (max 50 chars), a 2-4 sentence story idea, "
+        "the best matching tone, visual art style, rule mode (rpg, story, or chat), and a thematic in-game time system."
+    )
+
+    user_prompt = (
+        f"Design a surprising and inspiring new adventure concept.\n"
+        f"- Target Language: {language}\n"
+        f"- Available Tones: {', '.join(available_tones)}\n"
+        f"- Available Visual Art Styles: {', '.join(available_styles)}\n\n"
+        f"Requirements:\n"
+        f"1. Choose the single most fitting Tone from the available list (exact ID or name).\n"
+        f"2. Choose the single most fitting Visual Style from the available list (exact ID or name).\n"
+        f"3. Select rule_enforcement_mode: 'rpg' (strict checks/combat), 'story' (balanced narrative priority), or 'chat' (casual roleplay).\n"
+        f"4. Decide time_system: 'calendar' (day & clock time) or 'units' (abstract units like Cycles, Hours, Lightyears, Sol, etc.).\n"
+        f"   - If 'calendar': provide thematic day_label (e.g. Day, Sol, Cycle, Shift), initial_day, start_time (HH:MM), and pacing_minutes (1-60).\n"
+        f"   - If 'units': provide unit_name (e.g. Hours, Cycles, Jumps, Lightyears), initial_units, and units_per_turn (1-10).\n"
+        f"5. Set generate_scene_images, generate_npc_images, generate_item_images (typically true).\n"
+        f"6. Optionally set min_scenes (3-6), max_scenes (5-10), min_quests (2-4), max_quests (3-6)."
+    )
+
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="generator")
+
+    try:
+        preset = await gm.aexecute_complex_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_model=GeneratorSurprisePresetResponse,
+            model=model,
+        )
+        # Normalize title length
+        preset.title = preset.title.strip()[:50]
+        # Match selected_tone to available_tones if possible
+        if preset.selected_tone and available_tones:
+            lower_tones = {t.lower(): t for t in available_tones}
+            if preset.selected_tone.lower() in lower_tones:
+                preset.selected_tone = lower_tones[preset.selected_tone.lower()]
+        # Match selected_style to available_styles if possible
+        if preset.selected_style and available_styles:
+            lower_styles = {s.lower(): s for s in available_styles}
+            if preset.selected_style.lower() in lower_styles:
+                preset.selected_style = lower_styles[preset.selected_style.lower()]
+
+        return preset
+    except Exception as exc:
+        logger.warning("World-gen LLM surprise preset generation failed, using diverse archetype fallback: %s", exc)
+        return _generate_fallback_surprise_preset(available_tones, available_styles, language)
 
 
 @router.post(

@@ -5,7 +5,7 @@ import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
-import { Sparkles, Palette, Flame } from 'lucide-vue-next'
+import { Sparkles, Palette, Flame, Dices, Loader2, ArrowLeft } from 'lucide-vue-next'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 // Components
@@ -261,6 +261,90 @@ async function handleSuggestStoryIdea() {
   }
 }
 
+const isSurprising = ref(false)
+
+async function handleSurpriseMe() {
+  if (isSurprising.value) return
+  if (!hasLlmConfig.value) {
+    errorMsg.value = 'LLM configuration is required to generate a surprise preset.'
+    return
+  }
+
+  isSurprising.value = true
+  errorMsg.value = ''
+  try {
+    const available_tones = tones.value.map(t => t.name || t.id)
+    const available_styles = imageStyles.value.map(s => s.id)
+
+    const preset = await api.generateSurprisePreset({
+      available_tones,
+      available_styles,
+      language: form.value.language || undefined,
+    })
+
+    if (preset) {
+      if (preset.title) form.value.title = preset.title.slice(0, 50)
+      if (preset.story_idea) form.value.storyIdea = preset.story_idea
+
+      if (preset.selected_tone) {
+        const foundTone = tones.value.find(
+          t => t.id.toLowerCase() === preset.selected_tone!.toLowerCase() ||
+               (t.name && t.name.toLowerCase() === preset.selected_tone!.toLowerCase())
+        )
+        form.value.selected_tone_id = foundTone ? foundTone.id : preset.selected_tone
+      }
+
+      if (preset.selected_style) {
+        const foundStyle = imageStyles.value.find(
+          s => s.id.toLowerCase() === preset.selected_style!.toLowerCase() ||
+               (s.name && s.name.toLowerCase() === preset.selected_style!.toLowerCase())
+        )
+        form.value.selected_style_id = foundStyle ? foundStyle.id : preset.selected_style
+      }
+
+      if (preset.rule_enforcement_mode) form.value.rule_enforcement_mode = preset.rule_enforcement_mode
+      if (preset.generate_scene_images !== undefined) form.value.generate_scene_images = preset.generate_scene_images
+      if (preset.generate_npc_images !== undefined) form.value.generate_npc_images = preset.generate_npc_images
+      if (preset.generate_item_images !== undefined) form.value.generate_item_images = preset.generate_item_images
+
+      // Time settings
+      if (preset.clock_enabled !== undefined) form.value.clock_enabled = preset.clock_enabled
+      if (preset.time_system) form.value.time_system = preset.time_system
+      if (preset.pacing_minutes !== undefined) form.value.pacing_minutes = preset.pacing_minutes
+
+      // Construct time_config
+      if (preset.time_system === 'units') {
+        form.value.time_config = {
+          time_system: 'units',
+          unit_name: preset.unit_name || 'Units',
+          initial_units: preset.initial_units ?? 0,
+          units_per_turn: preset.units_per_turn ?? 1,
+        }
+      } else {
+        form.value.time_config = {
+          time_system: 'calendar',
+          day_label: preset.day_label || 'Day',
+          initial_day: preset.initial_day ?? 1,
+          start_time: preset.start_time || '08:00',
+          time_format: preset.time_format || '24h',
+          pacing_minutes: preset.pacing_minutes ?? 5,
+        }
+      }
+      form.value.time_auto = false
+
+      // World constraints
+      if (preset.min_scenes !== undefined) form.value.min_scenes = preset.min_scenes
+      if (preset.max_scenes !== undefined) form.value.max_scenes = preset.max_scenes
+      if (preset.min_quests !== undefined) form.value.min_quests = preset.min_quests
+      if (preset.max_quests !== undefined) form.value.max_quests = preset.max_quests
+    }
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Failed to generate surprise preset.'
+  } finally {
+    isSurprising.value = false
+  }
+}
+
 async function loadCoverSource() {
   if (!isCoverMode.value) {
     sourceAdventure.value = null
@@ -327,7 +411,29 @@ onMounted(() => {
         <h1 class="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight">Generate Adventure</h1>
         <p class="text-slate-500 mt-1 sm:mt-2 tracking-wide text-xs sm:text-sm">Weave the parameters of your next odyssey.</p>
       </div>
-      <button @click="router.back()" class="self-start sm:self-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all text-sm sm:text-base">Back</button>
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          :disabled="isSurprising || !hasLlmConfig"
+          @click="handleSurpriseMe"
+          class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 hover:text-purple-100 font-bold text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-950/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+          title="Randomly pre-fill the entire adventure configuration using the world-gen LLM"
+        >
+          <Dices v-if="!isSurprising" class="w-4 h-4 text-purple-400" />
+          <Loader2 v-else class="w-4 h-4 text-purple-400 animate-spin" />
+          <span>{{ isSurprising ? 'Weaving Surprise...' : 'Surprise Me' }}</span>
+        </button>
+
+        <button
+          type="button"
+          @click="router.back()"
+          class="flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-white/25 text-slate-300 hover:text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-200 shadow-md shadow-black/30 group active:scale-95"
+          title="Return to previous page"
+        >
+          <ArrowLeft class="w-4 h-4 text-slate-400 group-hover:text-white group-hover:-translate-x-0.5 transition-all" />
+          <span>Back</span>
+        </button>
+      </div>
     </header>
 
     <main class="max-w-7xl mx-auto">

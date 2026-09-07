@@ -289,6 +289,37 @@ export interface StoryIdeaSuggestionResponse {
   story_idea: string
 }
 
+export interface GeneratorSurprisePresetPayload {
+  available_tones?: string[]
+  available_styles?: string[]
+  language?: string
+}
+
+export interface GeneratorSurprisePresetResponse {
+  title: string
+  story_idea: string
+  selected_tone?: string | null
+  selected_style?: string | null
+  rule_enforcement_mode: 'rpg' | 'story' | 'chat'
+  generate_scene_images: boolean
+  generate_npc_images: boolean
+  generate_item_images: boolean
+  clock_enabled: boolean
+  time_system: 'calendar' | 'units'
+  day_label: string
+  initial_day: number
+  start_time: string
+  time_format: '24h' | '12h'
+  pacing_minutes: number
+  unit_name: string
+  initial_units: number
+  units_per_turn: number
+  min_scenes?: number | null
+  max_scenes?: number | null
+  min_quests?: number | null
+  max_quests?: number | null
+}
+
 /** Minimal import payload type for .ADV files (frontend-side). */
 export interface AdventureImportPayload {
   version: string
