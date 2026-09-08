@@ -258,7 +258,6 @@ GM_MECHANICS_SUFFIX = (
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short. CRITICAL DRAFT NARRATION RULE: In your 'narrative_description' draft, do NOT describe any actions, movements, or dialogue for NPCs that are not physically PRESENT in the current scene. Only present NPCs may speak or act.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
-    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 Appended to the system prompt when the GM is running in 'Mechanics' mode (Pass 1 of strict rules).
@@ -307,7 +306,6 @@ GM_STORY_MECHANICS_SUFFIX = (
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition (e.g., 'Poisoned', 'Exhausted'). Do NOT use it for NPC actions or world state descriptions. "
     "Your 'narrative_description' will be used as a draft/log; keep it short. CRITICAL DRAFT NARRATION RULE: In your 'narrative_description' draft, do NOT describe any actions, movements, or dialogue for NPCs that are not physically PRESENT in the current scene. Only present NPCs may speak or act.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
-    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 Appended to the system prompt when the GM is running in 'Mechanics' mode but for 'Story Mode' adventures.
@@ -435,7 +433,6 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "AVAILABLE UNEARNED AWARDS:\n"
     "{awards_json}\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
-    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 
 GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
@@ -472,7 +469,6 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "If the player's message contains the required `code_to_unlock` value listed in AVAILABLE EXITS, or references a required item they carry, emit `updated_entities` with `locked=false` (containers) or `updated_exits` with `is_locked=false` (exits). "
     "Do NOT require English keywords like 'unlock' or 'open' — the code/item value itself is the signal.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
-    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 # --- Prompt Suggestion ---
 

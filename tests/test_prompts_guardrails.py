@@ -87,7 +87,8 @@ def test_world_and_gm_prompts_include_puzzle_contract_and_patterns() -> None:
 
     for prompt_text in prompt_targets:
         assert puzzle_contract in prompt_text
-        assert puzzle_patterns in prompt_text
+    # World generation prompt retains design patterns, while runtime prompts omit them to save tokens
+    assert puzzle_patterns in prompts.WORLD_GENERATION_SYSTEM_PROMPT
 
 
 def test_world_generation_prompts_define_directional_exit_contract() -> None:

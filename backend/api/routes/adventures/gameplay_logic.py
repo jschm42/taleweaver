@@ -524,6 +524,9 @@ class GameTurnManager:
     def _build_mechanics_awards(self) -> list[dict]:
         return self._progression.build_mechanics_awards()
 
+    def _build_mechanics_quests(self) -> list[dict]:
+        return self._progression.build_mechanics_quests()
+
     def _build_chat_progression_quests(self) -> list[dict]:
         return self._progression.build_chat_progression_quests()
 
@@ -1175,7 +1178,7 @@ class GameTurnManager:
             )
 
             mechanics_prompt = mechanics_system_prompt + "\n\n" + mechanics_suffix.format(
-                quests_json=self._compact_json(self.state.quests or []),
+                quests_json=self._compact_json(self._build_mechanics_quests()),
                 awards_json=self._compact_json(mechanics_awards),
                 dynamic_items_instruction=dynamic_instr
             )
@@ -1672,7 +1675,12 @@ class GameTurnManager:
         if game_event:
             outcome_dict = game_event.model_dump()
             draft_narration = outcome_dict.pop("narrative_description", "")
-            outcome_json = json.dumps(outcome_dict)
+            pruned_outcome = {
+                k: v
+                for k, v in outcome_dict.items()
+                if v is not None and v is not False and v != 0 and v != "" and v != [] and v != {}
+            }
+            outcome_json = json.dumps(pruned_outcome, ensure_ascii=False, separators=(",", ":"))
         else:
             draft_narration = ""
             outcome_json = "{}"
@@ -2091,7 +2099,9 @@ class GameTurnManager:
 
         formatted_lines = []
         for m in new_msgs_to_compress:
-            role_label = "Player" if m.role == "user" else ("Game Master" if m.role == "assistant" else "System")
+            if m.role not in ("user", "assistant"):
+                continue
+            role_label = "Player" if m.role == "user" else "Game Master"
             content = (m.content or "").strip()
             if content:
                 formatted_lines.append(f"[{role_label}]: {content}")

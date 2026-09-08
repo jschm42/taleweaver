@@ -51,12 +51,30 @@ class MemoryManager:
     def _project_inventory_item(item: object) -> object:
         if not isinstance(item, dict):
             return item
-        projected = {
-            key: value
-            for key, value in item.items()
-            if key in MemoryManager.INVENTORY_CORE_FIELDS and MemoryManager._is_meaningful(value)
-        }
+        projected = {}
+        for key, value in item.items():
+            if key not in MemoryManager.INVENTORY_CORE_FIELDS:
+                continue
+            if not MemoryManager._is_meaningful(value):
+                continue
+            if (key.startswith("stat_modifier_") or key in ("hp_change", "mana_change", "stamina_change")) and value == 0:
+                continue
+            projected[key] = value
         return projected if projected else {"name": item.get("name") or item.get("id") or "Unknown Item"}
+
+    @staticmethod
+    def _project_equipment(equipment: object) -> dict:
+        if not isinstance(equipment, dict):
+            return {}
+        projected_eq: dict[str, Any] = {}
+        for slot, item in equipment.items():
+            if not item:
+                continue
+            if isinstance(item, dict):
+                projected_eq[slot] = MemoryManager._project_inventory_item(item)
+            elif isinstance(item, str) and item.strip():
+                projected_eq[slot] = {"name": item.strip()}
+        return projected_eq
 
     @staticmethod
     def _build_location_context(current_scene=None, entities=None, exits=None, detail_level: str = "full") -> str:
@@ -429,12 +447,11 @@ class MemoryManager:
             "name": avatar.name,
             "role": getattr(avatar, 'role', None),
             "description": getattr(avatar, 'description', None),
-            "profile_image": getattr(avatar, 'profile_image', None),
             "hp": avatar.hp,
             "stamina": avatar.stamina,
             "mana": avatar.mana,
             "stats": total_stats,
-            "equipment": avatar.equipment,
+            "equipment": MemoryManager._project_equipment(avatar.equipment),
             "inventory": [MemoryManager._project_inventory_item(i) for i in (avatar.inventory or [])],
             "status_effects": avatar.status_effects
         }

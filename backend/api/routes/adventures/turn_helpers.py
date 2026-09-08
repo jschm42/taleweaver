@@ -50,7 +50,44 @@ class TurnProgressionBuilder:
                 or entry.get("adventure_id") == self.manager.adventure.id
             )
         }
-        return [a for a in awards if not a.get("key") or a.get("key") not in earned_keys]
+        unearned = [a for a in awards if not a.get("key") or a.get("key") not in earned_keys]
+        projected: list[dict[str, Any]] = []
+        for a in unearned:
+            if not isinstance(a, dict):
+                continue
+            key = a.get("key")
+            if not key:
+                continue
+            entry: dict[str, Any] = {
+                "key": key,
+                "title": a.get("title") or key,
+            }
+            cond = str(a.get("trigger_condition") or a.get("description") or "").strip()
+            if cond:
+                entry["condition"] = cond[:160]
+            projected.append(entry)
+        return projected
+
+    def build_mechanics_quests(self) -> list[dict]:
+        reduced_quests = []
+        for quest in list(self.manager.state.quests or []):
+            if not isinstance(quest, dict):
+                continue
+            status = quest.get("status")
+            if status == "completed":
+                continue
+            qid = quest.get("id")
+            if not qid:
+                continue
+            item: dict[str, Any] = {
+                "id": qid,
+                "title": quest.get("title") or qid,
+            }
+            desc = str(quest.get("description") or "").strip()
+            if desc:
+                item["description"] = desc[:160]
+            reduced_quests.append(item)
+        return reduced_quests
 
     def build_chat_progression_quests(self) -> list[dict]:
         reduced_quests = []

@@ -131,3 +131,70 @@ def test_normalize_llm_settings_compacting_defaults():
     norm4 = _normalize_llm_settings({"turns_before_compacting": 0, "enable_history_compression": True})
     assert norm4["turns_before_compacting"] == 1
 
+
+@pytest.mark.asyncio
+async def test_compress_history_ignores_license_and_system_intro_messages():
+    manager = MagicMock(spec=GameTurnManager)
+    manager.game_id = "test-game-intro"
+    manager.user = User(id="user-1", username="testuser")
+    manager.user.llm_settings = {
+        "compression_model": "test-compress-model",
+        "compression_model_provider": "openai",
+    }
+    manager.adventure = MagicMock()
+    manager.adventure.max_memory_turns = 2
+
+    state = SessionState()
+    state.session_id = "test-game-intro"
+    state.template_id = "adv-1"
+    state.enable_history_compression = True
+    state.max_memory_turns = 2
+    state.compressed_history = None
+    manager.state = state
+
+    # Initial session setup messages (license info + intro text) followed by 4 user turns
+    msgs = [
+        ChatMessage(id="m_lic", session_id="test-game-intro", role="license_info", content='{"creator": "Alice", "license": "MIT"}'),
+        ChatMessage(id="m_intro", session_id="test-game-intro", role="system", content="A long atmospheric intro text that should not be compressed."),
+        ChatMessage(id="m1", session_id="test-game-intro", role="user", content="I enter the cave."),
+        ChatMessage(id="m2", session_id="test-game-intro", role="assistant", content="You see glowing mushrooms."),
+        ChatMessage(id="m3", session_id="test-game-intro", role="user", content="I pick a mushroom."),
+        ChatMessage(id="m4", session_id="test-game-intro", role="assistant", content="It smells sweet."),
+        ChatMessage(id="m5", session_id="test-game-intro", role="user", content="I go deeper."),
+        ChatMessage(id="m6", session_id="test-game-intro", role="assistant", content="A goblin appears!"),
+        ChatMessage(id="m7", session_id="test-game-intro", role="user", content="I greet the goblin."),
+        ChatMessage(id="m8", session_id="test-game-intro", role="assistant", content="The goblin grunts friendly."),
+    ]
+
+    mock_res = MagicMock()
+    mock_res.scalars.return_value.all.return_value = msgs
+    manager.db = MagicMock()
+    manager.db.execute = AsyncMock(return_value=mock_res)
+    manager.db.commit = AsyncMock()
+    manager._save_chat_message = AsyncMock()
+
+    captured_user_prompt = ""
+
+    async def mock_execute(system_prompt, user_prompt, model, **kwargs):
+        nonlocal captured_user_prompt
+        captured_user_prompt = user_prompt
+        return "The hero entered a cave and picked mushrooms."
+
+    mock_llm_instance = MagicMock()
+    mock_llm_instance.aexecute_simple_task = AsyncMock(side_effect=mock_execute)
+
+    with patch("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", return_value=mock_llm_instance):
+        events = []
+        async for ev in GameTurnManager._compress_history_if_needed(manager):
+            events.append(ev)
+
+    assert len(events) == 1
+    # Verify that license info and intro text were NOT included in the prompt
+    assert "Alice" not in captured_user_prompt
+    assert "MIT" not in captured_user_prompt
+    assert "A long atmospheric intro text" not in captured_user_prompt
+    # Verify that player actions WERE included
+    assert "I enter the cave" in captured_user_prompt
+    assert "I pick a mushroom" in captured_user_prompt
+
+
