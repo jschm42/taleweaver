@@ -1360,6 +1360,12 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                movement_messages = await self._enforce_npc_movement_guardrails(game_event)
+                rule_violations.extend(movement_messages)
+                for gm in movement_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 reveal_messages = await self._enforce_hidden_entity_reveal(game_event, user_msg)
                 rule_violations.extend(reveal_messages)
                 for gm in reveal_messages:
@@ -1590,6 +1596,12 @@ class GameTurnManager:
                 switch_guardrail_messages = await self._enforce_switch_transition_guardrails(game_event, user_msg)
                 rule_violations.extend(switch_guardrail_messages)
                 for gm in switch_guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
+                movement_messages = await self._enforce_npc_movement_guardrails(game_event)
+                rule_violations.extend(movement_messages)
+                for gm in movement_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
@@ -2455,6 +2467,9 @@ class GameTurnManager:
 
     async def _enforce_switch_transition_guardrails(self, *args, **kwargs) -> list[str]:
         return await self.guardrails._enforce_switch_transition_guardrails(*args, **kwargs)
+
+    async def _enforce_npc_movement_guardrails(self, *args, **kwargs) -> list[str]:
+        return await self.guardrails._enforce_npc_movement_guardrails(*args, **kwargs)
 
     async def _enforce_quest_and_award_guardrails(self, *args, **kwargs) -> list[str]:
         return await self.guardrails._enforce_quest_and_award_guardrails(*args, **kwargs)

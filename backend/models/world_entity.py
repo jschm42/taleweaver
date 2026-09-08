@@ -81,6 +81,9 @@ class WorldEntity(Base, TimestampMixin):
     # NPC Specific Fields
     npc_type = Column(String(50), nullable=True) # HUMANOID, ANIMAL, MONSTER, BEING
     movement_type = Column(String(50), nullable=True) # STATIONARY, MOVABLE
+    moveable = Column(Boolean, default=False, nullable=False) # Whether NPC can move between scenes
+    allowed_scenes = Column(JSON, default=list, nullable=True) # Allowed scenes list; empty/null = all scenes
+    notes = Column(String(1000), nullable=True) # Dynamic status/condition notes for GM and narration
     goal = Column(String(1000), nullable=True)
     character = Column(String(1000), nullable=True)
     hp = Column(JSON, nullable=True) # Store as JSON to allow for {current: 10, max: 10} or similar if needed, or just Integer. User asked for Hitpoints.

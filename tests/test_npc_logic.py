@@ -66,7 +66,8 @@ async def _seed_npc_context(db):
         hp=50,
         max_hp=50,
         is_hidden=False,
-        is_in_inventory=False
+        is_in_inventory=False,
+        moveable=True,
     )
     db.add(npc)
     await db.commit()

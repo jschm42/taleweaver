@@ -802,6 +802,69 @@ class TurnGuardrailsManager:
 
         return messages
 
+    async def _enforce_npc_movement_guardrails(self, event: GameEvent) -> list[str]:
+        """Enforces that NPCs only move between scenes if moveable=True and to_scene_id is in allowed_scenes."""
+        if not event.moved_entities:
+            return []
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == self.game_id)
+        )
+        canonical_ents = ent_res.scalars().all()
+        ent_lookup_by_id = {e.id.upper(): e for e in canonical_ents if e.id}
+        ent_lookup_by_name = {(e.name or "").strip().lower(): e for e in canonical_ents if e.name}
+
+        states = self.state.entity_states or {}
+        messages: list[str] = []
+        valid_moves = []
+
+        for move in event.moved_entities:
+            raw_eid = str(move.entity_id or "").strip()
+            ent = (
+                ent_lookup_by_id.get(raw_eid.upper())
+                or ent_lookup_by_name.get(raw_eid.lower())
+            )
+            if not ent or ent.entity_type != "NPC" or not move.to_scene_id:
+                valid_moves.append(move)
+                continue
+
+            ent_state = states.get(ent.id, {})
+            current_scene = ent_state.get("current_scene_id") or ent.current_scene_id
+
+            # If moving to the exact same scene (e.g. only changing spatial position), that's always permitted
+            if move.to_scene_id == current_scene:
+                valid_moves.append(move)
+                continue
+
+            # Check moveable flag
+            is_moveable = ent_state.get("moveable")
+            if is_moveable is None:
+                is_moveable = getattr(ent, "moveable", False)
+                if not is_moveable and str(getattr(ent, "movement_type", "") or "").upper() == "MOVABLE":
+                    is_moveable = True
+
+            if not is_moveable:
+                msg = f"Rule Violation: NPC '{ent.name}' ({ent.id}) is not moveable and cannot change scenes to '{move.to_scene_id}'."
+                messages.append(msg)
+                continue
+
+            # Check allowed_scenes constraint
+            allowed_scenes = ent_state.get("allowed_scenes")
+            if allowed_scenes is None:
+                allowed_scenes = getattr(ent, "allowed_scenes", None) or []
+
+            if isinstance(allowed_scenes, list) and len(allowed_scenes) > 0:
+                normalized_allowed = [str(s).upper() for s in allowed_scenes if s]
+                if move.to_scene_id.upper() not in normalized_allowed:
+                    msg = f"Rule Violation: NPC '{ent.name}' ({ent.id}) is not permitted to move to scene '{move.to_scene_id}'. Allowed scenes: {', '.join(allowed_scenes)}."
+                    messages.append(msg)
+                    continue
+
+            valid_moves.append(move)
+
+        event.moved_entities = valid_moves
+        return messages
+
     async def _enforce_hidden_entity_reveal(
         self, event: GameEvent, user_msg: str, draft_narration: str = ""
     ) -> list[str]:

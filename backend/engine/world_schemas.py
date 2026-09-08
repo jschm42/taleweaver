@@ -71,7 +71,10 @@ class WorldNPCSchema(BaseModel):
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'sitting in the armchair', 'hidden in a drawer'")
 
     npc_type: str = Field(..., description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
-    movement_type: str = Field(..., description="One of: STATIONARY, MOVABLE")
+    movement_type: str = Field(default="STATIONARY", description="One of: STATIONARY, MOVABLE")
+    moveable: bool = Field(default=False, description="Whether this NPC can move between scenes.")
+    allowed_scenes: list[str] = Field(default=[], description="List of scene IDs this NPC is allowed to move between. If empty, can move through all scenes.")
+    notes: Optional[str] = Field(default=None, description="Dynamic state/status notes or conditions regarding the NPC.")
     hp: int = Field(..., description="Hitpoints (range 10-100)")
     mana: int = Field(..., description="Mana (range 0-999)")
     stamina: int = Field(..., description="Stamina (range 50-100)")

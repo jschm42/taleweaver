@@ -299,6 +299,50 @@ class DebugEngine:
             await db.commit()
             return f"DEBUG: Entity '{found.name}' (ID: {found.id}) is now visible."
 
+        elif sub in ("npc_note", "note"):
+            parts = args.split(" ", 2)
+            if len(parts) < 3:
+                return "DEBUG ERROR: Usage: /debug npc_note [NPC_ID|NAME] [note text]"
+            target = parts[1].strip()
+            note_val = parts[2].strip()
+
+            res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "NPC"))
+            ents = res.scalars().all()
+            found = next((e for e in ents if e.id.upper() == target.upper() or (e.name and e.name.lower() == target.lower())), None)
+            if not found:
+                return f"DEBUG ERROR: NPC '{target}' not found in session."
+
+            states = dict(state.entity_states or {})
+            if found.id not in states:
+                states[found.id] = {}
+            states[found.id]["notes"] = note_val
+            state.entity_states = states
+            flag_modified(state, "entity_states")
+            await db.commit()
+            return f"DEBUG: NPC '{found.name}' notes set to: \"{note_val}\""
+
+        elif sub == "moveable":
+            parts = args.split(" ")
+            if len(parts) < 3:
+                return "DEBUG ERROR: Usage: /debug moveable [NPC_ID|NAME] [true|false]"
+            target = parts[1].strip()
+            val = parts[2].strip().lower() in ("true", "1", "yes")
+
+            res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "NPC"))
+            ents = res.scalars().all()
+            found = next((e for e in ents if e.id.upper() == target.upper() or (e.name and e.name.lower() == target.lower())), None)
+            if not found:
+                return f"DEBUG ERROR: NPC '{target}' not found in session."
+
+            states = dict(state.entity_states or {})
+            if found.id not in states:
+                states[found.id] = {}
+            states[found.id]["moveable"] = val
+            state.entity_states = states
+            flag_modified(state, "entity_states")
+            await db.commit()
+            return f"DEBUG: NPC '{found.name}' moveable set to {val}."
+
         elif sub == "open_exit":
             parts = args.split(" ")
             if len(parts) < 2: return "DEBUG ERROR: Usage: /debug open_exit [EXIT_ID]"

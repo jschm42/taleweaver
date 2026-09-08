@@ -92,6 +92,11 @@ function getSceneLabel(sceneId?: string | null): string {
                   <i class="ra" :class="npc.is_killable === false ? 'ra-shield' : 'ra-crossed-swords'"></i>
                   {{ npc.is_killable === false ? 'IMMORTAL' : 'KILLABLE' }}
                 </div>
+                <div class="flex items-center gap-1 text-[8px] font-black px-1 py-0.5 rounded border"
+                     :class="(npc.moveable || npc.movement_type === 'MOVABLE') ? 'text-sky-400 bg-sky-500/10 border-sky-500/20' : 'text-slate-400 bg-slate-800/40 border-slate-700/40'">
+                  <i class="ra" :class="(npc.moveable || npc.movement_type === 'MOVABLE') ? 'ra-footsteps' : 'ra-anchor'"></i>
+                  {{ (npc.moveable || npc.movement_type === 'MOVABLE') ? 'MOVEABLE' : 'STATIONARY' }}
+                </div>
               </div>
               <div v-if="npc.inventory && npc.inventory.length > 0" class="flex flex-wrap gap-1 mt-2">
                 <div v-for="item in npc.inventory.slice(0, 4)" :key="item.id" class="w-4 h-4 rounded-sm overflow-hidden border border-white/10 bg-black/40">

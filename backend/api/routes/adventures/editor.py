@@ -136,6 +136,9 @@ class EntityUpdateRequest(BaseModel):
     decorative_objects: Optional[list[str]] = None
     is_hidden: Optional[bool] = None
     reveal_rule: Optional[str] = None
+    moveable: Optional[bool] = None
+    allowed_scenes: Optional[list[str]] = None
+    notes: Optional[str] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -184,6 +187,9 @@ class EntityCreateRequest(BaseModel):
     inventory: Optional[list] = None
     is_hidden: Optional[bool] = None
     reveal_rule: Optional[str] = None
+    moveable: Optional[bool] = None
+    allowed_scenes: Optional[list[str]] = None
+    notes: Optional[str] = None
 
 
 class QuestCreateRequest(BaseModel):
@@ -1499,6 +1505,13 @@ async def _apply_proposal_patch(
                 ent.character = str(updates["character"]).strip() or None
             if "is_killable" in updates:
                 ent.is_killable = bool(updates["is_killable"])
+            if "moveable" in updates:
+                ent.moveable = bool(updates["moveable"])
+                ent.movement_type = "MOVABLE" if ent.moveable else "STATIONARY"
+            if "allowed_scenes" in updates:
+                ent.allowed_scenes = list(updates["allowed_scenes"] or [])
+            if "notes" in updates:
+                ent.notes = str(updates["notes"]).strip() or None
         elif ent.entity_type == "OBJECT":
             item_type = str(ent.item_type or "").upper()
             is_container = item_type == "CONTAINER"
@@ -2698,6 +2711,10 @@ async def create_editor_entity(
         stamina=payload.stamina,
         max_stamina=payload.stamina,
         is_killable=bool(payload.is_killable) if payload.is_killable is not None else True,
+        moveable=bool(payload.moveable) if payload.moveable is not None else False,
+        movement_type="MOVABLE" if payload.moveable else "STATIONARY",
+        allowed_scenes=list(payload.allowed_scenes or []),
+        notes=str(payload.notes).strip() if payload.notes else None,
         metadata_json=metadata_json,
         inventory=list(payload.inventory or []),
         wearable_slots=payload.wearable_slots,
@@ -2818,6 +2835,9 @@ async def clone_editor_entity(
         stat_modifier_armor_class=source.stat_modifier_armor_class,
         is_attackable=source.is_attackable,
         is_killable=source.is_killable,
+        moveable=source.moveable,
+        allowed_scenes=list(source.allowed_scenes or []) if source.allowed_scenes else [],
+        notes=source.notes,
         inventory=[item if isinstance(item, str) else dict(item) for item in (source.inventory or [])],
         metadata_json=dict(source.metadata_json or {}),
     )

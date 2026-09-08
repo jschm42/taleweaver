@@ -63,6 +63,9 @@ class WorldEntityUpdate(BaseModel):
     locked: Optional[bool] = None
     inventory: Optional[list[InventoryItem]] = None
     switch_state: Optional[str] = None
+    notes: Optional[str] = None
+    moveable: Optional[bool] = None
+    allowed_scenes: Optional[list[str]] = None
 
 class AttackRequest(BaseModel):
     """Requested by the GM to perform a combat action."""

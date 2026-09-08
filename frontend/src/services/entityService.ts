@@ -14,6 +14,9 @@ export interface EntityEditData {
   goal?: string
   character?: string
   is_killable?: boolean
+  moveable?: boolean
+  allowed_scenes?: string[]
+  notes?: string
   item_type?: string
   is_portable?: boolean
   locked?: boolean
@@ -82,6 +85,9 @@ export interface EntityCreateData {
   stamina?: number
   mana?: number
   is_killable?: boolean
+  moveable?: boolean
+  allowed_scenes?: string[]
+  notes?: string
   metadata_json?: Record<string, any>
   wearable_slots?: string[]
   combination_ingredients?: string[]

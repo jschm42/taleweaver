@@ -483,6 +483,12 @@ class TurnStateApplier:
                     states[eid]["is_killable"] = update.is_killable
                 if update.switch_state is not None:
                     states[eid]["switch_state"] = update.switch_state
+                if update.notes is not None:
+                    states[eid]["notes"] = update.notes
+                if update.moveable is not None:
+                    states[eid]["moveable"] = update.moveable
+                if update.allowed_scenes is not None:
+                    states[eid]["allowed_scenes"] = update.allowed_scenes
                 if update.is_defeated is not None:
                     was_defeated = self.state.entity_states.get(eid, {}).get("is_defeated", False)
                     if not was_defeated and update.is_defeated is True:

@@ -125,7 +125,11 @@ class MemoryManager:
                         inv_str = f" [Inventory: {', '.join(items_list)}]"
                 defeated_str = " [DEFEATED]" if getattr(e, 'is_defeated', False) else ""
                 desc_str = f" - Description: {e.description}" if (e.description and detail != "concise") else ""
-                npcs.append(f"{e.name} (ID: {e.id}){stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{defeated_str}{inv_str}{desc_str}")
+                notes_str = f" [Status/Notes: \"{e.notes}\"]" if getattr(e, 'notes', None) else ""
+                is_moveable = bool(getattr(e, 'moveable', False) or str(getattr(e, 'movement_type', '') or '').upper() == 'MOVABLE')
+                allowed = getattr(e, 'allowed_scenes', None) or []
+                move_str = f" [Movable: Allowed in {', '.join(allowed)}]" if (is_moveable and allowed) else (" [Movable: Any scene]" if is_moveable else " [Stationary]")
+                npcs.append(f"{e.name} (ID: {e.id}){stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{defeated_str}{notes_str}{move_str}{inv_str}{desc_str}")
 
             objects = []
             for e in entities:
@@ -328,8 +332,12 @@ class MemoryManager:
                             items_list.append(item_name)
                 if items_list:
                     inv_str = f", Inventory: {', '.join(items_list)}"
+            notes_str = f", Status: \"{npc.notes}\"" if getattr(npc, 'notes', None) else ""
+            is_moveable = bool(getattr(npc, 'moveable', False) or str(getattr(npc, 'movement_type', '') or '').upper() == 'MOVABLE')
+            allowed = getattr(npc, 'allowed_scenes', None) or []
+            move_str = f", Movable: Allowed in {', '.join(allowed)}" if (is_moveable and allowed) else (", Movable: Any scene" if is_moveable else ", Stationary")
 
-            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{hidden_str}{inv_str}")
+            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{hidden_str}{notes_str}{move_str}{inv_str}")
 
         return "\n".join(lines) + "\n"
 

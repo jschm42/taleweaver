@@ -191,6 +191,24 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added world_entities.movement_type")
 
+        if "moveable" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN moveable BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added world_entities.moveable")
+
+        if "allowed_scenes" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN allowed_scenes JSON"
+            )
+            logger.info("SQLite migration: added world_entities.allowed_scenes")
+
+        if "notes" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN notes TEXT"
+            )
+            logger.info("SQLite migration: added world_entities.notes")
+
         if "hp" not in entity_cols:
             await conn.exec_driver_sql(
                 "ALTER TABLE world_entities ADD COLUMN hp INTEGER"

@@ -132,6 +132,9 @@ const allNpcs = computed<any[]>(() => {
         is_hidden: boolVal(over.is_hidden ?? n.is_hidden),
         is_hostile: boolVal(over.is_hostile ?? n.is_hostile),
         inventory: over.inventory || n.inventory || [],
+        notes: over.notes || n.notes || '',
+        moveable: over.moveable != null ? boolVal(over.moveable) : (n.moveable != null ? boolVal(n.moveable) : String(n.movement_type || '').toUpperCase() === 'MOVABLE'),
+        allowed_scenes: over.allowed_scenes || n.allowed_scenes || [],
         is_in_current_scene: (over.current_scene_id || n.start_scene_id) === currentSceneId.value,
         stats: { strength: 10, dexterity: 10, intelligence: 10, wisdom: 10, charisma: 10, armor_class: 10 },
       }
@@ -151,7 +154,8 @@ const filteredNpcs = computed(() => {
       npc.name?.toLowerCase().includes(q) ||
       npc.id?.toLowerCase().includes(q) ||
       npc.current_scene_name?.toLowerCase().includes(q) ||
-      npc.current_scene_id?.toLowerCase().includes(q)
+      npc.current_scene_id?.toLowerCase().includes(q) ||
+      npc.notes?.toLowerCase().includes(q)
     )
   })
 })
@@ -709,10 +713,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                       </div>
                       <div class="text-[10px] text-slate-400 font-mono truncate mt-0.5">ID: {{ npc.id }}</div>
 
-                      <!-- Location Badge -->
-                      <div class="mt-1.5 flex items-center gap-1.5 text-[11px]">
-                        <Compass class="w-3 h-3 text-cyan-400 shrink-0" />
-                        <span class="text-slate-300 font-semibold truncate">{{ npc.current_scene_name || npc.current_scene_id }}</span>
+                      <!-- Location & Movement Badges -->
+                      <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <div class="flex items-center gap-1 text-slate-300 font-semibold truncate">
+                          <Compass class="w-3 h-3 text-cyan-400 shrink-0" />
+                          <span class="truncate">{{ npc.current_scene_name || npc.current_scene_id }}</span>
+                        </div>
+                        <span
+                          class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0"
+                          :class="npc.moveable ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'"
+                        >
+                          {{ npc.moveable ? (npc.allowed_scenes?.length ? `Movable (${npc.allowed_scenes.length} scenes)` : 'Movable') : 'Stationary' }}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -752,6 +764,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                       <div>DEX: <strong class="text-slate-200">{{ npc.stats.dexterity }}</strong></div>
                       <div>AC: <strong class="text-slate-200">{{ npc.stats.armor_class }}</strong></div>
                     </div>
+                  </div>
+
+                  <!-- Dynamic GM Status & Notes -->
+                  <div v-if="npc.notes" class="bg-amber-950/30 border border-amber-500/30 rounded-xl p-2.5 space-y-1">
+                    <div class="flex items-center justify-between text-[9px] font-black uppercase tracking-wider text-amber-400">
+                      <span class="flex items-center gap-1">
+                        <Sparkles class="w-3 h-3" /> GM Status & Notes
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-amber-200/90 font-mono italic leading-snug break-words">
+                      "{{ npc.notes }}"
+                    </p>
+                  </div>
+
+                  <!-- Allowed Scenes Restriction Info -->
+                  <div v-if="npc.moveable && npc.allowed_scenes?.length" class="text-[9px] text-slate-400 font-mono px-1">
+                    <span class="text-slate-500 font-bold uppercase">Allowed Scenes:</span> {{ npc.allowed_scenes.join(', ') }}
                   </div>
 
                   <!-- Inventory items if any -->

@@ -159,6 +159,9 @@ async def _build_session_debug_payload(
         is_hidden = bool(over.get("is_hidden", getattr(ent, "is_hidden", False)))
         is_hostile = bool(over.get("is_hostile", getattr(ent, "is_hostile", False)))
         inv = over.get("inventory", getattr(ent, "inventory", None) or [])
+        notes = over.get("notes") or getattr(ent, "notes", None) or ""
+        is_moveable = bool(over.get("moveable")) if over.get("moveable") is not None else (bool(getattr(ent, "moveable", False)) if getattr(ent, "moveable", None) is not None else (str(getattr(ent, "movement_type", "") or "").upper() == "MOVABLE"))
+        allowed_scenes = over.get("allowed_scenes") or getattr(ent, "allowed_scenes", None) or []
 
         npc_info = {
             "id": ent.id,
@@ -180,6 +183,9 @@ async def _build_session_debug_payload(
             "is_hidden": is_hidden,
             "is_hostile": is_hostile,
             "inventory": inv,
+            "notes": notes,
+            "moveable": is_moveable,
+            "allowed_scenes": allowed_scenes,
             "is_in_current_scene": loc_id == state.current_scene_id,
             "stats": {
                 "strength": getattr(ent, "stat_modifier_strength", 0) or 10,
@@ -202,6 +208,9 @@ async def _build_session_debug_payload(
             "max_hp": max_hp,
             "is_alive": is_alive,
             "is_hidden": is_hidden,
+            "notes": notes,
+            "moveable": is_moveable,
+            "allowed_scenes": allowed_scenes,
         })
 
     # 5. Items Matrix (Avatar, Scenes, Containers, NPCs)
