@@ -52,15 +52,24 @@ export function resolveNpcMetadata(nameOrId: string, metadataMap?: Record<string
 export function resolveNpc(name: string, entities: any[] = [], metadataMap?: Record<string, any>) {
   if (!name) return null
   const norm = name.trim().toLowerCase()
-  const foundEntity = (entities || []).find(
+  let foundEntity = (entities || []).find(
     (e) => e.entity_type === 'NPC' && (e.name?.toLowerCase() === norm || e.id?.toLowerCase() === norm)
+  ) || (entities || []).find(
+    (e) => e.name?.toLowerCase() === norm || e.id?.toLowerCase() === norm
   )
+
+  if (!foundEntity) {
+    foundEntity = (entities || []).find(
+      (e) => e.name && (e.name.toLowerCase().startsWith(norm) || norm.startsWith(e.name.toLowerCase()))
+    )
+  }
+
   const meta = resolveNpcMetadata(name, metadataMap) || (foundEntity ? resolveNpcMetadata(foundEntity.id, metadataMap) || resolveNpcMetadata(foundEntity.name, metadataMap) : null)
 
   if (foundEntity || meta) {
     return {
       id: foundEntity?.id || meta?.id || norm,
-      entity_type: 'NPC',
+      entity_type: foundEntity?.entity_type || meta?.entity_type || 'NPC',
       name: foundEntity?.name || meta?.name || name,
       description: foundEntity?.description || meta?.description || meta?.backstory || 'A character in this adventure.',
       image_url: foundEntity?.image_url || meta?.image_url || null,
@@ -78,6 +87,10 @@ export function resolveNpc(name: string, entities: any[] = [], metadataMap?: Rec
   }
   return null
 }
+
+const NON_SPEAKER_LABELS = new Set([
+  'note', 'warning', 'caution', 'info', 'location', 'status', 'time', 'goal', 'quest', 'tip'
+])
 
 export function parseUserMessage(
   msg: ChatMessage | null | undefined,
@@ -97,7 +110,7 @@ export function parseUserMessage(
     const colonIdx = after.indexOf(':')
     if (colonIdx > 0) {
       const targetCandidate = after.slice(0, colonIdx).trim()
-      const speech = after.slice(colonIdx + 1).trim().replace(/^["“]|["”]$/g, '')
+      const speech = after.slice(colonIdx + 1).trim().replace(/^["“„»]+|["”«]+$/g, '')
       const targetEntity = resolveNpc(targetCandidate, entities, metadataMap)
       return {
         isDialogue: true,
@@ -110,7 +123,7 @@ export function parseUserMessage(
         if (ent.entity_type === 'NPC' && ent.name) {
           const entName = ent.name.toLowerCase()
           if (after.toLowerCase().startsWith(entName)) {
-            const speech = after.slice(ent.name.length).trim().replace(/^[:,"“\s]+|["”]$/g, '')
+            const speech = after.slice(ent.name.length).trim().replace(/^[:,"“„»\s]+|["”«]+$/g, '')
             return {
               isDialogue: true,
               targetName: ent.name,
@@ -125,7 +138,7 @@ export function parseUserMessage(
   }
 
   if (raw.toLowerCase().startsWith('/say ')) {
-    const speech = raw.slice(5).trim().replace(/^["“]|["”]$/g, '')
+    const speech = raw.slice(5).trim().replace(/^["“„»]+|["”«]+$/g, '')
     const colonIdx = speech.indexOf(':')
     if (colonIdx > 0) {
       const targetCandidate = speech.slice(0, colonIdx).trim()
@@ -135,15 +148,15 @@ export function parseUserMessage(
           isDialogue: true,
           targetName: targetEntity.name,
           targetEntity,
-          speechText: speech.slice(colonIdx + 1).trim().replace(/^["“]|["”]$/g, ''),
+          speechText: speech.slice(colonIdx + 1).trim().replace(/^["“„»]+|["”«]+$/g, ''),
         }
       }
     }
     return { isDialogue: true, speechText: speech }
   }
 
-  if (raw.startsWith('"') && raw.endsWith('"') && raw.length > 2) {
-    const unquoted = raw.slice(1, -1).trim()
+  if ((raw.startsWith('"') || raw.startsWith('„') || raw.startsWith('“') || raw.startsWith('»')) && raw.length > 2) {
+    const unquoted = raw.replace(/^["“„»]+|["”«]+$/g, '').trim()
     const colonIdx = unquoted.indexOf(':')
     if (colonIdx > 0) {
       const targetCandidate = unquoted.slice(0, colonIdx).trim()
@@ -153,7 +166,7 @@ export function parseUserMessage(
           isDialogue: true,
           targetName: targetEntity.name,
           targetEntity,
-          speechText: unquoted.slice(colonIdx + 1).trim().replace(/^["“]|["”]$/g, ''),
+          speechText: unquoted.slice(colonIdx + 1).trim().replace(/^["“„»]+|["”«]+$/g, ''),
         }
       }
     }
@@ -172,11 +185,17 @@ export function parseAssistantContent(
   if (!content) return { narration: '', dialogues: [] }
 
   const dialogues: DialogueSegment[] = []
-  const cleanContent = content.replace(/\\n/g, '\n').trim()
+  let cleanContent = content.replace(/\\n/g, '\n').trim()
+
+  // 1) Pre-split embedded/inline dialogues onto separate lines:
+  // Detects: (Sentence end, voice tag, or line boundary) -> Speaker: "Dialogue"
+  const inlineSpeechSplitter = /(?:^|\n|(?<=[.!?»”"“]\s+)|(?<=\]\s*))(?:\*\*([^*\n:]{2,60}?):\*\*|\*\*([^*\n:]{2,60}?)\*\*:|([A-Z\p{Lu}][\p{L}\p{N}_\s'’\-,.()]{1,60}?):)\s*(["“„»][\s\S]*?["”«])/gu
+  cleanContent = cleanContent.replace(inlineSpeechSplitter, (m) => '\n\n' + m.trim() + '\n\n')
+
   const lines = cleanContent.split('\n')
   const narrationLines: string[] = []
 
-  const speechRegex = /^(?:\*\*([^*:\n]+?):\*\*|\*\*([^*:\n]+?)\*\*:|([A-Za-z0-9_\s'-]{2,30}):)\s*(?:["“](.+?)["”]|(.+))$/
+  const speechRegex = /^(?:(\*\*([^*:\n]+?):\*\*)|(\*\*([^*:\n]+?)\*\*:)|([\p{L}\p{N}_\s'’\-,.()]{2,60}):)\s*(?:(["“„»])([\s\S]+?)(["”«])|(.+))$/u
 
   for (const rawLine of lines) {
     const line = rawLine.trim()
@@ -184,7 +203,17 @@ export function parseAssistantContent(
 
     const match = line.match(speechRegex)
     if (match) {
-      let speakerName = (match[1] || match[2] || match[3] || '').trim()
+      const isBold = Boolean(match[1] || match[3])
+      let speakerName = (match[2] || match[4] || match[5] || '').trim()
+      const hasQuotes = Boolean(match[6] && match[8])
+      const speechText = (hasQuotes ? match[7] : match[9] || '').trim().replace(/^["“„»]+|["”«]+$/g, '')
+
+      // Guard against non-speaker labels (e.g. "Hinweis: ...", "Note: ...") when unquoted and not bold
+      if (!hasQuotes && !isBold && NON_SPEAKER_LABELS.has(speakerName.toLowerCase())) {
+        narrationLines.push(line)
+        continue
+      }
+
       let targetName: string | undefined = undefined
       let targetEntity: any = undefined
 
@@ -194,8 +223,6 @@ export function parseAssistantContent(
         targetName = toMatch[2].trim()
         targetEntity = resolveNpc(targetName, entities, metadataMap)
       }
-
-      const speechText = (match[4] || match[5] || '').trim().replace(/^["“]|["”]$/g, '')
 
       const resolvedNpc = resolveNpc(speakerName, entities, metadataMap)
       if (speakerName.toLowerCase() === 'you' || speakerName.toLowerCase() === (playerSheet?.name || '').toLowerCase()) {

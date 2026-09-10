@@ -201,10 +201,11 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "Avoid repeating information the player already knows. Show, don't tell.\n\n"
     "FORMATTING RULES:\n"
     "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: Character Name: \"...\" (no markdown bold)\n"
-    "2. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
-    "3. READABILITY: Avoid walls of text. Keep paragraphs focused.\n"
-    "4. NO SUMMARIES: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'.\n"
-    "5. NO SEPARATORS: Do NOT use horizontal rules or lines like '---' in your output."
+    "2. NO COLONS IN NARRATION: Never use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: \"...\"). Use dashes (—), periods, or commas instead.\n"
+    "3. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
+    "4. READABILITY: Avoid walls of text. Keep paragraphs focused.\n"
+    "5. NO SUMMARIES: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'.\n"
+    "6. NO SEPARATORS: Do NOT use horizontal rules or lines like '---' in your output."
 )
 """
 The main system prompt that defines the GM's persona and rules.
@@ -363,7 +364,8 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "NPC INTERACTION RULE: If multiple NPCs are present in the current scene, let them occasionally talk to each other directly (not only to the player), as long as it is narratively appropriate.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
-    "Separate narrative prose from speech with a blank line.\n\n"
+    "Separate narrative prose from speech with a blank line. "
+    "NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: \"...\"). Use dashes (—), periods, or commas instead.\n\n"
     "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
 )
 
