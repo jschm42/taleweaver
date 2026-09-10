@@ -13,13 +13,13 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.gameplay_logic import (
-    WALKTHROUGH_HINT_COST,
     WALKTHROUGH_REVEAL_COST,
     _friendly_llm_error_message,
     _friendly_llm_unexpected_error_message,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
+from backend.core.awards import SPOILER_SEEKER_AWARD
 from backend.core.config import settings
 from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
@@ -769,8 +769,8 @@ class TurnInteractionsManager:
             flag_modified(self.avatar, "exp")
             flag_modified(self.state, "is_walkthrough_revealed")
 
-            # Grant negative award
-            award_key = "SPOILER_SEEKER"
+            # Grant universal negative award
+            award_key = SPOILER_SEEKER_AWARD["key"]
             now = datetime.utcnow().isoformat()
             user_awards = list(self.user.earned_awards or [])
             adv_id = (
@@ -781,7 +781,7 @@ class TurnInteractionsManager:
             adv_title = (
                 self.manager.adventure.title
                 if (hasattr(self.manager, "adventure") and self.manager.adventure)
-                else "Abenteuer"
+                else "Adventure"
             )
             already_earned = any(
                 ea.get("key") == award_key
@@ -791,9 +791,10 @@ class TurnInteractionsManager:
             if not already_earned:
                 user_awards.append({
                     "key": award_key,
-                    "title": "Spoiler-Sucher",
-                    "description": "Hat den Walkthrough für -150 XP freigeschaltet.",
-                    "tier": "negative",
+                    "title": SPOILER_SEEKER_AWARD["title"],
+                    "description": SPOILER_SEEKER_AWARD["description"],
+                    "tier": SPOILER_SEEKER_AWARD["tier"],
+                    "requirement": SPOILER_SEEKER_AWARD["requirement"],
                     "template_id": adv_id,
                     "adventure_id": adv_id,
                     "adventure_title": adv_title,
@@ -802,18 +803,12 @@ class TurnInteractionsManager:
                 })
                 self.user.earned_awards = user_awards
                 flag_modified(self.user, "earned_awards")
-                await self.manager._save_chat_message("system", "Negativ-Award erhalten: Spoiler-Sucher (-150 XP)")
+                await self.manager._save_chat_message(
+                    "system",
+                    f"Negative award received: {SPOILER_SEEKER_AWARD['title']} (-{WALKTHROUGH_REVEAL_COST} XP)",
+                )
 
-            response = f"Walkthrough freigeschaltet! (-{WALKTHROUGH_REVEAL_COST} XP) Du kannst den Walkthrough ab sofort dauerhaft über das Menü einsehen."
-
-        elif response.startswith("[TRIGGER_WALKTHROUGH_HINT]"):
-            if self.avatar.exp >= WALKTHROUGH_HINT_COST:
-                # For now, hint just reveals the whole thing or we could implement a smarter hint system.
-                # User specifically asked for walkthrough reveal, so let's stick to that for now.
-                self.avatar.exp -= WALKTHROUGH_HINT_COST
-                response = f"Hint: Look closer at the surroundings. (Cost: {WALKTHROUGH_HINT_COST} XP)"
-            else:
-                response = f"You do not have enough XP for a hint ({self.avatar.exp}/{WALKTHROUGH_HINT_COST})."
+            response = f"Walkthrough unlocked! (-{WALKTHROUGH_REVEAL_COST} XP) You can view the walkthrough permanently via the menu."
 
         if response.startswith("[TRIGGER_DROP]"):
             item_name = response[14:].strip()

@@ -6,10 +6,10 @@ def _avatar() -> Avatar:
     return Avatar(name="Tester", inventory=[], equipment={"Hands": None})
 
 
-def test_help_includes_walkthrough_and_hint_commands() -> None:
+def test_help_includes_walkthrough_command_and_not_hint() -> None:
     help_text = CommandParser.parse_command(_avatar(), "/help")
     assert "/walkthrough" in help_text
-    assert "/hint" in help_text
+    assert "/hint" not in help_text
 
 
 def test_walkthrough_reveal_command_returns_trigger() -> None:
@@ -17,9 +17,9 @@ def test_walkthrough_reveal_command_returns_trigger() -> None:
     assert response == "[TRIGGER_WALKTHROUGH_REVEAL]"
 
 
-def test_hint_command_returns_trigger() -> None:
+def test_hint_is_not_a_known_command() -> None:
     response = CommandParser.parse_command(_avatar(), "/hint")
-    assert response == "[TRIGGER_HINT]"
+    assert "Unknown command" in response
 
 
 def test_take_command_routes_to_direct_take_trigger() -> None:

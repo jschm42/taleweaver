@@ -14,7 +14,6 @@ export interface WalkthroughData {
   message: string
   current_xp: number
   reveal_cost: number
-  hint_cost: number
   [key: string]: any
 }
 
@@ -25,7 +24,6 @@ function getWalkthroughUnavailable(currentXp: number): WalkthroughData {
     message: 'No walkthrough available for this adventure yet.',
     current_xp: currentXp,
     reveal_cost: 150,
-    hint_cost: 50,
   }
 }
 

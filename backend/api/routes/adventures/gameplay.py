@@ -14,7 +14,6 @@ from backend.core.config import settings
 
 from backend.api.routes.adventures.gameplay_logic import (
     GameTurnManager,
-    WALKTHROUGH_HINT_COST,
     WALKTHROUGH_REVEAL_COST,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -521,20 +520,12 @@ async def get_chat_history(
         image_url=scene_image,
         adventure_image=AdventureLogic.resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
         quests=state.quests,
-        awards=[
-            {
-                **aw,
-                "is_earned": any(
-                    ea.get("key") == aw.get("key")
-                    and (
-                        ea.get("template_id") == (adventure.id if adventure else state.template_id)
-                        or ea.get("adventure_id") == (adventure.id if adventure else state.template_id)
-                    )
-                    for ea in (current_user.earned_awards or [])
-                ),
-            }
-            for aw in ((adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(state).get("adventure") or {}).get("awards")) or [])
-        ],
+        awards=AdventureLogic.build_awards_payload(
+            user_earned_awards=current_user.earned_awards,
+            adventure_awards=(adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(state).get("adventure") or {}).get("awards")) or [],
+            adventure_id=adventure.id if adventure else state.template_id,
+            session_id=state.session_id,
+        ),
         is_completed=state.is_completed,
         game_over=state.session.status == "game_over" if state.session else False,
         game_completed=state.session.status == "completed" if state.session else False,
@@ -867,7 +858,6 @@ async def get_walkthrough(
             "revealed": False,
             "current_xp": avatar.exp if avatar else 0,
             "reveal_cost": WALKTHROUGH_REVEAL_COST,
-            "hint_cost": WALKTHROUGH_HINT_COST,
             "message": "No walkthrough available for this adventure yet.",
             "preview": "No walkthrough available for this adventure yet.",
             "steps": [],
@@ -882,7 +872,6 @@ async def get_walkthrough(
             "revealed": True,
             "current_xp": avatar.exp if avatar else 0,
             "reveal_cost": WALKTHROUGH_REVEAL_COST,
-            "hint_cost": WALKTHROUGH_HINT_COST,
             "walkthrough": state.walkthrough,
             "steps": steps,
             "message": "Walkthrough unlocked.",
@@ -894,7 +883,6 @@ async def get_walkthrough(
         "revealed": False,
         "current_xp": avatar.exp if avatar else 0,
         "reveal_cost": WALKTHROUGH_REVEAL_COST,
-        "hint_cost": WALKTHROUGH_HINT_COST,
         "preview": "The strategy guide is sealed. Reveal it to permanently view the walkthrough for this session.",
         "message": "The strategy guide is sealed. Reveal it to permanently view the walkthrough for this session.",
         "steps": [],

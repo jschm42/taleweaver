@@ -206,7 +206,7 @@ class AwardTemplateSchema(BaseModel):
     key: str = Field(..., description="Unique identifier for the award, e.g., SLAYER_OF_RATS")
     title: str = Field(..., description="Visual name of the award")
     description: str = Field(..., description="Short description shown to the player")
-    tier: Literal["bronze", "silver", "gold"] = Field(..., description="The rarity/tier of the award: bronze, silver, or gold")
+    tier: Literal["bronze", "silver", "gold", "negative"] = Field(..., description="The rarity/tier of the award: bronze, silver, gold, or negative")
     requirement: str = Field(..., description="The specific rule/condition when the GM should grant this award")
 
     model_config = {"extra": "forbid"}

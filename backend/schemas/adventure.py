@@ -17,7 +17,7 @@ class AwardSchema(BaseModel):
     key: str
     title: str
     description: str
-    tier: Literal["bronze", "silver", "gold"]
+    tier: Literal["bronze", "silver", "gold", "negative"]
     requirement: str
     is_earned: bool = False
 

@@ -82,8 +82,6 @@ class CommandParser:
             return CommandParser._handle_help(debug_enabled=debug_enabled)
         elif command == "/walkthrough":
             return "[TRIGGER_WALKTHROUGH_REVEAL]" if args.strip().lower() == "reveal" else "[TRIGGER_WALKTHROUGH]"
-        elif command == "/hint":
-            return "[TRIGGER_HINT]"
         elif command == "/combine" or command == "/use":
             return f"[TRIGGER_COMBINE] {args}"
         elif command == "/take":
@@ -154,7 +152,6 @@ class CommandParser:
             "- `/use <item1> [on] <item2>`: Use/Combine objects.",
             "- `/walkthrough`: Open the secret walkthrough panel.",
             "- `/walkthrough reveal`: Reveal all steps for 150 XP.",
-            "- `/hint`: Buy one tactical hint for 50 XP.",
             "- `/sheet`: Open your character sheet.",
             "- `/agent on/off`: Turn on/off autonomous agent gameplay mode."
         ]

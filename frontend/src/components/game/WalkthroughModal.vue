@@ -22,7 +22,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   reveal: []
-  hint: []
   itemHover: [item: WorldEntity, event: MouseEvent]
   itemLeave: []
 }>()
@@ -150,12 +149,6 @@ function fixNewlines(text: string | null | undefined): string {
             <div v-else class="space-y-3">
               <div class="flex items-center justify-between gap-3 flex-wrap">
                 <p class="text-sm font-bold text-emerald-300">Walkthrough Unlocked</p>
-                <button
-                  class="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors"
-                  @click="emit('hint')"
-                >
-                  Buy Hint ({{ data?.hint_cost ?? 50 }} XP)
-                </button>
               </div>
 
               <ol v-if="data?.steps && data.steps.length > 0" class="space-y-2">
@@ -193,11 +186,6 @@ function fixNewlines(text: string | null | undefined): string {
                   </span>
                 </template>
               </div>
-            </div>
-
-            <div v-if="data?.latest_hint" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-              <p class="text-xxs uppercase tracking-widest text-amber-300 font-black">Latest Hint</p>
-              <p class="text-sm text-amber-100 mt-1 whitespace-pre-wrap">{{ fixNewlines(data.latest_hint) }}</p>
             </div>
           </div>
         </div>

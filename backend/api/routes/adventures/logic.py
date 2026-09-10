@@ -949,3 +949,60 @@ class AdventureLogic:
         # 5. Always clean up template-owned library assets.
         # Session visuals are now copied into session folders when sessions are created.
         await MediaEngine.cleanup_adventure_assets(template_id)
+
+    @staticmethod
+    def build_awards_payload(
+        user_earned_awards: list[dict] | None,
+        adventure_awards: list[dict] | None,
+        adventure_id: str | None = None,
+        session_id: str | None = None,
+    ) -> list[dict]:
+        """Builds an adventure's awards list including universal global awards and earned status."""
+        from backend.core.awards import GLOBAL_AWARDS
+
+        earned = user_earned_awards or []
+        adv_awards = [dict(aw) for aw in (adventure_awards or [])]
+        known_keys = {aw.get("key") for aw in adv_awards if aw.get("key")}
+
+        # Include universal global awards applicable to all adventures
+        for glob in GLOBAL_AWARDS:
+            g_key = glob.get("key")
+            if g_key and g_key not in known_keys:
+                adv_awards.append(dict(glob))
+                known_keys.add(g_key)
+
+        result: list[dict] = []
+        for aw in adv_awards:
+            k = aw.get("key")
+            is_earned = any(
+                ea.get("key") == k
+                and (
+                    ea.get("template_id") == adventure_id
+                    or ea.get("adventure_id") == adventure_id
+                    or (session_id and ea.get("session_id") == session_id)
+                )
+                for ea in earned
+            )
+            result.append({
+                **aw,
+                "is_earned": is_earned,
+            })
+
+        # Include custom or unregistered earned awards for this adventure/session
+        for ea in earned:
+            k = ea.get("key")
+            if not k or k in known_keys:
+                continue
+            if (
+                ea.get("template_id") == adventure_id
+                or ea.get("adventure_id") == adventure_id
+                or (session_id and ea.get("session_id") == session_id)
+            ):
+                known_keys.add(k)
+                result.append({
+                    **ea,
+                    "is_earned": True,
+                })
+
+        return result
+

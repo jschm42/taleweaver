@@ -109,7 +109,7 @@ export interface AwardCreateData {
   key: string
   title: string
   description?: string
-  tier?: 'bronze' | 'silver' | 'gold'
+  tier?: 'bronze' | 'silver' | 'gold' | 'negative'
   requirement?: string
   is_earned?: boolean
 }

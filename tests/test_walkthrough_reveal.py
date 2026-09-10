@@ -81,13 +81,20 @@ async def test_walkthrough_reveal_deducts_150_xp_and_grants_negative_award(setup
         manager = GameTurnManager(db, session.id, user)
         assert await manager.initialize()
 
+        # Check that the universal negative award is present even before reveal (unearned)
+        initial_awards = await manager.state_applier._build_awards_payload(adv)
+        initial_spoiler = next((aw for aw in initial_awards if aw.get("key") == "SPOILER_SEEKER"), None)
+        assert initial_spoiler is not None
+        assert initial_spoiler.get("tier") == "negative"
+        assert initial_spoiler.get("is_earned") is False
+
         # Trigger walkthrough reveal via process_turn
         chunks = []
         async for chunk in manager.process_turn("/walkthrough reveal"):
             chunks.append(chunk)
 
         combined = "".join(chunks)
-        assert "Walkthrough freigeschaltet" in combined
+        assert "Walkthrough unlocked" in combined
         assert "-150 XP" in combined
         assert manager.state.is_walkthrough_revealed is True
         # Avatar XP was 200, should now be 50 (200 - 150)

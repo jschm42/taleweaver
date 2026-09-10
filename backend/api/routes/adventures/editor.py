@@ -206,7 +206,7 @@ class AwardCreateRequest(BaseModel):
     key: str
     title: str
     description: str = ""
-    tier: Literal["bronze", "silver", "gold"] = "bronze"
+    tier: Literal["bronze", "silver", "gold", "negative"] = "bronze"
     requirement: str = ""
     is_earned: bool = False
 

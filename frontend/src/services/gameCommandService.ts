@@ -3,7 +3,6 @@ export type UiPanelCommand = 'map' | 'sheet' | 'quests'
 export type SpecialGameCommand =
   | 'walkthrough'
   | 'walkthroughReveal'
-  | 'hint'
   | 'debugWalkthrough'
   | 'debugRevealMap'
   | 'debugSession'
@@ -67,8 +66,6 @@ export const gameCommandService = {
         return 'walkthrough'
       case '/walkthrough reveal':
         return 'walkthroughReveal'
-      case '/hint':
-        return 'hint'
       case '/debug walkthrough':
         return 'debugWalkthrough'
       case '/debug reveal_map':

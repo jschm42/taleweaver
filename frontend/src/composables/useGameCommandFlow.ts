@@ -79,11 +79,6 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     await loadWalkthrough()
   }
 
-  const buyHint = async () => {
-    await sendMessage('/hint')
-    await loadWalkthrough()
-  }
-
   const handlePlayerInput = async (content: string) => {
     // Unlock the AudioContext on every user send so async TTS play() is allowed.
     audioService.unlock()
@@ -137,10 +132,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
       return
     }
 
-    if (specialCommand === 'hint') {
-      await buyHint()
-      return
-    }
+
 
     if (specialCommand === 'debugWalkthrough') {
       await sendMessage('/debug walkthrough')
@@ -178,7 +170,6 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     openDebugInspector,
     openWalkthroughPanel,
     revealWalkthrough,
-    buyHint,
     handlePlayerInput,
   }
 }

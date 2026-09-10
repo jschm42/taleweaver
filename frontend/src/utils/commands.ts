@@ -11,7 +11,6 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/inventory', label: '/inventory', description: 'View your items and equipment', category: 'game' },
   { id: '/map', label: '/map', description: 'View the world map', category: 'game' },
   { id: '/quests', label: '/quests', description: 'View active and completed quests', category: 'game' },
-  { id: '/hint', label: '/hint', description: 'Get a hint for your next step (50 XP)', category: 'game' },
   { id: '/walkthrough', label: '/walkthrough', description: 'Open the adventure walkthrough', category: 'game' },
   { id: '/equip', label: '/equip', description: 'Equip an item from your inventory', category: 'game' },
   { id: '/unequip', label: '/unequip', description: 'Remove an equipped item', category: 'game' },
