@@ -53,6 +53,13 @@ def validate_password_strength(password: str) -> None:
     """
     if not isinstance(password, str):
         raise ValueError("Password must be a string.")
+
+    # Allow relaxed password policy for local development if explicitly configured
+    if not getattr(settings, "STRICT_PASSWORD_POLICY", True):
+        if len(password) < 4:
+            raise ValueError("Password must be at least 4 characters long.")
+        return
+
     if len(password) < MIN_PASSWORD_LENGTH:
         raise ValueError(
             f"Password must be at least {MIN_PASSWORD_LENGTH} characters long."

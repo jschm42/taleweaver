@@ -172,6 +172,11 @@ class Settings(BaseSettings):
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
 
+    # Password Policy
+    # When True (default), passwords require >= 10 characters, lower, upper, digit, and special char.
+    # When False (local dev only), passwords require >= 4 characters without complexity checks.
+    STRICT_PASSWORD_POLICY: bool = True
+
     def get_env_api_key(self, provider: str) -> Optional[str]:
         """Returns the API key for a provider if set in environment variables."""
         p = provider.lower()
