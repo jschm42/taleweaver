@@ -11,6 +11,7 @@ export interface DialogueSegment {
   isPlayer?: boolean
   text: string
   isAction?: boolean
+  voiceTag?: string
 }
 
 export interface ComicTurn {
@@ -176,6 +177,66 @@ export function parseUserMessage(
   return { isDialogue: false, speechText: raw }
 }
 
+const GERMAN_TO_ENGLISH_TAGS: Record<string, string> = {
+  neugierig: 'curious',
+  amüsiert: 'amused',
+  amusiert: 'amused',
+  aufgeregt: 'excited',
+  begeistert: 'excited',
+  flüstert: 'whispers',
+  flüsternd: 'whispers',
+  geflüstert: 'whispers',
+  lacht: 'laughs',
+  lachend: 'laughs',
+  lächelt: 'amused',
+  lächelnd: 'amused',
+  kichert: 'giggles',
+  kichernd: 'giggles',
+  seufzt: 'sighs',
+  seufzend: 'sighs',
+  wütend: 'angry',
+  zornig: 'angry',
+  verärgert: 'frustrated',
+  frustriert: 'frustrated',
+  ängstlich: 'panicked',
+  panisch: 'panicked',
+  überrascht: 'surprised',
+  erstaunt: 'amazed',
+  nachdenklich: 'thoughtful',
+  ernst: 'serious',
+  ruhig: 'calm',
+  gelassen: 'calm',
+  spöttisch: 'mocking',
+  sarkastisch: 'sarcastic',
+  ironisch: 'sarcastic',
+  traurig: 'sad',
+  schnell: 'very fast',
+  'sehr schnell': 'very fast',
+  langsam: 'very slow',
+  'sehr langsam': 'very slow',
+  schreiend: 'shouting',
+  schreit: 'shouting',
+  nervös: 'nervous',
+  nervos: 'nervous',
+  gelangweilt: 'bored',
+  müde: 'tired',
+  mude: 'tired',
+  erleichtert: 'relieved',
+  verwirrt: 'confused',
+  sanft: 'gentle',
+  streng: 'stern',
+  warmherzig: 'warmly',
+  kalt: 'coldly',
+  spielerisch: 'playfully',
+  fröhlich: 'cheerfully',
+  frohlich: 'cheerfully',
+}
+
+export function normalizeTagToEnglish(tag: string): string {
+  const norm = tag.trim().toLowerCase()
+  return GERMAN_TO_ENGLISH_TAGS[norm] || norm
+}
+
 export function parseAssistantContent(
   content: string,
   playerSheet?: any,
@@ -189,13 +250,19 @@ export function parseAssistantContent(
 
   // 1) Pre-split embedded/inline dialogues onto separate lines:
   // Detects: (Sentence end, voice tag, or line boundary) -> Speaker: "Dialogue"
-  const inlineSpeechSplitter = /(?:^|\n|(?<=[.!?»”"“]\s+)|(?<=\]\s*))(?:\*\*([^*\n:]{2,60}?):\*\*|\*\*([^*\n:]{2,60}?)\*\*:|([A-Z\p{Lu}][\p{L}\p{N}_\s'’\-,.()]{1,60}?):)\s*(["“„»][\s\S]*?["”«])/gu
+  const inlineSpeechSplitter = /(?:^|\n|(?<=[.!?»”"“]\s+)|(?<=\]\s*))(?:\*\*([^*\n:]{2,60}?):\*\*|\*\*([^*\n:]{2,60}?)\*\*:|([A-Z\p{Lu}][\p{L}\p{N}_\s'’\-,.()]{1,60}?):)\s*(?:(?:\[[^\]\n]+\]|"[^"\n]+")\s*)?(["“„»][\s\S]*?["”«])/gu
   cleanContent = cleanContent.replace(inlineSpeechSplitter, (m) => '\n\n' + m.trim() + '\n\n')
 
   const lines = cleanContent.split('\n')
   const narrationLines: string[] = []
 
-  const speechRegex = /^(?:(\*\*([^*:\n]+?):\*\*)|(\*\*([^*:\n]+?)\*\*:)|([\p{L}\p{N}_\s'’\-,.()]{2,60}):)\s*(?:(["“„»])([\s\S]+?)(["”«])|(.+))$/u
+  // Matches:
+  // - [tag] Character Name: "Dialogue"
+  // - Character Name: [tag] "Dialogue"
+  // - Character Name: "[tag]" "Dialogue"
+  // - Character Name: "[tag] "Dialogue"
+  // - Character Name: "Dialogue"
+  const speechRegex = /^(?:\[([^\]\n]+)\]\s*)?(?:(\*\*([^*:\n]+?):\*\*)|(\*\*([^*:\n]+?)\*\*:)|([\p{L}\p{N}_\s'’\-,.()]{2,60}):)\s*(.*)$/u
 
   for (const rawLine of lines) {
     const line = rawLine.trim()
@@ -203,10 +270,25 @@ export function parseAssistantContent(
 
     const match = line.match(speechRegex)
     if (match) {
-      const isBold = Boolean(match[1] || match[3])
-      let speakerName = (match[2] || match[4] || match[5] || '').trim()
-      const hasQuotes = Boolean(match[6] && match[8])
-      const speechText = (hasQuotes ? match[7] : match[9] || '').trim().replace(/^["“„»]+|["”«]+$/g, '')
+      const isBold = Boolean(match[2] || match[4])
+      let speakerName = (match[3] || match[5] || match[6] || '').trim()
+      const rawSpeech = (match[7] || '').trim()
+      let voiceTag = match[1] ? normalizeTagToEnglish(match[1]) : undefined
+      let speechText = rawSpeech
+
+      // Check if rawSpeech starts with a voice tag (e.g. [amused] "Ah...", "[amused]" "Ah...", "[amused] "Ah...")
+      const tagInSpeechMatch = speechText.match(/^"?\[([^\]\n]+)\]"?\s*"?\s*([\s\S]*)$/)
+      if (tagInSpeechMatch) {
+        if (!voiceTag) {
+          voiceTag = normalizeTagToEnglish(tagInSpeechMatch[1])
+        }
+        speechText = tagInSpeechMatch[2].trim()
+      }
+
+      const hasQuotes = /^["“„»]/.test(speechText) || /["”«]$/.test(speechText)
+      speechText = speechText.replace(/^["“„»\s]+|["”«\s]+$/g, '').trim()
+      // Clean accidental leftover opening quotes from malformed tags like "[amused] ""
+      speechText = speechText.replace(/^["“„»\s]+/, '').trim()
 
       // Guard against non-speaker labels (e.g. "Hinweis: ...", "Note: ...") when unquoted and not bold
       if (!hasQuotes && !isBold && NON_SPEAKER_LABELS.has(speakerName.toLowerCase())) {
@@ -233,6 +315,7 @@ export function parseAssistantContent(
           targetEntity,
           avatarUrl: playerSheet?.profile_image,
           text: speechText,
+          voiceTag,
         })
       } else {
         dialogues.push({
@@ -243,6 +326,7 @@ export function parseAssistantContent(
           avatarUrl: resolvedNpc?.image_url,
           isPlayer: false,
           text: speechText,
+          voiceTag,
         })
       }
     } else {
@@ -259,7 +343,11 @@ export function parseAssistantContent(
 export function renderFormattedHtml(text: string): string {
   if (!text) return ''
   const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  const withVoiceTags = escaped.replace(/(\[[^\]\n]+\])/g, '<span class="comic-voice-tag">$1</span>')
+  const withVoiceTags = escaped.replace(/(\[[^\]\n]+\])/g, (match, tag) => {
+    const raw = tag.slice(1, -1).trim()
+    const en = normalizeTagToEnglish(raw)
+    return `<span class="comic-voice-tag">[${en}]</span>`
+  })
   const withBolds = withVoiceTags.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-bold">$1</strong>')
   const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="comic-object-tag">$1</span>')
 

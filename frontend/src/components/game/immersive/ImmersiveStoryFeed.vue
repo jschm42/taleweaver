@@ -379,14 +379,14 @@ function isDebugSystemMessage(msg: any): boolean {
             <button
               v-if="configState.isTtsEnabled"
               type="button"
-              @click.stop="speakBubble(dlg.text, dlg.speaker)"
+              @click.stop="speakBubble(dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text, dlg.speaker)"
               class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md border"
               :class="dlg.isPlayer ? 'bg-emerald-950/90 hover:bg-emerald-900 border-emerald-400/60 text-emerald-300' : 'bg-amber-950/90 hover:bg-amber-900 border-amber-400/60 text-amber-300'"
-              :title="isSpeakingBubble(dlg.text, dlg.speaker) ? 'Stop Audio' : 'Play Audio'"
+              :title="isSpeakingBubble(dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text, dlg.speaker) ? 'Stop Audio' : 'Play Audio'"
             >
-              <VolumeX v-if="isSpeakingBubble(dlg.text, dlg.speaker)" class="w-3 h-3 text-red-400" />
+              <VolumeX v-if="isSpeakingBubble(dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text, dlg.speaker)" class="w-3 h-3 text-red-400" />
               <Volume2 v-else class="w-3 h-3" />
-              <span>{{ isSpeakingBubble(dlg.text, dlg.speaker) ? 'Stop' : 'Audio' }}</span>
+              <span>{{ isSpeakingBubble(dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text, dlg.speaker) ? 'Stop' : 'Audio' }}</span>
             </button>
 
             <!-- Comic Angled Speech Tail pointing Left directly towards the NPC portrait card -->
@@ -424,6 +424,14 @@ function isDebugSystemMessage(msg: any): boolean {
                   @click="dlg.isPlayer ? emit('openSheet') : emit('npcClick', dlg.speaker)"
                 >
                   {{ dlg.speaker }}
+                </span>
+
+                <!-- Emotion / Voice Tag Badge -->
+                <span
+                  v-if="dlg.voiceTag"
+                  class="comic-voice-tag not-italic select-none align-baseline mr-1.5"
+                >
+                  [{{ dlg.voiceTag }}]
                 </span>
 
                 <!-- Target Addressee Badge (if targeted) -->

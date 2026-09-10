@@ -12,14 +12,15 @@ from pydantic import BaseModel, ValidationError
 from backend.core.llm_logger import log_llm_interaction, log_structured_event
 from backend.core.security import encryption_util
 from backend.models.user import User
-from backend.core.voice_tags import VOICE_TAG_SET
+from backend.core.voice_tags import GERMAN_TO_ENGLISH_VOICE_TAGS, VOICE_TAG_SET
 
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
-# Compile regex pattern to match voice tags.
+# Compile regex pattern to match voice tags (English + German fallback normalization)
 # Sort by length descending to match longest first
-_sorted_tags = sorted(VOICE_TAG_SET, key=len, reverse=True)
+_all_tags = set(VOICE_TAG_SET) | set(GERMAN_TO_ENGLISH_VOICE_TAGS.keys())
+_sorted_tags = sorted(_all_tags, key=len, reverse=True)
 _tag_pattern = "|".join(re.escape(t) for t in _sorted_tags)
 
 BRACKETED_RE = re.compile(
@@ -429,29 +430,79 @@ class GameMasterLLM:
             logger.warning("Failed to append generation log: %s", e)
 
     @staticmethod
+    def _to_canonical_voice_tag(tag: str) -> str:
+        lowered = tag.strip().lower()
+        return GERMAN_TO_ENGLISH_VOICE_TAGS.get(lowered, lowered)
+
+    @staticmethod
     def normalize_voice_tags(text: str) -> str:
         """
-        Normalizes voice/emotion tags at the beginning of the text to bracketed format [tag]
-        and removes any unnecessary newlines between the tag and the narration text.
+        Normalizes voice/emotion tags at the beginning of the text, in paragraphs,
+        and in character dialogue lines to standard English [tag] format.
         """
         if not text:
             return text
 
-        # Try matching bracketed first
+        # 1. Normalize leading tag of the whole text
         m = BRACKETED_RE.match(text)
         if m:
-            tag = m.group("tag")
+            tag = GameMasterLLM._to_canonical_voice_tag(m.group("tag"))
             rest = m.group("rest")
-            return f"[{tag.lower()}] {rest.lstrip()}".strip()
+            text = f"[{tag}] {rest.lstrip()}".strip()
+        else:
+            m = UNBRACKETED_RE.match(text)
+            if m:
+                tag = GameMasterLLM._to_canonical_voice_tag(m.group("tag"))
+                rest = m.group("rest")
+                text = f"[{tag}] {rest.lstrip()}".strip()
 
-        # Try matching unbracketed followed by line boundary
-        m = UNBRACKETED_RE.match(text)
-        if m:
-            tag = m.group("tag")
-            rest = m.group("rest")
-            return f"[{tag.lower()}] {rest.lstrip()}".strip()
+        # 2. Line-by-line normalization for dialogue and paragraph voice tags
+        lines = text.split("\n")
+        normalized_lines: list[str] = []
 
-        return text
+        speaker_re = re.compile(
+            r"^(?P<speaker>\s*(?:\*\*[^*:\n]+?\*\*|[^\n:]{1,60}):\s*)(?P<speech>.*)$"
+        )
+        tag_extract_re = re.compile(
+            r'^"?\[(?P<tag>[^\]\n]+)\]"?\s*"?\s*(?P<body>.*)$'
+        )
+        para_tag_re = re.compile(
+            r'^\s*\[(?P<tag>[^\]\n]+)\]\s*(?P<body>.*)$'
+        )
+
+        for line in lines:
+            trimmed = line.strip()
+            if not trimmed:
+                normalized_lines.append(line)
+                continue
+
+            sp_match = speaker_re.match(line)
+            if sp_match:
+                speaker_part = sp_match.group("speaker")
+                speech_part = sp_match.group("speech").strip()
+                tag_match = tag_extract_re.match(speech_part)
+                if tag_match:
+                    canon_tag = GameMasterLLM._to_canonical_voice_tag(tag_match.group("tag"))
+                    body = tag_match.group("body").strip()
+                    body = body.rstrip('"').rstrip('”').rstrip('»').lstrip('"').lstrip('“').lstrip('„').lstrip('«').strip()
+                    normalized_lines.append(f'{speaker_part}[{canon_tag}] "{body}"')
+                    continue
+                normalized_lines.append(line)
+                continue
+
+            # Paragraph leading tag normalization (e.g. German tag [neugierig] -> [curious])
+            p_match = para_tag_re.match(line)
+            if p_match:
+                raw_tag = p_match.group("tag").strip()
+                canon_tag = GameMasterLLM._to_canonical_voice_tag(raw_tag)
+                if canon_tag != raw_tag:
+                    body = p_match.group("body").strip()
+                    normalized_lines.append(f"[{canon_tag}] {body}".strip())
+                    continue
+
+            normalized_lines.append(line)
+
+        return "\n".join(normalized_lines)
 
     @staticmethod
     async def _clean_stream_voice_tags(stream):

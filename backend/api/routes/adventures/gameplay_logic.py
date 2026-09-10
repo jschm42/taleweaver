@@ -1730,7 +1730,7 @@ class GameTurnManager:
             narration_prompt += "\n\n" + prompts.GM_CHAT_NARRATION_SUFFIX
             
         if language:
-            narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
+            narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only (except voice tags like [curious], which MUST always remain in English)."
             
         pass2_start = time.perf_counter()
         narration_messages, memory_turns = await self._build_narration_messages(narration_prompt, user_msg)

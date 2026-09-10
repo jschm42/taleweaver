@@ -96,7 +96,32 @@ class AudioService {
       .map(p => p.trim())
       .filter(Boolean)
 
-    return paragraphs.map(p => ({ text: p }))
+    const speakerPattern = /^(?:\*\*([^*:\n]+)\*\*|([^:\n]+)):\s*([\s\S]*)$/
+    const nonSpeakerLabels = new Set(['note', 'warning', 'caution', 'info', 'location', 'status', 'time', 'goal', 'quest', 'tip', 'hinweis'])
+    const segments: Array<{ speaker?: string, text: string }> = []
+
+    for (const paragraph of paragraphs) {
+      const match = paragraph.match(speakerPattern)
+      if (match) {
+        const rawSpeaker = (match[1] || match[2] || '').trim()
+        const spokenText = (match[3] || '').trim()
+        if (spokenText && !nonSpeakerLabels.has(rawSpeaker.toLowerCase()) && this.looksLikeSpeakerLabel(rawSpeaker)) {
+          segments.push({ speaker: rawSpeaker, text: spokenText })
+          continue
+        }
+      }
+      segments.push({ text: paragraph })
+    }
+
+    return segments
+  }
+
+  private looksLikeSpeakerLabel(value: string): boolean {
+    const normalized = String(value || '').trim()
+    if (!normalized || normalized.length > 50) return false
+    const words = normalized.split(/\s+/).filter(Boolean)
+    if (words.length > 6) return false
+    return /^[\p{L}\p{N}][\p{L}\p{N} '\-.,()]*$/u.test(normalized)
   }
 
   private chunkSegmentText(text: string, maxChars = 1200): string[] {

@@ -363,7 +363,8 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "If the player addresses an NPC who is not present in the current scene, narrate that there is no response because that character is not in this room.\n\n"
     "NPC INTERACTION RULE: If multiple NPCs are present in the current scene, let them occasionally talk to each other directly (not only to the player), as long as it is narratively appropriate.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
-    "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
+    "Use the format: Character Name: \"Dialogue\" (or Character Name: [tag] \"Dialogue\" if an emotion tag is used, e.g. Professor Quark: [excited] \"Look here!\"). "
+    "NEVER put emotion tags inside quotation marks (do NOT write Character Name: \"[tag] Dialogue\" or \"[tag]\" \"Dialogue\"). "
     "Separate narrative prose from speech with a blank line. "
     "NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: \"...\"). Use dashes (—), periods, or commas instead.\n\n"
     "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
@@ -371,14 +372,16 @@ GM_NARRATION_MANDATORY_FORMATTING = (
 
 def get_vocal_direction_prompt(provider: str = "google") -> str:
     return (
-        "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
-        "Tags MUST come from the fixed catalog below and MUST always be in English. "
+        "VOICE DIRECTION: Actively use tone and pace tags to give your narration and dialogue life and atmosphere. "
+        "Tags MUST come from the fixed catalog below and MUST ALWAYS be in English. "
+        "CRITICAL: NEVER translate voice tags into German or any other language (e.g. NEVER write [neugierig], ALWAYS write [curious]). "
         + build_voice_tag_catalog_prompt_block(provider) +
         "Open a paragraph with one catalog tag (for example [excited], [whispers], [shouting], [very fast], [very slow], "
-        "[tense], [solemn], [mocking], [dramatic pause], or [sarcastically, one painfully slow word at a time]). "
+        "[tense], [solemn], [mocking], [dramatic pause], [amused], [curious]). "
+        "You may also use a catalog tag directly before a character's dialogue line (e.g. Madam Entropy: [amused] \"Dialogue\"). "
         "Use them whenever the mood calls for it — combat tension, hushed secrets, desperate warnings, "
         "triumphant moments. Aim to use at least one voice tag per response where the scene warrants it. "
-        "A tag applies to the entire paragraph it opens — start a new paragraph when switching to a different tag. "
+        "A tag applies to the entire paragraph or dialogue line it opens — start a new paragraph when switching to a different tag. "
         "Do not nest tags."
     )
 
