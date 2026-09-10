@@ -34,7 +34,7 @@ class TurnSuggestionsManager:
 
     @staticmethod
     def extract_prompt_suggestions(exit_states: Any) -> list[str]:
-        """Return up to three stored prompt suggestions from session exit_state payload."""
+        """Return up to five stored prompt suggestions from session exit_state payload."""
         if not isinstance(exit_states, dict):
             return []
         raw = exit_states.get(PROMPT_SUGGESTIONS_STATE_KEY)
@@ -47,7 +47,7 @@ class TurnSuggestionsManager:
             cleaned = " ".join(entry.strip().split())
             if cleaned:
                 result.append(cleaned)
-            if len(result) >= 3:
+            if len(result) >= 5:
                 break
         return result
 
@@ -71,7 +71,7 @@ class TurnSuggestionsManager:
                 continue
             seen.add(key)
             normalized.append(cleaned)
-            if len(normalized) >= 3:
+            if len(normalized) >= 5:
                 break
         return normalized
 
@@ -118,19 +118,29 @@ class TurnSuggestionsManager:
     ) -> list[str]:
         sensory_target = visible_objects[0] if visible_objects else scene_label or "the area"
         interaction_target = visible_npcs[0] if visible_npcs else (inventory_items[0] if inventory_items else sensory_target)
+        second_object = visible_objects[1] if len(visible_objects) > 1 else None
+        second_npc = visible_npcs[1] if len(visible_npcs) > 1 else None
         fallback = [
             f"Examine {sensory_target}".strip(),
             f"Ask {interaction_target} carefully".strip(),
             "Pause and read the room",
         ]
+        if second_object:
+            fallback.append(f"Search {second_object}".strip())
+        elif second_npc:
+            fallback.append(f"Talk to {second_npc}".strip())
+        else:
+            fallback.append("Search the surroundings")
+        fallback.append("Look around")
         return self.normalize_prompt_suggestions(fallback)
 
     async def build_player_only_suggestion_context(self) -> dict[str, Any]:
         """Build a spoiler-safe suggestion context (visible NPCs/objects, unlocked exits, inventory)."""
+        session_id = self.manager.state.session_id if self.manager.state else self.manager.game_id
         scene_res = await self.manager.db.execute(
             select(WorldScene).where(
                 WorldScene.id == self.manager.state.current_scene_id,
-                WorldScene.session_id == self.manager.game_id,
+                WorldScene.session_id == session_id,
             )
         )
         current_scene = scene_res.scalars().first()
@@ -139,7 +149,7 @@ class TurnSuggestionsManager:
 
         ent_res = await self.manager.db.execute(
             select(WorldEntity).where(
-                WorldEntity.session_id == self.manager.game_id,
+                WorldEntity.session_id == session_id,
                 WorldEntity.current_scene_id == self.manager.state.current_scene_id,
             )
         )
@@ -160,7 +170,7 @@ class TurnSuggestionsManager:
 
         exits_res = await self.manager.db.execute(
             select(WorldExit).where(
-                WorldExit.session_id == self.manager.game_id,
+                WorldExit.session_id == session_id,
                 WorldExit.from_scene_id == self.manager.state.current_scene_id,
             )
         )
@@ -238,5 +248,5 @@ class TurnSuggestionsManager:
 
         if len(suggestions) < 3:
             suggestions = self.normalize_prompt_suggestions(suggestions + fallback)
-        self.set_prompt_suggestions_state(suggestions[:3])
-        return suggestions[:3]
+        self.set_prompt_suggestions_state(suggestions[:5])
+        return suggestions[:5]

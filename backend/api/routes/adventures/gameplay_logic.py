@@ -72,7 +72,7 @@ from backend.utils.path_security import sanitize_path_component as _sanitize_pat
 logger = logging.getLogger(__name__)
 
 # Constants
-WALKTHROUGH_REVEAL_COST = 200
+WALKTHROUGH_REVEAL_COST = 150
 WALKTHROUGH_HINT_COST = 50
 AG_IMAGE_CONFIRMATION_STATE_KEY = "__ag_image_confirmation__"
 AG_LAST_REQUEST_STATE_KEY = "__ag_last_generation_request__"

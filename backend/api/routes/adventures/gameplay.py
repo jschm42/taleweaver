@@ -7,11 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, or_, and_
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 
-from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.api.routes.adventures.gameplay_logic import (
+    GameTurnManager,
+    WALKTHROUGH_HINT_COST,
+    WALKTHROUGH_REVEAL_COST,
+)
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.schemas import (
     ChatRequest,
@@ -488,6 +493,23 @@ async def get_chat_history(
         except Exception as exc:
             logger.warning("Could not build full_world debug payload: %s", exc)
 
+    prompt_suggestions = GameTurnManager.extract_prompt_suggestions(state.exit_states or {})
+    if not prompt_suggestions:
+        try:
+            manager = GameTurnManager(db, state.session_id, current_user)
+            if await manager.initialize():
+                ctx = await manager.suggestions.build_player_only_suggestion_context()
+                prompt_suggestions = manager.suggestions.fallback_prompt_suggestions(
+                    scene_label=ctx.get("scene_label", ""),
+                    visible_objects=ctx.get("visible_objects", []),
+                    visible_npcs=ctx.get("visible_npcs", []),
+                    inventory_items=ctx.get("inventory_items", []),
+                )
+                manager.suggestions.set_prompt_suggestions_state(prompt_suggestions)
+                await db.commit()
+        except Exception as exc:
+            logger.warning("Could not build fallback prompt suggestions on session load: %s", exc)
+
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
@@ -519,7 +541,7 @@ async def get_chat_history(
         status_note=state.session.status_note if state.session else None,
         input_locked=input_locked,
         pending_terminal_epilogue=pending_terminal_epilogue,
-        prompt_suggestions=GameTurnManager.extract_prompt_suggestions(state.exit_states or {}),
+        prompt_suggestions=prompt_suggestions,
         world_memories=state.world_memories or [],
         world_rumors=state.world_rumors or [],
         full_world=full_world_debug,
@@ -770,28 +792,160 @@ async def translate_text(
 
     return TranslateTextResponse(translated_text=cleaned or source_text, language=target_language)
 
+def _parse_walkthrough_steps(text: str) -> list[dict[str, str]]:
+    """Parse walkthrough markdown/text into structured steps if possible."""
+    if not text or not text.strip():
+        return []
+    lines = text.strip().splitlines()
+    steps: list[dict[str, str]] = []
+    current_title = ""
+    current_content: list[str] = []
+
+    step_pattern = re.compile(r"^(?:(?:Schritt|Step)\s*\d+[:.]?|\d+[.)])\s*(.*)", re.IGNORECASE)
+
+    for line in lines:
+        stripped = line.strip()
+        m = step_pattern.match(stripped)
+        if m:
+            if current_content or current_title:
+                steps.append({
+                    "title": current_title or f"Step {len(steps) + 1}",
+                    "content": "\n".join(current_content).strip(),
+                })
+                current_content = []
+            matched_title = m.group(1).strip()
+            current_title = matched_title if matched_title else f"Step {len(steps) + 1}"
+            if not matched_title:
+                current_content.append(stripped)
+        elif stripped.startswith(("# ", "## ", "### ")):
+            if current_content or current_title:
+                steps.append({
+                    "title": current_title or f"Step {len(steps) + 1}",
+                    "content": "\n".join(current_content).strip(),
+                })
+                current_content = []
+            current_title = stripped.lstrip("#").strip()
+        else:
+            current_content.append(line)
+
+    if current_content or current_title:
+        steps.append({
+            "title": current_title or f"Step {len(steps) + 1}",
+            "content": "\n".join(current_content).strip(),
+        })
+
+    if len(steps) <= 1:
+        paragraphs = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
+        if len(paragraphs) > 1:
+            steps = [{"title": f"Step {i+1}", "content": p} for i, p in enumerate(paragraphs)]
+
+    return steps
+
+
 @router.get("/{game_id}/walkthrough")
 async def get_walkthrough(
     game_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Returns the walkthrough for the current session if revealed or in debug mode."""
-    res = await db.execute(
-        select(SessionState)
-        .join(GameSession, GameSession.id == SessionState.session_id)
-        .where(SessionState.session_id == game_id, GameSession.user_id == current_user.id)
-    )
-    state = res.scalars().first()
+    """Returns the walkthrough status and payload for the current session."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session state not found.")
-    
-    # Check if revealed or debug enabled
-    from backend.core.config import settings
-    if not state.is_walkthrough_revealed and not settings.TALEWEAVER_DEBUG_ENABLED:
-        raise HTTPException(status_code=403, detail="The walkthrough is not revealed yet.")
 
-    return {"walkthrough": state.walkthrough or "No walkthrough available for this adventure."}
+    res = await db.execute(
+        select(GameSession, Avatar)
+        .outerjoin(Avatar, Avatar.id == GameSession.avatar_id)
+        .where(GameSession.id == state.session_id)
+    )
+    row = res.first()
+    session, avatar = row if row else (None, None)
+
+    if not state.walkthrough or not state.walkthrough.strip():
+        return {
+            "available": False,
+            "revealed": False,
+            "current_xp": avatar.exp if avatar else 0,
+            "reveal_cost": WALKTHROUGH_REVEAL_COST,
+            "hint_cost": WALKTHROUGH_HINT_COST,
+            "message": "No walkthrough available for this adventure yet.",
+            "preview": "No walkthrough available for this adventure yet.",
+            "steps": [],
+        }
+
+    is_revealed = bool(state.is_walkthrough_revealed or settings.TALEWEAVER_DEBUG_ENABLED)
+    steps = _parse_walkthrough_steps(state.walkthrough) if is_revealed else []
+
+    if is_revealed:
+        return {
+            "available": True,
+            "revealed": True,
+            "current_xp": avatar.exp if avatar else 0,
+            "reveal_cost": WALKTHROUGH_REVEAL_COST,
+            "hint_cost": WALKTHROUGH_HINT_COST,
+            "walkthrough": state.walkthrough,
+            "steps": steps,
+            "message": "Walkthrough unlocked.",
+            "preview": "Walkthrough unlocked.",
+        }
+
+    return {
+        "available": True,
+        "revealed": False,
+        "current_xp": avatar.exp if avatar else 0,
+        "reveal_cost": WALKTHROUGH_REVEAL_COST,
+        "hint_cost": WALKTHROUGH_HINT_COST,
+        "preview": "The strategy guide is sealed. Reveal it to permanently view the walkthrough for this session.",
+        "message": "The strategy guide is sealed. Reveal it to permanently view the walkthrough for this session.",
+        "steps": [],
+    }
+
+
+@router.get("/{game_id}/suggestions")
+async def get_prompt_suggestions(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns stored or freshly generated spoiler-safe prompt suggestions."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session state not found.")
+
+    manager = GameTurnManager(db, state.session_id, current_user)
+    if not await manager.initialize():
+        raise HTTPException(status_code=404, detail="Failed to initialize session.")
+
+    suggestions = manager.suggestions.extract_prompt_suggestions(manager.state.exit_states or {})
+    if not suggestions:
+        last_response = await manager.suggestions.load_last_assistant_message()
+        suggestions = await manager.suggestions.generate_prompt_suggestions(last_response)
+        await db.commit()
+
+    return {"suggestions": suggestions}
+
+
+@router.post("/{game_id}/suggestions")
+@router.post("/{game_id}/shuffle")
+async def shuffle_prompt_suggestions(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Regenerates up to 5 spoiler-safe prompt suggestions for the current session."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session state not found.")
+
+    manager = GameTurnManager(db, state.session_id, current_user)
+    if not await manager.initialize():
+        raise HTTPException(status_code=404, detail="Failed to initialize session.")
+
+    last_response = await manager.suggestions.load_last_assistant_message()
+    suggestions = await manager.suggestions.generate_prompt_suggestions(last_response)
+    await db.commit()
+
+    return {"suggestions": suggestions}
 
 
 @router.post("/{game_id}/text-logs/{entity_id}/read")

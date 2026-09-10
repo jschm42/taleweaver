@@ -147,13 +147,38 @@ async def test_generate_prompt_suggestions_returns_and_persists_three_items(setu
             return_value='["Examine floor scratches now", "Ask Guide Rowan quietly", "Wait and steady breathing"]'
         )
         monkeypatch.setattr(
-            "backend.api.routes.adventures.gameplay_logic.GameMasterLLM",
+            "backend.api.routes.adventures.turn_suggestions.GameMasterLLM",
             lambda *args, **kwargs: llm_mock,
         )
 
         suggestions = await manager._generate_prompt_suggestions("You hear a faint scrape in the hall.")
 
         assert len(suggestions) == 3
+        assert all(len(text.split()) <= 6 for text in suggestions)
+        saved = manager.extract_prompt_suggestions(manager.state.exit_states or {})
+        assert saved == suggestions
+
+
+async def test_generate_prompt_suggestions_supports_up_to_five_items(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user = await _seed_prompt_context(db)
+        manager = GameTurnManager(db, "session-suggest", user)
+        assert await manager.initialize()
+
+        llm_mock = MagicMock()
+        llm_mock.aexecute_simple_task = AsyncMock(
+            return_value='["Examine floor scratches", "Ask Guide Rowan quietly", "Search Lantern carefully", "Inspect archway exit", "Listen closely to sounds"]'
+        )
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.turn_suggestions.GameMasterLLM",
+            lambda *args, **kwargs: llm_mock,
+        )
+
+        suggestions = await manager._generate_prompt_suggestions("You hear a faint scrape in the hall.")
+
+        assert len(suggestions) == 5
         assert all(len(text.split()) <= 6 for text in suggestions)
         saved = manager.extract_prompt_suggestions(manager.state.exit_states or {})
         assert saved == suggestions

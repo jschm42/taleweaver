@@ -24,7 +24,7 @@ function getWalkthroughUnavailable(currentXp: number): WalkthroughData {
     preview: 'No walkthrough available for this adventure yet.',
     message: 'No walkthrough available for this adventure yet.',
     current_xp: currentXp,
-    reveal_cost: 200,
+    reveal_cost: 150,
     hint_cost: 50,
   }
 }

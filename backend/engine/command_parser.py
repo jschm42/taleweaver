@@ -153,7 +153,7 @@ class CommandParser:
             "- `/combine <item1> <item2>`: Attempt to combine two objects.",
             "- `/use <item1> [on] <item2>`: Use/Combine objects.",
             "- `/walkthrough`: Open the secret walkthrough panel.",
-            "- `/walkthrough reveal`: Reveal all steps for 200 XP.",
+            "- `/walkthrough reveal`: Reveal all steps for 150 XP.",
             "- `/hint`: Buy one tactical hint for 50 XP.",
             "- `/sheet`: Open your character sheet.",
             "- `/agent on/off`: Turn on/off autonomous agent gameplay mode."

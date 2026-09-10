@@ -158,8 +158,11 @@ function handleNpcClick(npc: any) {
 }
 
 function handleSuggestionSelect(suggestion: string) {
-  if (!canSendInput.value) return
   inputBarRef.value?.setInputText(suggestion)
+}
+
+function handleSuggestionShuffle() {
+  emit('send', '/shuffle')
 }
 
 defineExpose({
@@ -293,6 +296,7 @@ defineExpose({
         @open-memories="emit('openMemories')"
         @open-debug="emit('openDebug')"
         @select-suggestion="handleSuggestionSelect"
+        @shuffle-suggestions="handleSuggestionShuffle"
       />
 
       <ImmersiveInputBar

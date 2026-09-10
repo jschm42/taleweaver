@@ -138,12 +138,12 @@ function fixNewlines(text: string | null | undefined): string {
             </div>
 
             <div v-else-if="!data?.revealed" class="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-4">
-              <p class="text-sm text-fuchsia-200 mb-3">The full strategy is sealed. Reveal it to unlock all steps.</p>
+              <p class="text-sm text-fuchsia-200 mb-3">The full strategy is sealed. Reveal it to permanently view the walkthrough for this session (-150 XP).</p>
               <button
                 class="px-4 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-sm font-bold transition-colors"
                 @click="emit('reveal')"
               >
-                Reveal Walkthrough ({{ data?.reveal_cost ?? 200 }} XP)
+                Reveal Walkthrough ({{ data?.reveal_cost ?? 150 }} XP)
               </button>
             </div>
 
@@ -158,10 +158,10 @@ function fixNewlines(text: string | null | undefined): string {
                 </button>
               </div>
 
-              <ol class="space-y-2">
-                <li v-for="(step, index) in data?.steps || []" :key="index" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <ol v-if="data?.steps && data.steps.length > 0" class="space-y-2">
+                <li v-for="(step, index) in data.steps" :key="index" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                   <p class="text-xxs uppercase tracking-widest text-slate-500 font-black">Step {{ index + 1 }}</p>
-                  <p class="text-sm text-slate-100 font-bold mt-1">{{ step.title }}</p>
+                  <p v-if="step.title && step.title !== `Step ${index + 1}`" class="text-sm text-slate-100 font-bold mt-1">{{ step.title }}</p>
                   <p class="text-sm text-slate-300 mt-1 leading-relaxed whitespace-pre-wrap">
                     <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">
                       <span v-if="part.type === 'text'">{{ fixNewlines(part.text) }}</span>
@@ -178,6 +178,21 @@ function fixNewlines(text: string | null | undefined): string {
                   </p>
                 </li>
               </ol>
+
+              <div v-else-if="data?.walkthrough" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+                <template v-for="(part, partIndex) in parseWalkthroughContent(data.walkthrough)" :key="`raw-${partIndex}`">
+                  <span v-if="part.type === 'text'">{{ fixNewlines(part.text) }}</span>
+                  <span
+                    v-else
+                    class="font-semibold text-amber-300/90 underline decoration-dotted underline-offset-4 cursor-help hover:text-amber-200"
+                    @mouseenter="emit('itemHover', part.item, $event)"
+                    @mousemove="emit('itemHover', part.item, $event)"
+                    @mouseleave="emit('itemLeave')"
+                  >
+                    {{ part.label }}
+                  </span>
+                </template>
+              </div>
             </div>
 
             <div v-if="data?.latest_hint" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">

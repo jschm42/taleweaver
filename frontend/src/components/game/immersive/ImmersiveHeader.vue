@@ -99,6 +99,15 @@ const emit = defineEmits<{
       <!-- In-Game Clock -->
       <GameClockWidget :game-time="props.gameTime || null" :clock-tick="props.clockTick || false" />
 
+      <!-- Experience XP -->
+      <div
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black tracking-wider shadow-sm shrink-0"
+        title="Experience Points (XP)"
+      >
+        <i class="ra ra-laurels text-sm text-amber-400"></i>
+        <span class="tabular-nums">{{ props.exp ?? 0 }} XP</span>
+      </div>
+
       <!-- TTS Toggle / Stop -->
       <div v-if="configState.isTtsEnabled" class="flex items-center gap-1.5">
         <button
@@ -136,12 +145,6 @@ const emit = defineEmits<{
       >
         <Sliders class="w-4 h-4" />
       </button>
-
-      <!-- Experience XP -->
-      <div v-if="props.exp !== undefined && props.mode !== 'chat'" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-black tracking-wider">
-        <i class="ra ra-laurels text-sm"></i>
-        <span>{{ props.exp }} XP</span>
-      </div>
 
       <!-- Mobile Interact Toggle (Only on mobile) -->
       <button

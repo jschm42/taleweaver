@@ -113,9 +113,14 @@ function formatDate(isoString?: string) {
 .gold .award-glow { background: #fbbf24; }
 .silver .award-glow { background: #cbd5e1; }
 .bronze .award-glow { background: #c2410c; }
+.negative .award-glow { background: #ef4444; }
 
 .award-tile:hover .award-glow {
   opacity: 0.4;
+}
+
+.negative .award-svg {
+  filter: hue-rotate(140deg) saturate(3) drop-shadow(0 0 15px rgba(239, 68, 68, 0.6));
 }
 
 .award-header {
@@ -147,6 +152,7 @@ function formatDate(isoString?: string) {
 .gold .award-tier-badge { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border-color: rgba(251, 191, 36, 0.2); }
 .silver .award-tier-badge { background: rgba(203, 213, 225, 0.1); color: #cbd5e1; border-color: rgba(203, 213, 225, 0.2); }
 .bronze .award-tier-badge { background: rgba(194, 65, 12, 0.1); color: #ea580c; border-color: rgba(194, 65, 12, 0.2); }
+.negative .award-tier-badge { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
 
 .award-description {
   font-size: 0.85rem;

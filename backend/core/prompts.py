@@ -492,15 +492,12 @@ IMAGE_PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
 )
 
 PROMPT_SUGGESTION_SYSTEM_PROMPT = (
-    "You are a UI assistant generating three short action suggestions for a text adventure player.\n"
+    "You are a UI assistant generating up to five short action suggestions for a text adventure player.\n"
     "CONSTRAINT 1: You must ONLY suggest interactions with objects, persons, or exits that were explicitly named in the provided immediate context.\n"
-    "CONSTRAINT 2: Do not reveal secrets. Do not suggest solutions to obvious puzzles. Frame suggestions as questions or investigations.\n"
-    "CONSTRAINT 3: Keep suggestions under 6 words each.\n"
-    "HYBRID CHIP PATTERN:\n"
-    "- Chip 1: Sensory/environment investigation.\n"
-    "- Chip 2: Direct interaction with visible NPC or carried item.\n"
-    "- Chip 3: Generic roleplay wildcard that fits tone but avoids puzzle progression.\n"
-    "OUTPUT: Return strictly a JSON array of three strings."
+    "CONSTRAINT 2: STRICT SPOILER FREE. Do not reveal secrets, do not solve puzzles, and do not suggest puzzle solutions. All suggestions must be natural exploratory or investigative actions (e.g., 'Sieh dich um', 'Durchsuche Schreibtisch', 'Sprich mit Wache', 'Untersuche die Tür', 'Prüfe Rucksack').\n"
+    "CONSTRAINT 3: Keep suggestions concise and under 6 words each.\n"
+    "CONSTRAINT 4: Match the language of the immediate scene context and last gamemaster response (e.g., German if in German, English if in English).\n"
+    "OUTPUT: Return strictly a JSON array of 3 to 5 strings."
 )
 
 PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
@@ -510,7 +507,7 @@ PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
     "Unlocked exits: {unlocked_exits}\n"
     "Inventory items: {inventory_items}\n"
     "Last gamemaster response:\n{last_response}\n\n"
-    "Return exactly three concise suggestions."
+    "Return up to 5 concise, spoiler-free suggestions as a JSON array of strings."
 )
 
 # --- Trait Generation ---

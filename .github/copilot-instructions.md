@@ -4,6 +4,9 @@ This file contains the fundamental coding and architectural guidelines for all d
 
 Please adhere to the following rules for all implementations to ensure high code quality.
 
+> [!IMPORTANT]
+> **Language Rule**: All texts, UI labels, buttons, tooltips, documentation, comments, and agent communications must be kept strictly in **English** until the user explicitly specifies otherwise.
+
 ---
 
 ## 1. Clean Code

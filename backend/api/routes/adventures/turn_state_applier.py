@@ -152,22 +152,43 @@ class TurnStateApplier:
         if not self.user:
             return []
             
+        adv_id = adventure.id if adventure else (self.state.template_id if self.state else None)
         awards_list = (adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(self.state).get("adventure") or {}).get("awards")) or []
         
-        return [
+        result = [
             {
                 **aw,
                 "is_earned": any(
                     ea.get("key") == aw.get("key")
                     and (
-                        ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
-                        or ea.get("adventure_id") == (adventure.id if adventure else self.state.template_id)
+                        ea.get("template_id") == adv_id
+                        or ea.get("adventure_id") == adv_id
+                        or ea.get("session_id") == (self.state.session_id if self.state else None)
                     )
                     for ea in (self.user.earned_awards or [])
                 ),
             }
             for aw in awards_list
         ]
+
+        # Include special/negative earned awards (like Spoiler-Sucher) that are not in the template definition
+        known_keys = {aw.get("key") for aw in awards_list if aw.get("key")}
+        for ea in (self.user.earned_awards or []):
+            k = ea.get("key")
+            if not k or k in known_keys:
+                continue
+            if (
+                ea.get("template_id") == adv_id
+                or ea.get("adventure_id") == adv_id
+                or (self.state and ea.get("session_id") == self.state.session_id)
+            ):
+                known_keys.add(k)
+                result.append({
+                    **ea,
+                    "is_earned": True,
+                })
+
+        return result
 
     async def _apply_game_event(self, event: GameEvent) -> list[str]:
         """Applies technical mutations from a GameEvent to the database and session state. Returns messages for the UI."""

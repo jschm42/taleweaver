@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import json
 import logging
 import re
@@ -763,12 +764,47 @@ class TurnInteractionsManager:
                 response = "You cannot take that."
         
         elif response.startswith("[TRIGGER_WALKTHROUGH_REVEAL]"):
-            if self.avatar.exp >= WALKTHROUGH_REVEAL_COST:
-                self.avatar.exp -= WALKTHROUGH_REVEAL_COST
-                self.state.is_walkthrough_revealed = True
-                response = f"Walkthrough revealed! You spent {WALKTHROUGH_REVEAL_COST} XP. You can now open it via the menu."
-            else:
-                response = f"You do not have enough XP to reveal the walkthrough ({self.avatar.exp}/{WALKTHROUGH_REVEAL_COST})."
+            self.avatar.exp = (self.avatar.exp or 0) - WALKTHROUGH_REVEAL_COST
+            self.state.is_walkthrough_revealed = True
+            flag_modified(self.avatar, "exp")
+            flag_modified(self.state, "is_walkthrough_revealed")
+
+            # Grant negative award
+            award_key = "SPOILER_SEEKER"
+            now = datetime.utcnow().isoformat()
+            user_awards = list(self.user.earned_awards or [])
+            adv_id = (
+                self.manager.adventure.id
+                if (hasattr(self.manager, "adventure") and self.manager.adventure)
+                else (getattr(self.avatar, "template_id", None) or self.state.template_id or "")
+            )
+            adv_title = (
+                self.manager.adventure.title
+                if (hasattr(self.manager, "adventure") and self.manager.adventure)
+                else "Abenteuer"
+            )
+            already_earned = any(
+                ea.get("key") == award_key
+                and (ea.get("adventure_id") == adv_id or ea.get("session_id") == self.state.session_id)
+                for ea in user_awards
+            )
+            if not already_earned:
+                user_awards.append({
+                    "key": award_key,
+                    "title": "Spoiler-Sucher",
+                    "description": "Hat den Walkthrough für -150 XP freigeschaltet.",
+                    "tier": "negative",
+                    "template_id": adv_id,
+                    "adventure_id": adv_id,
+                    "adventure_title": adv_title,
+                    "session_id": self.state.session_id,
+                    "earned_at": now,
+                })
+                self.user.earned_awards = user_awards
+                flag_modified(self.user, "earned_awards")
+                await self.manager._save_chat_message("system", "Negativ-Award erhalten: Spoiler-Sucher (-150 XP)")
+
+            response = f"Walkthrough freigeschaltet! (-{WALKTHROUGH_REVEAL_COST} XP) Du kannst den Walkthrough ab sofort dauerhaft über das Menü einsehen."
 
         elif response.startswith("[TRIGGER_WALKTHROUGH_HINT]"):
             if self.avatar.exp >= WALKTHROUGH_HINT_COST:

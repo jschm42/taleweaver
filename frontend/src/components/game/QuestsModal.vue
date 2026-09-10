@@ -474,6 +474,7 @@ export default {
 .bronze .award-icon { color: #cd7f32; filter: drop-shadow(0 0 10px rgba(205, 127, 50, 0.4)); }
 .silver .award-icon { color: #c0c0c0; filter: drop-shadow(0 0 10px rgba(192, 192, 192, 0.4)); }
 .gold .award-icon { color: #ffd700; filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4)); }
+.negative .award-icon { color: #ef4444; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.5)); }
 
 .earned-check {
   position: absolute;
