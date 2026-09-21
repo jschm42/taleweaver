@@ -6,7 +6,7 @@
  * GM narrative caption boxes, NPC dialogue bubbles with angled tails pointing
  * to character portraits, item discovery cards, and turn pagination controls.
  */
-import { ref } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { configState } from '@/store/config'
 import { audioService } from '@/services/audioService'
 import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
@@ -53,6 +53,15 @@ const emit = defineEmits<{
 }>()
 
 const brokenImages = ref<Record<string, boolean>>({})
+const storyContainerRef = ref<HTMLElement | null>(null)
+
+watch(() => props.activeTurnIndex, () => {
+  nextTick(() => {
+    if (storyContainerRef.value) {
+      storyContainerRef.value.scrollTop = 0
+    }
+  })
+})
 
 function handleImageError(path?: string | null) {
   if (!path) return
@@ -144,7 +153,10 @@ function isDebugSystemMessage(msg: any): boolean {
 <template>
   <div class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
     <!-- COMIC STORY CONTAINER (Turn Display) -->
-    <div class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 flex flex-col gap-4 min-h-0 relative">
+    <div
+      ref="storyContainerRef"
+      class="comic-story-container flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 flex flex-col gap-4 min-h-0 relative"
+    >
       <!-- Empty State -->
       <div v-if="!props.activeTurn && !props.isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-500">
         <Sparkles class="w-8 h-8 text-amber-400/60 mb-2 animate-pulse" />
@@ -153,13 +165,13 @@ function isDebugSystemMessage(msg: any): boolean {
 
       <template v-else-if="props.activeTurn">
         <!-- 0A) LICENSE & CREDITS BANNER (Initial Turn / Re-run) -->
-        <LicenseInfoBlock v-if="props.activeTurn.licenseMessage" :msg="props.activeTurn.licenseMessage" />
+        <LicenseInfoBlock v-if="props.activeTurn.licenseMessage" :msg="props.activeTurn.licenseMessage" class="shrink-0" />
 
         <!-- 0B) SYSTEM MESSAGES / INTRO TEXT BANNER -->
         <div
           v-for="(sysMsg, sIdx) in props.activeTurn.systemMessages"
           :key="sIdx"
-          class="animate-fade-in relative group my-1"
+          class="animate-fade-in relative group my-1 shrink-0"
         >
           <div
             :class="[
@@ -240,7 +252,7 @@ function isDebugSystemMessage(msg: any): boolean {
         <!-- 1) PROTAGONIST / USER SPEECH OR ACTION BUBBLE -->
         <div
           v-if="props.activeTurn.userMessage"
-          class="flex flex-wrap items-center gap-3 animate-fade-in group"
+          class="flex flex-wrap items-center gap-3 animate-fade-in group shrink-0"
         >
           <div class="relative max-w-2xl">
             <!-- Overlay TTS Button (visible on hover) -->
@@ -341,7 +353,7 @@ function isDebugSystemMessage(msg: any): boolean {
         </div>
 
         <!-- 2) GM COMIC NARRATIVE CAPTION BOX -->
-        <div v-if="props.activeTurn.narration" class="animate-fade-in relative group">
+        <div v-if="props.activeTurn.narration" class="animate-fade-in relative group shrink-0">
           <div class="relative bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl">
             <!-- Overlay TTS Button -->
             <button
@@ -372,7 +384,7 @@ function isDebugSystemMessage(msg: any): boolean {
         <div
           v-for="(dlg, dIdx) in props.activeTurn.dialogues"
           :key="dIdx"
-          class="flex flex-col gap-1 animate-fade-in items-start group"
+          class="flex flex-col gap-1 animate-fade-in items-start group shrink-0"
         >
           <div class="relative max-w-2xl">
             <!-- Overlay TTS Button -->
@@ -457,7 +469,7 @@ function isDebugSystemMessage(msg: any): boolean {
         </div>
 
         <!-- 4) REVEALED ITEMS DISCOVERY CARDS -->
-        <div v-if="props.activeTurn.revealedItemIds.length" class="flex flex-wrap gap-3 my-2">
+        <div v-if="props.activeTurn.revealedItemIds.length" class="flex flex-wrap gap-3 my-2 shrink-0">
           <div
             v-for="itemId in props.activeTurn.revealedItemIds"
             :key="itemId"
@@ -527,10 +539,14 @@ function isDebugSystemMessage(msg: any): boolean {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.1); }
+.comic-story-container > * {
+  flex-shrink: 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
 .comic-narration-text,
 .comic-bubble-text {

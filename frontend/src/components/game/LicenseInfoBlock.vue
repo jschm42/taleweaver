@@ -32,7 +32,7 @@ const hasAny = computed(() => {
 <template>
   <div
     v-if="hasAny"
-    class="my-2.5 mx-1 relative overflow-hidden rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/[0.06] via-slate-950/40 to-slate-950/20 backdrop-blur-md shadow-lg shadow-black/10 px-4 py-2.5 text-xs text-slate-400 font-medium"
+    class="shrink-0 my-2.5 mx-1 relative overflow-hidden rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/[0.06] via-slate-950/40 to-slate-950/20 backdrop-blur-md shadow-lg shadow-black/10 px-4 py-2.5 text-xs text-slate-400 font-medium"
   >
     <div class="absolute inset-y-0 left-0 w-[3px] bg-amber-500/30"></div>
 
