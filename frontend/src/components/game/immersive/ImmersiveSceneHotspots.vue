@@ -59,6 +59,32 @@ function showImage(path?: string | null) {
   return !!path && !brokenImages.value[path]
 }
 
+function getItemTypeBorderClass(type?: string) {
+  switch (type?.toUpperCase()) {
+    case 'WEAPON':
+      return 'border-rose-500/70 hover:border-rose-400 shadow-[0_4px_20px_rgba(244,63,94,0.18)]'
+    case 'CONSUMABLE':
+      return 'border-emerald-500/70 hover:border-emerald-400 shadow-[0_4px_20px_rgba(16,185,129,0.18)]'
+    case 'KEY':
+    case 'KEYS':
+      return 'border-amber-400/80 hover:border-amber-300 shadow-[0_4px_20px_rgba(251,191,36,0.18)]'
+    case 'READABLE':
+      return 'border-indigo-400/80 hover:border-indigo-300 shadow-[0_4px_20px_rgba(129,140,248,0.18)]'
+    case 'TOOL':
+      return 'border-sky-500/70 hover:border-sky-400 shadow-[0_4px_20px_rgba(14,165,233,0.18)]'
+    case 'WEARABLE':
+      return 'border-blue-500/70 hover:border-blue-400 shadow-[0_4px_20px_rgba(59,130,246,0.18)]'
+    case 'COMBINABLE':
+      return 'border-fuchsia-500/70 hover:border-fuchsia-400 shadow-[0_4px_20px_rgba(217,70,239,0.18)]'
+    case 'CONSTRUCTABLE':
+      return 'border-orange-500/70 hover:border-orange-400 shadow-[0_4px_20px_rgba(249,115,22,0.18)]'
+    case 'SWITCH':
+      return 'border-lime-500/70 hover:border-lime-400 shadow-[0_4px_20px_rgba(132,204,22,0.18)]'
+    default:
+      return 'border-slate-700/80 hover:border-cyan-400/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
+  }
+}
+
 const hasLockedExits = computed(() => {
   return Array.isArray(props.sceneExits) && props.sceneExits.some((e: any) => e.is_locked)
 })
@@ -314,7 +340,7 @@ function handleExitMouseMove(event: MouseEvent) {
         <Transition name="popover">
           <div
             v-if="showDiscoveriesPopover"
-            class="absolute top-full left-0 mt-2 z-50 w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-w-sm bg-slate-950/95 border border-slate-700/80 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] backdrop-blur-2xl p-3 flex flex-col gap-2"
+            class="absolute top-full left-0 mt-2 z-50 w-[calc(100vw-2rem)] sm:w-[28rem] md:w-[32rem] max-w-lg bg-slate-950/95 border border-slate-700/80 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] backdrop-blur-2xl p-3 flex flex-col gap-2"
           >
             <!-- Header -->
             <div class="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -349,75 +375,46 @@ function handleExitMouseMove(event: MouseEvent) {
               </div>
             </div>
 
-            <!-- Items list -->
-            <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            <!-- Items 2-Column Tile Grid -->
+            <div class="grid grid-cols-2 gap-2.5 max-h-84 overflow-y-auto pr-1 custom-scrollbar">
               <div
                 v-for="item in props.items"
                 :key="item.id"
-                class="group flex items-center justify-between p-2 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800/90 hover:border-cyan-400/50 transition-all"
+                class="group relative flex flex-col items-center justify-between p-3 rounded-2xl bg-slate-900/85 hover:bg-slate-800/95 border-2 transition-all shadow-md cursor-pointer active:scale-[0.98]"
+                :class="getItemTypeBorderClass(item.item_type)"
+                @click="emit('itemClick', item)"
                 @mouseenter="emit('itemHover', item, $event)"
                 @mouseleave="emit('itemLeave')"
                 @contextmenu.prevent="emit('itemContextmenu', item, $event)"
               >
-                <!-- Item left / click to inspect -->
-                <div
-                  class="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                  @click="emit('itemClick', item)"
+                <!-- Floating Take Button (top-right) -->
+                <button
+                  v-if="item.is_portable !== false"
+                  type="button"
+                  class="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 hover:scale-110 transition-all shadow-md cursor-pointer"
+                  title="Take Item"
+                  @click.stop="emit('takeDirect', item)"
                 >
-                  <div class="w-9 h-9 rounded-lg overflow-hidden bg-slate-950 border border-slate-700/80 flex items-center justify-center shrink-0">
-                    <img
-                      v-if="item.image_url && showImage(item.image_url)"
-                      :src="getImageUrl(item.image_url, { thumbnail: true })"
-                      :alt="item.name"
-                      class="w-full h-full object-cover"
-                      @error="onImageLoadError($event, item.image_url)"
-                    />
-                    <i v-else :class="['ra text-sm', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
-                  </div>
+                  <Hand class="w-3.5 h-3.5 text-emerald-400" />
+                </button>
 
-                  <div class="min-w-0 flex-1">
-                    <p class="text-xs font-bold text-slate-200 group-hover:text-cyan-300 uppercase tracking-tight truncate transition-colors">
-                      {{ item.name }}
-                    </p>
-                    <div class="flex items-center gap-1.5 mt-0.5">
-                      <span
-                        class="px-1.5 py-0.2 rounded text-[8px] font-black uppercase"
-                        :class="String(item.item_type || '').toUpperCase() === 'READABLE' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-slate-800 text-slate-400'"
-                      >
-                        {{ item.item_type || 'Item' }}
-                      </span>
-                      <span
-                        v-if="item.is_portable === false"
-                        class="text-[8px] font-bold text-slate-500 uppercase"
-                      >
-                        Fixed
-                      </span>
-                    </div>
-                  </div>
+                <!-- Hero Icon / Artwork (Large) -->
+                <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-950/90 border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform my-1">
+                  <img
+                    v-if="item.image_url && showImage(item.image_url)"
+                    :src="getImageUrl(item.image_url, { thumbnail: true })"
+                    :alt="item.name"
+                    class="w-full h-full object-cover"
+                    @error="onImageLoadError($event, item.image_url)"
+                  />
+                  <i v-else :class="['ra text-3xl sm:text-4xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
                 </div>
 
-                <!-- Item Actions -->
-                <div class="flex items-center gap-1 ml-2 shrink-0">
-                  <!-- Inspect Button -->
-                  <button
-                    type="button"
-                    class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                    title="Inspect Object"
-                    @click.stop="emit('itemClick', item)"
-                  >
-                    <Eye class="w-3.5 h-3.5" />
-                  </button>
-
-                  <!-- Take Direct Button -->
-                  <button
-                    v-if="item.is_portable !== false"
-                    type="button"
-                    class="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                    title="Take Item"
-                    @click.stop="emit('takeDirect', item)"
-                  >
-                    <Hand class="w-3.5 h-3.5" />
-                  </button>
+                <!-- Item Name (Centered, clean) -->
+                <div class="mt-1.5 w-full text-center">
+                  <p class="text-xs font-bold text-slate-200 group-hover:text-white uppercase tracking-tight line-clamp-2 leading-snug transition-colors px-1">
+                    {{ item.name }}
+                  </p>
                 </div>
               </div>
             </div>
