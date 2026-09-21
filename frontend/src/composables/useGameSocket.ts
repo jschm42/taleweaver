@@ -47,6 +47,7 @@ export interface UseGameSocket {
   agentPaused: Ref<boolean>
   agentStepByStep: Ref<boolean>
   isCheckpointSaving: Ref<boolean>
+  isSceneTransitioning: Ref<boolean>
   generatorProposal: Ref<any | null>
   showGeneratorModal: Ref<boolean>
   turnError: Ref<TurnErrorState | null>
@@ -108,6 +109,7 @@ export function useGameSocket(): UseGameSocket {
   const agentPaused = ref(false)
   const agentStepByStep = ref(localStorage.getItem('tw_agent_step_by_step') === 'true')
   const isCheckpointSaving = ref(false)
+  const isSceneTransitioning = ref(false)
   let checkpointPulseTimer: number | null = null
   const generatorProposal = ref<any | null>(null)
   const showGeneratorModal = ref(false)
@@ -588,6 +590,7 @@ export function useGameSocket(): UseGameSocket {
           } else if (event === 'scene_transition') {
             // Clear previous scene's chat bubbles; the LLM will narrate the new scene
             hadSceneTransition = true
+            isSceneTransitioning.value = true
             messages.value = []
             applySessionSnapshot(data, false)
           } else if (event === 'adventure_generator_proposal') {
@@ -660,6 +663,7 @@ export function useGameSocket(): UseGameSocket {
       }
     } finally {
       clearTimeout(timeoutId)
+      isSceneTransitioning.value = false
       if (activeChatController === controller) {
         activeChatController = null
       }
@@ -900,6 +904,7 @@ export function useGameSocket(): UseGameSocket {
     agentPaused,
     agentStepByStep,
     isCheckpointSaving,
+    isSceneTransitioning,
     generatorProposal,
     showGeneratorModal,
     turnError,

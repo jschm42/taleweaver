@@ -110,6 +110,7 @@ const exitUnlockModalTarget = ref<any>(null)
 const exitUnlockBusy = ref(false)
 const exitUnlockError = ref('')
 const exitTraversalBusy = ref<string>('')
+const sceneTransitionTarget = ref<{ label: string; targetSceneName: string; targetSceneId: string } | null>(null)
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -182,6 +183,7 @@ const {
   agentPaused,
   agentStepByStep,
   isCheckpointSaving,
+  isSceneTransitioning: socketIsSceneTransitioning,
   generatorProposal,
   showGeneratorModal,
   openGeneratorModal,
@@ -738,8 +740,19 @@ const handleExitClick = async (exit: any) => {
   await traverseSceneExit(exit, exitRef)
 }
 
+const isSceneTransitioning = computed(() => {
+  return Boolean(exitTraversalBusy.value) || socketIsSceneTransitioning.value
+})
+
 const traverseSceneExit = async (exit: any, exitRef: string) => {
   exitTraversalBusy.value = exitRef
+  const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim().toUpperCase()
+  const targetNode = targetId ? (nodes.value[targetId] || {}) : {}
+  sceneTransitionTarget.value = {
+    label: exit?.label || 'Passage',
+    targetSceneName: targetNode.name || targetNode.title || targetId || 'New Location',
+    targetSceneId: targetId,
+  }
   try {
     // Use the sendMessage pipeline so the scene transition triggers
     // a full LLM narration turn and clears old chat bubbles via the
@@ -749,6 +762,7 @@ const traverseSceneExit = async (exit: any, exitRef: string) => {
     addNotification(error?.message || 'Failed to traverse the exit.', 'error')
   } finally {
     exitTraversalBusy.value = ''
+    sceneTransitionTarget.value = null
   }
 }
 
@@ -1455,6 +1469,8 @@ watch(
       :clock-tick="clockTick"
       :is-checkpoint-saving="isCheckpointSaving"
       :exit-traversal-busy="exitTraversalBusy"
+      :is-scene-transitioning="isSceneTransitioning"
+      :scene-transition-target="sceneTransitionTarget"
       :exit-unlock-busy="exitUnlockBusy"
       :turn-error="turnError"
       @send="handlePlayerInput"

@@ -6,7 +6,7 @@
  * GM narrative caption boxes, NPC dialogue bubbles with angled tails pointing
  * to character portraits, item discovery cards, and turn pagination controls.
  */
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { configState } from '@/store/config'
 import { audioService } from '@/services/audioService'
 import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  Compass,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -54,6 +55,13 @@ const emit = defineEmits<{
 
 const brokenImages = ref<Record<string, boolean>>({})
 const storyContainerRef = ref<HTMLElement | null>(null)
+
+const latestSystemMessage = computed(() => {
+  if (!props.activeTurn?.systemMessages || props.activeTurn.systemMessages.length === 0) {
+    return null
+  }
+  return props.activeTurn.systemMessages[props.activeTurn.systemMessages.length - 1]
+})
 
 watch(() => props.activeTurnIndex, () => {
   nextTick(() => {
@@ -163,46 +171,56 @@ function isDebugSystemMessage(msg: any): boolean {
         <p class="text-sm font-semibold tracking-wider uppercase">Awaiting Adventure Turn...</p>
       </div>
 
+      <!-- Loading / Scene Transitioning State -->
+      <div v-else-if="!props.activeTurn && props.isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-400 my-auto">
+        <div class="relative flex items-center justify-center w-12 h-12 mb-3">
+          <div class="absolute inset-0 rounded-full bg-amber-400/20 animate-ping"></div>
+          <Compass class="w-8 h-8 text-amber-400 animate-spin" style="animation-duration: 4s;" />
+        </div>
+        <p class="text-xs font-black uppercase tracking-widest text-amber-300 animate-pulse">
+          {{ props.statusText || 'Arriving at new scene...' }}
+        </p>
+      </div>
+
       <template v-else-if="props.activeTurn">
         <!-- 0A) LICENSE & CREDITS BANNER (Initial Turn / Re-run) -->
         <LicenseInfoBlock v-if="props.activeTurn.licenseMessage" :msg="props.activeTurn.licenseMessage" class="shrink-0" />
 
-        <!-- 0B) SYSTEM MESSAGES / INTRO TEXT BANNER -->
+        <!-- 0B) SYSTEM MESSAGES / INTRO TEXT BANNER (Latest in turn only) -->
         <div
-          v-for="(sysMsg, sIdx) in props.activeTurn.systemMessages"
-          :key="sIdx"
+          v-if="latestSystemMessage"
           class="animate-fade-in relative group my-1 shrink-0"
         >
           <div
             :class="[
               'relative rounded-r-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl border-y border-r text-slate-100 transition-all',
-              props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
+              props.turnError && props.turnError.message && latestSystemMessage.content.includes(props.turnError.message)
                 ? 'bg-red-950/80 border-l-4 border-l-red-500 border-red-500/40 shadow-red-950/40'
-                : isDebugSystemMessage(sysMsg)
+                : isDebugSystemMessage(latestSystemMessage)
                   ? 'bg-slate-950/90 border-l-4 border-l-cyan-400 border-cyan-500/30 shadow-cyan-950/20'
                   : 'bg-slate-900/95 border-l-4 border-emerald-500 border-emerald-500/30'
             ]"
           >
             <!-- Overlay TTS Button -->
             <button
-              v-if="configState.isTtsEnabled && !isDebugSystemMessage(sysMsg)"
+              v-if="configState.isTtsEnabled && !isDebugSystemMessage(latestSystemMessage)"
               type="button"
-              @click.stop="speakBubble(sysMsg.content, 'System')"
+              @click.stop="speakBubble(latestSystemMessage.content, 'System')"
               class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-400/60 text-emerald-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
-              :title="isSpeakingBubble(sysMsg.content, 'System') ? 'Stop Audio' : 'Play Audio'"
+              :title="isSpeakingBubble(latestSystemMessage.content, 'System') ? 'Stop Audio' : 'Play Audio'"
             >
-              <VolumeX v-if="isSpeakingBubble(sysMsg.content, 'System')" class="w-3 h-3 text-red-400" />
+              <VolumeX v-if="isSpeakingBubble(latestSystemMessage.content, 'System')" class="w-3 h-3 text-red-400" />
               <Volume2 v-else class="w-3 h-3" />
-              <span>{{ isSpeakingBubble(sysMsg.content, 'System') ? 'Stop' : 'Audio' }}</span>
+              <span>{{ isSpeakingBubble(latestSystemMessage.content, 'System') ? 'Stop' : 'Audio' }}</span>
             </button>
 
             <!-- System Header & Content -->
             <div
               :class="[
                 'comic-narration-text text-sm sm:text-base leading-relaxed',
-                props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
+                props.turnError && props.turnError.message && latestSystemMessage.content.includes(props.turnError.message)
                   ? 'text-red-100'
-                  : isDebugSystemMessage(sysMsg)
+                  : isDebugSystemMessage(latestSystemMessage)
                     ? 'text-cyan-100'
                     : 'text-emerald-100'
               ]"
@@ -210,22 +228,22 @@ function isDebugSystemMessage(msg: any): boolean {
               <span
                 :class="[
                   'inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm',
-                  props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)
+                  props.turnError && props.turnError.message && latestSystemMessage.content.includes(props.turnError.message)
                     ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                    : isDebugSystemMessage(sysMsg)
+                    : isDebugSystemMessage(latestSystemMessage)
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                       : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                 ]"
               >
-                {{ props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message) ? 'Error' : isDebugSystemMessage(sysMsg) ? 'Debug' : 'System' }}
+                {{ props.turnError && props.turnError.message && latestSystemMessage.content.includes(props.turnError.message) ? 'Error' : isDebugSystemMessage(latestSystemMessage) ? 'Debug' : 'System' }}
               </span>
-              <pre v-if="isDebugSystemMessage(sysMsg) && (sysMsg.content.includes('\n') || sysMsg.content.length > 90)" class="mt-2 p-3 rounded-xl bg-black/60 border border-cyan-500/20 text-cyan-300/90 text-xs font-mono whitespace-pre-wrap break-all custom-scrollbar">{{ sysMsg.content }}</pre>
-              <span v-else class="italic font-medium" :class="{ 'font-mono text-xs text-cyan-200/90 not-italic': isDebugSystemMessage(sysMsg) }" v-html="renderFormattedHtml(sysMsg.content)"></span>
+              <pre v-if="isDebugSystemMessage(latestSystemMessage) && (latestSystemMessage.content.includes('\n') || latestSystemMessage.content.length > 90)" class="mt-2 p-3 rounded-xl bg-black/60 border border-cyan-500/20 text-cyan-300/90 text-xs font-mono whitespace-pre-wrap break-all custom-scrollbar">{{ latestSystemMessage.content }}</pre>
+              <span v-else class="italic font-medium" :class="{ 'font-mono text-xs text-cyan-200/90 not-italic': isDebugSystemMessage(latestSystemMessage) }" v-html="renderFormattedHtml(latestSystemMessage.content)"></span>
             </div>
 
             <!-- Inline Action Buttons (Retry & Cancel) -->
             <div
-              v-if="props.turnError && props.turnError.message && sysMsg.content.includes(props.turnError.message)"
+              v-if="props.turnError && props.turnError.message && latestSystemMessage.content.includes(props.turnError.message)"
               class="mt-3.5 pt-3 border-t border-red-500/25 flex items-center gap-2.5 not-italic"
             >
               <button

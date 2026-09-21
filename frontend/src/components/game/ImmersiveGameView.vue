@@ -21,6 +21,7 @@ import ImmersiveSceneHotspots from './immersive/ImmersiveSceneHotspots.vue'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
+import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -53,6 +54,8 @@ const props = defineProps<{
   clockTick?: boolean
   isCheckpointSaving?: boolean
   exitTraversalBusy?: string
+  isSceneTransitioning?: boolean
+  sceneTransitionTarget?: { label: string; targetSceneName: string; targetSceneId?: string } | null
   exitUnlockBusy?: boolean
   turnError?: { message: string; action: string } | null
   worldMemories?: any[]
@@ -232,10 +235,19 @@ defineExpose({
 
       <!-- 3B. CENTER / STORY AREA WITH SCENE HOTSPOTS & COMIC FEED -->
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
+        <!-- Cinematic Scene Transition Curtain -->
+        <SceneTransitionOverlay
+          :active="Boolean(props.isSceneTransitioning || props.exitTraversalBusy)"
+          :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
+          :exit-label="props.sceneTransitionTarget?.label"
+          :status-text="props.statusText"
+        />
+
         <ImmersiveSceneHotspots
           :scene-exits="props.sceneExits"
           :scene-switches="props.sceneSwitches"
           :items="props.items"
+          :system-messages="activeTurn?.systemMessages || []"
           :is-evaluating="isEvaluating"
           :show-mobile-interact="showMobileInteract"
           :current-scene-name="props.currentSceneName || props.sheet?.current_scene"
