@@ -31,6 +31,7 @@ export interface Adventure {
   min_text_logs?: number | null
   max_text_logs?: number | null
   awards?: any[]
+  scripts?: any[]
   allow_dynamic_items: boolean
   can_damage_npcs: boolean
   npcs_can_damage_protagonist: boolean
@@ -82,6 +83,7 @@ export interface AdventureFormData {
   min_text_logs: number | null
   max_text_logs: number | null
   awards: any[]
+  scripts?: any[]
   allow_dynamic_items: boolean
   can_damage_npcs: boolean
   npcs_can_damage_protagonist: boolean
@@ -200,6 +202,58 @@ export const adventureService = {
     }
     return res.json()
   },
+
+  async validateScript(
+    adventureId: string,
+    data: { code: string; trigger?: string; target?: string }
+  ): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/script/validate`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Script validation request failed.')
+    }
+    return res.json()
+  },
+
+  async saveScript(
+    adventureId: string,
+    script: {
+      id?: string
+      name?: string
+      trigger: string
+      target?: string | null
+      code: string
+      priority?: number
+      is_active?: boolean
+    }
+  ): Promise<{ status: string; script: any; scripts: any[] }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/script`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify(script),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to save script.')
+    }
+    return res.json()
+  },
+
+  async deleteScript(adventureId: string, scriptId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/script/${encodeURIComponent(scriptId)}`, {
+      method: 'DELETE',
+      headers: authHeaders(true),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to delete script.')
+    }
+  },
+
 
   normalizeDebugPayload(raw: any): DebugPayload {
     if (!raw || typeof raw !== 'object') return raw

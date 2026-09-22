@@ -64,8 +64,9 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 
 ### 🛠️ Fully-Featured Adventure Editor
 * **Complete World Customization:** The Adventure Editor is now fully functional to edit, refine, and build adventure templates.
-* **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, and switch outcomes directly from the UI.
+* **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, switch outcomes, and event scripts directly from the UI.
 * **Asset Integration:** Assign visual styles, upload custom assets, and configure bidirectional route maps.
+* **Sandboxed Python Event Scripts:** Author deterministic, reactive game logic directly in the World-Editor or via AI World-Builder generation. Safely queries and modifies scenes, exits, items, NPCs, avatar stats, variables, and victory conditions without host escapes. See the [Scripting Engine Guide](docs/guides/scripting_engine.md).
 
 ### 🎯 Quests & Meta-Progression
 * **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log.

@@ -23,6 +23,7 @@ import ScenesTab from '@/components/editor/ScenesTab.vue'
 import MapTab from '@/components/editor/MapTab.vue'
 import QuestTab from '@/components/editor/QuestTab.vue'
 import AwardsTab from '@/components/editor/AwardsTab.vue'
+import ScriptsTab from '@/components/editor/ScriptsTab.vue'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
 import ValidationTab from '@/components/editor/ValidationTab.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
@@ -469,6 +470,7 @@ const editorTabs = [
   { key: 'items', label: 'Items' },
   { key: 'quest', label: 'Quests' },
   { key: 'awards', label: 'Awards' },
+  { key: 'scripts', label: 'Scripts' },
   { key: 'visuals', label: 'Visual Style' },
   { key: 'tone', label: 'Tone' },
   { key: 'advanced', label: 'Advanced' },
@@ -1675,6 +1677,19 @@ async function handleUpdateAwards(newAwards: any[]) {
   }
 }
 
+async function handleUpdateScripts(newScripts: any[]) {
+  isSaving.value = true
+  try {
+    await adventureService.updateAdventure(props.adventureId, { scripts: newScripts } as any)
+    await fetchAdventure()
+    addNotification('Scripts updated.', 'success')
+  } catch (error: any) {
+    addNotification(error instanceof Error ? error.message : 'Failed to update scripts', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 const goBack = () => {
   const from = route.query.from as string
   if (from) {
@@ -2575,6 +2590,14 @@ watch(
               :adventure="adventure"
               :reference-options="referenceOptions"
               @update-awards="handleUpdateAwards"
+              @notify="addNotification"
+            />
+
+            <ScriptsTab
+              v-if="activeTab === 'scripts'"
+              :adventure="adventure"
+              :reference-options="referenceOptions"
+              @update-scripts="handleUpdateScripts"
               @notify="addNotification"
             />
 

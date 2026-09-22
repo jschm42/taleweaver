@@ -27,7 +27,10 @@ from backend.api.routes.adventures.schemas import (
     QuestGenerationResponse,
     SceneDescriptionGenerationRequest,
     SceneDescriptionGenerationResponse,
+    ScriptValidateRequest,
+    ScriptValidateResponse,
 )
+from backend.engine.scripting import SafeAstInterpreter
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -2948,6 +2951,101 @@ async def delete_editor_award(
     adv.awards = filtered
     await db.commit()
     return {"status": "success", "deleted_award_key": award_key}
+
+
+class ScriptCreateRequest(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    trigger: str = "on_turn_start"
+    target: Optional[str] = None
+    code: str = ""
+    priority: int = 100
+    is_active: bool = True
+
+
+@router.post("/{template_id}/editor/script/validate", response_model=ScriptValidateResponse)
+async def validate_editor_script(
+    template_id: str,
+    payload: ScriptValidateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ScriptValidateResponse:
+    """Validates python script syntax and security sandbox rules."""
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    errors = SafeAstInterpreter.check_syntax(payload.code)
+    warnings: list[str] = []
+
+    valid_triggers = {"on_turn_start", "on_enter_scene", "on_interact", "on_turn_end"}
+    if payload.trigger and payload.trigger not in valid_triggers:
+        errors.append(
+            f"Invalid trigger '{payload.trigger}'. Must be one of: {', '.join(sorted(valid_triggers))}."
+        )
+
+    return ScriptValidateResponse(
+        valid=len(errors) == 0,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+@router.post("/{template_id}/editor/script")
+async def save_editor_script(
+    template_id: str,
+    payload: ScriptCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Creates or updates a single script in the adventure manifest."""
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    errors = SafeAstInterpreter.check_syntax(payload.code)
+    if errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+
+    script_id = _sanitize_editor_id(payload.id or f"script_{uuid.uuid4().hex[:8]}", "script_id")
+    scripts = list(adv.scripts)
+
+    script_data = {
+        "id": script_id,
+        "name": str(payload.name or script_id).strip(),
+        "trigger": str(payload.trigger or "on_turn_start").strip(),
+        "target": str(payload.target).strip() if payload.target else None,
+        "code": payload.code,
+        "priority": int(payload.priority or 100),
+        "is_active": bool(payload.is_active),
+    }
+
+    existing_idx = next((i for i, s in enumerate(scripts) if str(s.get("id") or "") == script_id), None)
+    if existing_idx is not None:
+        scripts[existing_idx] = script_data
+    else:
+        scripts.append(script_data)
+
+    adv.scripts = scripts
+    await db.commit()
+    return {"status": "success", "script": script_data, "scripts": scripts}
+
+
+@router.delete("/{template_id}/editor/script/{script_id}")
+async def delete_editor_script(
+    template_id: str,
+    script_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Deletes a script from the adventure manifest."""
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    script_id = _sanitize_editor_id(script_id, "script_id")
+
+    scripts = list(adv.scripts)
+    filtered = [s for s in scripts if str(s.get("id") or "") != script_id]
+    if len(filtered) == len(scripts):
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    adv.scripts = filtered
+    await db.commit()
+    return {"status": "success", "deleted_script_id": script_id, "scripts": filtered}
+
 
 @router.patch("/{template_id}/editor/entity")
 async def update_editor_entity(

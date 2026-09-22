@@ -129,3 +129,39 @@ tw.story.narrate("You hear gears grinding as the passage unlocks!")
 
         await manager._apply_script_changeset(cs_lever)
         assert manager.state.exit_states["SCENE_START:SCENE_SECRET"]["is_locked"] is False
+
+
+@pytest.mark.asyncio
+async def test_adventure_template_scripts_property(setup_test_db):
+    async with TestSessionLocal() as db_session:
+        adv = AdventureTemplate(
+            id="adv_scripts_prop_test",
+            title="Scripts Property Test",
+            owner_id="test_owner",
+            is_ready=True,
+            original_manifest={"title": "Manifest", "scripts": []},
+        )
+        db_session.add(adv)
+        await db_session.flush()
+
+        assert adv.scripts == []
+
+        # Update scripts property
+        new_scripts = [
+            {
+                "id": "SCRIPT_1",
+                "name": "First Script",
+                "trigger": "on_turn_start",
+                "code": "tw.story.narrate('Hello')",
+                "priority": 100,
+                "is_active": True,
+            }
+        ]
+        adv.scripts = new_scripts
+        await db_session.commit()
+        await db_session.refresh(adv)
+
+        assert len(adv.scripts) == 1
+        assert adv.scripts[0]["id"] == "SCRIPT_1"
+        assert adv.original_manifest["scripts"][0]["name"] == "First Script"
+

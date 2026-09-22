@@ -162,3 +162,43 @@ tw.game.win("Victory!")
     assert len(changeset.new_memories) == 1
     assert "QUEST_MAIN" in changeset.completed_quest_ids
     assert changeset.game_completed is True
+
+
+def test_check_syntax_valid_code():
+    code = """
+x = 10
+if x > 5:
+    tw.story.narrate("High value")
+"""
+    errors = SafeAstInterpreter.check_syntax(code)
+    assert errors == []
+
+
+def test_check_syntax_syntax_error():
+    code = """
+if x > 5
+    print("missing colon")
+"""
+    errors = SafeAstInterpreter.check_syntax(code)
+    assert len(errors) == 1
+    assert "Syntax error at line 2" in errors[0]
+
+
+def test_check_syntax_forbidden_import():
+    code = "import os\nos.system('echo 1')"
+    errors = SafeAstInterpreter.check_syntax(code)
+    assert len(errors) >= 1
+    assert any("Forbidden syntax 'Import'" in e for e in errors)
+
+
+def test_check_syntax_forbidden_dunder():
+    code = "secret = obj.__class__"
+    errors = SafeAstInterpreter.check_syntax(code)
+    assert len(errors) == 1
+    assert "Access to private/dunder attribute '__class__' is forbidden" in errors[0]
+
+
+def test_check_syntax_empty_code():
+    assert SafeAstInterpreter.check_syntax("") == []
+    assert SafeAstInterpreter.check_syntax("   \n\t  ") == []
+

@@ -196,13 +196,13 @@ Achievements players can unlock through specific actions.
 
 ### 2.9 Scripts (`scripts`)
 
-Custom sandboxed event scripts reacting to game hooks.
+Custom sandboxed event scripts reacting to game hooks. For full syntax, API references, and examples, see the [Scripting Engine Guide](../guides/scripting_engine.md).
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `id` | `string` | Unique uppercase slug (e.g., `"SCRIPT_LEVER_PUZZLE"`). |
 | `name` | `string` | Human-readable title for the script. |
-| `trigger` | `string` | Event hook: `"on_session_start"`, `"on_enter_scene"`, `"on_exit_scene"`, `"on_interact"`, `"on_turn_start"`, or `"on_turn_end"`. |
+| `trigger` | `string` | Event hook: `"on_turn_start"`, `"on_enter_scene"`, `"on_interact"`, or `"on_turn_end"`. |
 | `target_id` | `string \| null` | Optional target scene ID or entity ID that filters when this script fires. |
 | `code` | `string` | Safe Python script utilizing the sandboxed `tw` GameContext API. |
 | `description` | `string \| null` | Optional narrative/technical description of the script logic. |

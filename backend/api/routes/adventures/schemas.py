@@ -305,6 +305,7 @@ class AdventureTemplateResponse(BaseModel):
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
     scripts_generation_enabled: bool = False
+    scripts: list[dict[str, Any]] = Field(default_factory=list)
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
@@ -536,6 +537,7 @@ class AdventureTemplateUpdate(BaseModel):
     max_scenes: Optional[int] = None
     container_generation_enabled: Optional[bool] = None
     scripts_generation_enabled: Optional[bool] = None
+    scripts: Optional[list[dict[str, Any]]] = None
     max_containers: Optional[int] = None
     award_generation_enabled: Optional[bool] = None
     min_awards: Optional[int] = None
@@ -794,6 +796,19 @@ class AISuggestFixWrapperResponse(BaseModel):
     """
 
     proposals: list[AISuggestFixProposal] = Field(default_factory=list)
+
+
+class ScriptValidateRequest(BaseModel):
+    code: str
+    trigger: Optional[str] = None
+    target: Optional[str] = None
+
+
+class ScriptValidateResponse(BaseModel):
+    valid: bool
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
 
 
 

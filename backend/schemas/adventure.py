@@ -57,6 +57,7 @@ class AdventureTemplateBase(BaseModel):
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
     scripts_generation_enabled: bool = False
+    scripts: Optional[list[dict[str, Any]]] = None
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
@@ -114,6 +115,7 @@ class AdventureTemplateUpdate(BaseModel):
     max_items: Optional[int] = None
     container_generation_enabled: Optional[bool] = None
     scripts_generation_enabled: Optional[bool] = None
+    scripts: Optional[list[dict[str, Any]]] = None
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: Optional[bool] = None

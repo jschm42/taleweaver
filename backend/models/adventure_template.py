@@ -102,4 +102,21 @@ class AdventureTemplate(Base, TimestampMixin):
     copyright: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     license: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     license_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    @property
+    def scripts(self) -> List[Dict[str, Any]]:
+        """Returns scripts from original_manifest if present."""
+        if not self.original_manifest or not isinstance(self.original_manifest, dict):
+            return []
+        return list(self.original_manifest.get("scripts", []))
+
+    @scripts.setter
+    def scripts(self, value: Optional[List[Dict[str, Any]]]) -> None:
+        """Sets scripts inside original_manifest and marks original_manifest modified."""
+        from sqlalchemy.orm.attributes import flag_modified
+        manifest = dict(self.original_manifest or {})
+        manifest["scripts"] = list(value or [])
+        self.original_manifest = manifest
+        flag_modified(self, "original_manifest")
+
     

@@ -148,6 +148,47 @@ class SafeAstInterpreter:
                         f"Use of dunder variable name '{node.id}' is forbidden."
                     )
 
+    @classmethod
+    def check_syntax(cls, code: str) -> list[str]:
+        """
+        Statically parses and validates Python script code without running it.
+        Returns a list of error strings (empty if valid).
+        """
+        if not code or not code.strip():
+            return []
+
+        errors: list[str] = []
+        try:
+            tree = ast.parse(code, mode="exec")
+        except SyntaxError as exc:
+            msg = f"Syntax error at line {exc.lineno or 1}"
+            if exc.offset:
+                msg += f", col {exc.offset}"
+            msg += f": {exc.msg}"
+            return [msg]
+        except Exception as exc:
+            return [f"Parser error: {exc}"]
+
+        for node in ast.walk(tree):
+            if type(node) not in ALLOWED_AST_NODES:
+                lineno = getattr(node, "lineno", "?")
+                errors.append(
+                    f"Line {lineno}: Forbidden syntax '{type(node).__name__}' is not allowed in sandbox."
+                )
+            elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+                lineno = getattr(node, "lineno", "?")
+                errors.append(
+                    f"Line {lineno}: Access to private/dunder attribute '{node.attr}' is forbidden."
+                )
+            elif isinstance(node, ast.Name) and node.id.startswith("__"):
+                lineno = getattr(node, "lineno", "?")
+                errors.append(
+                    f"Line {lineno}: Use of dunder variable '{node.id}' is forbidden."
+                )
+
+        return errors
+
+
     def execute(self, code: str, context: dict[str, Any]) -> None:
         """
         Parses, validates, and executes the script within the provided context.
