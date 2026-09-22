@@ -58,6 +58,7 @@ from backend.engine.rule_engine import (
     ToolResults,
     WorldEntityUpdate,
 )
+from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner
 from backend.engine.skill_check import roll_attack, roll_skill_check
 from backend.engine.stat_aggregator import calculate_total_stats
 from backend.models.adventure_template import AdventureTemplate
@@ -1109,6 +1110,27 @@ class GameTurnManager:
         rule_violations = []
         pending_generator_proposal: dict[str, Any] | None = None
 
+        # Pre-turn scripts (on_turn_start)
+        script_runner = self._get_script_runner()
+        if script_runner.scripts:
+            script_ctx = await self._build_script_context()
+            cs = script_runner.run_trigger("on_turn_start", script_ctx)
+            if (
+                cs.narrative_messages
+                or cs.player_hp_change
+                or cs.player_mana_change
+                or cs.player_stamina_change
+                or cs.var_updates
+                or cs.entity_updates
+                or cs.exit_updates
+                or cs.teleport_scene_id
+                or cs.game_completed
+                or cs.game_over
+            ):
+                sys_msgs = await self._apply_script_changeset(cs)
+                for sm in sys_msgs:
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
         # Pass 1: Mechanics (strict adventures), chat progression intent (normal chat),
         # or adventure-generator tool-intent pass (generator chat mode).
         run_mechanics_pass = self.adventure.strict_rules
@@ -1378,6 +1400,24 @@ class GameTurnManager:
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
+                # Trigger scripts for scene entry and entity interactions
+                if script_runner.scripts:
+                    script_ctx = await self._build_script_context()
+                    if game_event.new_scene_id and game_event.new_scene_id != self.state.current_scene_id:
+                        cs_scene = script_runner.run_trigger("on_enter_scene", script_ctx, target_id=game_event.new_scene_id)
+                        rule_violations.extend(cs_scene.rejected_actions)
+                        sys_msgs = await self._apply_script_changeset(cs_scene, game_event)
+                        for sm in sys_msgs:
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
+                    if game_event.updated_entities:
+                        for ue in game_event.updated_entities:
+                            cs_ent = script_runner.run_trigger("on_interact", script_ctx, target_id=ue.entity_id)
+                            rule_violations.extend(cs_ent.rejected_actions)
+                            sys_msgs = await self._apply_script_changeset(cs_ent, game_event)
+                            for sm in sys_msgs:
+                                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
 
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
@@ -2002,6 +2042,26 @@ class GameTurnManager:
                     await self._save_chat_message("system", msg_text)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
+        # Post-turn scripts (on_turn_end)
+        if script_runner.scripts:
+            script_ctx = await self._build_script_context()
+            cs_end = script_runner.run_trigger("on_turn_end", script_ctx)
+            if (
+                cs_end.narrative_messages
+                or cs_end.player_hp_change
+                or cs_end.player_mana_change
+                or cs_end.player_stamina_change
+                or cs_end.var_updates
+                or cs_end.entity_updates
+                or cs_end.exit_updates
+                or cs_end.teleport_scene_id
+                or cs_end.game_completed
+                or cs_end.game_over
+            ):
+                sys_msgs = await self._apply_script_changeset(cs_end)
+                for sm in sys_msgs:
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
         await self.db.commit()
 
         async for comp_event in self._compress_history_if_needed():
@@ -2588,3 +2648,144 @@ class GameTurnManager:
         if applier is None or not hasattr(applier, "_apply_game_event"):
             applier = TurnStateApplier(self)
         return await applier._apply_game_event(*args, **kwargs)
+
+    async def _build_script_context(self) -> GameContext:
+        """Builds an isolated GameContext for the scripting sandbox."""
+        entities_list = await AdventureLogic.build_session_entities(self.db, self.state)
+        entities_map = {e["id"]: e for e in entities_list if "id" in e}
+
+        entity_states = self.state.entity_states or {}
+        script_vars = dict(entity_states.get("__script_vars__", {}))
+
+        avatar_dict = {
+            "name": self.avatar.name,
+            "hp": self.avatar.hp,
+            "mana": self.avatar.mana,
+            "stamina": self.avatar.stamina,
+            "inventory": list(self.avatar.inventory or []),
+            "status_effects": list(self.avatar.status_effects or []),
+        }
+
+        return GameContext(
+            avatar_data=avatar_dict,
+            current_scene_id=self.state.current_scene_id,
+            entities=entities_map,
+            exit_states=self.state.exit_states or {},
+            quests=self.state.quests or [],
+            script_vars=script_vars,
+        )
+
+    def _get_script_runner(self) -> ScriptRunner:
+        """Instantiates ScriptRunner with scripts from original_manifest."""
+        manifest = getattr(self.adventure, "original_manifest", None) or {}
+        scripts = manifest.get("scripts", [])
+        return ScriptRunner(scripts)
+
+    async def _apply_script_changeset(self, changeset: ScriptChangeset, game_event: Any = None) -> list[str]:
+        """Applies mutations from ScriptChangeset to models and returns narrative messages."""
+        system_messages: list[str] = []
+
+        if changeset.player_hp_change:
+            self.avatar.hp = max(0, min(RESOURCE_CAP, self.avatar.hp + changeset.player_hp_change))
+            verb = "gain" if changeset.player_hp_change > 0 else "lose"
+            system_messages.append(f"You {verb} {abs(changeset.player_hp_change)} HP (Script).")
+            if self.avatar.hp <= 0:
+                raise GameOverException(f"{self.avatar.name} has fallen! Game Over.")
+
+        if changeset.player_mana_change:
+            self.avatar.mana = max(0, min(RESOURCE_CAP, self.avatar.mana + changeset.player_mana_change))
+            verb = "gain" if changeset.player_mana_change > 0 else "lose"
+            system_messages.append(f"You {verb} {abs(changeset.player_mana_change)} Mana (Script).")
+
+        if changeset.player_stamina_change:
+            self.avatar.stamina = max(0, min(RESOURCE_CAP, self.avatar.stamina + changeset.player_stamina_change))
+            verb = "gain" if changeset.player_stamina_change > 0 else "lose"
+            system_messages.append(f"You {verb} {abs(changeset.player_stamina_change)} Stamina (Script).")
+
+        if changeset.player_new_items:
+            inv = list(self.avatar.inventory or [])
+            for it in changeset.player_new_items:
+                inv.append(it)
+                system_messages.append(f"Acquired: {it.get('name', it.get('id'))}")
+            self.avatar.inventory = inv
+
+        if changeset.player_removed_item_ids:
+            inv = [
+                it for it in (self.avatar.inventory or [])
+                if (it.get('id') if isinstance(it, dict) else it) not in changeset.player_removed_item_ids
+            ]
+            self.avatar.inventory = inv
+
+        if changeset.player_status_effects_add or changeset.player_status_effects_remove:
+            effs = set(self.avatar.status_effects or [])
+            effs.update(changeset.player_status_effects_add)
+            effs.difference_update(changeset.player_status_effects_remove)
+            self.avatar.status_effects = list(effs)
+
+        if changeset.teleport_scene_id:
+            self.state.current_scene_id = changeset.teleport_scene_id
+
+        entity_states = dict(self.state.entity_states or {})
+        for move in changeset.entity_movements:
+            eid = move["entity_id"]
+            st = dict(entity_states.get(eid, {}))
+            st["current_scene_id"] = move["to_scene_id"]
+            if move.get("to_spatial_position"):
+                st["spatial_position"] = move["to_spatial_position"]
+            entity_states[eid] = st
+
+        for upd in changeset.entity_updates:
+            eid = upd["entity_id"]
+            st = dict(entity_states.get(eid, {}))
+            for k, v in upd.items():
+                if k != "entity_id":
+                    st[k] = v
+            entity_states[eid] = st
+
+        if changeset.var_updates:
+            script_vars = dict(entity_states.get("__script_vars__", {}))
+            script_vars.update(changeset.var_updates)
+            entity_states["__script_vars__"] = script_vars
+
+        self.state.entity_states = entity_states
+
+        if changeset.exit_updates:
+            exit_states = dict(self.state.exit_states or {})
+            for eu in changeset.exit_updates:
+                k = f"{eu['from_scene_id']}:{eu['to_scene_id']}"
+                st = dict(exit_states.get(k, {}))
+                st["is_locked"] = eu["is_locked"]
+                if "lock_description" in eu:
+                    st["lock_description"] = eu["lock_description"]
+                exit_states[k] = st
+            self.state.exit_states = exit_states
+
+        for msg in changeset.narrative_messages:
+            system_messages.append(msg)
+            await self._save_chat_message("system", msg)
+
+        if changeset.new_memories:
+            memories = list(self.state.world_memories or [])
+            for m in changeset.new_memories:
+                memories.append(m)
+            self.state.world_memories = memories
+
+        for qid in changeset.completed_quest_ids:
+            quests = list(self.state.quests or [])
+            for q in quests:
+                if isinstance(q, dict) and q.get("id") == qid:
+                    q["status"] = "completed"
+            self.state.quests = quests
+
+        if changeset.completed_condition_override:
+            self.state.completed_condition = changeset.completed_condition_override
+        if changeset.gameover_condition_override:
+            self.state.gameover_condition = changeset.gameover_condition_override
+
+        if changeset.game_completed:
+            await self._finalize_session("completed", changeset.status_note)
+        elif changeset.game_over:
+            raise GameOverException(changeset.status_note or f"{self.avatar.name} has met their end.")
+
+        return system_messages
+

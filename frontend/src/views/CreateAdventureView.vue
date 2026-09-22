@@ -41,6 +41,7 @@ const form = ref({
   min_items: null as number | null,
   max_items: null as number | null,
   container_generation_enabled: true,
+  scripts_generation_enabled: false,
   min_containers: null as number | null,
   max_containers: null as number | null,
   text_log_generation_enabled: true,

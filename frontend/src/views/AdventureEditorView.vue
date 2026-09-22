@@ -625,6 +625,7 @@ const form = ref({
   min_items: null as number | null,
   max_items: null as number | null,
   container_generation_enabled: true,
+  scripts_generation_enabled: false,
   min_containers: null as number | null,
   max_containers: null as number | null,
   text_log_generation_enabled: true,
@@ -863,6 +864,7 @@ async function fetchAdventure() {
     form.value.min_items = data.min_items !== undefined ? data.min_items : null
     form.value.max_items = data.max_items !== undefined ? data.max_items : null
     form.value.container_generation_enabled = data.container_generation_enabled ?? true
+    form.value.scripts_generation_enabled = data.scripts_generation_enabled ?? false
     form.value.min_containers = data.min_containers !== undefined ? data.min_containers : null
     form.value.max_containers = data.max_containers !== undefined ? data.max_containers : null
     form.value.text_log_generation_enabled = data.text_log_generation_enabled ?? true

@@ -20,6 +20,7 @@ const props = defineProps<{
     min_quests: number | null
     max_quests: number | null
     container_generation_enabled: boolean
+    scripts_generation_enabled?: boolean
     min_containers: number | null
     max_containers: number | null
     text_log_generation_enabled: boolean
@@ -105,6 +106,7 @@ watch(
       :award-generation-enabled="modelValue.award_generation_enabled"
       :min-awards="modelValue.min_awards"
       :max-awards="modelValue.max_awards"
+      :scripts-generation-enabled="modelValue.scripts_generation_enabled ?? false"
       @update:min-scenes="update('min_scenes', $event)"
       @update:max-scenes="update('max_scenes', $event)"
       @update:min-items="update('min_items', $event)"
@@ -121,6 +123,7 @@ watch(
       @update:award-generation-enabled="update('award_generation_enabled', $event)"
       @update:min-awards="update('min_awards', $event)"
       @update:max-awards="update('max_awards', $event)"
+      @update:scripts-generation-enabled="update('scripts_generation_enabled', $event)"
     />
 
     <!-- 4. Combat Permissions (Active only in RPG Mode) -->

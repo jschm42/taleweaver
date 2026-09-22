@@ -215,6 +215,19 @@ def _build_cover_guidance(
     )
 
 
+def _build_scripts_requirement(scripts_generation_enabled: bool) -> str:
+    if not scripts_generation_enabled:
+        return "\nSCRIPTING: Do NOT generate any custom scripts. Keep scripts: []."
+    return (
+        "\nSCRIPTING: Generate 1 to 3 simple, deterministic puzzle, trap, or event scripts in `scripts`. "
+        "Each script must have an `id`, `name`, `trigger` ('on_enter_scene', 'on_interact', 'on_turn_start', 'on_turn_end'), "
+        "`target_id` (scene or entity slug, or None), and safe Python `code` using the `tw` API.\n"
+        "Valid syntax examples:\n"
+        "- `if tw.objects.get('LEVER_A').switch_state == 'ON':\\n    tw.exits.unlock('SCENE_A', 'SCENE_B')\\n    tw.story.narrate('A passage clicks open!')`\n"
+        "- `if not tw.vars.get('trap_disabled'):\\n    tw.player.modify_hp(-10)\\n    tw.story.narrate('Poison darts fire from the wall!')`\n"
+    )
+
+
 def build_world_generation_prompts(
     *,
     title: str,
@@ -234,6 +247,7 @@ def build_world_generation_prompts(
     min_awards: Optional[int],
     max_awards: Optional[int],
     container_generation_enabled: bool,
+    scripts_generation_enabled: bool = False,
     min_containers: Optional[int],
     max_containers: Optional[int],
     text_log_generation_enabled: bool,
@@ -286,6 +300,7 @@ def build_world_generation_prompts(
         ),
     )
     user_prompt += _build_container_requirement(container_generation_enabled, min_containers, max_containers)
+    user_prompt += _build_scripts_requirement(scripts_generation_enabled)
     user_prompt += _build_item_requirement(min_items, max_items)
     user_prompt += _build_switch_requirement(original_prompt)
 

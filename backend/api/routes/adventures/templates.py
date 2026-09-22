@@ -1002,6 +1002,7 @@ async def create_adventure(
         min_scenes=payload.min_scenes,
         max_scenes=payload.max_scenes,
         container_generation_enabled=payload.container_generation_enabled,
+        scripts_generation_enabled=payload.scripts_generation_enabled,
         min_containers=payload.min_containers,
         max_containers=payload.max_containers,
         min_items=payload.min_items,
@@ -1282,6 +1283,7 @@ async def create_adventure(
                     min_scenes=eff_min_scenes,
                     max_scenes=eff_max_scenes,
                     container_generation_enabled=payload.container_generation_enabled,
+                    scripts_generation_enabled=payload.scripts_generation_enabled,
                     min_containers=eff_min_containers,
                     max_containers=eff_max_containers,
                     text_log_generation_enabled=bool(

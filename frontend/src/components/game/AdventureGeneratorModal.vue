@@ -143,6 +143,7 @@ const form = ref({
   min_quests: 2 as number | null,
   max_quests: 4 as number | null,
   container_generation_enabled: true,
+  scripts_generation_enabled: false,
   min_containers: 2 as number | null,
   max_containers: 4 as number | null,
   text_log_generation_enabled: true,
@@ -244,6 +245,7 @@ function populateFromProposal(p: any) {
   if (p.max_quests !== undefined && p.max_quests !== null) form.value.max_quests = p.max_quests
 
   if (p.container_generation_enabled !== undefined) form.value.container_generation_enabled = !!p.container_generation_enabled
+  if (p.scripts_generation_enabled !== undefined) form.value.scripts_generation_enabled = !!p.scripts_generation_enabled
   if (p.min_containers !== undefined && p.min_containers !== null) form.value.min_containers = p.min_containers
   if (p.max_containers !== undefined && p.max_containers !== null) form.value.max_containers = p.max_containers
 
@@ -689,6 +691,7 @@ onBeforeUnmount(() => {
               v-model:min-awards="form.min_awards"
               v-model:max-awards="form.max_awards"
               v-model:award-generation-enabled="form.award_generation_enabled"
+              v-model:scripts-generation-enabled="form.scripts_generation_enabled"
               v-model:rule-enforcement-mode="form.rule_enforcement_mode"
             />
           </div>

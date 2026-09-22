@@ -49,6 +49,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     min_items: Optional[int] = None
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
+    scripts_generation_enabled: bool = False
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
@@ -303,6 +304,7 @@ class AdventureTemplateResponse(BaseModel):
     min_items: Optional[int] = None
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
+    scripts_generation_enabled: bool = False
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
@@ -533,6 +535,7 @@ class AdventureTemplateUpdate(BaseModel):
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
     container_generation_enabled: Optional[bool] = None
+    scripts_generation_enabled: Optional[bool] = None
     max_containers: Optional[int] = None
     award_generation_enabled: Optional[bool] = None
     min_awards: Optional[int] = None

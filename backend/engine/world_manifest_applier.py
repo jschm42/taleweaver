@@ -1388,6 +1388,7 @@ async def apply_manifest(
         adventure.is_adventure_generator = _adv_field("is_adventure_generator", False)  # type: ignore[assignment]
         adventure.can_damage_npcs = _adv_field("can_damage_npcs", True)  # type: ignore[assignment]
         adventure.npcs_can_damage_protagonist = _adv_field("npcs_can_damage_protagonist", True)  # type: ignore[assignment]
+        adventure.scripts_generation_enabled = _adv_field("scripts_generation_enabled", getattr(adventure, "scripts_generation_enabled", False))  # type: ignore[assignment]
         adventure.original_manifest = manifest_dict  # type: ignore[assignment]
 
     objects = list(manifest_dict.get("objects", []))

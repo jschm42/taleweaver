@@ -56,6 +56,7 @@ class AdventureTemplateBase(BaseModel):
     min_items: Optional[int] = None
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
+    scripts_generation_enabled: bool = False
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
@@ -112,6 +113,7 @@ class AdventureTemplateUpdate(BaseModel):
     min_items: Optional[int] = None
     max_items: Optional[int] = None
     container_generation_enabled: Optional[bool] = None
+    scripts_generation_enabled: Optional[bool] = None
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: Optional[bool] = None

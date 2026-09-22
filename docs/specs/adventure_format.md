@@ -28,7 +28,8 @@ The manifest represents the complete blueprint of a generated or exported world.
   "objects": [ ... ],
   "exits": [ ... ],
   "quests": [ ... ],
-  "awards": [ ... ]
+  "awards": [ ... ],
+  "scripts": [ ... ]
 }
 ```
 
@@ -59,6 +60,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
 | `min_scenes` / `max_scenes` | `number` | Constraints defining world generation scope. |
 | `container_generation_enabled` | `boolean` | Enables generation of containers with nested loot. |
+| `scripts_generation_enabled` | `boolean` | Enables generation of custom event scripts by the World-Builder. |
 | `max_containers` | `number` | Hard cap for container objects generated in the world (`0..30`). |
 | `award_generation_enabled`| `boolean` | Whether custom achievements/awards are generated for this adventure. |
 | `creator` | `string` | Optional author / creator identifier (max 100 chars). |
@@ -189,6 +191,21 @@ Achievements players can unlock through specific actions.
 | `title` | `string` | Achievement display title. |
 | `tier` | `string` | Achievement rank: `"bronze"`, `"silver"`, or `"gold"`. |
 | `requirement` | `string` | Exact trigger condition evaluated during turn execution. |
+
+---
+
+### 2.9 Scripts (`scripts`)
+
+Custom sandboxed event scripts reacting to game hooks.
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `string` | Unique uppercase slug (e.g., `"SCRIPT_LEVER_PUZZLE"`). |
+| `name` | `string` | Human-readable title for the script. |
+| `trigger` | `string` | Event hook: `"on_session_start"`, `"on_enter_scene"`, `"on_exit_scene"`, `"on_interact"`, `"on_turn_start"`, or `"on_turn_end"`. |
+| `target_id` | `string \| null` | Optional target scene ID or entity ID that filters when this script fires. |
+| `code` | `string` | Safe Python script utilizing the sandboxed `tw` GameContext API. |
+| `description` | `string \| null` | Optional narrative/technical description of the script logic. |
 
 ---
 

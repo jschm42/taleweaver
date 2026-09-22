@@ -339,6 +339,7 @@ class AdventureExporter:
                 "min_items": adv.min_items,
                 "max_items": adv.max_items,
                 "container_generation_enabled": adv.container_generation_enabled,
+                "scripts_generation_enabled": getattr(adv, "scripts_generation_enabled", False),
                 "min_containers": adv.min_containers,
                 "max_containers": adv.max_containers,
                 "text_log_generation_enabled": adv.text_log_generation_enabled,
@@ -404,6 +405,7 @@ class AdventureExporter:
             "objects": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "OBJECT"],
             "quests": adv.quests or [],
             "awards": adv.awards or [],
+            "scripts": (adv.original_manifest or {}).get("scripts", []),
         }
         
         return manifest

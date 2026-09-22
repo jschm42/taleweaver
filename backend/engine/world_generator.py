@@ -428,6 +428,7 @@ class WorldGenerator:
         min_scenes: Optional[int] = None,
         max_scenes: Optional[int] = None,
         container_generation_enabled: bool = True,
+        scripts_generation_enabled: bool = False,
         min_containers: Optional[int] = None,
         max_containers: Optional[int] = None,
         text_log_generation_enabled: bool = True,
@@ -528,6 +529,7 @@ class WorldGenerator:
             min_awards=min_awards,
             max_awards=max_awards,
             container_generation_enabled=container_generation_enabled,
+            scripts_generation_enabled=scripts_generation_enabled,
             min_containers=min_containers,
             max_containers=max_containers,
             text_log_generation_enabled=text_log_generation_enabled,
@@ -575,6 +577,7 @@ class WorldGenerator:
                 "min_items": min_items,
                 "max_items": max_items,
                 "container_generation_enabled": container_generation_enabled,
+                "scripts_generation_enabled": scripts_generation_enabled,
                 "min_containers": min_containers,
                 "max_containers": max_containers,
                 "text_log_generation_enabled": text_log_generation_enabled,
@@ -658,6 +661,8 @@ class WorldGenerator:
         # Post-processing: clamp container and text-log counts
         clamped_max_containers = max(0, min(30, int(max_containers))) if max_containers is not None else 9999
         clamped_max_text_logs = max(0, min(30, int(max_text_logs))) if max_text_logs is not None else 9999
+        if not scripts_generation_enabled:
+            manifest_dict["scripts"] = []
 
         objects = manifest_dict.get("objects") or []
         container_indices = [

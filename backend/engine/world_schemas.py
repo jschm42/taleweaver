@@ -250,6 +250,30 @@ class ProtagonistSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class WorldScriptSchema(BaseModel):
+    id: str = Field(..., description="Unique slug for the script, e.g. SCRIPT_LEVER_PUZZLE")
+    name: str = Field(..., description="Human-readable title for the script")
+    trigger: Literal[
+        "on_session_start",
+        "on_enter_scene",
+        "on_exit_scene",
+        "on_interact",
+        "on_turn_start",
+        "on_turn_end",
+    ] = Field(..., description="The game event trigger: on_session_start, on_enter_scene, on_exit_scene, on_interact, on_turn_start, on_turn_end")
+    target_id: Optional[str] = Field(
+        None,
+        description="Optional entity_id or scene_id target. E.g. scene ID for on_enter_scene, or entity ID for on_interact."
+    )
+    code: str = Field(
+        ...,
+        description="Safe Python script using the 'tw' API."
+    )
+    description: Optional[str] = Field(None, description="What this script does.")
+
+    model_config = {"extra": "forbid"}
+
+
 class WorldManifesto(BaseModel):
     """The complete blueprint of the generated world."""
 
@@ -272,6 +296,7 @@ class WorldManifesto(BaseModel):
     objects: list[WorldObjectSchema]
     quests: list[QuestSchema] = Field(..., description="List of 3-5 quests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
+    scripts: list[WorldScriptSchema] = Field(default_factory=list, description="Optional game logic scripts. Use [] if none.")
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
     cover_similarity_percent: int = 50

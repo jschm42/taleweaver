@@ -128,6 +128,7 @@ class AdventureGenerationRequest(BaseModel):
     min_items: Optional[int] = None
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
+    scripts_generation_enabled: bool = False
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True

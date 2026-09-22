@@ -320,6 +320,11 @@ class AdventureTemplateImporter:
                         if "container_generation_enabled" in adv_data
                         else manifest_data.get("container_generation_enabled", True)
                     ),
+                    scripts_generation_enabled=(
+                        adv_data.get("scripts_generation_enabled", False)
+                        if "scripts_generation_enabled" in adv_data
+                        else manifest_data.get("scripts_generation_enabled", False)
+                    ),
                     min_containers=(
                         int(adv_data["min_containers"])
                         if adv_data.get("min_containers") is not None
@@ -660,6 +665,7 @@ class AdventureTemplateImporter:
                     min_items=old_adv.get("min_items") if old_adv.get("min_items") is not None else data.get("min_items"),
                     max_items=old_adv.get("max_items") if old_adv.get("max_items") is not None else data.get("max_items"),
                     container_generation_enabled=old_adv.get("container_generation_enabled", True) if "container_generation_enabled" in old_adv else data.get("container_generation_enabled", True),
+                    scripts_generation_enabled=old_adv.get("scripts_generation_enabled", False) if "scripts_generation_enabled" in old_adv else data.get("scripts_generation_enabled", False),
                     min_containers=old_adv.get("min_containers") if old_adv.get("min_containers") is not None else data.get("min_containers"),
                     max_containers=old_adv.get("max_containers") if old_adv.get("max_containers") is not None else data.get("max_containers"),
                     text_log_generation_enabled=old_adv.get("text_log_generation_enabled", True) if "text_log_generation_enabled" in old_adv else data.get("text_log_generation_enabled", True),
@@ -844,6 +850,7 @@ class AdventureTemplateImporter:
                     min_items=adv_meta.get("min_items") if adv_meta.get("min_items") is not None else manifest.get("min_items"),
                     max_items=adv_meta.get("max_items") if adv_meta.get("max_items") is not None else manifest.get("max_items"),
                     container_generation_enabled=adv_meta.get("container_generation_enabled", True) if "container_generation_enabled" in adv_meta else manifest.get("container_generation_enabled", True),
+                    scripts_generation_enabled=adv_meta.get("scripts_generation_enabled", False) if "scripts_generation_enabled" in adv_meta else manifest.get("scripts_generation_enabled", False),
                     min_containers=adv_meta.get("min_containers") if adv_meta.get("min_containers") is not None else manifest.get("min_containers"),
                     max_containers=adv_meta.get("max_containers") if adv_meta.get("max_containers") is not None else manifest.get("max_containers"),
                     text_log_generation_enabled=adv_meta.get("text_log_generation_enabled", True) if "text_log_generation_enabled" in adv_meta else manifest.get("text_log_generation_enabled", True),

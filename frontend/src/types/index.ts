@@ -239,6 +239,7 @@ export interface CreateAdventurePayload {
   min_items?: number | null
   max_items?: number | null
   container_generation_enabled?: boolean
+  scripts_generation_enabled?: boolean
   min_containers?: number | null
   max_containers?: number | null
   text_log_generation_enabled?: boolean

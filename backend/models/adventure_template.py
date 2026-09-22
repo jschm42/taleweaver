@@ -62,6 +62,7 @@ class AdventureTemplate(Base, TimestampMixin):
     min_scenes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     max_scenes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     container_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    scripts_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     min_containers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     max_containers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     min_items: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
