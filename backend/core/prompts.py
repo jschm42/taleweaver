@@ -34,7 +34,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "JSON STRUCTURE REQUIREMENTS (CRITICAL):\n"
     "Return one JSON object (no markdown, no wrapper list).\n"
     "CRITICAL JSON FORMATTING: In string fields (descriptions, text logs, notes), NEVER use raw unescaped double quotes (\") inside string values. If you quote words, ALWAYS use single quotes (') or properly escape them (\\\").\n"
-    "Required top-level keys: protagonist, scenes, exits, npcs, objects, quests, awards, language, teaser, plot, rules, walkthrough, completed_condition, gameover_condition, intro_text, origin_id, tts_director_notes.\n\n"
+    "Required top-level keys: protagonist, scenes, exits, npcs, objects, quests, awards, scripts, language, teaser, plot, rules, walkthrough, completed_condition, gameover_condition, intro_text, origin_id, tts_director_notes.\n\n"
     "SCENES & DECORATIVE OBJECTS:\n"
     "Each scene in `scenes` MUST include a `decorative_objects` field as a JSON array of up to 7 short strings (max 100 characters each), describing simple, non-interactable background details, features, or static furniture (e.g., ['metal table', 'hanging light fixture', 'cracked stone floor']). Do NOT put these items in the top-level `objects` or `npcs` list — they live ONLY as a structured `decorative_objects` array on the scene. Do NOT embed them into the `description` string either; the scene description must remain clean prose.\n\n"
     "INTRO TEXT & STARTING SCENE INTEGRITY:\n"
@@ -72,6 +72,8 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "You are allowed and encouraged to generate multiple similar or identical NPC enemies (e.g. multiple rats in a rat-infested cellar) or multiple consumable items (e.g. multiple health potions) when it makes sense for the narrative.\n"
     "For duplicates, define them as separate entries in 'npcs' or 'objects' with unique slug IDs (e.g. RAT_1, RAT_2, RAT_3; HEALTH_POTION_1, HEALTH_POTION_2).\n"
     "You can slightly vary their spatial_positions and stats (hp, stamina, mana, items) if needed. You do not need to request different visuals for duplicates; the engine will automatically reuse/copy the generated image from the first occurrence.\n\n"
+    "EVENT SCRIPTS (`scripts`):\n"
+    "The `scripts` array contains deterministic Python event scripts reacting to game hooks ('on_turn_start', 'on_enter_scene', 'on_interact', 'on_turn_end'). If scripting is enabled in the prompt, you MUST populate `scripts` with 1-3 event scripts containing valid safe Python using `tw.*` (e.g. `tw.player.damage(15)`, `tw.exits.lock(...)`, `tw.story.show_message(...)`, `tw.vars.set(...)`). If scripting is disabled, keep `scripts: []`.\n\n"
     "AWARD & QUEST GENERATION:\n"
     "Generate varied quests and awards that match the story context.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK

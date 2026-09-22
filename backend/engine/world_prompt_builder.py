@@ -145,6 +145,153 @@ def _build_item_requirement(min_items: Optional[int], max_items: Optional[int]) 
         return f"\n\nITEM COUNT LIMIT:\n- Generate no more than {max(1, max_items)} total objects/items in `objects`."
     return f"\n\nITEM COUNT LIMIT:\n- Generate between {max(1, min_items)} and {max(1, max_items)} total objects/items in `objects`."  # type: ignore[arg-type]
 
+"""
+Prompt construction for the world generation LLM call.
+
+This module builds the system and user prompts for `WorldGenerator.generate_world`
+based on the generation parameters (scene/quest/award/container/item counts, tone,
+cover-source guidance, etc.).
+"""
+from typing import Any, Optional
+
+from backend.core import prompts
+
+
+def _build_voice_assignment_requirement(
+    enabled: bool,
+    available_voice_list: Optional[list[str]] = None,
+) -> str:
+    """Return voice assignment instructions for the LLM prompt (currently a no-op placeholder)."""
+    return ""
+
+
+def _build_scene_requirement(min_scenes: Optional[int], max_scenes: Optional[int]) -> str:
+    if min_scenes is None and max_scenes is None:
+        return "- Generate a suitable number of unique scenes (typically between 3 and 10) based on the story complexity."
+    if min_scenes is not None and max_scenes is None:
+        return f"- Generate at least {max(1, min_scenes)} unique scenes."
+    if min_scenes is None and max_scenes is not None:
+        return f"- Generate no more than {max(1, max_scenes)} unique scenes."
+    return f"- Generate between {max(1, min_scenes)} and {max(1, max_scenes)} unique scenes."  # type: ignore[arg-type]
+
+
+def _build_quest_requirement(
+    quest_generation_enabled: bool,
+    min_quests: Optional[int],
+    max_quests: Optional[int],
+) -> str:
+    if not quest_generation_enabled:
+        return "\n- Do not generate any quests for this adventure."
+    if min_quests is None and max_quests is None:
+        return "\n- Generate a suitable number of total quests (typically between 2 and 6) that fit the narrative context. Mix main and side quests naturally."
+    if min_quests is not None and max_quests is None:
+        return f"\n- Generate at least {max(1, min_quests)} total quests. Mix main and side quests naturally."
+    if min_quests is None and max_quests is not None:
+        return f"\n- Generate no more than {max(1, max_quests)} total quests. Mix main and side quests naturally."
+    clamped_min = max(1, min(30, int(min_quests)))  # type: ignore[arg-type]
+    clamped_max = max(clamped_min, min(30, int(max_quests)))  # type: ignore[arg-type]
+    return (
+        f"\n- Generate between {clamped_min} and {clamped_max} total quests that fit the narrative context."
+        " Mix main and side quests naturally."
+    )
+
+
+def _build_award_requirement(
+    award_generation_enabled: bool,
+    min_awards: Optional[int],
+    max_awards: Optional[int],
+) -> str:
+    if not award_generation_enabled:
+        return "\n\nAWARD SYSTEM:\n- Do not generate any awards for this adventure."
+    if min_awards is None and max_awards is None:
+        return "\n\nAWARD SYSTEM:\n- Generate a suitable number of unique Awards (typically between 3 and 8) that players can earn."
+    if min_awards is not None and max_awards is None:
+        return f"\n\nAWARD SYSTEM:\n- Generate at least {max(1, min_awards)} unique Awards that players can earn."
+    if min_awards is None and max_awards is not None:
+        return f"\n\nAWARD SYSTEM:\n- Generate no more than {max(1, max_awards)} unique Awards that players can earn."
+    clamped_min = max(1, min(30, int(min_awards)))  # type: ignore[arg-type]
+    clamped_max = max(clamped_min, min(30, int(max_awards)))  # type: ignore[arg-type]
+    return f"\n\nAWARD SYSTEM:\n- Generate between {clamped_min} and {clamped_max} unique Awards that players can earn."
+
+
+_CONTAINER_LOCK_HINTS = (
+    "- CONTAINER objects may be open or locked depending on story needs.\n"
+    "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
+    "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
+    "- CRITICAL: NEVER write the unlock code directly in plain text in a single note/log (e.g., 'The code is 1234'). That is boring and provides no challenge!\n"
+    "- Instead, hide the `code_to_unlock` behind one of these three patterns:\n"
+    "  1. RIDDLES & PUZZLES: The code is the answer to a math or logic puzzle. Place this riddle in a READABLE text log or a description. Use counting puzzles (e.g., 'Count the pillars in the hall and multiply by the candles'), wordplay, or math based on lore numbers.\n"
+    "  2. SPLIT CODES (FRAGMENTS): Break the code into 2 or 3 parts (e.g. 'First part: 45', 'Second part: 89' making '4589') and distribute them across different READABLE objects (e.g., sign, book, scroll) or scene details in different locations.\n"
+    "  3. NPC COAXING / INTERROGATION: An NPC knows the code or a clue. The player must talk to them, negotiate, bribe, or help them to get the code or clue. Put this in the NPC's biography/reveal_rule or give them a READABLE item in their inventory.\n"
+    "- Explain the exact solution and clues for each container lock in the secret GM `walkthrough`.\n"
+    "- CONTAINER LOCK INVARIANT (CRITICAL): The engine sets `metadata_json.locked` to true only when at least one of `code_to_unlock`, `item_to_unlock`, or `rule_to_unlock` is non-empty. Therefore: if the description says the container is locked, requires a code/key/password/combination, or otherwise cannot be opened freely, you MUST set exactly one of those three unlock fields — never describe a lock in prose without binding it to a deterministic unlock field. If the container is open and freely searchable, keep all three fields empty."
+)
+
+_CONTAINER_NON_EMPTY_HINT = "\n- Every generated CONTAINER must include at least one item ID in `inventory`; do not leave container inventories empty."
+
+
+def _build_container_requirement(
+    container_generation_enabled: bool,
+    min_containers: Optional[int],
+    max_containers: Optional[int],
+) -> str:
+    if not container_generation_enabled:
+        return "\n\nCONTAINER ITEMS:\n- Do not generate any objects with item_type CONTAINER."
+
+    if min_containers is None and max_containers is None:
+        body = (
+            "- Generate a suitable number of container items (typically between 2 and 6) if the scenes require them.\n"
+            + _CONTAINER_LOCK_HINTS
+        )
+    elif min_containers is not None and max_containers is None:
+        body = f"- Generate at least {max(0, min_containers)} container items.\n" + _CONTAINER_LOCK_HINTS
+    elif min_containers is None and max_containers is not None:
+        body = f"- You may generate CONTAINER objects, but never more than {max(0, max_containers)}.\n" + _CONTAINER_LOCK_HINTS
+    else:
+        body = (
+            f"- Generate between {max(0, min_containers)} and {max(0, max_containers)} container items.\n"  # type: ignore[arg-type]
+            + _CONTAINER_LOCK_HINTS
+        )
+
+    return f"\n\nCONTAINER ITEMS:\n{body}{_CONTAINER_NON_EMPTY_HINT}"
+
+
+def _build_text_log_requirement(
+    text_log_generation_enabled: bool,
+    min_text_logs: Optional[int],
+    max_text_logs: Optional[int],
+) -> str:
+    if not text_log_generation_enabled:
+        return "\n\nTEXT LOGS (READABLE OBJECTS):\n- Do not generate any READABLE objects."
+
+    base = (
+        "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
+        "- `text_log_content` for READABLE objects MUST be non-empty (never \"\" and never omitted).\n"
+        "- Keep text_log_content practical: hints, story fragments, warnings, clues. Paragraph formatting is allowed; use blank lines between paragraphs when useful.\n"
+        "- CRITICAL FOR CLUES: If a READABLE contains information about a lock code, NEVER write the code directly (e.g. 'The code is 1234'). Write a riddle, a counting task (referencing decorative objects in a scene), a logic/math puzzle, or only a fragment of the full code (with other fragments located on other READABLE objects)."
+    )
+
+    if min_text_logs is None and max_text_logs is None:
+        intro = "- Generate a suitable number of readable text logs (typically between 1 and 5) containing clues or lore.\n"
+    elif min_text_logs is not None and max_text_logs is None:
+        intro = f"- Generate at least {max(0, min_text_logs)} readable text logs.\n"
+    elif min_text_logs is None and max_text_logs is not None:
+        intro = f"- You may generate READABLE objects, but never more than {max(0, max_text_logs)}.\n"
+    else:
+        intro = f"- Generate between {max(0, min_text_logs)} and {max(0, max_text_logs)} readable text logs.\n"  # type: ignore[arg-type]
+
+    return f"\n\nTEXT LOGS (READABLE OBJECTS):\n{intro}{base}"
+
+
+def _build_item_requirement(min_items: Optional[int], max_items: Optional[int]) -> str:
+    if min_items is None and max_items is None:
+        return "\n\nITEM COUNT LIMIT:\n- Generate a suitable number of total objects/items in `objects` (typically between 5 and 25) that fit the scenes."
+    if min_items is not None and max_items is None:
+        return f"\n\nITEM COUNT LIMIT:\n- Generate at least {max(1, min_items)} total objects/items in `objects`."
+    if min_items is None and max_items is not None:
+        return f"\n\nITEM COUNT LIMIT:\n- Generate no more than {max(1, max_items)} total objects/items in `objects`."
+    return f"\n\nITEM COUNT LIMIT:\n- Generate between {max(1, min_items)} and {max(1, max_items)} total objects/items in `objects`."  # type: ignore[arg-type]
+
 
 def _build_switch_requirement(original_prompt: str) -> str:
     prompt_lower = str(original_prompt or "").lower()
@@ -172,6 +319,7 @@ def _build_cover_guidance(
     cover_source_adventure_name: Optional[str],
     cover_similarity_percent: int,
     allow_reuse_source_assets: bool,
+    scripts_generation_enabled: bool = False,
 ) -> str:
     if not cover_source_manifest:
         return ""
@@ -199,6 +347,23 @@ def _build_cover_guidance(
         for o in (cover_source_manifest.get("objects") or [])
         if isinstance(o, dict) and o.get("id")
     ][:24]
+    source_scripts = [
+        f"{s.get('id')} ({s.get('trigger')}: {s.get('name')})"
+        for s in (cover_source_manifest.get("scripts") or [])
+        if isinstance(s, dict) and s.get("id")
+    ][:6]
+
+    scripts_note = ""
+    if scripts_generation_enabled:
+        if source_scripts:
+            scripts_note = (
+                f"- The source adventure used event scripts: {', '.join(source_scripts)}. "
+                "Since event scripting is ENABLED for this cover, you MUST adapt, reimagine, or match them with 1-3 new deterministic scripts in `scripts`.\n"
+            )
+        else:
+            scripts_note = (
+                "- Event scripting is ENABLED for this cover! You MUST generate 1 to 3 creative deterministic event scripts in `scripts` matching this cover adventure.\n"
+            )
 
     return (
         "\n\nCOVER MODE:\n"
@@ -212,6 +377,7 @@ def _build_cover_guidance(
         f"- Source scene IDs (sample): {source_scene_ids}\n"
         f"- Source NPC IDs (sample): {source_npc_ids}\n"
         f"- Source object IDs (sample): {source_object_ids}\n"
+        f"{scripts_note}"
     )
 
 
@@ -219,12 +385,34 @@ def _build_scripts_requirement(scripts_generation_enabled: bool) -> str:
     if not scripts_generation_enabled:
         return "\nSCRIPTING: Do NOT generate any custom scripts. Keep scripts: []."
     return (
-        "\nSCRIPTING: Generate 1 to 3 simple, deterministic puzzle, trap, or event scripts in `scripts`. "
-        "Each script must have an `id`, `name`, `trigger` ('on_enter_scene', 'on_interact', 'on_turn_start', 'on_turn_end'), "
-        "`target_id` (scene or entity slug, or None), and safe Python `code` using the `tw` API.\n"
-        "Valid syntax examples:\n"
-        "- `if tw.objects.get('LEVER_A').switch_state == 'ON':\\n    tw.exits.unlock('SCENE_A', 'SCENE_B')\\n    tw.story.narrate('A passage clicks open!')`\n"
-        "- `if not tw.vars.get('trap_disabled'):\\n    tw.player.modify_hp(-10)\\n    tw.story.narrate('Poison darts fire from the wall!')`\n"
+        "\n\n================================================================================\n"
+        "CRITICAL DIRECTIVE - EVENT SCRIPTS ACTIVELY REQUESTED BY USER:\n"
+        "The user has explicitly turned ON the Event Scripts Engine for this adventure. "
+        "This is an explicit user requirement that the world MUST contain interactive event scripts!\n"
+        "You MUST generate between 1 and 3 high-quality, deterministic event scripts in the top-level `scripts` array.\n"
+        "Do NOT return `scripts: []` under any circumstances when this option is enabled.\n\n"
+        "Each script in `scripts` must have:\n"
+        "- `id`: Unique uppercase slug (e.g., 'SCRIPT_TRAP_CHEST', 'SCRIPT_GATE_KEEPER', 'SCRIPT_PUZZLE_LEVER')\n"
+        "- `name`: Short descriptive title (e.g., 'Poison Dart Chest Trap')\n"
+        "- `trigger`: Exactly one of: 'on_turn_start', 'on_enter_scene', 'on_interact', 'on_turn_end'\n"
+        "- `target_id`: Target scene ID or entity ID (or None for global turn triggers)\n"
+        "- `code`: Valid, safe Python code using the `tw` API\n\n"
+        "VALID tw SCRIPTING API PATTERNS:\n"
+        "1. Trap / Hazard on Interact (e.g. trigger='on_interact', target_id='CHEST_01'):\n"
+        "   if not tw.vars.get('trap_disarmed', False):\\n"
+        "       tw.player.damage(15)\\n"
+        "       tw.story.show_message('A poisoned needle springs from the lock mechanism! (-15 HP)')\n"
+        "2. Gatekeeper / Guard on Enter Scene (e.g. trigger='on_enter_scene', target_id='SCENE_GATES'):\n"
+        "   if not tw.player.has_item('ITEM_KEY'):\\n"
+        "       tw.exits.lock('EXIT_GATES_COURTYARD', 'The heavy iron portcullis is barred.')\\n"
+        "       tw.story.show_message('The sentinel lowers his spear, barring the passage.')\\n"
+        "   else:\\n"
+        "       tw.exits.unlock('EXIT_GATES_COURTYARD')\\n"
+        "       tw.story.show_message('Seeing your key, the sentinel raises the portcullis.')\n"
+        "3. State Variable / Lever Puzzle (e.g. trigger='on_interact', target_id='LEVER_01'):\n"
+        "   tw.vars.set('secret_lever_pulled', True)\\n"
+        "   tw.story.show_message('Gears grind in the stone walls as a hidden compartment opens.')\n"
+        "================================================================================\n"
     )
 
 
@@ -278,7 +466,11 @@ def build_world_generation_prompts(
     quest_requirement = _build_quest_requirement(quest_generation_enabled, min_quests, max_quests)
     award_requirement = _build_award_requirement(award_generation_enabled, min_awards, max_awards)
     cover_guidance = _build_cover_guidance(
-        cover_source_manifest, cover_source_adventure_name, cover_similarity_percent, allow_reuse_source_assets
+        cover_source_manifest,
+        cover_source_adventure_name,
+        cover_similarity_percent,
+        allow_reuse_source_assets,
+        scripts_generation_enabled=scripts_generation_enabled,
     )
 
     user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(

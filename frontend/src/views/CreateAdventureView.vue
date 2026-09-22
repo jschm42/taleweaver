@@ -389,6 +389,14 @@ async function loadCoverSource() {
       form.value.time_config = source.time_config
       form.value.time_auto = false
     }
+
+    if (source.scripts_generation_enabled !== undefined) {
+      form.value.scripts_generation_enabled = !!source.scripts_generation_enabled
+    } else if (Array.isArray(source.scripts) && source.scripts.length > 0) {
+      form.value.scripts_generation_enabled = true
+    } else if (Array.isArray(source.original_manifest?.scripts) && source.original_manifest.scripts.length > 0) {
+      form.value.scripts_generation_enabled = true
+    }
   } catch (error: any) {
     sourceAdventure.value = null
     errorMsg.value = error?.message || 'Failed to load source adventure for cover mode.'
@@ -479,6 +487,16 @@ onMounted(() => {
               <label class="flex items-center justify-between gap-3 sm:gap-4 p-3 rounded-xl border border-white/10 bg-black/20">
                 <span class="text-xs font-bold text-slate-200">Allow to use old assets if they fit the new story.</span>
                 <input v-model="form.allow_reuse_source_assets" type="checkbox" class="h-4 w-4 shrink-0" />
+              </label>
+
+              <label class="flex items-center justify-between gap-3 sm:gap-4 p-3 rounded-xl border border-white/10 bg-black/20 cursor-pointer hover:border-amber-500/30 transition-all">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-xs font-bold text-slate-200">Generate Event Scripts</span>
+                  <span class="text-[11px] text-slate-400">
+                    Instructs the World-Builder to generate deterministic Python event scripts (puzzles, traps, scene logic) for this cover adventure.
+                  </span>
+                </div>
+                <input v-model="form.scripts_generation_enabled" type="checkbox" class="h-4 w-4 shrink-0 accent-amber-400 cursor-pointer" />
               </label>
             </section>
 

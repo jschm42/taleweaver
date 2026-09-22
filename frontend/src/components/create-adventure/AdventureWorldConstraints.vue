@@ -564,23 +564,34 @@ function updateAwardMax(val: number) {
       </div>
 
       <!-- Custom Event Scripts Row -->
-      <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-indigo-500/20">
+      <div
+        class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border space-y-3 transition-all cursor-pointer"
+        :class="props.scriptsGenerationEnabled ? 'border-indigo-500/30 bg-indigo-500/5' : 'border-white/5 hover:border-indigo-500/20'"
+        @click="emit('update:scriptsGenerationEnabled', !props.scriptsGenerationEnabled)"
+      >
         <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
           <div class="flex items-center gap-3 min-w-0">
             <input
               type="checkbox"
               :checked="props.scriptsGenerationEnabled ?? false"
-              @change="emit('update:scriptsGenerationEnabled', ($event.target as HTMLInputElement).checked)"
-              class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 h-4 w-4"
+              @change.stop="emit('update:scriptsGenerationEnabled', ($event.target as HTMLInputElement).checked)"
+              @click.stop
+              class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 h-4 w-4 shrink-0"
             />
             <div class="min-w-0">
-              <span class="text-xs font-black uppercase tracking-widest block" :class="props.scriptsGenerationEnabled ? 'text-white/80' : 'text-white/40'">Event Scripts Engine</span>
+              <span class="text-xs font-black uppercase tracking-widest block" :class="props.scriptsGenerationEnabled ? 'text-indigo-200' : 'text-white/40'">Event Scripts Engine</span>
               <span class="text-[10px] text-white/40 uppercase tracking-wider">Generate custom trigger scripts for deterministic puzzles and traps</span>
             </div>
           </div>
+          <span
+            v-if="props.scriptsGenerationEnabled"
+            class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+          >
+            Directive Active
+          </span>
         </div>
-        <div v-if="props.scriptsGenerationEnabled" class="text-xs text-indigo-300/70 italic uppercase tracking-wider py-1">
-          ⚡ World-Builder will author sandboxed Python trigger scripts reacting to scene entries, switches, and puzzle events.
+        <div v-if="props.scriptsGenerationEnabled" class="text-xs text-indigo-200/90 py-1.5 px-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 leading-relaxed">
+          ⚡ <strong>User Directive Active:</strong> World-Builder is explicitly instructed to generate 1–3 interactive Python event scripts (puzzles, traps, scene transitions).
         </div>
       </div>
 

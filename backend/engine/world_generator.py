@@ -733,6 +733,7 @@ class WorldGenerator:
         manifest_dict["cover_source_adventure_name"] = cover_source_adventure_name
         manifest_dict["cover_similarity_percent"] = max(0, min(100, int(cover_similarity_percent or 0)))
         manifest_dict["allow_reuse_source_assets"] = bool(allow_reuse_source_assets)
+        manifest_dict["scripts_generation_enabled"] = bool(scripts_generation_enabled)
 
         await apply_manifest(
             db,

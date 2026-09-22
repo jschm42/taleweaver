@@ -7,7 +7,7 @@ passed to the manifest applier.
 """
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_serializer
+from pydantic import BaseModel, Field, model_serializer, model_validator
 
 
 class WorldSceneSchema(BaseModel):
@@ -265,6 +265,10 @@ class WorldScriptSchema(BaseModel):
         None,
         description="Optional entity_id or scene_id target. E.g. scene ID for on_enter_scene, or entity ID for on_interact."
     )
+    target: Optional[str] = Field(
+        None,
+        description="Optional alias for target_id."
+    )
     code: str = Field(
         ...,
         description="Safe Python script using the 'tw' API."
@@ -272,6 +276,14 @@ class WorldScriptSchema(BaseModel):
     description: Optional[str] = Field(None, description="What this script does.")
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_target(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("target_id") and data.get("target"):
+                data["target_id"] = data.get("target")
+        return data
 
 
 class WorldManifesto(BaseModel):
@@ -296,7 +308,10 @@ class WorldManifesto(BaseModel):
     objects: list[WorldObjectSchema]
     quests: list[QuestSchema] = Field(..., description="List of 3-5 quests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
-    scripts: list[WorldScriptSchema] = Field(default_factory=list, description="Optional game logic scripts. Use [] if none.")
+    scripts: list[WorldScriptSchema] = Field(
+        default_factory=list,
+        description="List of 1-3 game logic event scripts when scripting is enabled (e.g. traps, puzzles, quest updates). Use [] ONLY if scripting is explicitly disabled."
+    )
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
     cover_similarity_percent: int = 50
