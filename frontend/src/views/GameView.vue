@@ -744,13 +744,57 @@ const isSceneTransitioning = computed(() => {
   return Boolean(exitTraversalBusy.value) || socketIsSceneTransitioning.value
 })
 
+const formatSceneIdToTitle = (rawId?: string | null): string => {
+  if (!rawId) return ''
+  const trimmed = String(rawId).trim()
+  if (trimmed.includes('_') || trimmed.includes('-') || /^[A-Z0-9\s_-]+$/.test(trimmed)) {
+    return trimmed
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, c => c.toUpperCase())
+  }
+  return trimmed
+}
+
+const resolveSceneName = (sceneId?: string | null): string => {
+  if (!sceneId) return ''
+  const raw = String(sceneId).trim()
+  if (!raw) return ''
+  const upper = raw.toUpperCase()
+  const safe = raw.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+
+  // 1. Check in nodes dictionary (AdventureLogic.get_all_scene_metadata)
+  const node = nodes.value?.[safe] || nodes.value?.[upper] || nodes.value?.[raw]
+  if (node?.label && String(node.label).trim()) return String(node.label).trim()
+  if (node?.name && String(node.name).trim()) return String(node.name).trim()
+
+  // 2. Check in mapData.nodes
+  const mapNodes = Array.isArray(mapData.value?.nodes) ? mapData.value.nodes : []
+  const found = mapNodes.find((n: any) => {
+    const nid = String(n.id || n.key || '').trim().toUpperCase()
+    return nid === upper || nid === safe
+  })
+  if (found?.label && String(found.label).trim() && found.label !== '?') {
+    return String(found.label).trim()
+  }
+
+  // 3. Fallback: Format the ID to Title Case
+  return formatSceneIdToTitle(raw)
+}
+
+const currentSceneName = computed(() => {
+  const curId = sheet.value?.scene_id || sheet.value?.current_scene_id || sheet.value?.current_scene
+  if (!curId) return 'Unknown Location'
+  return resolveSceneName(curId)
+})
+
 const traverseSceneExit = async (exit: any, exitRef: string) => {
   exitTraversalBusy.value = exitRef
-  const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim().toUpperCase()
-  const targetNode = targetId ? (nodes.value[targetId] || {}) : {}
+  const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim()
+  const targetSceneName = exit?.target_scene_name || resolveSceneName(targetId) || 'New Location'
   sceneTransitionTarget.value = {
-    label: exit?.label || 'Passage',
-    targetSceneName: targetNode.name || targetNode.title || targetId || 'New Location',
+    label: exitDisplayName(exit),
+    targetSceneName,
     targetSceneId: targetId,
   }
   try {
@@ -1052,7 +1096,7 @@ const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((
 // Exits currently accessible from the player's scene (one-way + bidirectional edges)
 const sceneExits = computed<any[]>(() => {
   const edges = Array.isArray(mapData.value?.edges) ? mapData.value.edges : []
-  const current = String(sheet.value?.scene_id || '').trim().toUpperCase()
+  const current = String(sheet.value?.scene_id || sheet.value?.current_scene_id || '').trim().toUpperCase()
   if (!current) return []
   const result: any[] = []
   for (const edge of edges) {
@@ -1061,9 +1105,21 @@ const sceneExits = computed<any[]>(() => {
     const toId = String(edge.to || '').trim().toUpperCase()
     const exitType = String(edge.exit_type || '').toLowerCase()
     if (fromId === current) {
-      result.push({ ...edge, direction: 'forward' })
+      const targetId = edge.to || toId
+      result.push({
+        ...edge,
+        direction: 'forward',
+        target_scene_id: targetId,
+        target_scene_name: resolveSceneName(targetId),
+      })
     } else if (exitType === 'bidirectional' && toId === current) {
-      result.push({ ...edge, direction: 'backward' })
+      const targetId = edge.from || fromId
+      result.push({
+        ...edge,
+        direction: 'backward',
+        target_scene_id: targetId,
+        target_scene_name: resolveSceneName(targetId),
+      })
     }
   }
   return result
@@ -1460,7 +1516,7 @@ watch(
       :game-id="props.id"
       :current-scene-image="currentSceneImage"
       :adventure-image="adventureImage"
-      :current-scene-name="sheet?.current_scene"
+      :current-scene-name="currentSceneName"
       :current-scene-description="currentSceneDescription"
       :prompt-suggestions="promptSuggestions"
       :world-memories="worldMemories"

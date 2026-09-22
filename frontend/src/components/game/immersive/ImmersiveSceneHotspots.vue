@@ -59,6 +59,18 @@ function showImage(path?: string | null) {
   return !!path && !brokenImages.value[path]
 }
 
+function formatSceneTitle(name?: string | null): string {
+  if (!name) return ''
+  const trimmed = String(name).trim()
+  if (trimmed.includes('_') || trimmed.includes('-') || /^[A-Z0-9\s_-]+$/.test(trimmed)) {
+    return trimmed
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, c => c.toUpperCase())
+  }
+  return trimmed
+}
+
 function getItemTypeBorderClass(type?: string) {
   switch (type?.toUpperCase()) {
     case 'WEAPON':
@@ -290,10 +302,10 @@ function handleExitMouseMove(event: MouseEvent) {
                     <p class="text-xs font-bold text-white uppercase tracking-tight truncate group-hover:text-amber-300 transition-colors">
                       {{ exit.label || 'Exit' }}
                     </p>
-                    <p v-if="exit.target_scene_id" class="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                    <p v-if="exit.target_scene_name || exit.target_scene_id" class="text-[10px] text-slate-400 flex items-center gap-1 truncate">
                       <span>{{ props.currentSceneName || 'Current' }}</span>
                       <ArrowRight class="w-2.5 h-2.5 text-slate-600 shrink-0" />
-                      <span class="text-slate-300 font-medium truncate">{{ exit.target_scene_id }}</span>
+                      <span class="text-slate-300 font-medium truncate">{{ exit.target_scene_name || formatSceneTitle(exit.target_scene_id) }}</span>
                     </p>
                   </div>
                 </div>
@@ -531,10 +543,10 @@ function handleExitMouseMove(event: MouseEvent) {
               </span>
             </div>
             <p class="text-xs font-bold text-white mb-1 uppercase tracking-tight">{{ hoveredExit.label }}</p>
-            <p class="text-[10px] font-bold text-slate-500 flex items-center gap-1.5" v-if="hoveredExit.target_scene_id">
+            <p class="text-[10px] font-bold text-slate-500 flex items-center gap-1.5" v-if="hoveredExit.target_scene_name || hoveredExit.target_scene_id">
               {{ props.currentSceneName || 'Current Location' }} 
               <i class="ra ra-plain-arrow text-slate-600"></i>
-              <span class="text-slate-300">{{ hoveredExit.target_scene_id }}</span>
+              <span class="text-slate-300">{{ hoveredExit.target_scene_name || formatSceneTitle(hoveredExit.target_scene_id) }}</span>
             </p>
           </div>
         </div>

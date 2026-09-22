@@ -13,6 +13,17 @@ const props = defineProps<{
   exitLabel?: string | null
   statusText?: string | null
 }>()
+function formatSceneTitle(name?: string | null): string {
+  if (!name) return ''
+  const trimmed = String(name).trim()
+  if (trimmed.includes('_') || trimmed.includes('-') || /^[A-Z0-9\s_-]+$/.test(trimmed)) {
+    return trimmed
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, c => c.toUpperCase())
+  }
+  return trimmed
+}
 </script>
 
 <template>
@@ -46,7 +57,7 @@ const props = defineProps<{
         </span>
 
         <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-md">
-          {{ props.targetSceneName || 'New Location' }}
+          {{ formatSceneTitle(props.targetSceneName) || 'New Location' }}
         </h2>
 
         <p class="text-xs sm:text-sm text-slate-400 italic mt-2">
