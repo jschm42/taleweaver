@@ -408,6 +408,21 @@ export function useComicTurns(options: UseComicTurnsOptions) {
         currentTurn.userSpeechText = userParsed.speechText
         currentTurn.timestamp = msg.timestamp
       } else if (msg.role === 'assistant') {
+        if (
+          currentTurn.assistantMessage ||
+          currentTurn.narration ||
+          currentTurn.dialogues.length > 0
+        ) {
+          turns.push(currentTurn)
+          currentTurn = {
+            index: turns.length,
+            systemMessages: [],
+            licenseMessage: null,
+            narration: '',
+            dialogues: [],
+            revealedItemIds: [],
+          }
+        }
         currentTurn.assistantMessage = msg
         currentTurn.timestamp = msg.timestamp || currentTurn.timestamp
         if (msg.itemIds && Array.isArray(msg.itemIds)) {
