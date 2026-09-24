@@ -14,9 +14,6 @@ TaleWeaver's core gameplay UI has been rebuilt from the ground up for maximum vi
   * Turns are dynamically formatted like an illustrated comic strip.
   * Gamemaster narrative exposition is cleanly partitioned from in-character dialogue.
   * Expressive speech bubbles and dialogue cards feature NPC portraits, speaker attribution, and dedicated action markers.
-* **Point-and-Click Scene Hotspots (`ImmersiveSceneHotspots`)**:
-  * Interactive hotspots are projected directly onto scene artwork.
-  * Players can click directly on the artwork to inspect items, open containers, engage NPCs, or transition between connected scenes with smooth visual fade transitions (`SceneTransitionOverlay`).
 * **Dynamic Character Stage (`ImmersiveCharacterStage`)**:
   * An interactive character staging area visualizes all NPCs present in the active scene.
   * Includes portrait badges, active status indicators, and integrated voice-tag playback that plays character dialogue lines.
