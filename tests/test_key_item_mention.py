@@ -20,7 +20,7 @@ def mock_llm_semantic_mention(monkeypatch):
     # Mock decryption/API key lookup to bypass key validation error in tests
     monkeypatch.setattr(GameMasterLLM, "_get_decrypted_key", lambda self, provider: "dummy_key")
 
-    async def mock_aexecute_simple_task(self, system_prompt, user_prompt, response_model, temperature=0.0, max_tokens=None):
+    async def mock_aexecute_task(self, system_prompt, user_prompt, response_model, *args, **kwargs):
         player_msg_parts = user_prompt.split('Player Message: "')
         player_msg = player_msg_parts[1].rstrip('"') if len(player_msg_parts) > 1 else ""
         player_msg_low = player_msg.lower()
@@ -37,7 +37,8 @@ def mock_llm_semantic_mention(monkeypatch):
                 referenced = True
         return response_model(referenced=referenced)
 
-    monkeypatch.setattr(GameMasterLLM, "aexecute_simple_task", mock_aexecute_simple_task)
+    monkeypatch.setattr(GameMasterLLM, "aexecute_simple_task", mock_aexecute_task)
+    monkeypatch.setattr(GameMasterLLM, "aexecute_complex_task", mock_aexecute_task)
 
 
 async def _seed_game_context(db):
@@ -308,7 +309,7 @@ async def test_rule_violations_modify_narrative_description(setup_test_db, monke
 
         # Capture the prompt passed to stream_simple_task
         captured_prompts = []
-        async def mock_stream(system_prompt, user_prompt, model_name):
+        async def mock_stream(system_prompt, user_prompt, model_name=None, *args, **kwargs):
             captured_prompts.append(system_prompt)
             # Yield empty/dummy chunk
             yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The box remains locked."))])

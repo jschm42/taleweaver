@@ -48,7 +48,12 @@
   <tr>
     <td><a href="docs/screenshots/editor-map.jpg"><img src="docs/screenshots/small/editor-map.jpg" width="180" alt="Editor Map"></a></td>
     <td><a href="docs/screenshots/character-sheet.jpg"><img src="docs/screenshots/small/character-sheet.jpg" width="180" alt="Character Sheet"></a></td>
+    <td><a href="docs/screenshots/editor-script-engine.jpg"><img src="docs/screenshots/small/editor-script-engine.jpg" width="180" alt="Scripting Engine"></a></td>
+    <td><a href="docs/screenshots/editor-validation.jpg"><img src="docs/screenshots/small/editor-validation.jpg" width="180" alt="AI Validation"></a></td>
+  
   </tr>
+
+  
 </table>
 
 ## 1. The Vision
@@ -62,11 +67,19 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
 * **Cover Mode (Sequels & Variations):** Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets.
 
-### 🛠️ Fully-Featured Adventure Editor
-* **Complete World Customization:** The Adventure Editor is now fully functional to edit, refine, and build adventure templates.
-* **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, switch outcomes, and event scripts directly from the UI.
-* **Asset Integration:** Assign visual styles, upload custom assets, and configure bidirectional route maps.
+### 🎭 Immersive In-Game Interface & Comic Turn Feed
+* **Comic-Style Turn Presentation:** Dynamic turn rendering that separates narrator exposition from character dialogue using expressive comic speech bubbles, speaker avatars, and action markers.
+* **Point-and-Click Scene Hotspots:** Interactive hotspots rendered directly over scene artwork for intuitive discovery, item inspection, and seamless navigation between connected scenes.
+* **Dynamic Character Stage:** Visual character staging area displaying active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback.
+* **Streamlined In-Game HUD:** Modernized HUD featuring a real-time In-Game Clock, contextual action quickbar, expandable Character Sheet, and dedicated modals for locked containers, switches, and combat.
+
+### 🛠️ Fully-Featured Adventure Editor & AI Validation
+* **Complete World Customization:** The Adventure Editor provides dedicated tabs to edit, refine, and build adventure templates: Scenes, Directed Map Routing, NPCs, Items, Switches, Containers, Quests, Awards, Tone, Visuals, and Scripts.
+* **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, switch outcomes, and event scripts directly from the UI with reference autocomplete.
+* **Bidirectional Route Mapping:** Visual route editor for bidirectional and one-way paths with lock descriptions, passcodes, and item unlock conditions.
 * **Sandboxed Python Event Scripts:** Author deterministic, reactive game logic directly in the World-Editor or via AI World-Builder generation. Safely queries and modifies scenes, exits, items, NPCs, avatar stats, variables, and victory conditions without host escapes. See the [Scripting Engine Guide](docs/guides/scripting_engine.md).
+* **Dual-Tier AI & Structural Validation:** Built-in world validation engine that checks graph connectivity, reachable scenes, valid exit endpoints, proper container contents, and crafting ingredient completeness, alongside deep LLM story critiques that detect plot holes, logic inconsistencies, and puzzle dead-ends.
+* **One-Click AI Fix Proposals:** Automatically generate and apply intelligent AI repairs for broken exits, missing keys, or narrative inconsistencies directly from the editor's Validation Tab.
 
 ### 🎯 Quests & Meta-Progression
 * **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log.
@@ -91,7 +104,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages.
 
 ### 🧠 Bring Your Own Model (BYOK) & Privacy First
-* **Cloud-Tier Intelligence:** Designed to harness the reasoning power of top-tier models (GPT-5, Claude 4.5, Gemini 3 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.
+* **Cloud-Tier Intelligence:** Designed to harness the reasoning power of flagship models (Anthropic Opus 5.x, OpenAI 5.x, DeepSeek v4 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.
 * **Self-Hosted & Tenant-Ready:** Run the backend completely on your own hardware via Docker. Built on SQLite with UUID-based primary keys, your game progress and prompts remain local and private on your machine.
 * **Local Tinkering (Experimental):** While the core engine relies on high-tier models for complex JSON generation, we offer highly experimental support for local execution via **Ollama**. Perfect for developers looking to push the boundaries of local inference, though not yet recommended for stable gameplay.
 
@@ -108,6 +121,16 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
 
 ### Recent Feature Highlights
+
+#### 🌟 What's New in v0.6.0-beta
+* **Immersive In-Game & Comic Turn Engine**: Fully reimagined interactive gameplay UI. The narrative feed is rendered as comic-style panels with speaker portraits, custom speech bubbles, and action cues (`ImmersiveStoryFeed`, `useComicTurns`). Scenes now feature interactive point-and-click hotspots (`ImmersiveSceneHotspots`) for room exits and item inspections, a dedicated NPC character stage (`ImmersiveCharacterStage`), voice-tag speech synchronization, and a modernized HUD with an in-game clock widget.
+* **Sandboxed Python Scripting Engine**: Secure, deterministic event logic running in an isolated AST interpreter sandbox (`backend/engine/scripting`). Creators and AI world generators can craft rich lifecycle event triggers (`on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`) affecting scenes, inventory, NPC state, stats, custom persistent variables, and victory/defeat rules. Includes an in-editor scripting workbench (`ScriptsTab.vue`) with linting, priority queues, and test execution.
+* **Dynamic World Generation & Script Synthesis**: TaleWeaver's world generator can now synthesize complete deterministic Python event scripts tailored to the generated adventure's lore, plot, and puzzle constraints.
+* **Enhanced World-Editor & AI Validation**: Full-featured in-browser authoring environment with dedicated tabs for Scenes, Directed Graph Map Routing, Inhabitants, Items, Switches, Containers, and Event Scripts. Includes a dual-tier validation suite (`ValidationTab.vue`) combining structural graph auditing (connectivity, broken links, missing ingredients) with semantic LLM story validation.
+* **One-Click AI Fix Proposals**: Automated AI diagnostic assistant (`AIFixSuggestionsModal.vue`) that analyzes world errors and applies one-click structural repairs to scenes, exits, and entities.
+* **Session Runtime Architecture & Asset Isolation**: Independent session state lifecycle with isolated asset folders, runtime entity snapshots, milestone-driven auto-checkpoints, and timeline rewind capabilities.
+
+#### Previous Highlights
 * **Whisper Speech-to-Text & Push-to-Talk** (`1f14273`, `6c3f1c2`, `52e7312`): OpenAI Whisper integration featuring background model preloading, hands-free recording overlays, automatic transcription submission, and a Shift/hotkey (B/T) shortcut to speak in-character (`/say `) to NPCs.
 * **Interactive World Map with Pathfinding** (`3e66a99`): Fully interactive world map visualization with pathfinding, panning, and zooming capabilities for navigating adventure scenes.
 * **Fully Functional Adventure Editor** (`ec53b2e`, `50e1657`): The Adventure Editor is now fully functional to edit, refine, and build adventure templates. Includes full CRUD management for scenes, exits, quests, NPCs, items, containers, and switch outcomes directly from the UI, with visual asset configuration and bidirectional route mapping.
@@ -161,13 +184,16 @@ For the best experience, we recommend using high-tier models, especially for **W
 
 | Task | Recommended Models | Notes |
 | :--- | :--- | :--- |
-| **World Generation** | **GPT-5**, **Claude 4.5 Opus**, **Gemini 3 Pro** | Requires strong reasoning to generate complex, valid JSON manifests. |
-| **Mechanics (Pass 1)** | **GPT-5-mini**, **Claude 4.5 Sonnet** | Best for following strict RPG rules and state modifications. |
-| **Narrative (Pass 2)** | **Claude 4.5 Sonnet**, **GPT-5** | These models provide the most immersive and atmospheric prose.
+| **World Generation** | Any Flagship model like **Anthropic Opus 5.x**, **OpenAI 5.x**, **DeepSeek v4 Pro** | Requires flagship reasoning to generate complex, valid JSON manifests. |
+| **Mechanics (Pass 1)** | **DeepSeek v4.1 Flash**, **GPT 6 Luna**, **Claude 4.5 Haiku** | Best for following strict RPG rules and state modifications with fast latency. |
+| **Narrative (Pass 2)** | **DeepSeek-v4 Pro**, **GPT 6 Luna Pro**, **Claude 4.5 Sonnet** | These models provide the most immersive, creative, and atmospheric prose. |
+
+> [!TIP]
+> **Cost-Efficiency:** While **Claude 4.5 Sonnet** and **Claude 4.5 Haiku** offer outstanding literary depth and precision, **DeepSeek** (`v4.1 Flash`, `v4 Pro`) and **GPT 6 Luna** (`Luna`, `Luna Pro`) are **significantly more cost-effective**, making them the recommended choice for extensive, turn-heavy play sessions at a fraction of the cost.
 
 > [!WARNING]
-Use providers with a good latency for the world generation to avoid long wait times. 
-Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat responses but may occasionally struggle with the complex, deep JSON schemas required for generating entire worlds. If world generation fails repeatedly, try a more powerful "Pro" or "Sonnet" class model.
+> Use providers with a good latency for the world generation to avoid long wait times. 
+> Models like `DeepSeek v4.1 Flash`, `GPT 6 Luna`, or `Claude 4.5 Haiku` are excellent for quick chat responses and strict mechanics passes, but world generation requires flagship reasoning models like **Anthropic Opus 5.x**, **OpenAI 5.x**, or **DeepSeek v4 Pro**. If world generation fails repeatedly, switch to one of these flagship models.
 > **Regarding Local Models (Ollama):** The `WorldManifesto` schema is highly complex and requires strict JSON outputs. Currently, most local models run via Ollama struggle to consistently produce valid schemas of this depth. Use cloud models for stable generation and local models only for experimental testing.
 
 ---

@@ -2540,7 +2540,7 @@ async def create_editor_exit(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
     from_scene_id = _sanitize_object_id(payload.from_scene_id, "from_scene_id")
     to_scene_id = _sanitize_object_id(payload.to_scene_id, "to_scene_id")

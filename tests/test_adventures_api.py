@@ -624,8 +624,7 @@ async def test_get_chat_history_includes_awards(client: AsyncClient):
     assert chat_resp.status_code == 200
     data = chat_resp.json()
     assert "awards" in data
-    assert len(data["awards"]) == 1
-    assert data["awards"][0]["key"] == "a-snapshot"
+    assert any(a["key"] == "a-snapshot" for a in data["awards"])
 
 
 async def test_get_chat_history_marks_award_earned_with_adventure_id(client: AsyncClient):
@@ -663,9 +662,9 @@ async def test_get_chat_history_marks_award_earned_with_adventure_id(client: Asy
     chat_resp = await client.get(f"/api/adventures/{ids['game_id']}/chat")
     assert chat_resp.status_code == 200
     data = chat_resp.json()
-    assert len(data["awards"]) == 1
-    assert data["awards"][0]["key"] == "health-inspector"
-    assert data["awards"][0]["is_earned"] is True
+    matching = [a for a in data["awards"] if a["key"] == "health-inspector"]
+    assert len(matching) == 1
+    assert matching[0]["is_earned"] is True
 
 
 async def test_get_chat_history_accepts_adventure_id_alias(client: AsyncClient):

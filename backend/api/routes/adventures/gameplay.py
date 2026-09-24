@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import logging
 from typing import Any, AsyncGenerator, cast
 from uuid import uuid4
@@ -6,7 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, func
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
 
