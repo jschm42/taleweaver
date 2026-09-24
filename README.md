@@ -52,9 +52,11 @@
     <td><a href="docs/screenshots/editor-validation.jpg"><img src="docs/screenshots/small/editor-validation.jpg" width="180" alt="AI Validation"></a></td>
   
   </tr>
-
-  
 </table>
+
+<p align="center">
+  <em>For detailed descriptions and feature breakdowns of each screen, see the <a href="docs/SCREENSHOTS.md">Screenshot Guide</a>.</em>
+</p>
 
 ## 1. The Vision
 
