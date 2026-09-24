@@ -15,11 +15,19 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-vue': ['vue', 'vue-router'],
-            'vendor-graph': ['dagre', 'roughjs'],
-            'vendor-sanitize': ['dompurify'],
-            'vendor-icons': ['lucide-vue-next'],
+          manualChunks(id) {
+            if (id.includes('node_modules/vue/') || id.includes('node_modules/vue-router/')) {
+              return 'vendor-vue'
+            }
+            if (id.includes('node_modules/dagre/') || id.includes('node_modules/roughjs/')) {
+              return 'vendor-graph'
+            }
+            if (id.includes('node_modules/dompurify/')) {
+              return 'vendor-sanitize'
+            }
+            if (id.includes('node_modules/lucide-vue-next/')) {
+              return 'vendor-icons'
+            }
           },
         },
       },
