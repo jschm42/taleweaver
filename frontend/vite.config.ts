@@ -12,6 +12,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    define: {
+      __BUNDLED_DEV__: false,
+    },
     build: {
       rollupOptions: {
         output: {
