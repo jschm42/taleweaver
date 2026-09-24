@@ -71,7 +71,6 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 
 ### 🎭 Immersive In-Game Interface & Comic Turn Feed
 * **Comic-Style Turn Presentation:** Dynamic turn rendering that separates narrator exposition from character dialogue using expressive comic speech bubbles, speaker avatars, and action markers.
-* **Point-and-Click Scene Hotspots:** Interactive hotspots rendered directly over scene artwork for intuitive discovery, item inspection, and seamless navigation between connected scenes.
 * **Dynamic Character Stage:** Visual character staging area displaying active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback.
 * **Streamlined In-Game HUD:** Modernized HUD featuring a real-time In-Game Clock, contextual action quickbar, expandable Character Sheet, and dedicated modals for locked containers, switches, and combat.
 
