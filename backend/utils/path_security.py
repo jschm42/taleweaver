@@ -50,8 +50,10 @@ def sanitize_relative_segment(value: Optional[str]) -> Optional[str]:
 
 def ensure_within_base_dir(path: str, base_dir: str) -> str:
     """Resolve a path and ensure it stays inside a base directory."""
-    base_root = os.path.realpath(base_dir)
-    resolved = os.path.realpath(path)
+    base_root = os.path.abspath(os.path.realpath(base_dir))
+    resolved = os.path.abspath(os.path.realpath(path))
+    if not (resolved == base_root or resolved.startswith(base_root + os.sep)):
+        raise ValueError("Resolved path escapes configured base directory.")
     try:
         if os.path.commonpath([resolved, base_root]) != base_root:
             raise ValueError("Resolved path escapes configured base directory.")
@@ -120,13 +122,21 @@ def assert_within_data_dir(path: str) -> str:
     mark a previously user-influenced value as verified-safe for downstream
     filesystem operations.
     """
-    return ensure_within_data_dir(path)
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    resolved = os.path.abspath(os.path.realpath(path))
+    if not (resolved == data_root or resolved.startswith(data_root + os.sep)):
+        raise ValueError("Resolved path escapes configured data directory.")
+    return ensure_within_data_dir(resolved)
 
 
 def assert_within_base_dir(path: str, base_dir: str) -> str:
     """Sanitizer helper: same as ``ensure_within_base_dir`` but raises on
     violation. See :func:`assert_within_data_dir` for rationale."""
-    return ensure_within_base_dir(path, base_dir)
+    base_root = os.path.abspath(os.path.realpath(base_dir))
+    resolved = os.path.abspath(os.path.realpath(path))
+    if not (resolved == base_root or resolved.startswith(base_root + os.sep)):
+        raise ValueError("Resolved path escapes configured base directory.")
+    return ensure_within_base_dir(resolved, base_root)
 
 
 def _resolve_host_ips(host: str) -> list[ipaddress._BaseAddress]:

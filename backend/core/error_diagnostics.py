@@ -18,8 +18,7 @@ def diagnose_provider_error(
     context: str = "llm",
 ) -> str:
     """Analyze an exception from an AI provider and return a clear, user-friendly diagnostic message."""
-    err_text = str(exc or "").strip()
-    lower_text = err_text.lower()
+    lower_text = str(exc or "").lower()
     prov_display = provider.capitalize() if provider else "Provider"
 
     # 1. ENCRYPTION_KEY / Decryption Errors
@@ -169,14 +168,10 @@ def diagnose_provider_error(
             "The request or thinking token budget exceeds the maximum allowed token limit."
         )
 
-    # 9. Clean provider error message if available and informative
-    if hasattr(exc, "message") and exc.message and isinstance(exc.message, str):
-        msg = exc.message.strip()
-        if len(msg) > 5 and not msg.startswith("{"):
-            return f"Connection test failed for {prov_display}: {msg}"
-
-    # Fallback with raw exception message if reasonably short and readable
-    if err_text and len(err_text) < 200 and not err_text.startswith("{") and not "traceback" in lower_text:
-        return f"Connection test failed for {prov_display}: {err_text}"
-
-    return f"Connection test failed for {prov_display}. Please check provider settings and server logs."
+    # Fallback: Never return raw exception text (str(exc) or exc.message) to the client
+    # to prevent information exposure through an exception (CodeQL py/stack-trace-exposure).
+    # All technical details must be inspected via server logs.
+    return (
+        f"Connection test failed for {prov_display}. "
+        "Please check your provider configuration, credentials, and server logs for details."
+    )

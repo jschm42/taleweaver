@@ -79,6 +79,7 @@ from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.path_security import (
+    assert_within_base_dir,
     assert_within_data_dir,
     data_url_to_local_path,
     ensure_within_base_dir,
@@ -329,8 +330,10 @@ async def _clone_entity_image(
     if not source_path or not os.path.isfile(source_path):
         return None
 
-    data_root = os.path.realpath(settings.DATA_DIR)
-    safe_source_path = os.path.realpath(ensure_within_data_dir(source_path))
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    safe_source_path = os.path.abspath(os.path.realpath(ensure_within_data_dir(source_path)))
+    if not safe_source_path.startswith(data_root + os.sep):
+        return None
     try:
         if os.path.commonpath([safe_source_path, data_root]) != data_root:
             return None
@@ -341,7 +344,9 @@ async def _clone_entity_image(
     if not target_dir or not os.path.isdir(target_dir):
         return None
 
-    safe_target_dir = os.path.realpath(ensure_within_data_dir(target_dir))
+    safe_target_dir = os.path.abspath(os.path.realpath(ensure_within_data_dir(target_dir)))
+    if not safe_target_dir.startswith(data_root + os.sep):
+        return None
     try:
         if os.path.commonpath([safe_target_dir, data_root]) != data_root:
             return None
@@ -360,12 +365,16 @@ async def _clone_entity_image(
         sanitize_relative_segment(target_name) or f"entity_clone_{uuid.uuid4().hex}{safe_ext}"
     )
 
-    candidate_path = os.path.realpath(
+    candidate_path = os.path.abspath(os.path.realpath(
         ensure_within_base_dir(
             os.path.join(safe_target_dir, safe_filename),
             safe_target_dir,
         )
-    )
+    ))
+    if not candidate_path.startswith(safe_target_dir + os.sep):
+        return None
+    if not candidate_path.startswith(data_root + os.sep):
+        return None
     try:
         if (
             os.path.commonpath([candidate_path, safe_target_dir]) != safe_target_dir
@@ -377,7 +386,9 @@ async def _clone_entity_image(
 
     # Re-validate before filesystem sink for taint-tracking static analysers
     safe_source_path = assert_within_data_dir(safe_source_path)
-    candidate_path = assert_within_data_dir(candidate_path)
+    candidate_path = assert_within_base_dir(candidate_path, safe_target_dir)
+    if not (safe_source_path.startswith(data_root + os.sep) and candidate_path.startswith(data_root + os.sep)):
+        return None
 
     try:
         shutil.copy2(safe_source_path, candidate_path)

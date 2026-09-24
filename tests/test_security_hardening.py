@@ -129,3 +129,38 @@ def test_heal_template_avatar_profile_image_stays_inside_data_dir(tmp_path, monk
     assert traversal_result == "/data/adventures/sessions/sess_999/avatar.png"
 
 
+def test_diagnose_provider_error_does_not_expose_raw_exception_text():
+    from backend.core.error_diagnostics import diagnose_provider_error
+
+    # Test unknown exception containing sensitive internal database path or stack trace
+    sensitive_exc = RuntimeError("Secret DB connection failed at /var/run/secrets/key.pem with token abc123xyz")
+    diag = diagnose_provider_error(sensitive_exc, provider="custom_provider")
+
+    assert "/var/run/secrets" not in diag
+    assert "key.pem" not in diag
+    assert "abc123xyz" not in diag
+    assert "Connection test failed for Custom_provider." in diag
+
+    # Test exception with custom .message attribute
+    class CustomError(Exception):
+        def __init__(self, msg):
+            self.message = msg
+            super().__init__(msg)
+
+    custom_exc = CustomError("Internal SQL syntax error at table users_internal_secrets")
+    diag_custom = diagnose_provider_error(custom_exc, provider="test_prov")
+    assert "users_internal_secrets" not in diag_custom
+    assert "Connection test failed for Test_prov." in diag_custom
+
+
+def test_friendly_llm_error_message_does_not_expose_raw_exception_text():
+    from backend.api.routes.adventures.gameplay_logic import _friendly_llm_error_message
+
+    sensitive_exc = Exception("Connection refused to internal proxy https://internal-vault.svc.cluster.local:8200/v1/token")
+    msg = _friendly_llm_error_message(sensitive_exc)
+    assert msg is not None
+    assert "internal-vault.svc" not in msg
+    assert "Connection failed" in msg
+
+
+
