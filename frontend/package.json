@@ -21,6 +21,7 @@
     "dagre": "^0.8.5",
     "dompurify": "^3.4.13",
     "lucide-vue-next": "^1.0.0",
+    "pixi.js": "^8.21.0",
     "roughjs": "^4.6.6",
     "rpg-awesome": "^0.2.0",
     "vue": "^3.4.0",

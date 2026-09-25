@@ -1664,6 +1664,7 @@ watch(
       :consumables="combatConsumables"
       :npc-metadata="npcMetadata"
       :player-sheet="sheet"
+      :scene-image-url="currentSceneImage || adventureImage"
       :evaluating="isCombatEvaluating"
       :is-debug="!!sheet?.debug_mode"
       @attack="handleCombatAttack"

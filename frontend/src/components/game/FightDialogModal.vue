@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CombatState, InventoryItem, CharacterSheet } from '@/types'
 import StatBar from './StatBar.vue'
 import { getImageUrl, getItemIcon, getTypeColor, hasRenderableImagePath } from '@/utils/game_icons'
+import CombatArenaPixi from './combat/CombatArenaPixi.vue'
 
 const LOG_REVEAL_DELAY_MS = 2000
 const DAMAGE_FLOAT_DURATION_MS = 2600
@@ -18,6 +19,7 @@ const props = defineProps<{
   consumables: InventoryItem[]
   npcMetadata: Record<string, any>
   playerSheet: CharacterSheet | null
+  sceneImageUrl?: string | null
   evaluating?: boolean
   isDebug?: boolean
 }>()
@@ -72,6 +74,8 @@ const lastSeenLogLength = ref(0)
 const initializedLogView = ref(false)
 const logContainerRef = ref<HTMLElement | null>(null)
 const prefersReducedMotion = ref(false)
+const combatArenaRef = ref<InstanceType<typeof CombatArenaPixi> | null>(null)
+const centerViewMode = ref<'split' | 'arena' | 'chronicle'>('split')
 
 type DamageFxItem = {
   id: number
@@ -136,6 +140,21 @@ function makeLogKey(entry: any, idx: number): string {
 
 function maybeSpawnDamageFx(entry: any): void {
   const roll = entry?.attackRoll
+  const attacker: 'player' | 'enemy' = entry.isPlayerAttack ? 'player' : 'enemy'
+  const defender: 'player' | 'enemy' = entry.isPlayerAttack ? 'enemy' : 'player'
+
+  if (roll) {
+    if (roll.isHit && roll.damageTotal != null && roll.damageTotal > 0) {
+      combatArenaRef.value?.playAttack(attacker, { isCrit: roll.isCrit, isHit: true }, () => {
+        combatArenaRef.value?.spawnDamageNumber(defender, roll.damageTotal!, roll.isCrit ? 'crit' : 'damage')
+      })
+    } else {
+      combatArenaRef.value?.playAttack(attacker, { isCrit: false, isHit: false }, () => {
+        combatArenaRef.value?.spawnDamageNumber(defender, 'MISS', 'miss')
+      })
+    }
+  }
+
   if (!roll || !roll.isHit || roll.damageTotal == null || roll.damageTotal <= 0) return
 
   const side: 'player' | 'enemy' = entry.isPlayerAttack ? 'enemy' : 'player'
@@ -208,7 +227,23 @@ function revealNewLogs(startIndex: number, endIndex: number): void {
     const delay = interval * (step + 1)
     const timeoutId = window.setTimeout(() => {
       visibleLogCount.value = Math.max(visibleLogCount.value, idx + 1)
-      maybeSpawnDamageFx(parsedLogs.value[idx])
+      const entry = parsedLogs.value[idx]
+      maybeSpawnDamageFx(entry)
+
+      if (entry) {
+        if (entry.type === 'special') {
+          combatArenaRef.value?.playMagicSurge(entry.isPlayerAttack ? 'enemy' : 'player', 'arcane')
+        } else if (entry.type === 'consume') {
+          combatArenaRef.value?.playMagicSurge('player', 'heal')
+        } else if (entry.type === 'outcome') {
+          if (props.combat?.outcome === 'victory') {
+            combatArenaRef.value?.showArcadeBanner('VICTORY!', 'ENCOUNTER WON', true)
+          } else if (props.combat?.outcome === 'defeat') {
+            combatArenaRef.value?.showArcadeBanner('DEFEAT', 'YOU HAVE FALLEN', false)
+          }
+        }
+      }
+
       nextTick(() => scrollLogToBottom(prefersReducedMotion.value ? 'auto' : 'smooth'))
     }, delay)
     revealTimeouts.push(timeoutId)
@@ -264,14 +299,36 @@ function onMotionChange(event: MediaQueryListEvent): void {
   prefersReducedMotion.value = event.matches
 }
 
+function onCombatKeydown(event: KeyboardEvent): void {
+  if (!props.open || !props.combat || !props.combat.active || isLootPhase.value || isInteractionLocked.value) return
+
+  const target = event.target as HTMLElement | null
+  const tag = target?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+
+  if (event.code === 'Space') {
+    event.preventDefault()
+    if (!isAttackDisabled.value) {
+      emit('attack')
+    }
+  } else if (event.key.toLowerCase() === 'r') {
+    event.preventDefault()
+    if (isPlayerTurn.value && (props.combat?.enemy?.hp ?? 0) > 0) {
+      emit('rest')
+    }
+  }
+}
+
 onMounted(() => {
   motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   prefersReducedMotion.value = motionMediaQuery.matches
   motionMediaQuery.addEventListener('change', onMotionChange)
+  window.addEventListener('keydown', onCombatKeydown)
 })
 
 onBeforeUnmount(() => {
   clearPendingTimers()
+  window.removeEventListener('keydown', onCombatKeydown)
   if (motionMediaQuery) {
     motionMediaQuery.removeEventListener('change', onMotionChange)
     motionMediaQuery = null
@@ -612,13 +669,68 @@ const restSlotClass = computed(() => {
               </div>
             </section>
 
-            <section class="relative border border-amber-500/20 bg-gradient-to-b from-slate-900/85 to-slate-950/80 rounded-xl min-h-0 flex flex-col backdrop-blur-sm shadow-[inset_0_1px_0_rgba(251,191,36,0.06)]">
-              <div class="relative px-4 py-2.5 border-b border-amber-500/15 bg-slate-950/40 text-xs uppercase tracking-[0.24em] font-black flex items-center gap-2">
-                <i class="ra ra-scroll-unfurled text-amber-300/80"></i>
-                <span class="text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.4)]">Battle Chronicle</span>
-                <span class="ml-auto text-[10px] text-amber-300/40 font-mono">{{ visibleLogs.length }} / {{ parsedLogs.length }}</span>
+            <section class="relative border border-amber-500/20 bg-gradient-to-b from-slate-900/85 to-slate-950/80 rounded-xl min-h-0 flex flex-col backdrop-blur-sm shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] overflow-hidden">
+              <div class="relative px-3 sm:px-4 py-2 border-b border-amber-500/15 bg-slate-950/50 flex items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-2">
+                  <i class="ra ra-crossed-swords text-amber-300/80 text-xs"></i>
+                  <span class="text-xs uppercase tracking-[0.2em] font-black text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.4)]">Encounter</span>
+                </div>
+
+                <!-- Arena / Log View Switcher -->
+                <div class="flex items-center gap-1 bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/20 text-[10px] sm:text-xs font-bold">
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded transition-all flex items-center gap-1"
+                    :class="centerViewMode === 'split' ? 'bg-amber-600/40 text-amber-200 border border-amber-400/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'text-slate-400 hover:text-slate-200'"
+                    @click="centerViewMode = 'split'"
+                  >
+                    <i class="ra ra-two-hearts text-[10px]"></i>
+                    Split
+                  </button>
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded transition-all flex items-center gap-1"
+                    :class="centerViewMode === 'arena' ? 'bg-amber-600/40 text-amber-200 border border-amber-400/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'text-slate-400 hover:text-slate-200'"
+                    @click="centerViewMode = 'arena'"
+                  >
+                    <i class="ra ra-perspective-dice-six-faces-random text-[10px]"></i>
+                    Arena
+                  </button>
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded transition-all flex items-center gap-1"
+                    :class="centerViewMode === 'chronicle' ? 'bg-amber-600/40 text-amber-200 border border-amber-400/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'text-slate-400 hover:text-slate-200'"
+                    @click="centerViewMode = 'chronicle'"
+                  >
+                    <i class="ra ra-scroll-unfurled text-[10px]"></i>
+                    Log
+                  </button>
+                </div>
+
+                <span class="text-[10px] text-amber-300/40 font-mono">{{ visibleLogs.length }} / {{ parsedLogs.length }}</span>
               </div>
-              <div ref="logContainerRef" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
+
+              <!-- PixiJS Arena Canvas -->
+              <div
+                v-show="centerViewMode === 'split' || centerViewMode === 'arena'"
+                :class="centerViewMode === 'split' ? 'h-56 sm:h-64 shrink-0 p-2 border-b border-amber-500/15' : 'flex-1 min-h-0 p-3'"
+              >
+                <CombatArenaPixi
+                  ref="combatArenaRef"
+                  :combat="combat"
+                  :player-sheet="playerSheet"
+                  :npc-metadata="npcMetadata"
+                  :active-turn="activeTurn"
+                  :scene-image-url="sceneImageUrl"
+                />
+              </div>
+
+              <!-- Battle Chronicle Log Container -->
+              <div
+                v-show="centerViewMode === 'split' || centerViewMode === 'chronicle'"
+                ref="logContainerRef"
+                class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3"
+              >
                 <div v-for="(entry, idx) in visibleLogs" :key="makeLogKey(entry, idx)" class="combat-log-entry text-sm md:text-base leading-relaxed border-l-2 pl-3"
                   :class="entry.type === 'special' ? 'border-violet-400/60 text-violet-200' : entry.type === 'enemy_action' ? 'border-rose-500/50 text-rose-200' : entry.type === 'player_action' ? 'border-emerald-500/50 text-emerald-200' : 'border-amber-500/40 text-slate-200'">
                   <div class="mb-1.5">
@@ -805,7 +917,10 @@ const restSlotClass = computed(() => {
                 @mouseleave="emitLeave"
               >
                 <div class="flex items-center justify-between">
-                  <span class="text-xs uppercase font-black tracking-widest text-slate-400">Main Hand</span>
+                  <span class="text-xs uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5">
+                    Main Hand
+                    <span class="px-1.5 py-0.5 rounded bg-slate-900 border border-emerald-400/40 text-[9px] font-mono font-bold text-emerald-300 shadow-[0_0_6px_rgba(16,185,129,0.3)]">SPACE</span>
+                  </span>
                   <span class="text-xs font-black px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-400">
                     ⚡ {{ attackCost.value }} {{ attackCost.type === 'mana' ? 'MP' : 'STA' }}
                   </span>

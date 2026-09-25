@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/lucide-vue-next/')) {
               return 'vendor-icons'
             }
+            if (id.includes('node_modules/pixi.js/')) {
+              return 'vendor-pixi'
+            }
           },
         },
       },
