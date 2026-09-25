@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import 'pixi.js/unsafe-eval'
 import { Application } from 'pixi.js'
 import { CombatStage, type CombatantInfo } from './CombatStage'
 import type { CombatState, CharacterSheet } from '@/types'

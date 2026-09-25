@@ -1,3 +1,4 @@
+import 'pixi.js/unsafe-eval'
 import { Application, Container, Graphics, Sprite, Assets, Text, TextStyle, type Ticker } from 'pixi.js'
 import { CombatVfxManager } from './CombatVfx'
 
