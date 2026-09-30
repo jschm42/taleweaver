@@ -360,11 +360,13 @@ class QwenTTSService:
 
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
             dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-            logger.info("[QwenTTS] Instantiating Qwen3TTSModel from %s (device=%s, dtype=%s)...", model_dir, device, dtype)
+            attn_impl = "sdpa" if torch.cuda.is_available() else "eager"
+            logger.info("[QwenTTS] Instantiating Qwen3TTSModel from %s (device=%s, dtype=%s, attn=%s)...", model_dir, device, dtype, attn_impl)
             model_instance = Qwen3TTSModel.from_pretrained(
                 model_dir,
                 device_map=device,
                 dtype=dtype,
+                attn_implementation=attn_impl,
             )
 
             cls._loaded_models[model_id] = model_instance
@@ -475,20 +477,23 @@ class QwenTTSService:
         if instruct and instruct.strip():
             gen_kwargs["instruct"] = instruct.strip()
 
+        import torch
+
         try:
-            if hasattr(model_instance, "generate_custom_voice"):
-                wavs, sample_rate = model_instance.generate_custom_voice(
-                    text=text,
-                    speaker=speaker_arg,
-                    language="Auto",
-                    **gen_kwargs,
-                )
-            else:
-                wavs, sample_rate = model_instance.generate(
-                    text=text,
-                    speaker=speaker_arg,
-                    **gen_kwargs,
-                )
+            with torch.inference_mode():
+                if hasattr(model_instance, "generate_custom_voice"):
+                    wavs, sample_rate = model_instance.generate_custom_voice(
+                        text=text,
+                        speaker=speaker_arg,
+                        language="Auto",
+                        **gen_kwargs,
+                    )
+                else:
+                    wavs, sample_rate = model_instance.generate(
+                        text=text,
+                        speaker=speaker_arg,
+                        **gen_kwargs,
+                    )
 
             # Unpack list of waveforms
             audio_data = wavs[0] if isinstance(wavs, (list, tuple)) else wavs
