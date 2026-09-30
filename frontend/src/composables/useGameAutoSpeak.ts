@@ -1,5 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
+import { parseAssistantContent } from '@/composables/useComicTurns'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
 const MAX_TRACKED_SIGNATURES = 200
@@ -13,6 +14,8 @@ type AutoSpeakOptions = {
   sheet: Ref<any>
   npcMetadata: Ref<Record<string, any>>
   sessionId: Ref<string>
+  autoSpeakNarration?: Ref<boolean>
+  autoSpeakDialogues?: Ref<boolean>
 }
 
 function computeContentHash(content: string): string {
@@ -128,15 +131,34 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     lastAutoSpeakAt.value = now
     markMessageAsSpoken(lastMsg, index)
 
-    void audioService.enqueueSpeak(lastMsg.content, {
-      sceneDescription: currentSceneDescription.value,
-      adventureId: sheet.value?.adventure_id || undefined,
-      sessionId: sessionId.value,
-      title: sheet.value?.adventure_title || undefined,
-      sceneName: sheet.value?.current_scene || undefined,
-      tone: sheet.value?.adventure_tone || undefined,
-      npcMetadata: npcMetadata.value,
-    })
+    const parsed = parseAssistantContent(lastMsg.content, sheet.value, [], npcMetadata.value)
+    const speakNarration = options.autoSpeakNarration?.value ?? false
+    const speakDialogues = options.autoSpeakDialogues?.value ?? true
+    
+    for (const dlg of parsed.dialogues) {
+      if (!dlg.text.trim()) continue
+      if (dlg.isNarration && !speakNarration) continue
+      if (!dlg.isNarration && !speakDialogues) continue
+      
+      let textToSpeak = dlg.text
+      if (dlg.voiceTag) {
+        textToSpeak = `[${dlg.voiceTag}] ${textToSpeak}`
+      }
+      if (dlg.speaker && dlg.speaker !== 'Game Master') {
+        textToSpeak = `${dlg.speaker}: ${textToSpeak}`
+      }
+
+      void audioService.enqueueSpeak(textToSpeak, {
+        sceneDescription: currentSceneDescription.value,
+        adventureId: sheet.value?.adventure_id || undefined,
+        sessionId: sessionId.value,
+        title: sheet.value?.adventure_title || undefined,
+        sceneName: sheet.value?.current_scene || undefined,
+        tone: sheet.value?.adventure_tone || undefined,
+        npcMetadata: npcMetadata.value,
+        voiceOverride: dlg.speaker !== 'Game Master' ? dlg.speaker : undefined,
+      })
+    }
   }
 
   watch(() => sessionId.value, (newSessionId, oldSessionId) => {

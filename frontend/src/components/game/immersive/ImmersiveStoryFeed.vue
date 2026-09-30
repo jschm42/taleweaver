@@ -378,10 +378,13 @@ function isDebugSystemMessage(msg: any): boolean {
         >
           <!-- GM NARRATION BOX -->
           <div v-if="dlg.isNarration" class="relative group shrink-0 w-full max-w-2xl">
-            <div class="relative bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+            <div 
+              class="relative bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl transition-all duration-300"
+              :class="{'ring-2 ring-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.5)] scale-[1.01]': isSpeakingBubble(dlg.text)}"
+            >
               <!-- Overlay TTS Button -->
               <button
-                v-if="configState.isTtsEnabled"
+                v-if="configState.isTtsEnabled && !audioService.autoSpeechEnabled.value"
                 type="button"
                 @click.stop="speakBubble(dlg.text)"
                 class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/90 hover:bg-amber-900 border border-amber-400/60 text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
@@ -408,7 +411,7 @@ function isDebugSystemMessage(msg: any): boolean {
           <div v-else class="relative max-w-2xl">
             <!-- Overlay TTS Button -->
             <button
-              v-if="configState.isTtsEnabled"
+              v-if="configState.isTtsEnabled && !audioService.autoSpeechEnabled.value"
               type="button"
               @click.stop="speakBubble(dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text, dlg.speaker)"
               class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md border"
@@ -436,8 +439,11 @@ function isDebugSystemMessage(msg: any): boolean {
             </svg>
 
             <div
-              class="relative p-3.5 sm:p-4.5 rounded-2xl border-2 shadow-[0_10px_30px_rgba(0,0,0,0.65)] backdrop-blur-xl bg-slate-900/95"
-              :class="dlg.isPlayer ? 'border-emerald-400 text-slate-100' : 'border-amber-400 text-slate-100 shadow-[0_0_20px_rgba(251,191,36,0.25)]'"
+              class="relative p-3.5 sm:p-4.5 rounded-2xl border-2 shadow-[0_10px_30px_rgba(0,0,0,0.65)] backdrop-blur-xl bg-slate-900/95 transition-all duration-300"
+              :class="[
+                dlg.isPlayer ? 'border-emerald-400 text-slate-100' : 'border-amber-400 text-slate-100 shadow-[0_0_20px_rgba(251,191,36,0.25)]',
+                isSpeakingBubble(dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text, dlg.speaker) ? (dlg.isPlayer ? 'ring-2 ring-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.5)] scale-[1.01]' : 'ring-2 ring-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.5)] scale-[1.01]') : ''
+              ]"
             >
               <p class="comic-bubble-text text-sm sm:text-base leading-relaxed font-medium italic text-white">
                 <!-- Speaker Tag -->

@@ -130,8 +130,16 @@ const showSettingsModal = ref(false)
 const showMemoriesModal = ref(false)
 const isSavingSettings = ref(false)
 
-const saveSessionSettings = async (payload: { turns: number; enableCompression?: boolean }) => {
+const autoSpeakNarration = ref(localStorage.getItem('tw_autoSpeakNarration') === 'true')
+const autoSpeakDialogues = ref(localStorage.getItem('tw_autoSpeakDialogues') !== 'false')
+
+const saveSessionSettings = async (payload: { turns: number; enableCompression?: boolean; autoSpeakNarration: boolean; autoSpeakDialogues: boolean }) => {
   isSavingSettings.value = true
+  localStorage.setItem('tw_autoSpeakNarration', String(payload.autoSpeakNarration))
+  localStorage.setItem('tw_autoSpeakDialogues', String(payload.autoSpeakDialogues))
+  autoSpeakNarration.value = payload.autoSpeakNarration
+  autoSpeakDialogues.value = payload.autoSpeakDialogues
+
   try {
     await api.updateSession(props.id, {
       max_memory_turns: payload.turns,
@@ -1267,6 +1275,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   sheet,
   npcMetadata,
   sessionId: computed(() => props.id),
+  autoSpeakNarration,
+  autoSpeakDialogues,
 })
 
 const handleTrackQuest = (questId: string | null) => {
@@ -1600,6 +1610,8 @@ watch(
       v-if="showSettingsModal"
       :initial-turns="sheet?.max_memory_turns ?? 10"
       :initial-compression="sheet?.enable_history_compression ?? true"
+      :initial-autospeak-narration="autoSpeakNarration"
+      :initial-autospeak-dialogues="autoSpeakDialogues"
       :is-saving="isSavingSettings"
       @close="showSettingsModal = false"
       @save="saveSessionSettings"
