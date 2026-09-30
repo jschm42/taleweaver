@@ -192,7 +192,7 @@ async def test_tts_engine_converts_uppercase_l16_mime_to_valid_wav(tmp_path, mon
             text="Test line",
             voice="Aoede",
             api_key="fake-key",
-            model_name="gemini-2.5-flash-preview-tts",
+            model_name="gemini-3.8-flash-tts",
         )
 
     assert audio_url and audio_url.endswith(".wav")
@@ -263,7 +263,7 @@ async def test_tts_engine_skips_empty_inline_data_and_uses_non_empty_chunk(tmp_p
             text="Chunked output test",
             voice="Aoede",
             api_key="fake-key",
-            model_name="gemini-2.5-flash-preview-tts",
+            model_name="gemini-3.8-flash-tts",
         )
 
     assert audio_url and audio_url.endswith(".wav")

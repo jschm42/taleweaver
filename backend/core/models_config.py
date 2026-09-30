@@ -50,8 +50,8 @@ PREDEFINED_IMAGE_MODELS = {
 
 PREDEFINED_TTS_MODELS = {
     "google": [
-        {"id": "gemini-2.5-flash-preview-tts", "name": "Gemini 2.5 Flash TTS (Preview)"},
-        {"id": "gemini-3.1-flash-tts-preview", "name": "Gemini 3.1 Flash TTS (Preview)"},
+        {"id": "gemini-3.8-flash-tts", "name": "Gemini 3.8 Flash TTS"},
+        {"id": "gemini-3.8-flash-lite-tts", "name": "Gemini 3.8 Flash Lite TTS"},
     ],
     "elevenlabs": [
         {"id": "eleven_v3", "name": "Eleven v3"},

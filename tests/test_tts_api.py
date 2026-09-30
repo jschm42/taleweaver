@@ -23,7 +23,7 @@ async def _enable_tts_for_test_user(api_key: str = "test-api-key") -> None:
         user.tts_settings = {
             "enabled": True,
             "provider": "google",
-            "selected_model": "gemini-2.5-flash-preview-tts",
+            "selected_model": "gemini-3.8-flash-tts",
             "selected_voice": "Puck",
             "use_vocal_tags": True,
             "speech_rate": 1.0,
@@ -175,7 +175,7 @@ async def test_tts_writes_audio_under_session_folder_when_session_id_present(
             text="Test line",
             voice="Puck",
             api_key="test-api-key",
-            model_name="gemini-2.5-flash-preview-tts",
+            model_name="gemini-3.8-flash-tts",
             adventure_id="route-tpl",
             session_id="route-session-uuid-001",
         )
@@ -221,7 +221,7 @@ async def test_tts_falls_back_to_global_audio_folder_without_session_id(
             text="Test line",
             voice="Puck",
             api_key="test-api-key",
-            model_name="gemini-2.5-flash-preview-tts",
+            model_name="gemini-3.8-flash-tts",
         )
 
     assert audio_url is not None
@@ -258,7 +258,7 @@ async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(
             text="Test line",
             voice="Puck",
             api_key="test-api-key",
-            model_name="gemini-2.5-flash-preview-tts",
+            model_name="gemini-3.8-flash-tts",
             adventure_id="some-adv",
             session_id="../etc/passwd",
         )

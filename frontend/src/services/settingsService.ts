@@ -102,7 +102,7 @@ class SettingsService {
   ttsForm = ref({
     enabled: false,
     provider: 'google',
-    selected_model: 'gemini-2.5-flash-preview-tts',
+    selected_model: 'gemini-3.8-flash-tts',
     elevenlabs_voice_id: '',
     use_vocal_tags: true,
     use_text_chunking: true,

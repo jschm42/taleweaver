@@ -270,7 +270,7 @@ class TTSEngine:
         session_id: Optional[str] = None,
         scene_description: Optional[str] = None,
         style_description: Optional[str] = None,
-        model_name: str = "gemini-2.5-flash-preview-tts",
+        model_name: str = "gemini-3.8-flash-tts",
         title: Optional[str] = None,
         scene_name: Optional[str] = None,
         tone: Optional[str] = None,
@@ -402,7 +402,7 @@ class TTSEngine:
         director_notes: Optional[str] = None,
         scene_description: Optional[str] = None,
         style_description: Optional[str] = None,
-        model_name: str = "gemini-2.5-flash-preview-tts",
+        model_name: str = "gemini-3.8-flash-tts",
         tone: Optional[str] = None,
         use_vocal_tags: bool = True,
         title: Optional[str] = None,
@@ -544,12 +544,10 @@ class TTSEngine:
                             continue
 
                         logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
-                        if model_name == "gemini-3.1-flash-tts-preview":
-                            raise TTSModelSwitchSuggestionError(
-                                "Gemini 3.1 Flash TTS ist derzeit serverseitig instabil (mehrfache 5xx-Fehler). "
-                                "Bitte wechsle auf 'gemini-2.5-flash-preview-tts' und versuche es erneut."
-                            )
-                        response.raise_for_status()
+                        raise TTSModelSwitchSuggestionError(
+                            f"Gemini TTS model '{model_name}' is currently unstable (repeated 5xx errors). "
+                            "Please try switching to 'gemini-3.8-flash-lite-tts' and retry."
+                        )
 
                     if response.status_code != 200:
                         logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)

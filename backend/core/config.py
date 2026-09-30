@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class TTSSettings(BaseModel):
     enabled: bool = True
     provider: str = "google"  # google, elevenlabs
-    selected_model: str = "gemini-2.5-flash-preview-tts"
+    selected_model: str = "gemini-3.8-flash-tts"
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True

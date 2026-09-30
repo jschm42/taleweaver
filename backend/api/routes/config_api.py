@@ -17,13 +17,16 @@ _MODEL_FETCH_LOG_COOLDOWN_SECONDS = 300.0
 _MODEL_FETCH_LAST_LOGGED_AT: dict[str, float] = {}
 
 SUPPORTED_TTS_MODELS = {
-    "gemini-3.1-flash-tts-preview",
-    "gemini-2.5-flash-preview-tts",
+    "gemini-3.8-flash-tts",
+    "gemini-3.8-flash-lite-tts",
 }
 
 TTS_MODEL_ALIASES = {
-    "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
-    "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
+    # Legacy aliases for backward compatibility
+    "gemini-2.5-flash-preview-tts": "gemini-3.8-flash-tts",
+    "gemini-2.5-flash-tts-preview": "gemini-3.8-flash-tts",
+    "gemini-2.5-flash-tts": "gemini-3.8-flash-tts",
+    "gemini-3.1-flash-tts-preview": "gemini-3.8-flash-tts",
 }
 
 from backend.core.auth import get_current_admin, get_current_user
@@ -615,7 +618,7 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     fallback = {
         "enabled": False,
         "provider": "google",
-        "selected_model": "gemini-2.5-flash-preview-tts",
+        "selected_model": "gemini-3.8-flash-tts",
         "voice_list": full_voice_list,
         "voice_catalog": full_voice_catalog,
         "selected_voice": "Puck",
@@ -904,7 +907,7 @@ class GameSettingsPayload(BaseModel):
 class TTSSettingsPayload(BaseModel):
     enabled: bool = False
     provider: str = "google"
-    selected_model: str = "gemini-2.5-flash-preview-tts"
+    selected_model: str = "gemini-3.8-flash-tts"
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
@@ -1377,18 +1380,20 @@ async def test_tts_connection(
     tts_settings = user.tts_settings or {}
     
     provider = tts_settings.get("provider", "google").lower()
-    api_key = settings.get_env_api_key(provider)
-    if not api_key and user.encrypted_api_keys:
-        enc_key = user.encrypted_api_keys.get(provider)
-        if enc_key:
-            try:
-                api_key = encryption_util.decrypt_key(enc_key)
-            except Exception as dec_exc:
-                diag = diagnose_provider_error(dec_exc, provider=provider, context="tts")
-                return {"status": "error", "message": diag}
+    api_key = None
+    if provider != "qwen":
+        api_key = settings.get_env_api_key(provider)
+        if not api_key and user.encrypted_api_keys:
+            enc_key = user.encrypted_api_keys.get(provider)
+            if enc_key:
+                try:
+                    api_key = encryption_util.decrypt_key(enc_key)
+                except Exception as dec_exc:
+                    diag = diagnose_provider_error(dec_exc, provider=provider, context="tts")
+                    return {"status": "error", "message": diag}
 
-    if not api_key:
-        return {"status": "error", "message": f"No API key configured for TTS provider '{provider.capitalize()}'."}
+        if not api_key:
+            return {"status": "error", "message": f"No API key configured for TTS provider '{provider.capitalize()}'."}
 
     test_text = "Tale Weaver connection test successful! The journey begins now."
     
@@ -1401,8 +1406,8 @@ async def test_tts_connection(
             use_vocal_tags=tts_settings.get("use_vocal_tags", True),
             api_key=api_key,
             model_name=TTS_MODEL_ALIASES.get(
-                str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
-                str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
+                str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip(),
+                str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip(),
             ),
         )
         if not audio_url:

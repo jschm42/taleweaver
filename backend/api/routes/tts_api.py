@@ -20,13 +20,16 @@ from backend.models.user import User
 router = APIRouter(prefix="/tts", tags=["TTS"])
 logger = logging.getLogger(__name__)
 SUPPORTED_TTS_MODELS = {
-    "gemini-3.1-flash-tts-preview",
-    "gemini-2.5-flash-preview-tts",
+    "gemini-3.8-flash-tts",
+    "gemini-3.8-flash-lite-tts",
 }
 
 TTS_MODEL_ALIASES = {
-    "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
-    "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
+    # Legacy aliases for backward compatibility
+    "gemini-2.5-flash-preview-tts": "gemini-3.8-flash-tts",
+    "gemini-2.5-flash-tts-preview": "gemini-3.8-flash-tts",
+    "gemini-2.5-flash-tts": "gemini-3.8-flash-tts",
+    "gemini-3.1-flash-tts-preview": "gemini-3.8-flash-tts",
 }
 
 
@@ -118,14 +121,16 @@ async def generate_tts(
         raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
 
     provider = tts_settings.get("provider", "google").lower()
-    api_key = settings.get_env_api_key(provider)
-    if not api_key and settings_user.encrypted_api_keys:
-        enc_key = settings_user.encrypted_api_keys.get(provider)
-        if enc_key:
-            api_key = encryption_util.decrypt_key(enc_key)
+    api_key = None
+    if provider != "qwen":
+        api_key = settings.get_env_api_key(provider)
+        if not api_key and settings_user.encrypted_api_keys:
+            enc_key = settings_user.encrypted_api_keys.get(provider)
+            if enc_key:
+                api_key = encryption_util.decrypt_key(enc_key)
 
-    if not api_key:
-        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
 
     # 2. Get TTS Settings
     voice = tts_settings.get("selected_voice", "Puck")
@@ -139,11 +144,11 @@ async def generate_tts(
     
     style = tts_settings.get("sample_context")
     speed = float(tts_settings.get("speech_rate", 1.0))
-    model = str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip()
+    model = str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip()
     model = TTS_MODEL_ALIASES.get(model, model)
     if provider == "google" and model not in SUPPORTED_TTS_MODELS:
-        logger.warning("Unsupported Google TTS model '%s' configured; falling back to gemini-2.5-flash-preview-tts.", model)
-        model = "gemini-2.5-flash-preview-tts"
+        logger.warning("Unsupported Google TTS model '%s' configured; falling back to gemini-3.8-flash-tts.", model)
+        model = "gemini-3.8-flash-tts"
     
     # Log provider and model
     logger.info("TTS provider: %s, model: %s", provider, model)
@@ -259,8 +264,8 @@ async def test_tts_connection_v2(
             api_key=api_key,
             model_name=(
                 TTS_MODEL_ALIASES.get(
-                    str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
-                    str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
+                    str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip(),
+                    str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip(),
                 )
             ),
             speed=float(tts_settings.get("speech_rate", 1.0)),
