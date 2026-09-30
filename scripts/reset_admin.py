@@ -1,7 +1,6 @@
 import asyncio
 import os
 import sys
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,7 +16,7 @@ from backend.models.user import User
 DEFAULT_ADMIN_USERNAME = "admin"
 
 
-async def reset_admin(username: str = DEFAULT_ADMIN_USERNAME, password: Optional[str] = None):
+async def reset_admin(username: str = DEFAULT_ADMIN_USERNAME, password: str | None = None):
     if not password:
         print(
             "ERROR: Refusing to reset the admin password without an explicit value. "

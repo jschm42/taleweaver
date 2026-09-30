@@ -36,11 +36,11 @@ def load_events(log_path: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     with log_path.open("r", encoding="utf-8") as handle:
         for line in handle:
-            line = line.strip()
-            if not line:
+            stripped = line.strip()
+            if not stripped:
                 continue
             try:
-                obj = json.loads(line)
+                obj = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
             events.append(obj)

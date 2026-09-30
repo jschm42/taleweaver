@@ -8,6 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from backend.core.config import settings
 from backend.engine.media_engine import MediaEngine
 
+
 async def run_migration():
     print("--- TaleWeaver Thumbnail Migration ---")
     library_dir = os.path.join(settings.DATA_DIR, "adventures", "library")
