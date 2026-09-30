@@ -50,6 +50,7 @@ class TTSGeneratePayload(BaseModel):
     voice_override: Optional[str] = Field(default=None)
     speaker_voices: Optional[dict[str, Optional[str]]] = Field(default=None)
     director_notes: Optional[str] = Field(default=None)
+    style_description: Optional[str] = Field(default=None)
 
     @staticmethod
     def _coerce_required_text(value: Any) -> str:
@@ -145,7 +146,7 @@ async def generate_tts(
     
     logger.info("[TTS] Vocal tags enabled: %s (raw value: %s)", use_vocal_tags, raw_vocal_tags)
     
-    style = tts_settings.get("sample_context")
+    style = payload.style_description or tts_settings.get("sample_context")
     speed = float(tts_settings.get("speech_rate", 1.0))
     model = str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip()
     model = TTS_MODEL_ALIASES.get(model, model)

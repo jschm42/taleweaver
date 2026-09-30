@@ -186,6 +186,8 @@ def build_voice_tag_catalog_prompt_block(provider: str = "google") -> str:
     catalog = ELEVENLABS_VOICE_TAG_CATALOG if provider == "elevenlabs" else VOICE_TAG_CATALOG
     tags = ", ".join(f"[{tag}]" for tag in catalog)
     return (
-        "VOICE TAG CATALOG (ENGLISH ONLY): Use ONLY these tags exactly as written.\n"
-        f"{tags}\n"
+        "TONE CATALOG (ENGLISH ONLY): Use ONLY these tags exactly as written in square brackets.\n"
+        f"{tags}\n\n"
+        "VOCAL BURSTS CATALOG: Use ONLY these tags exactly as written in angle brackets.\n"
+        "<cough>, <sigh>, <breath>, <heavy breath>, <laugh>, <chuckle>, <throat-clearing>, <short pause>, <long pause>, <gasp>, <groan>\n"
     )

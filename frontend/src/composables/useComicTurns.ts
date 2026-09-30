@@ -336,11 +336,23 @@ export function parseAssistantContent(
         })
       }
     } else {
+      let narrationText = line
+      let voiceTag: string | undefined = undefined
+      const tagMatch = narrationText.match(/^\[([^\]\n]+)\]\s*(.*)$/)
+      if (tagMatch) {
+        voiceTag = normalizeTagToEnglish(tagMatch[1])
+        narrationText = tagMatch[2].trim()
+      }
+
       const last = dialogues[dialogues.length - 1]
       if (last && last.isNarration) {
-        last.text += '\n\n' + line
+        last.text += '\n\n' + narrationText
+        // Use the voice tag from the first paragraph if the new one doesn't have one
+        if (voiceTag && !last.voiceTag) {
+          last.voiceTag = voiceTag
+        }
       } else {
-        dialogues.push({ speaker: 'Game Master', text: line, isNarration: true })
+        dialogues.push({ speaker: 'Game Master', text: narrationText, isNarration: true, voiceTag })
       }
     }
   }

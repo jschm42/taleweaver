@@ -8,6 +8,7 @@ import os
 import random
 import struct
 import uuid
+import re
 
 import httpx
 
@@ -141,6 +142,7 @@ def _strip_vocal_tags(text: str) -> str:
     result: list[str] = []
     square_depth = 0
     paren_depth = 0
+    angle_depth = 0
 
     for char in text:
         if char == "[":
@@ -155,7 +157,13 @@ def _strip_vocal_tags(text: str) -> str:
         if char == ")" and paren_depth > 0:
             paren_depth -= 1
             continue
-        if square_depth == 0 and paren_depth == 0:
+        if char == "<":
+            angle_depth += 1
+            continue
+        if char == ">" and angle_depth > 0:
+            angle_depth -= 1
+            continue
+        if square_depth == 0 and paren_depth == 0 and angle_depth == 0:
             result.append(char)
 
     return "".join(result).strip()
@@ -300,6 +308,9 @@ class TTSEngine:
             logger.info("[TTS] Text stripped: %d -> %d characters", original_len, len(text))
         else:
             logger.info("[TTS] Vocal tags are ENABLED. Keeping tags in input text.")
+            # Convert [tag] to <tag> as Gemini 3.8 TTS expects angle brackets
+            if text and ("gemini" in (model_name or "").lower() or provider == "google"):
+                text = re.sub(r'\[([^\]\n]+)\]', r'<\1>', text)
 
         if provider == "elevenlabs":
             # Sanitize model_id: ElevenLabs models usually use underscores, but some might be sent with dots

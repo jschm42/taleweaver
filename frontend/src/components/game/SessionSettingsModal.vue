@@ -17,7 +17,7 @@ const emit = defineEmits<{
 
 const turns = ref(10)
 const enableCompression = ref(true)
-const autoSpeakNarration = ref(false)
+const autoSpeakNarration = ref(true)
 const autoSpeakDialogues = ref(true)
 
 onMounted(() => {

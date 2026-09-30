@@ -130,7 +130,7 @@ const showSettingsModal = ref(false)
 const showMemoriesModal = ref(false)
 const isSavingSettings = ref(false)
 
-const autoSpeakNarration = ref(localStorage.getItem('tw_autoSpeakNarration') === 'true')
+const autoSpeakNarration = ref(localStorage.getItem('tw_autoSpeakNarration') !== 'false')
 const autoSpeakDialogues = ref(localStorage.getItem('tw_autoSpeakDialogues') !== 'false')
 
 const saveSessionSettings = async (payload: { turns: number; enableCompression?: boolean; autoSpeakNarration: boolean; autoSpeakDialogues: boolean }) => {
@@ -1610,8 +1610,8 @@ watch(
       v-if="showSettingsModal"
       :initial-turns="sheet?.max_memory_turns ?? 10"
       :initial-compression="sheet?.enable_history_compression ?? true"
-      :initial-autospeak-narration="autoSpeakNarration"
-      :initial-autospeak-dialogues="autoSpeakDialogues"
+      :initial-auto-speak-narration="autoSpeakNarration"
+      :initial-auto-speak-dialogues="autoSpeakDialogues"
       :is-saving="isSavingSettings"
       @close="showSettingsModal = false"
       @save="saveSessionSettings"

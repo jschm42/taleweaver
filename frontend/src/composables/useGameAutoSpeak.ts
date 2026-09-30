@@ -132,7 +132,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     markMessageAsSpoken(lastMsg, index)
 
     const parsed = parseAssistantContent(lastMsg.content, sheet.value, [], npcMetadata.value)
-    const speakNarration = options.autoSpeakNarration?.value ?? false
+    const speakNarration = options.autoSpeakNarration?.value ?? true
     const speakDialogues = options.autoSpeakDialogues?.value ?? true
     
     for (const dlg of parsed.dialogues) {
@@ -142,7 +142,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       
       let textToSpeak = dlg.text
       if (dlg.voiceTag) {
-        textToSpeak = `[${dlg.voiceTag}] ${textToSpeak}`
+        textToSpeak = `<${dlg.voiceTag}> ${textToSpeak}`
       }
       if (dlg.speaker && dlg.speaker !== 'Game Master') {
         textToSpeak = `${dlg.speaker}: ${textToSpeak}`
@@ -157,6 +157,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
         tone: sheet.value?.adventure_tone || undefined,
         npcMetadata: npcMetadata.value,
         voiceOverride: dlg.speaker !== 'Game Master' ? dlg.speaker : undefined,
+        style: dlg.voiceTag || undefined,
       })
     }
   }

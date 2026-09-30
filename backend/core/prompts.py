@@ -374,17 +374,14 @@ GM_NARRATION_MANDATORY_FORMATTING = (
 
 def get_vocal_direction_prompt(provider: str = "google") -> str:
     return (
-        "VOICE DIRECTION: Actively use tone and pace tags to give your narration and dialogue life and atmosphere. "
-        "Tags MUST come from the fixed catalog below and MUST ALWAYS be in English. "
-        "CRITICAL: NEVER translate voice tags into German or any other language (e.g. NEVER write [neugierig], ALWAYS write [curious]). "
+        "VOICE DIRECTION: Actively use tone tags and inline vocalizations to give your narration and dialogue life and atmosphere. "
+        "Tags MUST come from the fixed catalogs below and MUST ALWAYS be in English. "
+        "CRITICAL: NEVER translate voice tags into German or any other language (e.g. NEVER write [neugierig], ALWAYS write [curious]).\n\n"
         + build_voice_tag_catalog_prompt_block(provider) +
-        "Open a paragraph with one catalog tag (for example [excited], [whispers], [shouting], [very fast], [very slow], "
-        "[tense], [solemn], [mocking], [dramatic pause], [amused], [curious]). "
-        "You may also use a catalog tag directly before a character's dialogue line (e.g. Madam Entropy: [amused] \"Dialogue\"). "
-        "Use them whenever the mood calls for it — combat tension, hushed secrets, desperate warnings, "
-        "triumphant moments. Aim to use at least one voice tag per response where the scene warrants it. "
-        "A tag applies to the entire paragraph or dialogue line it opens — start a new paragraph when switching to a different tag. "
-        "Do not nest tags."
+        "1. TONE TAGS: Open a paragraph or dialogue line with one tone tag from the Tone Catalog to set the sustained mood (for example [excited], [whispers], [shouting], [very fast]). "
+        "A tone tag applies to the entire paragraph or dialogue line it opens — start a new paragraph when switching to a different tag. Do not nest tone tags.\n"
+        "2. INLINE VOCALIZATIONS: Insert momentary human sounds exactly where they happen using angle brackets from the Vocal Bursts Catalog (for example <cough>, <sigh>, <short pause>, <laugh>, <throat-clearing>).\n"
+        "Use both whenever the mood calls for it — combat tension, hushed secrets, desperate warnings."
     )
 
 

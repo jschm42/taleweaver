@@ -1738,7 +1738,7 @@ class GameTurnManager:
             tts_provider = tts_settings.get("provider", "google")
             narration_prompt += "\n\n" + prompts.get_vocal_direction_prompt(tts_provider)
             # Add a strong reminder at the end if enabled to ensure the LLM doesn't ignore it
-            narration_prompt += "\n\nREMINDER: Use emotional vocal tags like [Laughs] or [Sighs] where appropriate to give your narration life."
+            narration_prompt += "\n\nREMINDER: Use tone tags like [excited] at the start of paragraphs, and inline vocal bursts like <sigh> or <laugh> in the middle of sentences where appropriate to give your narration life."
 
         scene_changed_this_turn = self.state.current_scene_id != scene_id_before_turn
         if self._is_lookaround_request(user_msg) or scene_changed_this_turn:

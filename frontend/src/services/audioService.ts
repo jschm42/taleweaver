@@ -12,6 +12,8 @@ type SpeakOptions = {
   segmentedVoices?: boolean
   interruptCurrent?: boolean
   useTextChunking?: boolean
+  style?: string
+  voiceOverride?: string
 }
 
 class AudioService {
@@ -459,6 +461,8 @@ class AudioService {
       sceneName,
       tone,
       npcMetadata,
+      style,
+      voiceOverride,
     } = options
 
     const normalizedSceneDescription = this.normalizeOptionalText(sceneDescription)
@@ -481,6 +485,12 @@ class AudioService {
 
       for (let i = 0; i < requests.length; i++) {
         const request = requests[i]
+        
+        let finalVoiceOverride = request.voiceOverride
+        if (!finalVoiceOverride && voiceOverride) {
+            finalVoiceOverride = voiceOverride
+        }
+
         await this.waitForTtsRequestSlot()
         
         const { audio_url } = await api.generateTTS({
@@ -491,7 +501,8 @@ class AudioService {
           title: normalizedTitle,
           scene_name: normalizedSceneName,
           tone: normalizedTone,
-          voice_override: request.voiceOverride,
+          voice_override: finalVoiceOverride,
+          style_description: style,
         })
 
         const blob = await this.fetchAudioBlob(audio_url)
