@@ -17,11 +17,19 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    curl \
     && rm -rf /var/lib/lists/*
 
+# Install poetry
+ENV POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1
+
+RUN pip install --no-cache-dir "poetry>=2.0.0"
+
 # Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml poetry.lock README.md ./
+RUN poetry install --no-root --without dev
+
 
 # Copy backend code
 COPY backend/ ./backend/
@@ -30,6 +38,9 @@ COPY alembic.ini .
 COPY version.json .
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
+
+# Install project package
+RUN poetry install --without dev
 
 # Copy adventures (for automatic import)
 COPY adventures/ ./adventures/

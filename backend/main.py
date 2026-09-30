@@ -260,7 +260,8 @@ async def ping():
     return {"message": "pong"}
 
 
-if __name__ == "__main__":
+def start() -> None:
+    """Start the TaleWeaver backend server."""
     import uvicorn
     # On Windows, reload mode spawns a watchdog process and can produce noisy
     # KeyboardInterrupt traces on shutdown. Keep reload opt-in for local dev.
@@ -271,3 +272,8 @@ if __name__ == "__main__":
         port=settings.BACKEND_PORT,
         reload=reload_enabled,
     )
+
+
+if __name__ == "__main__":
+    start()
+

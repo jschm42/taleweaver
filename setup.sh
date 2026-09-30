@@ -30,32 +30,35 @@ else
     fi
 fi
 
-# 2. Python Virtual Environment
-if [ ! -d "venv" ]; then
-    echo "[*] Creating virtual environment (venv)..."
-    python3 -m venv venv
+# 2. Dependency Management (Poetry)
+echo "[*] Setting up Python dependencies with Poetry..."
+if command -v poetry &> /dev/null; then
+    echo "[+] Using system Poetry..."
+    poetry install
+    RUN_CMD="poetry run"
+    PYTHON_CMD="poetry run python"
+else
+    echo "[*] Poetry not found in PATH. Checking virtual environment (venv)..."
+    if [ ! -d "venv" ]; then
+        echo "[*] Creating virtual environment (venv)..."
+        python3 -m venv venv
+    fi
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+        ./venv/Scripts/pip install --upgrade pip "poetry>=2.0.0"
+        ./venv/Scripts/poetry install
+        RUN_CMD="./venv/Scripts/poetry run"
+        PYTHON_CMD="./venv/Scripts/poetry run python"
+    else
+        ./venv/bin/pip install --upgrade pip "poetry>=2.0.0"
+        ./venv/bin/poetry install
+        RUN_CMD="./venv/bin/poetry run"
+        PYTHON_CMD="./venv/bin/poetry run python"
+    fi
 fi
 
-# 3. Install Backend Dependencies
-echo "[*] Installing backend dependencies..."
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-    # Windows-based shells (Git Bash, etc.)
-    ./venv/Scripts/pip install --upgrade pip
-    ./venv/Scripts/pip install -r requirements.txt
-else
-    ./venv/bin/pip install --upgrade pip
-    ./venv/bin/pip install -r requirements.txt
-fi
 
 # 4. Security Keys
 mkdir -p data
-
-# Determine python command
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-    PYTHON_CMD="./venv/Scripts/python"
-else
-    PYTHON_CMD="./venv/bin/python3"
-fi
 
 # Helper: set or append a key=value pair in .env
 # Usage: set_env_key KEY VALUE
@@ -103,11 +106,7 @@ cd ..
 
 echo -e "\n--- Setup Complete! ---"
 echo "To start the application:"
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-    echo "Backend: ./venv/Scripts/python -m backend.main"
-else
-    echo "Backend: ./venv/bin/python3 -m backend.main"
-fi
+echo "Backend: $RUN_CMD python -m backend.main (or: $RUN_CMD taleweaver)"
 echo "Frontend: cd frontend && npm run dev"
 
 # 7. Start (Optional)
@@ -117,11 +116,7 @@ if [ "$SKIP_START" = false ]; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "[*] Starting backend..."
-        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-            ./venv/Scripts/python -m backend.main &
-        else
-            ./venv/bin/python3 -m backend.main &
-        fi
+        $RUN_CMD python -m backend.main &
         BACKEND_PID=$!
         
         echo "[*] Starting frontend..."

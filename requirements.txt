@@ -1,3 +1,5 @@
+# NOTE: TaleWeaver uses Poetry (pyproject.toml) for build & dependency management.
+# This file is maintained for legacy/fallback environments.
 fastapi
 uvicorn[standard]
 gunicorn

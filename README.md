@@ -325,33 +325,25 @@ If you prefer to run the components separately for development:
 The project is split into a Python/FastAPI backend and a Vue.js frontend.
 
 #### 1. Backend Setup
-Navigate to the project root directory, create a virtual environment, and install dependencies:
+Navigate to the project root directory and install dependencies with Poetry:
 
 ```bash
-# Create and activate a virtual environment
-python -m venv venv
-
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
-
-# Install requirements
-python -m pip install -r requirements.txt
+# Install dependencies (creates and manages virtualenv automatically)
+poetry install
 
 # Set up your environment variables
 cp .env.example .env
 
 # Generate a secure ENCRYPTION_KEY and follow the script's instructions
 # to place the generated key into your new .env file
-python scripts/generate_fernet_key.py
+poetry run python scripts/generate_fernet_key.py
 
 # Generate a random SECRET_KEY (used to sign JWT tokens)
 python -c "import secrets; print(secrets.token_hex(32))"
 # ...and paste it as SECRET_KEY=... in your .env file
 
 # Apply database migrations
-python -m alembic upgrade head
+poetry run alembic upgrade head
 
 > [!IMPORTANT]
 > Just like starting the server, run the migration command from the project root directory so Alembic can find the `alembic.ini` configuration file.
@@ -360,17 +352,18 @@ python -m alembic upgrade head
 # delete data/taleweaver.db and run migrations again
 
 # If a previous migration crashed and left temp tables behind, clean and retry:
-# python -c "import sqlite3; c=sqlite3.connect('data/taleweaver.db'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_adventures'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_users'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_avatars'); c.commit(); c.close()"
-# python -m alembic upgrade head
+# poetry run python -c "import sqlite3; c=sqlite3.connect('data/taleweaver.db'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_adventures'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_users'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_avatars'); c.commit(); c.close()"
+# poetry run alembic upgrade head
 
 # Start the FastAPI server (uses BACKEND_PORT from .env)
-python -m backend.main
+poetry run taleweaver
+# or: poetry run python -m backend.main
 
 
-#### ⚡ Start the Backend Server (Uvicorn)
+#### ⚡ Start the Backend Server (Uvicorn with reload)
 Start the FastAPI application with automatic reloading on change:
 
-uvicorn backend.main:app --reload --port 8000
+poetry run uvicorn backend.main:app --reload --port 8000
 ```
 
 Important: Run this command from the project root. Running it from inside the backend directory causes import errors like ModuleNotFoundError: No module named backend.
@@ -389,11 +382,9 @@ If you want a copy-paste setup for Windows PowerShell from the project root:
 
 ```powershell
 # Backend terminal
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m alembic upgrade head
-python -m backend.main
+poetry install
+poetry run alembic upgrade head
+poetry run taleweaver
 ```
 
 ```powershell

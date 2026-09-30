@@ -1,3 +1,53 @@
+[project]
+name = "taleweaver"
+version = "0.5.0"
+description = "AI-powered text and role-playing adventure game engine"
+authors = [
+    {name = "Jean Schmitz"}
+]
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "gunicorn>=22.0.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "uuid6>=2024.0.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "cryptography>=42.0.0",
+    "litellm>=1.40.0",
+    "alembic>=1.13.0",
+    "pillow>=10.0.0",
+    "python-multipart>=0.0.9",
+    "passlib[bcrypt]>=1.7.4",
+    "pyjwt>=2.8.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+taleweaver = "backend.main:start"
+
+[tool.poetry]
+packages = [{include = "backend"}]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0"
+pytest-asyncio = ">=0.23.0"
+ruff = ">=0.8.0"
+mypy = ">=1.10.0"
+black = ">=24.0.0"
+flake8 = ">=7.0.0"
+types-pillow = ">=10.0.0"
+types-python-jose = ">=3.3.0"
+types-cryptography = ">=3.3.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
 [tool.ruff]
 # Target Python version
 target-version = "py310"
