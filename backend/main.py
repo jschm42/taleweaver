@@ -250,6 +250,16 @@ else:
     # Standard mount for development
     app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="assets")
 
+    @app.get("/", tags=["Development"])
+    async def dev_root() -> dict:
+        return {
+            "name": "TaleWeaver Backend API",
+            "status": "online",
+            "docs": "/docs",
+            "frontend_dev_url": "http://localhost:5173",
+            "message": "Backend is running. In development mode, start and open the frontend on http://localhost:5173 ('cd frontend; npm run dev') or run 'npm run build' in /frontend to serve the web UI directly on port 8000.",
+        }
+
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict:
     """Returns a simple liveness signal for load-balancer health checks."""

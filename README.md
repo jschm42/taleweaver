@@ -508,13 +508,15 @@ You can download `.adv` or `.adz` files from there and import them into your loc
 * **AI & LLM:** Image generation is powered by **FLUX.1 [schnell]** and **FLUX.2 [klein]** by [Black Forest Labs](https://blackforestlabs.ai/). Multi-provider LLM abstraction is handled via [LiteLLM](https://github.com/BerriAI/litellm).
 * **Voice & Audio:** Cinematic narration provided by **Google Gemini 2.5 Flash (TTS)** and **ElevenLabs**, with speech-to-text input transcribing powered by **OpenAI Whisper**.
 * **Mapping:** Dynamic hand-drawn world maps are rendered using [rough.js](https://roughjs.com/) and [dagre](https://github.com/dagrejs/dagre).
-* **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets, and [DiceBear](https://www.dicebear.com/) for the procedural user avatars.
+* **Visual Assets:** Visual assets generated via Black Forest Labs FLUX / OpenAI API. Distributed under MIT License / Public Domain equivalent. Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets, and [DiceBear](https://www.dicebear.com/) for the procedural user avatars. See [ASSETS.md](ASSETS.md) for full attribution details.
 * **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).
 * **Typography:** Retro pixel-art and fantasy aesthetics powered by the **Press Start 2P**, **Acme**, and **Orbitron** fonts from [Google Fonts](https://fonts.google.com/) (SIL Open Font License).
 
 ## 8. License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+Visual assets generated via Black Forest Labs FLUX / OpenAI API. Distributed under MIT License / Public Domain equivalent. Detailed attribution and model licenses are documented in [ASSETS.md](ASSETS.md).
 
 Adventure License: All adventure files in this repository (blueprints, packaged .adz/.adv adventures, concepts, documentation, and assets) are licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) License** - see the [LICENSE-CC-BY-NC-4.0](LICENSE-CC-BY-NC-4.0) file for details. You are free to share and adapt the material for non-commercial purposes, provided that appropriate credit is given to the creator. See the LICENSE-CC-BY-NC-4.0 file for the full legal text.
 
