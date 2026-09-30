@@ -218,8 +218,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Analyze TaleWeaver LLM latency telemetry.")
     parser.add_argument(
         "--log",
-        default="backend/logs/llm_debug.jsonl",
-        help="Path to telemetry log file (default: backend/logs/llm_debug.jsonl)",
+        default="",
+        help="Path to telemetry log file (defaults to data/logs/llm_debug.jsonl)",
     )
     parser.add_argument(
         "--limit",
@@ -240,9 +240,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    log_path = Path(args.log)
-    if not log_path.exists():
-        raise SystemExit(f"Log file not found: {log_path}")
+    log_path = Path(args.log) if args.log else None
+    if not log_path or not log_path.exists():
+        candidates = [
+            Path("data/logs/llm_debug.jsonl"),
+            Path("data/logs/llm_telemetry.jsonl"),
+            Path("backend/logs/llm_debug.jsonl"),
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                log_path = candidate
+                break
+
+    if not log_path or not log_path.exists():
+        raise SystemExit(f"Log file not found: {args.log or 'data/logs/llm_debug.jsonl'}")
 
     events = load_events(log_path)
     print(f"Loaded events: {len(events)} from {log_path}")

@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
-TaleWeaver State & Manifest Inspector (CLI)
+TaleWeaver State, Database & Manifest Inspector (CLI)
 
-Provides deep diagnostic inspection for:
+Provides deep diagnostic inspection and management for:
+- Database Health & Table Counts (SQLite stats, WAL, storage sizes)
 - Adventure Templates (Manifests, Scenes, Entities, Exits, Rules, Quests, Awards)
-- Game Sessions (SessionState, Avatar, Inventory, Entity Overrides, Runtime Flags)
+- Disk Adventures (.adv, .adz, manifests on disk & import status)
+- Game Sessions (SessionState, Avatar, Inventory, Entity Overrides, Dialogue Turns, Checkpoints)
+- Adventure Import / Ingestion
 
 Usage:
-  python scripts/inspect_state.py list-adventures
-  python scripts/inspect_state.py show-adventure <template_id_or_title> [--entities] [--scenes] [--exits] [--manifest] [--json]
+  python scripts/inspect_state.py db-status [--json]
+  python scripts/inspect_state.py list-adventures [--json]
+  python scripts/inspect_state.py list-disk-adventures [--json]
+  python scripts/inspect_state.py show-adventure <id_or_title> [--entities] [--scenes] [--exits] [--manifest] [--json]
+  python scripts/inspect_state.py dump-manifest <id_or_title>
+  python scripts/inspect_state.py import-adventure [path] [--user <username>] [--overwrite]
   python scripts/inspect_state.py list-sessions [--limit 10] [--all] [--json]
-  python scripts/inspect_state.py show-session <session_id> [--inventory] [--entities] [--hidden-only] [--json]
-  python scripts/inspect_state.py dump-manifest <template_id>
+  python scripts/inspect_state.py show-session <session_id> [--inventory] [--entities] [--hidden-only] [--chat] [--checkpoints] [--json]
 """
 
 import argparse
@@ -19,20 +25,32 @@ import asyncio
 import json
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 # Add project root to sys.path
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from sqlalchemy import select, desc
-from sqlalchemy.orm import selectinload
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
+from sqlalchemy import desc, func, select, text
+
+from backend.core.config import settings
 from backend.core.database import AsyncSessionLocal
+from backend.engine.adventure_importer import AdventureTemplateImporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
+from backend.models.character import Character
+from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
+from backend.models.session_checkpoint import SessionCheckpoint
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -41,6 +59,34 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 def _format_json(data: Any) -> str:
     """Format dictionary/list as pretty JSON string."""
     return json.dumps(data, indent=2, default=str, ensure_ascii=False)
+
+
+def _format_bytes(size: int) -> str:
+    """Format bytes into human-readable size."""
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    elif size < 1024 * 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} MB"
+    return f"{size / (1024 * 1024 * 1024):.2f} GB"
+
+
+def _get_dir_size(path: Path) -> tuple[int, int]:
+    """Calculate total byte size and file count for a directory."""
+    total_bytes = 0
+    file_count = 0
+    if not path.exists():
+        return 0, 0
+    for root, _, files in os.walk(path):
+        for f in files:
+            fp = Path(root) / f
+            try:
+                total_bytes += fp.stat().st_size
+                file_count += 1
+            except OSError:
+                pass
+    return total_bytes, file_count
 
 
 def _print_header(title: str, char: str = "="):
@@ -63,8 +109,143 @@ def _print_kv(key: str, value: Any, indent: int = 2):
 
 
 # -----------------------------------------------------------------------------
+# DATABASE & STORAGE STATUS
+# -----------------------------------------------------------------------------
+
+
+async def cmd_db_status(args):
+    db_url = settings.DATABASE_URL
+    db_path = None
+    if ":///" in db_url:
+        raw_path = db_url.split(":///", 1)[1]
+        db_path = Path(raw_path) if Path(raw_path).is_absolute() else Path(PROJECT_ROOT) / raw_path
+    if not db_path or not db_path.exists():
+        fallback = Path(PROJECT_ROOT) / "data" / "taleweaver.db"
+        if fallback.exists():
+            db_path = fallback
+
+    async with AsyncSessionLocal() as db:
+        # Table counts
+        counts: dict[str, Any] = {}
+        tables_to_count = [
+            ("users", User),
+            ("adventure_templates", AdventureTemplate),
+            ("game_sessions", GameSession),
+            ("session_states", SessionState),
+            ("avatars", Avatar),
+            ("characters", Character),
+            ("chat_messages", ChatMessage),
+            ("session_checkpoints", SessionCheckpoint),
+            ("world_scenes", WorldScene),
+            ("world_entities", WorldEntity),
+            ("world_exits", WorldExit),
+        ]
+        for name, model in tables_to_count:
+            try:
+                res = await db.execute(select(func.count()).select_from(model))
+                counts[name] = res.scalar_one()
+            except Exception as e:
+                counts[name] = f"error ({e})"
+
+        # Pragmas
+        try:
+            j_res = await db.execute(text("PRAGMA journal_mode;"))
+            journal_mode = j_res.scalar_one()
+        except Exception:
+            journal_mode = "unknown"
+
+        try:
+            page_res = await db.execute(text("PRAGMA page_count;"))
+            page_count = page_res.scalar_one()
+            page_size_res = await db.execute(text("PRAGMA page_size;"))
+            page_size = page_size_res.scalar_one()
+            calc_size = page_count * page_size
+        except Exception:
+            calc_size = 0
+
+    # Files on disk
+    files_info: dict[str, Any] = {}
+    if db_path and db_path.exists():
+        files_info["database_file"] = {
+            "path": str(db_path),
+            "size_bytes": db_path.stat().st_size,
+            "size_formatted": _format_bytes(db_path.stat().st_size),
+        }
+        for ext in ["-wal", "-shm"]:
+            sidecar = Path(str(db_path) + ext)
+            if sidecar.exists():
+                files_info[f"database{ext}"] = {
+                    "path": str(sidecar),
+                    "size_bytes": sidecar.stat().st_size,
+                    "size_formatted": _format_bytes(sidecar.stat().st_size),
+                }
+
+    # Data directory breakdown
+    data_dir = Path(PROJECT_ROOT) / settings.DATA_DIR
+    dirs_info: dict[str, Any] = {}
+    subdirs = [
+        "adventures/library",
+        "adventures/sessions",
+        "characters",
+        "audio",
+        "logs",
+        "presets/adventures",
+        "imports/adventures",
+    ]
+    for sub in subdirs:
+        target = data_dir / sub
+        if target.exists():
+            b, c = _get_dir_size(target)
+            dirs_info[sub] = {
+                "bytes": b,
+                "formatted": _format_bytes(b),
+                "count": c,
+            }
+
+    if args.json:
+        print(
+            _format_json(
+                {
+                    "database_url": db_url,
+                    "journal_mode": journal_mode,
+                    "calculated_size_bytes": calc_size,
+                    "calculated_size_formatted": _format_bytes(calc_size),
+                    "files": files_info,
+                    "table_counts": counts,
+                    "storage_usage": dirs_info,
+                }
+            )
+        )
+        return
+
+    _print_header("TaleWeaver Database & Storage Status")
+    if db_path and db_path.exists():
+        _print_kv("Database File", f"{db_path} ({_format_bytes(db_path.stat().st_size)})")
+        for ext in ["-wal", "-shm"]:
+            sidecar = Path(str(db_path) + ext)
+            if sidecar.exists():
+                _print_kv(
+                    f"Sidecar ({ext})", f"{sidecar.name} ({_format_bytes(sidecar.stat().st_size)})"
+                )
+    else:
+        _print_kv("Database URL", db_url)
+    _print_kv("Journal Mode", journal_mode)
+    if calc_size:
+        _print_kv("Calculated DB Size", _format_bytes(calc_size))
+
+    _print_header("Database Table Records", char="-")
+    for tbl, cnt in counts.items():
+        _print_kv(tbl, cnt)
+
+    _print_header(f"Data Directory Storage ({data_dir.name}/)", char="-")
+    for sdir, info in dirs_info.items():
+        _print_kv(sdir, f"{info['formatted']} ({info['count']} files)")
+
+
+# -----------------------------------------------------------------------------
 # ADVENTURE COMMANDS
 # -----------------------------------------------------------------------------
+
 
 async def cmd_list_adventures(args):
     async with AsyncSessionLocal() as db:
@@ -89,7 +270,7 @@ async def cmd_list_adventures(args):
             print(_format_json(out))
             return
 
-        _print_header(f"Adventure Templates ({len(templates)} found)")
+        _print_header(f"Adventure Templates ({len(templates)} found in database)")
         if not templates:
             print("  No adventure templates found in database.")
             return
@@ -105,10 +286,145 @@ async def cmd_list_adventures(args):
             print()
 
 
+async def cmd_list_disk_adventures(args):
+    search_dirs = [
+        Path(PROJECT_ROOT) / "adventures",
+        Path(PROJECT_ROOT) / settings.DATA_DIR / "imports" / "adventures",
+        Path(PROJECT_ROOT) / settings.DATA_DIR / "presets" / "adventures",
+    ]
+    disk_files: list[Path] = []
+    for d in search_dirs:
+        if not d.exists():
+            continue
+        for ext in ["*.adv", "*.adz", "*.json"]:
+            for f in d.rglob(ext):
+                # Skip package/config files
+                if f.name in (
+                    "package.json",
+                    "tsconfig.json",
+                    "version.json",
+                    "scratch_manifest.json",
+                ):
+                    continue
+                disk_files.append(f)
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(AdventureTemplate))
+        db_templates = res.scalars().all()
+        db_titles = {t.title.lower(): t for t in db_templates if t.title}
+        db_origins = {t.origin_id: t for t in db_templates if t.origin_id}
+        db_ids = {t.id: t for t in db_templates if t.id}
+
+    records = []
+    for f in sorted(disk_files):
+        size = f.stat().st_size
+        try:
+            rel_path = f.relative_to(PROJECT_ROOT)
+        except ValueError:
+            rel_path = f
+
+        stem = f.stem.lower()
+        matched = db_titles.get(stem) or db_origins.get(stem) or db_ids.get(stem)
+
+        status = f"IMPORTED ({matched.id})" if matched else "AVAILABLE TO IMPORT"
+        records.append(
+            {
+                "path": str(rel_path),
+                "filename": f.name,
+                "size_bytes": size,
+                "size_formatted": _format_bytes(size),
+                "status": status,
+                "imported": matched is not None,
+                "template_id": matched.id if matched else None,
+            }
+        )
+
+    if args.json:
+        print(_format_json(records))
+        return
+
+    _print_header(f"Disk Adventures ({len(records)} found)")
+    if not records:
+        print("  No adventure files found on disk.")
+        return
+
+    for r in records:
+        status_color = "\033[1;32m" if r["imported"] else "\033[1;33m"
+        print(f"  • \033[1;36m{r['path']}\033[0m ({r['size_formatted']})")
+        print(f"    Status: {status_color}{r['status']}\033[0m")
+        print()
+
+
+async def cmd_import_adventure(args):
+    target = args.file_path
+    if not target:
+        default_adv = Path(PROJECT_ROOT) / "adventures" / "default" / "combat_test_adventure.adv"
+        if default_adv.exists():
+            target = str(default_adv)
+        else:
+            print(
+                "ERROR: Please specify an adventure file (.adv, .adz) or directory to import.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    target_path = Path(target)
+    if not target_path.is_absolute():
+        target_path = Path(PROJECT_ROOT) / target
+
+    if not target_path.exists():
+        print(f"ERROR: File or directory '{target_path}' not found.", file=sys.stderr)
+        sys.exit(1)
+
+    async with AsyncSessionLocal() as db:
+        owner_id = None
+        if args.user:
+            u_res = await db.execute(
+                select(User).where((User.id == args.user) | (User.username == args.user))
+            )
+            user = u_res.scalars().first()
+            if user:
+                owner_id = user.id
+            else:
+                print(
+                    f"WARNING: User '{args.user}' not found. Falling back to admin.",
+                    file=sys.stderr,
+                )
+
+        if not owner_id:
+            adm_res = await db.execute(select(User).where(User.role == "admin").limit(1))
+            admin = adm_res.scalars().first()
+            if admin:
+                owner_id = admin.id
+
+        print(
+            f"[*] Importing '{target_path.name}' (owner_id: {owner_id or 'None'}, overwrite: {args.overwrite})..."
+        )
+        if target_path.is_dir():
+            success = await AdventureTemplateImporter.import_from_directory(
+                db,
+                str(target_path),
+                owner_id=owner_id,
+                overwrite=args.overwrite,
+            )
+        else:
+            success = await AdventureTemplateImporter.import_file(
+                db,
+                str(target_path),
+                owner_id=owner_id,
+                overwrite=args.overwrite,
+            )
+
+        if success:
+            print(f"\033[1;32m[+] Successfully imported '{target_path.name}'!\033[0m")
+        else:
+            print(f"\033[1;31m[-] Failed to import '{target_path.name}'.\033[0m", file=sys.stderr)
+            sys.exit(1)
+
+
 async def cmd_show_adventure(args):
     ident = args.identifier.strip()
     async with AsyncSessionLocal() as db:
-        # Search by exact ID, origin_id, or title prefix/match
         query = select(AdventureTemplate).where(
             (AdventureTemplate.id == ident)
             | (AdventureTemplate.origin_id == ident)
@@ -121,20 +437,19 @@ async def cmd_show_adventure(args):
             print(f"ERROR: No adventure template found matching '{ident}'.", file=sys.stderr)
             sys.exit(1)
 
-        # Load scenes, entities, exits for this template
         scenes_res = await db.execute(
             select(WorldScene).where(WorldScene.template_id == template.id).order_by(WorldScene.id)
         )
         scenes = scenes_res.scalars().all()
 
         entities_res = await db.execute(
-            select(WorldEntity).where(WorldEntity.template_id == template.id).order_by(WorldEntity.id)
+            select(WorldEntity)
+            .where(WorldEntity.template_id == template.id)
+            .order_by(WorldEntity.id)
         )
         entities = entities_res.scalars().all()
 
-        exits_res = await db.execute(
-            select(WorldExit).where(WorldExit.template_id == template.id)
-        )
+        exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template.id))
         exits = exits_res.scalars().all()
 
         if args.json:
@@ -154,7 +469,12 @@ async def cmd_show_adventure(args):
                     "game_over_rules": template.game_over_rules,
                 },
                 "scenes": [
-                    {"id": s.id, "label": s.label, "description": s.description, "image_url": s.image_url}
+                    {
+                        "id": s.id,
+                        "label": s.label,
+                        "description": s.description,
+                        "image_url": s.image_url,
+                    }
                     for s in scenes
                 ],
                 "entities": [
@@ -178,9 +498,8 @@ async def cmd_show_adventure(args):
                         "id": x.id,
                         "from_scene_id": x.from_scene_id,
                         "to_scene_id": x.to_scene_id,
-                        "label": x.label,
+                        "direction": x.direction,
                         "is_locked": x.is_locked,
-                        "lock_description": x.lock_description,
                         "item_to_unlock": x.item_to_unlock,
                         "code_to_unlock": x.code_to_unlock,
                         "rule_to_unlock": x.rule_to_unlock,
@@ -193,59 +512,82 @@ async def cmd_show_adventure(args):
             print(_format_json(payload))
             return
 
-        _print_header(f"Adventure: {template.title} (ID: {template.id})")
-        _print_kv("Title", template.title)
-        _print_kv("ID", template.id)
-        _print_kv("Origin ID", template.origin_id or "N/A")
-        _print_kv("Version", template.version or "1.0")
-        _print_kv("Language", template.language or "en")
-        _print_kv("Teaser", (template.teaser or "N/A")[:120] + ("..." if len(template.teaser or "") > 120 else ""))
-        _print_kv("Rule Mode", template.rule_enforcement_mode)
-        _print_kv("Clock Enabled", template.clock_enabled)
-        _print_kv("Time System", f"{template.time_system} (Pacing: {template.pacing_minutes}m/turn)")
-        _print_kv("Quests Count", len(template.quests or []))
+        # Header Details
+        _print_header(f"Adventure: {template.title}")
+        _print_kv("Template ID", template.id)
+        if template.origin_id:
+            _print_kv("Origin ID", template.origin_id)
+        _print_kv("Version", f"{template.version or '1.0'} ({template.language or 'en'})")
+        _print_kv(
+            "Status", "READY" if template.is_ready else f"PENDING ({template.creation_status})"
+        )
+        _print_kv("Rule Enforcement", template.rule_enforcement_mode or "standard")
+        _print_kv(
+            "Clock Enabled", f"{template.clock_enabled} ({template.time_system or 'calendar'})"
+        )
+        if template.teaser:
+            _print_kv("Teaser", template.teaser)
 
-        # Show Scenes
-        if not args.entities and not args.exits and not args.manifest:
-            _print_header(f"World Scenes ({len(scenes)})", char="-")
+        # Scenes
+        if not args.entities and not args.exits:
+            _print_header(f"Scenes ({len(scenes)})", char="-")
             for s in scenes:
-                print(f"  • [\033[1;33m{s.id}\033[0m] {s.label}")
-                desc_snippet = (s.description or "").replace("\n", " ")[:100]
-                if desc_snippet:
-                    print(f"    Description: {desc_snippet}...")
+                print(f"  • [\033[1;33m{s.id}\033[0m] {s.label or '(unlabeled)'}")
+                if s.description:
+                    desc_snippet = s.description.strip()
+                    if len(desc_snippet) > 120:
+                        desc_snippet = desc_snippet[:117] + "..."
+                    print(f"    {desc_snippet}")
 
-        # Show Entities / Items
-        if not args.scenes and not args.exits and not args.manifest:
-            _print_header(f"World Entities & Items ({len(entities)})", char="-")
+        # Entities
+        if not args.scenes and not args.exits:
+            _print_header(f"Entities & Items ({len(entities)})", char="-")
             for e in entities:
-                hidden_tag = "\033[1;31m[HIDDEN]\033[0m" if e.is_hidden else "\033[1;32m[VISIBLE]\033[0m"
-                type_tag = f"({e.entity_type}:{e.item_type or 'STANDARD'})"
-                print(f"  • [\033[1;33m{e.id}\033[0m] \033[1m{e.name}\033[0m {type_tag} {hidden_tag}")
-                print(f"    Scene   : {e.current_scene_id} (Spatial: {e.spatial_position or 'default'})")
-                if e.reveal_rule:
-                    print(f"    Reveal Rule: {e.reveal_rule}")
+                hidden_tag = (
+                    "\033[1;31m[HIDDEN]\033[0m" if e.is_hidden else "\033[1;32m[VISIBLE]\033[0m"
+                )
+                itype = e.item_type or e.entity_type or "OBJECT"
+                print(
+                    f"  • [\033[1;36m{e.id}\033[0m] \033[1m{e.name}\033[0m ({itype}) {hidden_tag}"
+                )
+                print(
+                    f"    Scene: {e.current_scene_id or 'none'} | Spatial: {e.spatial_position or 'default'}"
+                )
                 if e.combination_ingredients:
                     print(f"    Ingredients: {e.combination_ingredients}")
-                if e.reveals_item_id:
-                    print(f"    Reveals Item: {e.reveals_item_id}")
+                if e.reveal_rule:
+                    print(f"    Reveal Rule: {e.reveal_rule}")
                 if e.unlock_rule:
                     print(f"    Unlock Rule: {e.unlock_rule}")
 
-        # Show Exits
-        if not args.scenes and not args.entities and not args.manifest:
-            _print_header(f"World Exits ({len(exits)})", char="-")
+        # Exits
+        if not args.scenes and not args.entities:
+            _print_header(f"Exits & Passages ({len(exits)})", char="-")
             for x in exits:
-                lock_tag = f"\033[1;31m[LOCKED by {x.item_to_unlock or x.code_to_unlock or 'rule'}]\033[0m" if x.is_locked else "\033[1;32m[OPEN]\033[0m"
-                arrow = "<->" if getattr(x, "exit_type", "one_way") == "bidirectional" else "->"
-                type_tag = f"[{getattr(x, 'exit_type', 'one_way').upper()}]"
-                print(f"  * {x.from_scene_id} {arrow} {x.to_scene_id} {type_tag} | \"{x.label}\" {lock_tag}")
-                if x.rule_to_unlock:
-                    print(f"    Rule to unlock: {x.rule_to_unlock}")
+                lock_tag = "\033[1;31m[LOCKED]\033[0m" if x.is_locked else "\033[1;32m[OPEN]\033[0m"
+                print(
+                    f"  • {x.from_scene_id} -> {x.to_scene_id} ({x.direction or 'path'}) {lock_tag}"
+                )
+                if x.is_locked:
+                    if x.item_to_unlock:
+                        print(f"    Key Item: {x.item_to_unlock}")
+                    if x.code_to_unlock:
+                        print(f"    Code/Password: {x.code_to_unlock}")
+                    if x.rule_to_unlock:
+                        print(f"    Rule: {x.rule_to_unlock}")
+
+        # Quests
+        if not args.scenes and not args.entities and not args.exits and template.quests:
+            _print_header(f"Quests ({len(template.quests)})", char="-")
+            for q in template.quests:
+                print(
+                    f"  • \033[1m{q.get('title') or q.get('id')}\033[0m: {q.get('description', '')}"
+                )
 
         # Manifest
         if args.manifest:
-            _print_header("Original Manifest", char="-")
-            print(_format_json(template.original_manifest or {}))
+            _print_header("Raw Original Manifest", char="-")
+            print(_format_json(template.original_manifest))
 
 
 async def cmd_dump_manifest(args):
@@ -259,9 +601,8 @@ async def cmd_dump_manifest(args):
         res = await db.execute(query)
         template = res.scalars().first()
         if not template:
-            print(f"ERROR: Template '{ident}' not found.", file=sys.stderr)
+            print(f"ERROR: No adventure template found matching '{ident}'.", file=sys.stderr)
             sys.exit(1)
-
         print(_format_json(template.original_manifest or {}))
 
 
@@ -269,9 +610,9 @@ async def cmd_dump_manifest(args):
 # SESSION COMMANDS
 # -----------------------------------------------------------------------------
 
+
 async def cmd_list_sessions(args):
     async with AsyncSessionLocal() as db:
-        limit = None if args.all else (args.limit or 10)
         query = (
             select(GameSession, SessionState, Avatar, User)
             .outerjoin(SessionState, SessionState.session_id == GameSession.id)
@@ -279,41 +620,47 @@ async def cmd_list_sessions(args):
             .outerjoin(User, User.id == GameSession.user_id)
             .order_by(desc(GameSession.updated_at))
         )
-        if limit:
-            query = query.limit(limit)
+        if not args.all:
+            query = query.limit(args.limit)
 
         res = await db.execute(query)
         rows = res.all()
 
         if args.json:
-            out = []
-            for g, s, av, u in rows:
-                out.append({
+            out = [
+                {
                     "session_id": g.id,
                     "adventure_title": g.adventure_title,
                     "template_id": g.template_id,
                     "status": g.status,
-                    "current_scene_id": s.current_scene_id if s else None,
-                    "avatar_name": av.name if av else None,
-                    "username": u.username if u else None,
+                    "user": u.username if u else None,
+                    "avatar": av.name if av else None,
+                    "current_scene": s.current_scene_id if s else None,
+                    "in_game_time": s.in_game_time if s else 0,
                     "updated_at": str(g.updated_at),
-                })
+                }
+                for g, s, av, u in rows
+            ]
             print(_format_json(out))
             return
 
-        _print_header(f"Game Sessions (Showing {len(rows)})")
+        _print_header(f"Game Sessions ({len(rows)} shown)")
         if not rows:
-            print("  No game sessions found in database.")
+            print("  No game sessions found.")
             return
 
         for g, s, av, u in rows:
-            user_str = u.username if u else "unknown"
-            scene_str = s.current_scene_id if s else "N/A"
-            avatar_str = av.name if av else "N/A"
-            print(f"  • \033[1;36mSession: {g.id}\033[0m")
-            print(f"    Adventure : {g.adventure_title or 'Unknown'} (Template: {g.template_id})")
-            print(f"    Avatar    : {avatar_str} (User: {user_str})")
-            print(f"    Scene     : \033[1;33m{scene_str}\033[0m | Status: {g.status}")
+            user_str = u.username if u else (g.user_id or "unknown")
+            avatar_str = av.name if av else (g.avatar_id or "unknown")
+            scene_str = s.current_scene_id if s else "unknown"
+            status_tag = f"[{g.status.upper()}]" if g.status else "[UNKNOWN]"
+
+            print(f"  • \033[1;36m{g.id}\033[0m {status_tag}")
+            print(f"    Adventure : \033[1m{g.adventure_title or g.template_id or 'Custom'}\033[0m")
+            print(f"    Player    : {avatar_str} (User: {user_str})")
+            print(
+                f"    Scene     : \033[1;33m{scene_str}\033[0m (Time: {s.in_game_time if s else 0} ticks)"
+            )
             print(f"    Updated   : {g.updated_at}")
             print()
 
@@ -346,13 +693,34 @@ async def cmd_show_session(args):
         # If no session entities cloned, fetch template entities
         if not session_entities and g.template_id:
             tpl_ent_res = await db.execute(
-                select(WorldEntity).where(WorldEntity.template_id == g.template_id).order_by(WorldEntity.id)
+                select(WorldEntity)
+                .where(WorldEntity.template_id == g.template_id)
+                .order_by(WorldEntity.id)
             )
             session_entities = tpl_ent_res.scalars().all()
 
-        # Calculate effective entity states with overrides
         entity_overrides = (s.entity_states or {}) if s else {}
         exit_overrides = (s.exit_states or {}) if s else {}
+
+        # Chat history
+        chat_messages = []
+        if getattr(args, "chat", False):
+            msg_res = await db.execute(
+                select(ChatMessage)
+                .where(ChatMessage.session_id == g.id)
+                .order_by(ChatMessage.created_at.asc())
+            )
+            chat_messages = msg_res.scalars().all()
+
+        # Checkpoints
+        checkpoints = []
+        if getattr(args, "checkpoints", False):
+            cp_res = await db.execute(
+                select(SessionCheckpoint)
+                .where(SessionCheckpoint.session_id == g.id)
+                .order_by(SessionCheckpoint.created_at.desc())
+            )
+            checkpoints = cp_res.scalars().all()
 
         if args.json:
             payload = {
@@ -382,30 +750,45 @@ async def cmd_show_session(args):
                     "quests": s.quests if s else [],
                     "world_memories": s.world_memories if s else [],
                     "world_rumors": s.world_rumors if s else [],
-                    "allow_dynamic_items": s.allow_dynamic_items if s else False,
+                    "entity_overrides": entity_overrides,
+                    "exit_overrides": exit_overrides,
                     "is_completed": s.is_completed if s else False,
                     "is_debug_enabled": s.is_debug_enabled if s else False,
                 },
-                "entity_overrides": entity_overrides,
-                "exit_overrides": exit_overrides,
+                "chat_messages": [
+                    {"role": m.role, "content": m.content, "created_at": str(m.created_at)}
+                    for m in chat_messages
+                ],
+                "checkpoints": [
+                    {"id": cp.id, "scene_id": cp.scene_id, "created_at": str(cp.created_at)}
+                    for cp in checkpoints
+                ],
             }
             print(_format_json(payload))
             return
 
-        _print_header(f"Session Inspector: {g.id}")
-        _print_kv("Adventure", f"{g.adventure_title} (Template: {g.template_id})")
-        _print_kv("User", f"{u.username if u else 'N/A'} (ID: {g.user_id})")
-        _print_kv("Status", f"{g.status} ({g.status_note or 'No notes'})")
-        _print_kv("Updated At", g.updated_at)
+        # Display Session State
+        _print_header(f"Session: {g.id}")
+        _print_kv(
+            "Adventure", f"{g.adventure_title or 'Custom'} (Template: {g.template_id or 'none'})"
+        )
+        _print_kv("User", f"{u.username if u else g.user_id} (ID: {g.user_id})")
+        _print_kv("Status", f"{g.status.upper()} ({g.status_note or 'normal'})")
+        _print_kv("Last Played", g.updated_at)
 
         if av:
             _print_header("Protagonist / Avatar", char="-")
             _print_kv("Name", f"{av.name} ({av.role or 'Protagonist'})")
-            _print_kv("Health / Stats", f"HP: {av.hp}/{av.max_hp} | Mana: {av.mana}/{av.max_mana} | Stamina: {av.stamina}/{av.max_stamina}")
-            _print_kv("RPG Stats", f"STR:{av.strength} DEX:{av.dexterity} INT:{av.intelligence} WIS:{av.wisdom} CHA:{av.charisma} AC:{av.armor_class}")
+            _print_kv(
+                "Health / Stats",
+                f"HP: {av.hp}/{av.max_hp} | Mana: {av.mana}/{av.max_mana} | Stamina: {av.stamina}/{av.max_stamina}",
+            )
+            _print_kv(
+                "RPG Stats",
+                f"STR:{av.strength} DEX:{av.dexterity} INT:{av.intelligence} WIS:{av.wisdom} CHA:{av.charisma} AC:{av.armor_class}",
+            )
             _print_kv("Status Effects", av.status_effects or "None")
 
-            # Inventory display
             inv = av.inventory or []
             _print_header(f"Avatar Inventory ({len(inv)} items)", char="-")
             if not inv:
@@ -417,7 +800,9 @@ async def cmd_show_session(args):
                         iname = item.get("name") or iid
                         itype = item.get("item_type") or "PICKABLE"
                         islot = item.get("slot") or "generic"
-                        print(f"    {idx}. \033[1;32m{iname}\033[0m [ID: {iid}] (Type: {itype}, Slot: {islot})")
+                        print(
+                            f"    {idx}. \033[1;32m{iname}\033[0m [ID: {iid}] (Type: {itype}, Slot: {islot})"
+                        )
                     else:
                         print(f"    {idx}. {item}")
 
@@ -433,16 +818,24 @@ async def cmd_show_session(args):
             if s.quests:
                 _print_header(f"Quests ({len(s.quests)})", char="-")
                 for q in s.quests:
-                    q_status = "\033[1;32m[DONE]\033[0m" if q.get("completed") else "\033[1;33m[ACTIVE]\033[0m"
-                    print(f"    • {q_status} {q.get('title') or q.get('id')}: {q.get('description', '')}")
+                    q_status = (
+                        "\033[1;32m[DONE]\033[0m"
+                        if q.get("completed")
+                        else "\033[1;33m[ACTIVE]\033[0m"
+                    )
+                    print(
+                        f"    • {q_status} {q.get('title') or q.get('id')}: {q.get('description', '')}"
+                    )
 
             if s.world_memories:
                 _print_header(f"World Memories ({len(s.world_memories)})", char="-")
                 for mem in s.world_memories:
-                    print(f"    • [{mem.get('scope', 'local').upper()}] ({mem.get('emotion', 'neutral')}): {mem.get('description')}")
+                    print(
+                        f"    • [{mem.get('scope', 'local').upper()}] ({mem.get('emotion', 'neutral')}): {mem.get('description')}"
+                    )
 
         # Entities in World / Overrides
-        if not args.inventory:
+        if not args.inventory and not getattr(args, "chat", False):
             _print_header("World Entities & State Overrides", char="-")
             for ent in session_entities:
                 override = entity_overrides.get(ent.id, {})
@@ -454,14 +847,18 @@ async def cmd_show_session(args):
                 if args.hidden_only and not eff_hidden:
                     continue
 
-                hidden_tag = "\033[1;31m[HIDDEN]\033[0m" if eff_hidden else "\033[1;32m[VISIBLE]\033[0m"
+                hidden_tag = (
+                    "\033[1;31m[HIDDEN]\033[0m" if eff_hidden else "\033[1;32m[VISIBLE]\033[0m"
+                )
                 inv_tag = "\033[1;36m[IN INVENTORY]\033[0m" if eff_in_inv else ""
                 scene_tag = f"Scene: {eff_scene}"
                 if eff_scene == (s.current_scene_id if s else None):
                     scene_tag = f"\033[1;33mScene: {eff_scene} (CURRENT)\033[0m"
 
                 has_override = " \033[1;35m(OVERRIDDEN)\033[0m" if override else ""
-                print(f"  • [\033[1;36m{ent.id}\033[0m] \033[1m{ent.name}\033[0m ({ent.item_type or 'OBJECT'}) {hidden_tag} {inv_tag}{has_override}")
+                print(
+                    f"  • [\033[1;36m{ent.id}\033[0m] \033[1m{ent.name}\033[0m ({ent.item_type or 'OBJECT'}) {hidden_tag} {inv_tag}{has_override}"
+                )
                 print(f"    {scene_tag} (Spatial: {eff_spatial or 'default'})")
 
                 if override:
@@ -471,25 +868,99 @@ async def cmd_show_session(args):
                 if ent.reveal_rule:
                     print(f"    Reveal Rule: {ent.reveal_rule}")
 
+        # Chat Turns / Messages
+        if getattr(args, "chat", False):
+            limit_m = getattr(args, "limit_messages", 30)
+            messages_slice = (
+                chat_messages[-limit_m:] if len(chat_messages) > limit_m else chat_messages
+            )
+            _print_header(
+                f"Conversation Turns ({len(messages_slice)} of {len(chat_messages)} shown)",
+                char="-",
+            )
+            if not messages_slice:
+                print("    (No chat messages recorded in this session)")
+            else:
+                for idx, m in enumerate(messages_slice, 1):
+                    role_color = "\033[1;36m" if m.role == "user" else "\033[1;35m"
+                    print(f"\n  [{idx}] {role_color}{m.role.upper()}\033[0m ({m.created_at}):")
+                    content_clean = m.content.strip()
+                    for line in content_clean.splitlines():
+                        print(f"    {line}")
+
+        # Checkpoints
+        if getattr(args, "checkpoints", False):
+            _print_header(f"Checkpoints ({len(checkpoints)})", char="-")
+            if not checkpoints:
+                print("    (No checkpoints recorded)")
+            else:
+                for cp in checkpoints:
+                    print(f"  • Checkpoint [{cp.id}] Scene: {cp.scene_id} at {cp.created_at}")
+
 
 # -----------------------------------------------------------------------------
 # MAIN CLI ENTRYPOINT
 # -----------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description="TaleWeaver State & Manifest Debug Inspector",
+        description="TaleWeaver State, Database & Manifest Debug Inspector",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # db-status
+    p_db = subparsers.add_parser(
+        "db-status",
+        aliases=["stats", "status"],
+        help="Inspect database health, table row counts, and data disk usage",
+    )
+    p_db.add_argument("--json", action="store_true", help="Output as raw JSON")
+    p_db.set_defaults(func=cmd_db_status)
+
     # list-adventures
-    p_la = subparsers.add_parser("list-adventures", aliases=["list-templates"], help="List all adventure templates")
+    p_la = subparsers.add_parser(
+        "list-adventures",
+        aliases=["list-templates"],
+        help="List all adventure templates in database",
+    )
     p_la.add_argument("--json", action="store_true", help="Output as raw JSON")
     p_la.set_defaults(func=cmd_list_adventures)
 
+    # list-disk-adventures
+    p_lda = subparsers.add_parser(
+        "list-disk-adventures",
+        aliases=["scan-disk"],
+        help="Scan disk for available .adv, .adz, or manifest files",
+    )
+    p_lda.add_argument("--json", action="store_true", help="Output as raw JSON")
+    p_lda.set_defaults(func=cmd_list_disk_adventures)
+
+    # import-adventure
+    p_ia = subparsers.add_parser(
+        "import-adventure",
+        aliases=["import"],
+        help="Import an adventure file or directory into the database",
+    )
+    p_ia.add_argument(
+        "file_path",
+        nargs="?",
+        default="",
+        help="Path to .adv, .adz, or directory (defaults to combat test adventure)",
+    )
+    p_ia.add_argument(
+        "--user", help="Assign adventure to specific username or user_id (defaults to first admin)"
+    )
+    p_ia.add_argument(
+        "--overwrite", action="store_true", help="Overwrite existing adventure template if matched"
+    )
+    p_ia.set_defaults(func=cmd_import_adventure)
+
     # show-adventure
-    p_sa = subparsers.add_parser("show-adventure", aliases=["show-template"], help="Show details of an adventure")
+    p_sa = subparsers.add_parser(
+        "show-adventure", aliases=["show-template"], help="Show details of an adventure"
+    )
     p_sa.add_argument("identifier", help="Template ID, origin_id, or title substring")
     p_sa.add_argument("--scenes", action="store_true", help="Show only scenes")
     p_sa.add_argument("--entities", action="store_true", help="Show only entities/items")
@@ -516,6 +987,19 @@ def main():
     p_ss.add_argument("--inventory", action="store_true", help="Focus on inventory details")
     p_ss.add_argument("--entities", action="store_true", help="Focus on world entities & overrides")
     p_ss.add_argument("--hidden-only", action="store_true", help="Show only hidden entities")
+    p_ss.add_argument(
+        "--chat",
+        "--messages",
+        dest="chat",
+        action="store_true",
+        help="Display session dialogue history / turns",
+    )
+    p_ss.add_argument(
+        "--limit-messages", type=int, default=30, help="Max chat messages to display (default: 30)"
+    )
+    p_ss.add_argument(
+        "--checkpoints", action="store_true", help="Display saved session checkpoints"
+    )
     p_ss.add_argument("--json", action="store_true", help="Output as raw JSON")
     p_ss.set_defaults(func=cmd_show_session)
 
