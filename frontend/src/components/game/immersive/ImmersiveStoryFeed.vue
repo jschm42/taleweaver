@@ -370,41 +370,42 @@ function isDebugSystemMessage(msg: any): boolean {
           </span>
         </div>
 
-        <!-- 2) GM COMIC NARRATIVE CAPTION BOX -->
-        <div v-if="props.activeTurn.narration" class="animate-fade-in relative group shrink-0">
-          <div class="relative bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-            <!-- Overlay TTS Button -->
-            <button
-              v-if="configState.isTtsEnabled"
-              type="button"
-              @click.stop="speakBubble(props.activeTurn.narration)"
-              class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/90 hover:bg-amber-900 border border-amber-400/60 text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
-              :title="isSpeakingBubble(props.activeTurn.narration) ? 'Stop Audio' : 'Play Audio'"
-            >
-              <VolumeX v-if="isSpeakingBubble(props.activeTurn.narration)" class="w-3 h-3 text-red-400" />
-              <Volume2 v-else class="w-3 h-3" />
-              <span>{{ isSpeakingBubble(props.activeTurn.narration) ? 'Stop' : 'Audio' }}</span>
-            </button>
-
-            <!-- Narrative Text with Inline "GAME MASTER" Badge in Text Flow -->
-            <div class="comic-narration-text text-sm sm:text-base leading-relaxed text-slate-100">
-              <span
-                class="inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm"
-              >
-                Game Master
-              </span>
-              <span v-html="renderFormattedHtml(props.activeTurn.narration)"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3) NPC DIALOGUE COMIC SPEECH BUBBLES -->
+        <!-- 2) COMBINED GM NARRATION & NPC DIALOGUE BUBBLES -->
         <div
           v-for="(dlg, dIdx) in props.activeTurn.dialogues"
           :key="dIdx"
           class="flex flex-col gap-1 animate-fade-in items-start group shrink-0"
         >
-          <div class="relative max-w-2xl">
+          <!-- GM NARRATION BOX -->
+          <div v-if="dlg.isNarration" class="relative group shrink-0 w-full max-w-2xl">
+            <div class="relative bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+              <!-- Overlay TTS Button -->
+              <button
+                v-if="configState.isTtsEnabled"
+                type="button"
+                @click.stop="speakBubble(dlg.text)"
+                class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/90 hover:bg-amber-900 border border-amber-400/60 text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
+                :title="isSpeakingBubble(dlg.text) ? 'Stop Audio' : 'Play Audio'"
+              >
+                <VolumeX v-if="isSpeakingBubble(dlg.text)" class="w-3 h-3 text-red-400" />
+                <Volume2 v-else class="w-3 h-3" />
+                <span>{{ isSpeakingBubble(dlg.text) ? 'Stop' : 'Audio' }}</span>
+              </button>
+
+              <!-- Narrative Text with Inline "GAME MASTER" Badge -->
+              <div class="comic-narration-text text-sm sm:text-base leading-relaxed text-slate-100">
+                <span
+                  class="inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm"
+                >
+                  Game Master
+                </span>
+                <span v-html="renderFormattedHtml(dlg.text)"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- NPC DIALOGUE COMIC SPEECH BUBBLE -->
+          <div v-else class="relative max-w-2xl">
             <!-- Overlay TTS Button -->
             <button
               v-if="configState.isTtsEnabled"

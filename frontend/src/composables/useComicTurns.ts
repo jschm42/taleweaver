@@ -12,6 +12,7 @@ export interface DialogueSegment {
   text: string
   isAction?: boolean
   voiceTag?: string
+  isNarration?: boolean
 }
 
 export interface ComicTurn {
@@ -292,7 +293,12 @@ export function parseAssistantContent(
 
       // Guard against non-speaker labels (e.g. "Hinweis: ...", "Note: ...") when unquoted and not bold
       if (!hasQuotes && !isBold && NON_SPEAKER_LABELS.has(speakerName.toLowerCase())) {
-        narrationLines.push(line)
+        const last = dialogues[dialogues.length - 1]
+        if (last && last.isNarration) {
+          last.text += '\n\n' + line
+        } else {
+          dialogues.push({ speaker: 'Game Master', text: line, isNarration: true })
+        }
         continue
       }
 
@@ -330,12 +336,20 @@ export function parseAssistantContent(
         })
       }
     } else {
-      narrationLines.push(line)
+      const last = dialogues[dialogues.length - 1]
+      if (last && last.isNarration) {
+        last.text += '\n\n' + line
+      } else {
+        dialogues.push({ speaker: 'Game Master', text: line, isNarration: true })
+      }
     }
   }
 
+  // To keep compatibility, extract the first narration block as .narration
+  // though the UI should iterate dialogues.
+  const firstNarration = dialogues.find(d => d.isNarration)
   return {
-    narration: narrationLines.join('\n\n'),
+    narration: firstNarration ? firstNarration.text : '',
     dialogues,
   }
 }
