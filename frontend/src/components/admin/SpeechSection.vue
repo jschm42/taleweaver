@@ -81,6 +81,12 @@ watch(() => localForm.value.provider, (newProvider) => {
   }
 })
 
+watch(() => localForm.value.use_streaming, (newStreaming) => {
+  if (newStreaming) {
+    localForm.value.use_text_chunking = false
+  }
+})
+
 const handleSave = () => {
   emit('save', localForm.value)
 }
@@ -209,8 +215,23 @@ const handleSave = () => {
                 <strong>Disabled:</strong> Sends full text at once for best prosody, but has higher initial delay and may hit length limits.
               </div>
             </div>
+            <label class="relative inline-flex items-center" :class="{'cursor-not-allowed opacity-50': localForm.use_streaming, 'cursor-pointer': !localForm.use_streaming}">
+              <input type="checkbox" v-model="localForm.use_text_chunking" :disabled="localForm.use_streaming" class="sr-only peer">
+              <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          <div v-if="localForm.provider === 'google' && localForm.selected_model.startsWith('gemini-')" class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5 col-span-1 md:col-span-2">
+            <div class="flex-1">
+              <div class="text-xs font-bold text-white uppercase tracking-wider">Streaming API</div>
+              <div class="text-[10px] text-slate-400 mt-1 pr-8">
+                <strong>Enabled:</strong> Connects directly to Google's streaming API (Server-Sent Events) for faster first-byte audio playback. <span class="text-amber-500">Automatically disables Text Chunking.</span>
+                <br/>
+                <strong>Disabled:</strong> Standard REST API request.
+              </div>
+            </div>
             <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="localForm.use_text_chunking" class="sr-only peer">
+              <input type="checkbox" v-model="localForm.use_streaming" class="sr-only peer">
               <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>

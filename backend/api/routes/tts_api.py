@@ -140,6 +140,9 @@ async def generate_tts(
     raw_vocal_tags = tts_settings.get("use_vocal_tags", True)
     use_vocal_tags = str(raw_vocal_tags).lower() in ("true", "1", "yes", "on") if not isinstance(raw_vocal_tags, bool) else raw_vocal_tags
     
+    raw_streaming = tts_settings.get("use_streaming", False)
+    use_streaming = str(raw_streaming).lower() in ("true", "1", "yes", "on") if not isinstance(raw_streaming, bool) else raw_streaming
+    
     logger.info("[TTS] Vocal tags enabled: %s (raw value: %s)", use_vocal_tags, raw_vocal_tags)
     
     style = tts_settings.get("sample_context")
@@ -206,6 +209,7 @@ async def generate_tts(
             include_style_context=(payload.voice_override is None and not payload.speaker_voices),
             speed=speed,
             director_notes=final_director_notes,
+            use_streaming=use_streaming,
         )
     except TTSTimeoutError as exc:
         raise HTTPException(

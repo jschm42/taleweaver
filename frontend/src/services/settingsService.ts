@@ -106,6 +106,7 @@ class SettingsService {
     elevenlabs_voice_id: '',
     use_vocal_tags: true,
     use_text_chunking: true,
+    use_streaming: false,
     voice_catalog: [] as Array<{ name: string; gender?: string; description?: string }>,
     selected_voice: 'Puck',
     sample_context: '',

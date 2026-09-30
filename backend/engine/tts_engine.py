@@ -277,6 +277,7 @@ class TTSEngine:
         include_style_context: bool = True,
         speed: float = 1.0,
         director_notes: Optional[str] = None,
+        use_streaming: bool = False,
         **_unused_kwargs: object,
     ) -> Optional[str]:
         """
@@ -327,7 +328,8 @@ class TTSEngine:
                 tone=tone,
                 use_vocal_tags=use_vocal_tags,
                 title=title,
-                scene_name=scene_name
+                scene_name=scene_name,
+                use_streaming=use_streaming
             )
 
     @staticmethod
@@ -407,6 +409,7 @@ class TTSEngine:
         use_vocal_tags: bool = True,
         title: Optional[str] = None,
         scene_name: Optional[str] = None,
+        use_streaming: bool = False,
         **_kwargs: object,
     ) -> Optional[str]:
         """
@@ -492,10 +495,13 @@ class TTSEngine:
             max_attempts = max(1, min(max_attempts, 10))
             data: Optional[dict] = None
             async with httpx.AsyncClient() as client:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                if use_streaming:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?alt=sse&key={api_key}"
+                else:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
                 # Log the prompt and request details for debugging.
-                logger.info("[TTS DEBUG] Final Prompt sent to %s:\n%s", model_name, user_content)
+                logger.info("[TTS DEBUG] Final Prompt sent to %s (streaming=%s):\n%s", model_name, use_streaming, user_content)
                 logger.info(
                     "TTS request model=%s voice=%s include_style=%s",
                     model_name,
@@ -552,7 +558,22 @@ class TTSEngine:
                     if response.status_code != 200:
                         logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
                     response.raise_for_status()
-                    data = response.json()
+
+                    # Handle streaming or non-streaming response format
+                    if use_streaming:
+                        data = {"candidates": [{"content": {"parts": []}}]}
+                        for line in response.iter_lines():
+                            if line.startswith("data: "):
+                                try:
+                                    chunk_data = json.loads(line[6:])
+                                    if "candidates" in chunk_data and chunk_data["candidates"]:
+                                        chunk_content = chunk_data["candidates"][0].get("content", {})
+                                        chunk_parts = chunk_content.get("parts", [])
+                                        data["candidates"][0]["content"]["parts"].extend(chunk_parts)
+                                except Exception as e:
+                                    logger.warning("Failed to parse SSE chunk: %s", e)
+                    else:
+                        data = response.json()
                     break
 
             if data is None:

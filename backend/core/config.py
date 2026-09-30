@@ -29,6 +29,7 @@ class TTSSettings(BaseModel):
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
+    use_streaming: bool = False
     voice_list: list[str] = [
         "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe",
         "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome",
