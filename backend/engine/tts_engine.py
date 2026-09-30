@@ -283,7 +283,7 @@ class TTSEngine:
         Generates speech using the specified provider and returns the relative URL to the audio file.
         """
         logger.info("[TTS] generate_speech called for provider: %s, text length: %d", provider, len(text or ''))
-        if not api_key:
+        if provider != "qwen" and not api_key:
             logger.error("No API key provided for %s TTS.", provider)
             return None
 
@@ -300,7 +300,35 @@ class TTSEngine:
         else:
             logger.info("[TTS] Vocal tags are ENABLED. Keeping tags in input text.")
 
-        if provider == "elevenlabs":
+        if provider == "qwen":
+            from backend.engine.qwen_tts_service import QwenTTSService
+            output_filepath = _build_audio_output_path(adventure_id, safe_session_id, "wav")
+            selected_model = QwenTTSService.resolve_active_model_id(model_name)
+            selected_voice = voice or "Vivian"
+
+            # Always strip raw bracket tags from spoken text for Qwen so brackets are not pronounced
+            clean_text = _strip_vocal_tags(text or "")
+            if not clean_text.strip():
+                clean_text = text or ""
+
+            # Use tone/style as natural speech instruction
+            instruct_parts: list[str] = []
+            if tone:
+                instruct_parts.append(f"Speak in a {tone.lower()} tone.")
+            if style_description:
+                instruct_parts.append(str(style_description))
+            instruct = " ".join(instruct_parts) if instruct_parts else None
+
+            await QwenTTSService.generate_speech(
+                text=clean_text,
+                voice=selected_voice,
+                model_id=selected_model,
+                speed=speed,
+                output_filepath=output_filepath,
+                instruct=instruct,
+            )
+            return _public_url_from_filepath(output_filepath)
+        elif provider == "elevenlabs":
             # Sanitize model_id: ElevenLabs models usually use underscores, but some might be sent with dots
             sanitized_model = model_name.replace(".", "_") if model_name else "eleven_multilingual_v2"
             return await TTSEngine._synthesize_elevenlabs(

@@ -118,14 +118,16 @@ async def generate_tts(
         raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
 
     provider = tts_settings.get("provider", "google").lower()
-    api_key = settings.get_env_api_key(provider)
-    if not api_key and settings_user.encrypted_api_keys:
-        enc_key = settings_user.encrypted_api_keys.get(provider)
-        if enc_key:
-            api_key = encryption_util.decrypt_key(enc_key)
+    api_key = None
+    if provider != "qwen":
+        api_key = settings.get_env_api_key(provider)
+        if not api_key and settings_user.encrypted_api_keys:
+            enc_key = settings_user.encrypted_api_keys.get(provider)
+            if enc_key:
+                api_key = encryption_util.decrypt_key(enc_key)
 
-    if not api_key:
-        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
 
     # 2. Get TTS Settings
     voice = tts_settings.get("selected_voice", "Puck")
@@ -235,14 +237,16 @@ async def test_tts_connection_v2(
     tts_settings = user.tts_settings or {}
     
     provider = tts_settings.get("provider", "google").lower()
-    api_key = settings.get_env_api_key(provider)
-    if not api_key and user.encrypted_api_keys:
-        enc_key = user.encrypted_api_keys.get(provider)
-        if enc_key:
-            api_key = encryption_util.decrypt_key(enc_key)
+    api_key = None
+    if provider != "qwen":
+        api_key = settings.get_env_api_key(provider)
+        if not api_key and user.encrypted_api_keys:
+            enc_key = user.encrypted_api_keys.get(provider)
+            if enc_key:
+                api_key = encryption_util.decrypt_key(enc_key)
 
-    if not api_key:
-        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
 
     use_vocal_tags = tts_settings.get("use_vocal_tags", True)
     test_text = "Tale Weaver connection test successful!"
@@ -253,12 +257,14 @@ async def test_tts_connection_v2(
         audio_url = await TTSEngine.generate_speech(
             text=test_text,
             provider=provider,
-            voice=tts_settings.get("selected_voice", "Puck"),
+            voice=tts_settings.get("selected_voice", "Vivian" if provider == "qwen" else "Puck"),
             elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
             use_vocal_tags=tts_settings.get("use_vocal_tags", True),
             api_key=api_key,
             model_name=(
-                TTS_MODEL_ALIASES.get(
+                tts_settings.get("selected_model")
+                if provider == "qwen"
+                else TTS_MODEL_ALIASES.get(
                     str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
                     str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
                 )
@@ -270,7 +276,92 @@ async def test_tts_connection_v2(
             "status": "error",
             "message": "The selected TTS model is currently unavailable. Please choose a different model and try again.",
         }
+    except Exception as exc:
+        logger.exception("[TTS] Test connection failed: %s", exc)
+        return {"status": "error", "message": f"TTS generation failed: {exc}"}
+
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}
     return {"status": "success", "audio_url": audio_url}
+
+
+# --- Qwen3-TTS Local Endpoints ---
+
+class QwenDownloadPayload(BaseModel):
+    model_id: str
+
+
+class QwenLoadPayload(BaseModel):
+    model_id: Optional[str] = None
+
+
+@router.get("/qwen/models")
+async def get_qwen_models(
+    current_user: User = Depends(get_current_user),
+):
+    """Returns list of supported Qwen3-TTS models, download states, disk usage, and voices."""
+    from backend.engine.qwen_tts_service import QwenTTSService
+    return {
+        "models": QwenTTSService.get_supported_models(),
+        "voices": QwenTTSService.get_default_voices(),
+        "device": QwenTTSService.get_execution_device(),
+    }
+
+
+@router.post("/qwen/download")
+async def download_qwen_model(
+    payload: QwenDownloadPayload,
+    current_user: User = Depends(get_current_user),
+):
+    """Triggers download of the specified Qwen3-TTS model in a background thread."""
+    from backend.engine.qwen_tts_service import QwenTTSService
+    try:
+        return QwenTTSService.start_download(payload.model_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/qwen/download-status")
+async def get_qwen_download_status(
+    model_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Returns current download progress and status for the model."""
+    from backend.engine.qwen_tts_service import QwenTTSService
+    return QwenTTSService.get_download_status(model_id)
+
+
+@router.post("/qwen/load")
+async def load_qwen_model(
+    payload: QwenLoadPayload = Body(default=QwenLoadPayload()),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preloads the Qwen3-TTS model into memory."""
+    from backend.engine.qwen_tts_service import QwenTTSService
+    model_id = payload.model_id
+    if not model_id:
+        settings_user = await _resolve_tts_settings_source_user(db, current_user)
+        tts_settings = settings_user.tts_settings or {}
+        model_id = tts_settings.get("selected_model", "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+
+    QwenTTSService.preload_model(model_id)
+    return QwenTTSService.get_load_status(model_id)
+
+
+@router.get("/qwen/load-status")
+async def get_qwen_load_status(
+    model_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns the in-memory load state of the Qwen3-TTS model."""
+    from backend.engine.qwen_tts_service import QwenTTSService
+    if not model_id:
+        settings_user = await _resolve_tts_settings_source_user(db, current_user)
+        tts_settings = settings_user.tts_settings or {}
+        model_id = tts_settings.get("selected_model", "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+
+    return QwenTTSService.get_load_status(model_id)
+
 

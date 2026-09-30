@@ -289,19 +289,70 @@ watch(trackedQuestId, (newId) => {
   }
 })
 
+const isQwenModelLoading = ref(false)
+const qwenLoadingDevice = ref('')
+const qwenLoadError = ref<string | null>(null)
+let qwenPollTimer: any = null
+
+async function checkAndPreloadQwenTTS() {
+  try {
+    const settings = await api.getSettings({ includeAvailableConstants: false })
+    const tts = settings.tts_settings as any
+    if (tts?.enabled && tts?.provider === 'qwen') {
+      const selectedModel = tts.selected_model || 'Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice'
+      
+      const statusRes = await api.getQwenLoadStatus(selectedModel)
+      qwenLoadingDevice.value = statusRes.device || 'CPU'
+      
+      if (statusRes.status !== 'loaded') {
+        isQwenModelLoading.value = true
+        qwenLoadError.value = null
+        
+        await api.loadQwenModel(selectedModel)
+        
+        if (qwenPollTimer) clearInterval(qwenPollTimer)
+        qwenPollTimer = setInterval(async () => {
+          try {
+            const check = await api.getQwenLoadStatus(selectedModel)
+            qwenLoadingDevice.value = check.device || 'CPU'
+            if (check.status === 'loaded') {
+              isQwenModelLoading.value = false
+              clearInterval(qwenPollTimer)
+            } else if (check.status === 'error') {
+              qwenLoadError.value = check.error || 'Failed to initialize Qwen3-TTS model.'
+              clearInterval(qwenPollTimer)
+            }
+          } catch (e: any) {
+            console.error('Qwen load polling error:', e)
+          }
+        }, 1000)
+      }
+    }
+  } catch (err) {
+    console.error('Failed to check Qwen TTS status:', err)
+  }
+}
+
+function dismissQwenLoading() {
+  isQwenModelLoading.value = false
+  if (qwenPollTimer) clearInterval(qwenPollTimer)
+}
+
 onMounted(() => {
   // Re-fetch config so in-game controls (e.g. TTS) reflect the latest server-side settings,
   // even if the user changed them after the initial app mount.
   void refreshConfig()
+  void checkAndPreloadQwenTTS()
 })
 
 onBeforeUnmount(() => {
   audioService.stop()
+  if (qwenPollTimer) clearInterval(qwenPollTimer)
 })
 
 const activeActionId = ref<string | null>(null)
 const isPassRunning = computed(() => status.value === 'loading')
-const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value)
+const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || isQwenModelLoading.value)
 
 const handleEntityClick = async (entity: any) => {
   if (isActionInputBlocked.value) return
@@ -1820,7 +1871,49 @@ watch(
       </div>
     </Teleport>
 
-  
+    <!-- QWEN3-TTS MODEL LOADING OVERLAY -->
+    <Teleport to="body">
+      <div 
+        v-if="isQwenModelLoading" 
+        class="fixed inset-0 z-[250] bg-slate-950/85 backdrop-blur-md flex items-center justify-center px-6"
+      >
+        <div class="w-full max-w-md rounded-3xl border border-blue-500/30 bg-slate-900/95 p-8 shadow-2xl shadow-blue-950/50 space-y-6 text-center animate-fade-in">
+          <div class="relative w-20 h-20 mx-auto">
+            <div class="absolute inset-0 rounded-full border-4 border-blue-500/20 animate-ping"></div>
+            <div class="w-full h-full rounded-full border-4 border-blue-500 border-t-transparent animate-spin flex items-center justify-center">
+              <i class="ra ra-speech-bubble text-2xl text-blue-400"></i>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-xl font-black text-white tracking-tight">
+              Preparing Voice Synthesizer
+            </h3>
+            <p class="text-sm text-slate-300 leading-relaxed">
+              Loading <strong class="text-blue-400">Qwen3-TTS</strong> local speech model into memory...
+            </p>
+            <p class="text-xs text-slate-400">
+              Target Hardware: <span class="font-semibold text-slate-200">{{ qwenLoadingDevice || 'Auto (GPU/CPU)' }}</span>
+            </p>
+            <p class="text-[11px] text-slate-500 italic mt-2">
+              Game interaction is locked while neural weights are initialized.
+            </p>
+          </div>
+
+          <div v-if="qwenLoadError" class="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-xs text-red-400 space-y-3">
+            <p class="font-medium">{{ qwenLoadError }}</p>
+            <button 
+              type="button"
+              @click="dismissQwenLoading"
+              class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+            >
+              Continue Without Qwen Speech
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- TOAST NOTIFICATIONS -->
     <GameNotificationsOverlay
       :notifications="notifications"

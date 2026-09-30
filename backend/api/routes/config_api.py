@@ -658,7 +658,13 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
 
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
-    if "selected_model" not in normalized:
+    if normalized.get("provider") == "qwen":
+        current_m = str(normalized.get("selected_model") or "").strip()
+        if not current_m or current_m.startswith("gemini-") or current_m.startswith("eleven_"):
+            normalized["selected_model"] = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+        if not normalized.get("selected_voice") or normalized.get("selected_voice") == "Puck":
+            normalized["selected_voice"] = "Vivian"
+    elif "selected_model" not in normalized:
         normalized["selected_model"] = fallback["selected_model"]
     elif normalized.get("provider") == "google" and normalized.get("selected_model") not in SUPPORTED_TTS_MODELS:
         normalized["selected_model"] = fallback["selected_model"]

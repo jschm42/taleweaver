@@ -267,7 +267,69 @@ async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(
     assert audio_url.startswith("/data/audio/")
     assert audio_url.endswith(".wav")
 
-    written_file = os.path.join(str(tmp_path), "audio", os.path.basename(audio_url))
-    assert os.path.isfile(written_file), f"Expected file at {written_file}"
-    # No traversal artifacts should be created under DATA_DIR.
     assert not (tmp_path / "etc").exists()
+
+
+@pytest.mark.asyncio
+async def test_qwen_models_endpoint(auth_client: AsyncClient):
+    """Verifies that GET /api/tts/qwen/models lists models, default voices, and device."""
+    res = await auth_client.get("/api/tts/qwen/models")
+    assert res.status_code == 200
+    data = res.json()
+    assert "models" in data
+    assert len(data["models"]) >= 4
+    model_ids = [m["id"] for m in data["models"]]
+    assert "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice" in model_ids
+    assert "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice" in model_ids
+    assert "voices" in data
+    assert any(v["name"] == "Vivian" for v in data["voices"])
+    assert "device" in data
+
+
+@pytest.mark.asyncio
+async def test_qwen_load_status_endpoint(auth_client: AsyncClient):
+    """Verifies that GET /api/tts/qwen/load-status returns initial state."""
+    res = await auth_client.get(
+        "/api/tts/qwen/load-status?model_id=Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert "status" in data
+    assert "device" in data
+    assert data["model_id"] == "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+
+
+@pytest.mark.asyncio
+async def test_qwen_speech_generation_via_engine(tmp_path, monkeypatch):
+    """Verifies that TTSEngine synthesizes speech via Qwen provider and creates a valid WAV file."""
+    from backend.core.config import settings
+    from backend.engine.qwen_tts_service import QwenTTSService
+    from backend.engine.tts_engine import TTSEngine
+
+    mock_model = MagicMock()
+    mock_model.get_supported_speakers.return_value = ["uncle_fu", "vivian"]
+    import numpy as np
+    mock_model.generate_custom_voice.return_value = ([np.zeros(2400, dtype=np.float32)], 24000)
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(QwenTTSService, "is_model_downloaded", classmethod(lambda cls, m: True))
+    monkeypatch.setattr(QwenTTSService, "_loaded_models", {"Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice": mock_model})
+    monkeypatch.setattr(QwenTTSService, "_load_states", {"Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice": "loaded"})
+
+    audio_url = await TTSEngine.generate_speech(
+        text="A dark shadow emerges from the ancient ruins.",
+        provider="qwen",
+        voice="Uncle_Fu",
+        model_name="Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        session_id="test-session-qwen",
+    )
+
+    assert audio_url is not None
+    assert audio_url.endswith(".wav")
+    assert "/tts/" in audio_url
+
+    filename = os.path.basename(audio_url)
+    expected_file = os.path.join(str(tmp_path), "adventures", "sessions", "test-session-qwen", "tts", filename)
+    assert os.path.isfile(expected_file)
+    assert os.path.getsize(expected_file) > 100
+

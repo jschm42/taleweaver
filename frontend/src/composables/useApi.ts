@@ -608,11 +608,11 @@ export const api = {
   },
 
   generateTTS(payload: { text: string; scene_description?: string; adventure_id?: string; session_id?: string; title?: string; scene_name?: string; tone?: string; voice_override?: string; speaker_voices?: Record<string, string>; director_notes?: string }): Promise<{ audio_url: string }> {
-    return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 120000 })
+    return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 300000 })
   },
 
   testTTS(): Promise<{ status: string; audio_url?: string; message?: string }> {
-    return request('/tts/test-connection', { method: 'POST', timeoutMs: 60000 })
+    return request('/tts/test-connection', { method: 'POST', timeoutMs: 300000 })
   },
 
   getElevenLabsModels(): Promise<Array<{ model_id: string, name: string }>> {
@@ -813,5 +813,81 @@ export const api = {
     return request('/stt/preload', {
       method: 'POST',
     })
+  },
+
+  getQwenModels(): Promise<{
+    models: Array<{
+      id: string
+      name: string
+      size_label: string
+      is_default: boolean
+      type: string
+      parameters: string
+      is_downloaded: boolean
+      disk_size_bytes: number
+      disk_size_formatted: string
+      download_status: string
+      download_progress: number
+      load_status: string
+      local_dir: string
+    }>
+    voices: Array<{ name: string; gender: string; description: string }>
+    device: string
+  }> {
+    return request('/tts/qwen/models', { method: 'GET' })
+  },
+
+  downloadQwenModel(modelId: string): Promise<{
+    model_id: string
+    status: string
+    progress: number
+    downloaded_bytes: number
+    total_bytes: number
+    error?: string | null
+  }> {
+    return request('/tts/qwen/download', {
+      method: 'POST',
+      body: JSON.stringify({ model_id: modelId }),
+    })
+  },
+
+  getQwenDownloadStatus(modelId: string): Promise<{
+    model_id: string
+    status: string
+    progress: number
+    downloaded_bytes: number
+    total_bytes: number
+    error?: string | null
+  }> {
+    return request(`/tts/qwen/download-status?model_id=${encodeURIComponent(modelId)}`, {
+      method: 'GET',
+    })
+  },
+
+  loadQwenModel(modelId?: string): Promise<{
+    model_id: string
+    status: 'not_loaded' | 'loading' | 'loaded' | 'error'
+    error?: string | null
+    device: string
+    is_ready: boolean
+  }> {
+    return request('/tts/qwen/load', {
+      method: 'POST',
+      body: JSON.stringify({ model_id: modelId || null }),
+    })
+  },
+
+  getQwenLoadStatus(modelId?: string): Promise<{
+    model_id: string
+    status: 'not_loaded' | 'loading' | 'loaded' | 'error'
+    error?: string | null
+    device: string
+    is_ready: boolean
+  }> {
+    const query = modelId ? `?model_id=${encodeURIComponent(modelId)}` : ''
+    return request(`/tts/qwen/load-status${query}`, {
+      method: 'GET',
+    })
   }
 }
+

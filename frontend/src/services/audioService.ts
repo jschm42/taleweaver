@@ -124,7 +124,7 @@ class AudioService {
     return /^[\p{L}\p{N}][\p{L}\p{N} '\-.,()]*$/u.test(normalized)
   }
 
-  private chunkSegmentText(text: string, maxChars = 1200): string[] {
+  private chunkSegmentText(text: string, maxChars = 240): string[] {
     const normalized = text.trim()
     if (!normalized) return []
     if (normalized.length <= maxChars) return [normalized]
@@ -571,6 +571,7 @@ class AudioService {
       this.currentlyGeneratingContent.value = normalizedText
       this.currentText.value = ttsText
       this.isPlaying.value = true
+      let lastSegmentError: unknown = null
 
       if (requests.length === 0) {
         this.logDebug('TTS skipped: no speakable segments after sanitization')
@@ -641,13 +642,13 @@ class AudioService {
             }
           }
 
-          // Do not abort full auto-speech because one segment failed upstream.
-          this.logDebug('TTS segment failed; skipping', {
+          console.warn('[AudioService] TTS segment failed; skipping', {
             index,
             speaker: request.speaker || null,
             textLength: request.requestText.length,
             error: String(err),
           })
+          lastSegmentError = err
           return null
         }
       }
@@ -655,6 +656,7 @@ class AudioService {
       // Pipeline mode: while one segment is playing, generate and prefetch the next.
       this.isGenerating.value = true
       let nextAudioPromise: Promise<Blob | null> | null = prepareSegmentAudio(0)
+      let hasPlayedAny = false
 
       for (let index = 0; index < requests.length; index++) {
         if (token !== this.playbackToken) return
@@ -677,13 +679,18 @@ class AudioService {
 
         try {
           await this.playAudioBlob(currentAudioBlob)
+          hasPlayedAny = true
         } catch (err) {
           // Continue with following chunks if one segment fails during playback.
-          this.logDebug('TTS chunk playback failed; continuing with next chunk', {
+          console.warn('[AudioService] TTS chunk playback failed; continuing with next chunk', {
             index,
             error: String(err),
           })
         }
+      }
+
+      if (!hasPlayedAny && requests.length > 0 && token === this.playbackToken && lastSegmentError) {
+        this.setPlaybackError(lastSegmentError)
       }
 
       this.isGenerating.value = false

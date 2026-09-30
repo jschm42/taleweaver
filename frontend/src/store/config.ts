@@ -9,6 +9,8 @@ export const configState = reactive({
   hasT2iConfig: false,
   isBackendReachable: true,
   isTtsEnabled: false,
+  ttsProvider: 'google',
+  ttsSelectedModel: '',
   lastErrorMessage: '' as string
 })
 
@@ -28,6 +30,8 @@ export async function refreshConfig() {
     configState.hasT2iConfig = !!data.is_t2i_configured
     const tts = data.tts_settings as any
     configState.isTtsEnabled = !!tts?.enabled
+    configState.ttsProvider = tts?.provider || 'google'
+    configState.ttsSelectedModel = tts?.selected_model || ''
     
     // Synchronize audio service state with the latest user preferences from DB
     const { audioService } = await import('@/services/audioService')

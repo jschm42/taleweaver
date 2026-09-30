@@ -1,5 +1,10 @@
-import logging
 import os
+# Configure AMD ROCm / MIOpen environment for GPU acceleration and clean logging
+os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
+os.environ.setdefault("MIOPEN_LOG_LEVEL", "3")
+os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
+
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
