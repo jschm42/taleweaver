@@ -9,6 +9,7 @@ import random
 import struct
 import uuid
 import re
+import json
 
 import httpx
 
@@ -285,6 +286,7 @@ class TTSEngine:
         include_style_context: bool = True,
         speed: float = 1.0,
         director_notes: Optional[str] = None,
+        language: Optional[str] = None,
         use_streaming: bool = False,
         **_unused_kwargs: object,
     ) -> Optional[str]:
@@ -333,6 +335,7 @@ class TTSEngine:
                 include_style_context=include_style_context,
                 speed=speed,
                 director_notes=director_notes,
+                language=language,
                 scene_description=scene_description,
                 style_description=style_description,
                 model_name=model_name,
@@ -420,6 +423,7 @@ class TTSEngine:
         use_vocal_tags: bool = True,
         title: Optional[str] = None,
         scene_name: Optional[str] = None,
+        language: Optional[str] = None,
         use_streaming: bool = False,
         **_kwargs: object,
     ) -> Optional[str]:
@@ -461,6 +465,12 @@ class TTSEngine:
                 "speechConfig": speech_config,
             }
         }
+        
+        # Add system instruction if language is provided to fix accent issues when English tags are used
+        if language:
+            payload["systemInstruction"] = {
+                "parts": [{"text": f"Speak strictly in the following language: {language}. Ensure native pronunciation and accent for {language}."}]
+            }
 
         try:
             timeout_seconds = _tts_timeout_seconds(text)

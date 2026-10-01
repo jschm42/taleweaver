@@ -493,8 +493,10 @@ class AudioService {
 
         await this.waitForTtsRequestSlot()
         
+        const bableFishLang = localStorage.getItem('tw_bable_fish_lang') || undefined
         const { audio_url } = await api.generateTTS({
           text: request.requestText,
+          language: bableFishLang,
           scene_description: normalizedSceneDescription,
           adventure_id: normalizedAdventureId,
           session_id: normalizedSessionId,

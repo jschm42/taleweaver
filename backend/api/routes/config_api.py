@@ -625,6 +625,7 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
         "elevenlabs_voice_id": "",
         "use_vocal_tags": True,
         "use_text_chunking": True,
+        "use_streaming": False,
         "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
         "speech_rate": 1.0
     }
@@ -658,6 +659,8 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
         normalized["use_vocal_tags"] = True
     if "use_text_chunking" not in normalized:
         normalized["use_text_chunking"] = True
+    if "use_streaming" not in normalized:
+        normalized["use_streaming"] = False
 
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
@@ -912,6 +915,7 @@ class TTSSettingsPayload(BaseModel):
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
     use_text_chunking: bool = True
+    use_streaming: bool = False
     voice_list: list[str] = Field(default_factory=list)
     voice_catalog: list[dict[str, Optional[str]]] = None
     sample_context: str = ""

@@ -31,7 +31,7 @@ PREDEFINED_LLM_MODELS = {
     "openai": ["gpt-5.4-mini", "gpt-5.3", "gpt-5.4", "gpt-5.5"],
     "google": ["gemini-3.1-pro-preview", "gemini-2.5-flash"],
     "kimi": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-k2.6", "kimi-k2.5"],
-    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
+    "deepseek": ["deepseek-flash", "deepseek-v4-pro"],
     "minimax": ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M3"],
     "openrouter": ["openai/gpt-5-mini", "openai/gpt-5-chat"],
     "anthropic": ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"],

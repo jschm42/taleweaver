@@ -51,6 +51,7 @@ class TTSGeneratePayload(BaseModel):
     speaker_voices: Optional[dict[str, Optional[str]]] = Field(default=None)
     director_notes: Optional[str] = Field(default=None)
     style_description: Optional[str] = Field(default=None)
+    language: Optional[str] = Field(default=None)
 
     @staticmethod
     def _coerce_required_text(value: Any) -> str:
@@ -210,6 +211,7 @@ async def generate_tts(
             include_style_context=(payload.voice_override is None and not payload.speaker_voices),
             speed=speed,
             director_notes=final_director_notes,
+            language=payload.language,
             use_streaming=use_streaming,
         )
     except TTSTimeoutError as exc:

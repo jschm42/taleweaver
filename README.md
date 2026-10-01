@@ -186,15 +186,15 @@ For the best experience, we recommend using high-tier models, especially for **W
 | Task | Recommended Models | Notes |
 | :--- | :--- | :--- |
 | **World Generation** | Any Flagship model like **Anthropic Opus 5.x**, **OpenAI 5.x**, **DeepSeek v4 Pro** | Requires flagship reasoning to generate complex, valid JSON manifests. |
-| **Mechanics (Pass 1)** | **DeepSeek v4.1 Flash**, **GPT 6 Luna**, **Claude 4.5 Haiku** | Best for following strict RPG rules and state modifications with fast latency. |
+| **Mechanics (Pass 1)** | **DeepSeek Flash**, **GPT 6 Luna**, **Claude 4.5 Haiku** | Best for following strict RPG rules and state modifications with fast latency. |
 | **Narrative (Pass 2)** | **DeepSeek-v4 Pro**, **GPT 6 Luna Pro**, **Claude 4.5 Sonnet** | These models provide the most immersive, creative, and atmospheric prose. |
 
 > [!TIP]
-> **Cost-Efficiency:** While **Claude 4.5 Sonnet** and **Claude 4.5 Haiku** offer outstanding literary depth and precision, **DeepSeek** (`v4.1 Flash`, `v4 Pro`) and **GPT 6 Luna** (`Luna`, `Luna Pro`) are **significantly more cost-effective**, making them the recommended choice for extensive, turn-heavy play sessions at a fraction of the cost.
+> **Cost-Efficiency:** While **Claude 4.5 Sonnet** and **Claude 4.5 Haiku** offer outstanding literary depth and precision, **DeepSeek** (`Flash`, `v4 Pro`) and **GPT 6 Luna** (`Luna`, `Luna Pro`) are **significantly more cost-effective**, making them the recommended choice for extensive, turn-heavy play sessions at a fraction of the cost.
 
 > [!WARNING]
 > Use providers with a good latency for the world generation to avoid long wait times. 
-> Models like `DeepSeek v4.1 Flash`, `GPT 6 Luna`, or `Claude 4.5 Haiku` are excellent for quick chat responses and strict mechanics passes, but world generation requires flagship reasoning models like **Anthropic Opus 5.x**, **OpenAI 5.x**, or **DeepSeek v4 Pro**. If world generation fails repeatedly, switch to one of these flagship models.
+> Models like `DeepSeek Flash`, `GPT 6 Luna`, or `Claude 4.5 Haiku` are excellent for quick chat responses and strict mechanics passes, but world generation requires flagship reasoning models like **Anthropic Opus 5.x**, **OpenAI 5.x**, or **DeepSeek v4 Pro**. If world generation fails repeatedly, switch to one of these flagship models.
 > **Regarding Local Models (Ollama):** The `WorldManifesto` schema is highly complex and requires strict JSON outputs. Currently, most local models run via Ollama struggle to consistently produce valid schemas of this depth. Use cloud models for stable generation and local models only for experimental testing.
 
 ---
