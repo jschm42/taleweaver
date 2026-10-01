@@ -307,6 +307,7 @@ class WorldManifesto(BaseModel):
     plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
     rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
     intro_text: str = Field(..., description="Optional intro text shown once when a new session starts. Use empty string if none.")
+    walkthrough: str = Field("", description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
@@ -330,4 +331,4 @@ class WorldManifesto(BaseModel):
     allow_reuse_source_assets: bool = True
     cover_source_asset_id: Optional[str] = None
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "ignore"}
