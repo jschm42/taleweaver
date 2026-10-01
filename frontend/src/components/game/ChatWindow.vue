@@ -709,6 +709,67 @@ function colorizeStatNames(text: string): string {
   return text
 }
 
+interface CompletionCelebration {
+  type: 'sequence' | 'quest' | 'sequence_unlocked'
+  badge: string
+  title: string
+  xp?: number
+}
+
+function getCompletionCelebration(content: string | undefined | null, role: string): CompletionCelebration | null {
+  if (role !== 'system' || !content) return null
+  const clean = content
+    .replace(/^\s*\[system\]\s*/i, '')
+    .replace(/^\s*SYSTEM:\s*/i, '')
+    .trim()
+
+  // Match: Sequence completed: <title> [(+<xp> XP)] OR Sequence completed! You gained <xp> XP.
+  const seqMatch = clean.match(/^Sequence completed(?::|!)?\s*(.*?)(?:\s*\(\+(\d+)\s*XP\))?$/i)
+  if (seqMatch) {
+    let title = (seqMatch[1] || '').trim()
+    let xp: number | undefined = seqMatch[2] ? parseInt(seqMatch[2], 10) : undefined
+
+    const xpSub = title.match(/You gained (\d+)\s*XP/i)
+    if (xpSub) {
+      xp = parseInt(xpSub[1], 10)
+      title = title.replace(/You gained \d+\s*XP\.?/i, '').trim()
+    }
+    if (!title) title = 'Story Chapter Finished'
+
+    return {
+      type: 'sequence',
+      badge: 'Chronicle Sequence Completed',
+      title,
+      xp,
+    }
+  }
+
+  // Match: New Sequence unlocked: <title>
+  const unlockMatch = clean.match(/^New Sequence unlocked:\s*(.*)$/i)
+  if (unlockMatch) {
+    return {
+      type: 'sequence_unlocked',
+      badge: 'Next Chapter Unlocked',
+      title: unlockMatch[1].trim() || 'Next Chapter',
+    }
+  }
+
+  // Match: Side-quest completed: <title> [(+<xp> XP)] OR Quest completed: <title> [(+<xp> XP)]
+  const questMatch = clean.match(/^(?:Side-?quest|Quest)\s+completed:\s*(.*?)(?:\s*\(\+(\d+)\s*XP\))?$/i)
+  if (questMatch) {
+    const title = (questMatch[1] || '').trim()
+    const xp = questMatch[2] ? parseInt(questMatch[2], 10) : undefined
+    return {
+      type: 'quest',
+      badge: 'Side Quest Completed',
+      title: title || 'Objective Completed',
+      xp,
+    }
+  }
+
+  return null
+}
+
 const lastUserMessage = computed(() => {
   const userMsgs = props.messages.filter(m => m.role === 'user')
   return userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : null
@@ -1164,8 +1225,115 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <!-- Fancy Completion Card (Sequence or Side-Quest) -->
+        <div
+          v-if="getCompletionCelebration(msg.content, msg.role)"
+          class="my-2 max-w-xl w-full rounded-2xl border p-4 md:p-5 relative overflow-hidden backdrop-blur-md shadow-2xl transition-all duration-300 animate-fade-in"
+          :class="[
+            getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'
+              ? 'border-amber-500/40 bg-gradient-to-br from-amber-950/70 via-slate-900/90 to-amber-950/40 shadow-amber-500/10'
+              : getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'
+              ? 'border-cyan-500/40 bg-gradient-to-br from-cyan-950/70 via-slate-900/90 to-slate-950/80 shadow-cyan-500/10'
+              : 'border-emerald-500/40 bg-gradient-to-br from-emerald-950/70 via-slate-900/90 to-teal-950/40 shadow-emerald-500/10'
+          ]"
+        >
+          <!-- Accent Top Bar -->
+          <div
+            class="absolute top-0 inset-x-0 h-1"
+            :class="[
+              getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'
+                ? 'bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-600'
+                : getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'
+                ? 'bg-gradient-to-r from-cyan-500 via-sky-300 to-indigo-500'
+                : 'bg-gradient-to-r from-emerald-500 via-teal-300 to-cyan-500'
+            ]"
+          ></div>
+
+          <!-- Subtle Glow Orbs -->
+          <div
+            class="absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl pointer-events-none"
+            :class="[
+              getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'
+                ? 'bg-amber-500/15'
+                : getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'
+                ? 'bg-cyan-500/15'
+                : 'bg-emerald-500/15'
+            ]"
+          ></div>
+
+          <div class="relative z-10 flex items-start gap-3.5">
+            <!-- Icon Crest -->
+            <div
+              class="w-11 h-11 md:w-12 md:h-12 rounded-xl flex items-center justify-center shrink-0 border shadow-lg"
+              :class="[
+                getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                  : getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'
+                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                  : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+              ]"
+            >
+              <i
+                v-if="getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'"
+                class="ra ra-trophy text-2xl drop-shadow"
+              ></i>
+              <i
+                v-else-if="getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'"
+                class="ra ra-book text-2xl drop-shadow"
+              ></i>
+              <i
+                v-else
+                class="ra ra-scroll-unfurled text-2xl drop-shadow"
+              ></i>
+            </div>
+
+            <!-- Text & Rewards -->
+            <div class="flex-1 min-w-0 space-y-1.5">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span
+                  class="text-[10px] md:text-xs font-black uppercase tracking-[0.22em] flex items-center gap-1.5"
+                  :class="[
+                    getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'
+                      ? 'text-amber-400'
+                      : getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'
+                      ? 'text-cyan-400'
+                      : 'text-emerald-400'
+                  ]"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full animate-ping" :class="getCompletionCelebration(msg.content, msg.role)?.type === 'sequence' ? 'bg-amber-400' : 'bg-emerald-400'"></span>
+                  {{ getCompletionCelebration(msg.content, msg.role)?.badge }}
+                </span>
+
+                <!-- XP Reward Badge -->
+                <span
+                  v-if="getCompletionCelebration(msg.content, msg.role)?.xp"
+                  class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
+                >
+                  <i class="ra ra-gem text-[10px]"></i>
+                  +{{ getCompletionCelebration(msg.content, msg.role)?.xp }} XP
+                </span>
+              </div>
+
+              <!-- Main Title -->
+              <h4
+                class="text-base md:text-lg font-black tracking-tight leading-snug drop-shadow"
+                :class="[
+                  getCompletionCelebration(msg.content, msg.role)?.type === 'sequence'
+                    ? 'text-amber-100'
+                    : getCompletionCelebration(msg.content, msg.role)?.type === 'sequence_unlocked'
+                    ? 'text-white'
+                    : 'text-emerald-100'
+                ]"
+              >
+                {{ getCompletionCelebration(msg.content, msg.role)?.title }}
+              </h4>
+            </div>
+          </div>
+        </div>
+
         <!-- Content -->
         <div
+          v-else
           :class="[
             'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2 transition-all relative',
             messageTypographyClass,

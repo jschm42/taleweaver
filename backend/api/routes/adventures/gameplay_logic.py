@@ -2799,12 +2799,15 @@ class GameTurnManager:
             
             if current_seq_idx >= 0:
                 completed_seq = sequences[current_seq_idx]
+                seq_title = completed_seq.get("title") or completed_seq.get("id") or f"Chapter {current_seq_idx + 1}"
                 xp_reward = int(completed_seq.get("exp_reward") or 0)
                 if xp_reward > 0:
                     self.avatar.exp = (self.avatar.exp or 0) + xp_reward
-                    xp_msg = f"Sequence completed! You gained {xp_reward} XP."
-                    await self._save_chat_message("system", xp_msg)
-                    system_messages.append(xp_msg)
+                    xp_msg = f"Sequence completed: {seq_title} (+{xp_reward} XP)"
+                else:
+                    xp_msg = f"Sequence completed: {seq_title}"
+                await self._save_chat_message("system", xp_msg)
+                system_messages.append(xp_msg)
                 
                 next_seq_idx = current_seq_idx + 1
                 if next_seq_idx < len(sequences):

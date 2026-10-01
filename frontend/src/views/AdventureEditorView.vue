@@ -468,7 +468,7 @@ const editorTabs = [
   { key: 'scenes', label: 'Scenes' },
   { key: 'inhabitants', label: 'Inhabitants' },
   { key: 'items', label: 'Items' },
-  { key: 'quest', label: 'Quests' },
+  { key: 'quest', label: 'Side Quests' },
   { key: 'awards', label: 'Awards' },
   { key: 'scripts', label: 'Scripts' },
   { key: 'visuals', label: 'Visual Style' },
@@ -1651,6 +1651,19 @@ watch(
   { immediate: true }
 )
 
+async function handleUpdateSequences(newSequences: any[]) {
+  isSaving.value = true
+  try {
+    await adventureService.updateAdventure(props.adventureId, { sequences: newSequences } as any)
+    await fetchAdventure()
+    addNotification('Sequences updated.', 'success')
+  } catch (error: any) {
+    addNotification(error instanceof Error ? error.message : 'Failed to update sequences', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 async function handleUpdateQuests(newQuests: any[]) {
   isSaving.value = true
   try {
@@ -2409,6 +2422,8 @@ watch(
               @update:calendar-max-unit="form.time_config = { ...(form.time_config || {}), calendar_max_unit: $event }"
               @update:mode="form.rule_enforcement_mode = $event as any"
               @save-changes="saveChanges"
+              @update-sequences="handleUpdateSequences"
+              @notify="addNotification"
             />
 
             <ProtagonistTab

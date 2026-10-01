@@ -16,10 +16,10 @@ class SequenceSchema(BaseModel):
     id: str
     order: int
     title: str
-    description: str
-    walkthrough: str
-    end_condition: str
-    exp_reward: int
+    description: Optional[str] = ""
+    walkthrough: Optional[str] = ""
+    end_condition: Optional[str] = ""
+    exp_reward: Optional[int] = 50
 
 class AwardSchema(BaseModel):
     key: str
@@ -130,6 +130,7 @@ class AdventureTemplateUpdate(BaseModel):
     scripts: Optional[list[dict[str, Any]]] = None
     min_sequences: Optional[int] = None
     max_sequences: Optional[int] = None
+    sequences: Optional[list[SequenceSchema]] = None
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: Optional[bool] = None
@@ -138,9 +139,11 @@ class AdventureTemplateUpdate(BaseModel):
     award_generation_enabled: Optional[bool] = None
     min_awards: Optional[int] = None
     max_awards: Optional[int] = None
+    awards: Optional[list[AwardSchema]] = None
     quest_generation_enabled: Optional[bool] = None
     min_quests: Optional[int] = None
     max_quests: Optional[int] = None
+    quests: Optional[list[QuestSchema]] = None
     is_adventure_generator: Optional[bool] = None
     
     # Editable Narrative Meta

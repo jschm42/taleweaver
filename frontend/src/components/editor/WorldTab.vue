@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PlotTab from '@/components/editor/PlotTab.vue'
+import SequencesSection from '@/components/editor/SequencesSection.vue'
 import { Save, X } from 'lucide-vue-next'
 import { computed } from 'vue'
 
@@ -48,6 +49,8 @@ const emit = defineEmits<{
   (e: 'update:calendar-max-value', val: number | null): void
   (e: 'update:calendar-max-unit', val: string): void
   (e: 'update:max-memory-turns', val: number): void
+  (e: 'update-sequences', sequences: any[]): void
+  (e: 'notify', message: string, type?: 'error' | 'success' | 'info'): void
 }>()
 
 const CALENDAR_UNIT_FACTORS: Record<string, number> = {
@@ -1171,6 +1174,14 @@ const licenseUrlInvalid = computed(() => {
         </div>
       </div>
     </section>
+
+    <!-- Story Sequences Section -->
+    <SequencesSection
+      :adventure="adventure"
+      :is-saving="isSaving"
+      @update-sequences="emit('update-sequences', $event)"
+      @notify="(msg, type) => emit('notify', msg, type)"
+    />
 
     <PlotTab
       :form="form"
