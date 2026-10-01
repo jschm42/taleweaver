@@ -414,18 +414,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 lg:p-12">
-    <header class="max-w-7xl mx-auto mb-6 sm:mb-10 md:mb-12 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-3 sm:p-5 md:p-6 lg:p-8">
+    <header class="max-w-7xl mx-auto mb-4 sm:mb-6 md:mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight">Generate Adventure</h1>
-        <p class="text-slate-500 mt-1 sm:mt-2 tracking-wide text-xs sm:text-sm">Weave the parameters of your next odyssey.</p>
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Generate Adventure</h1>
+        <p class="text-slate-500 mt-0.5 sm:mt-1 tracking-wide text-xs sm:text-sm">Weave the parameters of your next odyssey.</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5 sm:gap-3">
         <button
           type="button"
           :disabled="isSurprising || !hasLlmConfig"
           @click="handleSurpriseMe"
-          class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 hover:text-purple-100 font-bold text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-950/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+          class="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 hover:text-purple-100 font-bold text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-950/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
           title="Randomly pre-fill the entire adventure configuration using the world-gen LLM"
         >
           <Dices v-if="!isSurprising" class="w-4 h-4 text-purple-400" />
@@ -436,7 +436,7 @@ onMounted(() => {
         <button
           type="button"
           @click="router.back()"
-          class="flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-white/25 text-slate-300 hover:text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-200 shadow-md shadow-black/30 group active:scale-95"
+          class="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-white/25 text-slate-300 hover:text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-200 shadow-md shadow-black/30 group active:scale-95"
           title="Return to previous page"
         >
           <ArrowLeft class="w-4 h-4 text-slate-400 group-hover:text-white group-hover:-translate-x-0.5 transition-all" />
@@ -453,22 +453,22 @@ onMounted(() => {
         :is-loading-catalogs="isLoadingCatalogs"
       />
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10 items-stretch">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 items-start">
         <!-- Configuration Panel (Left) -->
-        <div class="flex flex-col h-full space-y-6 md:space-y-8">
-          <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8 overflow-y-auto">
-            <section v-if="isCoverMode" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5 space-y-4">
+        <div class="flex flex-col h-full space-y-4 sm:space-y-6">
+          <div class="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-2xl md:rounded-3xl p-3.5 sm:p-5 md:p-6 space-y-4 sm:space-y-6">
+            <section v-if="isCoverMode" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3.5 sm:p-4 space-y-3.5">
               <div>
                 <p class="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Cover Source</p>
-                <h3 class="text-base sm:text-lg font-black text-white mt-1">
+                <h3 class="text-sm sm:text-base font-black text-white mt-1">
                   {{ isLoadingCoverSource ? 'Loading source adventure...' : (sourceAdventure?.title || 'Unknown source') }}
                 </h3>
-                <p class="text-xs text-slate-300 mt-2 leading-relaxed whitespace-pre-wrap">
+                <p class="text-xs text-slate-300 mt-1.5 leading-relaxed whitespace-pre-wrap">
                   {{ sourceAdventure?.teaser || sourceAdventure?.original_prompt || sourceAdventure?.plot || 'No source description available.' }}
                 </p>
               </div>
 
-              <div class="space-y-2">
+              <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
                   <label class="text-xs font-black uppercase tracking-widest text-slate-200">Similarity</label>
                   <span class="text-xs font-black text-amber-300">{{ form.cover_similarity_percent }}%</span>
@@ -481,18 +481,18 @@ onMounted(() => {
                   step="1"
                   class="w-full accent-amber-400"
                 />
-                <p class="text-[11px] text-slate-400">0% = freely inspired, 100% = very close to original.</p>
+                <p class="text-[10px] text-slate-400">0% = freely inspired, 100% = very close to original.</p>
               </div>
 
-              <label class="flex items-center justify-between gap-3 sm:gap-4 p-3 rounded-xl border border-white/10 bg-black/20">
+              <label class="flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl border border-white/10 bg-black/20">
                 <span class="text-xs font-bold text-slate-200">Allow to use old assets if they fit the new story.</span>
                 <input v-model="form.allow_reuse_source_assets" type="checkbox" class="h-4 w-4 shrink-0" />
               </label>
 
-              <label class="flex items-center justify-between gap-3 sm:gap-4 p-3 rounded-xl border border-white/10 bg-black/20 cursor-pointer hover:border-amber-500/30 transition-all">
+              <label class="flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl border border-white/10 bg-black/20 cursor-pointer hover:border-amber-500/30 transition-all">
                 <div class="flex flex-col gap-0.5">
                   <span class="text-xs font-bold text-slate-200">Generate Event Scripts</span>
-                  <span class="text-[11px] text-slate-400">
+                  <span class="text-[10px] text-slate-400">
                     Instructs the World-Builder to generate deterministic Python event scripts (puzzles, traps, scene logic) for this cover adventure.
                   </span>
                 </div>
@@ -514,7 +514,7 @@ onMounted(() => {
         </div>
 
         <!-- Style & Tone Selection (Right) -->
-        <div class="flex flex-col gap-6 md:gap-8 h-full">
+        <div class="flex flex-col gap-4 sm:gap-6">
           <AdventureAssetSettings
             v-model="form"
           />
@@ -544,20 +544,20 @@ onMounted(() => {
       </div>
 
       <!-- Action Button (Centered at bottom) -->
-      <div class="mt-10 md:mt-16 flex flex-col items-center gap-4 md:gap-6 px-2">
+      <div class="mt-6 sm:mt-10 flex flex-col items-center gap-2 sm:gap-3 px-2">
         <button
           @click="handleCreate"
           :disabled="isGenerating || isLoadingCatalogs || !hasLlmConfig"
-          class="group relative w-full sm:w-auto px-6 sm:px-12 md:px-20 py-4 sm:py-5 md:py-6 bg-gradient-to-br from-aether-primary to-aether-secondary rounded-2xl md:rounded-3xl font-black text-white shadow-2xl shadow-aether-primary/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+          class="group relative w-full sm:w-auto px-6 sm:px-10 md:px-14 py-3 sm:py-3.5 md:py-4 bg-gradient-to-br from-aether-primary to-aether-secondary rounded-2xl font-black text-white shadow-2xl shadow-aether-primary/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden cursor-pointer"
         >
           <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
           <div class="relative flex items-center justify-center gap-3 md:gap-4">
-            <div v-if="isGenerating" class="w-5 h-5 md:w-6 md:h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-            <Sparkles v-else class="w-5 h-5 md:w-7 md:h-7" />
-            <span class="text-sm sm:text-base md:text-xl tracking-[0.2em] text-center">{{ isGenerating ? 'WEAVING REALITY...' : (!hasLlmConfig ? 'CONFIGURATION REQUIRED' : 'BEGIN WEAVING') }}</span>
+            <div v-if="isGenerating" class="w-4 h-4 md:w-5 md:h-5 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <Sparkles v-else class="w-4 h-4 md:w-5 md:h-5" />
+            <span class="text-xs sm:text-sm md:text-base tracking-[0.2em] text-center">{{ isGenerating ? 'WEAVING REALITY...' : (!hasLlmConfig ? 'CONFIGURATION REQUIRED' : 'BEGIN WEAVING') }}</span>
           </div>
         </button>
-        <p class="text-xxs text-white/20 uppercase tracking-[0.3em] text-center px-2">The process may take a few minutes as the world is manifest</p>
+        <p class="text-[10px] text-white/30 uppercase tracking-[0.25em] text-center px-2">The process may take a few minutes as the world is manifest</p>
       </div>
     </main>
   </div>
