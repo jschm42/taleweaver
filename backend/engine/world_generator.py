@@ -412,6 +412,39 @@ class WorldGenerator:
                     if field in award:
                         award[field] = replace_ids_in_text(award[field])
 
+        for seq in (manifest_dict.get("sequences") or []):
+            if isinstance(seq, dict):
+                for field in ("title", "description", "walkthrough", "end_condition"):
+                    if field in seq:
+                        seq[field] = replace_ids_in_text(seq[field])
+
+    @staticmethod
+    def _extract_sequences_from_prompt(prompt_str: str) -> tuple[str, list[dict[str, Any]]]:
+        if not prompt_str:
+            return prompt_str, []
+        seq_regex = re.compile(r'\[Sequence[\s:]*\d*\]', re.IGNORECASE)
+        if not seq_regex.search(prompt_str):
+            return prompt_str, []
+        blocks = seq_regex.split(prompt_str)
+        cleaned_prompt = blocks[0].strip()
+        sequences: list[dict[str, Any]] = []
+        for i, block in enumerate(blocks[1:], start=1):
+            if len(sequences) >= 15:
+                break
+            lines = [l.strip() for l in block.strip().split("\n") if l.strip()]
+            title = lines[0] if lines else f"Sequence {i}"
+            desc = "\n".join(lines[1:]) if len(lines) > 1 else "Follow the sequence blueprint."
+            sequences.append({
+                "id": f"SEQ_{i}",
+                "order": i,
+                "title": title,
+                "description": desc[:500],
+                "walkthrough": desc,
+                "end_condition": "Complete the sequence objectives.",
+                "exp_reward": 100,
+            })
+        return cleaned_prompt, sequences
+
     @staticmethod
     async def generate_world(
         db: AsyncSession,
@@ -512,6 +545,12 @@ class WorldGenerator:
             cover_similarity_percent=max(0, min(100, int(cover_similarity_percent or 0))),
             allow_reuse_source_assets=bool(allow_reuse_source_assets),
         )
+
+        if not sequences and original_prompt:
+            cleaned_prompt, extracted_seqs = WorldGenerator._extract_sequences_from_prompt(original_prompt)
+            if extracted_seqs:
+                sequences = extracted_seqs
+                original_prompt = cleaned_prompt
 
         system_prompt, user_prompt = build_world_generation_prompts(
             title=title,

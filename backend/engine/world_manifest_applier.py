@@ -1168,7 +1168,7 @@ async def apply_manifest(
                 q["status"] = "open"
         adventure.quests = quests  # type: ignore[assignment]
 
-        if "sequences" in manifest_dict:
+        if "sequences" in manifest_dict and manifest_dict["sequences"]:
             adventure.sequences = manifest_dict["sequences"]  # type: ignore[assignment]
 
         # In standard ADV manifests, narrative metadata is nested under
@@ -1194,6 +1194,31 @@ async def apply_manifest(
         adventure.copyright = _adv_field("copyright") or adventure.copyright  # type: ignore[assignment]
         adventure.license = _adv_field("license") or adventure.license  # type: ignore[assignment]
         adventure.license_url = _adv_field("license_url") or adventure.license_url  # type: ignore[assignment]
+
+        # If sequences exist but top-level walkthrough is empty, synthesize walkthrough from sequence walkthroughs
+        if getattr(adventure, "sequences", None):
+            seq_list = sorted(adventure.sequences, key=lambda s: s.get("order", 1))
+            if not adventure.walkthrough:
+                combined_walkthroughs = [
+                    f"### Sequence {s.get('order', i+1)}: {s.get('title', 'Chapter')}\n{s.get('walkthrough', '').strip()}"
+                    for i, s in enumerate(seq_list)
+                    if s.get("walkthrough", "").strip()
+                ]
+                if combined_walkthroughs:
+                    adventure.walkthrough = "\n\n".join(combined_walkthroughs)
+        elif getattr(adventure, "walkthrough", None):
+            # Fallback: if walkthrough exists but no sequences, wrap into Sequence 1
+            adventure.sequences = [
+                {
+                    "id": "SEQ_1_MAIN",
+                    "order": 1,
+                    "title": "Main Journey",
+                    "description": adventure.plot or "Follow the adventure storyline.",
+                    "walkthrough": adventure.walkthrough,
+                    "end_condition": adventure.completed_condition or "Achieve the victory condition.",
+                    "exp_reward": 500,
+                }
+            ]
 
         if manifest_dict.get("time_per_turn") is not None:
             adventure.time_per_turn = int(manifest_dict["time_per_turn"])  # type: ignore[assignment]
@@ -1241,6 +1266,11 @@ async def apply_manifest(
         for state in state_res.scalars().all():
             if not state.quests:
                 state.quests = quests
+            if not state.active_sequence_id and getattr(adventure, "sequences", None):
+                sorted_seqs = sorted(adventure.sequences, key=lambda s: s.get("order", 1))
+                if sorted_seqs:
+                    state.active_sequence_id = sorted_seqs[0].get("id")
+                    state.active_sequence_order = sorted_seqs[0].get("order", 1)
             state.plot = adventure.plot
             state.rules = adventure.rules
             state.walkthrough = adventure.walkthrough

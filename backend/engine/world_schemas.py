@@ -193,12 +193,12 @@ class SequenceSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the sequence, e.g., SEQ_1_DRAGON")
     order: int = Field(..., description="The sequence order (1, 2, 3...)")
     title: str = Field(..., description="Title of the section")
-    description: str = Field(..., description="Narrative description for the AI Gamemaster")
-    walkthrough: str = Field(..., description="The dedicated walkthrough/solution for this sequence")
-    end_condition: str = Field(..., description="Condition that must be met to proceed to the next sequence")
-    exp_reward: int = Field(..., description="XP reward for completion")
+    description: str = Field("", description="Narrative description for the AI Gamemaster")
+    walkthrough: str = Field("", description="The dedicated walkthrough/solution for this sequence")
+    end_condition: str = Field("", description="Condition that must be met to proceed to the next sequence")
+    exp_reward: int = Field(default=100, description="XP reward for completion")
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "ignore"}
 
 
 class QuestSchema(BaseModel):
@@ -318,7 +318,7 @@ class WorldManifesto(BaseModel):
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
     objects: list[WorldObjectSchema]
-    sequences: list["SequenceSchema"] = Field(..., description="List of sequences for the linear story.", max_length=15)
+    sequences: list["SequenceSchema"] = Field(default_factory=list, description="List of sequences for the linear story.", max_length=15)
     quests: list[QuestSchema] = Field(..., description="List of 3-5 optional sidequests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
     scripts: list[WorldScriptSchema] = Field(

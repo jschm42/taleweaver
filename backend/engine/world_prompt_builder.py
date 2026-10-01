@@ -36,16 +36,15 @@ def _build_quest_requirement(
     if not quest_generation_enabled:
         return "\n- Do not generate any quests for this adventure."
     if min_quests is None and max_quests is None:
-        return "\n- Generate a suitable number of total quests (typically between 2 and 6) that fit the narrative context. Mix main and side quests naturally."
+        return "\n- Generate a suitable number of optional side-quests (typically between 2 and 4) that fit the narrative context. All quests must be optional side-quests (is_main: false)."
     if min_quests is not None and max_quests is None:
-        return f"\n- Generate at least {max(1, min_quests)} total quests. Mix main and side quests naturally."
+        return f"\n- Generate at least {max(1, min_quests)} optional side-quests (is_main: false)."
     if min_quests is None and max_quests is not None:
-        return f"\n- Generate no more than {max(1, max_quests)} total quests. Mix main and side quests naturally."
+        return f"\n- Generate no more than {max(1, max_quests)} optional side-quests (is_main: false)."
     clamped_min = max(1, min(30, int(min_quests)))  # type: ignore[arg-type]
     clamped_max = max(clamped_min, min(30, int(max_quests)))  # type: ignore[arg-type]
     return (
-        f"\n- Generate between {clamped_min} and {clamped_max} total quests that fit the narrative context."
-        " Mix main and side quests naturally."
+        f"\n- Generate between {clamped_min} and {clamped_max} optional side-quests (is_main: false) that fit the narrative context."
     )
 
 
@@ -76,7 +75,7 @@ _CONTAINER_LOCK_HINTS = (
     "  1. RIDDLES & PUZZLES: The code is the answer to a math or logic puzzle. Place this riddle in a READABLE text log or a description. Use counting puzzles (e.g., 'Count the pillars in the hall and multiply by the candles'), wordplay, or math based on lore numbers.\n"
     "  2. SPLIT CODES (FRAGMENTS): Break the code into 2 or 3 parts (e.g. 'First part: 45', 'Second part: 89' making '4589') and distribute them across different READABLE objects (e.g., sign, book, scroll) or scene details in different locations.\n"
     "  3. NPC COAXING / INTERROGATION: An NPC knows the code or a clue. The player must talk to them, negotiate, bribe, or help them to get the code or clue. Put this in the NPC's biography/reveal_rule or give them a READABLE item in their inventory.\n"
-    "- Explain the exact solution and clues for each container lock in the secret GM `walkthrough`.\n"
+    "- Explain the exact solution and clues for each container lock in the dedicated `walkthrough` of the sequence where the container/lock is located (inside `sequences`).\n"
     "- CONTAINER LOCK INVARIANT (CRITICAL): The engine sets `metadata_json.locked` to true only when at least one of `code_to_unlock`, `item_to_unlock`, or `rule_to_unlock` is non-empty. Therefore: if the description says the container is locked, requires a code/key/password/combination, or otherwise cannot be opened freely, you MUST set exactly one of those three unlock fields — never describe a lock in prose without binding it to a deterministic unlock field. If the container is open and freely searchable, keep all three fields empty."
 )
 
@@ -216,7 +215,22 @@ def _build_award_requirement(
 
 def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], generation_strictness: str) -> str:
     if not sequences:
-        return ""
+        return (
+            "\n\n================================================================================\n"
+            "STORY SEQUENCES (LINEAR CHAPTERS & DEDICATED WALKTHROUGHS):\n"
+            "- You MUST break the adventure's main storyline arc into a chronological series of linear chapters in `sequences` (typically between 3 and 7 sequences, maximum 15).\n"
+            "- Each sequence represents a distinct narrative phase or chapter of the adventure (e.g. Chapter 1: The Awakening/Escape, Chapter 2: The Sewers, Chapter 3: The Sanctuary).\n"
+            "- For EVERY sequence in `sequences`, you MUST populate:\n"
+            "  * `id`: unique slug (e.g. 'SEQ_1_ESCAPE', 'SEQ_2_SEWERS')\n"
+            "  * `order`: 1-based sequential integer (1, 2, 3...)\n"
+            "  * `title`: evocative title of the chapter\n"
+            "  * `description`: narrative guidelines and context for the GM during this sequence\n"
+            "  * `walkthrough`: the DEDICATED, step-by-step walkthrough and puzzle solutions specifically for this sequence! How the player overcomes this chapter's obstacles, finds keys/codes, interacts with NPCs, and reaches the sequence objective.\n"
+            "  * `end_condition`: technical or narrative condition to complete this sequence and unlock the next sequence (e.g. 'The player unlocks the iron gate with the brass key and enters the sewer tunnels')\n"
+            "  * `exp_reward`: XP awarded upon completion (e.g. 50, 100, 200)\n"
+            "- CRITICAL: Do NOT generate a single monolithic walkthrough. The puzzle solutions and progression steps MUST be distributed into their respective sequence's `walkthrough`. The top-level `walkthrough` field should be left empty or contain only a brief 1-sentence synopsis.\n"
+            "================================================================================\n"
+        )
     
     strict_mode = generation_strictness == "strict"
     
@@ -225,30 +239,29 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
     
     if strict_mode:
         seq_text += "STRICT ADHERENCE MODE IS ACTIVE: You MUST strictly implement these sequences as the core backbone of the adventure. "
-        seq_text += "Do not deviate from their order or core intent. Fill in the gaps, but preserve these exactly as requested.\n"
+        seq_text += "Do not deviate from their order or core intent. Fill in the details, and provide the dedicated `walkthrough`, `end_condition`, and `exp_reward` for each sequence.\n"
     else:
         seq_text += "CREATIVE EXPANSION MODE IS ACTIVE: Use these sequences as a creative foundation. "
-        seq_text += "You are free to adapt, expand, or deviate from them to create a richer narrative experience.\n"
+        seq_text += "You are free to adapt, expand, or add intermediate sequences (up to 15 total) to create a richer narrative experience. For every sequence, provide its dedicated `walkthrough` and `end_condition`.\n"
         
     seq_text += "\nUser-Provided Sequences:\n"
     for s in sequences:
         seq_text += f"[{s.get('order', 0)}] {s.get('title', 'Unknown')}: {s.get('description', '')}\n"
+    
+    seq_text += (
+        "\nCRITICAL REQUIREMENT FOR SEQUENCES:\n"
+        "- For EVERY sequence in `sequences`, you MUST populate:\n"
+        "  * `id`: unique slug (e.g. 'SEQ_1_ESCAPE')\n"
+        "  * `order`: sequential integer starting at 1\n"
+        "  * `title`: chapter title\n"
+        "  * `description`: narrative guidance and context for the GM during this sequence\n"
+        "  * `walkthrough`: DEDICATED step-by-step walkthrough and puzzle solutions specifically for this sequence! Do NOT place them into a global walkthrough.\n"
+        "  * `end_condition`: condition that triggers transition to the next sequence\n"
+        "  * `exp_reward`: XP awarded upon sequence completion (e.g. 50, 100, 200)\n"
+        "- The top-level `walkthrough` should be left empty or contain only a brief 1-sentence synopsis, as all puzzle solutions and critical paths live in the individual sequence walkthroughs.\n"
+    )
         
-    return f"\n\n================================================================================\n{seq_text}\n================================================================================\n"
-
-
-_CONTAINER_LOCK_HINTS = (
-    "- CONTAINER objects may be open or locked depending on story needs.\n"
-    "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
-    "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
-    "- CRITICAL: NEVER write the unlock code directly in plain text in a single note/log (e.g., 'The code is 1234'). That is boring and provides no challenge!\n"
-    "- Instead, hide the `code_to_unlock` behind one of these three patterns:\n"
-    "  1. RIDDLES & PUZZLES: The code is the answer to a math or logic puzzle. Place this riddle in a READABLE text log or a description. Use counting puzzles (e.g., 'Count the pillars in the hall and multiply by the candles'), wordplay, or math based on lore numbers.\n"
-    "  2. SPLIT CODES (FRAGMENTS): Break the code into 2 or 3 parts (e.g. 'First part: 45', 'Second part: 89' making '4589') and distribute them across different READABLE objects (e.g., sign, book, scroll) or scene details in different locations.\n"
-    "  3. NPC COAXING / INTERROGATION: An NPC knows the code or a clue. The player must talk to them, negotiate, bribe, or help them to get the code or clue. Put this in the NPC's biography/reveal_rule or give them a READABLE item in their inventory.\n"
-    "- Explain the exact solution and clues for each container lock in the secret GM `walkthrough`.\n"
-    "- CONTAINER LOCK INVARIANT (CRITICAL): The engine sets `metadata_json.locked` to true only when at least one of `code_to_unlock`, `item_to_unlock`, or `rule_to_unlock` is non-empty. Therefore: if the description says the container is locked, requires a code/key/password/combination, or otherwise cannot be opened freely, you MUST set exactly one of those three unlock fields — never describe a lock in prose without binding it to a deterministic unlock field. If the container is open and freely searchable, keep all three fields empty."
-)
+    return f"\n\n================================================================================\n{seq_text}================================================================================\n"
 
 _CONTAINER_NON_EMPTY_HINT = "\n- Every generated CONTAINER must include at least one item ID in `inventory`; do not leave container inventories empty."
 

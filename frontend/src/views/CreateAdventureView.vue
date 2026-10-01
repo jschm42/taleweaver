@@ -205,11 +205,44 @@ async function handleCreate() {
     }
   }
 
+  let promptStr = form.value.storyIdea.trim()
+  let parsedSequences = undefined
+
+  // Parse [Sequence] tags
+  const seqRegex = /\[Sequence[\s:]*\d*\]/i
+  if (seqRegex.test(promptStr)) {
+    const blocks = promptStr.split(new RegExp('\\[Sequence[\\s:]*\\d*\\]', 'ig'))
+    const sequences = []
+    promptStr = blocks[0].trim()
+
+    for (let i = 1; i < blocks.length; i++) {
+      if (sequences.length >= 15) break
+      const block = blocks[i].trim()
+      const lines = block.split('\n')
+      const title = lines[0].trim() || `Sequence ${i}`
+      const description = lines.slice(1).join('\n').trim() || 'Follow the sequence blueprint.'
+
+      sequences.push({
+        id: crypto.randomUUID(),
+        order: i,
+        title: title,
+        description: description.slice(0, 500),
+        walkthrough: description,
+        end_condition: 'Complete the sequence objectives.',
+        exp_reward: 100,
+      })
+    }
+    if (sequences.length > 0) {
+      parsedSequences = sequences
+    }
+  }
+
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: (form.value.title.trim() || 'Untitled Odyssey').slice(0, 50),
-    original_prompt: form.value.storyIdea.trim(),
+    original_prompt: promptStr,
+    sequences: parsedSequences,
     generation_strictness: form.value.generation_strictness,
     clock_enabled: form.value.clock_enabled,
     time_system: timeSystemVal,
