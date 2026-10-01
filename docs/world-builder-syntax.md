@@ -6,7 +6,7 @@ TaleWeaver's World-Builder supports a structured prompting syntax. By incorporat
 
 The most powerful feature of the structured syntax is the ability to outline a linear storyline using `[Sequence: X]` tags. The AI will segment your adventure into distinct, chronological chapters.
 
-> **Important:** The maximum number of sequences per adventure is strictly capped at **30**.
+> **Important:** The maximum number of sequences per adventure is strictly capped at **15**.
 
 ### Basic Usage
 

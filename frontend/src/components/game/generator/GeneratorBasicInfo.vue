@@ -47,7 +47,7 @@ const emit = defineEmits<{
             <span>Story Blueprint & World Vision</span>
           </label>
           <InfoPopoverButton title="Structured Syntax">
-            <p class="mb-2">Use structured tags to guide the AI linearly (Limit: 30 sequences) or force specific entities.</p>
+            <p class="mb-2">Use structured tags to guide the AI linearly (Limit: 15 sequences) or force specific entities.</p>
             <div class="space-y-1 mb-2 font-mono text-cyan-400">
               <div>[Sequence: 1] Sequence descriptions</div>
               <div>[Scene: 1] Scene descriptions</div>

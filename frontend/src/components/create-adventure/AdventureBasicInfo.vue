@@ -50,7 +50,7 @@ defineEmits<{
           <div class="flex items-center gap-2">
             <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Story Idea & Context</label>
             <InfoPopoverButton title="Structured Syntax">
-              <p class="mb-2">Use structured tags to guide the AI linearly (Limit: 30 sequences) or force specific entities.</p>
+              <p class="mb-2">Use structured tags to guide the AI linearly (Limit: 15 sequences) or force specific entities.</p>
               <div class="space-y-1 mb-2 font-mono text-cyan-400">
                 <div>[Sequence: 1] Title</div>
                 <div>[Sequence: 2] Next Title</div>

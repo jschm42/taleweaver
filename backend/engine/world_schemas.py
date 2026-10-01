@@ -312,12 +312,12 @@ class WorldManifesto(BaseModel):
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
     can_damage_npcs: bool = Field(True, description="Global flag: whether the protagonist can damage NPCs.")
     npcs_can_damage_protagonist: bool = Field(True, description="Global flag: whether NPCs can damage the protagonist.")
-    max_sequences: int = Field(30, description="Maximum number of allowed sequences.")
+    max_sequences: int = Field(15, description="Maximum number of allowed sequences.")
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
     objects: list[WorldObjectSchema]
-    sequences: list["SequenceSchema"] = Field(..., description="List of sequences for the linear story.", max_length=30)
+    sequences: list["SequenceSchema"] = Field(..., description="List of sequences for the linear story.", max_length=15)
     quests: list[QuestSchema] = Field(..., description="List of 3-5 optional sidequests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
     scripts: list[WorldScriptSchema] = Field(

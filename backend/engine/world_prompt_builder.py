@@ -221,7 +221,7 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
     strict_mode = generation_strictness == "strict"
     
     seq_text = "The user has provided a structural blueprint consisting of the following Sequences. "
-    seq_text += f"HARD LIMIT: You must strictly enforce a maximum of 30 sequences in the final output. The user provided {len(sequences)} sequences.\n\n"
+    seq_text += f"HARD LIMIT: You must strictly enforce a maximum of 15 sequences in the final output. The user provided {len(sequences)} sequences.\n\n"
     
     if strict_mode:
         seq_text += "STRICT ADHERENCE MODE IS ACTIVE: You MUST strictly implement these sequences as the core backbone of the adventure. "
