@@ -10,8 +10,16 @@ class QuestSchema(BaseModel):
     goal: str
     impact: str
     exp_reward: int
-    is_main: bool
     status: Literal["open", "completed"] = "open"
+
+class SequenceSchema(BaseModel):
+    id: str
+    order: int
+    title: str
+    description: str
+    walkthrough: str
+    end_condition: str
+    exp_reward: int
 
 class AwardSchema(BaseModel):
     key: str
@@ -32,6 +40,7 @@ class AdventureTemplateBase(BaseModel):
     license_url: Optional[str] = Field(None, max_length=500)
     original_prompt: Optional[str] = Field(None, max_length=20000)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
+    generation_strictness: Optional[Literal["strict", "creative"]] = "creative"
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     max_time_per_turn: Optional[int] = None
@@ -58,6 +67,9 @@ class AdventureTemplateBase(BaseModel):
     container_generation_enabled: bool = True
     scripts_generation_enabled: bool = False
     scripts: Optional[list[dict[str, Any]]] = None
+    min_sequences: Optional[int] = None
+    max_sequences: Optional[int] = 30
+    sequences: Optional[list[SequenceSchema]] = None
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
@@ -77,7 +89,6 @@ class AdventureTemplateBase(BaseModel):
     plot: Optional[str] = None
     rules: Optional[str] = None
     intro_text: Optional[str] = None
-    walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
     tts_director_notes: Optional[str] = None
@@ -99,6 +110,7 @@ class AdventureTemplateUpdate(BaseModel):
     license_url: Optional[str] = Field(None, max_length=500)
     original_prompt: Optional[str] = Field(None, max_length=20000)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
+    generation_strictness: Optional[Literal["strict", "creative"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
@@ -116,6 +128,8 @@ class AdventureTemplateUpdate(BaseModel):
     container_generation_enabled: Optional[bool] = None
     scripts_generation_enabled: Optional[bool] = None
     scripts: Optional[list[dict[str, Any]]] = None
+    min_sequences: Optional[int] = None
+    max_sequences: Optional[int] = None
     min_containers: Optional[int] = None
     max_containers: Optional[int] = None
     text_log_generation_enabled: Optional[bool] = None
@@ -133,7 +147,6 @@ class AdventureTemplateUpdate(BaseModel):
     plot: Optional[str] = None
     rules: Optional[str] = None
     intro_text: Optional[str] = None
-    walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
     tts_director_notes: Optional[str] = None
@@ -191,6 +204,7 @@ class GeneratorSurprisePresetResponse(BaseModel):
     selected_tone: Optional[str] = None
     selected_style: Optional[str] = None
     rule_enforcement_mode: Literal["rpg", "story", "chat"] = "story"
+    generation_strictness: Literal["strict", "creative"] = "creative"
     generate_scene_images: bool = True
     generate_npc_images: bool = True
     generate_item_images: bool = True

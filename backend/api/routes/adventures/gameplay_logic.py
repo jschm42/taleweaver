@@ -2057,6 +2057,7 @@ class GameTurnManager:
                 or cs_end.teleport_scene_id
                 or cs_end.game_completed
                 or cs_end.game_over
+                or cs_end.sequence_completed
             ):
                 sys_msgs = await self._apply_script_changeset(cs_end)
                 for sm in sys_msgs:
@@ -2786,6 +2787,37 @@ class GameTurnManager:
             await self._finalize_session("completed", changeset.status_note)
         elif changeset.game_over:
             raise GameOverException(changeset.status_note or f"{self.avatar.name} has met their end.")
+
+        if changeset.sequence_completed and hasattr(self.adventure, 'sequences') and self.adventure.sequences:
+            sequences = sorted(self.adventure.sequences, key=lambda x: x.get("order", 1))
+            current_seq_idx = -1
+            
+            for i, seq in enumerate(sequences):
+                if seq.get("id") == self.state.active_sequence_id or (not self.state.active_sequence_id and i == 0):
+                    current_seq_idx = i
+                    break
+            
+            if current_seq_idx >= 0:
+                completed_seq = sequences[current_seq_idx]
+                xp_reward = int(completed_seq.get("exp_reward") or 0)
+                if xp_reward > 0:
+                    self.avatar.exp = (self.avatar.exp or 0) + xp_reward
+                    xp_msg = f"Sequence completed! You gained {xp_reward} XP."
+                    await self._save_chat_message("system", xp_msg)
+                    system_messages.append(xp_msg)
+                
+                next_seq_idx = current_seq_idx + 1
+                if next_seq_idx < len(sequences):
+                    next_seq = sequences[next_seq_idx]
+                    self.state.active_sequence_id = next_seq.get("id")
+                    self.state.active_sequence_order = next_seq.get("order", next_seq_idx + 1)
+                    
+                    next_title = next_seq.get("title") or next_seq.get("id")
+                    next_msg = f"New Sequence unlocked: {next_title}"
+                    await self._save_chat_message("system", next_msg)
+                    system_messages.append(next_msg)
+                else:
+                    await self._finalize_session("completed", "Congratulations! You have completed the final sequence.")
 
         return system_messages
 

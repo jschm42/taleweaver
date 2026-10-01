@@ -14,6 +14,8 @@ class SessionStateBase(BaseModel):
     discovered_scenes: list[str] = []
     is_completed: bool = False
     is_debug_enabled: bool = False
+    active_sequence_id: Optional[str] = None
+    active_sequence_order: int = 1
 
 class SessionStateCreate(SessionStateBase):
     session_id: str
@@ -30,6 +32,8 @@ class SessionStateUpdate(BaseModel):
     discovered_scenes: Optional[list[str]] = None
     is_completed: Optional[bool] = None
     is_debug_enabled: Optional[bool] = None
+    active_sequence_id: Optional[str] = None
+    active_sequence_order: Optional[int] = None
 
 class GameSessionBase(BaseModel):
     user_id: str

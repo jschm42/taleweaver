@@ -214,6 +214,29 @@ def _build_award_requirement(
     return f"\n\nAWARD SYSTEM:\n- Generate between {clamped_min} and {clamped_max} unique Awards that players can earn."
 
 
+def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], generation_strictness: str) -> str:
+    if not sequences:
+        return ""
+    
+    strict_mode = generation_strictness == "strict"
+    
+    seq_text = "The user has provided a structural blueprint consisting of the following Sequences. "
+    seq_text += f"HARD LIMIT: You must strictly enforce a maximum of 30 sequences in the final output. The user provided {len(sequences)} sequences.\n\n"
+    
+    if strict_mode:
+        seq_text += "STRICT ADHERENCE MODE IS ACTIVE: You MUST strictly implement these sequences as the core backbone of the adventure. "
+        seq_text += "Do not deviate from their order or core intent. Fill in the gaps, but preserve these exactly as requested.\n"
+    else:
+        seq_text += "CREATIVE EXPANSION MODE IS ACTIVE: Use these sequences as a creative foundation. "
+        seq_text += "You are free to adapt, expand, or deviate from them to create a richer narrative experience.\n"
+        
+    seq_text += "\nUser-Provided Sequences:\n"
+    for s in sequences:
+        seq_text += f"[{s.get('order', 0)}] {s.get('title', 'Unknown')}: {s.get('description', '')}\n"
+        
+    return f"\n\n================================================================================\n{seq_text}\n================================================================================\n"
+
+
 _CONTAINER_LOCK_HINTS = (
     "- CONTAINER objects may be open or locked depending on story needs.\n"
     "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
@@ -447,6 +470,8 @@ def build_world_generation_prompts(
     cover_source_adventure_name: Optional[str],
     cover_similarity_percent: int,
     allow_reuse_source_assets: bool,
+    sequences: Optional[list[dict[str, Any]]] = None,
+    generation_strictness: str = "creative",
 ) -> tuple[str, str]:
     """Build the system and user prompts for the world generation LLM call.
 
@@ -495,5 +520,6 @@ def build_world_generation_prompts(
     user_prompt += _build_scripts_requirement(scripts_generation_enabled)
     user_prompt += _build_item_requirement(min_items, max_items)
     user_prompt += _build_switch_requirement(original_prompt)
+    user_prompt += _build_sequences_requirement(sequences, generation_strictness)
 
     return system_prompt, user_prompt

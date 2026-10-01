@@ -287,6 +287,26 @@ class TurnLlmContextBuilder:
         db_duration = time.perf_counter() - db_start
         logger.debug("[Turn %s] LLM Context DB prep took %.4fs", self.manager.game_id, db_duration)
 
+        # Sequence Resolution
+        active_walkthrough = ""
+        active_end_condition = self.manager.state.completed_condition or self.manager.adventure.completed_condition
+        
+        if hasattr(self.manager.adventure, 'sequences') and self.manager.adventure.sequences:
+            for i, seq in enumerate(sorted(self.manager.adventure.sequences, key=lambda x: x.get("order", 1))):
+                if seq.get("id") == self.manager.state.active_sequence_id or (not self.manager.state.active_sequence_id and i == 0):
+                    active_walkthrough = seq.get("walkthrough", "")
+                    active_end_condition = seq.get("end_condition", "")
+                    break
+
+        if not active_walkthrough:
+            active_walkthrough = self.manager.state.walkthrough or self.manager.adventure.walkthrough
+
+        if active_walkthrough and hasattr(self.manager.adventure, 'generation_strictness'):
+            if self.manager.adventure.generation_strictness == 'strict':
+                active_walkthrough = f"[STRICT ADHERENCE REQUIRED] You MUST strictly follow this walkthrough. Do not allow the player to bypass these steps.\n\n{active_walkthrough}"
+            elif self.manager.adventure.generation_strictness == 'creative':
+                active_walkthrough = f"[CREATIVE FOUNDATION] Use this walkthrough as a creative foundation. Allow the player to find alternative solutions.\n\n{active_walkthrough}"
+
         mechanics_system_prompt = MemoryManager.build_context(
             self.manager.avatar,
             self.manager.adventure.original_prompt or "",
@@ -298,8 +318,8 @@ class TurnLlmContextBuilder:
             awards=self.manager.adventure.awards,
             plot=self.manager.state.plot or self.manager.adventure.plot,
             rules=self.manager.state.rules or self.manager.adventure.rules,
-            walkthrough=self.manager.state.walkthrough or self.manager.adventure.walkthrough,
-            completed_condition=self.manager.state.completed_condition or self.manager.adventure.completed_condition,
+            walkthrough=active_walkthrough,
+            completed_condition=active_end_condition,
             gameover_condition=self.manager.state.gameover_condition or self.manager.adventure.gameover_condition,
             time_system=self.manager.state.time_system or self.manager.adventure.time_system or "calendar",
             time_config=self.manager.state.time_config or self.manager.adventure.time_config,
@@ -321,8 +341,8 @@ class TurnLlmContextBuilder:
             awards=self.manager.adventure.awards,
             plot=self.manager.state.plot or self.manager.adventure.plot,
             rules=self.manager.state.rules or self.manager.adventure.rules,
-            walkthrough=self.manager.state.walkthrough or self.manager.adventure.walkthrough,
-            completed_condition=self.manager.state.completed_condition or self.manager.adventure.completed_condition,
+            walkthrough=active_walkthrough,
+            completed_condition=active_end_condition,
             gameover_condition=self.manager.state.gameover_condition or self.manager.adventure.gameover_condition,
             time_system=self.manager.state.time_system or self.manager.adventure.time_system or "calendar",
             time_config=self.manager.state.time_config or self.manager.adventure.time_config,

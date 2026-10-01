@@ -8,6 +8,7 @@ defineProps<{
     title: string
     storyIdea: string
     language: string
+    generation_strictness?: 'creative' | 'strict'
   }
   isSuggestingStoryIdea?: boolean
   canSuggestStoryIdea?: boolean
@@ -46,7 +47,20 @@ defineEmits<{
 
       <div>
         <div class="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
-          <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Story Idea & Context</label>
+          <div class="flex items-center gap-2">
+            <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Story Idea & Context</label>
+            <InfoPopoverButton title="Structured Syntax">
+              <p class="mb-2">Use structured tags to guide the AI linearly (Limit: 30 sequences) or force specific entities.</p>
+              <div class="space-y-1 mb-2 font-mono text-cyan-400">
+                <div>[Sequence: 1] Title</div>
+                <div>[Sequence: 2] Next Title</div>
+                <div>[Scene: X] Name</div>
+                <div>[NPC: X] Name</div>
+              </div>
+              <p class="mb-2">Enable <b>Strict Adherence</b> below to enforce the structure.</p>
+              <p class="text-[10px] text-slate-400 italic">See /docs/world-builder-syntax.md for the full guide.</p>
+            </InfoPopoverButton>
+          </div>
           <button
             type="button"
             :disabled="isSuggestingStoryIdea || canSuggestStoryIdea === false"
@@ -64,6 +78,45 @@ defineEmits<{
           placeholder="The Weaver will use this to seed the world's history and current conflicts..."
           class="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white resize-y min-h-[4.5rem] sm:min-h-[5.5rem] focus:border-cyan-400 outline-none transition-all placeholder:text-white/20"
         ></textarea>
+
+        <!-- Builder Mode Strictness -->
+        <div class="mt-4">
+          <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em] mb-1.5 sm:mb-2">Builder Mode</label>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              @click="$emit('update:modelValue', { ...modelValue, generation_strictness: 'strict' })"
+              :class="[
+                'flex-1 px-3 py-2 rounded-xl text-xs font-bold transition-all border',
+                modelValue.generation_strictness === 'strict'
+                  ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.1)]'
+                  : 'bg-black/40 border-white/10 text-slate-400 hover:bg-white/5'
+              ]"
+            >
+              Strict Adherence
+            </button>
+            <button
+              type="button"
+              @click="$emit('update:modelValue', { ...modelValue, generation_strictness: 'creative' })"
+              :class="[
+                'flex-1 px-3 py-2 rounded-xl text-xs font-bold transition-all border',
+                (!modelValue.generation_strictness || modelValue.generation_strictness === 'creative')
+                  ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.1)]'
+                  : 'bg-black/40 border-white/10 text-slate-400 hover:bg-white/5'
+              ]"
+            >
+              Creative Expansion
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+            <template v-if="modelValue.generation_strictness === 'strict'">
+              The Architect strictly implements your structural blueprint tags like <span class="font-mono text-cyan-400">[Sequence: ...]</span> or <span class="font-mono text-cyan-400">[Scene: ...]</span>.
+            </template>
+            <template v-else>
+              The Architect expands creatively on your blueprint and fills in the gaps freely.
+            </template>
+          </p>
+        </div>
       </div>
     </div>
 

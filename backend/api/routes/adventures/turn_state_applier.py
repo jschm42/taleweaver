@@ -684,21 +684,40 @@ class TurnStateApplier:
                     )
                     system_messages.append(xp_msg)
 
-        # RPG Completion Logic: Check if all main quests are finished
-        if state_dirty:
-            all_main_done = True
-            main_quest_exists = False
-            for q in (self.state.quests or []):
-                if q.get("is_main"):
-                    main_quest_exists = True
-                    if q.get("status") != "completed":
-                        all_main_done = False
-                        break
+        # Sequence Completion Logic
+        if event.sequence_completed and hasattr(self.adventure, 'sequences') and self.adventure.sequences:
+            sequences = sorted(self.adventure.sequences, key=lambda x: x.get("order", 1))
+            current_seq_idx = -1
             
-            if main_quest_exists and all_main_done:
-                event.game_completed = True
-                if not event.status_note:
-                    event.status_note = "Congratulations! You have completed all main objectives."
+            for i, seq in enumerate(sequences):
+                if seq.get("id") == self.state.active_sequence_id or (not self.state.active_sequence_id and i == 0):
+                    current_seq_idx = i
+                    break
+            
+            if current_seq_idx >= 0:
+                completed_seq = sequences[current_seq_idx]
+                xp_reward = int(completed_seq.get("exp_reward") or 0)
+                if xp_reward > 0:
+                    self.avatar.exp = (self.avatar.exp or 0) + xp_reward
+                    xp_msg = f"Sequence completed! You gained {xp_reward} XP."
+                    await self._save_chat_message("system", xp_msg)
+                    system_messages.append(xp_msg)
+                
+                next_seq_idx = current_seq_idx + 1
+                if next_seq_idx < len(sequences):
+                    next_seq = sequences[next_seq_idx]
+                    self.state.active_sequence_id = next_seq.get("id")
+                    self.state.active_sequence_order = next_seq.get("order", next_seq_idx + 1)
+                    state_dirty = True
+                    
+                    next_title = next_seq.get("title") or next_seq.get("id")
+                    next_msg = f"New Sequence unlocked: {next_title}"
+                    await self._save_chat_message("system", next_msg)
+                    system_messages.append(next_msg)
+                else:
+                    event.game_completed = True
+                    if not event.status_note:
+                        event.status_note = "Congratulations! You have completed the final sequence."
 
         # Process Explicit Map Updates (Exits)
         if event.updated_exits:

@@ -35,6 +35,7 @@ class ScriptChangeset:
     completed_quest_ids: list[str] = field(default_factory=list)
     failed_quest_ids: list[str] = field(default_factory=list)
     granted_award_keys: list[str] = field(default_factory=list)
+    sequence_completed: bool = False
 
     var_updates: dict[str, Any] = field(default_factory=dict)
     game_completed: bool = False
@@ -403,6 +404,19 @@ class AwardsProxy:
             self._changeset.granted_award_keys.append(award_key)
 
 
+class SequencesProxy:
+    """Safe proxy for sequence progression."""
+
+    def __init__(self, changeset: ScriptChangeset):
+        self._changeset = changeset
+
+    def advance(self) -> None:
+        self._changeset.sequence_completed = True
+
+    def complete_current(self) -> None:
+        self._changeset.sequence_completed = True
+
+
 class DiceProxy:
     """Safe proxy for dice rolls."""
 
@@ -459,4 +473,5 @@ class GameContext:
         self.game = GameProxy(self.changeset)
         self.quests = QuestsProxy(quests, self.changeset)
         self.awards = AwardsProxy(self.changeset)
+        self.sequences = SequencesProxy(self.changeset)
         self.dice = DiceProxy()

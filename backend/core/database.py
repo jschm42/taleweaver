@@ -485,6 +485,18 @@ async def apply_sqlite_compat_migrations() -> None:
                 )
                 logger.info("SQLite migration: added adventure_templates.license")
 
+            if "sequences" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN sequences TEXT"
+                )
+                logger.info("SQLite migration: added adventure_templates.sequences")
+
+            if "generation_strictness" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN generation_strictness TEXT NOT NULL DEFAULT 'creative'"
+                )
+                logger.info("SQLite migration: added adventure_templates.generation_strictness")
+
 
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
@@ -588,6 +600,18 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE session_states ADD COLUMN compressed_history TEXT"
             )
             logger.info("SQLite migration: added session_states.compressed_history")
+
+        if "active_sequence_id" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN active_sequence_id TEXT"
+            )
+            logger.info("SQLite migration: added session_states.active_sequence_id")
+
+        if "active_sequence_order" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN active_sequence_order INTEGER NOT NULL DEFAULT 1"
+            )
+            logger.info("SQLite migration: added session_states.active_sequence_order")
 
         if "enable_history_compression" not in session_state_cols:
             await conn.exec_driver_sql(

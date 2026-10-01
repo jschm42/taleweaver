@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from backend.core.config import settings
-from backend.core.database import engine
+from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
 
 # Configure logging based on .env settings
@@ -65,7 +65,7 @@ async def lifespan(_app: FastAPI):
 
     # Note: We now use Alembic for all schema migrations. 
     # Manual apply_sqlite_compat_migrations() is deprecated and disabled to avoid conflicts.
-    # await apply_sqlite_compat_migrations()
+    await apply_sqlite_compat_migrations()
 
     # Auto-import adventures
     from backend.core.database import AsyncSessionLocal

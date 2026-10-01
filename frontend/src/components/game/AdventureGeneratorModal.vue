@@ -167,6 +167,7 @@ const form = ref({
   initial_units: 0,
   units_per_turn: 1,
   max_units_per_turn: null as number | null,
+  generation_strictness: 'creative' as 'creative' | 'strict',
 })
 
 const imageStyles = ref<CatalogTile[]>([])
@@ -259,6 +260,7 @@ function populateFromProposal(p: any) {
 
   if (p.rule_enforcement_mode) form.value.rule_enforcement_mode = p.rule_enforcement_mode
   if (p.language) form.value.language = p.language
+  if (p.generation_strictness) form.value.generation_strictness = p.generation_strictness
 
   // TIME HANDLING FROM PROPOSAL
   if (p.clock_enabled !== undefined) form.value.clock_enabled = !!p.clock_enabled
@@ -357,6 +359,7 @@ async function handleSurpriseMe() {
       }
 
       if (preset.rule_enforcement_mode) form.value.rule_enforcement_mode = preset.rule_enforcement_mode
+      if (preset.generation_strictness) form.value.generation_strictness = preset.generation_strictness
       if (preset.generate_scene_images !== undefined) form.value.generate_scene_images = preset.generate_scene_images
       if (preset.generate_npc_images !== undefined) form.value.generate_npc_images = preset.generate_npc_images
       if (preset.generate_item_images !== undefined) form.value.generate_item_images = preset.generate_item_images
@@ -448,11 +451,46 @@ async function startGeneration() {
 
   const pacingVal = form.value.time_system === 'units' ? form.value.units_per_turn : form.value.pacing_minutes
 
+  let promptStr = form.value.storyIdea.trim()
+  let parsedSequences = undefined
+  
+  // Parse [Sequence] tags
+  const seqRegex = /\[Sequence[\s:]*\d*\]/i
+  if (seqRegex.test(promptStr)) {
+    const blocks = promptStr.split(new RegExp('\\[Sequence[\\s:]*\\d*\\]', 'ig'))
+    const sequences = []
+    // The first block is whatever text comes before the first sequence tag
+    // We can keep it in the prompt as the general premise
+    promptStr = blocks[0].trim()
+    
+    for (let i = 1; i < blocks.length; i++) {
+      if (sequences.length >= 30) break // Hard limit
+      const block = blocks[i].trim()
+      const lines = block.split('\n')
+      const title = lines[0].trim() || `Sequence ${i}`
+      const description = lines.slice(1).join('\n').trim() || 'Follow the sequence blueprint.'
+      
+      sequences.push({
+        id: crypto.randomUUID(),
+        order: i,
+        title: title,
+        description: description.slice(0, 500),
+        walkthrough: description,
+        end_condition: 'Complete the sequence objectives.',
+        exp_reward: 500
+      })
+    }
+    if (sequences.length > 0) {
+      parsedSequences = sequences
+    }
+  }
+
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: (form.value.title.trim() || 'A New Reality').slice(0, 50),
-    original_prompt: form.value.storyIdea.trim(),
+    original_prompt: promptStr,
+    sequences: parsedSequences,
     selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
     selected_tone: form.value.selected_tone_id ? fullToneObj : null,
     // Time & Pacing
@@ -646,6 +684,7 @@ onBeforeUnmount(() => {
             <GeneratorBasicInfo
               v-model:title="form.title"
               v-model:story-idea="form.storyIdea"
+              v-model:generation-strictness="form.generation_strictness"
             />
 
             <!-- 2. Style, Tone & Visual Generation Toggles -->

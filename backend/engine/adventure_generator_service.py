@@ -83,6 +83,8 @@ class AdventureGeneratorService:
             quest_generation_enabled=getattr(request, "quest_generation_enabled", True),
             min_quests=getattr(request, "min_quests", None),
             max_quests=getattr(request, "max_quests", None),
+            sequences=getattr(request, "sequences", None),
+            generation_strictness=getattr(request, "generation_strictness", "creative"),
             creation_status="Initializing...",
             is_ready=False
         )
@@ -105,6 +107,8 @@ class AdventureGeneratorService:
                 template_id=new_id,
                 title=request.title,
                 original_prompt=request.prompt,
+                sequences=getattr(request, "sequences", None),
+                generation_strictness=getattr(request, "generation_strictness", "creative"),
                 generate_scene_images=images_enabled,
                 generate_npc_images=images_enabled,
                 generate_item_images=images_enabled,

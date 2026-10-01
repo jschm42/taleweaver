@@ -23,6 +23,7 @@ type RuleMode = 'rpg' | 'story' | 'chat'
 const form = ref({
   title: '',
   storyIdea: '',
+  generation_strictness: 'creative' as 'creative' | 'strict',
   generate_npc_images: true,
   generate_item_images: true,
   generate_scene_images: true,
@@ -209,6 +210,7 @@ async function handleCreate() {
     id: crypto.randomUUID(),
     title: (form.value.title.trim() || 'Untitled Odyssey').slice(0, 50),
     original_prompt: form.value.storyIdea.trim(),
+    generation_strictness: form.value.generation_strictness,
     clock_enabled: form.value.clock_enabled,
     time_system: timeSystemVal,
     time_per_turn: pacingVal,

@@ -1,4 +1,4 @@
-from typing import Optional, Union, Literal
+from typing import Optional, Union, Literal, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -134,6 +134,8 @@ class AdventureGenerationRequest(BaseModel):
     text_log_generation_enabled: bool = True
     min_text_logs: Optional[int] = None
     max_text_logs: Optional[int] = None
+    sequences: Optional[list[dict[str, Any]]] = None
+    generation_strictness: Literal["strict", "creative"] = "creative"
 
 
 class ToolResults(BaseModel):
@@ -172,6 +174,7 @@ class AdventureGeneratorToolIntent(BaseModel):
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
     completed_quest_ids: Optional[list[str]] = None
+    sequence_completed: bool = False
     earned_award_keys: Optional[list[str]] = None
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None
@@ -247,6 +250,9 @@ class GameEvent(BaseModel):
     
     # Award System
     earned_award_keys: Optional[list[str]] = None
+    
+    # Sequence System
+    sequence_completed: bool = Field(False, description="Set to true if the protagonist has met the end condition for the current sequence.")
 
     combination_intent: bool = Field(False, description="Set to true if the player's message indicates they are attempting to combine, craft, mix, assemble, or use multiple items together (in any language).")
 

@@ -189,6 +189,18 @@ class WorldObjectSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SequenceSchema(BaseModel):
+    id: str = Field(..., description="Unique slug for the sequence, e.g., SEQ_1_DRAGON")
+    order: int = Field(..., description="The sequence order (1, 2, 3...)")
+    title: str = Field(..., description="Title of the section")
+    description: str = Field(..., description="Narrative description for the AI Gamemaster")
+    walkthrough: str = Field(..., description="The dedicated walkthrough/solution for this sequence")
+    end_condition: str = Field(..., description="Condition that must be met to proceed to the next sequence")
+    exp_reward: int = Field(..., description="XP reward for completion")
+
+    model_config = {"extra": "forbid"}
+
+
 class QuestSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the quest, e.g., FIND_GOLDEN_KEY")
     title: str = Field(..., description="Short, descriptive title")
@@ -196,7 +208,6 @@ class QuestSchema(BaseModel):
     goal: str = Field(..., description="Technical condition for completion (for GM reference)")
     impact: str = Field(..., description="How this affects the world when completed. Use empty string for standard quests.")
     exp_reward: int = Field(..., description="EXP awarded for completion (e.g., 50, 100, 250)")
-    is_main: bool = Field(..., description="True if this quest is required to finish the adventure")
     status: str = Field(..., description="Current state: open, completed, failed")
 
     model_config = {"extra": "forbid"}
@@ -296,17 +307,18 @@ class WorldManifesto(BaseModel):
     plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
     rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
     intro_text: str = Field(..., description="Optional intro text shown once when a new session starts. Use empty string if none.")
-    walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
     can_damage_npcs: bool = Field(True, description="Global flag: whether the protagonist can damage NPCs.")
     npcs_can_damage_protagonist: bool = Field(True, description="Global flag: whether NPCs can damage the protagonist.")
+    max_sequences: int = Field(30, description="Maximum number of allowed sequences.")
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
     objects: list[WorldObjectSchema]
-    quests: list[QuestSchema] = Field(..., description="List of 3-5 quests. Use [] if none.")
+    sequences: list["SequenceSchema"] = Field(..., description="List of sequences for the linear story.", max_length=30)
+    quests: list[QuestSchema] = Field(..., description="List of 3-5 optional sidequests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
     scripts: list[WorldScriptSchema] = Field(
         default_factory=list,

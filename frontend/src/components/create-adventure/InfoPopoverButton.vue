@@ -3,9 +3,10 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   title?: string
-  text: string
+  text?: string
 }>(), {
   title: 'Help',
+  text: '',
 })
 
 const open = ref(false)
@@ -45,10 +46,12 @@ onBeforeUnmount(() => {
 
     <div
       v-if="open"
-      class="absolute right-0 sm:right-0 top-8 z-30 w-[calc(100vw-2rem)] sm:w-72 max-w-sm rounded-xl border border-cyan-400/30 bg-slate-950/95 backdrop-blur-lg shadow-2xl p-3"
+      class="absolute left-0 top-8 z-50 w-[calc(100vw-2rem)] sm:w-72 max-w-sm rounded-xl border border-cyan-400/30 bg-slate-950/95 backdrop-blur-lg shadow-2xl p-3"
     >
       <p class="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300 mb-2">{{ title }}</p>
-      <p class="text-xs leading-relaxed text-slate-200 break-words">{{ text }}</p>
+      <div class="text-xs leading-relaxed text-slate-200 break-words whitespace-pre-wrap">
+        <slot>{{ text }}</slot>
+      </div>
     </div>
   </div>
 </template>

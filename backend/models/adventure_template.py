@@ -93,9 +93,12 @@ class AdventureTemplate(Base, TimestampMixin):
     quest_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     min_quests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     max_quests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
-    
     # Adventure Generator Mode
     is_adventure_generator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Sequences
+    sequences: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    generation_strictness: Mapped[str] = mapped_column(String(20), default="creative", nullable=False)
 
     # Creator, Copyright, License Metadata
     creator: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

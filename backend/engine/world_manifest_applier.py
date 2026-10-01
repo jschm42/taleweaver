@@ -1168,6 +1168,9 @@ async def apply_manifest(
                 q["status"] = "open"
         adventure.quests = quests  # type: ignore[assignment]
 
+        if "sequences" in manifest_dict:
+            adventure.sequences = manifest_dict["sequences"]  # type: ignore[assignment]
+
         # In standard ADV manifests, narrative metadata is nested under
         # `adventure`; look there first and fall back to top-level keys.
         adv_block = manifest_dict.get("adventure") if isinstance(manifest_dict.get("adventure"), dict) else {}

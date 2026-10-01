@@ -15,7 +15,7 @@ import datetime
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -419,6 +419,8 @@ class WorldGenerator:
         template_id: str,
         title: str,
         original_prompt: str,
+        sequences: Optional[list[dict[str, Any]]] = None,
+        generation_strictness: Literal["strict", "creative"] = "creative",
         model: Optional[str] = None,
         provider: Optional[str] = None,
         generate_scene_images: bool = False,
@@ -514,6 +516,8 @@ class WorldGenerator:
         system_prompt, user_prompt = build_world_generation_prompts(
             title=title,
             original_prompt=original_prompt,
+            sequences=sequences,
+            generation_strictness=generation_strictness,
             language=language,
             selected_tone=selected_tone,
             automatic_npc_voice_assignment=automatic_npc_voice_assignment,

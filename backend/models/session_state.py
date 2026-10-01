@@ -39,9 +39,12 @@ class SessionState(Base, TimestampMixin):
     # Session-specific overrides/copies from template
     plot = Column(String(5000), nullable=True)
     rules = Column(String(5000), nullable=True)
-    walkthrough = Column(String(10000), nullable=True)
     completed_condition = Column(String(1000), nullable=True)
     gameover_condition = Column(String(1000), nullable=True)
+    
+    # Active Sequence Tracking
+    active_sequence_id = Column(String(100), nullable=True)
+    active_sequence_order = Column(Integer, default=1, nullable=False)
     tts_director_notes = Column(String(5000), nullable=True)
     selected_image_styles = Column(JSON, nullable=True)
     selected_tone = Column(JSON, nullable=True)

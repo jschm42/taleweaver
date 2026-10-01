@@ -37,6 +37,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     tts_director_notes: Optional[str] = None
+    sequences: Optional[list[dict[str, Any]]] = None
+    generation_strictness: Optional[Literal["strict", "creative"]] = "creative"
     # Advanced/import fields
     original_manifest: Optional[dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
