@@ -53,7 +53,7 @@ watch(() => props.ttsForm, (newVal) => {
 
 const vocalTagsSupported = computed(() => {
   if (localForm.value.provider === 'google') return true
-  if (localForm.value.provider === 'elevenlabs' && localForm.value.selected_model === 'eleven_v3') return true
+  if (localForm.value.provider === 'elevenlabs' && (localForm.value.selected_model === 'eleven_v3' || localForm.value.selected_model.startsWith('eleven_v4'))) return true
   return false
 })
 
@@ -74,7 +74,7 @@ watch(() => localForm.value.provider, (newProvider) => {
   if (newProvider === 'elevenlabs') {
     fetchElevenLabsModels()
     if (!localForm.value.selected_model.startsWith('eleven_')) {
-      localForm.value.selected_model = 'eleven_multilingual_v2'
+      localForm.value.selected_model = 'eleven_v4'
     }
   } else if (newProvider === 'google' && !localForm.value.selected_model.startsWith('gemini-')) {
     localForm.value.selected_model = 'gemini-3.8-flash-tts'
