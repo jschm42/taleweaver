@@ -135,18 +135,9 @@ class AdventureTemplateImporter:
 
     @staticmethod
     async def delete_template_for_overwrite(db: AsyncSession, template_id: str):
-        """Helper to cleanly delete a template and its assets before an overwrite import."""
-        # 1. Delete assets from disk
-        await MediaEngine.cleanup_adventure_assets(template_id)
-        
-        # 2. Delete from DB (cascades should handle the rest if configured, 
-        # but for safety we use the existing delete logic if available)
-        # Assuming a simple delete for now, or calling a shared delete method.
-        # For now, let's just delete the template and assume cascades.
-        template = await db.get(AdventureTemplate, template_id)
-        if template:
-            await db.delete(template)
-            await db.flush()
+        """Helper to cleanly delete a template, decoupling sessions and cleaning assets before overwrite import."""
+        from backend.api.routes.adventures.logic import AdventureLogic
+        await AdventureLogic.delete_adventure(db, template_id)
 
     @staticmethod
     async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None, allow_session: bool = True, overwrite: bool = False) -> bool:
@@ -260,6 +251,7 @@ class AdventureTemplateImporter:
                     owner_id=owner_id,
                     title=adv_data["title"],
                     version=adv_data.get("version"),
+                    sequences=adv_data.get("sequences") or manifest_data.get("sequences"),
                     creator=adv_data.get("creator") or manifest_data.get("creator"),
                     copyright=adv_data.get("copyright") or manifest_data.get("copyright"),
                     license=resolved_license,
@@ -494,6 +486,7 @@ class AdventureTemplateImporter:
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),
                     "objects": manifest_data.get("objects", []),
+                    "sequences": adv_data.get("sequences") or manifest_data.get("sequences", []),
                     "quests": manifest_data.get("quests") or adv_data.get("quests", []),
                     "awards": manifest_data.get("awards") or adv_data.get("awards", []),
                     "teaser": manifest_data.get("teaser") or adv_data.get("teaser"),
@@ -626,6 +619,7 @@ class AdventureTemplateImporter:
                     title=old_adv['title'],
                     teaser=old_adv.get("teaser"),
                     version=old_adv.get("version"),
+                    sequences=old_adv.get("sequences") or data.get("sequences"),
                     creator=old_adv.get("creator"),
                     copyright=old_adv.get("copyright"),
                     license=old_adv.get("license"),

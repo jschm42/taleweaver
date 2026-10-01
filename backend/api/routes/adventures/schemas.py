@@ -412,6 +412,11 @@ class AdventureTemplateSummaryResponse(BaseModel):
     is_adventure_generator: bool = False
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
+    has_update: bool = False
+    available_version: Optional[str] = None
+    has_sequences: bool = True
+    is_legacy_format: bool = False
+    can_start: bool = True
 
     @field_validator("selected_tone", mode="before")
     @classmethod
