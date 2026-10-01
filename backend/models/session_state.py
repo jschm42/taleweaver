@@ -39,6 +39,7 @@ class SessionState(Base, TimestampMixin):
     # Session-specific overrides/copies from template
     plot = Column(String(5000), nullable=True)
     rules = Column(String(5000), nullable=True)
+    walkthrough = Column(String(20000), nullable=True)
     completed_condition = Column(String(1000), nullable=True)
     gameover_condition = Column(String(1000), nullable=True)
     
