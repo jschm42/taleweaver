@@ -213,12 +213,26 @@ def _build_award_requirement(
     return f"\n\nAWARD SYSTEM:\n- Generate between {clamped_min} and {clamped_max} unique Awards that players can earn."
 
 
-def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], generation_strictness: str) -> str:
+def _build_sequences_requirement(
+    sequences: Optional[list[dict[str, Any]]],
+    generation_strictness: str,
+    min_sequences: Optional[int],
+    max_sequences: Optional[int],
+) -> str:
     if not sequences:
+        if min_sequences is None and max_sequences is None:
+            seq_limit_text = "typically between 3 and 7 sequences, maximum 15"
+        elif min_sequences is not None and max_sequences is None:
+            seq_limit_text = f"at least {max(1, min_sequences)} sequences, maximum 15"
+        elif min_sequences is None and max_sequences is not None:
+            seq_limit_text = f"maximum {max(1, max_sequences)} sequences"
+        else:
+            seq_limit_text = f"between {max(1, min_sequences)} and {max(1, max_sequences)} sequences"  # type: ignore
+
         return (
             "\n\n================================================================================\n"
             "STORY SEQUENCES (LINEAR CHAPTERS & DEDICATED WALKTHROUGHS):\n"
-            "- You MUST break the adventure's main storyline arc into a chronological series of linear chapters in `sequences` (typically between 3 and 7 sequences, maximum 15).\n"
+            f"- You MUST break the adventure's main storyline arc into a chronological series of linear chapters in `sequences` ({seq_limit_text}).\n"
             "- Each sequence represents a distinct narrative phase or chapter of the adventure (e.g. Chapter 1: The Awakening/Escape, Chapter 2: The Sewers, Chapter 3: The Sanctuary).\n"
             "- For EVERY sequence in `sequences`, you MUST populate:\n"
             "  * `id`: unique slug (e.g. 'SEQ_1_ESCAPE', 'SEQ_2_SEWERS')\n"
@@ -247,7 +261,19 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
         seq_text += "Do not deviate from their order or core intent. Fill in the details, and provide the dedicated `walkthrough`, `end_condition`, hard rules, and `exp_reward` for each sequence.\n"
     else:
         seq_text += "CREATIVE EXPANSION MODE IS ACTIVE: Use these sequences as a creative foundation. "
-        seq_text += "You are free to adapt, expand, or add intermediate sequences (up to 15 total) to create a richer narrative experience. For every sequence, provide its dedicated `walkthrough`, `end_condition`, and applicable hard rules.\n"
+        seq_text += "You are free to adapt, expand, or add intermediate sequences to create a richer narrative experience. "
+        
+        if min_sequences is not None or max_sequences is not None:
+            if min_sequences is not None and max_sequences is not None:
+                seq_text += f"You MUST generate between {min_sequences} and {max_sequences} total sequences. "
+            elif min_sequences is not None:
+                seq_text += f"You MUST generate at least {min_sequences} total sequences. "
+            else:
+                seq_text += f"You MUST generate no more than {max_sequences} total sequences. "
+        else:
+             seq_text += "You MUST generate up to 15 total sequences. "
+
+        seq_text += "For every sequence, provide its dedicated `walkthrough`, `end_condition`, and applicable hard rules.\n"
         
     seq_text += "\nUser-Provided Sequences:\n"
     for s in sequences:
@@ -484,6 +510,8 @@ def build_world_generation_prompts(
     max_scenes: Optional[int],
     min_quests: Optional[int],
     max_quests: Optional[int],
+    min_sequences: Optional[int] = None,
+    max_sequences: Optional[int] = None,
     award_generation_enabled: bool,
     min_awards: Optional[int],
     max_awards: Optional[int],
@@ -550,6 +578,11 @@ def build_world_generation_prompts(
     user_prompt += _build_scripts_requirement(scripts_generation_enabled)
     user_prompt += _build_item_requirement(min_items, max_items)
     user_prompt += _build_switch_requirement(original_prompt)
-    user_prompt += _build_sequences_requirement(sequences, generation_strictness)
+    user_prompt += _build_sequences_requirement(
+        sequences,
+        generation_strictness,
+        min_sequences,
+        max_sequences,
+    )
 
     return system_prompt, user_prompt

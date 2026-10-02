@@ -134,6 +134,8 @@ class AdventureGenerationRequest(BaseModel):
     text_log_generation_enabled: bool = True
     min_text_logs: Optional[int] = None
     max_text_logs: Optional[int] = None
+    min_sequences: Optional[int] = None
+    max_sequences: Optional[int] = None
     sequences: Optional[list[dict[str, Any]]] = None
     generation_strictness: Literal["strict", "creative"] = "creative"
 

@@ -142,8 +142,10 @@ const form = ref({
   quest_generation_enabled: true,
   min_quests: 2 as number | null,
   max_quests: 4 as number | null,
+  min_sequences: 3 as number | null,
+  max_sequences: 5 as number | null,
   container_generation_enabled: true,
-  scripts_generation_enabled: false,
+  scripts_generation_enabled: true,
   min_containers: 2 as number | null,
   max_containers: 4 as number | null,
   text_log_generation_enabled: true,
@@ -244,6 +246,9 @@ function populateFromProposal(p: any) {
   if (p.quest_generation_enabled !== undefined) form.value.quest_generation_enabled = !!p.quest_generation_enabled
   if (p.min_quests !== undefined && p.min_quests !== null) form.value.min_quests = p.min_quests
   if (p.max_quests !== undefined && p.max_quests !== null) form.value.max_quests = p.max_quests
+
+  if (p.min_sequences !== undefined && p.min_sequences !== null) form.value.min_sequences = p.min_sequences
+  if (p.max_sequences !== undefined && p.max_sequences !== null) form.value.max_sequences = p.max_sequences
 
   if (p.container_generation_enabled !== undefined) form.value.container_generation_enabled = !!p.container_generation_enabled
   if (p.scripts_generation_enabled !== undefined) form.value.scripts_generation_enabled = !!p.scripts_generation_enabled

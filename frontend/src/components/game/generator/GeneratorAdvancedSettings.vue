@@ -63,7 +63,7 @@ function onNumberInput(e: Event, emitEvent: any) {
     >
       <div class="flex items-center gap-2">
         <Layers class="w-3.5 h-3.5 text-cyan-400" />
-        <span>{{ isExpanded ? 'Hide Advanced World Settings' : 'Show Advanced World Settings (Scenes, Rules, Quests)' }}</span>
+        <span>{{ isExpanded ? 'Hide Advanced World Settings' : 'Show Advanced World Settings (Scenes, Rules, Sidequests)' }}</span>
       </div>
       <component :is="isExpanded ? ChevronUp : ChevronDown" class="w-4 h-4 text-slate-500" />
     </button>
@@ -171,7 +171,7 @@ function onNumberInput(e: Event, emitEvent: any) {
             />
           </div>
           <div>
-            <label class="block text-[10px] font-bold text-slate-400 mb-1">Min Quests</label>
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">Min Sidequests</label>
             <input
               :value="props.minQuests"
               @input="onNumberInput($event, (v: any) => emit('update:minQuests', v))"
@@ -183,7 +183,7 @@ function onNumberInput(e: Event, emitEvent: any) {
             />
           </div>
           <div>
-            <label class="block text-[10px] font-bold text-slate-400 mb-1">Max Quests</label>
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">Max Sidequests</label>
             <input
               :value="props.maxQuests"
               @input="onNumberInput($event, (v: any) => emit('update:maxQuests', v))"
@@ -210,7 +210,7 @@ function onNumberInput(e: Event, emitEvent: any) {
               @change="emit('update:questGenerationEnabled', ($event.target as HTMLInputElement).checked)"
               class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0"
             />
-            <span>Quests</span>
+            <span>Sidequests</span>
           </label>
 
           <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-white/5 text-xs font-semibold text-slate-300 cursor-pointer hover:border-white/10 select-none">

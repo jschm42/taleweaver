@@ -19,6 +19,8 @@ const props = defineProps<{
     quest_generation_enabled: boolean
     min_quests: number | null
     max_quests: number | null
+    min_sequences: number | null
+    max_sequences: number | null
     container_generation_enabled: boolean
     scripts_generation_enabled?: boolean
     min_containers: number | null
@@ -97,6 +99,8 @@ watch(
       :quest-generation-enabled="modelValue.quest_generation_enabled"
       :min-quests="modelValue.min_quests"
       :max-quests="modelValue.max_quests"
+      :min-sequences="modelValue.min_sequences"
+      :max-sequences="modelValue.max_sequences"
       :container-generation-enabled="modelValue.container_generation_enabled"
       :min-containers="modelValue.min_containers"
       :max-containers="modelValue.max_containers"
@@ -114,6 +118,8 @@ watch(
       @update:quest-generation-enabled="update('quest_generation_enabled', $event)"
       @update:min-quests="update('min_quests', $event)"
       @update:max-quests="update('max_quests', $event)"
+      @update:min-sequences="update('min_sequences', $event)"
+      @update:max-sequences="update('max_sequences', $event)"
       @update:container-generation-enabled="update('container_generation_enabled', $event)"
       @update:min-containers="update('min_containers', $event)"
       @update:max-containers="update('max_containers', $event)"
