@@ -510,6 +510,16 @@ async def get_chat_history(
         except Exception as exc:
             logger.warning("Could not build fallback prompt suggestions on session load: %s", exc)
 
+    active_sequence = None
+    if adventure and hasattr(adventure, "sequences") and adventure.sequences:
+        if state.active_sequence_id:
+            for s in adventure.sequences:
+                if isinstance(s, dict) and s.get("id") == state.active_sequence_id:
+                    active_sequence = s
+                    break
+        if not active_sequence and len(adventure.sequences) > 0 and isinstance(adventure.sequences[0], dict):
+            active_sequence = adventure.sequences[0]
+
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
@@ -520,6 +530,7 @@ async def get_chat_history(
         npc_metadata=await AdventureLogic.get_npc_metadata(db, state.template_id, session_id=state.session_id),
         image_url=scene_image,
         adventure_image=AdventureLogic.resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
+        active_sequence=active_sequence,
         quests=state.quests,
         awards=AdventureLogic.build_awards_payload(
             user_earned_awards=current_user.earned_awards,

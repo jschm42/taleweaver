@@ -175,6 +175,7 @@ const {
   npcMetadata,
   currentSceneImage,
   quests,
+  activeSequence,
   awards,
   combat,
   isCompleted,
@@ -1583,6 +1584,7 @@ watch(
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 
+      :active-sequence="activeSequence"
       :awards="awards"
       :tracked-quest-id="trackedQuestId" 
       :tracker-hidden="isQuestTrackerHidden"

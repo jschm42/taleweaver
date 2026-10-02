@@ -36,41 +36,30 @@
 
       <div class="quests-body">
         <template v-if="activeTab === 'quests'">
-          <div class="quests-section">
-            <h3><span class="section-icon">📜</span> Main Quests</h3>
-            <div v-if="mainQuests.length === 0" class="empty-state">No main quests available.</div>
-            <div v-for="quest in mainQuests" :key="quest.id" :class="['quest-card', quest.status]">
+          <div class="quests-section" v-if="activeSequence">
+            <h3><span class="section-icon">📜</span> Current Chapter</h3>
+            <div class="quest-card open">
               <div class="quest-info">
                 <div class="quest-header">
                   <div class="title-group">
-                    <i v-if="quest.status === 'completed'" class="ra ra-circle section-icon text-emerald-500 mr-2"></i>
-                    <span class="quest-title">{{ quest.title }}</span>
+                    <span class="quest-title">{{ activeSequence.title }}</span>
                   </div>
-                  <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
                 </div>
-                <p class="quest-desc" v-html="formatObjectIds(quest.description || quest.goal)"></p>
+                <p class="quest-desc" v-html="formatObjectIds(activeSequence.description)"></p>
                 <div class="quest-footer">
-                  <div class="status-badge" :class="quest.status">
+                  <div class="status-badge open">
                     <span class="status-dot"></span>
-                    {{ (quest.status || 'open').toUpperCase() }}
+                    ACTIVE
                   </div>
-                  <button 
-                    v-if="!quest.status || quest.status === 'open'" 
-                    class="track-btn" 
-                    :class="{ active: trackedQuestId === quest.id }"
-                    @click="toggleTrack(quest.id)"
-                  >
-                    {{ trackedQuestId === quest.id ? 'Tracking' : 'Track' }}
-                  </button>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="quests-section">
-            <h3><span class="section-icon">⚔️</span> Side Quests</h3>
-            <div v-if="sideQuests.length === 0" class="empty-state">No side quests available.</div>
-            <div v-for="quest in sideQuests" :key="quest.id" :class="['quest-card', quest.status]">
+            <h3><span class="section-icon">⚔️</span> Quests</h3>
+            <div v-if="quests.length === 0" class="empty-state">No quests available.</div>
+            <div v-for="quest in quests" :key="quest.id" :class="['quest-card', quest.status]">
               <div class="quest-info">
                 <div class="quest-header">
                   <div class="title-group">
@@ -136,6 +125,10 @@ export default {
       type: Array,
       default: () => []
     },
+    activeSequence: {
+      type: Object,
+      default: null
+    },
     awards: {
       type: Array,
       default: () => []
@@ -150,12 +143,6 @@ export default {
     };
   },
   computed: {
-    mainQuests() {
-      return this.quests.filter(q => q.is_main);
-    },
-    sideQuests() {
-      return this.quests.filter(q => !q.is_main);
-    }
   },
   methods: {
     formatObjectIds(text) {

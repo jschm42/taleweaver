@@ -88,6 +88,7 @@ export function useGameSocket(): UseGameSocket {
   const autoVisualize = ref(false)
   const adventureImage = ref<string | null>(null)
   const quests = ref<any[]>([])
+  const activeSequence = ref<any | null>(null)
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
   const language = ref<string>(localStorage.getItem('tw_bable_fish_lang') || '')
@@ -242,6 +243,9 @@ export function useGameSocket(): UseGameSocket {
     if (data.quests !== undefined) {
       quests.value = data.quests || []
     }
+    if (data.active_sequence !== undefined) {
+      activeSequence.value = data.active_sequence || null
+    }
     if (data.is_completed !== undefined) {
       isCompleted.value = !!data.is_completed
     }
@@ -356,6 +360,7 @@ export function useGameSocket(): UseGameSocket {
     entities.value = []
     combat.value = null
     quests.value = []
+    activeSequence.value = null
     awards.value = []
     adventureImage.value = null
     statusNote.value = ''
@@ -887,6 +892,7 @@ export function useGameSocket(): UseGameSocket {
     autoVisualize,
     adventureImage,
     quests,
+    activeSequence,
     awards,
     isCompleted,
     language,

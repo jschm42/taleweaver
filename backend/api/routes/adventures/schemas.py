@@ -291,6 +291,7 @@ class AdventureTemplateResponse(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     original_prompt: Optional[str] = None
+    sequences: Optional[list[dict[str, Any]]] = None
     quests: Optional[list[dict[str, Any]]] = None
     awards: Optional[list[dict[str, Any]]] = None
     is_completed: bool = False
@@ -476,6 +477,7 @@ class ChatResponse(BaseModel):
     adventure_image: Optional[str] = None
     quests: Optional[list[dict[str, Any]]] = None
     awards: Optional[list[dict[str, Any]]] = None
+    active_sequence: Optional[dict[str, Any]] = None
     is_completed: bool = False
     game_over: bool = False
     game_completed: bool = False
