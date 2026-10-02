@@ -319,7 +319,7 @@ class WorldManifesto(BaseModel):
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
     objects: list[WorldObjectSchema]
-    sequences: list[SequenceSchema] = Field(default_factory=list, description="List of sequences for the linear story.", max_length=15)
+    sequences: list[SequenceSchema] = Field(..., description="List of sequences for the linear story. Must not be empty unless sequences are explicitly disabled.", max_length=15)
     quests: list[QuestSchema] = Field(..., description="List of 3-5 optional sidequests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
     scripts: list[WorldScriptSchema] = Field(

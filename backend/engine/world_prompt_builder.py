@@ -233,6 +233,7 @@ def _build_sequences_requirement(
             "\n\n================================================================================\n"
             "STORY SEQUENCES (LINEAR CHAPTERS & DEDICATED WALKTHROUGHS):\n"
             f"- You MUST break the adventure's main storyline arc into a chronological series of linear chapters in `sequences` ({seq_limit_text}).\n"
+            "- You MUST include ALL generated sequences in the `sequences` array of your JSON output! DO NOT leave it empty.\n"
             "- Each sequence represents a distinct narrative phase or chapter of the adventure (e.g. Chapter 1: The Awakening/Escape, Chapter 2: The Sewers, Chapter 3: The Sanctuary).\n"
             "- For EVERY sequence in `sequences`, you MUST populate:\n"
             "  * `id`: unique slug (e.g. 'SEQ_1_ESCAPE', 'SEQ_2_SEWERS')\n"
@@ -265,13 +266,13 @@ def _build_sequences_requirement(
         
         if min_sequences is not None or max_sequences is not None:
             if min_sequences is not None and max_sequences is not None:
-                seq_text += f"You MUST generate between {min_sequences} and {max_sequences} total sequences. "
+                seq_text += f"You MUST generate between {min_sequences} and {max_sequences} total sequences. If the user provided fewer than {min_sequences} sequences, you MUST invent NEW sequences to bridge the gaps and meet the minimum! "
             elif min_sequences is not None:
-                seq_text += f"You MUST generate at least {min_sequences} total sequences. "
+                seq_text += f"You MUST generate at least {min_sequences} total sequences. If the user provided fewer than {min_sequences} sequences, you MUST invent NEW sequences to bridge the gaps and meet the minimum! "
             else:
                 seq_text += f"You MUST generate no more than {max_sequences} total sequences. "
         else:
-             seq_text += "You MUST generate up to 15 total sequences. "
+             seq_text += "You MUST generate up to 15 total sequences. If the user provided only a few, you are highly encouraged to invent NEW sequences to expand the story! "
 
         seq_text += "For every sequence, provide its dedicated `walkthrough`, `end_condition`, and applicable hard rules.\n"
         
@@ -290,6 +291,7 @@ def _build_sequences_requirement(
     
     seq_text += (
         "\nCRITICAL REQUIREMENT FOR SEQUENCES:\n"
+        "- You MUST include ALL generated sequences in the `sequences` array of your JSON output! DO NOT leave it empty.\n"
         "- For EVERY sequence in `sequences`, you MUST populate:\n"
         "  * `id`: unique slug (e.g. 'SEQ_1_ESCAPE')\n"
         "  * `order`: sequential integer starting at 1\n"
