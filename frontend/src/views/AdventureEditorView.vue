@@ -13,6 +13,7 @@ import { notificationService } from '@/services/notificationService'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
 import WorldTab from '@/components/editor/WorldTab.vue'
+import SequencesSection from '@/components/editor/SequencesSection.vue'
 import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
 import MoveItemToSceneModal from '@/components/editor/MoveItemToSceneModal.vue'
@@ -394,9 +395,9 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced' | 'validation'>('world')
-const sceneEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced' | 'validation'>('scenes')
-const exitEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced' | 'validation'>('map')
+const activeTab = ref<'world' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'tone' | 'advanced' | 'validation'>('world')
+const sceneEditorReturnTab = ref<'world' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'tone' | 'advanced' | 'validation'>('scenes')
+const exitEditorReturnTab = ref<'world' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'tone' | 'advanced' | 'validation'>('map')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -463,6 +464,7 @@ const availableVoices = ref<Array<{ name: string; gender?: string; description?:
 
 const editorTabs = [
   { key: 'world', label: 'World' },
+  { key: 'sequences', label: 'Sequences' },
   { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
   { key: 'scenes', label: 'Scenes' },
@@ -2343,6 +2345,12 @@ watch(
           >
             <span>{{ tab.label }}</span>
             <span
+              v-if="tab.key === 'sequences' && Array.isArray(adventure?.sequences) && adventure.sequences.length > 0"
+              class="px-1.5 py-0.5 rounded-md text-[9px] font-black border leading-none bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+            >
+              {{ adventure.sequences.length }}
+            </span>
+            <span
               v-if="tab.key === 'validation' && validationBadgeText()"
               :class="['px-1.5 py-0.5 rounded-md text-[9px] font-black border leading-none', validationBadgeClass()]"
             >
@@ -2367,6 +2375,12 @@ watch(
                   ]"
                 >
                   <span>{{ tab.label }}</span>
+                  <span
+                    v-if="tab.key === 'sequences' && Array.isArray(adventure?.sequences) && adventure.sequences.length > 0"
+                    class="px-1.5 py-0.5 rounded-md text-[9px] font-black border leading-none bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                  >
+                    {{ adventure.sequences.length }}
+                  </span>
                   <span
                     v-if="tab.key === 'validation' && validationBadgeText()"
                     :class="['px-1.5 py-0.5 rounded-md text-[9px] font-black border leading-none', validationBadgeClass()]"
@@ -2422,9 +2436,17 @@ watch(
               @update:calendar-max-unit="form.time_config = { ...(form.time_config || {}), calendar_max_unit: $event }"
               @update:mode="form.rule_enforcement_mode = $event as any"
               @save-changes="saveChanges"
-              @update-sequences="handleUpdateSequences"
               @notify="addNotification"
             />
+
+            <div v-else-if="activeTab === 'sequences'" class="space-y-6">
+              <SequencesSection
+                :adventure="adventure"
+                :is-saving="isSaving"
+                @update-sequences="handleUpdateSequences"
+                @notify="addNotification"
+              />
+            </div>
 
             <ProtagonistTab
               v-if="activeTab === 'protagonist'"

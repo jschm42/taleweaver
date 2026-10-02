@@ -228,7 +228,7 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
             "  * `walkthrough`: the DEDICATED, step-by-step walkthrough and puzzle solutions specifically for this sequence! How the player overcomes this chapter's obstacles, finds keys/codes, interacts with NPCs, and reaches the sequence objective.\n"
             "  * `end_condition`: technical or narrative condition to complete this sequence and unlock the next sequence (e.g. 'The player unlocks the iron gate with the brass key and enters the sewer tunnels')\n"
             "  * `exp_reward`: XP awarded upon completion (e.g. 50, 100, 200)\n"
-            "- CRITICAL: Do NOT generate a single monolithic walkthrough. The puzzle solutions and progression steps MUST be distributed into their respective sequence's `walkthrough`. The top-level `walkthrough` field should be left empty or contain only a brief 1-sentence synopsis.\n"
+            "- CRITICAL: All puzzle solutions and progression steps MUST be defined in their respective sequence's `walkthrough`.\n"
             "================================================================================\n"
         )
     
@@ -255,10 +255,9 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
         "  * `order`: sequential integer starting at 1\n"
         "  * `title`: chapter title\n"
         "  * `description`: narrative guidance and context for the GM during this sequence\n"
-        "  * `walkthrough`: DEDICATED step-by-step walkthrough and puzzle solutions specifically for this sequence! Do NOT place them into a global walkthrough.\n"
+        "  * `walkthrough`: DEDICATED step-by-step walkthrough and puzzle solutions specifically for this sequence.\n"
         "  * `end_condition`: condition that triggers transition to the next sequence\n"
         "  * `exp_reward`: XP awarded upon sequence completion (e.g. 50, 100, 200)\n"
-        "- The top-level `walkthrough` should be left empty or contain only a brief 1-sentence synopsis, as all puzzle solutions and critical paths live in the individual sequence walkthroughs.\n"
     )
         
     return f"\n\n================================================================================\n{seq_text}================================================================================\n"

@@ -1,6 +1,6 @@
 """
 TaleWeaver Prompt Templates
-This module contains all LLM prompts used across the system, centralized for 
+This module contains all LLM prompts used across the system, centralized for
 better maintainability and documentation.
 """
 
@@ -33,15 +33,15 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "interconnected game world based on a provided Story Idea.\n\n"
     "JSON STRUCTURE REQUIREMENTS (CRITICAL):\n"
     "Return one JSON object (no markdown, no wrapper list).\n"
-    "CRITICAL JSON FORMATTING: In string fields (descriptions, text logs, notes), NEVER use raw unescaped double quotes (\") inside string values. If you quote words, ALWAYS use single quotes (') or properly escape them (\\\").\n"
-    "Required top-level keys: protagonist, scenes, exits, npcs, objects, sequences, quests, awards, scripts, language, teaser, plot, rules, walkthrough, completed_condition, gameover_condition, intro_text, origin_id, tts_director_notes.\n\n"
+    'CRITICAL JSON FORMATTING: In string fields (descriptions, text logs, notes), NEVER use raw unescaped double quotes (") inside string values. If you quote words, ALWAYS use single quotes (\') or properly escape them (\\").\n'
+    "Required top-level keys: protagonist, scenes, exits, npcs, objects, sequences, quests, awards, scripts, language, teaser, plot, rules, completed_condition, gameover_condition, intro_text, origin_id.\n\n"
     "SCENES & DECORATIVE OBJECTS:\n"
     "Each scene in `scenes` MUST include a `decorative_objects` field as a JSON array of up to 7 short strings (max 100 characters each), describing simple, non-interactable background details, features, or static furniture (e.g., ['metal table', 'hanging light fixture', 'cracked stone floor']). Do NOT put these items in the top-level `objects` or `npcs` list — they live ONLY as a structured `decorative_objects` array on the scene. Do NOT embed them into the `description` string either; the scene description must remain clean prose.\n\n"
     "INTRO TEXT & STARTING SCENE INTEGRITY:\n"
     "`intro_text` (1-2 paragraphs) introduces the adventure and sets the mood when starting.\n"
     "CRITICAL RULE: `intro_text` MUST describe ONLY the starting scene (`origin_id`). It is STRICTLY FORBIDDEN to move the player to a different room, open doors to adjacent scenes, or introduce NPCs from other scenes inside `intro_text`. The player must always begin in `origin_id`, and other scenes/NPCs will only be discovered when the player explicitly moves to them.\n\n"
     "MANDATORY FIELDS & DEFAULTS:\n"
-    "Every required schema field must be present. If not applicable, use defaults: empty string \"\", empty list [], false for booleans, and 0 for numbers.\n\n"
+    'Every required schema field must be present. If not applicable, use defaults: empty string "", empty list [], false for booleans, and 0 for numbers.\n\n'
     "NPC & OBJECT SPATIAL LOGIC:\n"
     "Every NPC and Object must have a 'spatial_position' relative to items in the room.\n"
     "NPC 'description' (bio) MUST be max 400 characters.\n"
@@ -85,7 +85,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "- `walkthrough`: the DEDICATED, step-by-step walkthrough and puzzle solutions specifically for this sequence! Do NOT dump the entire adventure walkthrough into a single global string — each sequence has its own self-contained walkthrough detailing how the player overcomes this chapter's obstacles, finds clues, solves container codes, and reaches the sequence objective.\n"
     "- `end_condition`: technical or narrative condition that triggers completion of this sequence and advances to the next sequence (e.g. 'The player unlocks the iron grate with the brass key and enters the sewer tunnels')\n"
     "- `exp_reward`: experience points awarded when this sequence completes (e.g. 50, 100, 200)\n\n"
-    "CRITICAL: The main storyline progression is driven by `sequences`. The top-level `walkthrough` should either be empty or a brief 1-sentence high-level overview, because the actual detailed step-by-step puzzle solutions and progression instructions live inside each sequence's `walkthrough`!\n\n"
+    "CRITICAL: The main storyline progression and puzzle walkthroughs are driven entirely by `sequences`. Each sequence defines its own self-contained puzzle solutions and objectives inside its `walkthrough`.\n\n"
     "SIDE QUESTS (OPTIONAL CONTENT):\n"
     "Quests in `quests` must be purely OPTIONAL side-quests (is_main: false). The main plot is managed exclusively by `sequences`. Generate 2-4 engaging side-quests with unique rewards.\n\n"
     "AWARDS:\n"
@@ -105,11 +105,8 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "WORLD SIZE REQUIREMENTS:\n"
     "{scene_requirement}\n"
     "- Set top-level combat flags exactly as requested: can_damage_npcs={can_damage_npcs}, npcs_can_damage_protagonist={npcs_can_damage_protagonist}.\n"
-
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
-    "- Use `is_bidirectional: true` (default) for every normal passage — the engine automatically creates the return path. Only set `is_bidirectional: false` for genuinely one-way transitions.\n"
-    "TTS DIRECTION:\n"
-    "- Generate 'tts_director_notes' that define the vocal style (tone, pace, emphasis) for the narrator to match the adventure's theme.\n\n"
+    "- Use `is_bidirectional: true` (default) for every normal passage — the engine automatically creates the return path. Only set `is_bidirectional: false` for genuinely one-way transitions.\n\n"
     "{cover_guidance}"
     "{voice_assignment_requirement}"
     "{quest_requirement}"
@@ -133,18 +130,22 @@ Global negative instruction appended to all image prompts to prevent AI-generate
 """
 
 ADVENTURE_COVER_PROMPT_TEMPLATE = (
-    "Epic cinematic illustration depicting: {original_prompt}. "
-    "Atmosphere: {title}. "
-    "Landscape format, 3:2 aspect ratio. "
-    "Cinematic lighting, immersive atmosphere, highly detailed digital painting."
+    "A single unified cinematic cover art illustration capturing the iconic atmosphere of {title}. "
+    "Depicting: {original_prompt}. "
+    "Single continuous scene, single seamless frame, single focal point, wide-angle cinematic composition. "
+    "ABSOLUTELY NO split-screen, NO multi-panel, NO collage, NO triptych, NO diptych, "
+    "NO borders, NO dividers, NO comic strip, NO storyboard, NO multiple views, NO TEXT. "
+    "1:1 aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
 )
 """
 Template for generating the main cover image of an adventure.
-Variables: title, context.
+Variables: title, original_prompt.
 """
 
 PROTAGONIST_IMAGE_PROMPT_TEMPLATE = (
-    "Portrait of character {name}, {role}. {description}. Game attribute art style."
+    "Portrait of character {name}, {role}. {description}. Game attribute art style. "
+    "NO borders, NO dividers, NO comic strip, NO storyboard, NO multiple views, NO TEXT. "
+    "2:3 aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
 )
 """
 Template for generating the player character's portrait.
@@ -152,7 +153,8 @@ Variables: name, role, description.
 """
 
 SCENE_IMAGE_PROMPT_TEMPLATE = (
-    "Background scene: {name}. {description}. 3:2 aspect ratio."
+    "Background scene: {name}. {description}. 3:2 aspect ratio, dramatic cinematic lighting, highly detailed digital painting. "
+    "NO borders, NO dividers, NO comic strip, NO storyboard, NO multiple views, NO TEXT. "
 )
 """
 Template for generating background images for scenes.
@@ -160,7 +162,8 @@ Variables: name, description.
 """
 
 NPC_IMAGE_PROMPT_TEMPLATE = (
-    "Character portrait: {name}. {description}."
+    "Character portrait: {name}. {description}. Game attribute art style. "
+    "3:2 aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
 )
 """
 Template for generating NPC portraits.
@@ -216,8 +219,8 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "Prioritize NPC dialogue — let characters speak with direct quotes to build tension and personality. "
     "Avoid repeating information the player already knows. Show, don't tell.\n\n"
     "FORMATTING RULES:\n"
-    "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: Character Name: \"...\" (no markdown bold)\n"
-    "2. NO COLONS IN NARRATION: Never use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: \"...\"). Use dashes (—), periods, or commas instead.\n"
+    '1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: Character Name: "..." (no markdown bold)\n'
+    '2. NO COLONS IN NARRATION: Never use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: "..."). Use dashes (—), periods, or commas instead.\n'
     "3. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
     "4. READABILITY: Avoid walls of text. Keep paragraphs focused.\n"
     "5. NO SUMMARIES: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'.\n"
@@ -379,20 +382,21 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "If the player addresses an NPC who is not present in the current scene, narrate that there is no response because that character is not in this room.\n\n"
     "NPC INTERACTION RULE: If multiple NPCs are present in the current scene, let them occasionally talk to each other directly (not only to the player), as long as it is narratively appropriate.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
-    "Use the format: Character Name: \"Dialogue\" (or Character Name: [tag] \"Dialogue\" if an emotion tag is used, e.g. Professor Quark: [excited] \"Look here!\"). "
-    "NEVER put emotion tags inside quotation marks (do NOT write Character Name: \"[tag] Dialogue\" or \"[tag]\" \"Dialogue\"). "
+    'Use the format: Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" if an emotion tag is used, e.g. Professor Quark: [excited] "Look here!"). '
+    'NEVER put emotion tags inside quotation marks (do NOT write Character Name: "[tag] Dialogue" or "[tag]" "Dialogue"). '
     "Separate narrative prose from speech with a blank line. "
-    "NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: \"...\"). Use dashes (—), periods, or commas instead.\n\n"
+    'NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: "..."). Use dashes (—), periods, or commas instead.\n\n'
     "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
 )
+
 
 def get_vocal_direction_prompt(provider: str = "google") -> str:
     return (
         "VOICE DIRECTION: Actively use tone tags and inline vocalizations to give your narration and dialogue life and atmosphere. "
         "Tags MUST come from the fixed catalogs below and MUST ALWAYS be in English. "
         "CRITICAL: NEVER translate voice tags into German or any other language (e.g. NEVER write [neugierig], ALWAYS write [curious]).\n\n"
-        + build_voice_tag_catalog_prompt_block(provider) +
-        "1. TONE TAGS: Open a paragraph or dialogue line with one tone tag from the Tone Catalog to set the sustained mood (for example [excited], [whispers], [shouting], [very fast]). "
+        + build_voice_tag_catalog_prompt_block(provider)
+        + "1. TONE TAGS: Open a paragraph or dialogue line with one tone tag from the Tone Catalog to set the sustained mood (for example [excited], [whispers], [shouting], [very fast]). "
         "A tone tag applies to the entire paragraph or dialogue line it opens — start a new paragraph when switching to a different tag. Do not nest tone tags.\n"
         "2. INLINE VOCALIZATIONS: Insert momentary human sounds exactly where they happen using angle brackets from the Vocal Bursts Catalog (for example <cough>, <sigh>, <short pause>, <laugh>, <throat-clearing>).\n"
         "Use both whenever the mood calls for it — combat tension, hushed secrets, desperate warnings."
@@ -400,7 +404,6 @@ def get_vocal_direction_prompt(provider: str = "google") -> str:
 
 
 ADVENTURE_GENERATOR_INSTRUCTIONS = (
-
     "\nADVENTURE GENERATOR TOOLS ENABLED:\n"
     "You are in a special 'Game Designer' mode. You have access to tools to help the player create a new adventure.\n"
     "1. `request_available_image_styles`: Use this to get the list of supported visual styles for adventures.\n"
@@ -449,8 +452,7 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "OPEN QUESTS:\n"
     "{quests_json}\n"
     "AVAILABLE UNEARNED AWARDS:\n"
-    "{awards_json}\n\n"
-    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    "{awards_json}\n\n" + PUZZLE_JSON_ENFORCEMENT_BLOCK
 )
 
 GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
@@ -668,7 +670,7 @@ DECORATIVE_ITEMS_GENERATION_SYSTEM_PROMPT = (
     "Do NOT include interactive or takeable items (no weapons, keys, quest items, containers).\n"
     "Do NOT include living beings (no NPCs, animals, monsters).\n"
     "Do NOT repeat or paraphrase any items from the 'Already present' list.\n"
-    "Respond with ONLY a valid JSON object of the form {\"items\": [\"...\", \"...\"]}. "
+    'Respond with ONLY a valid JSON object of the form {"items": ["...", "..."]}. '
     "Do NOT wrap it in code fences and do NOT add any additional text."
 )
 """
@@ -744,7 +746,7 @@ User prompt for the profile bio generator. Variable: username.
 INSPECT_SEARCH_INTENT_GUARD_SYSTEM_PROMPT = (
     "You classify the player's intent for a text-adventure turn. "
     "Return ONLY strict JSON with schema: "
-    "{\"action\":\"inspect\"|\"search\"|\"other\",\"target\":string|null}. "
+    '{"action":"inspect"|"search"|"other","target":string|null}. '
     "Use action=inspect/search only if the player clearly intends to inspect or search a specific target. "
     "For generic look-around or unrelated actions, return action=other and target=null."
 )
@@ -756,7 +758,7 @@ Returns strict JSON; on parse failure the guard is silently skipped.
 COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT = (
     "You are the Game Master deciding a combat special event. "
     "Return ONLY valid JSON with this schema: "
-    "{\"mode\":\"story\"|\"special_attack\",\"text\":string,\"damage\":number}. "
+    '{"mode":"story"|"special_attack","text":string,"damage":number}. '
     "Rules: Keep text to 1-2 short in-world sentences. "
     "If mode is story, set damage to 0. "
     "If mode is special_attack, damage must be an integer between 5 and 40. "
@@ -884,5 +886,3 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
 System prompt for the autonomous play agent (incl. Monkey Mode robustness tests).
 Output is expected to be a strict JSON action object. Variables are pre-formatted by the caller.
 """
-
-

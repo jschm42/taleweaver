@@ -368,7 +368,7 @@ class WorldGenerator:
                 text = re.sub(pattern, f"##{obj_id}", text, flags=re.IGNORECASE)
             return text
 
-        for field in ("teaser", "plot", "rules", "intro_text", "walkthrough", "completed_condition", "gameover_condition", "tts_director_notes"):
+        for field in ("teaser", "plot", "rules", "intro_text", "completed_condition", "gameover_condition"):
             if field in manifest_dict:
                 manifest_dict[field] = replace_ids_in_text(manifest_dict[field])
 

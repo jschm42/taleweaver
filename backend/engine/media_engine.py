@@ -1347,12 +1347,29 @@ class MediaEngine:
         safe_id = safe_adventure_id
         filename = f"{safe_id}_cover_{uuid.uuid4().hex[:8]}.{ext}"
         
+        # Clean original_prompt for cover generation:
+        # Strip out structured [Sequence: ...], [Scene: ...], [NPC: ...] blocks to prevent multi-panel storyboarding
+        clean_prompt = str(original_prompt or "").strip()
+        tag_match = re.search(r'\[(?:Sequence|Scene|NPC|Item|Quest)\b', clean_prompt, flags=re.IGNORECASE)
+        if tag_match:
+            clean_prompt = clean_prompt[:tag_match.start()].strip()
+        if not clean_prompt:
+            clean_prompt = str(original_prompt or "").strip()
+        if len(clean_prompt) > 400 and "." in clean_prompt[:400]:
+            clean_prompt = clean_prompt[:400].rsplit(".", 1)[0] + "."
+        elif len(clean_prompt) > 400:
+            clean_prompt = clean_prompt[:400]
+
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
-            title=title, original_prompt=original_prompt
+            title=title, original_prompt=clean_prompt
         )
         
         # Resolve steps and cfg_scale for advanced model
         options = dict(t2i)
+        options.setdefault("aspect_ratio", "3:2")
+        existing_neg = options.get("negative_prompt") or ""
+        anti_split_neg = "split screen, multi-panel, panels, comic strip, collage, triptych, diptych, multiple views, storyboard, frames, borders, dividers"
+        options["negative_prompt"] = f"{existing_neg}, {anti_split_neg}".strip(", ") if existing_neg else anti_split_neg
         options["steps"] = t2i.get("advanced_steps")
         options["cfg_scale"] = t2i.get("advanced_cfg_scale")
         options["sampler_name"] = t2i.get("advanced_sampler_name")

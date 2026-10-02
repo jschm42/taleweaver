@@ -273,8 +273,8 @@ def test_empty_story_fields_emit_warnings():
     )
     findings = validate_adventure(payload)
     fields = {f.context.get("field") for f in _codes(findings, "empty_story_field")}
-    expected = {"teaser", "plot", "intro_text", "walkthrough",
-                "completed_condition", "gameover_condition", "tts_director_notes"}
+    expected = {"teaser", "plot", "intro_text",
+                "completed_condition", "gameover_condition"}
     assert expected.issubset(fields)
 
 

@@ -90,10 +90,16 @@ def test_object_id_preprocessing():
         "plot": "The plot centers on the golden_key.",
         "rules": "",
         "intro_text": "You start with a golden_key.",
-        "walkthrough": "Use the GOLDEN_KEY to unlock the exit.",
         "completed_condition": "Have golden_key.",
         "gameover_condition": "Lose the golden_key.",
-        "tts_director_notes": "Emphasize the golden_key.",
+        "sequences": [
+            {
+                "title": "Escape",
+                "description": "Find the golden_key.",
+                "walkthrough": "Use the GOLDEN_KEY to unlock the exit.",
+                "end_condition": "Have golden_key."
+            }
+        ],
         "scenes": [
             {
                 "id": "KITCHEN_01",
@@ -157,10 +163,10 @@ def test_object_id_preprocessing():
     assert manifest["teaser"] == "Get the ##GOLDEN_KEY."
     assert manifest["plot"] == "The plot centers on the ##GOLDEN_KEY."
     assert manifest["intro_text"] == "You start with a ##GOLDEN_KEY."
-    assert manifest["walkthrough"] == "Use the ##GOLDEN_KEY to unlock the exit."
     assert manifest["completed_condition"] == "Have ##GOLDEN_KEY."
     assert manifest["gameover_condition"] == "Lose the ##GOLDEN_KEY."
-    assert manifest["tts_director_notes"] == "Emphasize the ##GOLDEN_KEY."
+    assert manifest["sequences"][0]["walkthrough"] == "Use the ##GOLDEN_KEY to unlock the exit."
+    assert manifest["sequences"][0]["description"] == "Find the ##GOLDEN_KEY."
 
     assert manifest["protagonist"]["description"] == "A chef carrying a ##GOLDEN_KEY in his pocket."
     assert manifest["protagonist"]["goal"] == "Find the ##GOLDEN_KEY."

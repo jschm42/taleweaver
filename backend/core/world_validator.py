@@ -542,10 +542,8 @@ def _check_empty_story_fields(adventure: dict[str, Any]) -> list[ValidationFindi
         "rules",
         "plot",
         "intro_text",
-        "walkthrough",
         "completed_condition",
         "gameover_condition",
-        "tts_director_notes",
     )
     findings: list[ValidationFinding] = []
     for f in fields:
