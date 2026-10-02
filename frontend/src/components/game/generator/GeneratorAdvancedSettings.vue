@@ -42,13 +42,17 @@ const emit = defineEmits<{
 
 const isExpanded = ref(false)
 
-function onNumberInput(e: Event, emitEvent: any) {
+function onNumberInput(e: Event, emitEvent: any, minLimit?: number, maxLimit?: number) {
   const target = e.target as HTMLInputElement
   const raw = target.value.trim()
   if (raw === '') {
     emitEvent(null)
   } else {
-    emitEvent(Number(raw))
+    let val = Number(raw)
+    if (minLimit !== undefined) val = Math.max(minLimit, val)
+    if (maxLimit !== undefined) val = Math.min(maxLimit, val)
+    if (isNaN(val)) emitEvent(null)
+    else emitEvent(val)
   }
 }
 </script>
@@ -150,7 +154,7 @@ function onNumberInput(e: Event, emitEvent: any) {
             <label class="block text-[10px] font-bold text-slate-400 mb-1">Min Scenes</label>
             <input
               :value="props.minScenes"
-              @input="onNumberInput($event, (v: any) => emit('update:minScenes', v))"
+              @input="onNumberInput($event, (v: any) => emit('update:minScenes', v), 1, 15)"
               type="number"
               min="1"
               max="15"
@@ -162,7 +166,7 @@ function onNumberInput(e: Event, emitEvent: any) {
             <label class="block text-[10px] font-bold text-slate-400 mb-1">Max Scenes</label>
             <input
               :value="props.maxScenes"
-              @input="onNumberInput($event, (v: any) => emit('update:maxScenes', v))"
+              @input="onNumberInput($event, (v: any) => emit('update:maxScenes', v), 1, 20)"
               type="number"
               min="1"
               max="20"
@@ -174,7 +178,7 @@ function onNumberInput(e: Event, emitEvent: any) {
             <label class="block text-[10px] font-bold text-slate-400 mb-1">Min Sidequests</label>
             <input
               :value="props.minQuests"
-              @input="onNumberInput($event, (v: any) => emit('update:minQuests', v))"
+              @input="onNumberInput($event, (v: any) => emit('update:minQuests', v), 0, 10)"
               type="number"
               min="0"
               max="10"
@@ -186,7 +190,7 @@ function onNumberInput(e: Event, emitEvent: any) {
             <label class="block text-[10px] font-bold text-slate-400 mb-1">Max Sidequests</label>
             <input
               :value="props.maxQuests"
-              @input="onNumberInput($event, (v: any) => emit('update:maxQuests', v))"
+              @input="onNumberInput($event, (v: any) => emit('update:maxQuests', v), 0, 10)"
               type="number"
               min="0"
               max="10"

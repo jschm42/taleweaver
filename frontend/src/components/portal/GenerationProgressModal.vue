@@ -47,12 +47,16 @@ async function fetchLogs() {
 const isReady = ref(false)
 const hasError = ref(false)
 
+const backendStats = ref<any>(null)
 async function checkStatus() {
   try {
     const statusData = await api.getAdventureStatus(props.adventureId)
     isReady.value = statusData.is_ready
     if (statusData.error || statusData.status === 'Failed' || statusData.status === 'Cancelled') {
       hasError.value = true
+    }
+    if (statusData.stats) {
+      backendStats.value = statusData.stats
     }
     
     if (isReady.value || hasError.value) {
@@ -82,6 +86,10 @@ const lastStatusIndex = computed(() => {
 })
 
 const assetStats = computed(() => {
+  if (backendStats.value) {
+    return backendStats.value
+  }
+
   const stats = {
     cover: { generated: 0, reused: 0 },
     protagonist: { generated: 0, reused: 0 },

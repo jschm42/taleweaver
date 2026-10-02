@@ -1619,6 +1619,9 @@ async def get_adventure_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from backend.models.world_entity import WorldEntity, WorldScene
+    from backend.models.avatar import Avatar
+    
     """Retrieves the generation status and potential errors for an adventure."""
     result = await db.execute(
         select(AdventureTemplate).where(
@@ -1630,10 +1633,30 @@ async def get_adventure_status(
     if not adv:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
+    stats = None
+    if adv.is_ready:
+        avatar = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+        avatar = avatar.scalars().first()
+        
+        scenes = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None)))
+        scenes = scenes.scalars().all()
+        
+        entities = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None)))
+        entities = entities.scalars().all()
+        
+        stats = {
+            "cover": {"generated": 1 if not adv.cover_source_asset_id else 0, "reused": 1 if adv.cover_source_asset_id else 0},
+            "protagonist": {"generated": 1 if avatar and not avatar.source_asset_id else 0, "reused": 1 if avatar and avatar.source_asset_id else 0},
+            "scene": {"generated": len([s for s in scenes if not s.source_asset_id]), "reused": len([s for s in scenes if s.source_asset_id])},
+            "npc": {"generated": len([e for e in entities if e.entity_type == "NPC" and not e.source_asset_id]), "reused": len([e for e in entities if e.entity_type == "NPC" and e.source_asset_id])},
+            "item": {"generated": len([e for e in entities if e.entity_type == "OBJECT" and not e.source_asset_id]), "reused": len([e for e in entities if e.entity_type == "OBJECT" and e.source_asset_id])},
+        }
+
     return {
         "status": adv.creation_status or "Unknown",
         "is_ready": adv.is_ready,
         "error": adv.creation_error,
+        "stats": stats,
     }
 
 

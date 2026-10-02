@@ -116,65 +116,83 @@ function toggleAuto(type: 'scenes' | 'items' | 'sequences' | 'containers' | 'tex
   }
 }
 
+function clamp(val: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, isNaN(val) ? min : val))
+}
+
 function updateSceneMin(val: number) {
+  val = clamp(val, 1, 20)
   emit('update:minScenes', val)
   if (props.maxScenes && val > props.maxScenes) emit('update:maxScenes', val)
 }
 function updateSceneMax(val: number) {
+  val = clamp(val, 1, 20)
   emit('update:maxScenes', val)
   if (props.minScenes && val < props.minScenes) emit('update:minScenes', val)
 }
 
 function updateItemMin(val: number) {
+  val = clamp(val, 0, 50)
   emit('update:minItems', val)
   if (props.maxItems && val > props.maxItems) emit('update:maxItems', val)
 }
 function updateItemMax(val: number) {
+  val = clamp(val, 0, 50)
   emit('update:maxItems', val)
   if (props.minItems && val < props.minItems) emit('update:minItems', val)
 }
 
 function updateSequenceMin(val: number) {
+  val = clamp(val, 1, 15)
   emit('update:minSequences', val)
   if (props.maxSequences && val > props.maxSequences) emit('update:maxSequences', val)
 }
 function updateSequenceMax(val: number) {
+  val = clamp(val, 1, 15)
   emit('update:maxSequences', val)
   if (props.minSequences && val < props.minSequences) emit('update:minSequences', val)
 }
 
 function updateContainerMin(val: number) {
+  val = clamp(val, 0, 20)
   emit('update:minContainers', val)
   if (props.maxContainers && val > props.maxContainers) emit('update:maxContainers', val)
 }
 function updateContainerMax(val: number) {
+  val = clamp(val, 0, 20)
   emit('update:maxContainers', val)
   if (props.minContainers && val < props.minContainers) emit('update:minContainers', val)
 }
 
 function updateTextLogMin(val: number) {
+  val = clamp(val, 0, 20)
   emit('update:minTextLogs', val)
   if (props.maxTextLogs && val > props.maxTextLogs) emit('update:maxTextLogs', val)
 }
 function updateTextLogMax(val: number) {
+  val = clamp(val, 0, 20)
   emit('update:maxTextLogs', val)
   if (props.minTextLogs && val < props.minTextLogs) emit('update:minTextLogs', val)
 }
 
 function updateQuestMin(val: number) {
+  val = clamp(val, 0, 10)
   emit('update:minQuests', val)
   if (props.maxQuests && val > props.maxQuests) emit('update:maxQuests', val)
 }
 function updateQuestMax(val: number) {
+  val = clamp(val, 0, 10)
   emit('update:maxQuests', val)
   if (props.minQuests && val < props.minQuests) emit('update:minQuests', val)
 }
 
 function updateAwardMin(val: number) {
+  val = clamp(val, 0, 10)
   emit('update:minAwards', val)
   if (props.maxAwards && val > props.maxAwards) emit('update:maxAwards', val)
 }
 function updateAwardMax(val: number) {
+  val = clamp(val, 0, 10)
   emit('update:maxAwards', val)
   if (props.minAwards && val < props.minAwards) emit('update:minAwards', val)
 }

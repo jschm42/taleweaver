@@ -66,7 +66,13 @@ const lastStatusIndex = computed(() => {
   return lastIdx
 })
 
+const backendStats = ref<any>(null)
+
 const assetStats = computed<AssetStatsMap>(() => {
+  if (backendStats.value) {
+    return backendStats.value
+  }
+
   const stats: AssetStatsMap = {
     cover: { generated: 0, reused: 0 },
     protagonist: { generated: 0, reused: 0 },
@@ -532,6 +538,9 @@ function startPolling(advId: string) {
       const data = await api.getAdventureStatus(advId)
       if (data.status) {
         currentStatusText.value = data.status
+      }
+      if (data.stats) {
+        backendStats.value = data.stats
       }
 
       if (data.is_ready || data.status === 'Ready') {
