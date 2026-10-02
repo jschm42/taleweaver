@@ -37,7 +37,7 @@ class WorldExitSchema(BaseModel):
         ),
     )
     is_locked: bool = Field(..., description="Whether the path is initially blocked.")
-    lock_description: str = Field(..., description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.")
+    lock_description: str = Field("", description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.")
     code_to_unlock: str = Field("", description="Deterministic access code for the lock, e.g. 4711. Keep empty if no code is required.")
     item_to_unlock: str = Field("", description="The ID of the item needed to unlock this path, e.g. IRON_KEY. Keep empty if no item is required.")
     rule_to_unlock: str = Field("", description="A soft narrative rule for unlocking, e.g. 'Protagonist overpersuades NPC_1 to open the door'. Keep empty if no soft rule is required.")
@@ -83,14 +83,14 @@ class WorldNPCSchema(BaseModel):
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
     source_asset_id: Optional[str] = Field(None, description="Optional source NPC ID to reuse an old portrait image.")
     reveal_rule: str = Field(
-        ...,
+        "",
         description=(
             "If is_hidden=True: the condition that reveals this NPC. "
             "E.g. 'If the prot searches under the table', 'If the prot picks up BRASS_KEY', or 'If the NPC speaks'. "
             "Use empty string if not hidden."
         )
     )
-    inventory: list[str] = Field(..., description="List of object IDs in this NPC's inventory. Use [] if empty.")
+    inventory: list[str] = Field(default_factory=list, description="List of object IDs in this NPC's inventory. Use [] if empty.")
     equipped_weapon_id: Optional[str] = Field(None, description="Optional ID of the equipped weapon object. Must exist in the objects list.")
     equipped_armor_id: Optional[str] = Field(None, description="Optional ID of the equipped armor object. Must exist in the objects list.")
     special_actions: list[SpecialActionSchema] = Field(default=[], description="List of up to 5 special actions this NPC can perform. Max 5.")
@@ -149,7 +149,7 @@ class WorldObjectSchema(BaseModel):
     wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
     is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
     reveal_rule: str = Field(
-        ...,
+        "",
         description=(
             "If is_hidden=True: the condition that reveals this object. "
             "E.g. 'If the prot searches the desk', 'If the prot picks up IRON_KEY'. "
@@ -160,21 +160,21 @@ class WorldObjectSchema(BaseModel):
     code_to_unlock: str = Field("", description="Deterministic access code for locked containers, e.g. ALPHA or 4711. May be empty for open containers.")
     item_to_unlock: str = Field("", description="Deterministic item ID required to unlock this container. May be empty for open containers.")
     rule_to_unlock: str = Field("", description="A soft narrative rule for unlocking locked containers, e.g. 'Protagonist defeats NPC_2'. May be empty for open containers.")
-    combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. For CONSTRUCTABLE, list ALL ingredient ids (minimum 2) that must be combined to materialize this item; the item must start is_hidden=True and is auto-revealed once every ingredient is combined. Use [] if none.")
-    reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Ignored for CONSTRUCTABLE (reveal is automatic). Use empty string if none.")
+    combination_ingredients: list[str] = Field(default_factory=list, description="Item IDs required to trigger a combination. For CONSTRUCTABLE, list ALL ingredient ids (minimum 2) that must be combined to materialize this item; the item must start is_hidden=True and is auto-revealed once every ingredient is combined. Use [] if none.")
+    reveals_item_id: str = Field("", description="Item slug revealed when combination occurs. Ignored for CONSTRUCTABLE (reveal is automatic). Use empty string if none.")
 
     # Stat Modifiers
-    stat_modifier_strength: int = Field(..., description="Strength bonus. Use 0 if none.")
-    stat_modifier_dexterity: int = Field(..., description="Dexterity bonus. Use 0 if none.")
-    stat_modifier_intelligence: int = Field(..., description="Intelligence bonus. Use 0 if none.")
-    stat_modifier_wisdom: int = Field(..., description="Wisdom bonus. Use 0 if none.")
-    stat_modifier_charisma: int = Field(..., description="Charisma bonus. Use 0 if none.")
-    stat_modifier_armor_class: int = Field(..., description="Armor class bonus. Use 0 if none.")
-    hp_change: int = Field(..., description="HP restoration or damage when consumed. Use 0 if none.")
-    stamina_change: int = Field(..., description="Stamina restoration when consumed. Use 0 if none.")
-    mana_change: int = Field(..., description="Mana restoration when consumed. Use 0 if none.")
+    stat_modifier_strength: int = Field(0, description="Strength bonus. Use 0 if none.")
+    stat_modifier_dexterity: int = Field(0, description="Dexterity bonus. Use 0 if none.")
+    stat_modifier_intelligence: int = Field(0, description="Intelligence bonus. Use 0 if none.")
+    stat_modifier_wisdom: int = Field(0, description="Wisdom bonus. Use 0 if none.")
+    stat_modifier_charisma: int = Field(0, description="Charisma bonus. Use 0 if none.")
+    stat_modifier_armor_class: int = Field(0, description="Armor class bonus. Use 0 if none.")
+    hp_change: int = Field(0, description="HP restoration or damage when consumed. Use 0 if none.")
+    stamina_change: int = Field(0, description="Stamina restoration when consumed. Use 0 if none.")
+    mana_change: int = Field(0, description="Mana restoration when consumed. Use 0 if none.")
 
-    inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
+    inventory: list[str] = Field(default_factory=list, description="List of object IDs inside this container object. Use [] if empty.")
     text_log_content: str = Field("", description="Only for READABLE objects: visible text content, max 500 characters. Must be non-empty for READABLE objects. Paragraphs are allowed (use blank lines). Use empty string for non-readable items.")
     text_log_format: str = Field("", description="Only for READABLE objects: one of DOCUMENT, SCROLL, BOOK, SIGN. Use empty string for non-readable items.")
     switch_states: list[str] = Field(default_factory=list, description="Only for SWITCH objects: ordered states, e.g. ['OFF','ON'].")
@@ -209,7 +209,7 @@ class QuestSchema(BaseModel):
     title: str = Field(..., description="Short, descriptive title")
     description: str = Field(..., description="Narrative description of what needs to be done")
     goal: str = Field(..., description="Technical condition for completion (for GM reference)")
-    impact: str = Field(..., description="How this affects the world when completed. Use empty string for standard quests.")
+    impact: str = Field("", description="How this affects the world when completed. Use empty string for standard quests.")
     exp_reward: int = Field(..., description="EXP awarded for completion (e.g., 50, 100, 250)")
     status: str = Field(..., description="Current state: open, completed, failed")
 
