@@ -45,6 +45,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     pacing: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
+    min_sequences: Optional[int] = None
+    max_sequences: Optional[int] = None
     quest_generation_enabled: bool = True
     min_quests: Optional[int] = None
     max_quests: Optional[int] = None

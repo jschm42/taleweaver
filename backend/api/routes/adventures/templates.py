@@ -1166,6 +1166,8 @@ async def create_adventure(
                 # In cover mode, if a category is on "auto" (min=None, max=None), derive tight
                 # bounds from the source manifest so the cover has approximately the same
                 # asset density as the original adventure.
+                eff_min_sequences = payload.min_sequences
+                eff_max_sequences = payload.max_sequences
                 eff_min_scenes = payload.min_scenes
                 eff_max_scenes = payload.max_scenes
                 eff_min_items = payload.min_items
@@ -1181,12 +1183,14 @@ async def create_adventure(
 
                 if cover_source_manifest:
                     src_scenes = cover_source_manifest.get("scenes") or []
+                    src_sequences = cover_source_manifest.get("sequences") or []
                     src_npcs = cover_source_manifest.get("npcs") or []
                     src_objects = cover_source_manifest.get("objects") or []
                     src_quests = cover_source_manifest.get("quests") or []
                     src_awards = cover_source_manifest.get("awards") or []
 
                     src_scene_count = len(src_scenes)
+                    src_sequence_count = len(src_sequences)
                     src_npc_count = len(src_npcs)  # noqa: F841 – kept for future use
                     src_object_count = len(src_objects)
                     src_container_count = sum(
@@ -1219,6 +1223,15 @@ async def create_adventure(
                     ):
                         eff_min_scenes, eff_max_scenes = _cover_bounds(
                             src_scene_count, hard_min=1
+                        )
+
+                    if (
+                        payload.min_sequences is None
+                        and payload.max_sequences is None
+                        and src_sequence_count > 0
+                    ):
+                        eff_min_sequences, eff_max_sequences = _cover_bounds(
+                            src_sequence_count, hard_min=0
                         )
 
                     if (
@@ -1279,6 +1292,8 @@ async def create_adventure(
                     title=payload.title,
                     original_prompt=payload.original_prompt or "",
                     sequences=payload.sequences,
+                    min_sequences=eff_min_sequences,
+                    max_sequences=eff_max_sequences,
                     generation_strictness=payload.generation_strictness or "creative",
                     generate_scene_images=payload.generate_scene_images,
                     generate_npc_images=payload.generate_npc_images,
@@ -1645,11 +1660,11 @@ async def get_adventure_status(
         entities = entities.scalars().all()
         
         stats = {
-            "cover": {"generated": 1 if not adv.cover_source_asset_id else 0, "reused": 1 if adv.cover_source_asset_id else 0},
-            "protagonist": {"generated": 1 if avatar and not avatar.source_asset_id else 0, "reused": 1 if avatar and avatar.source_asset_id else 0},
-            "scene": {"generated": len([s for s in scenes if not s.source_asset_id]), "reused": len([s for s in scenes if s.source_asset_id])},
-            "npc": {"generated": len([e for e in entities if e.entity_type == "NPC" and not e.source_asset_id]), "reused": len([e for e in entities if e.entity_type == "NPC" and e.source_asset_id])},
-            "item": {"generated": len([e for e in entities if e.entity_type == "OBJECT" and not e.source_asset_id]), "reused": len([e for e in entities if e.entity_type == "OBJECT" and e.source_asset_id])},
+            "cover": {"generated": 1 if not adv.cover_source_adventure_id else 0, "reused": 1 if adv.cover_source_adventure_id else 0},
+            "protagonist": {"generated": 1 if avatar and not getattr(avatar, "source_asset_id", None) else 0, "reused": 1 if avatar and getattr(avatar, "source_asset_id", None) else 0},
+            "scene": {"generated": len([s for s in scenes if not getattr(s, "source_asset_id", None)]), "reused": len([s for s in scenes if getattr(s, "source_asset_id", None)])},
+            "npc": {"generated": len([e for e in entities if e.entity_type == "NPC" and not getattr(e, "source_asset_id", None)]), "reused": len([e for e in entities if e.entity_type == "NPC" and getattr(e, "source_asset_id", None)])},
+            "item": {"generated": len([e for e in entities if e.entity_type == "OBJECT" and not getattr(e, "source_asset_id", None)]), "reused": len([e for e in entities if e.entity_type == "OBJECT" and getattr(e, "source_asset_id", None)])},
         }
 
     return {
