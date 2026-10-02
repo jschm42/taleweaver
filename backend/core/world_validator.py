@@ -673,6 +673,64 @@ def _check_quest_references(
     return findings
 
 
+def _check_sequence_references(
+    adventure: dict[str, Any],
+    scenes: list[dict[str, Any]],
+    entities: list[dict[str, Any]],
+) -> list[ValidationFinding]:
+    """Verify that hard rule references in sequences point to existing entities and scenes."""
+    sequences = adventure.get("sequences") or []
+    if not isinstance(sequences, list):
+        return []
+    scene_ids = {_scene_id(s) for s in scenes if _scene_id(s)}
+    entity_ids = {_entity_id(e) for e in entities if _entity_id(e)}
+    findings: list[ValidationFinding] = []
+
+    for i, seq in enumerate(sequences):
+        if not isinstance(seq, dict):
+            continue
+        sid = seq.get("id") or f"sequence_{i+1}"
+        title = seq.get("title") or sid
+
+        req_item = seq.get("required_item_id")
+        if req_item and req_item not in entity_ids:
+            findings.append(
+                _f(
+                    "error",
+                    "sequence_references_missing_item",
+                    f"Sequence '{title}' requires item '{req_item}' which does not exist.",
+                    location=f"sequence:{sid}",
+                    context={"sequence_id": sid, "required_item_id": req_item},
+                )
+            )
+
+        req_scene = seq.get("required_scene_id")
+        if req_scene and req_scene not in scene_ids:
+            findings.append(
+                _f(
+                    "error",
+                    "sequence_references_missing_scene",
+                    f"Sequence '{title}' requires entering scene '{req_scene}' which does not exist.",
+                    location=f"sequence:{sid}",
+                    context={"sequence_id": sid, "required_scene_id": req_scene},
+                )
+            )
+
+        req_npc = seq.get("required_defeated_npc_id")
+        if req_npc and req_npc not in entity_ids:
+            findings.append(
+                _f(
+                    "error",
+                    "sequence_references_missing_npc",
+                    f"Sequence '{title}' requires defeating NPC '{req_npc}' which does not exist.",
+                    location=f"sequence:{sid}",
+                    context={"sequence_id": sid, "required_defeated_npc_id": req_npc},
+                )
+            )
+
+    return findings
+
+
 def validate_adventure(payload: dict[str, Any]) -> list[ValidationFinding]:
     """Run the structural validator over a debug payload.
 
@@ -711,6 +769,7 @@ def validate_adventure(payload: dict[str, Any]) -> list[ValidationFinding]:
     findings.extend(_check_decorative_objects_overflow(scenes))
     findings.extend(_check_switch_state_consistency(entities))
     findings.extend(_check_quest_references(adventure, entities))
+    findings.extend(_check_sequence_references(adventure, scenes, entities))
 
     # Sort: errors first, then by code (stable order for UI).
     severity_order = {"error": 0, "warn": 1}

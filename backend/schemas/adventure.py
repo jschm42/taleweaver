@@ -19,6 +19,9 @@ class SequenceSchema(BaseModel):
     description: Optional[str] = ""
     walkthrough: Optional[str] = ""
     end_condition: Optional[str] = ""
+    required_item_id: Optional[str] = ""
+    required_scene_id: Optional[str] = ""
+    required_defeated_npc_id: Optional[str] = ""
     exp_reward: Optional[int] = 50
 
 class AwardSchema(BaseModel):

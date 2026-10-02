@@ -196,6 +196,9 @@ class SequenceSchema(BaseModel):
     description: str = Field("", description="Narrative description for the AI Gamemaster")
     walkthrough: str = Field("", description="The dedicated walkthrough/solution for this sequence")
     end_condition: str = Field("", description="Condition that must be met to proceed to the next sequence")
+    required_item_id: Optional[str] = Field("", description="Optional hard rule: ID of the item the protagonist must obtain to complete the sequence")
+    required_scene_id: Optional[str] = Field("", description="Optional hard rule: ID of the scene the protagonist must enter to complete the sequence")
+    required_defeated_npc_id: Optional[str] = Field("", description="Optional hard rule: ID of the NPC the protagonist must defeat to complete the sequence")
     exp_reward: int = Field(default=100, description="XP reward for completion")
 
     model_config = {"extra": "ignore"}

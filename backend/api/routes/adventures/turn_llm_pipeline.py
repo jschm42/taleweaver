@@ -296,6 +296,20 @@ class TurnLlmContextBuilder:
                 if seq.get("id") == self.manager.state.active_sequence_id or (not self.manager.state.active_sequence_id and i == 0):
                     active_walkthrough = seq.get("walkthrough", "")
                     active_end_condition = seq.get("end_condition", "")
+                    
+                    hard_reqs = []
+                    if seq.get("required_item_id"):
+                        hard_reqs.append(f"obtain item '{seq['required_item_id']}'")
+                    if seq.get("required_scene_id"):
+                        hard_reqs.append(f"enter scene '{seq['required_scene_id']}'")
+                    if seq.get("required_defeated_npc_id"):
+                        hard_reqs.append(f"defeat NPC '{seq['required_defeated_npc_id']}'")
+                    if hard_reqs:
+                        req_str = " AND ".join(hard_reqs)
+                        if active_end_condition:
+                            active_end_condition = f"{active_end_condition} (Deterministic triggers required: {req_str})"
+                        else:
+                            active_end_condition = f"Deterministic triggers required: {req_str}"
                     break
 
         if not active_walkthrough:

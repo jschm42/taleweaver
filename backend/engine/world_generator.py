@@ -417,6 +417,11 @@ class WorldGenerator:
                 for field in ("title", "description", "walkthrough", "end_condition"):
                     if field in seq:
                         seq[field] = replace_ids_in_text(seq[field])
+                for hard_field in ("required_item_id", "required_scene_id", "required_defeated_npc_id"):
+                    val = str(seq.get(hard_field) or "").replace("##", "").strip()
+                    if val.upper() in ("NONE", "NULL", "UNDEFINED", "N/A", "FALSE"):
+                        val = ""
+                    seq[hard_field] = val.upper() if val else ""
 
     @staticmethod
     def _extract_sequences_from_prompt(prompt_str: str) -> tuple[str, list[dict[str, Any]]]:
@@ -428,19 +433,70 @@ class WorldGenerator:
         blocks = seq_regex.split(prompt_str)
         cleaned_prompt = blocks[0].strip()
         sequences: list[dict[str, Any]] = []
+
+        def _clean_id(raw_val: str) -> str:
+            clean = raw_val.replace("##", "").strip().strip("\"'").strip()
+            if clean.upper() in ("NONE", "NULL", "UNDEFINED", "N/A", "FALSE"):
+                return ""
+            return clean.upper()
+
         for i, block in enumerate(blocks[1:], start=1):
             if len(sequences) >= 15:
                 break
             lines = [l.strip() for l in block.strip().split("\n") if l.strip()]
             title = lines[0] if lines else f"Sequence {i}"
-            desc = "\n".join(lines[1:]) if len(lines) > 1 else "Follow the sequence blueprint."
+            raw_lines = lines[1:] if len(lines) > 1 else []
+            desc_lines: list[str] = []
+            req_item = ""
+            req_scene = ""
+            req_defeated_npc = ""
+            custom_end_condition = ""
+
+            for line in raw_lines:
+                item_match = re.match(
+                    r'^(?:required[_\s]+item(?:[_\s]+id)?|key[_\s]+item|item(?:[_\s]+id)?)\s*:\s*(.+)$',
+                    line,
+                    re.IGNORECASE,
+                )
+                scene_match = re.match(
+                    r'^(?:required[_\s]+scene(?:[_\s]+id)?|target[_\s]+scene|scene(?:[_\s]+id)?)\s*:\s*(.+)$',
+                    line,
+                    re.IGNORECASE,
+                )
+                npc_match = re.match(
+                    r'^(?:required[_\s]+defeated[_\s]+npc(?:[_\s]+id)?|defeated[_\s]+npc(?:[_\s]+id)?|defeat[_\s]+npc(?:[_\s]+id)?|defeat|npc[_\s]+to[_\s]+defeat)\s*:\s*(.+)$',
+                    line,
+                    re.IGNORECASE,
+                )
+                cond_match = re.match(
+                    r'^(?:end[_\s]+condition|completion[_\s]+condition|condition)\s*:\s*(.+)$',
+                    line,
+                    re.IGNORECASE,
+                )
+
+                if item_match:
+                    req_item = _clean_id(item_match.group(1))
+                elif scene_match:
+                    req_scene = _clean_id(scene_match.group(1))
+                elif npc_match:
+                    req_defeated_npc = _clean_id(npc_match.group(1))
+                elif cond_match:
+                    custom_end_condition = cond_match.group(1).strip()
+                else:
+                    desc_lines.append(line)
+
+            desc = "\n".join(desc_lines) if desc_lines else "Follow the sequence blueprint."
+            end_cond = custom_end_condition or "Complete the sequence objectives."
             sequences.append({
                 "id": f"SEQ_{i}",
                 "order": i,
                 "title": title,
                 "description": desc[:500],
                 "walkthrough": desc,
-                "end_condition": "Complete the sequence objectives.",
+                "end_condition": end_cond,
+                "required_item_id": req_item,
+                "required_scene_id": req_scene,
+                "required_defeated_npc_id": req_defeated_npc,
                 "exp_reward": 100,
             })
         return cleaned_prompt, sequences

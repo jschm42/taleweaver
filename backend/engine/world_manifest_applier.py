@@ -1169,7 +1169,19 @@ async def apply_manifest(
         adventure.quests = quests  # type: ignore[assignment]
 
         if "sequences" in manifest_dict and manifest_dict["sequences"]:
-            adventure.sequences = manifest_dict["sequences"]  # type: ignore[assignment]
+            cleaned_sequences = []
+            for s in manifest_dict["sequences"]:
+                if isinstance(s, dict):
+                    c = dict(s)
+                    for hard_field in ("required_item_id", "required_scene_id", "required_defeated_npc_id"):
+                        val = str(c.get(hard_field) or "").replace("##", "").strip()
+                        if val.upper() in ("NONE", "NULL", "UNDEFINED", "N/A", "FALSE"):
+                            val = ""
+                        c[hard_field] = val.upper() if val else ""
+                    cleaned_sequences.append(c)
+                else:
+                    cleaned_sequences.append(s)
+            adventure.sequences = cleaned_sequences  # type: ignore[assignment]
 
         # In standard ADV manifests, narrative metadata is nested under
         # `adventure`; look there first and fall back to top-level keys.

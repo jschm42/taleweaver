@@ -227,6 +227,11 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
             "  * `description`: narrative guidelines and context for the GM during this sequence\n"
             "  * `walkthrough`: the DEDICATED, step-by-step walkthrough and puzzle solutions specifically for this sequence! How the player overcomes this chapter's obstacles, finds keys/codes, interacts with NPCs, and reaches the sequence objective.\n"
             "  * `end_condition`: technical or narrative condition to complete this sequence and unlock the next sequence (e.g. 'The player unlocks the iron gate with the brass key and enters the sewer tunnels')\n"
+            "  * DETERMINISTIC HARD RULES (optional completion triggers, populate where applicable for clear mechanical progression):\n"
+            "    - `required_item_id`: ID of an existing item the protagonist must obtain to complete this sequence (e.g. 'BRASS_KEY'). Empty string if no item trigger.\n"
+            "    - `required_scene_id`: ID of an existing scene the protagonist must enter to complete this sequence (e.g. 'SEWER_TUNNELS'). Empty string if no scene trigger.\n"
+            "    - `required_defeated_npc_id`: ID of an existing NPC the protagonist must defeat to complete this sequence (e.g. 'GOBLIN_WARLORD'). Empty string if no NPC defeat trigger.\n"
+            "    - RULE INVARIANT: Any referenced item, scene, or NPC ID in hard rules MUST exist in your generated `objects`, `scenes`, or `npcs`!\n"
             "  * `exp_reward`: XP awarded upon completion (e.g. 50, 100, 200)\n"
             "- CRITICAL: All puzzle solutions and progression steps MUST be defined in their respective sequence's `walkthrough`.\n"
             "================================================================================\n"
@@ -239,14 +244,23 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
     
     if strict_mode:
         seq_text += "STRICT ADHERENCE MODE IS ACTIVE: You MUST strictly implement these sequences as the core backbone of the adventure. "
-        seq_text += "Do not deviate from their order or core intent. Fill in the details, and provide the dedicated `walkthrough`, `end_condition`, and `exp_reward` for each sequence.\n"
+        seq_text += "Do not deviate from their order or core intent. Fill in the details, and provide the dedicated `walkthrough`, `end_condition`, hard rules, and `exp_reward` for each sequence.\n"
     else:
         seq_text += "CREATIVE EXPANSION MODE IS ACTIVE: Use these sequences as a creative foundation. "
-        seq_text += "You are free to adapt, expand, or add intermediate sequences (up to 15 total) to create a richer narrative experience. For every sequence, provide its dedicated `walkthrough` and `end_condition`.\n"
+        seq_text += "You are free to adapt, expand, or add intermediate sequences (up to 15 total) to create a richer narrative experience. For every sequence, provide its dedicated `walkthrough`, `end_condition`, and applicable hard rules.\n"
         
     seq_text += "\nUser-Provided Sequences:\n"
     for s in sequences:
-        seq_text += f"[{s.get('order', 0)}] {s.get('title', 'Unknown')}: {s.get('description', '')}\n"
+        reqs = []
+        if s.get("required_item_id"):
+            reqs.append(f"required_item_id='{s['required_item_id']}'")
+        if s.get("required_scene_id"):
+            reqs.append(f"required_scene_id='{s['required_scene_id']}'")
+        if s.get("required_defeated_npc_id"):
+            reqs.append(f"required_defeated_npc_id='{s['required_defeated_npc_id']}'")
+        req_info = f" [Hard Rules: {', '.join(reqs)}]" if reqs else ""
+        end_cond = f" [End Condition: {s.get('end_condition')}]" if s.get('end_condition') else ""
+        seq_text += f"[{s.get('order', 0)}] {s.get('title', 'Unknown')}: {s.get('description', '')}{end_cond}{req_info}\n"
     
     seq_text += (
         "\nCRITICAL REQUIREMENT FOR SEQUENCES:\n"
@@ -257,6 +271,10 @@ def _build_sequences_requirement(sequences: Optional[list[dict[str, Any]]], gene
         "  * `description`: narrative guidance and context for the GM during this sequence\n"
         "  * `walkthrough`: DEDICATED step-by-step walkthrough and puzzle solutions specifically for this sequence.\n"
         "  * `end_condition`: condition that triggers transition to the next sequence\n"
+        "  * `required_item_id`: ID of item protagonist must obtain (or empty string)\n"
+        "  * `required_scene_id`: ID of scene protagonist must enter (or empty string)\n"
+        "  * `required_defeated_npc_id`: ID of NPC protagonist must defeat (or empty string)\n"
+        "  * If the user provided hard rules above, you MUST preserve them and ensure the referenced IDs exist in your generated world entities/scenes.\n"
         "  * `exp_reward`: XP awarded upon sequence completion (e.g. 50, 100, 200)\n"
     )
         

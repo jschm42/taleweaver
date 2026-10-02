@@ -13,7 +13,11 @@ TaleWeaver adventures require a very specific structured syntax to guide the AI 
 
 You must use linear sequences and specific entity tags to outline the story chronologically.
 
-1.  **Sequences (`[Sequence: X]`)**: The adventure must be broken down into chronological chapters, numbered sequentially. Maximum 15 sequences.
+1.  **Sequences (`[Sequence: X]`)**: The adventure must be broken down into chronological chapters, numbered sequentially. Maximum 15 sequences. Each sequence can optionally declare deterministic completion rules (hard rules):
+    - `Required Item: <ITEM_ID>`: Sequence only completes once the player obtains this item.
+    - `Required Scene: <SCENE_ID>`: Sequence only completes once the player enters this scene.
+    - `Defeat NPC: <NPC_ID>`: Sequence only completes once this NPC is defeated.
+    - `End Condition: <narrative condition>`: High-level narrative completion description.
 2.  **Scenes (`[Scene: X]`)**: Specific locations within a sequence.
 3.  **NPCs (`[NPC: X]`)**: Characters the player interacts with.
 4.  **Items (`[Item: X]`)**: Important objects the player acquires or uses.
@@ -24,7 +28,9 @@ When generating an adventure concept, format your output strictly using these ta
 
 ```text
 [Sequence: 1] The Prison Escape
-The player starts in a damp cell and must find a way to pick the lock. 
+The player starts in a damp cell and must find a way to pick the lock.
+Required Item: RUSTY_SHIV
+End Condition: Pick the cell lock using the shiv and escape into the corridor.
 
 [Scene: 1] Damp Cell
 A dark, moldy cell with a rusted iron door. Water drips from the ceiling.
@@ -36,8 +42,10 @@ A crazy prisoner in the neighboring cell who gives the player a rusty shiv.
 A crude weapon made from a piece of scrap metal.
 
 [Sequence: 2] The Sewers
-After escaping the cell, the player navigates the maze-like sewers below the prison. 
-They must defeat a giant rat to reach the exit.
+After escaping the cell, the player navigates the maze-like sewers below the prison.
+Required Scene: SEWER_TUNNELS
+Defeat NPC: GIANT_RAT
+End Condition: Defeat the giant rat blocking the drain to escape the prison grounds.
 
 [Scene: 2] Sewer Tunnels
 A labyrinth of waist-deep water and crumbling brickwork.

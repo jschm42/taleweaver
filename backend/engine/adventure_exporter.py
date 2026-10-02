@@ -405,6 +405,7 @@ class AdventureExporter:
             "objects": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "OBJECT"],
             "quests": adv.quests or [],
             "awards": adv.awards or [],
+            "sequences": adv.sequences or [],
             "scripts": (adv.original_manifest or {}).get("scripts", []),
         }
         

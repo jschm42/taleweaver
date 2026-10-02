@@ -790,6 +790,13 @@ const editorTextLogs = computed<any[]>(() => {
   return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'READABLE')
 })
 
+const editorAllItems = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred)
+})
+
 async function fetchAdventure() {
   if (!props.adventureId) return
   isLoading.value = true
@@ -2442,6 +2449,9 @@ watch(
             <div v-else-if="activeTab === 'sequences'" class="space-y-6">
               <SequencesSection
                 :adventure="adventure"
+                :editor-scenes="editorScenes"
+                :editor-objects="editorAllItems"
+                :editor-npcs="editorNpcs"
                 :is-saving="isSaving"
                 @update-sequences="handleUpdateSequences"
                 @notify="addNotification"
