@@ -9,6 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.config import settings
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -309,7 +310,7 @@ class AdventureExporter:
         # Build standard manifest structure according to docs/specs/adventure_format.md
         manifest = {
             "format": "TaleWeaver",
-            "version": "1.2",
+            "version": CURRENT_VERSION,
             
             "adventure": {
                 "title": adv.title,

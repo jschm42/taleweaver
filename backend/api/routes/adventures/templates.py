@@ -844,10 +844,20 @@ async def list_templates(
                 scene_label,
             )
 
+    from backend.engine.adventure_updates import (
+        check_template_update,
+        scan_available_adventure_files,
+        update_all_adventures,
+        update_single_adventure,
+    )
+
+    available_files = scan_available_adventure_files()
+
     response = []
     for template in templates:
         latest = latest_by_template.get(template.id)
         game_session, state, scene_label = latest if latest else (None, None, None)
+        update_info = check_template_update(template, available_files)
         response.append(
             AdventureTemplateSummaryResponse(
                 template_id=template.id,
@@ -880,9 +890,54 @@ async def list_templates(
                 is_adventure_generator=template.is_adventure_generator,
                 cover_source_adventure_id=template.cover_source_adventure_id,
                 cover_source_adventure_name=template.cover_source_adventure_name,
+                has_update=update_info["has_update"],
+                available_version=update_info["available_version"],
+                has_sequences=update_info["has_sequences"],
+                is_legacy_format=update_info["is_legacy_format"],
+                can_start=update_info["can_start"],
             )
         )
     return response
+
+
+@router.post("/templates/update-all")
+@router.post("/update-all")
+async def update_all_adventure_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Updates all adventure templates for the user that have newer versions in /adventures."""
+    from backend.engine.adventure_updates import update_all_adventures
+    try:
+        return await update_all_adventures(
+            db=db,
+            user_id=current_user.id,
+        )
+    except Exception as e:
+        logger.exception("Failed to update all adventure templates")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/templates/{template_id}/update")
+@router.post("/{template_id}/update")
+async def update_adventure_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Updates an individual adventure template from its matching file in /adventures."""
+    from backend.engine.adventure_updates import update_single_adventure
+    try:
+        return await update_single_adventure(
+            db=db,
+            template_id=template_id,
+            user_id=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to update adventure template %s", template_id)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{template_id}", response_model=AdventureTemplateResponse)

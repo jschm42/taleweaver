@@ -4,7 +4,7 @@ from typing import Any
 
 FORMAT_NAME = "TaleWeaver"
 LEGACY_FORMAT_NAME = "taleweaver.adz"
-CURRENT_VERSION = "1.2"
+CURRENT_VERSION = "1.3"
 MIN_SUPPORTED_VERSION = "1.0"
 
 

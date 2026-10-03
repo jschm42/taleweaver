@@ -68,6 +68,11 @@ const {
   loadingWordIndex,
   pendingCards,
   visibleTemplates,
+  updatingTemplateIds,
+  isUpdatingAll,
+  availableUpdatesCount,
+  updateAdventure,
+  updateAllAdventures,
   fetchPortalData,
   startSessionForTemplate,
   confirmDeleteSession,
@@ -305,10 +310,13 @@ onUnmounted(() => {
           :is-deleting-templates="isDeleting"
           :session-count="sessions.length"
           :is-deleting-sessions="isDeletingSession"
+          :update-count="availableUpdatesCount"
+          :is-updating-all="isUpdatingAll"
           @change-section="activeSection = $event"
           @delete-all-adventures="onDeleteAllAdventures"
           @import="triggerImportPicker"
           @restore-defaults="executeRestoreDefaults"
+          @update-all="updateAllAdventures"
           @delete-all-sessions="onDeleteAllSessions"
         />
 
@@ -327,12 +335,14 @@ onUnmounted(() => {
               :loading-word-index="loadingWordIndex"
               :is-starting-session="isStartingSession"
               :starting-session-template-id="startingSessionTemplateId"
+              :updating-template-ids="updatingTemplateIds"
               @create="createEmptyAdventure"
               @generate-world="openCreateModal"
               @import-samples="handleImportSamplesClick"
               @remove-failed-pending="removeFailedPendingCard"
               @cancel-pending="cancelAdventure"
               @start-session="startSession"
+              @update-adventure="updateAdventure"
               @cover="openCoverCreate"
               @edit="editAdventure"
               @export-adz="exportAdventureAdz"

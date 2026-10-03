@@ -1,5 +1,6 @@
-import { ref, type ComputedRef, type Ref } from 'vue'
+import { ref, computed, type ComputedRef, type Ref } from 'vue'
 import { api } from '@/composables/useApi'
+import { notificationService } from '@/services/notificationService'
 import { usePortalModals, type PortalImportWarningType } from '@/composables/usePortalModals'
 import { usePortalPendingState } from '@/composables/usePortalPendingState'
 import type { AdventureTemplateSummary, GameSession } from '@/types'
@@ -31,6 +32,11 @@ export interface UsePortalDataResult {
   loadingWordIndex: Ref<number>
   pendingCards: ComputedRef<PendingCard[]>
   visibleTemplates: ComputedRef<AdventureTemplateSummary[]>
+  updatingTemplateIds: Ref<Set<string>>
+  isUpdatingAll: Ref<boolean>
+  availableUpdatesCount: ComputedRef<number>
+  updateAdventure: (templateId: string) => Promise<void>
+  updateAllAdventures: () => Promise<void>
   fetchPortalData: () => Promise<void>
   startSessionForTemplate: (templateId: string, onStarted: (gameId: string) => void | Promise<void>) => Promise<void>
   confirmDeleteSession: (gameId: string, title: string) => void
@@ -196,6 +202,11 @@ export function usePortalData(): UsePortalDataResult {
   const isStartingSession = ref(false)
   const startingSessionTemplateId = ref<string | null>(null)
   const startingSessionTitle = ref('')
+  const updatingTemplateIds = ref<Set<string>>(new Set())
+  const isUpdatingAll = ref(false)
+  const availableUpdatesCount = computed(() => {
+    return templates.value.filter((t) => !!t.has_update).length
+  })
 
   const importInput = ref<HTMLInputElement | null>(null)
 
@@ -232,6 +243,45 @@ export function usePortalData(): UsePortalDataResult {
       console.error('API Error:', error)
     } finally {
       isLoading.value = false
+    }
+  }
+
+  /** Updates an individual adventure template from /adventures. */
+  async function updateAdventure(templateId: string) {
+    if (updatingTemplateIds.value.has(templateId)) return
+    updatingTemplateIds.value.add(templateId)
+    try {
+      const res = await api.upgradeAdventureTemplate(templateId)
+      notificationService.success(res.message || 'Adventure updated successfully.')
+      await fetchPortalData()
+    } catch (err: any) {
+      console.error('Failed to update adventure:', err)
+      notificationService.error(err?.message || 'Failed to update adventure.')
+    } finally {
+      updatingTemplateIds.value.delete(templateId)
+    }
+  }
+
+  /** Updates all adventure templates that have newer versions in /adventures. */
+  async function updateAllAdventures() {
+    if (isUpdatingAll.value) return
+    isUpdatingAll.value = true
+    try {
+      const res = await api.updateAllAdventureTemplates()
+      if (res.updated_count > 0) {
+        notificationService.success(`Successfully updated ${res.updated_count} adventure(s).`)
+      } else {
+        notificationService.info('All adventures are already up to date.')
+      }
+      if (res.errors && res.errors.length > 0) {
+        notificationService.error(`Some updates failed: ${res.errors.join(', ')}`)
+      }
+      await fetchPortalData()
+    } catch (err: any) {
+      console.error('Failed to update all adventures:', err)
+      notificationService.error(err?.message || 'Failed to update all adventures.')
+    } finally {
+      isUpdatingAll.value = false
     }
   }
 
@@ -767,6 +817,11 @@ export function usePortalData(): UsePortalDataResult {
     loadingWordIndex,
     pendingCards,
     visibleTemplates,
+    updatingTemplateIds,
+    isUpdatingAll,
+    availableUpdatesCount,
+    updateAdventure,
+    updateAllAdventures,
     fetchPortalData,
     startSessionForTemplate,
     confirmDeleteSession,

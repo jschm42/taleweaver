@@ -6,22 +6,24 @@ import ImportExamplesCard from './ImportExamplesCard.vue'
 import PendingAdventureCard from './PendingAdventureCard.vue'
 import AdventureTemplateCard from './AdventureTemplateCard.vue'
 
-defineProps<{
+const props = defineProps<{
   visibleTemplates: AdventureTemplateSummary[]
   pendingCards: any[]
   isSeeding: boolean
   loadingWordIndex: number
   isStartingSession?: boolean
   startingSessionTemplateId?: string | null
+  updatingTemplateIds?: Set<string>
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'create'): void
   (e: 'generate-world'): void
   (e: 'import-samples'): void
   (e: 'remove-failed-pending', adventureId: string, kind: 'creation' | 'import'): void
   (e: 'cancel-pending', adventureId: string): void
   (e: 'start-session', templateId: string): void
+  (e: 'update-adventure', templateId: string): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'export-adz', templateId: string, title: string): void
@@ -65,7 +67,9 @@ defineEmits<{
       :template="entry"
       :is-starting-session="isStartingSession"
       :is-starting-this-template="startingSessionTemplateId === entry.template_id"
+      :is-updating="props.updatingTemplateIds ? props.updatingTemplateIds.has(entry.template_id) : false"
       @start-session="(id) => $emit('start-session', id)"
+      @update-adventure="(id) => $emit('update-adventure', id)"
       @cover="(id) => $emit('cover', id)"
       @edit="(id) => $emit('edit', id)"
       @export-adz="(id, title) => $emit('export-adz', id, title)"

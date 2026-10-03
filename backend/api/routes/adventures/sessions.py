@@ -490,6 +490,16 @@ async def start_session_for_template(
     if adventure.owner_id != current_user.id and not adventure.is_ready:
         raise HTTPException(status_code=403, detail="You do not have access to this adventure yet.")
 
+    # Disallow starting sessions on legacy/outdated format adventures
+    from backend.engine.adventure_updates import check_template_update, scan_available_adventure_files
+    files = scan_available_adventure_files()
+    update_info = check_template_update(adventure, files)
+    if update_info["is_legacy_format"] or not update_info["can_start"]:
+        raise HTTPException(
+            status_code=400,
+            detail="This adventure uses an outdated format and is no longer usable. Please update the adventure first.",
+        )
+
     # 1. Resolve Avatar (Template-based or fresh manifest-based)
     av_res = await db.execute(
         select(Avatar)

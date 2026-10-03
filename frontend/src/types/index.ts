@@ -214,6 +214,11 @@ export interface AdventureTemplateSummary {
   current_scene_name?: string | null
   cover_source_adventure_id?: string | null
   cover_source_adventure_name?: string | null
+  has_update?: boolean
+  available_version?: string | null
+  has_sequences?: boolean
+  is_legacy_format?: boolean
+  can_start?: boolean
 }
 
 /** Payload for creating a new adventure. */

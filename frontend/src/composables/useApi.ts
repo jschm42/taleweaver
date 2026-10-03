@@ -343,6 +343,16 @@ export const api = {
     return request<AdventureTemplateSummary[]>('/adventures/templates')
   },
 
+  /** Updates an adventure template to the latest version found in /adventures. */
+  upgradeAdventureTemplate(templateId: string): Promise<{ status: string; message: string; template_id: string; new_version?: string }> {
+    return request(`/adventures/templates/${templateId}/update`, { method: 'POST' })
+  },
+
+  /** Updates all adventure templates that have newer versions in /adventures. */
+  updateAllAdventureTemplates(): Promise<{ status: string; updated_count: number; updated_titles: string[]; errors: string[] }> {
+    return request('/adventures/templates/update-all', { method: 'POST' })
+  },
+
   /** Starts (or reuses) a session for a template. */
   startSessionForTemplate(templateId: string): Promise<{ game_id: string; template_id: string; adventure_id: string; avatar_id: string }> {
     return request(`/adventures/${templateId}/sessions/start`, { method: 'POST' })

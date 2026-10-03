@@ -8,10 +8,12 @@ const props = defineProps<{
   template: AdventureTemplateSummary
   isStartingSession?: boolean
   isStartingThisTemplate?: boolean
+  isUpdating?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'startSession', templateId: string): void
+  (e: 'updateAdventure', templateId: string): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'exportAdz', templateId: string, title: string): void
@@ -44,12 +46,13 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', handleClickOutside)
 })
 
-function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete'): void {
+function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete' | 'update'): void {
   if (action === 'cover') emit('cover', props.template.template_id)
   else if (action === 'edit') emit('edit', props.template.template_id)
   else if (action === 'adz') emit('exportAdz', props.template.template_id, props.template.title)
   else if (action === 'adv') emit('exportAdv', props.template.template_id, props.template.title)
   else if (action === 'delete') emit('delete', props.template.template_id, props.template.title)
+  else if (action === 'update') emit('updateAdventure', props.template.template_id)
   isMenuOpen.value = false
 }
 
@@ -116,6 +119,36 @@ const hasLicenseInfo = computed(() => {
 
       <!-- Badges Stack -->
       <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 flex flex-col gap-1.5 sm:gap-2 items-start z-20">
+        <!-- Update Tag / Badge -->
+        <div v-if="props.template.has_update">
+          <button
+            @click.stop="emit('updateAdventure', props.template.template_id)"
+            :disabled="props.isUpdating"
+            class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-cyan-500/30 hover:bg-cyan-500/50 text-cyan-300 hover:text-white text-[9px] sm:text-xs uppercase tracking-widest font-black border border-cyan-400/50 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md shadow-lg shadow-cyan-500/20 cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+            :title="`Update available${props.template.available_version ? ': v' + props.template.available_version : ''}. Click to update this adventure.`"
+          >
+            <i :class="props.isUpdating ? 'ra ra-cycle animate-spin text-[10px] sm:text-xs' : 'ra ra-clockwise text-[10px] sm:text-xs text-cyan-400'"></i>
+            <span>{{ props.isUpdating ? 'Updating...' : (props.template.available_version ? `Update v${props.template.available_version}` : 'Update') }}</span>
+          </button>
+        </div>
+
+        <!-- Outdated Format Warning Badge -->
+        <div v-if="props.template.is_legacy_format || !props.template.can_start">
+          <div class="group/legacy relative">
+            <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-rose-500/20 text-rose-400 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-rose-500/30 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md shadow-lg shadow-rose-500/10 cursor-help">
+              <i class="ra ra-skull text-[10px] sm:text-xs"></i>
+              <span>Outdated Format</span>
+            </div>
+            <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-rose-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/legacy:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
+              <div class="text-rose-400 uppercase tracking-[0.2em] mb-1 flex items-center gap-2">
+                <i class="ra ra-warning"></i>
+                Format Incompatible
+              </div>
+              This adventure was imported in an older format and is no longer usable. {{ props.template.has_update ? 'Click Update to upgrade it to the new format.' : 'Please update or re-import a compatible version.' }}
+            </div>
+          </div>
+        </div>
+
         <!-- Tone Badge -->
         <div v-if="props.template.selected_tone">
           <span class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[9px] sm:text-xs uppercase tracking-widest font-black border border-aether-primary/20 max-w-[7rem] truncate inline-block">
@@ -196,6 +229,15 @@ const hasLicenseInfo = computed(() => {
               Export (.adv)
             </button>
             <button
+              v-if="props.template.has_update"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-cyan-400/90 hover:text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-2"
+              :disabled="props.isUpdating"
+              @click="runAction('update')"
+            >
+              <i :class="props.isUpdating ? 'ra ra-cycle animate-spin' : 'ra ra-clockwise'" class="text-xs"></i>
+              Update adventure
+            </button>
+            <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-500/10 flex items-center gap-2"
               @click="openLicenseInfo"
             >
@@ -239,7 +281,33 @@ const hasLicenseInfo = computed(() => {
       </div>
 
       <!-- Action Button -->
+      <!-- Case 1: Legacy format with update available -> Update button -->
       <button
+        v-if="(props.template.is_legacy_format || !props.template.can_start) && props.template.has_update"
+        class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 shadow-lg bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 border-cyan-500/30 shadow-cyan-500/10 cursor-pointer"
+        :disabled="props.isUpdating"
+        @click="emit('updateAdventure', props.template.template_id)"
+      >
+        <i
+          :class="props.isUpdating ? 'ra ra-cycle animate-spin text-xs sm:text-sm' : 'ra ra-clockwise text-xs sm:text-sm'"
+        ></i>
+        <span class="truncate">{{ props.isUpdating ? 'Updating...' : 'Update to Play' }}</span>
+      </button>
+
+      <!-- Case 2: Legacy format without update -> Disabled incompatible button -->
+      <button
+        v-else-if="props.template.is_legacy_format || !props.template.can_start"
+        class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 bg-rose-500/10 text-rose-400/60 border-rose-500/20 cursor-not-allowed shadow-none"
+        disabled
+        title="This adventure was imported in an older format and is no longer usable."
+      >
+        <i class="ra ra-slash-ring text-xs sm:text-sm"></i>
+        <span class="truncate">Incompatible Format</span>
+      </button>
+
+      <!-- Case 3: Playable adventure -> Normal Start button -->
+      <button
+        v-else
         class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 shadow-lg"
         :class="props.isStartingSession
           ? 'bg-slate-800/70 text-slate-400 border-slate-700 cursor-not-allowed shadow-slate-900/30'

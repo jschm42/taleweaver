@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.config import settings
 from backend.engine.adventure_importer import AdventureTemplateImporter
 from backend.models.adventure_template import AdventureTemplate
@@ -36,22 +37,33 @@ def _parse_version_tuple(v: Optional[str]) -> tuple[int, ...]:
 
 
 def is_version_newer(
-    file_version: Optional[str],
-    db_version: Optional[str],
+    file_version: Optional[str] = None,
+    db_version: Optional[str] = None,
     file_has_sequences: bool = False,
     db_has_sequences: bool = False,
+    file_format_version: Optional[str] = None,
+    db_format_version: Optional[str] = None,
 ) -> bool:
-    """Compares file version against database version.
+    """Compares file version and format against database version.
 
     Returns True if:
     - The file has sequences while the DB template does not (upgrade to new format)
+    - The file format version is strictly newer than the DB format version
     - The file has a version string and the DB template has none
     - The file version is strictly greater than the DB version
     """
-    # If the file has been migrated to the new sequence format and the DB template hasn't,
-    # it is considered an update regardless of version bumping.
     if file_has_sequences and not db_has_sequences:
         return True
+
+    # If the file manifest format version is higher than DB manifest format version
+    if file_format_version and db_format_version:
+        try:
+            pv_file_fmt = parse_semver(str(file_format_version).strip())
+            pv_db_fmt = parse_semver(str(db_format_version).strip())
+            if pv_file_fmt > pv_db_fmt:
+                return True
+        except Exception:
+            pass
 
     if not file_version or not str(file_version).strip():
         return False
@@ -89,17 +101,24 @@ def scan_available_adventure_files(force_refresh: bool = False) -> list[dict[str
     if not force_refresh and (now - _SCANNED_FILES_TIMESTAMP) < _CACHE_TTL_SECONDS and _SCANNED_FILES_CACHE:
         return _SCANNED_FILES_CACHE
 
-    directories = [
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    candidate_dirs = [
         "adventures",
+        os.path.join(repo_root, "adventures"),
         os.path.join(settings.DATA_DIR, "presets", "adventures"),
+        os.path.join(settings.DATA_DIR, "adventures"),
     ]
+    seen_dirs = set()
+    directories = []
+    for d in candidate_dirs:
+        norm = os.path.abspath(d)
+        if norm not in seen_dirs and os.path.exists(norm):
+            seen_dirs.add(norm)
+            directories.append(norm)
 
     scanned: list[dict[str, Any]] = []
 
     for base_dir in directories:
-        if not os.path.exists(base_dir):
-            continue
-
         for root, _, files in os.walk(base_dir):
             for filename in files:
                 ext = os.path.splitext(filename)[1].lower()
@@ -127,6 +146,7 @@ def scan_available_adventure_files(force_refresh: bool = False) -> list[dict[str
 
                     origin_id = adv_data.get("origin_id") or manifest.get("origin_id")
                     version = adv_data.get("version") or manifest.get("version")
+                    format_version = str(manifest.get("version") or "").strip()
                     sequences = adv_data.get("sequences") or manifest.get("sequences") or []
                     has_sequences = isinstance(sequences, list) and len(sequences) > 0
 
@@ -137,6 +157,7 @@ def scan_available_adventure_files(force_refresh: bool = False) -> list[dict[str
                         "title": title.strip(),
                         "origin_id": str(origin_id).strip() if origin_id else None,
                         "version": str(version).strip() if version else None,
+                        "format_version": format_version,
                         "sequences": sequences,
                         "has_sequences": has_sequences,
                     })
@@ -189,16 +210,43 @@ def find_matching_file_for_template(
 
     # Pick candidate with newest version or sequence support
     best = candidates[0]
+    db_has_seq = bool(template.sequences and len(template.sequences) > 0)
+    db_fmt_ver = (template.original_manifest or {}).get("version")
     for cand in candidates[1:]:
         if is_version_newer(
-            cand.get("version"),
-            best.get("version"),
+            file_version=cand.get("version"),
+            db_version=best.get("version"),
             file_has_sequences=cand.get("has_sequences", False),
             db_has_sequences=best.get("has_sequences", False),
+            file_format_version=cand.get("format_version"),
+            db_format_version=best.get("format_version"),
         ):
             best = cand
 
     return best
+
+
+def is_legacy_template(template: AdventureTemplate) -> bool:
+    """
+    Checks if a template was previously imported from an older ADV format version (< CURRENT_VERSION)
+    or lacks required sequences for imported adventures.
+    """
+    manifest = template.original_manifest or {}
+    manifest_version = manifest.get("format_version") or manifest.get("version")
+
+    if manifest_version:
+        try:
+            if parse_semver(str(manifest_version)) < parse_semver(CURRENT_VERSION):
+                return True
+        except Exception:
+            if str(manifest_version) < CURRENT_VERSION:
+                return True
+
+    # If it was imported (has origin_id or manifest) and lacks sequences:
+    if (template.origin_id or template.original_manifest) and not (template.sequences and len(template.sequences) > 0):
+        return True
+
+    return False
 
 
 def check_template_update(
@@ -207,25 +255,34 @@ def check_template_update(
 ) -> dict[str, Any]:
     """Calculates update status and sequence format status for an AdventureTemplate."""
     db_has_sequences = bool(template.sequences and len(template.sequences) > 0)
+    is_legacy = is_legacy_template(template)
+    can_start = not is_legacy
+
     matching_file = find_matching_file_for_template(template, available_files)
 
     has_update = False
     available_version: Optional[str] = None
     update_file_path: Optional[str] = None
 
+    manifest = template.original_manifest or {}
+    db_format_version = manifest.get("format_version") or manifest.get("version")
+
     if matching_file:
         file_version = matching_file.get("version")
         file_has_sequences = matching_file.get("has_sequences", False)
+        file_format_version = matching_file.get("format_version")
 
         has_update = is_version_newer(
             file_version=file_version,
             db_version=template.version,
             file_has_sequences=file_has_sequences,
             db_has_sequences=db_has_sequences,
+            file_format_version=file_format_version,
+            db_format_version=db_format_version,
         )
 
         if has_update:
-            available_version = file_version
+            available_version = file_version or file_format_version
             update_file_path = matching_file.get("file_path")
 
     return {
@@ -233,8 +290,8 @@ def check_template_update(
         "available_version": available_version,
         "update_file_path": update_file_path,
         "has_sequences": db_has_sequences,
-        "is_legacy_format": not db_has_sequences,
-        "can_start": db_has_sequences,
+        "is_legacy_format": is_legacy,
+        "can_start": can_start,
     }
 
 
@@ -243,7 +300,15 @@ async def update_single_adventure(
     template_id: str,
     user_id: str,
 ) -> dict[str, Any]:
-    """Updates an individual adventure template from its matching file in /adventures."""
+    """Updates an individual adventure template from its matching file in /adventures.
+    
+    NOTE: Existing game sessions are NOT updated. Their narrative snapshot and state
+    remain preserved as-is.
+    """
+    from backend.models.game_session import GameSession
+    from backend.models.session_state import SessionState
+    from sqlalchemy import update
+
     result = await db.execute(
         select(AdventureTemplate).where(
             AdventureTemplate.id == template_id,
@@ -261,12 +326,18 @@ async def update_single_adventure(
 
     file_path = matching["file_path"]
 
-    # Re-import with overwrite=True
+    # Capture linked sessions so they remain preserved and linked to the updated template
+    session_res = await db.execute(
+        select(GameSession.id).where(GameSession.template_id == template_id)
+    )
+    linked_session_ids = session_res.scalars().all()
+
+    # Re-import template with overwrite=True; allow_session=False ensures sessions are never touched/imported
     success = await AdventureTemplateImporter.import_file(
         db=db,
         file_path=file_path,
         owner_id=user_id,
-        allow_session=True,
+        allow_session=False,
         overwrite=True,
     )
 
@@ -281,6 +352,20 @@ async def update_single_adventure(
         ).order_by(AdventureTemplate.created_at.desc())
     )
     updated_template = updated_res.scalars().first()
+
+    # Re-link existing session records to the new template without modifying their state
+    if linked_session_ids and updated_template:
+        await db.execute(
+            update(GameSession)
+            .where(GameSession.id.in_(linked_session_ids))
+            .values(template_id=updated_template.id)
+        )
+        await db.execute(
+            update(SessionState)
+            .where(SessionState.session_id.in_(linked_session_ids))
+            .values(template_id=updated_template.id)
+        )
+        await db.commit()
 
     return {
         "status": "success",
@@ -311,17 +396,15 @@ async def update_all_adventures(
         status = check_template_update(template, files)
         if status["has_update"] and status["update_file_path"]:
             try:
-                success = await AdventureTemplateImporter.import_file(
+                res = await update_single_adventure(
                     db=db,
-                    file_path=status["update_file_path"],
-                    owner_id=user_id,
-                    allow_session=True,
-                    overwrite=True,
+                    template_id=template.id,
+                    user_id=user_id,
                 )
-                if success:
+                if res.get("status") == "success":
                     updated_titles.append(template.title)
                 else:
-                    errors.append(f"Failed to import {template.title}")
+                    errors.append(f"Failed to update {template.title}")
             except Exception as e:
                 logger.error("Error updating template %s: %s", template.id, e)
                 errors.append(f"{template.title}: {str(e)}")
