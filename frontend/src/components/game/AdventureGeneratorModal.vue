@@ -11,8 +11,11 @@ import {
   Wand2,
   Dices,
   Loader2,
+  AlertTriangle,
+  Info,
 } from 'lucide-vue-next'
 import { api, GENERATION_SAYINGS } from '@/composables/useApi'
+import { configState } from '@/store/config'
 import type { CatalogTile } from '@/types'
 
 // Modular Subcomponents
@@ -23,6 +26,7 @@ import GeneratorAdvancedSettings from './generator/GeneratorAdvancedSettings.vue
 import GeneratorProgressStream, { type LogEntry } from './generator/GeneratorProgressStream.vue'
 import GeneratorAssetStats, { type AssetStatsMap } from './generator/GeneratorAssetStats.vue'
 import GeneratorLightbox from './generator/GeneratorLightbox.vue'
+import AdventureRuleModeSelector from '@/components/create-adventure/AdventureRuleModeSelector.vue'
 
 const props = defineProps<{
   open: boolean
@@ -177,6 +181,35 @@ const form = ref({
   max_units_per_turn: null as number | null,
   generation_strictness: 'creative' as 'creative' | 'strict',
 })
+
+const generatorMode = ref<'simple' | 'advanced'>(
+  (localStorage.getItem('tw_modal_generator_mode') as 'simple' | 'advanced') || 'simple'
+)
+
+function setGeneratorMode(mode: 'simple' | 'advanced') {
+  generatorMode.value = mode
+  localStorage.setItem('tw_modal_generator_mode', mode)
+  if (mode === 'simple') {
+    form.value.scripts_generation_enabled = true
+    form.value.min_scenes = null
+    form.value.max_scenes = null
+    form.value.min_quests = null
+    form.value.max_quests = null
+    form.value.min_sequences = null
+    form.value.max_sequences = null
+    form.value.min_containers = null
+    form.value.max_containers = null
+    form.value.min_text_logs = null
+    form.value.max_text_logs = null
+    form.value.min_awards = null
+    form.value.max_awards = null
+    form.value.quest_generation_enabled = true
+    form.value.container_generation_enabled = true
+    form.value.text_log_generation_enabled = true
+    form.value.award_generation_enabled = true
+    form.value.clock_enabled = true
+  }
+}
 
 const imageStyles = ref<CatalogTile[]>([])
 const tones = ref<CatalogTile[]>([])
@@ -418,9 +451,20 @@ async function fetchLogs(advId: string) {
 }
 
 async function startGeneration() {
+  if (generatorMode.value === 'simple') {
+    form.value.scripts_generation_enabled = true
+  }
+
   if (!form.value.title.trim()) {
-    errorMessage.value = 'Please provide an adventure title.'
-    return
+    if (form.value.storyIdea.trim()) {
+      const clean = form.value.storyIdea.trim().replace(/^(\[.*?\]|\W)+/, '')
+      const firstLine = clean.split('\n')[0].replace(/[.!?].*$/, '')
+      const words = firstLine.split(/\s+/).slice(0, 5).join(' ')
+      form.value.title = words.slice(0, 45) || 'A New Reality'
+    } else {
+      errorMessage.value = 'Please provide an adventure title or story blueprint.'
+      return
+    }
   }
 
   viewState.value = 'progress'
@@ -656,6 +700,30 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="flex items-center gap-2 shrink-0">
+              <!-- Mode Toggle -->
+              <div v-if="viewState === 'form'" class="inline-flex p-0.5 rounded-lg bg-slate-900 border border-white/10 shadow-sm">
+                <button
+                  type="button"
+                  @click="setGeneratorMode('simple')"
+                  class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                  :class="generatorMode === 'simple'
+                    ? 'bg-cyan-500 text-white shadow'
+                    : 'text-slate-400 hover:text-white'"
+                >
+                  Simple
+                </button>
+                <button
+                  type="button"
+                  @click="setGeneratorMode('advanced')"
+                  class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                  :class="generatorMode === 'advanced'
+                    ? 'bg-purple-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'"
+                >
+                  Advanced
+                </button>
+              </div>
+
               <button
                 v-if="viewState === 'form'"
                 type="button"
@@ -694,6 +762,33 @@ onBeforeUnmount(() => {
               <span>{{ errorMessage }}</span>
             </div>
 
+            <!-- Helpful Intelligence / Visuals Provider Alerts -->
+            <div
+              v-if="!configState.hasLlmConfig && configState.isLoaded"
+              class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-3"
+            >
+              <div class="flex items-center gap-2.5">
+                <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
+                <span><strong>Intelligence Provider Required:</strong> No LLM is configured in Admin. Adventure generation will fail without an active LLM.</span>
+              </div>
+              <router-link to="/admin" class="px-3 py-1 rounded-lg bg-rose-600 text-white font-bold text-[10px] uppercase tracking-wider shrink-0 hover:bg-rose-500">
+                Configure
+              </router-link>
+            </div>
+
+            <div
+              v-else-if="configState.hasLlmConfig && !configState.hasT2iConfig"
+              class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3"
+            >
+              <div class="flex items-center gap-2.5">
+                <Info class="w-4 h-4 text-amber-400 shrink-0" />
+                <span><strong>Visuals Provider Not Configured:</strong> No image generation model is active in Admin. Placeholders will be used for art.</span>
+              </div>
+              <router-link to="/admin" class="px-3 py-1 rounded-lg border border-amber-500/40 bg-amber-500/20 text-amber-200 font-bold text-[10px] uppercase tracking-wider shrink-0 hover:bg-amber-500/30">
+                Configure
+              </router-link>
+            </div>
+
             <!-- 1. Basic Info (Title & Story Blueprint) -->
             <GeneratorBasicInfo
               v-model:title="form.title"
@@ -712,41 +807,64 @@ onBeforeUnmount(() => {
               :display-styles="displayStyles"
             />
 
-            <!-- 3. NEW: Time Handling & World Pacing -->
-            <GeneratorTimeSettings
-              v-model:clock-enabled="form.clock_enabled"
-              v-model:time-system="form.time_system"
-              v-model:day-label="form.day_label"
-              v-model:initial-day="form.initial_day"
-              v-model:start-time="form.start_time"
-              v-model:time-format="form.time_format"
-              v-model:pacing-minutes="form.pacing_minutes"
-              v-model:max-time-per-turn="form.max_time_per_turn"
-              v-model:unit-name="form.unit_name"
-              v-model:initial-units="form.initial_units"
-              v-model:units-per-turn="form.units_per_turn"
-              v-model:max-units-per-turn="form.max_units_per_turn"
-            />
+            <!-- SIMPLE MODE: Game Mode Selector & Auto note -->
+            <template v-if="generatorMode === 'simple'">
+              <div class="p-4 rounded-2xl bg-slate-950/60 border border-white/5 space-y-3">
+                <AdventureRuleModeSelector
+                  :model-value="form.rule_enforcement_mode"
+                  @update:model-value="form.rule_enforcement_mode = $event"
+                />
+              </div>
 
-            <!-- 4. Advanced Settings (Bounds, Rules, Modules) -->
-            <GeneratorAdvancedSettings
-              v-model:min-scenes="form.min_scenes"
-              v-model:max-scenes="form.max_scenes"
-              v-model:min-quests="form.min_quests"
-              v-model:max-quests="form.max_quests"
-              v-model:quest-generation-enabled="form.quest_generation_enabled"
-              v-model:min-containers="form.min_containers"
-              v-model:max-containers="form.max_containers"
-              v-model:container-generation-enabled="form.container_generation_enabled"
-              v-model:min-text-logs="form.min_text_logs"
-              v-model:max-text-logs="form.max_text_logs"
-              v-model:text-log-generation-enabled="form.text_log_generation_enabled"
-              v-model:min-awards="form.min_awards"
-              v-model:max-awards="form.max_awards"
-              v-model:award-generation-enabled="form.award_generation_enabled"
-              v-model:scripts-generation-enabled="form.scripts_generation_enabled"
-              v-model:rule-enforcement-mode="form.rule_enforcement_mode"
-            />
+              <div class="p-3 rounded-xl bg-slate-950/40 border border-white/5 flex items-center justify-between gap-2 text-xs text-slate-400">
+                <div class="flex items-center gap-2 text-emerald-400 font-bold">
+                  <CheckCircle2 class="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Scripting Engine Enabled</span>
+                </div>
+                <span class="text-slate-500 text-[11px]">
+                  Time pacing, quests, and asset density are automated.
+                </span>
+              </div>
+            </template>
+
+            <!-- ADVANCED MODE: Time Handling & Advanced Bounds -->
+            <template v-else>
+              <!-- 3. Time Handling & World Pacing -->
+              <GeneratorTimeSettings
+                v-model:clock-enabled="form.clock_enabled"
+                v-model:time-system="form.time_system"
+                v-model:day-label="form.day_label"
+                v-model:initial-day="form.initial_day"
+                v-model:start-time="form.start_time"
+                v-model:time-format="form.time_format"
+                v-model:pacing-minutes="form.pacing_minutes"
+                v-model:max-time-per-turn="form.max_time_per_turn"
+                v-model:unit-name="form.unit_name"
+                v-model:initial-units="form.initial_units"
+                v-model:units-per-turn="form.units_per_turn"
+                v-model:max-units-per-turn="form.max_units_per_turn"
+              />
+
+              <!-- 4. Advanced Settings (Bounds, Rules, Modules) -->
+              <GeneratorAdvancedSettings
+                v-model:min-scenes="form.min_scenes"
+                v-model:max-scenes="form.max_scenes"
+                v-model:min-quests="form.min_quests"
+                v-model:max-quests="form.max_quests"
+                v-model:quest-generation-enabled="form.quest_generation_enabled"
+                v-model:min-containers="form.min_containers"
+                v-model:max-containers="form.max_containers"
+                v-model:container-generation-enabled="form.container_generation_enabled"
+                v-model:min-text-logs="form.min_text_logs"
+                v-model:max-text-logs="form.max_text_logs"
+                v-model:text-log-generation-enabled="form.text_log_generation_enabled"
+                v-model:min-awards="form.min_awards"
+                v-model:max-awards="form.max_awards"
+                v-model:award-generation-enabled="form.award_generation_enabled"
+                v-model:scripts-generation-enabled="form.scripts_generation_enabled"
+                v-model:rule-enforcement-mode="form.rule_enforcement_mode"
+              />
+            </template>
           </div>
 
           <!-- BODY: PROGRESS VIEW -->

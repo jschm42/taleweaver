@@ -5,7 +5,7 @@ import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
-import { Sparkles, Palette, Flame, Dices, Loader2, ArrowLeft } from 'lucide-vue-next'
+import { Sparkles, Palette, Flame, Dices, Loader2, ArrowLeft, Sliders, Info, AlertTriangle, CheckCircle2 } from 'lucide-vue-next'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 // Components
@@ -14,6 +14,8 @@ import AdventureBasicInfo from '@/components/create-adventure/AdventureBasicInfo
 import AdventureGameSettings from '@/components/create-adventure/AdventureGameSettings.vue'
 import AdventureAssetSettings from '@/components/create-adventure/AdventureAssetSettings.vue'
 import AdventureCatalogSelector from '@/components/create-adventure/AdventureCatalogSelector.vue'
+import AdventureRuleModeSelector from '@/components/create-adventure/AdventureRuleModeSelector.vue'
+import AdventureWorldConstraints from '@/components/create-adventure/AdventureWorldConstraints.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -78,6 +80,44 @@ const isGenerating = ref(false)
 const isSuggestingStoryIdea = ref(false)
 const errorMsg = ref('')
 const config = ref<any>(null)
+
+const generatorMode = ref<'simple' | 'advanced'>(
+  (localStorage.getItem('tw_generator_mode') as 'simple' | 'advanced') || 'simple'
+)
+
+function setGeneratorMode(mode: 'simple' | 'advanced') {
+  generatorMode.value = mode
+  localStorage.setItem('tw_generator_mode', mode)
+  if (mode === 'simple') {
+    // In Simple mode: activate scripting engine, auto pacing, auto density/bounds
+    form.value.scripts_generation_enabled = true
+    form.value.time_auto = true
+    form.value.min_scenes = null
+    form.value.max_scenes = null
+    form.value.min_items = null
+    form.value.max_items = null
+    form.value.min_quests = null
+    form.value.max_quests = null
+    form.value.min_sequences = null
+    form.value.max_sequences = null
+    form.value.min_containers = null
+    form.value.max_containers = null
+    form.value.min_text_logs = null
+    form.value.max_text_logs = null
+    form.value.min_awards = null
+    form.value.max_awards = null
+    form.value.quest_generation_enabled = true
+    form.value.container_generation_enabled = true
+    form.value.text_log_generation_enabled = true
+    form.value.award_generation_enabled = true
+    form.value.generate_npc_images = true
+    form.value.generate_item_images = true
+    form.value.generate_scene_images = true
+    form.value.automatic_cover_generation = true
+    form.value.automatic_npc_voice_assignment = true
+    form.value.generation_strictness = 'creative'
+  }
+}
 
 const hasLlmConfig = computed(() => configState.hasLlmConfig)
 const hasT2iConfig = computed(() => configState.hasT2iConfig)
@@ -157,10 +197,27 @@ function initializeLanguage() {
 async function handleCreate() {
   form.value.title = (form.value.title || '').slice(0, 50)
 
-  if (!form.value.title.trim()) {
-    errorMsg.value = 'Title is required.'
-    return
+  if (generatorMode.value === 'simple') {
+    form.value.scripts_generation_enabled = true
+    form.value.time_auto = true
+    if (!form.value.storyIdea.trim()) {
+      errorMsg.value = 'Please provide a concept prompt for your adventure.'
+      return
+    }
   }
+
+  if (!form.value.title.trim()) {
+    if (form.value.storyIdea.trim()) {
+      const clean = form.value.storyIdea.trim().replace(/^(\[.*?\]|\W)+/, '')
+      const firstLine = clean.split('\n')[0].replace(/[.!?].*$/, '')
+      const words = firstLine.split(/\s+/).slice(0, 5).join(' ')
+      form.value.title = words.slice(0, 45) || 'A New Adventure'
+    } else {
+      errorMsg.value = 'Title is required.'
+      return
+    }
+  }
+
   if (isCoverMode.value && !sourceAdventure.value) {
     errorMsg.value = 'Cover source adventure could not be loaded.'
     return
@@ -458,6 +515,32 @@ onMounted(() => {
         <p class="text-slate-500 mt-0.5 sm:mt-1 tracking-wide text-xs sm:text-sm">Weave the parameters of your next odyssey.</p>
       </div>
       <div class="flex items-center gap-2.5 sm:gap-3">
+        <!-- Mode Switcher -->
+        <div class="inline-flex p-1 rounded-xl bg-slate-900/90 border border-white/10 shadow-md">
+          <button
+            type="button"
+            @click="setGeneratorMode('simple')"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+            :class="generatorMode === 'simple'
+              ? 'bg-gradient-to-r from-aether-primary to-cyan-500 text-white shadow'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'"
+          >
+            <Sparkles class="w-3.5 h-3.5" />
+            <span>Simple</span>
+          </button>
+          <button
+            type="button"
+            @click="setGeneratorMode('advanced')"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+            :class="generatorMode === 'advanced'
+              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'"
+          >
+            <Sliders class="w-3.5 h-3.5" />
+            <span>Advanced</span>
+          </button>
+        </div>
+
         <button
           type="button"
           :disabled="isSurprising || !hasLlmConfig"
@@ -490,8 +573,135 @@ onMounted(() => {
         :is-loading-catalogs="isLoadingCatalogs"
       />
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 items-start">
-        <!-- Configuration Panel (Left) -->
+      <!-- ================= SIMPLE MODE VIEW ================= -->
+      <div v-if="generatorMode === 'simple'" class="space-y-4 sm:space-y-6 max-w-5xl mx-auto">
+        <!-- Helpful Intelligence / Visuals Provider Alerts -->
+        <div v-if="!hasLlmConfig && configState.isLoaded" class="p-4 sm:p-5 rounded-2xl border border-rose-500/40 bg-rose-500/10 text-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div class="flex items-start sm:items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+              <AlertTriangle class="w-5 h-5" />
+            </div>
+            <div>
+              <h4 class="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-300">Intelligence Provider Required</h4>
+              <p class="text-xs text-slate-300 mt-0.5">TaleWeaver needs an active LLM (such as Google Gemini, OpenAI GPT, Anthropic Claude, or local Ollama) to weave plotlines, characters, and quests.</p>
+            </div>
+          </div>
+          <router-link to="/admin" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black uppercase tracking-wider whitespace-nowrap text-center transition-all shrink-0">
+            Configure LLM
+          </router-link>
+        </div>
+
+        <div v-else-if="hasLlmConfig && !hasT2iConfig && !isLoadingCatalogs" class="p-3.5 sm:p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-start sm:items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Info class="w-4 h-4" />
+            </div>
+            <div>
+              <h4 class="text-xs sm:text-sm font-black uppercase tracking-wider text-amber-300">Visuals Model Not Configured</h4>
+              <p class="text-xs text-slate-300 mt-0.5">No image generation model is active in Admin. You can still weave your adventure; scenes and NPCs will use atmospheric style fallbacks.</p>
+            </div>
+          </div>
+          <router-link to="/admin" class="px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold uppercase tracking-wider whitespace-nowrap text-center transition-all shrink-0">
+            Configure Visuals
+          </router-link>
+        </div>
+
+        <!-- 1. Concept Prompt Card -->
+        <div class="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-2xl md:rounded-3xl p-4 sm:p-6 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Step 1</span>
+                <span class="text-xs sm:text-sm font-black text-white uppercase tracking-wider">Concept Blueprint</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Enter a concept prompt describing the world, setting, heroes, or conflict.</p>
+            </div>
+
+            <button
+              v-if="hasLlmConfig"
+              type="button"
+              :disabled="isSuggestingStoryIdea"
+              @click="handleSuggestStoryIdea"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 self-start sm:self-auto cursor-pointer"
+              title="Use LLM to generate an inspiring concept"
+            >
+              <Sparkles class="w-3.5 h-3.5" :class="{ 'animate-spin': isSuggestingStoryIdea }" />
+              <span>{{ isSuggestingStoryIdea ? 'Inspiring...' : 'Inspire Idea' }}</span>
+            </button>
+          </div>
+
+          <textarea
+            v-model="form.storyIdea"
+            rows="5"
+            class="w-full bg-slate-950/80 border border-slate-800 focus:border-cyan-500/80 rounded-xl p-3.5 sm:p-4 text-xs sm:text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition-all resize-y custom-scrollbar"
+            placeholder="e.g. A forgotten star observatory buried beneath a glacial mountain peak. An ancient mechanical astrolabe has reawakened and started transmitting coordinates across the stars..."
+          ></textarea>
+
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-2 border-t border-white/5">
+            <label class="text-xs font-bold text-slate-400 whitespace-nowrap">Adventure Title (Optional):</label>
+            <input
+              v-model="form.title"
+              type="text"
+              maxlength="50"
+              class="flex-1 bg-slate-950/60 border border-slate-800 focus:border-cyan-500/80 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all"
+              placeholder="Leave blank to automatically derive from your concept"
+            />
+          </div>
+        </div>
+
+        <!-- 2. Game Mode Selector (RPG, Story, Chat) -->
+        <div class="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-2xl md:rounded-3xl p-4 sm:p-6 space-y-3">
+          <div>
+            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Step 2</span>
+            <h3 class="text-xs sm:text-sm font-black text-white uppercase tracking-wider mt-0.5">Game Mode</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Select how mechanics and narrative rules are enforced during play.</p>
+          </div>
+          <AdventureRuleModeSelector
+            :model-value="form.rule_enforcement_mode"
+            @update:model-value="form.rule_enforcement_mode = $event"
+          />
+        </div>
+
+        <!-- 3. Image Style & Narrative Tone Catalogs -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <AdventureCatalogSelector
+            title="Visual Style"
+            subtitle="Select one aesthetic direction"
+            :icon="Palette"
+            :items="imageStyles"
+            :selected-id="form.selected_style_id"
+            accent-color-class="bg-indigo-500/20 text-indigo-400"
+            :help-text="CREATE_ADVENTURE_HELP_TEXTS.visualStyle"
+            @select="id => form.selected_style_id = id"
+          />
+
+          <AdventureCatalogSelector
+            title="Narrative Tone"
+            subtitle="Atmosphere and description style"
+            :icon="Flame"
+            :items="tones"
+            :selected-id="form.selected_tone_id"
+            accent-color-class="bg-amber-500/20 text-amber-400"
+            :help-text="CREATE_ADVENTURE_HELP_TEXTS.narrativeTone"
+            @select="id => form.selected_tone_id = id"
+          />
+        </div>
+
+        <!-- Engine & Auto Info Footer Banner -->
+        <div class="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2 text-emerald-400 font-bold">
+            <CheckCircle2 class="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Deterministic Python Scripting Engine Active</span>
+          </div>
+          <span class="text-slate-500 text-[11px]">
+            Asset density, time pacing, quests, and containers will automatically adapt to your prompt.
+          </span>
+        </div>
+      </div>
+
+      <!-- ================= ADVANCED MODE VIEW (TWO-COLUMN BALANCED) ================= -->
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 items-start">
+        <!-- Configuration Panel (Left / Column 1) -->
         <div class="flex flex-col h-full space-y-4 sm:space-y-6">
           <div class="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-2xl md:rounded-3xl p-3.5 sm:p-5 md:p-6 space-y-4 sm:space-y-6">
             <section v-if="isCoverMode" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3.5 sm:p-4 space-y-3.5">
@@ -550,10 +760,52 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Style & Tone Selection (Right) -->
+        <!-- Style, Constraints & Asset Settings (Right / Column 2) -->
         <div class="flex flex-col gap-4 sm:gap-6">
           <AdventureAssetSettings
             v-model="form"
+          />
+
+          <!-- Min/Max Asset Counts Configuration Panel (Moved to Column 2 for balanced column heights) -->
+          <AdventureWorldConstraints
+            :min-scenes="form.min_scenes"
+            :max-scenes="form.max_scenes"
+            :min-items="form.min_items"
+            :max-items="form.max_items"
+            :quest-generation-enabled="form.quest_generation_enabled"
+            :min-quests="form.min_quests"
+            :max-quests="form.max_quests"
+            :min-sequences="form.min_sequences"
+            :max-sequences="form.max_sequences"
+            :container-generation-enabled="form.container_generation_enabled"
+            :min-containers="form.min_containers"
+            :max-containers="form.max_containers"
+            :text-log-generation-enabled="form.text_log_generation_enabled"
+            :min-text-logs="form.min_text_logs"
+            :max-text-logs="form.max_text_logs"
+            :award-generation-enabled="form.award_generation_enabled"
+            :min-awards="form.min_awards"
+            :max-awards="form.max_awards"
+            :scripts-generation-enabled="form.scripts_generation_enabled ?? true"
+            @update:min-scenes="form.min_scenes = $event"
+            @update:max-scenes="form.max_scenes = $event"
+            @update:min-items="form.min_items = $event"
+            @update:max-items="form.max_items = $event"
+            @update:quest-generation-enabled="form.quest_generation_enabled = $event"
+            @update:min-quests="form.min_quests = $event"
+            @update:max-quests="form.max_quests = $event"
+            @update:min-sequences="form.min_sequences = $event"
+            @update:max-sequences="form.max_sequences = $event"
+            @update:container-generation-enabled="form.container_generation_enabled = $event"
+            @update:min-containers="form.min_containers = $event"
+            @update:max-containers="form.max_containers = $event"
+            @update:text-log-generation-enabled="form.text_log_generation_enabled = $event"
+            @update:min-text-logs="form.min_text_logs = $event"
+            @update:max-text-logs="form.max_text_logs = $event"
+            @update:award-generation-enabled="form.award_generation_enabled = $event"
+            @update:min-awards="form.min_awards = $event"
+            @update:max-awards="form.max_awards = $event"
+            @update:scripts-generation-enabled="form.scripts_generation_enabled = $event"
           />
 
           <AdventureCatalogSelector

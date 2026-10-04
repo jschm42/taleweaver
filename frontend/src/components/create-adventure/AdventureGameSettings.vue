@@ -2,7 +2,6 @@
 import { watch } from 'vue'
 import AdventureRuleModeSelector from './AdventureRuleModeSelector.vue'
 import AdventureTimeSettings, { type TimeConfigData } from './AdventureTimeSettings.vue'
-import AdventureWorldConstraints from './AdventureWorldConstraints.vue'
 import AdventureCombatSettings from './AdventureCombatSettings.vue'
 
 type RuleMode = 'rpg' | 'story' | 'chat'
@@ -90,49 +89,7 @@ watch(
       @update:time-config="update('time_config', $event)"
     />
 
-    <!-- 3. World Density & Constraints -->
-    <AdventureWorldConstraints
-      :min-scenes="modelValue.min_scenes"
-      :max-scenes="modelValue.max_scenes"
-      :min-items="modelValue.min_items"
-      :max-items="modelValue.max_items"
-      :quest-generation-enabled="modelValue.quest_generation_enabled"
-      :min-quests="modelValue.min_quests"
-      :max-quests="modelValue.max_quests"
-      :min-sequences="modelValue.min_sequences"
-      :max-sequences="modelValue.max_sequences"
-      :container-generation-enabled="modelValue.container_generation_enabled"
-      :min-containers="modelValue.min_containers"
-      :max-containers="modelValue.max_containers"
-      :text-log-generation-enabled="modelValue.text_log_generation_enabled"
-      :min-text-logs="modelValue.min_text_logs"
-      :max-text-logs="modelValue.max_text_logs"
-      :award-generation-enabled="modelValue.award_generation_enabled"
-      :min-awards="modelValue.min_awards"
-      :max-awards="modelValue.max_awards"
-      :scripts-generation-enabled="modelValue.scripts_generation_enabled ?? false"
-      @update:min-scenes="update('min_scenes', $event)"
-      @update:max-scenes="update('max_scenes', $event)"
-      @update:min-items="update('min_items', $event)"
-      @update:max-items="update('max_items', $event)"
-      @update:quest-generation-enabled="update('quest_generation_enabled', $event)"
-      @update:min-quests="update('min_quests', $event)"
-      @update:max-quests="update('max_quests', $event)"
-      @update:min-sequences="update('min_sequences', $event)"
-      @update:max-sequences="update('max_sequences', $event)"
-      @update:container-generation-enabled="update('container_generation_enabled', $event)"
-      @update:min-containers="update('min_containers', $event)"
-      @update:max-containers="update('max_containers', $event)"
-      @update:text-log-generation-enabled="update('text_log_generation_enabled', $event)"
-      @update:min-text-logs="update('min_text_logs', $event)"
-      @update:max-text-logs="update('max_text_logs', $event)"
-      @update:award-generation-enabled="update('award_generation_enabled', $event)"
-      @update:min-awards="update('min_awards', $event)"
-      @update:max-awards="update('max_awards', $event)"
-      @update:scripts-generation-enabled="update('scripts_generation_enabled', $event)"
-    />
-
-    <!-- 4. Combat Permissions (Active only in RPG Mode) -->
+    <!-- 3. Combat Permissions (Active only in RPG Mode) -->
     <AdventureCombatSettings
       :rule-enforcement-mode="modelValue.rule_enforcement_mode"
       :can-damage-npcs="modelValue.can_damage_npcs"

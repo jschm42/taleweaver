@@ -85,6 +85,7 @@ const emit = defineEmits<{
   itemClick: [item: any]
   traverseExit: [exit: any]
   switchFlip: [entity: any]
+  exitSession: []
 }>()
 
 // --- State: Scene Image & Fallbacks ---
@@ -218,6 +219,7 @@ defineExpose({
       @open-settings="emit('openSettings')"
       @open-debug="emit('openDebug')"
       @toggle-mobile-interact="showMobileInteract = !showMobileInteract"
+      @exit-session="emit('exitSession')"
     />
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->

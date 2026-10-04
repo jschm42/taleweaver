@@ -84,6 +84,11 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     audioService.unlock()
     const normalized = content.trim().toLowerCase()
 
+    if (normalized === '/exit' || normalized === '/quit') {
+      goBack()
+      return
+    }
+
     const uiCommand = gameCommandService.resolveUiPanelCommand(normalized)
     if (uiCommand) {
       if (uiCommand === 'map') {

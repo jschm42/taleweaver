@@ -22,6 +22,7 @@ import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
 import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import AdventureGeneratorModal from '@/components/game/AdventureGeneratorModal.vue'
+import ExitSessionModal from '@/components/game/ExitSessionModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ChroniclesModal from '@/components/game/ChroniclesModal.vue'
@@ -69,6 +70,11 @@ const showNoteModal = ref(false)
 const isSavingNote = ref(false)
 const showChroniclesModal = ref(false)
 const showRestoreConfirmModal = ref(false)
+const showExitModal = ref(false)
+const handleExitSession = () => {
+  showExitModal.value = false
+  goBack()
+}
 const isLoadingCheckpoints = ref(false)
 const restoringCheckpointId = ref<string | null>(null)
 const checkpoints = ref<SessionCheckpoint[]>([])
@@ -1586,6 +1592,7 @@ watch(
       @item-contextmenu="(entity, event) => openContextMenu(entity, event)"
       @traverse-exit="handleExitClick"
       @switch-flip="openSwitchStateModal"
+      @exit-session="showExitModal = true"
     />
 
     <!-- Modals -->
@@ -1804,6 +1811,13 @@ watch(
         emitSystemMessage(`SYSTEM: Adventure '${title}' successfully created and added to your archives.`)
         addNotification(`Adventure '${title}' created successfully!`, 'success')
       }"
+    />
+
+    <ExitSessionModal
+      :open="showExitModal"
+      :adventure-title="displayAdventureTitle"
+      @close="showExitModal = false"
+      @confirm="handleExitSession"
     />
 
     <!-- HOVER TOOLTIP -->
