@@ -114,6 +114,7 @@ class EntityUpdateRequest(BaseModel):
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
     inventory: Optional[list] = None
+    is_in_inventory: Optional[bool] = None
     text_log_content: Optional[str] = None
     text_log_format: Optional[str] = None
     exit_type: Optional[str] = None
@@ -3098,12 +3099,70 @@ async def update_editor_entity(
             if payload.charisma is not None: avatar.charisma = payload.charisma
             if payload.armor_class is not None: avatar.armor_class = payload.armor_class
             if payload.exp is not None: avatar.exp = payload.exp
-            if payload.inventory is not None:
-                avatar.inventory = list(payload.inventory)
-                flag_modified(avatar, "inventory")
-            if payload.equipment is not None:
-                avatar.equipment = normalize_equipment_keys(payload.equipment)
-                flag_modified(avatar, "equipment")
+            if payload.inventory is not None or payload.equipment is not None:
+                if payload.inventory is not None:
+                    avatar.inventory = list(payload.inventory)
+                    flag_modified(avatar, "inventory")
+                if payload.equipment is not None:
+                    avatar.equipment = normalize_equipment_keys(payload.equipment)
+                    flag_modified(avatar, "equipment")
+
+                inv_item_ids = {
+                    (i if isinstance(i, str) else i.get("id"))
+                    for i in (avatar.inventory or [])
+                    if (i if isinstance(i, str) else (i.get("id") if isinstance(i, dict) else None))
+                }
+                eq_item_ids = {
+                    (v if isinstance(v, str) else (v.get("id") if isinstance(v, dict) else None))
+                    for v in (avatar.equipment or {}).values()
+                    if (v if isinstance(v, str) else (v.get("id") if isinstance(v, dict) else None))
+                }
+                avatar_all_ids = inv_item_ids | eq_item_ids
+
+                all_objs_res = await db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.template_id == template_id,
+                        WorldEntity.session_id.is_(None),
+                        WorldEntity.entity_type == "OBJECT",
+                    )
+                )
+                template_objs = all_objs_res.scalars().all()
+                all_npcs_res = await db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.template_id == template_id,
+                        WorldEntity.session_id.is_(None),
+                        WorldEntity.entity_type == "NPC",
+                    )
+                )
+                template_npcs = all_npcs_res.scalars().all()
+
+                for obj_ent in template_objs:
+                    if obj_ent.id in avatar_all_ids:
+                        obj_ent.is_in_inventory = True
+                        obj_ent.current_scene_id = "INVENTORY"
+                    elif obj_ent.is_in_inventory:
+                        is_in_npc = any(
+                            obj_ent.id in {
+                                (ni if isinstance(ni, str) else (ni.get("id") if isinstance(ni, dict) else None))
+                                for ni in (npc.inventory or [])
+                            }
+                            for npc in template_npcs
+                            if npc.inventory
+                        )
+                        if not is_in_npc:
+                            obj_ent.is_in_inventory = False
+                            if obj_ent.current_scene_id == "INVENTORY":
+                                start_sc = await AdventureLogic.resolve_initial_scene_id(db, template_id)
+                                if start_sc:
+                                    obj_ent.current_scene_id = start_sc
+
+                if isinstance(adv.original_manifest, dict):
+                    manifest = deepcopy(adv.original_manifest)
+                    if "protagonist" in manifest and isinstance(manifest["protagonist"], dict):
+                        manifest["protagonist"]["starting_inventory"] = list(inv_item_ids)
+                        manifest["protagonist"]["starting_equipment"] = dict(avatar.equipment or {})
+                        adv.original_manifest = manifest
+                        flag_modified(adv, "original_manifest")
     elif payload.target_type == "scene":
         sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None), WorldScene.id == payload.target_id))
         scene = sc_res.scalars().first()
@@ -3362,6 +3421,23 @@ async def update_editor_entity(
                 if payload.inventory is not None:
                     ent.inventory = list(payload.inventory)
                     flag_modified(ent, "inventory")
+                    npc_item_ids = {
+                        (i if isinstance(i, str) else i.get("id"))
+                        for i in ent.inventory
+                        if (i if isinstance(i, str) else (i.get("id") if isinstance(i, dict) else None))
+                    }
+                    for i_id in npc_item_ids:
+                        sub_res = await db.execute(
+                            select(WorldEntity).where(
+                                WorldEntity.template_id == template_id,
+                                WorldEntity.session_id.is_(None),
+                                WorldEntity.id == i_id,
+                            )
+                        )
+                        sub_ent = sub_res.scalars().first()
+                        if sub_ent:
+                            sub_ent.is_in_inventory = True
+                            sub_ent.current_scene_id = "INVENTORY"
                 if payload.is_hidden is not None:
                     ent.is_hidden = bool(payload.is_hidden)
                 if payload.reveal_rule is not None:
@@ -3391,6 +3467,45 @@ async def update_editor_entity(
                         raise HTTPException(status_code=400, detail="current_scene_id must contain only uppercase letters, digits, and underscores.")
                     await _ensure_template_scene_exists(db, template_id, new_scene_id)
                     ent.current_scene_id = new_scene_id
+                    if new_scene_id != "INVENTORY":
+                        ent.is_in_inventory = False
+                        avatar = await _get_template_avatar(db, template_id)
+                        if avatar:
+                            avatar_changed = False
+                            if avatar.inventory:
+                                orig_len = len(avatar.inventory)
+                                avatar.inventory = [
+                                    i for i in avatar.inventory
+                                    if (i if isinstance(i, str) else (i.get("id") if isinstance(i, dict) else None)) != ent.id
+                                ]
+                                if len(avatar.inventory) != orig_len:
+                                    flag_modified(avatar, "inventory")
+                                    avatar_changed = True
+                            if avatar.equipment:
+                                eq = dict(avatar.equipment)
+                                eq_changed = False
+                                for slot, eq_val in list(eq.items()):
+                                    slot_id = eq_val if isinstance(eq_val, str) else (eq_val.get("id") if isinstance(eq_val, dict) else None)
+                                    if slot_id == ent.id:
+                                        eq[slot] = None
+                                        eq_changed = True
+                                if eq_changed:
+                                    avatar.equipment = eq
+                                    flag_modified(avatar, "equipment")
+                                    avatar_changed = True
+                            if avatar_changed and isinstance(adv.original_manifest, dict):
+                                manifest = deepcopy(adv.original_manifest)
+                                if "protagonist" in manifest and isinstance(manifest["protagonist"], dict):
+                                    start_inv = manifest["protagonist"].get("starting_inventory") or manifest["protagonist"].get("inventory") or []
+                                    if isinstance(start_inv, list):
+                                        manifest["protagonist"]["starting_inventory"] = [
+                                            x for x in start_inv
+                                            if (x if isinstance(x, str) else (x.get("id") if isinstance(x, dict) else None)) != ent.id
+                                        ]
+                                        adv.original_manifest = manifest
+                                        flag_modified(adv, "original_manifest")
+                if payload.is_in_inventory is not None:
+                    ent.is_in_inventory = bool(payload.is_in_inventory)
                 # Apply type change first so the cascade branches below run against
                 # the NEW type. The old code computed `is_readable_object` etc.
                 # against the pre-PATCH value, which silently dropped the user's

@@ -757,12 +757,34 @@ async def start_session_for_template(
         copied_entity_image = entity_images.get(ent.id)
         if copied_entity_image is None:
             copied_entity_image = _copy_data_asset_to_session(new_session.id, "entities", ent.image_url, asset_copy_cache)
+        
+        # Determine consistent is_in_inventory state
+        is_in_inventory = bool(ent.is_in_inventory)
+        if ent.current_scene_id != "INVENTORY":
+            is_in_inventory = False
+        elif avatar and avatar.inventory:
+            avatar_inv_ids = {
+                (i if isinstance(i, str) else (i.get("id") if isinstance(i, dict) else None))
+                for i in avatar.inventory
+            }
+            if ent.id not in avatar_inv_ids:
+                is_in_npc = any(
+                    ent.id in {
+                        (ni if isinstance(ni, str) else (ni.get("id") if isinstance(ni, dict) else None))
+                        for ni in (other.inventory or [])
+                    }
+                    for other in entities
+                    if other.entity_type == "NPC" and other.inventory
+                )
+                if not is_in_npc:
+                    is_in_inventory = False
+
         new_ent = WorldEntity(
             id=ent.id, session_id=new_session.id, template_id=None,
             entity_type=ent.entity_type, name=ent.name, description=ent.description,
             current_scene_id=ent.current_scene_id, spatial_position=ent.spatial_position,
             image_url=(copied_entity_image or ent.image_url), item_type=ent.item_type, wearable_slots=ent.wearable_slots,
-            is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, unlock_rule=ent.unlock_rule, is_portable=ent.is_portable,
+            is_in_inventory=is_in_inventory, is_hidden=ent.is_hidden, unlock_rule=ent.unlock_rule, is_portable=ent.is_portable,
             combination_ingredients=ent.combination_ingredients, reveals_item_id=ent.reveals_item_id,
             is_final_state=ent.is_final_state, state_comment=ent.state_comment,
             npc_type=ent.npc_type, movement_type=ent.movement_type,

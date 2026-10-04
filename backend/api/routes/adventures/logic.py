@@ -548,7 +548,9 @@ class AdventureLogic:
             current_scene = str(state.current_scene_id or "").strip().lower().replace("-", "_").replace(" ", "_")
             if ent_scene != current_scene:
                 continue
-            if ent.get("is_hidden") or ent.get("is_in_inventory"):
+            if ent.get("is_hidden"):
+                continue
+            if ent.get("is_in_inventory") and ent_scene in {"inventory", ""}:
                 continue
             if str(ent.get("id") or "") in contained_item_ids:
                 continue
