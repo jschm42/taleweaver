@@ -380,6 +380,7 @@ class GameSessionResponse(BaseModel):
     copied_from_id: Optional[str] = None
     max_memory_turns: Optional[int] = 10
     enable_history_compression: Optional[bool] = True
+    is_legacy_format: bool = False
 
     @field_validator("selected_tone", mode="before")
     @classmethod
@@ -487,6 +488,7 @@ class ChatResponse(BaseModel):
     prompt_suggestions: list[str] = Field(default_factory=list)
     world_memories: Optional[list[dict[str, Any]]] = Field(default_factory=list)
     world_rumors: Optional[list[dict[str, Any]]] = Field(default_factory=list)
+    is_legacy_format: bool = False
     full_world: Optional[AdventureTemplateDebugResponse] = None
 
 class AdventureTemplateImportPayload(BaseModel):

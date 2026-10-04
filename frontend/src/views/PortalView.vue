@@ -65,6 +65,7 @@ const {
   importWarningType,
   importConflicts,
   importInput,
+  importAccept,
   loadingWordIndex,
   pendingCards,
   visibleTemplates,
@@ -117,6 +118,19 @@ const {
 } = usePortalData()
 
 watch(importInput, () => undefined)
+
+watch(
+  activeSection,
+  (section) => {
+    importAccept.value = section === 'sessions' ? '.ads' : '.adv,.adz'
+  },
+  { immediate: true }
+)
+
+function handleImport(kind?: 'templates' | 'sessions') {
+  const targetKind = kind || (activeSection.value === 'sessions' ? 'session' : 'adventure')
+  triggerImportPicker(targetKind === 'sessions' ? 'session' : 'adventure')
+}
 
 const isAdmin = computed(() => authState.user?.role === 'admin')
 
@@ -314,7 +328,7 @@ onUnmounted(() => {
           :is-updating-all="isUpdatingAll"
           @change-section="activeSection = $event"
           @delete-all-adventures="onDeleteAllAdventures"
-          @import="triggerImportPicker"
+          @import="handleImport"
           @restore-defaults="executeRestoreDefaults"
           @update-all="updateAllAdventures"
           @delete-all-sessions="onDeleteAllSessions"
@@ -379,7 +393,7 @@ onUnmounted(() => {
       type="file"
       ref="importInput"
       style="display: none"
-      accept=".adv,.adz,.ads"
+      :accept="importAccept"
       @change="onImportFileSelected"
     />
 

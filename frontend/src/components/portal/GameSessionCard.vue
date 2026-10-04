@@ -79,8 +79,8 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
 
       <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-16 sm:h-24"></div>
 
-      <!-- Status Badge -->
-      <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3">
+      <!-- Status & Format Badges -->
+      <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 flex flex-wrap items-center gap-1.5">
         <span
           class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs uppercase tracking-widest font-black"
           :class="{
@@ -96,6 +96,23 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
             (props.session.is_paused ? 'Paused' : 'Active')
           }}
         </span>
+
+        <!-- Outdated Format Warning Badge -->
+        <div v-if="props.session.is_legacy_format">
+          <div class="group/legacy relative">
+            <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-rose-500/20 text-rose-400 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-rose-500/30 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md shadow-lg shadow-rose-500/10 cursor-help">
+              <i class="ra ra-skull text-[10px] sm:text-xs"></i>
+              <span>Outdated Format</span>
+            </div>
+            <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-rose-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/legacy:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
+              <div class="text-rose-400 uppercase tracking-[0.2em] mb-1 flex items-center gap-2">
+                <i class="ra ra-warning"></i>
+                Format Incompatible
+              </div>
+              This session was created with an outdated adventure format. Unpredictable side effects may occur during gameplay.
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Action Dots & Note Icon -->
@@ -189,6 +206,18 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
             <Clock class="w-3 h-3 opacity-50" />
             {{ props.session.copied_from_id ? 'Copied:' : 'Started:' }} {{ formatDate(props.session.created_at) }}
           </p>
+        </div>
+
+        <!-- Outdated Format Alert in Card Content -->
+        <div
+          v-if="props.session.is_legacy_format"
+          class="mt-2.5 p-2 sm:p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-300 text-[10px] sm:text-xs flex items-start gap-2"
+        >
+          <i class="ra ra-warning text-xs sm:text-sm text-rose-400 shrink-0 mt-0.5"></i>
+          <div class="leading-relaxed">
+            <span class="font-bold text-rose-300 block">Outdated Adventure Format</span>
+            <span class="text-slate-300 text-[10px] sm:text-[11px]">This session was created with an outdated adventure format. Unpredictable side effects may occur.</span>
+          </div>
         </div>
       </div>
 

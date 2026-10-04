@@ -164,6 +164,7 @@ export interface GameSession {
   copied_from_id?: string | null
   max_memory_turns?: number
   enable_history_compression?: boolean
+  is_legacy_format?: boolean
 }
 
 export interface WorldMemory {

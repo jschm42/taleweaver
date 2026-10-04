@@ -244,6 +244,61 @@ async def test_openrouter_async_retries_with_available_providers_on_provider_mis
     assert calls[1]["extra_body"]["provider"]["allow_fallbacks"] is True
 
 
+@pytest.mark.asyncio
+async def test_openrouter_routing_funnel_rejection_retries_without_provider_filter(monkeypatch):
+    """When OpenRouter returns a routing funnel 404 (all candidates removed), retry without provider filter."""
+    user = _make_user(
+        llm_settings={
+            "small_model_provider": "openrouter",
+            "small_openrouter_provider": "NonExistentProvider",
+        },
+        encrypted_api_keys={"openrouter": "placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    router = GameMasterLLM(user, provider="openrouter", model_category="small")
+
+    calls = []
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception(
+                "NotFoundError: OpenrouterException - {'error': {'message': "
+                "'No endpoints found for openai/gpt-5-mini. Every candidate endpoint was removed during routing: "
+                "Filter by Fallback removed openai.'}}"
+            )
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_simple_task(
+        system_prompt="sys",
+        user_prompt="hello",
+        model="openai/gpt-5-mini",
+    )
+
+    assert out == "ok"
+    assert len(calls) == 2
+    # First call had restricted provider
+    assert calls[0]["extra_body"]["provider"]["order"] == ["NonExistentProvider"]
+    # Second retry call removed the provider restriction
+    assert "provider" not in calls[1].get("extra_body", {})
+
+
+
 def test_thinking_defaults_to_disabled_when_not_configured(monkeypatch):
     monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
     user = _make_user(llm_settings={"small_model": "gpt-4o-mini"})

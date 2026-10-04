@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'changeSection', section: 'templates' | 'sessions'): void
-  (e: 'import'): void
+  (e: 'import', kind?: 'templates' | 'sessions'): void
   (e: 'restore-defaults'): void
   (e: 'delete-all-adventures'): void
   (e: 'delete-all-sessions'): void
@@ -44,7 +44,7 @@ onUnmounted(() => {
 
 function runAndClose(action: 'import' | 'restore' | 'delete-all' | 'update-all') {
   isMenuOpen.value = false
-  if (action === 'import') emit('import')
+  if (action === 'import') emit('import', props.activeSection)
   else if (action === 'restore') emit('restore-defaults')
   else if (action === 'update-all') emit('update-all')
   else if (action === 'delete-all') {
@@ -90,7 +90,7 @@ function runAndClose(action: 'import' | 'restore' | 'delete-all' | 'update-all')
         </button>
         <button
           class="px-3 lg:px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-[10px] lg:text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
-          @click="emit('import')"
+          @click="emit('import', 'templates')"
         >
           <i class="ra ra-download"></i>
           <span class="hidden lg:inline">Import Adventure</span>
@@ -118,7 +118,7 @@ function runAndClose(action: 'import' | 'restore' | 'delete-all' | 'update-all')
         </button>
         <button
           class="px-3 lg:px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-[10px] lg:text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
-          @click="emit('import')"
+          @click="emit('import', 'sessions')"
         >
           <i class="ra ra-download"></i>
           <span class="hidden lg:inline">Import Session</span>

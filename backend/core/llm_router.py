@@ -118,6 +118,20 @@ class GameMasterLLM:
                         retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
                         return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
 
+                    err_str = str(exc)
+                    if "removed during routing" in err_str or "No endpoints found" in err_str:
+                        extra_body = dict(kwargs.get("extra_body") or {})
+                        if "provider" in extra_body:
+                            logger.warning(
+                                "OpenRouter provider routing failed for model '%s'. Retrying with unrestricted fallback routing.",
+                                kwargs.get("model"),
+                            )
+                            retry_kwargs = dict(kwargs)
+                            new_extra_body = dict(extra_body)
+                            new_extra_body.pop("provider", None)
+                            retry_kwargs["extra_body"] = new_extra_body
+                            return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
+
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
                     backoff_delay = 0.75 * (attempt + 1)
                     logger.warning(
@@ -164,6 +178,20 @@ class GameMasterLLM:
                             kwargs.get("model"),
                         )
                         return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
+
+                    err_str = str(exc)
+                    if "removed during routing" in err_str or "No endpoints found" in err_str:
+                        extra_body = dict(kwargs.get("extra_body") or {})
+                        if "provider" in extra_body:
+                            logger.warning(
+                                "OpenRouter provider routing failed for model '%s'. Retrying with unrestricted fallback routing.",
+                                kwargs.get("model"),
+                            )
+                            retry_kwargs = dict(kwargs)
+                            new_extra_body = dict(extra_body)
+                            new_extra_body.pop("provider", None)
+                            retry_kwargs["extra_body"] = new_extra_body
+                            return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
                     backoff_delay = 0.75 * (attempt + 1)
@@ -919,7 +947,7 @@ class GameMasterLLM:
         if not self.openrouter_provider:
             return
 
-        providers = [p.strip() for p in self.openrouter_provider.split(",") if p.strip()]
+        providers = [p.strip() for p in self.openrouter_provider.split(",") if p.strip() and "/" not in p]
         if not providers:
             return
 

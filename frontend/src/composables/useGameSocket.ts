@@ -32,6 +32,7 @@ export interface UseGameSocket {
   quests: Ref<any[]>
   awards: Ref<any[]>
   isCompleted: Ref<boolean>
+  isLegacyFormat: Ref<boolean>
   language: Ref<string>
   statusText: Ref<string>
   statusNote: Ref<string>
@@ -91,6 +92,7 @@ export function useGameSocket(): UseGameSocket {
   const activeSequence = ref<any | null>(null)
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
+  const isLegacyFormat = ref(false)
   const language = ref<string>(localStorage.getItem('tw_bable_fish_lang') || '')
   const statusText = ref('')
   const statusNote = ref('')
@@ -248,6 +250,9 @@ export function useGameSocket(): UseGameSocket {
     }
     if (data.is_completed !== undefined) {
       isCompleted.value = !!data.is_completed
+    }
+    if (data.is_legacy_format !== undefined) {
+      isLegacyFormat.value = !!data.is_legacy_format
     }
     if (data.input_locked !== undefined) {
       inputLocked.value = !!data.input_locked
@@ -895,6 +900,7 @@ export function useGameSocket(): UseGameSocket {
     activeSequence,
     awards,
     isCompleted,
+    isLegacyFormat,
     language,
     statusText,
     statusNote,

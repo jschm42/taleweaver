@@ -21,6 +21,7 @@ from backend.engine.session_exporter import SessionExporter
 from backend.engine.session_importer import SessionImporter
 from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.adventure_updates import is_legacy_session
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -470,6 +471,7 @@ async def list_sessions(
             status=g.status,
             status_note=g.status_note,
             copied_from_id=g.copied_from_id,
+            is_legacy_format=is_legacy_session(session=g, state=s, template=a),
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]
@@ -1388,6 +1390,7 @@ async def _get_session_response(db: AsyncSession, game_id: str, current_user_id:
         status=g.status,
         status_note=g.status_note,
         copied_from_id=g.copied_from_id,
+        is_legacy_format=is_legacy_session(session=g, state=s, template=a),
         max_memory_turns=getattr(s, "max_memory_turns", 10) if s else 10,
         enable_history_compression=getattr(s, "enable_history_compression", True) if s else True,
     )

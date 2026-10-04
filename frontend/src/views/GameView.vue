@@ -208,7 +208,10 @@ const {
   turnError,
   retryLastAction,
   cancelTurnError,
+  isLegacyFormat,
 } = useGameSocket()
+
+const showLegacyFormatWarning = ref(true)
 
 if (import.meta.env.DEV) {
   ;(window as any).__openGeneratorModal = openGeneratorModal
@@ -1499,8 +1502,29 @@ watch(
     class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative"
     :class="{ 'selection-mode': activeActionId }"
   >
-    <div v-if="configState.isLoaded && !configState.hasLlmConfig" class="absolute top-16 inset-x-6 z-50 pointer-events-auto">
-      <SetupWarningBanner />
+    <div class="absolute top-16 inset-x-4 sm:inset-x-6 z-50 pointer-events-auto flex flex-col gap-2.5">
+      <div v-if="configState.isLoaded && !configState.hasLlmConfig">
+        <SetupWarningBanner />
+      </div>
+
+      <div
+        v-if="isLegacyFormat && showLegacyFormatWarning"
+        class="bg-rose-950/90 border border-rose-500/40 rounded-xl p-3 sm:p-4 text-rose-200 shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3"
+      >
+        <div class="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm">
+          <i class="ra ra-warning text-base sm:text-lg text-rose-400 shrink-0"></i>
+          <div>
+            <strong class="font-bold text-rose-300">Outdated Adventure Format:</strong>
+            <span class="text-slate-200 ml-1">This session was created with an outdated adventure format. Unpredictable side effects may occur during gameplay.</span>
+          </div>
+        </div>
+        <button
+          class="text-rose-400 hover:text-white text-xs uppercase tracking-wider font-bold px-2 py-1 rounded bg-white/5 hover:bg-white/10 shrink-0"
+          @click="showLegacyFormatWarning = false"
+        >
+          Dismiss
+        </button>
+      </div>
     </div>
 
     <ImmersiveGameView

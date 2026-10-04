@@ -29,6 +29,7 @@ export interface UsePortalDataResult {
   importWarningType: Ref<PortalImportWarningType>
   importConflicts: Ref<Array<{ title: string; already_exists: boolean }>>
   importInput: Ref<HTMLInputElement | null>
+  importAccept: Ref<string>
   loadingWordIndex: Ref<number>
   pendingCards: ComputedRef<PendingCard[]>
   visibleTemplates: ComputedRef<AdventureTemplateSummary[]>
@@ -55,7 +56,7 @@ export interface UsePortalDataResult {
   performImportExamples: () => Promise<void>
   executeRestoreDefaults: () => Promise<void>
   performRestoreDefaults: () => Promise<void>
-  triggerImportPicker: () => void
+  triggerImportPicker: (kindOrAccept?: 'adventure' | 'session' | string) => void
   onImportFileSelected: (event: Event) => Promise<void>
   exportAdventureAdz: (adventureId: string, title: string) => Promise<void>
   exportAdventureAdv: (adventureId: string, title: string) => Promise<void>
@@ -209,6 +210,7 @@ export function usePortalData(): UsePortalDataResult {
   })
 
   const importInput = ref<HTMLInputElement | null>(null)
+  const importAccept = ref<string>('.adv,.adz')
 
   /** Loads templates and sessions and synchronizes pending generation state. */
   async function fetchPortalData() {
@@ -522,9 +524,21 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Opens hidden file picker for manual adventure import. */
-  function triggerImportPicker() {
-    importInput.value?.click()
+  /** Opens hidden file picker for manual adventure or session import. */
+  function triggerImportPicker(kindOrAccept?: 'adventure' | 'session' | string) {
+    let accept = '.adv,.adz'
+    if (kindOrAccept === 'session' || kindOrAccept === 'sessions' || kindOrAccept === '.ads') {
+      accept = '.ads'
+    } else if (kindOrAccept === 'adventure' || kindOrAccept === 'templates' || kindOrAccept === '.adv,.adz') {
+      accept = '.adv,.adz'
+    } else if (kindOrAccept) {
+      accept = kindOrAccept
+    }
+    importAccept.value = accept
+    if (importInput.value) {
+      importInput.value.accept = accept
+      importInput.value.click()
+    }
   }
 
   async function executeFileImport(
@@ -615,6 +629,16 @@ export function usePortalData(): UsePortalDataResult {
     const file = target.files[0]
 
     const lower = file.name.toLowerCase()
+    if (importAccept.value === '.ads' && !lower.endsWith('.ads')) {
+      errorMsg.value = 'Only .ads session files can be imported here.'
+      target.value = ''
+      return
+    }
+    if (importAccept.value === '.adv,.adz' && !lower.endsWith('.adz') && !lower.endsWith('.adv')) {
+      errorMsg.value = 'Only .adv and .adz adventure files can be imported here.'
+      target.value = ''
+      return
+    }
     if (!lower.endsWith('.adz') && !lower.endsWith('.adv') && !lower.endsWith('.ads')) {
       errorMsg.value = 'Only .adv, .adz, and .ads are supported as import formats.'
       target.value = ''
@@ -814,6 +838,7 @@ export function usePortalData(): UsePortalDataResult {
     importWarningType,
     importConflicts,
     importInput,
+    importAccept,
     loadingWordIndex,
     pendingCards,
     visibleTemplates,

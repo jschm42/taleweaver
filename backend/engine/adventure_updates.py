@@ -17,6 +17,8 @@ from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.config import settings
 from backend.engine.adventure_importer import AdventureTemplateImporter
 from backend.models.adventure_template import AdventureTemplate
+from backend.models.game_session import GameSession
+from backend.models.session_state import SessionState
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +247,49 @@ def is_legacy_template(template: AdventureTemplate) -> bool:
     # If it was imported (has origin_id or manifest) and lacks sequences:
     if (template.origin_id or template.original_manifest) and not (template.sequences and len(template.sequences) > 0):
         return True
+
+    return False
+
+
+def is_legacy_session(
+    session: Optional[GameSession] = None,
+    state: Optional[SessionState] = None,
+    template: Optional[AdventureTemplate] = None,
+) -> bool:
+    """
+    Checks if a game session was created with an outdated/legacy adventure format (< CURRENT_VERSION)
+    or is linked to a legacy template without sequence support.
+    """
+    if template and is_legacy_template(template):
+        return True
+
+    if not state and session and getattr(session, "state", None):
+        state = session.state
+
+    if state:
+        snapshot = AdventureLogic.extract_manifest_snapshot(state)
+        manifest = snapshot.get("original_manifest") or {}
+        manifest_version = manifest.get("format_version") or manifest.get("version")
+        if manifest_version:
+            try:
+                if parse_semver(str(manifest_version)) < parse_semver(CURRENT_VERSION):
+                    return True
+            except Exception:
+                if str(manifest_version) < CURRENT_VERSION:
+                    return True
+
+        # Check if imported but lacks sequences
+        is_imported = bool(
+            manifest
+            or (template and (template.origin_id or template.original_manifest))
+        )
+        has_sequences = bool(
+            (manifest.get("sequences") and len(manifest["sequences"]) > 0)
+            or (template and template.sequences and len(template.sequences) > 0)
+            or getattr(state, "active_sequence_id", None)
+        )
+        if is_imported and not has_sequences:
+            return True
 
     return False
 

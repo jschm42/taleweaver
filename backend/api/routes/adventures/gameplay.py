@@ -18,6 +18,7 @@ from backend.api.routes.adventures.gameplay_logic import (
     WALKTHROUGH_REVEAL_COST,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.engine.adventure_updates import is_legacy_session
 from backend.api.routes.adventures.schemas import (
     ChatRequest,
     ChatResponse,
@@ -547,6 +548,7 @@ async def get_chat_history(
         prompt_suggestions=prompt_suggestions,
         world_memories=state.world_memories or [],
         world_rumors=state.world_rumors or [],
+        is_legacy_format=is_legacy_session(session=state.session if state else None, state=state, template=adventure),
         full_world=full_world_debug,
     )
 
