@@ -1001,6 +1001,35 @@ class GameTurnManager:
                 # Standard slash command handling (equip, take_direct, etc.)
                 async for chunk in self._handle_slash(user_msg, response):
                     yield chunk
+
+                pickup = getattr(self.interactions, "pending_pickup_trigger", None)
+                self.interactions.pending_pickup_trigger = None
+                if pickup:
+                    item_name = pickup.get("item_name") or "the item"
+                    cue = pickup.get("cue") or ""
+                    if pickup.get("mode") == "narration":
+                        reaction_prompt = (
+                            f"[ITEM_PICKUP] The player just picked up {item_name}. "
+                            "Narrate ONLY the immediate reaction to this action in one or two short paragraphs. "
+                            "Do NOT change world state, award items, move the player, or advance the plot beyond this reaction."
+                        )
+                    else:
+                        reaction_prompt = (
+                            f"[ITEM_PICKUP] The player just picked up {item_name}. "
+                            "React to this action as the Game Master: let present NPCs respond in character and "
+                            "apply any rules or consequences that now trigger."
+                        )
+                    if cue:
+                        reaction_prompt += f" Author's cue for this moment: {cue}"
+                    yield f"event: status\ndata: {json.dumps({'content': 'The Game Master reacts...'})}\n\n"
+                    try:
+                        async for chunk in self._run_llm_cycle(reaction_prompt, False, language=language):
+                            yield chunk
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        user_safe_error = _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
+                        yield f"event: error\ndata: {json.dumps({'detail': user_safe_error, 'retryable': True})}\n\n"
                 return
 
         blocked_message = await self._guard_non_visible_inspect_or_search(user_msg)

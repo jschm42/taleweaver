@@ -32,6 +32,8 @@ const props = defineProps<{
     is_hidden: boolean
     spatial_position: string
     reveals_item_id: string
+    pickup_trigger_mode?: string
+    pickup_trigger_cue?: string
     switch_states_json: string
     switch_initial_state: string
     switch_transitions_json: string
@@ -63,6 +65,8 @@ const localForm = ref({
   moveable: false,
   allowed_scenes_input: [] as string[],
   notes: '',
+  pickup_trigger_mode: 'silent',
+  pickup_trigger_cue: '',
   ...props.initialForm
 })
 const switchStates = ref<string[]>([])
@@ -915,6 +919,30 @@ const textLogPreviewClass = computed(() => {
                       TRUE (Fixed)
                     </div>
                   </div>
+                </div>
+
+                <!-- Pickup reaction (GM / NPC comment after the player takes this item) -->
+                <div v-if="localForm.is_portable && currentItemType !== 'WEARABLE'" class="space-y-3 border-t border-white/5 pt-4">
+                  <div class="space-y-1">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">On Pickup</label>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">Choose whether the Game Master or an NPC reacts when the player takes this item.</p>
+                  </div>
+                  <select
+                    v-model="localForm.pickup_trigger_mode"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-emerald-500/50 outline-none transition-all"
+                  >
+                    <option value="silent">Silent (no reaction)</option>
+                    <option value="narration">Narration Pass (short reaction only)</option>
+                    <option value="turn">Full Turn (NPCs and rules may react)</option>
+                  </select>
+                  <textarea
+                    v-if="localForm.pickup_trigger_mode && localForm.pickup_trigger_mode !== 'silent'"
+                    v-model="localForm.pickup_trigger_cue"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Optional cue for the GM, e.g. 'The HR clerk smirks and warns Arthur that signing is binding.'"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none transition-all resize-none"
+                  ></textarea>
                 </div>
 
                 <!-- Hidden state & Reveal rule for Objects -->

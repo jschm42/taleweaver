@@ -11,6 +11,7 @@ PUZZLE_JSON_ENFORCEMENT_BLOCK = (
     "Every narrative puzzle must map to deterministic engine fields. Do not invent free-form puzzle logic without state bindings.\n"
     "Use these fields explicitly where applicable: `is_locked`, `lock_description`, `combination_ingredients`, `reveals_item_id`, `is_hidden`, `reveal_rule`, `is_portable`, `spatial_position`, `wearable_slots`, `item_type`, `stat_modifier_strength`, `metadata_json.code_to_unlock`, `metadata_json.item_to_unlock`, `metadata_json.rule_to_unlock`, `rule_to_unlock`, `voice`, and time controls like `extra_time_minutes`.\n"
     "Design puzzles so they can be resolved by concrete world state changes (entity updates, inventory/equipment changes, unlocks, reveals, movement), not by vague narration alone.\n"
+    "PICKUP REACTIONS: For narratively important portable items (e.g. a contract an NPC wants the player to take), you may set `metadata_json.pickup_trigger` with a `mode` of `narration` or `turn` and an optional short `cue` GM hint. `narration` triggers a short GM reaction only; `turn` lets NPCs and rules react. Omit it (silent) for ordinary items.\n"
 )
 
 PUZZLE_DESIGN_PATTERNS_BLOCK = (

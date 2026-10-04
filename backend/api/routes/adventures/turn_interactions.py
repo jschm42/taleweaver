@@ -38,6 +38,7 @@ class TurnInteractionsManager:
 
     def __init__(self, manager: GameTurnManager) -> None:
         self.manager = manager
+        self.pending_pickup_trigger: dict[str, Any] | None = None
 
     @property
     def db(self):
@@ -702,6 +703,8 @@ class TurnInteractionsManager:
         return message
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
+        # Set when a take_direct picked up an item configured with a pickup trigger.
+        self.pending_pickup_trigger: dict[str, Any] | None = None
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_payload = await self._build_map_payload()
@@ -789,6 +792,18 @@ class TurnInteractionsManager:
                 flag_modified(self.state, "entity_states")
                 response = f"Added {ent.name} to your inventory."
                 await self._check_special_action_unlocks("FIND_ITEM", ent.id)
+
+                pickup_meta = ent.metadata_json if isinstance(ent.metadata_json, dict) else {}
+                pickup_cfg = pickup_meta.get("pickup_trigger")
+                if isinstance(pickup_cfg, dict):
+                    pickup_mode = str(pickup_cfg.get("mode") or "silent").strip().lower()
+                    if pickup_mode in {"narration", "turn"}:
+                        self.pending_pickup_trigger = {
+                            "mode": pickup_mode,
+                            "cue": str(pickup_cfg.get("cue") or "").strip(),
+                            "item_name": ent.name,
+                            "item_id": ent.id,
+                        }
             else:
                 response = "You cannot take that."
         
@@ -961,6 +976,9 @@ class TurnInteractionsManager:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': seq_msg})}\n\n"
 
         await self.db.commit()
+        if self.pending_pickup_trigger:
+            # Caller chains an LLM pass, which emits the final event itself.
+            return
         final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),

@@ -124,6 +124,8 @@ class EntityUpdateRequest(BaseModel):
     is_hidden: Optional[bool] = None
     spatial_position: Optional[str] = None
     reveals_item_id: Optional[str] = None
+    pickup_trigger_mode: Optional[str] = None
+    pickup_trigger_cue: Optional[str] = None
     switch_states: Optional[list[str]] = None
     switch_initial_state: Optional[str] = None
     switch_transitions: Optional[list[dict[str, Any]]] = None
@@ -3640,6 +3642,28 @@ async def update_editor_entity(
                 if payload.reveals_item_id is not None:
                     normalized = str(payload.reveals_item_id or "").strip().upper()
                     ent.reveals_item_id = normalized or None
+
+                # Pickup reaction: optional narration/turn pass after the player takes this item.
+                if payload.pickup_trigger_mode is not None or payload.pickup_trigger_cue is not None:
+                    existing_trigger = metadata_json.get("pickup_trigger")
+                    if not isinstance(existing_trigger, dict):
+                        existing_trigger = {}
+                    trigger_mode = str(
+                        payload.pickup_trigger_mode
+                        if payload.pickup_trigger_mode is not None
+                        else existing_trigger.get("mode") or "silent"
+                    ).strip().lower()
+                    if trigger_mode not in {"silent", "narration", "turn"}:
+                        raise HTTPException(status_code=400, detail="pickup_trigger_mode must be one of silent, narration, turn.")
+                    trigger_cue = str(
+                        payload.pickup_trigger_cue
+                        if payload.pickup_trigger_cue is not None
+                        else existing_trigger.get("cue") or ""
+                    ).strip()[:500]
+                    if trigger_mode == "silent" and not trigger_cue:
+                        metadata_json.pop("pickup_trigger", None)
+                    else:
+                        metadata_json["pickup_trigger"] = {"mode": trigger_mode, "cue": trigger_cue}
                 
                 # 3. Switch logic (only for SWITCH items)
                 if is_switch_object:
