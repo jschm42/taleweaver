@@ -211,6 +211,31 @@ def _copy_data_asset_to_session(
         logger.exception("Failed copying asset to session folder: %s -> %s", source_path, target_path)
         return source_url
 
+    # Ensure thumbnail exists in session visuals
+    target_stem, target_ext = os.path.splitext(target_path)
+    target_thumb_path = f"{target_stem}_thumb{target_ext}"
+    source_stem, source_ext = os.path.splitext(source_path)
+    source_thumb_path = f"{source_stem}_thumb{source_ext}"
+    if os.path.isfile(source_thumb_path):
+        try:
+            shutil.copy2(source_thumb_path, target_thumb_path)
+        except OSError:
+            logger.warning("Failed copying asset thumbnail to session folder: %s -> %s", source_thumb_path, target_thumb_path)
+    else:
+        try:
+            from PIL import Image
+
+            def _gen_thumb():
+                with Image.open(target_path) as img:
+                    img.thumbnail((480, 480), Image.Resampling.LANCZOS)
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
+                    img.save(target_thumb_path, optimize=True, quality=80)
+
+            _gen_thumb()
+        except Exception as e:
+            logger.warning("Could not generate thumbnail for session asset %s: %s", target_path, e)
+
     target_url = local_path_to_data_url(target_path)
     cache[normalized_source_url] = target_url
     return target_url

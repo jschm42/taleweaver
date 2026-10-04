@@ -39,6 +39,15 @@ const systemContainerRef = ref<HTMLElement | null>(null)
 
 const isTakingAll = ref(false)
 const brokenImages = ref<Record<string, boolean>>({})
+const thumbFailed = ref<Record<string, boolean>>({})
+
+function getSceneItemImageUrl(path?: string | null): string {
+  if (!path) return ''
+  if (thumbFailed.value[path]) {
+    return getOriginalImageUrl(path)
+  }
+  return getImageUrl(path, { thumbnail: true })
+}
 
 function handleImageError(path?: string | null) {
   if (!path) return
@@ -47,9 +56,8 @@ function handleImageError(path?: string | null) {
 
 function onImageLoadError(e: Event, path?: string | null) {
   if (!path) return
-  const target = e.target as HTMLImageElement
-  if (target && target.src && target.src.includes('_thumb')) {
-    target.src = getOriginalImageUrl(path)
+  if (!thumbFailed.value[path]) {
+    thumbFailed.value[path] = true
   } else {
     handleImageError(path)
   }
@@ -414,7 +422,7 @@ function handleExitMouseMove(event: MouseEvent) {
                 <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-950/90 border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform my-1">
                   <img
                     v-if="item.image_url && showImage(item.image_url)"
-                    :src="getImageUrl(item.image_url, { thumbnail: true })"
+                    :src="getSceneItemImageUrl(item.image_url)"
                     :alt="item.name"
                     class="w-full h-full object-cover"
                     @error="onImageLoadError($event, item.image_url)"

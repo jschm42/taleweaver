@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -214,6 +215,20 @@ class SafeStaticFiles(StaticFiles):
         lowered = path.lower()
         if any(lowered.endswith(ext) for ext in self._BLOCKED_EXTENSIONS):
             raise StarletteHTTPException(status_code=403, detail="Access denied")
+
+        full_path, stat_result = self.lookup_path(path)
+        if stat_result is None and "_thumb." in lowered:
+            m = re.match(r"^(.*)_thumb(\.[a-zA-Z0-9]+)$", path, re.IGNORECASE)
+            if m:
+                source_rel = f"{m.group(1)}{m.group(2)}"
+                source_full, source_stat = self.lookup_path(source_rel)
+                if source_stat is not None and os.path.isfile(source_full):
+                    try:
+                        from backend.engine.media_engine import MediaEngine
+                        await MediaEngine._generate_thumbnail(source_full)
+                    except Exception as e:
+                        logger.warning("Dynamic thumbnail generation failed for %s: %s", source_full, e)
+
         return await super().get_response(path, scope)
 
 # Mount the entire DATA_DIR under /data for robustness, with security filters

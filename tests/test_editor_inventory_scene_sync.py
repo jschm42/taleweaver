@@ -1,3 +1,5 @@
+import os
+import shutil
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -138,3 +140,48 @@ async def test_editor_inventory_to_scene_sync(client, setup_test_db):
         session_entities = await AdventureLogic.build_session_entities(db_session, session_state)
         returned_ids = [e["id"] for e in session_entities]
         assert "KEY_1" in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_session_copy_asset_and_dynamic_thumbnail(client, tmp_path):
+    from PIL import Image
+    from backend.core.config import settings
+    from backend.api.routes.adventures.sessions import _copy_data_asset_to_session
+    from backend.utils.path_security import data_url_to_local_path
+
+    # Create dummy source image in DATA_DIR
+    src_dir = os.path.join(settings.DATA_DIR, "adventures", "library", "test_thumb_lib")
+    os.makedirs(src_dir, exist_ok=True)
+    src_img_path = os.path.join(src_dir, "test_badge.png")
+    img = Image.new("RGB", (200, 200), color="blue")
+    img.save(src_img_path)
+
+    try:
+        session_id = "test_thumb_sess_1"
+        cache = {}
+        copied_url = _copy_data_asset_to_session(session_id, "entities", f"/data/adventures/library/test_thumb_lib/test_badge.png", cache)
+        assert copied_url is not None
+        assert "/data/adventures/sessions/test_thumb_sess_1/visuals/entities/" in copied_url
+
+        # Verify that thumbnail was generated automatically by _copy_data_asset_to_session
+        local_path = data_url_to_local_path(copied_url)
+        assert local_path is not None
+        assert os.path.isfile(local_path)
+        stem, ext = os.path.splitext(local_path)
+        thumb_path = f"{stem}_thumb{ext}"
+        assert os.path.isfile(thumb_path)
+
+        # Now delete the thumbnail to test on-demand generation in SafeStaticFiles
+        os.remove(thumb_path)
+        assert not os.path.isfile(thumb_path)
+
+        # Request the missing thumbnail via client
+        thumb_url = f"{copied_url.rsplit('.', 1)[0]}_thumb.{copied_url.rsplit('.', 1)[1]}"
+        res = await client.get(thumb_url)
+        assert res.status_code == 200
+        assert os.path.isfile(thumb_path)
+    finally:
+        shutil.rmtree(src_dir, ignore_errors=True)
+        shutil.rmtree(os.path.join(settings.DATA_DIR, "adventures", "sessions", "test_thumb_sess_1"), ignore_errors=True)
+
+
