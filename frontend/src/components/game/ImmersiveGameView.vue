@@ -240,20 +240,6 @@ defineExpose({
 
       <!-- 3B. CENTER / STORY AREA WITH SCENE HOTSPOTS & COMIC FEED -->
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
-        <!-- Cinematic Scene Transition Curtain -->
-        <SceneTransitionOverlay
-          :active="Boolean(props.isSceneTransitioning || props.exitTraversalBusy)"
-          :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
-          :exit-label="props.sceneTransitionTarget?.label"
-          :status-text="props.statusText"
-        />
-
-        <!-- Cinematic Movie-Style Sequence Title Overlay -->
-        <CinematicSequenceOverlay
-          :active-sequence="props.activeSequence"
-          :adventure-title="props.adventureTitle"
-        />
-
         <ImmersiveSceneHotspots
           :scene-exits="props.sceneExits"
           :scene-switches="props.sceneSwitches"
@@ -262,6 +248,7 @@ defineExpose({
           :is-evaluating="isEvaluating"
           :show-mobile-interact="showMobileInteract"
           :current-scene-name="props.currentSceneName || props.sheet?.current_scene"
+          :active-sequence-id="props.activeSequence?.id"
           @traverse-exit="(exit) => emit('traverseExit', exit)"
           @switch-flip="(sw) => emit('switchFlip', sw)"
           @item-click="(item) => emit('itemClick', item)"
@@ -295,6 +282,20 @@ defineExpose({
           @npc-hover="(entity, event) => emit('npcHover', entity, event)"
           @npc-leave="emit('npcLeave')"
           @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
+        />
+
+        <!-- Cinematic Scene Transition Curtain -->
+        <SceneTransitionOverlay
+          :active="Boolean(props.isSceneTransitioning || props.exitTraversalBusy)"
+          :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
+          :exit-label="props.sceneTransitionTarget?.label"
+          :status-text="props.statusText"
+        />
+
+        <!-- Cinematic Movie-Style Sequence Title Overlay -->
+        <CinematicSequenceOverlay
+          :active-sequence="props.activeSequence"
+          :adventure-title="props.adventureTitle"
         />
       </main>
     </div>

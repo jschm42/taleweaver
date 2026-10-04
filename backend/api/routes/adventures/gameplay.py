@@ -511,6 +511,21 @@ async def get_chat_history(
         except Exception as exc:
             logger.warning("Could not build fallback prompt suggestions on session load: %s", exc)
 
+    if adventure and avatar:
+        seq_messages = AdventureLogic.evaluate_sequence_progress(
+            adventure=adventure,
+            state=state,
+            avatar=avatar,
+        )
+        if seq_messages:
+            for seq_msg in seq_messages:
+                db.add(ChatMessage(session_id=state.session_id, role="system", content=seq_msg))
+            await db.commit()
+            chat_res = await db.execute(
+                select(ChatMessage).where(ChatMessage.session_id == state.session_id).order_by(ChatMessage.created_at.asc())
+            )
+            history = [{"id": m.id, "role": m.role, "content": m.content} for m in chat_res.scalars().all()]
+
     active_sequence = AdventureLogic.resolve_active_sequence(adventure, state)
 
     return ChatResponse(

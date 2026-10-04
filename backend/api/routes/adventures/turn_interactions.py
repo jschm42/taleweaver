@@ -948,8 +948,19 @@ class TurnInteractionsManager:
             await self._save_chat_message("system", response)
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
-        await self.db.commit()
+        # Check sequence progress deterministically
         adv = getattr(self.manager, "adventure", None)
+        seq_messages = AdventureLogic.evaluate_sequence_progress(
+            adventure=adv,
+            state=self.state,
+            avatar=self.avatar,
+        )
+        if seq_messages:
+            for seq_msg in seq_messages:
+                await self._save_chat_message("system", seq_msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': seq_msg})}\n\n"
+
+        await self.db.commit()
         final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),

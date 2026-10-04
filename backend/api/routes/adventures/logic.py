@@ -8,6 +8,7 @@ from typing import Any, Optional, Union
 from sqlalchemy import select, update, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.config import settings
 from backend.engine.item_logic import normalize_equipment_keys
@@ -576,6 +577,178 @@ class AdventureLogic:
         if isinstance(sequences[0], dict):
             return sequences[0]
         return None
+
+    @staticmethod
+    def evaluate_sequence_progress(
+        adventure: Any,
+        state: SessionState,
+        avatar: Avatar,
+        new_inventory_items: Optional[list[Any]] = None,
+        new_scene_id: Optional[str] = None,
+        updated_entities: Optional[list[Any]] = None,
+        force_complete: bool = False,
+    ) -> list[str]:
+        """Evaluates whether current active sequence hard rules (or forced completion) are met.
+
+        If conditions are met, awards XP to the avatar, advances state.active_sequence_id,
+        and returns descriptive system messages.
+        """
+        if not adventure or not getattr(adventure, "sequences", None):
+            return []
+        raw_sequences = adventure.sequences
+        if not isinstance(raw_sequences, list) or len(raw_sequences) == 0:
+            return []
+
+        sequences = sorted(
+            [s for s in raw_sequences if isinstance(s, dict)],
+            key=lambda x: x.get("order", 1),
+        )
+        if not sequences:
+            return []
+
+        active_seq_id = getattr(state, "active_sequence_id", None)
+        current_seq_idx = -1
+        for i, seq in enumerate(sequences):
+            if seq.get("id") == active_seq_id or (not active_seq_id and i == 0):
+                current_seq_idx = i
+                break
+
+        if current_seq_idx < 0:
+            return []
+
+        current_seq = sequences[current_seq_idx]
+        req_item = str(current_seq.get("required_item_id") or "").strip()
+        req_scene = str(current_seq.get("required_scene_id") or "").strip()
+        req_npc = str(current_seq.get("required_defeated_npc_id") or "").strip()
+        has_hard_rules = bool(req_item or req_scene or req_npc)
+
+        sequence_completed = False
+        if has_hard_rules:
+            # 1. Evaluate Item requirement (protagonist receives item X)
+            item_met = True
+            if req_item:
+                req_item_norm = req_item.upper()
+                inv_ids: set[str] = set()
+                inv_names: set[str] = set()
+                for item in (getattr(avatar, "inventory", None) or []):
+                    if isinstance(item, dict):
+                        if item.get("id"):
+                            inv_ids.add(str(item["id"]).strip().upper())
+                        if item.get("name"):
+                            inv_names.add(str(item["name"]).strip().upper())
+                    elif isinstance(item, str) and item.strip():
+                        inv_ids.add(item.strip().upper())
+                    elif getattr(item, "id", None):
+                        inv_ids.add(str(item.id).strip().upper())
+                    elif getattr(item, "name", None):
+                        inv_names.add(str(item.name).strip().upper())
+
+                for item in (new_inventory_items or []):
+                    if isinstance(item, dict):
+                        if item.get("id"):
+                            inv_ids.add(str(item["id"]).strip().upper())
+                        if item.get("name"):
+                            inv_names.add(str(item["name"]).strip().upper())
+                    elif isinstance(item, str) and item.strip():
+                        inv_ids.add(item.strip().upper())
+                    elif getattr(item, "id", None):
+                        inv_ids.add(str(item.id).strip().upper())
+                    elif getattr(item, "name", None):
+                        inv_names.add(str(item.name).strip().upper())
+
+                states = getattr(state, "entity_states", None) or {}
+                in_inv_states = {
+                    str(eid).strip().upper()
+                    for eid, st in states.items()
+                    if isinstance(st, dict) and st.get("is_in_inventory")
+                }
+                item_met = (
+                    req_item_norm in inv_ids
+                    or req_item_norm in inv_names
+                    or req_item_norm in in_inv_states
+                )
+
+            # 2. Evaluate Scene requirement (protagonist enters scene X)
+            scene_met = True
+            if req_scene:
+                req_scene_norm = req_scene.upper()
+                curr_scene = str(getattr(state, "current_scene_id", "") or "").strip().upper()
+                new_scene = str(new_scene_id or "").strip().upper()
+                scene_met = (curr_scene == req_scene_norm or new_scene == req_scene_norm)
+
+            # 3. Evaluate Defeated NPC requirement (protagonist defeats NPC X)
+            npc_met = True
+            if req_npc:
+                req_npc_norm = req_npc.upper()
+                states = getattr(state, "entity_states", None) or {}
+                npc_st = states.get(req_npc) or {}
+                if not npc_st:
+                    for k, v in states.items():
+                        if str(k).strip().upper() == req_npc_norm and isinstance(v, dict):
+                            npc_st = v
+                            break
+                is_def = False
+                if isinstance(npc_st, dict):
+                    if npc_st.get("is_defeated") is True:
+                        is_def = True
+                    elif npc_st.get("hp") is not None and npc_st.get("hp") <= 0:
+                        is_def = True
+                if not is_def:
+                    for upd in (updated_entities or []):
+                        ent_id = getattr(upd, "entity_id", None) if not isinstance(upd, dict) else upd.get("entity_id")
+                        if str(ent_id or "").strip().upper() == req_npc_norm:
+                            upd_def = getattr(upd, "is_defeated", None) if not isinstance(upd, dict) else upd.get("is_defeated")
+                            upd_hp = getattr(upd, "hp", None) if not isinstance(upd, dict) else upd.get("hp")
+                            if upd_def is True:
+                                is_def = True
+                            elif upd_hp is not None and upd_hp <= 0:
+                                is_def = True
+                npc_met = is_def
+
+            if item_met and scene_met and npc_met:
+                sequence_completed = True
+        else:
+            sequence_completed = force_complete
+
+        if not sequence_completed:
+            return []
+
+        system_messages: list[str] = []
+        seq_title = current_seq.get("title") or current_seq.get("id") or f"Chapter {current_seq_idx + 1}"
+        xp_reward = int(current_seq.get("exp_reward") or 0)
+        if xp_reward > 0:
+            avatar.exp = (getattr(avatar, "exp", 0) or 0) + xp_reward
+            try:
+                flag_modified(avatar, "exp")
+            except Exception:
+                pass
+            xp_msg = f"Sequence completed: {seq_title} (+{xp_reward} XP)"
+        else:
+            xp_msg = f"Sequence completed: {seq_title}"
+        system_messages.append(xp_msg)
+
+        next_seq_idx = current_seq_idx + 1
+        if next_seq_idx < len(sequences):
+            next_seq = sequences[next_seq_idx]
+            state.active_sequence_id = next_seq.get("id")
+            state.active_sequence_order = next_seq.get("order", next_seq_idx + 1)
+            try:
+                flag_modified(state, "active_sequence_id")
+                flag_modified(state, "active_sequence_order")
+            except Exception:
+                pass
+            next_title = next_seq.get("title") or next_seq.get("id")
+            next_msg = f"New Sequence unlocked: {next_title}"
+            system_messages.append(next_msg)
+        else:
+            if hasattr(state, "is_completed"):
+                state.is_completed = True
+                try:
+                    flag_modified(state, "is_completed")
+                except Exception:
+                    pass
+
+        return system_messages
 
     @staticmethod
     def extract_inventory_entity_ids(inventory: Any) -> set[str]:

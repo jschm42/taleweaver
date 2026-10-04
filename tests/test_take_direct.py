@@ -48,13 +48,39 @@ async def test_take_direct_removes_from_scene_entities(client, setup_test_db):
             title="Test Take Direct",
             owner_id=user.id,
             version="2.0.0",
-            sequences=[{"id": "SEQ_1", "title": "Sequence 1", "order": 1}],
+            sequences=[
+                {
+                    "id": "SEQ_1",
+                    "title": "Sequence 1",
+                    "order": 1,
+                    "required_item_id": "GUEST_BADGE",
+                    "exp_reward": 20,
+                },
+                {
+                    "id": "SEQ_2",
+                    "title": "Sequence 2",
+                    "order": 2,
+                },
+            ],
             is_ready=True,
             creation_status="Ready",
             original_manifest={
                 "version": "2.0.0",
                 "format_version": "2.0.0",
-                "sequences": [{"id": "SEQ_1", "title": "Sequence 1", "order": 1}],
+                "sequences": [
+                    {
+                        "id": "SEQ_1",
+                        "title": "Sequence 1",
+                        "order": 1,
+                        "required_item_id": "GUEST_BADGE",
+                        "exp_reward": 20,
+                    },
+                    {
+                        "id": "SEQ_2",
+                        "title": "Sequence 2",
+                        "order": 2,
+                    },
+                ],
                 "start_scene_id": "LOBBY",
             },
         )
@@ -130,13 +156,25 @@ async def test_take_direct_removes_from_scene_entities(client, setup_test_db):
         ent_ids = [e["id"] for e in scene_ents]
         assert "GUEST_BADGE" not in ent_ids
 
-        # Verify avatar has exactly 1 badge
+        # Verify avatar has exactly 1 badge and earned 20 XP from SEQ_1 completion
         av_res = await db_session.execute(
             select(Avatar).where(Avatar.id == st.avatar_id)
         )
         av = av_res.scalars().first()
         inv_badges = [i for i in (av.inventory or []) if (i.get("id") if isinstance(i, dict) else i) == "GUEST_BADGE"]
         assert len(inv_badges) == 1
+        assert av.exp == 20
+        assert st.active_sequence_id == "SEQ_2"
+
+    # Verify get_chat returns active_sequence as SEQ_2
+    chat_state_res = await client.get(
+        f"/api/adventures/{game_id}/chat",
+        headers=headers,
+    )
+    assert chat_state_res.status_code == 200
+    chat_state = chat_state_res.json()
+    assert chat_state["active_sequence"]["id"] == "SEQ_2"
+    assert chat_state["sheet"]["exp"] == 20
 
     # Send /take_direct GUEST_BADGE again
     chat_res2 = await client.post(
@@ -153,3 +191,4 @@ async def test_take_direct_removes_from_scene_entities(client, setup_test_db):
         av = av_res.scalars().first()
         inv_badges = [i for i in (av.inventory or []) if (i.get("id") if isinstance(i, dict) else i) == "GUEST_BADGE"]
         assert len(inv_badges) == 1
+        assert av.exp == 20

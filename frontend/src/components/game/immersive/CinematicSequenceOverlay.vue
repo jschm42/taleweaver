@@ -77,7 +77,7 @@ onBeforeUnmount(() => {
   <Transition name="cinematic-fade">
     <div
       v-if="isVisible && displayedSequence"
-      class="absolute inset-0 z-35 flex flex-col items-center justify-center p-6 select-none bg-slate-950/80 backdrop-blur-md cursor-pointer overflow-hidden"
+      class="absolute inset-0 z-[70] flex flex-col items-center justify-center p-6 select-none bg-slate-950/90 backdrop-blur-md cursor-pointer overflow-hidden"
       @click="dismiss"
     >
       <!-- Cinematic Vignette / Letterbox Lighting -->

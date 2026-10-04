@@ -17,6 +17,7 @@ const props = defineProps<{
   isEvaluating?: boolean
   showMobileInteract?: boolean
   currentSceneName?: string | null
+  activeSequenceId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -176,6 +177,12 @@ async function handleTakeAll() {
 watch(() => props.items?.length, (newLen) => {
   if (!newLen || newLen === 0) {
     showDiscoveriesPopover.value = false
+  }
+})
+
+watch(() => props.activeSequenceId, (newId, oldId) => {
+  if (newId && oldId && newId !== oldId) {
+    closeAllPopovers()
   }
 })
 

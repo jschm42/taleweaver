@@ -677,123 +677,25 @@ class TurnStateApplier:
                 system_messages.append(msg)
 
         # Sequence Completion Logic
-        if hasattr(self.adventure, 'sequences') and self.adventure.sequences:
-            sequences = sorted(self.adventure.sequences, key=lambda x: x.get("order", 1))
-            current_seq_idx = -1
-            
-            for i, seq in enumerate(sequences):
-                if seq.get("id") == self.state.active_sequence_id or (not self.state.active_sequence_id and i == 0):
-                    current_seq_idx = i
-                    break
-            
-            if current_seq_idx >= 0:
-                current_seq = sequences[current_seq_idx]
-                req_item = str(current_seq.get("required_item_id") or "").strip()
-                req_scene = str(current_seq.get("required_scene_id") or "").strip()
-                req_npc = str(current_seq.get("required_defeated_npc_id") or "").strip()
-                has_hard_rules = bool(req_item or req_scene or req_npc)
-
-                if has_hard_rules:
-                    # 1. Evaluate Item requirement (prot erhält item X)
-                    item_met = True
-                    if req_item:
-                        req_item_norm = req_item.upper()
-                        inv_ids = {
-                            str(item.get("id") if isinstance(item, dict) else getattr(item, "id", "") or "").strip().upper()
-                            for item in (self.avatar.inventory or [])
-                        }
-                        inv_names = {
-                            str(item.get("name") if isinstance(item, dict) else getattr(item, "name", "") or "").strip().upper()
-                            for item in (self.avatar.inventory or [])
-                        }
-                        for item in (event.new_inventory_items or []):
-                            if getattr(item, "id", None):
-                                inv_ids.add(str(item.id).strip().upper())
-                            if getattr(item, "name", None):
-                                inv_names.add(str(item.name).strip().upper())
-                        in_inv_states = {
-                            str(eid).strip().upper()
-                            for eid, st in states.items()
-                            if isinstance(st, dict) and st.get("is_in_inventory")
-                        }
-                        item_met = (
-                            req_item_norm in inv_ids
-                            or req_item_norm in inv_names
-                            or req_item_norm in in_inv_states
-                        )
-
-                    # 2. Evaluate Scene requirement (prot betritt Scene X)
-                    scene_met = True
-                    if req_scene:
-                        req_scene_norm = req_scene.upper()
-                        curr_scene = str(self.state.current_scene_id or "").strip().upper()
-                        new_scene = str(getattr(event, "new_scene_id", "") or "").strip().upper()
-                        scene_met = (curr_scene == req_scene_norm or new_scene == req_scene_norm)
-
-                    # 3. Evaluate Defeated NPC requirement (prot besiegt NPC X)
-                    npc_met = True
-                    if req_npc:
-                        req_npc_norm = req_npc.upper()
-                        npc_st = states.get(req_npc) or {}
-                        if not npc_st:
-                            for k, v in states.items():
-                                if str(k).strip().upper() == req_npc_norm and isinstance(v, dict):
-                                    npc_st = v
-                                    break
-                        if not npc_st:
-                            for k, v in (self.state.entity_states or {}).items():
-                                if str(k).strip().upper() == req_npc_norm and isinstance(v, dict):
-                                    npc_st = v
-                                    break
-                        is_def = False
-                        if isinstance(npc_st, dict):
-                            if npc_st.get("is_defeated") is True:
-                                is_def = True
-                            elif npc_st.get("hp") is not None and npc_st.get("hp") <= 0:
-                                is_def = True
-                        if not is_def:
-                            for upd in (event.updated_entities or []):
-                                if str(getattr(upd, "entity_id", "")).strip().upper() == req_npc_norm:
-                                    if getattr(upd, "is_defeated", None) is True:
-                                        is_def = True
-                                    elif getattr(upd, "hp", None) is not None and upd.hp <= 0:
-                                        is_def = True
-                        npc_met = is_def
-
-                    # Hard rules are defined: all defined hard rules MUST be satisfied!
-                    if item_met and scene_met and npc_met:
-                        event.sequence_completed = True
-                    else:
-                        event.sequence_completed = False
-
-                if event.sequence_completed:
-                    completed_seq = sequences[current_seq_idx]
-                    seq_title = completed_seq.get("title") or completed_seq.get("id") or f"Chapter {current_seq_idx + 1}"
-                    xp_reward = int(completed_seq.get("exp_reward") or 0)
-                    if xp_reward > 0:
-                        self.avatar.exp = (self.avatar.exp or 0) + xp_reward
-                        xp_msg = f"Sequence completed: {seq_title} (+{xp_reward} XP)"
-                    else:
-                        xp_msg = f"Sequence completed: {seq_title}"
-                    await self._save_chat_message("system", xp_msg)
-                    system_messages.append(xp_msg)
-                    
-                    next_seq_idx = current_seq_idx + 1
-                    if next_seq_idx < len(sequences):
-                        next_seq = sequences[next_seq_idx]
-                        self.state.active_sequence_id = next_seq.get("id")
-                        self.state.active_sequence_order = next_seq.get("order", next_seq_idx + 1)
-                        state_dirty = True
-                        
-                        next_title = next_seq.get("title") or next_seq.get("id")
-                        next_msg = f"New Sequence unlocked: {next_title}"
-                        await self._save_chat_message("system", next_msg)
-                        system_messages.append(next_msg)
-                    else:
-                        event.game_completed = True
-                        state_dirty = True
-                        if not event.status_note:
-                            event.status_note = "Congratulations! You have completed the final sequence."
+        seq_messages = AdventureLogic.evaluate_sequence_progress(
+            adventure=self.adventure,
+            state=self.state,
+            avatar=self.avatar,
+            new_inventory_items=event.new_inventory_items,
+            new_scene_id=event.new_scene_id,
+            updated_entities=event.updated_entities,
+            force_complete=bool(event.sequence_completed),
+        )
+        event.sequence_completed = bool(seq_messages)
+        if seq_messages:
+            state_dirty = True
+            for seq_msg in seq_messages:
+                await self._save_chat_message("system", seq_msg)
+                system_messages.append(seq_msg)
+            if getattr(self.state, "is_completed", False):
+                event.game_completed = True
+                if not event.status_note:
+                    event.status_note = "Congratulations! You have completed the final sequence."
 
         # Process Explicit Map Updates (Exits)
         if event.updated_exits:
