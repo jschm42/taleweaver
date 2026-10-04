@@ -550,7 +550,7 @@ class AdventureLogic:
                 continue
             if ent.get("is_hidden"):
                 continue
-            if ent.get("is_in_inventory") and ent_scene in {"inventory", ""}:
+            if ent.get("is_in_inventory"):
                 continue
             if str(ent.get("id") or "") in contained_item_ids:
                 continue
@@ -559,6 +559,23 @@ class AdventureLogic:
                 ent["inventory"] = AdventureLogic.hydrate_container_inventory(ent.get("inventory"), entity_lookup)
             entities.append(ent)
         return entities
+
+    @staticmethod
+    def resolve_active_sequence(adventure: Any, state: SessionState) -> dict[str, Any] | None:
+        """Resolves the current active sequence dictionary from an adventure template and session state."""
+        if not adventure or not getattr(adventure, "sequences", None):
+            return None
+        sequences = adventure.sequences
+        if not isinstance(sequences, list) or len(sequences) == 0:
+            return None
+        active_seq_id = getattr(state, "active_sequence_id", None)
+        if active_seq_id:
+            for s in sequences:
+                if isinstance(s, dict) and s.get("id") == active_seq_id:
+                    return s
+        if isinstance(sequences[0], dict):
+            return sequences[0]
+        return None
 
     @staticmethod
     def extract_inventory_entity_ids(inventory: Any) -> set[str]:

@@ -5,7 +5,7 @@
  * Displays compact Wayfinder (Exits) and Discoveries (Room Stash) popover buttons
  * alongside tactical switches, eliminating badge clutter from the story view.
  */
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { Compass, DoorOpen, Lock, Hand, Sparkles, Eye, X, ArrowRight, Terminal } from 'lucide-vue-next'
 
@@ -152,9 +152,17 @@ function handleTraverse(exit: any) {
   showExitsPopover.value = false
 }
 
+function handleDirectTake(item: any) {
+  emit('takeDirect', item)
+  if (portableItems.value.length <= 1) {
+    showDiscoveriesPopover.value = false
+  }
+}
+
 async function handleTakeAll() {
   if (!canTakeAll.value) return
   isTakingAll.value = true
+  showDiscoveriesPopover.value = false
   try {
     for (const item of portableItems.value) {
       emit('takeDirect', item)
@@ -164,6 +172,12 @@ async function handleTakeAll() {
     isTakingAll.value = false
   }
 }
+
+watch(() => props.items?.length, (newLen) => {
+  if (!newLen || newLen === 0) {
+    showDiscoveriesPopover.value = false
+  }
+})
 
 function handleDocumentClick(e: MouseEvent) {
   const target = e.target as HTMLElement | null
@@ -413,7 +427,7 @@ function handleExitMouseMove(event: MouseEvent) {
                   type="button"
                   class="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 hover:scale-110 transition-all shadow-md cursor-pointer"
                   title="Take Item"
-                  @click.stop="emit('takeDirect', item)"
+                  @click.stop="handleDirectTake(item)"
                 >
                   <Hand class="w-3.5 h-3.5 text-emerald-400" />
                 </button>

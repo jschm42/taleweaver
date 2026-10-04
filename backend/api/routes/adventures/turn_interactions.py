@@ -737,25 +737,54 @@ class TurnInteractionsManager:
             candidates = ent_res.scalars().all()
             hint_lower = entity_id_or_name.lower()
             ent = None
+            overrides = self.state.entity_states or {}
             for candidate in candidates:
+                cand_ov = overrides.get(candidate.id, {})
+                if cand_ov.get("is_in_inventory") or cand_ov.get("is_hidden"):
+                    continue
                 if candidate.id and candidate.id.lower() == hint_lower:
                     ent = candidate
                     break
                 if candidate.name and candidate.name.lower() == hint_lower:
                     ent = candidate
                     break
-            if ent and ent.is_portable and str(ent.item_type or "").upper() != "SWITCH":
+
+            already_in_inv = bool(
+                ent and any(
+                    (isinstance(i, dict) and str(i.get("id") or "").lower() == ent.id.lower())
+                    or (isinstance(i, str) and i.lower() == ent.id.lower())
+                    for i in (self.avatar.inventory or [])
+                )
+            )
+
+            if ent and already_in_inv:
+                ent.is_in_inventory = True
+                ent.current_scene_id = "INVENTORY"
+                states = dict(self.state.entity_states or {})
+                states.setdefault(ent.id, {})["is_in_inventory"] = True
+                states[ent.id]["current_scene_id"] = "INVENTORY"
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+                response = f"{ent.name} is already in your inventory."
+            elif ent and ent.is_portable and str(ent.item_type or "").upper() != "SWITCH":
                 # Move to inventory
-                new_inv = list(self.avatar.inventory)
+                new_inv = list(self.avatar.inventory or [])
                 item_dict = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
+                item_dict["is_in_inventory"] = True
+                item_dict["current_scene_id"] = "INVENTORY"
                 new_inv.append(item_dict)
                 self.avatar.inventory = new_inv
                 
+                # Update DB entity directly
+                ent.is_in_inventory = True
+                ent.current_scene_id = "INVENTORY"
+
                 # Update session state instead of global entity
                 states = dict(self.state.entity_states or {})
                 if ent.id not in states:
                     states[ent.id] = {}
                 states[ent.id]["is_in_inventory"] = True
+                states[ent.id]["current_scene_id"] = "INVENTORY"
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 response = f"Added {ent.name} to your inventory."
@@ -920,10 +949,12 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
         await self.db.commit()
+        adv = getattr(self.manager, "adventure", None)
         final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
+            'active_sequence': AdventureLogic.resolve_active_sequence(adv, self.state),
             **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
         })

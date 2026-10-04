@@ -1093,6 +1093,7 @@ const npcs = computed(() => {
 
 const isListedInDiscoveries = (entity: any): boolean => {
   if (!entity || entity.entity_type !== 'OBJECT') return false
+  if (entity.is_in_inventory) return false
 
   const metadata = (entity.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
   const discoveryVisibility = (metadata.discovery_visibility && typeof metadata.discovery_visibility === 'object')
@@ -1570,6 +1571,8 @@ watch(
       :scene-transition-target="sceneTransitionTarget"
       :exit-unlock-busy="exitUnlockBusy"
       :turn-error="turnError"
+      :active-sequence="activeSequence"
+      :adventure-title="displayAdventureTitle"
       @send="handlePlayerInput"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"

@@ -2090,6 +2090,7 @@ class GameTurnManager:
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'quests': self.state.quests,
+            'active_sequence': AdventureLogic.resolve_active_sequence(adventure, self.state),
             'awards': await self._build_awards_payload(adventure),
             'world_memories': self.state.world_memories or [],
             'world_rumors': self.state.world_rumors or [],

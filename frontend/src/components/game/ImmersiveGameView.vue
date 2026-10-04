@@ -22,6 +22,7 @@ import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
+import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -59,6 +60,8 @@ const props = defineProps<{
   exitUnlockBusy?: boolean
   turnError?: { message: string; action: string } | null
   worldMemories?: any[]
+  activeSequence?: any | null
+  adventureTitle?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -243,6 +246,12 @@ defineExpose({
           :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
           :exit-label="props.sceneTransitionTarget?.label"
           :status-text="props.statusText"
+        />
+
+        <!-- Cinematic Movie-Style Sequence Title Overlay -->
+        <CinematicSequenceOverlay
+          :active-sequence="props.activeSequence"
+          :adventure-title="props.adventureTitle"
         />
 
         <ImmersiveSceneHotspots

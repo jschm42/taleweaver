@@ -511,15 +511,7 @@ async def get_chat_history(
         except Exception as exc:
             logger.warning("Could not build fallback prompt suggestions on session load: %s", exc)
 
-    active_sequence = None
-    if adventure and hasattr(adventure, "sequences") and adventure.sequences:
-        if state.active_sequence_id:
-            for s in adventure.sequences:
-                if isinstance(s, dict) and s.get("id") == state.active_sequence_id:
-                    active_sequence = s
-                    break
-        if not active_sequence and len(adventure.sequences) > 0 and isinstance(adventure.sequences[0], dict):
-            active_sequence = adventure.sequences[0]
+    active_sequence = AdventureLogic.resolve_active_sequence(adventure, state)
 
     return ChatResponse(
         messages=history,
