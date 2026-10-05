@@ -37,7 +37,6 @@ class TTSSettings(BaseModel):
         "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager"
     ]
     voice_catalog: list[dict] = []
-    sample_context: str = ""
     speech_rate: float = 1.0
 
 class Settings(BaseSettings):

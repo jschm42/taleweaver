@@ -147,7 +147,6 @@ async def generate_tts(
     
     logger.info("[TTS] Vocal tags enabled: %s (raw value: %s)", use_vocal_tags, raw_vocal_tags)
     
-    style = payload.style_description or tts_settings.get("sample_context")
     speed = float(tts_settings.get("speech_rate", 1.0))
     model = str(tts_settings.get("selected_model", "gemini-3.8-flash-tts") or "").strip()
     model = TTS_MODEL_ALIASES.get(model, model)
@@ -203,7 +202,7 @@ async def generate_tts(
             adventure_id=normalized_adventure_id,
             session_id=normalized_session_id,
             scene_description=payload.scene_description,
-            style_description=style,
+            style_description=payload.style_description,
             model_name=model,
             title=payload.title,
             scene_name=payload.scene_name,

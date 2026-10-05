@@ -438,6 +438,7 @@ class TTSEngine:
         # However, we keep the signature for internal use in _synthesize_google.
         _ = speed
         _ = use_vocal_tags
+        _ = style_description
         
         user_content = text
 

@@ -2,9 +2,11 @@
 /**
  * ImmersiveHeader — Atmospheric top bar for the immersive RPG view
  *
- * Displays scene and adventure metadata, tracked quest badge, in-game clock,
- * speech controls, BabelFish language selector, and experience counter.
+ * Displays scene and adventure metadata, active sequence with description tooltip,
+ * tracked quest badge, in-game clock, speech controls, BabelFish language selector,
+ * and experience counter.
  */
+import { ref, computed } from 'vue'
 import { configState } from '@/store/config'
 import { audioService } from '@/services/audioService'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
@@ -21,6 +23,7 @@ import {
 
 const props = defineProps<{
   sceneName?: string | null
+  activeSequence?: any | null
   adventureTitle?: string | null
   creator?: string | null
   copyright?: string | null
@@ -40,11 +43,37 @@ const emit = defineEmits<{
   toggleMobileInteract: []
   exitSession: []
 }>()
+
+const showSequenceTooltip = ref(false)
+
+const sequenceTitle = computed(() => {
+  if (!props.activeSequence) return ''
+  return (
+    props.activeSequence.title ||
+    props.activeSequence.name ||
+    props.activeSequence.id ||
+    ''
+  ).trim()
+})
+
+const sequenceDescription = computed(() => {
+  if (!props.activeSequence) return ''
+  return (
+    props.activeSequence.description ||
+    props.activeSequence.summary ||
+    props.activeSequence.teaser ||
+    ''
+  ).trim()
+})
+
+const sequenceOrder = computed(() => {
+  return props.activeSequence?.order ?? null
+})
 </script>
 
 <template>
   <header class="relative z-20 flex items-center justify-between px-4 py-3 sm:px-6 sm:py-3.5 bg-slate-950/75 backdrop-blur-md border-b border-slate-800/80 shadow-2xl shrink-0">
-    <!-- Left: Scene Title & Back / Chronicles -->
+    <!-- Left: Scene & Sequence Title & Back / Chronicles -->
     <div class="flex items-center gap-3 min-w-0">
       <button
         type="button"
@@ -56,11 +85,68 @@ const emit = defineEmits<{
       </button>
 
       <div class="flex flex-col min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-            Scene
-          </span>
-          <h2 class="text-sm sm:text-base font-black text-white uppercase tracking-wider truncate drop-shadow-md comic-title">
+        <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+          <!-- Active Sequence Badge with Hover Tooltip -->
+          <div
+            v-if="sequenceTitle"
+            class="relative inline-flex items-center shrink-0"
+            @mouseenter="showSequenceTooltip = true"
+            @mouseleave="showSequenceTooltip = false"
+          >
+            <div
+              class="flex items-center px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-500/15 to-amber-600/10 border border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/25 transition-all duration-200 cursor-help shadow-sm group select-none"
+              :class="{ 'border-amber-400/90 bg-amber-500/30 ring-1 ring-amber-400/30': showSequenceTooltip }"
+            >
+              <span class="text-xs sm:text-sm font-black text-amber-200 uppercase tracking-wide truncate max-w-[8rem] sm:max-w-[14rem] md:max-w-[20rem] comic-title">
+                {{ sequenceTitle }}
+              </span>
+            </div>
+
+            <!-- Sequence Short Description Tooltip on Mousehover -->
+            <Transition name="tooltip-fade">
+              <div
+                v-if="showSequenceTooltip"
+                class="absolute left-0 top-full mt-2.5 z-50 w-72 sm:w-84 max-w-[calc(100vw-2rem)] p-3.5 bg-slate-950/95 border border-amber-500/40 rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.85)] backdrop-blur-xl pointer-events-none select-none"
+              >
+                <!-- Glowing top border accent -->
+                <div class="absolute -top-[1px] left-4 right-4 h-[1px] bg-gradient-to-r from-transparent via-amber-400/80 to-transparent"></div>
+
+                <!-- Callout pointer arrow -->
+                <div class="absolute -top-1.5 left-6 w-3 h-3 bg-slate-950 border-t border-l border-amber-500/40 rotate-45"></div>
+
+                <div class="relative z-10">
+                  <div class="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <i class="ra ra-scroll-unfurled text-xs text-amber-400 shrink-0"></i>
+                      <span class="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400 truncate">
+                        {{ sequenceOrder ? `Chapter ${sequenceOrder}` : 'Sequence' }}
+                      </span>
+                    </div>
+                    <span class="text-[9px] font-mono font-bold text-amber-300/80 uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 shrink-0">
+                      Active
+                    </span>
+                  </div>
+
+                  <h4 class="text-xs sm:text-sm font-black text-white uppercase tracking-wider mb-1.5 comic-title leading-snug">
+                    {{ sequenceTitle }}
+                  </h4>
+
+                  <p v-if="sequenceDescription" class="text-xs leading-relaxed text-slate-300 font-serif italic max-h-56 overflow-y-auto">
+                    {{ sequenceDescription }}
+                  </p>
+                  <p v-else class="text-xs italic text-slate-500">
+                    No short description available for this sequence.
+                  </p>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <!-- Divider between Sequence and Scene -->
+          <span v-if="sequenceTitle" class="text-slate-600 font-bold text-xs select-none shrink-0">/</span>
+
+          <!-- Scene Name -->
+          <h2 class="text-sm sm:text-base font-black text-white uppercase tracking-wider truncate drop-shadow-md comic-title min-w-0">
             {{ props.sceneName || 'Unknown Location' }}
           </h2>
         </div>
@@ -182,5 +268,17 @@ const emit = defineEmits<{
   display: inline-block;
   line-height: 1;
   vertical-align: middle;
+}
+
+/* Tooltip animation */
+.tooltip-fade-enter-active,
+.tooltip-fade-leave-active {
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tooltip-fade-enter-from,
+.tooltip-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
 }
 </style>

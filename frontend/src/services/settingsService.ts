@@ -109,7 +109,6 @@ class SettingsService {
     use_streaming: false,
     voice_catalog: [] as Array<{ name: string; gender?: string; description?: string }>,
     selected_voice: 'Puck',
-    sample_context: '',
     speech_rate: 1.0,
   })
 

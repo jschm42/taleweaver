@@ -460,8 +460,6 @@ class AudioService {
       title,
       sceneName,
       tone,
-      npcMetadata,
-      style,
       voiceOverride,
     } = options
 
@@ -504,7 +502,6 @@ class AudioService {
           scene_name: normalizedSceneName,
           tone: normalizedTone,
           voice_override: finalVoiceOverride,
-          style_description: style,
         })
 
         const blob = await this.fetchAudioBlob(audio_url)

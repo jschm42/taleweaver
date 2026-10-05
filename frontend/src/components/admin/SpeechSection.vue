@@ -256,17 +256,6 @@ const handleSave = () => {
             <span class="text-xs text-slate-500 w-10">2.0×</span>
           </div>
         </div>
-
-        <div v-if="localForm.provider === 'google'" class="space-y-2">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Narration Context (Style Description)</label>
-          <textarea 
-            v-model="localForm.sample_context" 
-            rows="3" 
-            placeholder="Describe the voice style and tone..."
-            class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-sans text-sm"
-          ></textarea>
-          <p class="text-[10px] text-slate-500 italic">Example: "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise..."</p>
-        </div>
       </div>
 
       <button type="button" @click="handleSave" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">

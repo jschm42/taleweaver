@@ -207,6 +207,7 @@ defineExpose({
     <!-- 2. TOP ATMOSPHERIC HEADER BAR -->
     <ImmersiveHeader
       :scene-name="props.currentSceneName || props.sheet?.current_scene"
+      :active-sequence="props.activeSequence"
       :adventure-title="props.sheet?.adventure_title"
       :creator="props.sheet?.creator"
       :copyright="props.sheet?.copyright"

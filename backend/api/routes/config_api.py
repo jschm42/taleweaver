@@ -626,7 +626,6 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
         "use_vocal_tags": True,
         "use_text_chunking": True,
         "use_streaming": False,
-        "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
         "speech_rate": 1.0
     }
     if not tts_settings:
@@ -675,8 +674,6 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     
     if "selected_voice" not in normalized:
         normalized["selected_voice"] = fallback["selected_voice"]
-    if "sample_context" not in normalized:
-        normalized["sample_context"] = fallback["sample_context"]
     if "speech_rate" not in normalized:
         normalized["speech_rate"] = fallback["speech_rate"]
     return normalized
@@ -918,7 +915,6 @@ class TTSSettingsPayload(BaseModel):
     use_streaming: bool = False
     voice_list: list[str] = Field(default_factory=list)
     voice_catalog: list[dict[str, Optional[str]]] = None
-    sample_context: str = ""
     speech_rate: float = 1.0
 
 
