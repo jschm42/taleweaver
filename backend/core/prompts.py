@@ -305,9 +305,9 @@ Appended to the system prompt when the GM is running in 'Mechanics' mode but for
 """
 
 GM_CHAT_NARRATION_SUFFIX = (
-    "CRITICAL: You are in Chat Mode. Focus heavily on dialogue, character interaction, and atmosphere. "
-    "Keep responses conversational, like a Sitcom or pure Roleplay. "
-    "If two or more NPCs are present in the same scene, include short NPC-to-NPC exchanges when it fits the moment. "
+    "CRITICAL: You are in Chat Mode. Focus on snappy dialogue, character interaction, and atmosphere. "
+    "Keep responses conversational and concise, like a Sitcom or pure Roleplay — never monologue or dump excessive exposition. "
+    "If two or more NPCs are present in the same scene, include short NPC-to-NPC exchanges (1-2 lines) when it fits the moment. "
     "Never reveal the internal walkthrough directly; when asked for help, give only hints and rough guidance."
 )
 """
@@ -349,6 +349,11 @@ Default instruction for standard interactions to keep the game moving.
 GM_NARRATION_MANDATORY_FORMATTING = (
     "Do not mention numbers, IDs, or system terms. "
     "1-2 short paragraphs max for standard actions. Up to 3 paragraphs ONLY for new scenes or major events.\n\n"
+    "PACING & CONCISENESS (CRITICAL): Keep dialogue and narrative prose crisp, natural, and engaging. "
+    "DO NOT produce rambling, endless walls of text or excessive exposition dumps. "
+    "NPC dialogue must remain snappy and interactive (1-3 sentences per character per turn). "
+    "Let the player react and act frequently instead of overwhelming them with long-winded monologues. "
+    "Avoid mechanically cataloging every object in the room in a single dense paragraph; focus on the most salient sensory details and immediate interactions.\n\n"
     "ITEM NARRATION RULE: Do NOT invent or describe obtaining new physical items that are not explicitly confirmed in the TECHNICAL OUTCOME or pre-defined in the scene. Only narrate interactions with items that actually exist in the world or mechanics outcome.\n\n"
     "STRICT SAME-ROOM NPC DIALOGUE RULE (CRITICAL): ONLY NPCs physically listed as PRESENT in the current scene may speak or have dialogue lines. "
     "NPCs located in other rooms/scenes MUST NEVER speak, shout through doors, or answer across rooms. "

@@ -1755,7 +1755,7 @@ class GameTurnManager:
 
         narration_prompt = (
             narration_system_prompt + "\n\n" + 
-            f"DRAFT NARRATION (Expand on this): {draft_narration}\n\n" +
+            f"DRAFT NARRATION (Narrative direction — keep focused and concise, do not bloat): {draft_narration}\n\n" +
             prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
                 outcome_json=outcome_json
             ) + 
@@ -1902,9 +1902,16 @@ class GameTurnManager:
 
         # Post-narration check: If the narration described uncovering any hidden entities in the scene
         if isinstance(game_event, GameEvent):
-            post_reveal_messages = await self._enforce_hidden_entity_reveal(game_event, user_msg, draft_narration=response_text)
-            if post_reveal_messages or (game_event and game_event.updated_entities):
-                await self._apply_game_event(game_event)
+            reveal_event = GameEvent()
+            post_reveal_messages = await self._enforce_hidden_entity_reveal(reveal_event, user_msg, draft_narration=response_text)
+            if post_reveal_messages and reveal_event.updated_entities:
+                await self._apply_game_event(reveal_event)
+                if game_event.updated_entities is None:
+                    game_event.updated_entities = []
+                game_event.updated_entities.extend(reveal_event.updated_entities)
+                for gm in post_reveal_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)
@@ -2798,7 +2805,14 @@ class GameTurnManager:
         if changeset.new_memories:
             memories = list(self.state.world_memories or [])
             for m in changeset.new_memories:
-                memories.append(m)
+                is_dup = any(
+                    (em.get("description") or "").strip().lower() == (m.get("description") or "").strip().lower()
+                    and em.get("scope") == m.get("scope")
+                    and (m.get("scope") == "global" or em.get("scene_id") == m.get("scene_id"))
+                    for em in memories
+                )
+                if not is_dup:
+                    memories.append(m)
             self.state.world_memories = memories
 
         for qid in changeset.completed_quest_ids:

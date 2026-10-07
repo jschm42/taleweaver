@@ -799,6 +799,22 @@ class TurnStateApplier:
             import uuid
             existing_memories = list(self.state.world_memories or [])
             for mem in event.new_world_memories:
+                target_scene_id = mem.scene_id or (self.state.current_scene_id if self.state else None)
+                # Deduplication check: prevent identical memories in the same scene/scope
+                is_duplicate = any(
+                    (m.get("description") or "").strip().lower() == (mem.description or "").strip().lower()
+                    and (m.get("scope") == mem.scope)
+                    and (mem.scope == "global" or (m.get("scene_id") or "") == (target_scene_id or ""))
+                    for m in existing_memories
+                )
+                if is_duplicate:
+                    logger.info(
+                        "[Turn %s] Skipping duplicate world memory: %s",
+                        self.game_id,
+                        mem.description,
+                    )
+                    continue
+
                 new_mem = {
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -806,7 +822,7 @@ class TurnStateApplier:
                     "npc_id": mem.npc_id,
                     "emotion": mem.emotion,
                     "scope": mem.scope,
-                    "scene_id": mem.scene_id or (self.state.current_scene_id if self.state else None)
+                    "scene_id": target_scene_id,
                 }
                 existing_memories.append(new_mem)
                 emotion_label = "positiv" if mem.emotion == "positive" else ("negativ" if mem.emotion == "negative" else "neutral")
@@ -817,6 +833,7 @@ class TurnStateApplier:
             self.state.world_memories = existing_memories
             flag_modified(self.state, "world_memories")
             self._queue_checkpoint("world_memories_updated")
+            event.new_world_memories = None
 
         # Time Management
         if event.start_datetime_override:

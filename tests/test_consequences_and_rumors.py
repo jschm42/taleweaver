@@ -67,6 +67,9 @@ async def test_apply_game_event_memories():
     mock_result.scalars.return_value.all.return_value = []
     manager.db.execute = AsyncMock(return_value=mock_result)
     
+    manager.adventure = MagicMock()
+    manager.adventure.time_per_turn = 5
+    
     event = GameEvent(
         narrative_description="Player insulted the wizard.",
         new_world_memories=[
@@ -84,6 +87,59 @@ async def test_apply_game_event_memories():
     assert manager.state.world_memories[0]["emotion"] == "negative"
     assert manager.state.world_memories[0]["scope"] == "local"
     assert manager.state.world_memories[0]["scene_id"] == "TOWER"
+
+
+@pytest.mark.asyncio
+async def test_apply_game_event_duplicate_memories():
+    """Verify that duplicate world memories in the same scope and scene are not added twice."""
+    manager = MagicMock(spec=GameTurnManager)
+    manager.game_id = "test-game-id"
+    state = SessionState()
+    state.session_id = "test-game-id"
+    state.entity_states = {}
+    state.world_memories = [
+        {
+            "id": "existing-1",
+            "description": "Arthur entered the lobby and smelled lavender.",
+            "emotion": "neutral",
+            "scope": "local",
+            "scene_id": "ENTRANCE_HALL",
+        }
+    ]
+    manager.state = state
+
+    avatar = Avatar()
+    avatar.hp = 100
+    avatar.stamina = 100
+    avatar.mana = 100
+    avatar.inventory = []
+    manager.avatar = avatar
+    manager.adventure = MagicMock()
+    manager.adventure.time_per_turn = 5
+
+    manager._collect_existing_item_ids = AsyncMock(return_value=set())
+    manager._save_chat_message = AsyncMock()
+    manager._queue_checkpoint = MagicMock()
+    manager.db = MagicMock()
+    manager.db.flush = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    manager.db.execute = AsyncMock(return_value=mock_result)
+
+    event = GameEvent(
+        new_world_memories=[
+            # Exact duplicate
+            WorldMemoryUpdate(description="Arthur entered the lobby and smelled lavender.", emotion="neutral", scope="local", scene_id="ENTRANCE_HALL"),
+            # Different memory
+            WorldMemoryUpdate(description="Arthur picked up the key.", emotion="positive", scope="local", scene_id="ENTRANCE_HALL"),
+        ]
+    )
+
+    await GameTurnManager._apply_game_event(manager, event)
+
+    # Only the new memory should have been added
+    assert len(manager.state.world_memories) == 2
+    assert manager.state.world_memories[1]["description"] == "Arthur picked up the key."
 
 def test_prompt_builders():
     """Verify that prompt builder blocks format world memories correctly based on current scene."""
