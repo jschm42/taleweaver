@@ -14,6 +14,7 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
 from backend.core.config import settings
 from backend.core.prompts import INSPECT_SEARCH_INTENT_GUARD_SYSTEM_PROMPT
+from backend.core.llm_router import GameMasterLLM
 import backend.api.routes.adventures.gameplay_logic as gl
 from backend.engine.rule_engine import (
     EntityMovement,
@@ -140,7 +141,7 @@ class TurnGuardrailsManager:
         intent_system_prompt = INSPECT_SEARCH_INTENT_GUARD_SYSTEM_PROMPT
 
         try:
-            llm = gl.GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+            llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
             raw_intent = await llm.aexecute_simple_task(
                 intent_system_prompt,
                 text,
@@ -982,7 +983,7 @@ class TurnGuardrailsManager:
                         or llm_settings.get("model")
                         or "gpt-4o-mini"
                     )
-                    llm = gl.GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+                    llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
                     
                     system_prompt = (
                         "You are a mechanics checker for an AI Text Adventure RPG.\n"
@@ -1112,7 +1113,7 @@ class TurnGuardrailsManager:
                 or "gpt-4o-mini"
             )
             
-            llm = gl.GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+            llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
             
             system_prompt = (
                 "You are a mechanics checker for an AI Text Adventure RPG.\n"

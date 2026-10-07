@@ -73,6 +73,8 @@ class Settings(BaseSettings):
 
     VISUAL_TIMEOUT: int = 300
     INTELLIGENCE_TIMEOUT: int = 60
+    STREAM_CHUNK_TIMEOUT: float = 12.0
+    STREAM_INITIAL_TIMEOUT: float = 40.0
     WORLDBUILDING_TIMEOUT: int = 600
     TTS_TIMEOUT_SECONDS: int = 120
     TTS_TIMEOUT_PER_1K_CHARS: int = 20

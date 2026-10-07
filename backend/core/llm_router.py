@@ -556,7 +556,13 @@ class GameMasterLLM:
             buffer += delta
             last_chunk = chunk
 
-            if len(buffer) >= 100:
+            ready_to_flush = (
+                len(buffer) >= 60
+                or "\n" in buffer
+                or ("]" in buffer and len(buffer) >= 15)
+                or (len(buffer) >= 30 and "[" not in buffer)
+            )
+            if ready_to_flush:
                 normalized = GameMasterLLM.normalize_voice_tags(buffer)
                 try:
                     chunk.choices[0].delta.content = normalized
@@ -588,6 +594,59 @@ class GameMasterLLM:
                 except Exception as e:
                     logger.warning("Failed to modify streaming chunk content: %s", e)
             yield last_chunk
+
+    @staticmethod
+    async def _with_stream_timeout(
+        stream,
+        initial_timeout: float = 40.0,
+        chunk_timeout: float = 12.0,
+    ):
+        """Async generator that enforces timeouts between streaming chunks.
+
+        - initial_timeout: Max wait for the first chunk (time to first token).
+        - chunk_timeout: Max wait between subsequent chunks (inactivity timeout).
+        If chunk_timeout expires AFTER content has already been received, the stream
+        terminates gracefully (as LLMs often complete without sending EOF or [DONE]).
+        """
+        has_content = False
+        iterator = aiter(stream)
+
+        while True:
+            current_timeout = chunk_timeout if has_content else initial_timeout
+            try:
+                chunk = await asyncio.wait_for(anext(iterator), timeout=current_timeout)
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                if has_content:
+                    logger.warning(
+                        "Stream stalled for %.1fs after receiving content; terminating stream gracefully.",
+                        chunk_timeout,
+                    )
+                    break
+                logger.error(
+                    "Stream timed out after %.1fs without generating any content.",
+                    initial_timeout,
+                )
+                raise TimeoutError("The AI model did not respond in time.")
+            except Exception as e:
+                if has_content:
+                    logger.warning(
+                        "Stream interrupted by %s after receiving content; preserving received narrative: %s",
+                        type(e).__name__,
+                        e,
+                    )
+                    break
+                raise
+
+            try:
+                delta = chunk.choices[0].delta.content
+                if delta and delta.strip():
+                    has_content = True
+            except (AttributeError, IndexError, TypeError):
+                pass
+
+            yield chunk
 
     @staticmethod
     async def _clean_stream_thinking(stream):
@@ -808,6 +867,8 @@ class GameMasterLLM:
                 settings.INTELLIGENCE_TIMEOUT,
                 default=settings.INTELLIGENCE_TIMEOUT,
             )
+        self.stream_chunk_timeout = float(getattr(settings, "STREAM_CHUNK_TIMEOUT", 12.0) or 12.0)
+        self.stream_initial_timeout = float(getattr(settings, "STREAM_INITIAL_TIMEOUT", 40.0) or 40.0)
         self.kimi_api_base = (getattr(settings, "KIMI_API_BASE", "https://api.moonshot.ai/v1") or "https://api.moonshot.ai/v1").rstrip("/")
         self.minimax_api_base = (getattr(settings, "MINIMAX_API_BASE", "https://api.minimax.io/v1") or "https://api.minimax.io/v1").rstrip("/")
         
@@ -1269,8 +1330,13 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        stream = await self._acompletion_with_openrouter_fallback(kwargs)
-        stream = self._clean_stream_thinking(stream)
+        raw_stream = await self._acompletion_with_openrouter_fallback(kwargs)
+        timed_stream = self._with_stream_timeout(
+            raw_stream,
+            initial_timeout=self.stream_initial_timeout,
+            chunk_timeout=self.stream_chunk_timeout,
+        )
+        stream = self._clean_stream_thinking(timed_stream)
         return self._clean_stream_voice_tags(stream)
 
     async def aexecute_complex_task(

@@ -1821,11 +1821,19 @@ class GameTurnManager:
                     yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
 
         except Exception as e:
-            user_safe_error = _friendly_llm_error_message(e)
-            if user_safe_error:
-                yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
-                return
-            raise
+            if (response_text or "").strip():
+                logger.warning(
+                    "[Turn %s] Stream ended with exception (%s) after receiving %d chars of narrative; keeping content and completing turn.",
+                    self.game_id,
+                    type(e).__name__,
+                    len(response_text),
+                )
+            else:
+                user_safe_error = _friendly_llm_error_message(e)
+                if user_safe_error:
+                    yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
+                    return
+                raise
 
         try:
             import litellm
@@ -1866,22 +1874,25 @@ class GameTurnManager:
             duration_ms=round((time.perf_counter() - cycle_start) * 1000, 2),
         )
 
-        if run_generator_tool_intent_pass and not (response_text or "").strip():
-            fallback = "The Architect inclines his head, the Construct awaiting your next directive."
-            if game_event and getattr(game_event, "requested_adventure_generation", None):
-                tool_results = getattr(game_event, "tool_results", None)
-                generation_success = getattr(tool_results, "generation_success", None) if tool_results else None
-                if generation_success is True:
-                    fallback = "The Architect steps aside as your new world settles into the library archives."
-                elif generation_success is False:
-                    fallback = "The Architect frowns as unstable code dissipates from the unfinished world."
-                else:
-                    fallback = "The Architect watches the Construct flare to life as your requested world takes shape."
-            elif game_event and (
-                getattr(game_event, "request_available_image_styles", False)
-                or getattr(game_event, "request_available_tones", False)
-            ):
-                fallback = "The Architect gestures toward the floating catalogs, inviting your selection."
+        if not (response_text or "").strip():
+            if run_generator_tool_intent_pass:
+                fallback = "The Architect inclines his head, the Construct awaiting your next directive."
+                if game_event and getattr(game_event, "requested_adventure_generation", None):
+                    tool_results = getattr(game_event, "tool_results", None)
+                    generation_success = getattr(tool_results, "generation_success", None) if tool_results else None
+                    if generation_success is True:
+                        fallback = "The Architect steps aside as your new world settles into the library archives."
+                    elif generation_success is False:
+                        fallback = "The Architect frowns as unstable code dissipates from the unfinished world."
+                    else:
+                        fallback = "The Architect watches the Construct flare to life as your requested world takes shape."
+                elif game_event and (
+                    getattr(game_event, "request_available_image_styles", False)
+                    or getattr(game_event, "request_available_tones", False)
+                ):
+                    fallback = "The Architect gestures toward the floating catalogs, inviting your selection."
+            else:
+                fallback = getattr(game_event, "draft_narration", None) or "The world reacts subtly, but nothing immediately obvious occurs."
 
             response_text = fallback
             yield f"event: chunk\ndata: {json.dumps({'content': fallback})}\n\n"

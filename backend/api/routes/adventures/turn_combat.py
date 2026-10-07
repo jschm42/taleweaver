@@ -18,6 +18,7 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
+from backend.core.llm_router import GameMasterLLM
 import backend.api.routes.adventures.gameplay_logic as gl
 from backend.core.prompts import (
     COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT,
@@ -263,7 +264,7 @@ class TurnCombatManager:
         complex_model = llm_settings.get("complex_model") or "gpt-4o"
 
         try:
-            llm = gl.GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
+            llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
         except ValueError:
             return
 
@@ -656,7 +657,7 @@ class TurnCombatManager:
         complex_model = llm_settings.get("complex_model") or "gpt-4o"
 
         try:
-            llm = gl.GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
+            llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
         except ValueError:
             return None
 
