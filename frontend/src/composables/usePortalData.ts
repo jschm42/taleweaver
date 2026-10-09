@@ -91,6 +91,8 @@ export interface UsePortalDataResult {
   openEditNote: (gameId: string, currentNote: string) => void
   saveSessionNote: (note: string) => Promise<void>
   exportSessionAds: (gameId: string, title: string) => Promise<void>
+  imageStylesCatalog: Ref<CatalogTile[]>
+  toneCatalog: Ref<CatalogTile[]>
 }
 
 function formatToneLabel(value?: unknown): string {
@@ -211,6 +213,8 @@ export function usePortalData(): UsePortalDataResult {
 
   const importInput = ref<HTMLInputElement | null>(null)
   const importAccept = ref<string>('.adv,.adz')
+  const imageStylesCatalog = ref<CatalogTile[]>([])
+  const toneCatalog = ref<CatalogTile[]>([])
 
   /** Loads templates and sessions and synchronizes pending generation state. */
   async function fetchPortalData() {
@@ -238,7 +242,22 @@ export function usePortalData(): UsePortalDataResult {
             selected_tone: formatToneLabel(entry.selected_tone),
           }))
         : []
-      sessions.value = Array.isArray(fetchedSessions) ? fetchedSessions : []
+      sessions.value = Array.isArray(fetchedSessions)
+        ? fetchedSessions.map((entry) => ({
+            ...entry,
+            selected_tone: formatToneLabel(entry.selected_tone),
+          }))
+        : []
+
+      try {
+        const settings = await api.getSettings()
+        if (settings) {
+          imageStylesCatalog.value = settings.image_styles_catalog || []
+          toneCatalog.value = settings.tone_catalog || []
+        }
+      } catch {
+        // non-blocking
+      }
 
       await syncPendingFromTemplates(fetchPortalData)
     } catch (error) {
@@ -888,5 +907,7 @@ export function usePortalData(): UsePortalDataResult {
     openEditNote,
     saveSessionNote,
     exportSessionAds,
+    imageStylesCatalog,
+    toneCatalog,
   }
 }

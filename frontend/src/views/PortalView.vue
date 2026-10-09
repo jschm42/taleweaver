@@ -8,10 +8,18 @@ import { usePortalSectionRouting } from '@/composables/usePortalSectionRouting'
 import PortalSidebar from '@/components/portal/PortalSidebar.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
+import PortalFilterToolbar from '@/components/portal/PortalFilterToolbar.vue'
 import AdventureLibraryGrid from '@/components/portal/AdventureLibraryGrid.vue'
+import AdventureLibraryTable from '@/components/portal/AdventureLibraryTable.vue'
 import GameSessionsGrid from '@/components/portal/GameSessionsGrid.vue'
+import GameSessionsTable from '@/components/portal/GameSessionsTable.vue'
 import UserProfileContent from '@/components/portal/UserProfileContent.vue'
 import PortalFooter from '@/components/portal/PortalFooter.vue'
+import {
+  usePortalFilters,
+  extractAvailableTones,
+  extractAvailableStyles
+} from '@/composables/usePortalFilters'
 import { isMobileSidebarOpen, closeMobileSidebar } from '@/store/layout'
 
 import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
@@ -115,7 +123,20 @@ const {
   openEditNote,
   saveSessionNote,
   exportSessionAds,
+  imageStylesCatalog,
+  toneCatalog,
 } = usePortalData()
+
+const templateFilters = usePortalFilters(visibleTemplates, 'templates', 18)
+const sessionFilters = usePortalFilters(sessions, 'sessions', 18)
+
+const availableTones = computed(() => {
+  return extractAvailableTones(visibleTemplates.value, sessions.value, toneCatalog.value)
+})
+
+const availableStyles = computed(() => {
+  return extractAvailableStyles(visibleTemplates.value, sessions.value, imageStylesCatalog.value)
+})
 
 watch(importInput, () => undefined)
 
@@ -334,6 +355,27 @@ onUnmounted(() => {
           @delete-all-sessions="onDeleteAllSessions"
         />
 
+        <PortalFilterToolbar
+          v-if="activeSection !== 'profile' && !isLoading"
+          :section="activeSection"
+          :search-query="activeSection === 'templates' ? templateFilters.searchQuery.value : sessionFilters.searchQuery.value"
+          :selected-type="activeSection === 'templates' ? templateFilters.selectedType.value : sessionFilters.selectedType.value"
+          :selected-tone="activeSection === 'templates' ? templateFilters.selectedTone.value : sessionFilters.selectedTone.value"
+          :selected-style="activeSection === 'templates' ? templateFilters.selectedStyle.value : sessionFilters.selectedStyle.value"
+          :view-mode="activeSection === 'templates' ? templateFilters.viewMode.value : sessionFilters.viewMode.value"
+          :available-tones="availableTones"
+          :available-styles="availableStyles"
+          :total-count="activeSection === 'templates' ? templateFilters.totalCount.value : sessionFilters.totalCount.value"
+          :filtered-count="activeSection === 'templates' ? templateFilters.filteredCount.value : sessionFilters.filteredCount.value"
+          :is-filtered="activeSection === 'templates' ? templateFilters.isFiltered.value : sessionFilters.isFiltered.value"
+          @update:search-query="activeSection === 'templates' ? (templateFilters.searchQuery.value = $event) : (sessionFilters.searchQuery.value = $event)"
+          @update:selected-type="activeSection === 'templates' ? (templateFilters.selectedType.value = $event) : (sessionFilters.selectedType.value = $event)"
+          @update:selected-tone="activeSection === 'templates' ? (templateFilters.selectedTone.value = $event) : (sessionFilters.selectedTone.value = $event)"
+          @update:selected-style="activeSection === 'templates' ? (templateFilters.selectedStyle.value = $event) : (sessionFilters.selectedStyle.value = $event)"
+          @update:view-mode="activeSection === 'templates' ? (templateFilters.viewMode.value = $event) : (sessionFilters.viewMode.value = $event)"
+          @reset-filters="activeSection === 'templates' ? templateFilters.resetFilters() : sessionFilters.resetFilters()"
+        />
+
         <!-- Loading State -->
         <div v-if="isLoading && templates.length === 0 && sessions.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-20 sm:py-32 gap-6">
           <div class="w-12 h-12 sm:w-16 sm:h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
@@ -343,13 +385,45 @@ onUnmounted(() => {
         <div v-else>
           <div v-if="activeSection === 'templates'">
             <AdventureLibraryGrid
-              :visible-templates="visibleTemplates"
+              v-if="templateFilters.viewMode.value === 'grid'"
+              :visible-templates="templateFilters.paginatedItems.value"
               :pending-cards="pendingCards"
               :is-seeding="isSeeding"
               :loading-word-index="loadingWordIndex"
               :is-starting-session="isStartingSession"
               :starting-session-template-id="startingSessionTemplateId"
               :updating-template-ids="updatingTemplateIds"
+              :has-more="templateFilters.hasMore.value"
+              :total-filtered-count="templateFilters.filteredCount.value"
+              @load-more="templateFilters.loadMore"
+              @create="createEmptyAdventure"
+              @generate-world="openCreateModal"
+              @import-samples="handleImportSamplesClick"
+              @remove-failed-pending="removeFailedPendingCard"
+              @cancel-pending="cancelAdventure"
+              @start-session="startSession"
+              @update-adventure="updateAdventure"
+              @cover="openCoverCreate"
+              @edit="editAdventure"
+              @export-adz="exportAdventureAdz"
+              @export-adv="exportAdventureAdv"
+              @delete="confirmDeleteTemplate"
+              @dismiss-warning="dismissWarning"
+              @click-pending="openProgressModal"
+            />
+            <AdventureLibraryTable
+              v-else
+              :visible-templates="templateFilters.paginatedItems.value"
+              :all-filtered-templates="templateFilters.filteredItems.value"
+              :pending-cards="pendingCards"
+              :is-seeding="isSeeding"
+              :loading-word-index="loadingWordIndex"
+              :is-starting-session="isStartingSession"
+              :starting-session-template-id="startingSessionTemplateId"
+              :updating-template-ids="updatingTemplateIds"
+              :has-more="templateFilters.hasMore.value"
+              :total-filtered-count="templateFilters.filteredCount.value"
+              @load-more="templateFilters.loadMore"
               @create="createEmptyAdventure"
               @generate-world="openCreateModal"
               @import-samples="handleImportSamplesClick"
@@ -369,7 +443,25 @@ onUnmounted(() => {
 
           <div v-else-if="activeSection === 'sessions'">
             <GameSessionsGrid
-              :sessions="sessions"
+              v-if="sessionFilters.viewMode.value === 'grid'"
+              :sessions="sessionFilters.paginatedItems.value"
+              :has-more="sessionFilters.hasMore.value"
+              :total-filtered-count="sessionFilters.filteredCount.value"
+              @load-more="sessionFilters.loadMore"
+              @resume="playSession"
+              @delete="confirmDeleteSession"
+              @copy="copySession"
+              @edit-note="openEditNote"
+              @export="(id) => exportSessionAds(id, sessions.find(s => s.game_id === id)?.adventure_title || 'session')"
+              @switch-to-templates="activeSection = 'templates'"
+            />
+            <GameSessionsTable
+              v-else
+              :sessions="sessionFilters.paginatedItems.value"
+              :all-filtered-sessions="sessionFilters.filteredItems.value"
+              :has-more="sessionFilters.hasMore.value"
+              :total-filtered-count="sessionFilters.filteredCount.value"
+              @load-more="sessionFilters.loadMore"
               @resume="playSession"
               @delete="confirmDeleteSession"
               @copy="copySession"

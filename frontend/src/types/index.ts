@@ -165,6 +165,9 @@ export interface GameSession {
   max_memory_turns?: number
   enable_history_compression?: boolean
   is_legacy_format?: boolean
+  rule_enforcement_mode?: 'rpg' | 'story' | 'chat' | string
+  selected_image_styles?: CatalogTile[] | any[]
+  selected_tone?: CatalogTile | string | null
 }
 
 export interface WorldMemory {
@@ -205,6 +208,8 @@ export interface AdventureTemplateSummary {
   creation_status?: string | null
   creation_error?: string | null
   selected_tone?: CatalogTile | string | null
+  selected_image_styles?: CatalogTile[] | any[]
+  rule_enforcement_mode?: 'rpg' | 'story' | 'chat' | string
   progress?: number
   quest_count?: number
   completed_quest_count?: number

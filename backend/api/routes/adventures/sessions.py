@@ -497,6 +497,8 @@ async def list_sessions(
             status_note=g.status_note,
             copied_from_id=g.copied_from_id,
             is_legacy_format=is_legacy_session(session=g, state=s, template=a),
+            rule_enforcement_mode=a.rule_enforcement_mode if a else ((AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("rule_enforcement_mode") or "rpg"),
+            selected_image_styles=a.selected_image_styles if a else ((AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("selected_image_styles") or (s.selected_image_styles if s else None)),
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]
@@ -1438,6 +1440,8 @@ async def _get_session_response(db: AsyncSession, game_id: str, current_user_id:
         status_note=g.status_note,
         copied_from_id=g.copied_from_id,
         is_legacy_format=is_legacy_session(session=g, state=s, template=a),
+        rule_enforcement_mode=a.rule_enforcement_mode if a else ((AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("rule_enforcement_mode") or "rpg"),
+        selected_image_styles=a.selected_image_styles if a else ((AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("selected_image_styles") or (s.selected_image_styles if s else None)),
         max_memory_turns=getattr(s, "max_memory_turns", 10) if s else 10,
         enable_history_compression=getattr(s, "enable_history_compression", True) if s else True,
     )

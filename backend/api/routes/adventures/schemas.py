@@ -381,12 +381,27 @@ class GameSessionResponse(BaseModel):
     max_memory_turns: Optional[int] = 10
     enable_history_compression: Optional[bool] = True
     is_legacy_format: bool = False
+    rule_enforcement_mode: Optional[str] = "rpg"
+    selected_image_styles: Optional[list[dict[str, Any]]] = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod
     def parse_legacy_tone(cls, v):
         if isinstance(v, str):
             return {"id": v, "name": v.capitalize()}
+        return v
+
+    @field_validator("selected_image_styles", mode="before")
+    @classmethod
+    def parse_session_image_styles(cls, v):
+        if isinstance(v, list):
+            res = []
+            for item in v:
+                if isinstance(item, str):
+                    res.append({"id": item, "name": item.replace("-", " ").title()})
+                elif isinstance(item, dict):
+                    res.append(item)
+            return res
         return v
 
 class AdventureTemplateSummaryResponse(BaseModel):
@@ -421,12 +436,27 @@ class AdventureTemplateSummaryResponse(BaseModel):
     has_sequences: bool = True
     is_legacy_format: bool = False
     can_start: bool = True
+    rule_enforcement_mode: Optional[str] = "rpg"
+    selected_image_styles: Optional[list[dict[str, Any]]] = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod
     def parse_legacy_tone(cls, v):
         if isinstance(v, str):
             return {"id": v, "name": v.capitalize()}
+        return v
+
+    @field_validator("selected_image_styles", mode="before")
+    @classmethod
+    def parse_template_image_styles(cls, v):
+        if isinstance(v, list):
+            res = []
+            for item in v:
+                if isinstance(item, str):
+                    res.append({"id": item, "name": item.replace("-", " ").title()})
+                elif isinstance(item, dict):
+                    res.append(item)
+            return res
         return v
 
 class ImportCheckItem(BaseModel):
