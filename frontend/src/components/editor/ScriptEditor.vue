@@ -17,8 +17,9 @@ import {
   Code2,
   HelpCircle,
   Sparkles,
-  RotateCcw,
+  Trash2,
   Terminal,
+  BookOpen,
 } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -44,7 +45,7 @@ const props = withDefaults(
     maxHeight: '450px',
     disabled: false,
     showActions: true,
-    showRunner: true,
+    showRunner: false,
   }
 )
 
@@ -66,6 +67,7 @@ const syntaxResult = ref<SyntaxCheckResult | null>(null)
 const isRunning = ref(false)
 const runResult = ref<ScriptRunResult | null>(null)
 const showOutputPanel = ref(false)
+const showApiDocs = ref(false)
 
 let cmInstance: any = null
 
@@ -222,6 +224,20 @@ function insertSnippet(snippetCode: string) {
   }
 }
 
+function insertNamedSnippet(type: string) {
+  const snippets: Record<string, string> = {
+    player: 'tw.player.damage(5)\n',
+    story: "tw.story.show_message('A strange energy hums in the air.')\n",
+    vars: "tw.vars.set('quest_flag', True)\n",
+    scene: "tw.scene.set_attribute('visited', True)\n",
+    exits: "tw.exits.unlock('EXIT_ID')\n",
+    npcs: "tw.npcs.move('NPC_ID', 'SCENE_ID')\n",
+  }
+  if (snippets[type]) {
+    insertSnippet(snippets[type])
+  }
+}
+
 function clearScript() {
   if (cmInstance) {
     cmInstance.setValue('')
@@ -345,9 +361,12 @@ onBeforeUnmount(() => {
         <div v-if="helpText" class="group relative flex items-center">
           <HelpCircle class="w-3.5 h-3.5 text-slate-500 hover:text-white cursor-help transition-colors" />
           <div
-            class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50"
+            class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50 space-y-1.5"
           >
-            {{ helpText }}
+            <div>{{ helpText }}</div>
+            <div class="text-[9px] text-amber-300 font-mono border-t border-white/10 pt-1">
+              📖 Guide: docs/scripting_engine.md
+            </div>
           </div>
         </div>
 
@@ -362,6 +381,23 @@ onBeforeUnmount(() => {
 
       <!-- Actions -->
       <div v-if="showActions" class="flex items-center gap-1.5 shrink-0">
+        <!-- Scripting Engine Docs (?) Button -->
+        <button
+          type="button"
+          @click="showApiDocs = !showApiDocs"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors',
+            showApiDocs
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+              : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5',
+          ]"
+          title="TaleWeaver Scripting Guide & Reference (docs/scripting_engine.md)"
+        >
+          <BookOpen class="w-3 h-3 text-amber-400" />
+          <span class="hidden md:inline">Docs</span>
+          <span class="text-amber-400 font-black">?</span>
+        </button>
+
         <!-- Snippets Dropdown -->
         <div class="relative group">
           <button
@@ -392,23 +428,23 @@ onBeforeUnmount(() => {
           type="button"
           @click="handleCheckSyntax"
           :disabled="isCheckingSyntax || !modelValue"
-          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 transition-all disabled:opacity-40"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all disabled:opacity-40 shadow-sm"
           title="Verify Python syntax in-browser using Skulpt AST"
         >
-          <CheckCircle2 class="w-3 h-3" />
-          <span class="hidden sm:inline">{{ isCheckingSyntax ? 'Checking...' : 'Check' }}</span>
+          <CheckCircle2 class="w-3.5 h-3.5" />
+          <span>{{ isCheckingSyntax ? 'Checking...' : 'Check Syntax' }}</span>
         </button>
 
-        <!-- Test Run (Skulpt) -->
+        <!-- Optional Test Run (only if explicitly enabled) -->
         <button
           v-if="showRunner"
           type="button"
           @click="handleRunScript"
           :disabled="isRunning || !modelValue"
-          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all disabled:opacity-40 shadow-sm"
-          title="Simulate script in browser sandbox with TaleWeaver mock APIs"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold transition-all disabled:opacity-40"
+          title="Simulate script in browser sandbox"
         >
-          <Play class="w-3 h-3" />
+          <Play class="w-3 h-3 text-emerald-400" />
           <span class="hidden sm:inline">{{ isRunning ? 'Running...' : 'Run' }}</span>
         </button>
 
@@ -420,7 +456,7 @@ onBeforeUnmount(() => {
           class="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
           title="Clear code"
         >
-          <RotateCcw class="w-3 h-3" />
+          <Trash2 class="w-3.5 h-3.5" />
         </button>
 
         <!-- Fullscreen Toggle -->
@@ -433,6 +469,98 @@ onBeforeUnmount(() => {
           <Minimize2 v-if="isFullscreen" class="w-3.5 h-3.5 text-amber-400" />
           <Maximize2 v-else class="w-3.5 h-3.5" />
         </button>
+      </div>
+    </div>
+
+    <!-- Scripting Guide / API Reference Drawer -->
+    <div
+      v-if="showApiDocs"
+      class="border-b border-white/10 bg-slate-900/95 p-3.5 text-xs space-y-2.5 max-h-72 overflow-y-auto"
+    >
+      <div class="flex items-center justify-between pb-1.5 border-b border-white/10">
+        <div class="flex items-center gap-2">
+          <BookOpen class="w-3.5 h-3.5 text-amber-400" />
+          <span class="font-bold text-white uppercase tracking-wider text-[11px]">
+            TaleWeaver Scripting Guide & Reference
+          </span>
+          <span class="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+            docs/scripting_engine.md
+          </span>
+        </div>
+        <button
+          type="button"
+          @click="showApiDocs = false"
+          class="text-slate-400 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded hover:bg-white/5"
+        >
+          ✕
+        </button>
+      </div>
+
+      <p class="text-[11px] text-slate-300 leading-relaxed font-sans">
+        Event-driven Python logic executed in a sandboxed turn loop. Full documentation, examples, and safety rules are in
+        <code class="text-amber-300 font-mono bg-black/40 px-1.5 py-0.5 rounded border border-white/5">docs/scripting_engine.md</code>
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-[11px] font-mono">
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.player</span>
+            <button type="button" @click="insertNamedSnippet('player')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.has_item(id)</code>, <code>.damage(n)</code>, <code>.heal(n)</code>, <code>.set_stat(k, v)</code>
+          </p>
+        </div>
+
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.story</span>
+            <button type="button" @click="insertNamedSnippet('story')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.show_message(text)</code>, <code>.narrate(text)</code>
+          </p>
+        </div>
+
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.vars</span>
+            <button type="button" @click="insertNamedSnippet('vars')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.get(k, default)</code>, <code>.set(k, v)</code> (persists across turns)
+          </p>
+        </div>
+
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.scene</span>
+            <button type="button" @click="insertNamedSnippet('scene')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.id</code>, <code>.name</code>, <code>.get_attribute(k)</code>, <code>.set_attribute(k, v)</code>
+          </p>
+        </div>
+
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.exits</span>
+            <button type="button" @click="insertNamedSnippet('exits')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.unlock(id)</code>, <code>.lock(id, reason)</code>, <code>.reveal(id)</code>
+          </p>
+        </div>
+
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.npcs</span>
+            <button type="button" @click="insertNamedSnippet('npcs')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.get(id)</code>, <code>.move(id, target_scene)</code>
+          </p>
+        </div>
       </div>
     </div>
 
@@ -479,7 +607,7 @@ onBeforeUnmount(() => {
       <div class="flex items-center justify-between">
         <span class="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-slate-400">
           <Terminal class="w-3 h-3 text-amber-400" />
-          Execution / Validation Output
+          Syntax Validation Output
         </span>
         <button
           type="button"
