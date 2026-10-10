@@ -21,6 +21,8 @@ class WorldScene(Base, TimestampMixin):
     description = Column(String(2000), nullable=False) # Atmospheric description
     image_url = Column(String(255), nullable=True) # Scene visual link
     decorative_objects = Column(JSON, nullable=True) # Static, non-interactable background details
+    on_enter_scene_script = Column(String(5000), nullable=True)
+    on_enter_scene_text = Column(String(5000), nullable=True)
     adventure_id = synonym("template_id")
 
 class WorldExit(Base, TimestampMixin):
@@ -43,6 +45,8 @@ class WorldExit(Base, TimestampMixin):
     code_to_unlock = Column(String(50), nullable=True)
     item_to_unlock = Column(String(50), nullable=True)
     rule_to_unlock = Column(String(500), nullable=True)
+    on_open_exit_script = Column(String(5000), nullable=True)
+    on_open_exit_text = Column(String(5000), nullable=True)
     adventure_id = synonym("template_id")
 
 class WorldEntity(Base, TimestampMixin):

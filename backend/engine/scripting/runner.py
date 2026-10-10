@@ -83,3 +83,10 @@ class ScriptRunner:
                 )
 
         return context.changeset
+
+    def execute_code(self, code: str, scope: dict[str, Any], script_id: str = "INLINE") -> None:
+        """Executes a single inline code block directly."""
+        try:
+            self.interpreter.execute(code, scope)
+        except Exception as exc:
+            logger.exception(f"[ScriptRunner] Unexpected error executing inline script '{script_id}': {exc}")

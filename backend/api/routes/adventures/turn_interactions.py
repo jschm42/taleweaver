@@ -951,6 +951,46 @@ class TurnInteractionsManager:
                             await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
                             response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
 
+        if response.startswith("[TRIGGER_EQUIP]"):
+            parts = response.replace("[TRIGGER_EQUIP]", "").strip().split("|", 1)
+            item_id = parts[0].strip() if len(parts) > 0 else ""
+            msg = parts[1].strip() if len(parts) > 1 else response
+            
+            if item_id and item_id != "None":
+                ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.session_id == self.state.session_id))
+                ent_obj = ent_res.scalars().first()
+                if ent_obj:
+                    meta = dict(ent_obj.metadata_json or {})
+                    if meta.get("on_equip_script"):
+                        msgs = await self.manager._execute_inline_script(meta["on_equip_script"], "on_equip", item_id)
+                        for m in msgs:
+                            await self._save_chat_message("system", m)
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+                    if meta.get("on_equip_text"):
+                        await self._save_chat_message("system", meta["on_equip_text"])
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': meta['on_equip_text']})}\n\n"
+            response = msg
+
+        if response.startswith("[TRIGGER_UNEQUIP]"):
+            parts = response.replace("[TRIGGER_UNEQUIP]", "").strip().split("|", 1)
+            item_id = parts[0].strip() if len(parts) > 0 else ""
+            msg = parts[1].strip() if len(parts) > 1 else response
+            
+            if item_id and item_id != "None":
+                ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.session_id == self.state.session_id))
+                ent_obj = ent_res.scalars().first()
+                if ent_obj:
+                    meta = dict(ent_obj.metadata_json or {})
+                    if meta.get("on_unequip_script"):
+                        msgs = await self.manager._execute_inline_script(meta["on_unequip_script"], "on_unequip", item_id)
+                        for m in msgs:
+                            await self._save_chat_message("system", m)
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+                    if meta.get("on_unequip_text"):
+                        await self._save_chat_message("system", meta["on_unequip_text"])
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': meta['on_unequip_text']})}\n\n"
+            response = msg
+
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
             action_msg = self._consume_item_now(item_name)

@@ -17,6 +17,8 @@ const props = defineProps<{
     code_to_unlock?: string
     item_to_unlock?: string
     rule_to_unlock?: string
+    on_open_exit_script?: string
+    on_open_exit_text?: string
   }
   sceneReferenceOptions: any[]
   referenceOptions: any[]
@@ -34,6 +36,8 @@ const emit = defineEmits<{
     code_to_unlock?: string
     item_to_unlock?: string
     rule_to_unlock?: string
+    on_open_exit_script?: string
+    on_open_exit_text?: string
   }): void
 }>()
 
@@ -46,7 +50,11 @@ const EMPTY_FORM = {
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
+  on_open_exit_script: '',
+  on_open_exit_text: '',
 }
+
+const activeTab = ref<'simple' | 'advanced'>('simple')
 
 const form = ref({ ...(props.initialForm || EMPTY_FORM) })
 
@@ -123,8 +131,25 @@ function submit() {
             </button>
           </div>
 
+          <!-- Tabs -->
+          <div class="px-6 border-b border-white/10 flex gap-6">
+            <button
+              @click="activeTab = 'simple'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'simple' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              General
+            </button>
+            <button
+              @click="activeTab = 'advanced'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'advanced' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              Advanced
+            </button>
+          </div>
+
           <!-- Scrollable Content -->
           <div class="p-6 space-y-5 overflow-y-auto flex-1 text-slate-200">
+            <div v-show="activeTab === 'simple'" class="space-y-5">
             <div class="grid md:grid-cols-2 gap-3">
               <label class="text-xs text-slate-300 space-y-1">
                 <span>From Scene</span>
@@ -213,6 +238,26 @@ function submit() {
               </div>
               <input v-model="form.rule_to_unlock" maxlength="500" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all" placeholder="e.g. Protagonist defeats NPC_2" />
             </label>
+            </div>
+
+            <div v-show="activeTab === 'advanced'" class="space-y-5">
+              <div class="space-y-2">
+                <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Advanced Triggers</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                  Define scripts or text cues to execute during interaction. (Leave blank if none).
+                </p>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                <div class="space-y-2">
+                  <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Open Exit Script</label>
+                  <textarea v-model="form.on_open_exit_script" rows="3" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-none"></textarea>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Open Exit Text</label>
+                  <textarea v-model="form.on_open_exit_text" rows="3" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-none"></textarea>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Fixed Footer -->

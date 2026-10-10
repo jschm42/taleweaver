@@ -18,6 +18,7 @@ class ScriptChangeset:
     player_hp_change: int = 0
     player_mana_change: int = 0
     player_stamina_change: int = 0
+    player_xp_change: int = 0
     player_new_items: list[dict[str, Any]] = field(default_factory=list)
     player_removed_item_ids: list[str] = field(default_factory=list)
     player_status_effects_add: list[str] = field(default_factory=list)
@@ -65,6 +66,10 @@ class PlayerProxy:
         return int(self._avatar.get("stamina", 100)) + self._changeset.player_stamina_change
 
     @property
+    def xp(self) -> int:
+        return int(self._avatar.get("xp", 0)) + self._changeset.player_xp_change
+
+    @property
     def name(self) -> str:
         return str(self._avatar.get("name", "Protagonist"))
 
@@ -76,6 +81,9 @@ class PlayerProxy:
 
     def modify_stamina(self, delta: int) -> None:
         self._changeset.player_stamina_change += int(delta)
+
+    def modify_xp(self, delta: int) -> None:
+        self._changeset.player_xp_change += int(delta)
 
     def give_item(self, item_id: str, name: Optional[str] = None, description: Optional[str] = None) -> None:
         self._changeset.player_new_items.append({
@@ -121,13 +129,23 @@ class PlayerProxy:
 class SceneProxy:
     """Safe proxy for scene inspection and transitions."""
 
-    def __init__(self, current_scene_id: str, changeset: ScriptChangeset):
+    def __init__(self, current_scene_id: str, changeset: ScriptChangeset, npcs_mgr: 'EntityManagerProxy', objects_mgr: 'EntityManagerProxy'):
         self._current_scene_id = current_scene_id
         self._changeset = changeset
+        self._npcs_mgr = npcs_mgr
+        self._objects_mgr = objects_mgr
 
     @property
     def id(self) -> str:
         return self._changeset.teleport_scene_id or self._current_scene_id
+
+    @property
+    def npcs(self) -> list['NPCProxy']:
+        return [npc for npc in self._npcs_mgr.all() if npc.current_scene_id == self.id]
+
+    @property
+    def items(self) -> list['ObjectProxy']:
+        return [obj for obj in self._objects_mgr.all() if obj.current_scene_id == self.id]
 
     def teleport(self, target_scene_id: str) -> None:
         self._changeset.teleport_scene_id = target_scene_id
@@ -297,6 +315,9 @@ class EntityManagerProxy:
         data = self._entities.get(entity_id, {"id": entity_id})
         return self._proxy_cls(entity_id, data, self._changeset)
 
+    def all(self) -> list[EntityProxy]:
+        return [self.get(eid) for eid in self._entities.keys()]
+
     def exists(self, entity_id: str) -> bool:
         return entity_id in self._entities
 
@@ -353,8 +374,13 @@ class MemoriesProxy:
 class GameProxy:
     """Safe proxy for game outcome and victory/defeat criteria."""
 
-    def __init__(self, changeset: ScriptChangeset):
+    def __init__(self, changeset: ScriptChangeset, in_game_time: int = 0):
         self._changeset = changeset
+        self.in_game_time = in_game_time
+
+    @property
+    def time(self) -> int:
+        return self.in_game_time
 
     def win(self, reason: Optional[str] = None) -> None:
         self._changeset.game_completed = True
@@ -452,11 +478,10 @@ class GameContext:
         exit_states: dict[str, Any],
         quests: list[dict[str, Any]],
         script_vars: dict[str, Any],
+        in_game_time: int = 0,
     ):
         self.changeset = ScriptChangeset()
         self.player = PlayerProxy(avatar_data, self.changeset)
-        self.scene = SceneProxy(current_scene_id, self.changeset)
-        self.exits = ExitProxy(exit_states, self.changeset)
         self.npcs = EntityManagerProxy(
             {k: v for k, v in entities.items() if v.get("npc_type") or v.get("is_npc")},
             self.changeset,
@@ -467,10 +492,12 @@ class GameContext:
             self.changeset,
             ObjectProxy
         )
+        self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
+        self.exits = ExitProxy(exit_states, self.changeset)
         self.vars = VarsProxy(script_vars, self.changeset)
         self.story = StoryProxy(self.changeset)
         self.memories = MemoriesProxy(self.changeset)
-        self.game = GameProxy(self.changeset)
+        self.game = GameProxy(self.changeset, in_game_time)
         self.quests = QuestsProxy(quests, self.changeset)
         self.awards = AwardsProxy(self.changeset)
         self.sequences = SequencesProxy(self.changeset)

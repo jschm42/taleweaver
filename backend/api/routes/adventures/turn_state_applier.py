@@ -385,6 +385,47 @@ class TurnStateApplier:
                     system_messages.append(msg)
                     self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
 
+                    # Trigger on_open_exit if applicable
+                    if valid_exit:
+                        if valid_exit.on_open_exit_script:
+                            msgs = await self.manager._execute_inline_script(valid_exit.on_open_exit_script, "on_open_exit", valid_exit.id)
+                            system_messages.extend(msgs)
+                        if valid_exit.on_open_exit_text:
+                            await self._save_chat_message("system", valid_exit.on_open_exit_text)
+                            system_messages.append(valid_exit.on_open_exit_text)
+                    
+                    if new_scene_db and new_scene_db.on_enter_scene_script:
+                        msgs = await self.manager._execute_inline_script(new_scene_db.on_enter_scene_script, "on_enter_scene", new_scene_db.id)
+                        system_messages.extend(msgs)
+                    if new_scene_db and new_scene_db.on_enter_scene_text:
+                        await self._save_chat_message("system", new_scene_db.on_enter_scene_text)
+                        system_messages.append(new_scene_db.on_enter_scene_text)
+                        
+                    # Check for NPCs in the new scene and run their hooks
+                    npc_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            WorldEntity.session_id == self.game_id,
+                            WorldEntity.entity_type == "NPC"
+                        )
+                    )
+                    all_npcs = npc_res.scalars().all()
+                    for npc in all_npcs:
+                        npc_scene = states.get(npc.id, {}).get("current_scene_id", npc.current_scene_id)
+                        if npc_scene == event.new_scene_id:
+                            npc_meta = dict(npc.metadata_json or {})
+                            if npc_meta.get("on_protagonist_enters_scene_script"):
+                                msgs = await self.manager._execute_inline_script(npc_meta["on_protagonist_enters_scene_script"], "on_protagonist_enters_scene", npc.id)
+                                system_messages.extend(msgs)
+                            if npc_meta.get("on_protagonist_enters_scene_text"):
+                                await self._save_chat_message("system", npc_meta["on_protagonist_enters_scene_text"])
+                                system_messages.append(npc_meta["on_protagonist_enters_scene_text"])
+                            
+                            attack_mode = npc_meta.get("attack_mode", "PASSIVE")
+                            if attack_mode == "ATTACK_ON_SIGHT":
+                                msg = f"{npc.name} is hostile and attacks on sight!"
+                                await self._save_chat_message("system", msg)
+                                system_messages.append(msg)
+
                     MapEngine.register_visit(
                         world_map, 
                         event.new_scene_id, 
@@ -501,6 +542,14 @@ class TurnStateApplier:
                             await self._save_chat_message("system", xp_msg)
                             system_messages.append(msg)
                             system_messages.append(xp_msg)
+                            
+                            npc_meta = dict(ent_obj.metadata_json or {})
+                            if npc_meta.get("on_defeat_script"):
+                                msgs = await self.manager._execute_inline_script(npc_meta["on_defeat_script"], "on_defeat", ent_obj.id)
+                                system_messages.extend(msgs)
+                            if npc_meta.get("on_defeat_text"):
+                                await self._save_chat_message("system", npc_meta["on_defeat_text"])
+                                system_messages.append(npc_meta["on_defeat_text"])
                     states[eid]["is_defeated"] = update.is_defeated
                 if update.locked is not None:
                     was_locked = self.state.entity_states.get(eid, {}).get("locked")
@@ -565,6 +614,31 @@ class TurnStateApplier:
                         states[item.id] = {}
                     states[item.id]["is_in_inventory"] = True
                     state_dirty = True
+                    
+                    ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.session_id == self.game_id))
+                    ent_obj = ent_res.scalars().first()
+                    if ent_obj:
+                        meta = dict(ent_obj.metadata_json or {})
+                        if meta.get("on_pickup_script"):
+                            msgs = await self.manager._execute_inline_script(meta["on_pickup_script"], "on_pickup", item.id)
+                            system_messages.extend(msgs)
+                        if meta.get("on_pickup_text"):
+                            await self._save_chat_message("system", meta["on_pickup_text"])
+                            system_messages.append(meta["on_pickup_text"])
+
+        if event.removed_inventory_item_ids:
+            for item_id in event.removed_inventory_item_ids:
+                if item_id:
+                    ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.session_id == self.game_id))
+                    ent_obj = ent_res.scalars().first()
+                    if ent_obj:
+                        meta = dict(ent_obj.metadata_json or {})
+                        if meta.get("on_drop_script"):
+                            msgs = await self.manager._execute_inline_script(meta["on_drop_script"], "on_drop", item_id)
+                            system_messages.extend(msgs)
+                        if meta.get("on_drop_text"):
+                            await self._save_chat_message("system", meta["on_drop_text"])
+                            system_messages.append(meta["on_drop_text"])
 
         if event.spawned_items:
             for item in event.spawned_items:

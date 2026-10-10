@@ -260,7 +260,8 @@ class CommandParser:
         result = response_msg + f"Equipped {item_to_equip.get('name')} in slot {slot}."
         if stat_msg:
             result += f" {stat_msg}"
-        return result
+        item_id_str = item_to_equip.get('id') or 'None'
+        return f"[TRIGGER_EQUIP] {item_id_str} | {result}"
 
     @staticmethod
     def _handle_unequip(avatar: Avatar, slot_name: str) -> str:
@@ -296,7 +297,8 @@ class CommandParser:
         result = f"Unequipped {currently_equipped.get('name')} from {match}."
         if stat_msg:
             result += f" {stat_msg}"
-        return result
+        item_id_str = currently_equipped.get('id') or 'None'
+        return f"[TRIGGER_UNEQUIP] {item_id_str} | {result}"
 
     @staticmethod
     def _handle_consume(avatar: Avatar, item_name: str) -> str:

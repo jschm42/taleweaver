@@ -59,6 +59,8 @@ const emit = defineEmits<{
   (e: 'save', data: any): void
 }>()
 
+const activeTab = ref<'simple' | 'advanced'>('simple')
+
 const localForm = ref({
   is_hidden: false,
   reveal_rule: '',
@@ -67,6 +69,23 @@ const localForm = ref({
   notes: '',
   pickup_trigger_mode: 'silent',
   pickup_trigger_cue: '',
+  attack_mode: 'PASSIVE',
+  on_pickup_script: '',
+  on_pickup_text: '',
+  on_drop_script: '',
+  on_drop_text: '',
+  on_equip_script: '',
+  on_equip_text: '',
+  on_unequip_script: '',
+  on_unequip_text: '',
+  on_enter_scene_script: '',
+  on_enter_scene_text: '',
+  on_open_exit_script: '',
+  on_open_exit_text: '',
+  on_defeat_script: '',
+  on_defeat_text: '',
+  on_protagonist_enters_scene_script: '',
+  on_protagonist_enters_scene_text: '',
   ...props.initialForm
 })
 const switchStates = ref<string[]>([])
@@ -262,6 +281,23 @@ watch(() => props.initialForm, (newVal) => {
     moveable: false,
     allowed_scenes_input: [],
     notes: '',
+    attack_mode: 'PASSIVE',
+    on_pickup_script: '',
+    on_pickup_text: '',
+    on_drop_script: '',
+    on_drop_text: '',
+    on_equip_script: '',
+    on_equip_text: '',
+    on_unequip_script: '',
+    on_unequip_text: '',
+    on_enter_scene_script: '',
+    on_enter_scene_text: '',
+    on_open_exit_script: '',
+    on_open_exit_text: '',
+    on_defeat_script: '',
+    on_defeat_text: '',
+    on_protagonist_enters_scene_script: '',
+    on_protagonist_enters_scene_text: '',
     ...newVal
   }
   syncFromForm()
@@ -407,6 +443,23 @@ function handleSave() {
     moveable: Boolean(localForm.value.moveable),
     allowed_scenes: (localForm.value.allowed_scenes_input || []).map((s: any) => String(s).trim().toUpperCase()).filter(Boolean),
     notes: String(localForm.value.notes || '').trim(),
+    attack_mode: localForm.value.attack_mode,
+    on_pickup_script: localForm.value.on_pickup_script,
+    on_pickup_text: localForm.value.on_pickup_text,
+    on_drop_script: localForm.value.on_drop_script,
+    on_drop_text: localForm.value.on_drop_text,
+    on_equip_script: localForm.value.on_equip_script,
+    on_equip_text: localForm.value.on_equip_text,
+    on_unequip_script: localForm.value.on_unequip_script,
+    on_unequip_text: localForm.value.on_unequip_text,
+    on_enter_scene_script: localForm.value.on_enter_scene_script,
+    on_enter_scene_text: localForm.value.on_enter_scene_text,
+    on_open_exit_script: localForm.value.on_open_exit_script,
+    on_open_exit_text: localForm.value.on_open_exit_text,
+    on_defeat_script: localForm.value.on_defeat_script,
+    on_defeat_text: localForm.value.on_defeat_text,
+    on_protagonist_enters_scene_script: localForm.value.on_protagonist_enters_scene_script,
+    on_protagonist_enters_scene_text: localForm.value.on_protagonist_enters_scene_text,
   })
 }
 
@@ -519,8 +572,25 @@ const textLogPreviewClass = computed(() => {
             </button>
           </div>
 
+          <!-- Tabs -->
+          <div class="px-8 border-b border-white/5 flex gap-6">
+            <button
+              @click="activeTab = 'simple'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'simple' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              General
+            </button>
+            <button
+              @click="activeTab = 'advanced'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'advanced' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              Advanced
+            </button>
+          </div>
+
           <!-- Scrollable Content -->
           <div class="px-8 py-6 space-y-6 overflow-y-auto flex-1">
+            <div v-show="activeTab === 'simple'" class="space-y-6">
               <!-- Editable ID (create mode or scene/npc/object edit mode) -->
               <div v-if="isCreateEntityMode || ['npc', 'object', 'scene'].includes(context.type)" class="space-y-3">
                 <div class="flex justify-between items-center">
@@ -921,29 +991,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <!-- Pickup reaction (GM / NPC comment after the player takes this item) -->
-                <div v-if="localForm.is_portable && currentItemType !== 'WEARABLE'" class="space-y-3 border-t border-white/5 pt-4">
-                  <div class="space-y-1">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">On Pickup</label>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">Choose whether the Game Master or an NPC reacts when the player takes this item.</p>
-                  </div>
-                  <select
-                    v-model="localForm.pickup_trigger_mode"
-                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-emerald-500/50 outline-none transition-all"
-                  >
-                    <option value="silent">Silent (no reaction)</option>
-                    <option value="narration">Narration Pass (short reaction only)</option>
-                    <option value="turn">Full Turn (NPCs and rules may react)</option>
-                  </select>
-                  <textarea
-                    v-if="localForm.pickup_trigger_mode && localForm.pickup_trigger_mode !== 'silent'"
-                    v-model="localForm.pickup_trigger_cue"
-                    rows="3"
-                    maxlength="500"
-                    placeholder="Optional cue for the GM, e.g. 'The HR clerk smirks and warns Arthur that signing is binding.'"
-                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none transition-all resize-none"
-                  ></textarea>
-                </div>
+
 
                 <!-- Hidden state & Reveal rule for Objects -->
                 <div v-if="currentItemType !== 'CONSTRUCTABLE'" class="space-y-4 border-t border-white/5 pt-4">
@@ -1509,9 +1557,255 @@ const textLogPreviewClass = computed(() => {
                   <span>Quick-Gen Description</span>
                 </button>
               </div>
-            </div>
+            </div> <!-- End simple tab -->
 
-          <!-- Fixed Footer -->
+            <div v-show="activeTab === 'advanced'" class="space-y-6">
+              <div class="space-y-2">
+                <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Advanced Triggers</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                  Define scripts or text cues to execute during interaction. (Leave blank if none).
+                </p>
+              </div>
+
+              <div v-if="context.type === 'object'" class="space-y-6">
+                <!-- Object Triggers -->
+                <div v-if="localForm.is_portable && currentItemType !== 'WEARABLE'" class="space-y-3 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-1">
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">On Pickup Mode</label>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">Choose whether the Game Master or an NPC reacts when the player takes this item.</p>
+                  </div>
+                  <select
+                    v-model="localForm.pickup_trigger_mode"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-emerald-500/50 outline-none transition-all"
+                  >
+                    <option value="silent">Silent (no reaction)</option>
+                    <option value="narration">Narration Pass (short reaction only)</option>
+                    <option value="turn">Full Turn (NPCs and rules may react)</option>
+                  </select>
+                  <textarea
+                    v-if="localForm.pickup_trigger_mode && localForm.pickup_trigger_mode !== 'silent'"
+                    v-model="localForm.pickup_trigger_cue"
+                    rows="4"
+                    maxlength="500"
+                    placeholder="Optional cue for the GM, e.g. 'The HR clerk smirks and warns Arthur that signing is binding.'"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none transition-all resize-y"
+                  ></textarea>
+                </div>
+
+                <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Pickup Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed immediately when the player picks up this item. Use this to mutate game state (e.g. give a curse or trigger a flag).
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_pickup_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Pickup Text
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        A narrative text string shown to the player when picking up this item.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_pickup_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+
+                <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Drop Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed immediately when the player drops this item from their inventory.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_drop_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Drop Text
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        A narrative text string shown to the player when dropping this item.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_drop_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+
+                <div v-if="currentItemType === 'WEARABLE' || currentItemType === 'WEAPON'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Equip Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed when the player equips this wearable/weapon.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_equip_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Equip Text
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        A narrative text string shown to the player upon equipping.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_equip_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+
+                <div v-if="currentItemType === 'WEARABLE' || currentItemType === 'WEAPON'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Unequip Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed when the player unequips this wearable/weapon.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_unequip_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Unequip Text
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        A narrative text string shown to the player upon unequipping.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_unequip_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else-if="context.type === 'scene'" class="space-y-6">
+                <!-- Scene Triggers -->
+                <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Enter Scene Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed immediately when the protagonist enters this scene.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_enter_scene_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Enter Scene Text
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        A narrative text string shown right after the player enters the scene.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_enter_scene_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else-if="context.type === 'npc'" class="space-y-6">
+                <!-- NPC Triggers -->
+                <div class="flex items-center justify-between p-4 bg-black/30 border border-white/10 rounded-2xl">
+                  <div class="space-y-1 pr-4">
+                    <p class="text-xs font-black text-red-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <i class="ra ra-swords"></i> Attack Mode
+                    </p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If ATTACK_ON_SIGHT, the NPC attacks instantly upon entry.</p>
+                  </div>
+                  <button
+                    type="button"
+                    @click="localForm.attack_mode = localForm.attack_mode === 'PASSIVE' ? 'ATTACK_ON_SIGHT' : 'PASSIVE'"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1 shrink-0', localForm.attack_mode === 'ATTACK_ON_SIGHT' ? 'bg-red-600' : 'bg-slate-700']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.attack_mode === 'ATTACK_ON_SIGHT' ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
+                </div>
+
+                <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Defeat Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed immediately when this NPC is marked as defeated. Use to spawn loot or trigger story progression.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_defeat_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Defeat Text (NPC speaks)
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        A final quote or description printed when the NPC is defeated.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_defeat_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+
+                <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Protagonist Enters Script
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Executed by this NPC when the protagonist enters the scene. Use to alter the NPC state or trigger a trap.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_protagonist_enters_scene_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Protagonist Enters Text
+                    <div class="group relative flex items-center">
+                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
+                        Text spoken or narrated by this NPC immediately when the player enters the scene.
+                      </div>
+                    </div>
+                  </div>
+                    <textarea v-model="localForm.on_protagonist_enters_scene_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
           <div class="px-8 py-5 border-t border-white/5 flex justify-end gap-4 bg-slate-900/55 rounded-b-[2.5rem]">
             <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
             <button @click="handleSave" :disabled="isSaving || isFormInvalid" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">

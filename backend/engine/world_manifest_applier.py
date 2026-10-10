@@ -609,6 +609,8 @@ async def _persist_scenes(
             description=description,
             image_url=image_url,
             decorative_objects=clean_decor or None,
+            on_enter_scene_script=s.get("on_enter_scene_script") or None,
+            on_enter_scene_text=s.get("on_enter_scene_text") or None,
         ))
 
 
@@ -659,6 +661,8 @@ def _persist_exits(
             code_to_unlock=code_to_unlock,
             item_to_unlock=item_to_unlock,
             rule_to_unlock=rule_to_unlock,
+            on_open_exit_script=e.get("on_open_exit_script") or None,
+            on_open_exit_text=e.get("on_open_exit_text") or None,
         ))
 
 
@@ -756,6 +760,11 @@ async def _persist_npcs(
             "equipped_weapon_id": n.get("equipped_weapon_id"),
             "equipped_armor_id": n.get("equipped_armor_id"),
             "special_actions": n.get("special_actions") or [],
+            "attack_mode": n.get("attack_mode") or "PASSIVE",
+            "on_defeat_script": n.get("on_defeat_script") or None,
+            "on_defeat_text": n.get("on_defeat_text") or None,
+            "on_protagonist_enters_scene_script": n.get("on_protagonist_enters_scene_script") or None,
+            "on_protagonist_enters_scene_text": n.get("on_protagonist_enters_scene_text") or None,
         }
 
         db.add(WorldEntity(
@@ -947,6 +956,15 @@ async def _persist_objects(
         }
 
         metadata_json = dict(o.get("metadata_json") or {})
+        metadata_json["on_pickup_script"] = o.get("on_pickup_script") or None
+        metadata_json["on_pickup_text"] = o.get("on_pickup_text") or None
+        metadata_json["on_drop_script"] = o.get("on_drop_script") or None
+        metadata_json["on_drop_text"] = o.get("on_drop_text") or None
+        metadata_json["on_equip_script"] = o.get("on_equip_script") or None
+        metadata_json["on_equip_text"] = o.get("on_equip_text") or None
+        metadata_json["on_unequip_script"] = o.get("on_unequip_script") or None
+        metadata_json["on_unequip_text"] = o.get("on_unequip_text") or None
+        
         if hp_change is not None:
             metadata_json["hp_change"] = hp_change
         if stamina_change is not None:

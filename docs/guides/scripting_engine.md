@@ -88,6 +88,20 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_interact` | When the player examines, attacks, talks to, or manipulates an entity. | Specific `entity_id` (NPC or object) or empty for all. |
 | `on_turn_end` | After LLM narration and state changes are computed, before client response. | Global (`*` or empty). |
 
+### Inline Entity Triggers
+
+In addition to standalone script assets, TaleWeaver allows configuring short inline scripts directly on entities, NPCs, and scenes via the World Editor's **Advanced Tab**. These execute automatically during specific interactions.
+
+| Entity Type | Available Triggers | Description |
+| :--- | :--- | :--- |
+| **Objects** | `on_pickup_script` | Executes when the item is taken into inventory. |
+| | `on_drop_script` | Executes when the item is dropped into the scene. |
+| | `on_equip_script` | Executes when the player equips a WEAPON or WEARABLE. |
+| | `on_unequip_script` | Executes when the player unequips a WEAPON or WEARABLE. |
+| **NPCs** | `on_defeat_script` | Executes when the NPC is defeated. Use to spawn loot or change state. |
+| | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
+| **Scenes** | `on_enter_scene_script` | Executes when the player enters this specific scene. |
+
 ### Priority Execution
 Scripts carry an integer `priority` (default: `100`). Scripts with **lower** priority numbers execute before scripts with higher numbers.
 
@@ -274,6 +288,37 @@ if remaining > 0:
     tw.story.show_message("The cavern tremors intensify! " + str(remaining) + " turn(s) before total collapse.")
 else:
     tw.game.set_game_over("The cavern roof collapsed, burying all beneath tons of solid rock.")
+```
+
+---
+
+### Example 6: Cursed Amulet (Inline Object Script)
+Trigger: `on_equip_script` (Configured directly on the `AMULET_OF_DOOM` item)
+
+```python
+# Apply a curse when equipped
+tw.vars.set("cursed_hp_drain", True)
+tw.story.show_message("As the amulet touches your skin, an icy chill grips your heart. You feel your vitality draining away.")
+```
+
+Trigger: `on_unequip_script` (Configured directly on the `AMULET_OF_DOOM` item)
+
+```python
+# Remove the curse when unequipped
+tw.vars.set("cursed_hp_drain", False)
+tw.story.show_message("You tear the amulet from your neck, gasping for breath. The icy grip subsides.")
+```
+
+---
+
+### Example 7: Ambusher NPC (Inline NPC Script)
+Trigger: `on_protagonist_enters_scene_script` (Configured directly on the `GOBLIN_AMBUSHER` NPC)
+
+```python
+# The NPC immediately attacks the player upon entering the scene
+tw.player.damage(5)
+tw.story.show_message("The goblin leaps from the shadows, scoring a quick hit with a rusty dagger! (-5 HP)")
+tw.memories.add("A goblin ambushed me from the shadows.")
 ```
 
 ---

@@ -19,6 +19,8 @@ class WorldSceneSchema(BaseModel):
         default=[],
         description="A list of up to 7 simple, non-interactable decorative objects, furniture, or background features present in the scene (e.g. ['metal table', 'faint light fixture']). These are not interactable entities and won't have images/stats, but describe the room better."
     )
+    on_enter_scene_script: str = Field("", description="Optional script executed when the protagonist enters the scene. Use empty string for none.")
+    on_enter_scene_text: str = Field("", description="Optional text output when the protagonist enters the scene. Use empty string for none.")
 
     model_config = {"extra": "forbid"}
 
@@ -41,6 +43,8 @@ class WorldExitSchema(BaseModel):
     code_to_unlock: str = Field("", description="Deterministic access code for the lock, e.g. 4711. Keep empty if no code is required.")
     item_to_unlock: str = Field("", description="The ID of the item needed to unlock this path, e.g. IRON_KEY. Keep empty if no item is required.")
     rule_to_unlock: str = Field("", description="A soft narrative rule for unlocking, e.g. 'Protagonist overpersuades NPC_1 to open the door'. Keep empty if no soft rule is required.")
+    on_open_exit_script: str = Field("", description="Optional script executed when this exit is opened/traversed. Use empty string for none.")
+    on_open_exit_text: str = Field("", description="Optional text output when this exit is opened/traversed. Use empty string for none.")
 
     model_config = {"extra": "forbid"}
 
@@ -94,6 +98,11 @@ class WorldNPCSchema(BaseModel):
     equipped_weapon_id: Optional[str] = Field(None, description="Optional ID of the equipped weapon object. Must exist in the objects list.")
     equipped_armor_id: Optional[str] = Field(None, description="Optional ID of the equipped armor object. Must exist in the objects list.")
     special_actions: list[SpecialActionSchema] = Field(default=[], description="List of up to 5 special actions this NPC can perform. Max 5.")
+    attack_mode: Literal["PASSIVE", "ATTACK_ON_SIGHT"] = Field("PASSIVE", description="If ATTACK_ON_SIGHT, the NPC attacks as soon as the protagonist enters the scene.")
+    on_defeat_script: str = Field("", description="Optional script executed when the NPC is defeated. Use empty string for none.")
+    on_defeat_text: str = Field("", description="Optional text the NPC says when defeated. Use empty string for none.")
+    on_protagonist_enters_scene_script: str = Field("", description="Optional script executed when the protagonist enters the NPC's scene. Use empty string for none.")
+    on_protagonist_enters_scene_text: str = Field("", description="Optional text the NPC says when the protagonist enters the scene. Use empty string for none.")
 
     model_config = {"extra": "forbid"}
 
@@ -185,6 +194,14 @@ class WorldObjectSchema(BaseModel):
     damage_dice: Optional[str] = Field("1d8", description="Only for WEAPON items: damage formula (e.g. 1d8, 2d6, 1d10+1).")
     weapon_cost_type: Optional[Literal["stamina", "mana"]] = Field("stamina", description="Only for WEAPON items: resource type consumed on attack.")
     weapon_cost_value: Optional[int] = Field(20, description="Only for WEAPON items: amount of resource consumed on attack.")
+    on_pickup_script: str = Field("", description="Optional script executed when the item is picked up. Use empty string for none.")
+    on_pickup_text: str = Field("", description="Optional text output when the item is picked up. Use empty string for none.")
+    on_drop_script: str = Field("", description="Optional script executed when the item is dropped. Use empty string for none.")
+    on_drop_text: str = Field("", description="Optional text output when the item is dropped. Use empty string for none.")
+    on_equip_script: str = Field("", description="Optional script executed when the item is equipped (only for equippables). Use empty string for none.")
+    on_equip_text: str = Field("", description="Optional text output when the item is equipped. Use empty string for none.")
+    on_unequip_script: str = Field("", description="Optional script executed when the item is unequipped. Use empty string for none.")
+    on_unequip_text: str = Field("", description="Optional text output when the item is unequipped. Use empty string for none.")
 
     model_config = {"extra": "forbid"}
 

@@ -464,15 +464,20 @@ def _build_cover_guidance(
 
 def _build_scripts_requirement(scripts_generation_enabled: bool) -> str:
     if not scripts_generation_enabled:
-        return "\nSCRIPTING: Do NOT generate any custom scripts. Keep scripts: []."
+        return "\nSCRIPTING: Do NOT generate any custom scripts. Keep scripts: [] and do not populate any on_*_script or on_*_text fields."
     return (
         "\n\n================================================================================\n"
         "CRITICAL DIRECTIVE - EVENT SCRIPTS ACTIVELY REQUESTED BY USER:\n"
         "The user has explicitly turned ON the Event Scripts Engine for this adventure. "
         "This is an explicit user requirement that the world MUST contain interactive event scripts!\n"
         "You MUST generate between 1 and 3 high-quality, deterministic event scripts in the top-level `scripts` array.\n"
-        "Do NOT return `scripts: []` under any circumstances when this option is enabled.\n\n"
-        "Each script in `scripts` must have:\n"
+        "You MAY ALSO attach short inline scripts or text outputs directly to entities using these trigger fields:\n"
+        "- OBJECTS: `on_pickup_script`, `on_pickup_text`, `on_drop_script`, `on_drop_text`, `on_equip_script`, `on_equip_text`, `on_unequip_script`, `on_unequip_text`\n"
+        "- SCENES: `on_enter_scene_script`, `on_enter_scene_text`\n"
+        "- EXITS: `on_open_exit_script`, `on_open_exit_text`\n"
+        "- NPCS: `on_defeat_script`, `on_defeat_text`, `on_protagonist_enters_scene_script`, `on_protagonist_enters_scene_text`\n"
+        "Note: You can use the `..._text` variant to just print a message, or the `..._script` variant to execute Python code (using the `tw` API) when the trigger occurs.\n\n"
+        "Each top-level script in `scripts` must have:\n"
         "- `id`: Unique uppercase slug (e.g., 'SCRIPT_TRAP_CHEST', 'SCRIPT_GATE_KEEPER', 'SCRIPT_PUZZLE_LEVER')\n"
         "- `name`: Short descriptive title (e.g., 'Poison Dart Chest Trap')\n"
         "- `trigger`: Exactly one of: 'on_turn_start', 'on_enter_scene', 'on_interact', 'on_turn_end'\n"

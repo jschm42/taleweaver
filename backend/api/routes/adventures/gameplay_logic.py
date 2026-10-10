@@ -2722,6 +2722,7 @@ class GameTurnManager:
             exit_states=self.state.exit_states or {},
             quests=self.state.quests or [],
             script_vars=script_vars,
+            in_game_time=self.state.in_game_time,
         )
 
     def _get_script_runner(self) -> ScriptRunner:
@@ -2729,6 +2730,16 @@ class GameTurnManager:
         manifest = getattr(self.adventure, "original_manifest", None) or {}
         scripts = manifest.get("scripts", [])
         return ScriptRunner(scripts)
+
+    async def _execute_inline_script(self, code: str, trigger_name: str, target_id: str) -> list[str]:
+        if not code or not code.strip():
+            return []
+        context = await self._build_script_context()
+        runner = self._get_script_runner()
+        scope = {"tw": context, "game": context}
+        runner.execute_code(code, scope, script_id=f"inline_{trigger_name}_{target_id}")
+        return await self._apply_script_changeset(context.changeset)
+
 
     async def _apply_script_changeset(self, changeset: ScriptChangeset, game_event: Any = None) -> list[str]:
         """Applies mutations from ScriptChangeset to models and returns narrative messages."""
