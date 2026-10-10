@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import { Plus, Trash2, Key, FileText, Lock } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -1593,18 +1594,13 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Pickup Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed immediately when the player picks up this item. Use this to mutate game state (e.g. give a curse or trigger a flag).
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_pickup_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_pickup_script"
+                    label="On Pickup Script"
+                    help-text="Executed immediately when the player picks up this item. Use this to mutate game state (e.g. give a curse or trigger a flag)."
+                    context="on_pickup"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Pickup Text</label>
@@ -1620,18 +1616,13 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Drop Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed immediately when the player drops this item from their inventory.
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_drop_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_drop_script"
+                    label="On Drop Script"
+                    help-text="Executed immediately when the player drops this item from their inventory."
+                    context="on_drop"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Drop Text</label>
@@ -1647,18 +1638,13 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <div v-if="currentItemType === 'WEARABLE' || currentItemType === 'WEAPON'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Equip Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed when the player equips this wearable/weapon.
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_equip_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_equip_script"
+                    label="On Equip Script"
+                    help-text="Executed when the player equips this wearable/weapon."
+                    context="on_equip"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Equip Text</label>
@@ -1674,18 +1660,13 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <div v-if="currentItemType === 'WEARABLE' || currentItemType === 'WEAPON'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Unequip Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed when the player unequips this wearable/weapon.
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_unequip_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_unequip_script"
+                    label="On Unequip Script"
+                    help-text="Executed when the player unequips this wearable/weapon."
+                    context="on_unequip"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Unequip Text</label>
@@ -1704,18 +1685,13 @@ const textLogPreviewClass = computed(() => {
               <div v-else-if="context.type === 'scene'" class="space-y-6">
                 <!-- Scene Triggers -->
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Enter Scene Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed immediately when the protagonist enters this scene.
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_enter_scene_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_enter_scene_script"
+                    label="On Enter Scene Script"
+                    help-text="Executed immediately when the protagonist enters this scene."
+                    context="on_enter_scene"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Enter Scene Text</label>
@@ -1750,18 +1726,13 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Defeat Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed immediately when this NPC is marked as defeated. Use to spawn loot or trigger story progression.
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_defeat_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_defeat_script"
+                    label="On Defeat Script"
+                    help-text="Executed immediately when this NPC is marked as defeated. Use to spawn loot or trigger story progression."
+                    context="on_defeat"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Defeat Text (NPC speaks)</label>
@@ -1777,18 +1748,13 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Protagonist Enters Script</label>
-                    <div class="group relative flex items-center">
-                      <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
-                        Executed by this NPC when the protagonist enters the scene. Use to alter the NPC state or trigger a trap.
-                      </div>
-                    </div>
-                  </div>
-                    <textarea v-model="localForm.on_protagonist_enters_scene_script" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-y"></textarea>
-                  </div>
+                  <ScriptEditor
+                    v-model="localForm.on_protagonist_enters_scene_script"
+                    label="On Protagonist Enters Script"
+                    help-text="Executed by this NPC when the protagonist enters the scene. Use to alter the NPC state or trigger a trap."
+                    context="on_protagonist_enters_scene"
+                    min-height="120px"
+                  />
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Protagonist Enters Text</label>

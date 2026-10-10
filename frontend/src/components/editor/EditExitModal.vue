@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 
 const props = defineProps<{
   show: boolean
@@ -248,10 +249,13 @@ function submit() {
                 </p>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-                <div class="space-y-2">
-                  <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Open Exit Script</label>
-                  <textarea v-model="form.on_open_exit_script" rows="3" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:border-amber-500 outline-none transition-all resize-none"></textarea>
-                </div>
+                <ScriptEditor
+                  v-model="form.on_open_exit_script"
+                  label="On Open Exit Script"
+                  help-text="Executed immediately when the player unlocks/opens this exit."
+                  context="on_open_exit"
+                  min-height="120px"
+                />
                 <div class="space-y-2">
                   <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Open Exit Text</label>
                   <textarea v-model="form.on_open_exit_text" rows="3" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-none"></textarea>

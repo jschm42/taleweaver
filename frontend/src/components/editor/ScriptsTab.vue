@@ -16,6 +16,7 @@ import {
   Play,
 } from 'lucide-vue-next'
 import { adventureService } from '@/services/adventureService'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 
 const props = defineProps<{
   adventure: any
@@ -672,50 +673,14 @@ function handleTabKey(e: KeyboardEvent) {
             </div>
           </div>
 
-          <!-- Code Editor Toolbar -->
-          <div class="space-y-2">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Python Script Code
-              </label>
-
-              <div class="flex items-center gap-2">
-                <!-- Snippet Inserter Dropdown -->
-                <select
-                  @change="(e: any) => { if (e.target.value) { insertSnippet(e.target.value); e.target.value = ''; } }"
-                  class="bg-slate-800 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 transition-colors"
-                >
-                  <option value="">Insert Snippet...</option>
-                  <option v-for="snippet in SNIPPET_TEMPLATES" :key="snippet.label" :value="snippet.code">
-                    {{ snippet.label }}
-                  </option>
-                </select>
-
-                <!-- Check Syntax Button -->
-                <button
-                  type="button"
-                  @click="checkSyntax"
-                  :disabled="isCheckingSyntax"
-                  class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50"
-                >
-                  <Play class="w-3 h-3" />
-                  {{ isCheckingSyntax ? 'Checking...' : 'Check Syntax' }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Code Textarea -->
-            <div class="relative rounded-xl border border-white/10 bg-slate-950 overflow-hidden">
-              <textarea
-                v-model="modalScript.code"
-                rows="12"
-                @keydown="handleTabKey"
-                placeholder="# Enter Python script here..."
-                class="w-full bg-transparent p-4 font-mono text-xs text-emerald-300 focus:outline-none resize-y leading-relaxed"
-                spellcheck="false"
-              ></textarea>
-            </div>
-          </div>
+          <!-- Code Editor via ScriptEditor (CodeMirror + Skulpt) -->
+          <ScriptEditor
+            v-model="modalScript.code"
+            label="Python Script Code"
+            help-text="Executed during turn evaluation. Use tw.* APIs to interact with player, inventory, scenes, or NPCs."
+            context="general"
+            min-height="240px"
+          />
 
           <!-- Syntax Validation Banner -->
           <div
