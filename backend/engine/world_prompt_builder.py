@@ -476,7 +476,7 @@ def _build_scripts_requirement(scripts_generation_enabled: bool) -> str:
         "- SCENES: `on_enter_scene_script`, `on_enter_scene_text`\n"
         "- EXITS: `on_open_exit_script`, `on_open_exit_text`\n"
         "- NPCS: `on_defeat_script`, `on_defeat_text`, `on_protagonist_enters_scene_script`, `on_protagonist_enters_scene_text`\n"
-        "Note: You can use the `..._text` variant to just print a message, or the `..._script` variant to execute Python code (using the `tw` API) when the trigger occurs.\n\n"
+        "Note: You can use the `..._text` variant to just print a message, or the `..._script` variant to execute Python code (using the `tw` API) when the trigger occurs. For example, give a cursed weapon an `on_equip_script` that deals damage, or an important quest item an `on_pickup_text`.\n\n"
         "Each top-level script in `scripts` must have:\n"
         "- `id`: Unique uppercase slug (e.g., 'SCRIPT_TRAP_CHEST', 'SCRIPT_GATE_KEEPER', 'SCRIPT_PUZZLE_LEVER')\n"
         "- `name`: Short descriptive title (e.g., 'Poison Dart Chest Trap')\n"
