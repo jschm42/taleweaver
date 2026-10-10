@@ -50,6 +50,22 @@ export interface EntityEditData {
   exp?: number
   equipment?: Record<string, any> | null
   decorative_objects?: string[]
+  on_pickup_script?: string | null
+  on_pickup_text?: string | null
+  on_drop_script?: string | null
+  on_drop_text?: string | null
+  on_equip_script?: string | null
+  on_equip_text?: string | null
+  on_unequip_script?: string | null
+  on_unequip_text?: string | null
+  on_enter_scene_script?: string | null
+  on_enter_scene_text?: string | null
+  on_open_exit_script?: string | null
+  on_open_exit_text?: string | null
+  on_defeat_script?: string | null
+  on_defeat_text?: string | null
+  on_protagonist_enters_scene_script?: string | null
+  on_protagonist_enters_scene_text?: string | null
 }
 
 export interface SceneCreateData {
@@ -95,6 +111,18 @@ export interface EntityCreateData {
   combination_ingredients?: string[]
   stat_modifier_strength?: number
   inventory?: any[]
+  on_pickup_script?: string
+  on_pickup_text?: string
+  on_drop_script?: string
+  on_drop_text?: string
+  on_equip_script?: string
+  on_equip_text?: string
+  on_unequip_script?: string
+  on_unequip_text?: string
+  on_defeat_script?: string
+  on_defeat_text?: string
+  on_protagonist_enters_scene_script?: string
+  on_protagonist_enters_scene_text?: string
 }
 
 export interface QuestCreateData {

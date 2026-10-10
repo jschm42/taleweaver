@@ -1035,6 +1035,22 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     stat_modifier_strength: selectedObject?.stat_modifier_strength || metadata?.stat_modifier_strength || 0,
     is_item_type_fixed: false,
     is_wearable_slots_fixed: false,
+    on_pickup_script: selectedObject?.on_pickup_script || metadata?.on_pickup_script || '',
+    on_pickup_text: selectedObject?.on_pickup_text || metadata?.on_pickup_text || '',
+    on_drop_script: selectedObject?.on_drop_script || metadata?.on_drop_script || '',
+    on_drop_text: selectedObject?.on_drop_text || metadata?.on_drop_text || '',
+    on_equip_script: selectedObject?.on_equip_script || metadata?.on_equip_script || '',
+    on_equip_text: selectedObject?.on_equip_text || metadata?.on_equip_text || '',
+    on_unequip_script: selectedObject?.on_unequip_script || metadata?.on_unequip_script || '',
+    on_unequip_text: selectedObject?.on_unequip_text || metadata?.on_unequip_text || '',
+    on_enter_scene_script: selectedObject?.on_enter_scene_script || metadata?.on_enter_scene_script || '',
+    on_enter_scene_text: selectedObject?.on_enter_scene_text || metadata?.on_enter_scene_text || '',
+    on_open_exit_script: selectedObject?.on_open_exit_script || metadata?.on_open_exit_script || '',
+    on_open_exit_text: selectedObject?.on_open_exit_text || metadata?.on_open_exit_text || '',
+    on_defeat_script: selectedNpc?.on_defeat_script || metadata?.on_defeat_script || '',
+    on_defeat_text: selectedNpc?.on_defeat_text || metadata?.on_defeat_text || '',
+    on_protagonist_enters_scene_script: selectedNpc?.on_protagonist_enters_scene_script || metadata?.on_protagonist_enters_scene_script || '',
+    on_protagonist_enters_scene_text: selectedNpc?.on_protagonist_enters_scene_text || metadata?.on_protagonist_enters_scene_text || '',
   }
   showEditModal.value = true
 }
@@ -1109,6 +1125,10 @@ async function saveEntityText(data: any) {
           reveal_rule: String(data.reveal_rule || '').trim() || undefined,
           spatial_position: String(data.spatial_position || '').trim() || undefined,
           inventory: data.inventory || [],
+          on_defeat_script: data.on_defeat_script || undefined,
+          on_defeat_text: data.on_defeat_text || undefined,
+          on_protagonist_enters_scene_script: data.on_protagonist_enters_scene_script || undefined,
+          on_protagonist_enters_scene_text: data.on_protagonist_enters_scene_text || undefined,
         })
       } else {
         const itemType = String(data.item_type || 'DEFAULT').toUpperCase()
@@ -1131,6 +1151,14 @@ async function saveEntityText(data: any) {
           stat_modifier_strength: data.stat_modifier_strength || undefined,
           is_hidden: data.is_hidden,
           reveal_rule: data.reveal_rule || undefined,
+          on_pickup_script: data.on_pickup_script || undefined,
+          on_pickup_text: data.on_pickup_text || undefined,
+          on_drop_script: data.on_drop_script || undefined,
+          on_drop_text: data.on_drop_text || undefined,
+          on_equip_script: data.on_equip_script || undefined,
+          on_equip_text: data.on_equip_text || undefined,
+          on_unequip_script: data.on_unequip_script || undefined,
+          on_unequip_text: data.on_unequip_text || undefined,
         }
         if (itemType === 'READABLE') {
           createPayload.metadata_json = {
@@ -1276,6 +1304,20 @@ async function saveEntityText(data: any) {
       stat_modifier_strength: editEntityContext.value.type === 'object' ? data.stat_modifier_strength : undefined,
       is_hidden: ['npc', 'object'].includes(editEntityContext.value.type) ? data.is_hidden : undefined,
       reveal_rule: ['npc', 'object'].includes(editEntityContext.value.type) ? data.reveal_rule : undefined,
+      on_pickup_script: editEntityContext.value.type === 'object' ? data.on_pickup_script : undefined,
+      on_pickup_text: editEntityContext.value.type === 'object' ? data.on_pickup_text : undefined,
+      on_drop_script: editEntityContext.value.type === 'object' ? data.on_drop_script : undefined,
+      on_drop_text: editEntityContext.value.type === 'object' ? data.on_drop_text : undefined,
+      on_equip_script: editEntityContext.value.type === 'object' ? data.on_equip_script : undefined,
+      on_equip_text: editEntityContext.value.type === 'object' ? data.on_equip_text : undefined,
+      on_unequip_script: editEntityContext.value.type === 'object' ? data.on_unequip_script : undefined,
+      on_unequip_text: editEntityContext.value.type === 'object' ? data.on_unequip_text : undefined,
+      on_defeat_script: editEntityContext.value.type === 'npc' ? data.on_defeat_script : undefined,
+      on_defeat_text: editEntityContext.value.type === 'npc' ? data.on_defeat_text : undefined,
+      on_protagonist_enters_scene_script: editEntityContext.value.type === 'npc' ? data.on_protagonist_enters_scene_script : undefined,
+      on_protagonist_enters_scene_text: editEntityContext.value.type === 'npc' ? data.on_protagonist_enters_scene_text : undefined,
+      on_enter_scene_script: editEntityContext.value.type === 'scene' ? data.on_enter_scene_script : undefined,
+      on_enter_scene_text: editEntityContext.value.type === 'scene' ? data.on_enter_scene_text : undefined,
     })
     // Redirect if we renamed the scene we are currently viewing
     if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {

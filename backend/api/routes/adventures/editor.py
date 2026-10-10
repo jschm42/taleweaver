@@ -141,6 +141,22 @@ class EntityUpdateRequest(BaseModel):
     exp: Optional[int] = None
     equipment: Optional[dict[str, Any]] = None
     decorative_objects: Optional[list[str]] = None
+    on_pickup_script: Optional[str] = None
+    on_pickup_text: Optional[str] = None
+    on_drop_script: Optional[str] = None
+    on_drop_text: Optional[str] = None
+    on_equip_script: Optional[str] = None
+    on_equip_text: Optional[str] = None
+    on_unequip_script: Optional[str] = None
+    on_unequip_text: Optional[str] = None
+    on_defeat_script: Optional[str] = None
+    on_defeat_text: Optional[str] = None
+    on_protagonist_enters_scene_script: Optional[str] = None
+    on_protagonist_enters_scene_text: Optional[str] = None
+    on_enter_scene_script: Optional[str] = None
+    on_enter_scene_text: Optional[str] = None
+    on_open_exit_script: Optional[str] = None
+    on_open_exit_text: Optional[str] = None
     is_hidden: Optional[bool] = None
     reveal_rule: Optional[str] = None
     moveable: Optional[bool] = None
@@ -3230,6 +3246,12 @@ async def update_editor_entity(
                     decor_list.append(s)
                 scene.decorative_objects = decor_list[:7] or None
                 flag_modified(scene, "decorative_objects")
+
+            if payload.on_enter_scene_script is not None:
+                scene.on_enter_scene_script = payload.on_enter_scene_script.strip() if payload.on_enter_scene_script else None
+            if payload.on_enter_scene_text is not None:
+                scene.on_enter_scene_text = payload.on_enter_scene_text.strip() if payload.on_enter_scene_text else None
+
     elif payload.target_type == "exit":
         ex_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id, WorldExit.id == payload.target_id))
         world_exit = ex_res.scalars().first()
@@ -3238,6 +3260,12 @@ async def update_editor_entity(
             if payload.locked is not None: world_exit.is_locked = bool(payload.locked)
             if payload.description is not None: world_exit.lock_description = payload.description
             if payload.exit_type is not None: world_exit.exit_type = payload.exit_type
+
+            if payload.on_open_exit_script is not None:
+                world_exit.on_open_exit_script = payload.on_open_exit_script.strip() if payload.on_open_exit_script else None
+            if payload.on_open_exit_text is not None:
+                world_exit.on_open_exit_text = payload.on_open_exit_text.strip() if payload.on_open_exit_text else None
+
             
             # Enforce mutual exclusivity and priority on exit lock attributes
             if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.rule_to_unlock is not None:
@@ -3440,6 +3468,20 @@ async def update_editor_entity(
                         if sub_ent:
                             sub_ent.is_in_inventory = True
                             sub_ent.current_scene_id = "INVENTORY"
+
+                metadata_json = dict(ent.metadata_json or {})
+                if payload.on_defeat_script is not None:
+                    metadata_json["on_defeat_script"] = payload.on_defeat_script.strip()
+                if payload.on_defeat_text is not None:
+                    metadata_json["on_defeat_text"] = payload.on_defeat_text.strip()
+                if payload.on_protagonist_enters_scene_script is not None:
+                    metadata_json["on_protagonist_enters_scene_script"] = payload.on_protagonist_enters_scene_script.strip()
+                if payload.on_protagonist_enters_scene_text is not None:
+                    metadata_json["on_protagonist_enters_scene_text"] = payload.on_protagonist_enters_scene_text.strip()
+                
+                ent.metadata_json = metadata_json
+                flag_modified(ent, "metadata_json")
+
                 if payload.is_hidden is not None:
                     ent.is_hidden = bool(payload.is_hidden)
                 if payload.reveal_rule is not None:
@@ -3634,6 +3676,24 @@ async def update_editor_entity(
                 if payload.reveal_rule is not None:
                     normalized = str(payload.reveal_rule or "").strip()
                     ent.reveal_rule = normalized[:500] if normalized else None
+                
+                if payload.on_pickup_script is not None:
+                    metadata_json["on_pickup_script"] = payload.on_pickup_script.strip()
+                if payload.on_pickup_text is not None:
+                    metadata_json["on_pickup_text"] = payload.on_pickup_text.strip()
+                if payload.on_drop_script is not None:
+                    metadata_json["on_drop_script"] = payload.on_drop_script.strip()
+                if payload.on_drop_text is not None:
+                    metadata_json["on_drop_text"] = payload.on_drop_text.strip()
+                if payload.on_equip_script is not None:
+                    metadata_json["on_equip_script"] = payload.on_equip_script.strip()
+                if payload.on_equip_text is not None:
+                    metadata_json["on_equip_text"] = payload.on_equip_text.strip()
+                if payload.on_unequip_script is not None:
+                    metadata_json["on_unequip_script"] = payload.on_unequip_script.strip()
+                if payload.on_unequip_text is not None:
+                    metadata_json["on_unequip_text"] = payload.on_unequip_text.strip()
+
                 if payload.is_hidden is not None:
                     ent.is_hidden = bool(payload.is_hidden)
                 if payload.spatial_position is not None:
