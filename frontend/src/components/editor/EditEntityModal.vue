@@ -1595,7 +1595,7 @@ const textLogPreviewClass = computed(() => {
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Pickup Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Pickup Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1607,7 +1607,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Pickup Text
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Pickup Text</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1622,7 +1622,7 @@ const textLogPreviewClass = computed(() => {
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Drop Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Drop Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1634,7 +1634,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Drop Text
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Drop Text</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1649,7 +1649,7 @@ const textLogPreviewClass = computed(() => {
                 <div v-if="currentItemType === 'WEARABLE' || currentItemType === 'WEAPON'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Equip Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Equip Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1661,7 +1661,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Equip Text
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Equip Text</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1676,7 +1676,7 @@ const textLogPreviewClass = computed(() => {
                 <div v-if="currentItemType === 'WEARABLE' || currentItemType === 'WEAPON'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Unequip Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Unequip Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1688,7 +1688,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Unequip Text
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Unequip Text</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1706,7 +1706,7 @@ const textLogPreviewClass = computed(() => {
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Enter Scene Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Enter Scene Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1718,7 +1718,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Enter Scene Text
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Enter Scene Text</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1752,7 +1752,7 @@ const textLogPreviewClass = computed(() => {
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Defeat Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Defeat Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1764,7 +1764,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Defeat Text (NPC speaks)
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Defeat Text (NPC speaks)</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1779,7 +1779,7 @@ const textLogPreviewClass = computed(() => {
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">amber-500On Protagonist Enters Script
+                    <label class="block text-[10px] font-black text-amber-500 uppercase tracking-widest">On Protagonist Enters Script</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
@@ -1791,7 +1791,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="space-y-2">
                     <div class="flex items-center gap-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">slate-400On Protagonist Enters Text
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Protagonist Enters Text</label>
                     <div class="group relative flex items-center">
                       <i class="ra ra-help text-slate-500 hover:text-white cursor-help transition-colors text-xs"></i>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-[10px] text-slate-300 font-normal normal-case tracking-normal rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity border border-white/10 z-50">
