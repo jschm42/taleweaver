@@ -9,7 +9,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.gameplay_logic import (
@@ -738,6 +738,24 @@ class TurnInteractionsManager:
                 )
             )
             candidates = ent_res.scalars().all()
+            if not candidates:
+                adv_id = (
+                    getattr(self.manager.adventure, "id", None)
+                    if hasattr(self.manager, "adventure") and self.manager.adventure
+                    else (getattr(self.avatar, "template_id", None) or getattr(self.state, "template_id", None))
+                )
+                if adv_id:
+                    tpl_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            WorldEntity.template_id == adv_id,
+                            WorldEntity.session_id.is_(None),
+                            WorldEntity.current_scene_id == self.state.current_scene_id,
+                            WorldEntity.entity_type == "OBJECT",
+                            WorldEntity.is_hidden.is_(False),
+                            WorldEntity.is_in_inventory.is_(False),
+                        )
+                    )
+                    candidates = tpl_res.scalars().all()
             hint_lower = entity_id_or_name.lower()
             ent = None
             overrides = self.state.entity_states or {}
@@ -793,7 +811,34 @@ class TurnInteractionsManager:
                 response = f"Added {ent.name} to your inventory."
                 await self._check_special_action_unlocks("FIND_ITEM", ent.id)
 
-                pickup_meta = ent.metadata_json if isinstance(ent.metadata_json, dict) else {}
+                pickup_meta = dict(ent.metadata_json or {}) if isinstance(ent.metadata_json, dict) else {}
+                adv_id = (
+                    getattr(self.manager.adventure, "id", None)
+                    if hasattr(self.manager, "adventure") and self.manager.adventure
+                    else (getattr(self.avatar, "template_id", None) or getattr(self.state, "template_id", None))
+                )
+                if adv_id and (not pickup_meta.get("on_pickup_script") and not pickup_meta.get("on_pickup_text")):
+                    tpl_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            func.upper(WorldEntity.id) == ent.id.upper(),
+                            WorldEntity.template_id == adv_id,
+                            WorldEntity.session_id.is_(None)
+                        )
+                    )
+                    tpl_ent = tpl_res.scalars().first()
+                    if tpl_ent and tpl_ent.metadata_json:
+                        for k, v in tpl_ent.metadata_json.items():
+                            if k not in pickup_meta:
+                                pickup_meta[k] = v
+
+                if pickup_meta.get("on_pickup_script"):
+                    script_msgs = await self.manager._execute_inline_script(pickup_meta["on_pickup_script"], "on_pickup", ent.id)
+                    for sm in script_msgs:
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                if pickup_meta.get("on_pickup_text"):
+                    await self._save_chat_message("system", pickup_meta["on_pickup_text"])
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': pickup_meta['on_pickup_text']})}\n\n"
+
                 pickup_cfg = pickup_meta.get("pickup_trigger")
                 if isinstance(pickup_cfg, dict):
                     pickup_mode = str(pickup_cfg.get("mode") or "silent").strip().lower()
@@ -876,6 +921,37 @@ class TurnInteractionsManager:
                     # Spawn in scene
                     await self._spawn_scene_item(dropped_item)
                     response = f"You dropped {dropped_item.get('name')}."
+
+                    drop_meta = dict(dropped_item.get("metadata_json") or {})
+                    dropped_id = dropped_item.get("id")
+                    adv_id = (
+                        getattr(self.manager.adventure, "id", None)
+                        if hasattr(self.manager, "adventure") and self.manager.adventure
+                        else (getattr(self.avatar, "template_id", None) or getattr(self.state, "template_id", None))
+                    )
+                    if dropped_id and adv_id and (not drop_meta.get("on_drop_script") and not drop_meta.get("on_drop_text")):
+                        ent_res = await self.db.execute(
+                            select(WorldEntity).where(
+                                func.upper(WorldEntity.id) == str(dropped_id).strip().upper(),
+                                or_(
+                                    WorldEntity.session_id == self.game_id,
+                                    and_(WorldEntity.template_id == adv_id, WorldEntity.session_id.is_(None))
+                                )
+                            ).order_by(WorldEntity.session_id.desc().nulls_last())
+                        )
+                        db_ent = ent_res.scalars().first()
+                        if db_ent and db_ent.metadata_json:
+                            for k, v in db_ent.metadata_json.items():
+                                if k not in drop_meta:
+                                    drop_meta[k] = v
+
+                    if drop_meta.get("on_drop_script") and dropped_id:
+                        script_msgs = await self.manager._execute_inline_script(drop_meta["on_drop_script"], "on_drop", str(dropped_id))
+                        for sm in script_msgs:
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                    if drop_meta.get("on_drop_text"):
+                        await self._save_chat_message("system", drop_meta["on_drop_text"])
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': drop_meta['on_drop_text']})}\n\n"
 
         if response.startswith("[TRIGGER_OPEN]"):
             container_hint = response.replace("[TRIGGER_OPEN]", "").strip()
@@ -964,7 +1040,6 @@ class TurnInteractionsManager:
                     if meta.get("on_equip_script"):
                         msgs = await self.manager._execute_inline_script(meta["on_equip_script"], "on_equip", item_id)
                         for m in msgs:
-                            await self._save_chat_message("system", m)
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
                     if meta.get("on_equip_text"):
                         await self._save_chat_message("system", meta["on_equip_text"])
@@ -984,7 +1059,6 @@ class TurnInteractionsManager:
                     if meta.get("on_unequip_script"):
                         msgs = await self.manager._execute_inline_script(meta["on_unequip_script"], "on_unequip", item_id)
                         for m in msgs:
-                            await self._save_chat_message("system", m)
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
                     if meta.get("on_unequip_text"):
                         await self._save_chat_message("system", meta["on_unequip_text"])

@@ -2699,12 +2699,43 @@ class GameTurnManager:
         return await applier._apply_game_event(*args, **kwargs)
 
     async def _build_script_context(self) -> GameContext:
-        """Builds an isolated GameContext for the scripting sandbox."""
-        entities_list = await AdventureLogic.build_session_entities(self.db, self.state)
-        entities_map = {e["id"]: e for e in entities_list if "id" in e}
+        """Builds an isolated GameContext for the scripting sandbox, covering all entities in the session."""
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == self.state.session_id)
+        )
+        base_entities = [
+            {c.name: getattr(e, c.name) for c in e.__table__.columns}
+            for e in ent_res.scalars().all()
+        ]
+        session_overrides = self.state.entity_states or {}
+        norm_overrides_by_id = {str(k).strip().upper(): v for k, v in session_overrides.items() if isinstance(v, dict)}
 
-        entity_states = self.state.entity_states or {}
-        script_vars = dict(entity_states.get("__script_vars__", {}))
+        entities_map: dict[str, dict[str, Any]] = {}
+        for ent in base_entities:
+            eid = ent.get("id")
+            if not eid:
+                continue
+            eid_upper = str(eid).strip().upper()
+            if eid in session_overrides:
+                ent.update(session_overrides[eid])
+            elif eid_upper in norm_overrides_by_id:
+                ent.update(norm_overrides_by_id[eid_upper])
+            entities_map[eid] = ent
+
+        manifest = getattr(self.adventure, "original_manifest", None) or {}
+        template_entities = manifest.get("entities") or getattr(self.adventure, "entities", None) or []
+        for tent in template_entities:
+            if isinstance(tent, dict) and tent.get("id") and tent.get("id") not in entities_map:
+                eid = tent.get("id")
+                ent_copy = dict(tent)
+                eid_upper = str(eid).strip().upper()
+                if eid in session_overrides:
+                    ent_copy.update(session_overrides[eid])
+                elif eid_upper in norm_overrides_by_id:
+                    ent_copy.update(norm_overrides_by_id[eid_upper])
+                entities_map[eid] = ent_copy
+
+        script_vars = dict(session_overrides.get("__script_vars__", {}))
 
         avatar_dict = {
             "name": self.avatar.name,
@@ -2808,6 +2839,40 @@ class GameTurnManager:
             entity_states["__script_vars__"] = script_vars
 
         self.state.entity_states = entity_states
+        flag_modified(self.state, "entity_states")
+
+        # Sync modified fields to WorldEntity DB records if present
+        if changeset.entity_movements or changeset.entity_updates:
+            affected_ids = {m["entity_id"] for m in changeset.entity_movements} | {u["entity_id"] for u in changeset.entity_updates}
+            for aid in affected_ids:
+                st = entity_states.get(aid, {})
+                db_ent_res = await self.db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.session_id == self.state.session_id,
+                        WorldEntity.id == aid
+                    )
+                )
+                db_ent = db_ent_res.scalar_one_or_none()
+                if db_ent:
+                    if "current_scene_id" in st:
+                        db_ent.current_scene_id = st["current_scene_id"]
+                    if "spatial_position" in st:
+                        db_ent.spatial_position = st["spatial_position"]
+                    if "hp" in st and hasattr(db_ent, "hp"):
+                        db_ent.hp = st["hp"]
+                    if "is_defeated" in st:
+                        if hasattr(db_ent, "is_defeated"):
+                            db_ent.is_defeated = st["is_defeated"]
+                        elif hasattr(db_ent, "metadata_json") and isinstance(db_ent.metadata_json, dict):
+                            meta = dict(db_ent.metadata_json)
+                            meta["is_defeated"] = st["is_defeated"]
+                            db_ent.metadata_json = meta
+                    if "inventory" in st and hasattr(db_ent, "inventory"):
+                        db_ent.inventory = st["inventory"]
+                    if "is_hidden" in st and hasattr(db_ent, "is_hidden"):
+                        db_ent.is_hidden = st["is_hidden"]
+                    if "is_in_inventory" in st and hasattr(db_ent, "is_in_inventory"):
+                        db_ent.is_in_inventory = st["is_in_inventory"]
 
         if changeset.exit_updates:
             exit_states = dict(self.state.exit_states or {})
@@ -2819,6 +2884,7 @@ class GameTurnManager:
                     st["lock_description"] = eu["lock_description"]
                 exit_states[k] = st
             self.state.exit_states = exit_states
+            flag_modified(self.state, "exit_states")
 
         for msg in changeset.narrative_messages:
             system_messages.append(msg)

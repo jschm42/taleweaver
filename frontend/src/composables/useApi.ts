@@ -353,6 +353,11 @@ export const api = {
     return request('/adventures/templates/update-all', { method: 'POST' })
   },
 
+  /** Migrates a legacy adventure template to the current sequence-supported format. */
+  migrateAdventureTemplate(templateId: string): Promise<{ success: boolean; status: string; message: string; template_id: string; has_sequences: boolean; is_legacy_format: boolean; can_start: boolean }> {
+    return request(`/adventures/templates/${templateId}/migrate`, { method: 'POST' })
+  },
+
   /** Starts (or reuses) a session for a template. */
   startSessionForTemplate(templateId: string): Promise<{ game_id: string; template_id: string; adventure_id: string; avatar_id: string }> {
     return request(`/adventures/${templateId}/sessions/start`, { method: 'POST' })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
@@ -282,6 +282,8 @@ watch(() => props.initialForm, (newVal) => {
     moveable: false,
     allowed_scenes_input: [],
     notes: '',
+    pickup_trigger_mode: 'silent',
+    pickup_trigger_cue: '',
     attack_mode: 'PASSIVE',
     on_pickup_script: '',
     on_pickup_text: '',
@@ -303,6 +305,46 @@ watch(() => props.initialForm, (newVal) => {
   }
   syncFromForm()
 }, { deep: true })
+
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    activeTab.value = 'simple'
+    localForm.value = {
+      is_hidden: false,
+      reveal_rule: '',
+      moveable: false,
+      allowed_scenes_input: [],
+      notes: '',
+      pickup_trigger_mode: 'silent',
+      pickup_trigger_cue: '',
+      attack_mode: 'PASSIVE',
+      on_pickup_script: '',
+      on_pickup_text: '',
+      on_drop_script: '',
+      on_drop_text: '',
+      on_equip_script: '',
+      on_equip_text: '',
+      on_unequip_script: '',
+      on_unequip_text: '',
+      on_enter_scene_script: '',
+      on_enter_scene_text: '',
+      on_open_exit_script: '',
+      on_open_exit_text: '',
+      on_defeat_script: '',
+      on_defeat_text: '',
+      on_protagonist_enters_scene_script: '',
+      on_protagonist_enters_scene_text: '',
+      ...props.initialForm
+    }
+    syncFromForm()
+  }
+})
+
+watch(() => activeTab.value, () => {
+  nextTick(() => {
+    window.dispatchEvent(new Event('resize'))
+  })
+})
 
 const sceneReferenceOptions = computed(() => {
   return (props.referenceOptions || []).filter(

@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (e: 'cancel-pending', adventureId: string): void
   (e: 'start-session', templateId: string): void
   (e: 'update-adventure', templateId: string): void
+  (e: 'migrate', template: any): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'export-adz', templateId: string, title: string): void
@@ -115,6 +116,7 @@ onUnmounted(() => {
         :is-updating="props.updatingTemplateIds ? props.updatingTemplateIds.has(entry.template_id) : false"
         @start-session="(id) => $emit('start-session', id)"
         @update-adventure="(id) => $emit('update-adventure', id)"
+        @migrate="(tpl) => $emit('migrate', tpl)"
         @cover="(id) => $emit('cover', id)"
         @edit="(id) => $emit('edit', id)"
         @export-adz="(id, title) => $emit('export-adz', id, title)"

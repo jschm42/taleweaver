@@ -32,9 +32,10 @@ import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
 import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
-import ExportProgressModal from '@/components/portal/ExportProgressModal.vue'
 import CloneProgressModal from '@/components/portal/CloneProgressModal.vue'
 import GenerationProgressModal from '@/components/portal/GenerationProgressModal.vue'
+import MigrateAdventureModal from '@/components/portal/MigrateAdventureModal.vue'
+import type { AdventureTemplateSummary } from '@/types'
 
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
@@ -78,9 +79,11 @@ const {
   pendingCards,
   visibleTemplates,
   updatingTemplateIds,
+  migratingTemplateIds,
   isUpdatingAll,
   availableUpdatesCount,
   updateAdventure,
+  migrateAdventure,
   updateAllAdventures,
   fetchPortalData,
   startSessionForTemplate,
@@ -258,6 +261,29 @@ function openCoverCreate(templateId: string) {
   router.push({ name: 'adventure-create', query: { cover_from: templateId } })
 }
 
+const showMigrateModal = ref(false)
+const templateToMigrate = ref<AdventureTemplateSummary | null>(null)
+
+function openMigrateModal(template: AdventureTemplateSummary) {
+  templateToMigrate.value = template
+  showMigrateModal.value = true
+}
+
+function closeMigrateModal() {
+  showMigrateModal.value = false
+  templateToMigrate.value = null
+}
+
+async function handleMigrateFormat(templateId: string) {
+  await migrateAdventure(templateId)
+  closeMigrateModal()
+}
+
+function handleMigrateCover(templateId: string) {
+  closeMigrateModal()
+  openCoverCreate(templateId)
+}
+
 onMounted(() => {
   isMobileSidebarOpen.value = false
   if (authState.token) {
@@ -403,6 +429,7 @@ onUnmounted(() => {
               @cancel-pending="cancelAdventure"
               @start-session="startSession"
               @update-adventure="updateAdventure"
+              @migrate="openMigrateModal"
               @cover="openCoverCreate"
               @edit="editAdventure"
               @export-adz="exportAdventureAdz"
@@ -431,6 +458,7 @@ onUnmounted(() => {
               @cancel-pending="cancelAdventure"
               @start-session="startSession"
               @update-adventure="updateAdventure"
+              @migrate="openMigrateModal"
               @cover="openCoverCreate"
               @edit="editAdventure"
               @export-adz="exportAdventureAdz"
@@ -587,6 +615,15 @@ onUnmounted(() => {
         :adventure-id="activeProgressAdventure.id"
         :adventure-title="activeProgressAdventure.title"
         @close="activeProgressAdventure = null"
+      />
+
+      <MigrateAdventureModal
+        :is-open="showMigrateModal"
+        :template="templateToMigrate"
+        :is-migrating="templateToMigrate ? migratingTemplateIds.has(templateToMigrate.template_id) : false"
+        @close="closeMigrateModal"
+        @migrate-format="handleMigrateFormat"
+        @cover="handleMigrateCover"
       />
 
       <div

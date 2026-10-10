@@ -34,9 +34,11 @@ export interface UsePortalDataResult {
   pendingCards: ComputedRef<PendingCard[]>
   visibleTemplates: ComputedRef<AdventureTemplateSummary[]>
   updatingTemplateIds: Ref<Set<string>>
+  migratingTemplateIds: Ref<Set<string>>
   isUpdatingAll: Ref<boolean>
   availableUpdatesCount: ComputedRef<number>
   updateAdventure: (templateId: string) => Promise<void>
+  migrateAdventure: (templateId: string) => Promise<void>
   updateAllAdventures: () => Promise<void>
   fetchPortalData: () => Promise<void>
   startSessionForTemplate: (templateId: string, onStarted: (gameId: string) => void | Promise<void>) => Promise<void>
@@ -206,6 +208,7 @@ export function usePortalData(): UsePortalDataResult {
   const startingSessionTemplateId = ref<string | null>(null)
   const startingSessionTitle = ref('')
   const updatingTemplateIds = ref<Set<string>>(new Set())
+  const migratingTemplateIds = ref<Set<string>>(new Set())
   const isUpdatingAll = ref(false)
   const availableUpdatesCount = computed(() => {
     return templates.value.filter((t) => !!t.has_update).length
@@ -280,6 +283,22 @@ export function usePortalData(): UsePortalDataResult {
       notificationService.error(err?.message || 'Failed to update adventure.')
     } finally {
       updatingTemplateIds.value.delete(templateId)
+    }
+  }
+
+  /** Migrates an individual legacy adventure template to the current format with Sequence 1. */
+  async function migrateAdventure(templateId: string) {
+    if (migratingTemplateIds.value.has(templateId)) return
+    migratingTemplateIds.value.add(templateId)
+    try {
+      const res = await api.migrateAdventureTemplate(templateId)
+      notificationService.success(res.message || 'Adventure format migrated successfully.')
+      await fetchPortalData()
+    } catch (err: any) {
+      console.error('Failed to migrate adventure:', err)
+      notificationService.error(err?.message || 'Failed to migrate adventure format.')
+    } finally {
+      migratingTemplateIds.value.delete(templateId)
     }
   }
 
@@ -862,9 +881,11 @@ export function usePortalData(): UsePortalDataResult {
     pendingCards,
     visibleTemplates,
     updatingTemplateIds,
+    migratingTemplateIds,
     isUpdatingAll,
     availableUpdatesCount,
     updateAdventure,
+    migrateAdventure,
     updateAllAdventures,
     fetchPortalData,
     startSessionForTemplate,

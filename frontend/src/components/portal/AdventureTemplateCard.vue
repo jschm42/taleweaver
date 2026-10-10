@@ -14,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'startSession', templateId: string): void
   (e: 'updateAdventure', templateId: string): void
+  (e: 'migrate', template: AdventureTemplateSummary): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'exportAdz', templateId: string, title: string): void
@@ -46,8 +47,9 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', handleClickOutside)
 })
 
-function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete' | 'update'): void {
+function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete' | 'update' | 'migrate'): void {
   if (action === 'cover') emit('cover', props.template.template_id)
+  else if (action === 'migrate') emit('migrate', props.template)
   else if (action === 'edit') emit('edit', props.template.template_id)
   else if (action === 'adz') emit('exportAdz', props.template.template_id, props.template.title)
   else if (action === 'adv') emit('exportAdv', props.template.template_id, props.template.title)
@@ -132,21 +134,16 @@ const hasLicenseInfo = computed(() => {
           </button>
         </div>
 
-        <!-- Outdated Format Warning Badge -->
-        <div v-if="props.template.is_legacy_format || !props.template.can_start">
-          <div class="group/legacy relative">
-            <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-rose-500/20 text-rose-400 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-rose-500/30 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md shadow-lg shadow-rose-500/10 cursor-help">
-              <i class="ra ra-skull text-[10px] sm:text-xs"></i>
-              <span>Outdated Format</span>
-            </div>
-            <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-rose-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/legacy:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
-              <div class="text-rose-400 uppercase tracking-[0.2em] mb-1 flex items-center gap-2">
-                <i class="ra ra-warning"></i>
-                Format Incompatible
-              </div>
-              This adventure was imported in an older format and is no longer usable. {{ props.template.has_update ? 'Click Update to upgrade it to the new format.' : 'Please update or re-import a compatible version.' }}
-            </div>
-          </div>
+        <!-- Outdated Format Warning Badge & Migrate Button -->
+        <div v-if="props.template.is_legacy_format || !props.template.can_start" class="flex items-center gap-1.5">
+          <button
+            @click.stop="emit('migrate', props.template)"
+            class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 hover:text-white text-[9px] sm:text-xs uppercase tracking-widest font-black border border-amber-500/40 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-pointer transition-all hover:scale-105 active:scale-95"
+            title="Click to migrate this legacy adventure to the current format"
+          >
+            <i class="ra ra-wrench text-[10px] sm:text-xs"></i>
+            <span>Migrate</span>
+          </button>
         </div>
 
         <!-- Tone Badge -->
@@ -209,6 +206,14 @@ const hasLicenseInfo = computed(() => {
               @click="runAction('cover')"
             >
               Cover
+            </button>
+            <button
+              v-if="props.template.is_legacy_format || !props.template.can_start"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10 flex items-center gap-2"
+              @click="runAction('migrate')"
+            >
+              <i class="ra ra-wrench text-xs"></i>
+              Migrate format
             </button>
             <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
@@ -294,15 +299,15 @@ const hasLicenseInfo = computed(() => {
         <span class="truncate">{{ props.isUpdating ? 'Updating...' : 'Update to Play' }}</span>
       </button>
 
-      <!-- Case 2: Legacy format without update -> Disabled incompatible button -->
+      <!-- Case 2: Legacy format without update -> Migrate button -->
       <button
         v-else-if="props.template.is_legacy_format || !props.template.can_start"
-        class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 bg-rose-500/10 text-rose-400/60 border-rose-500/20 cursor-not-allowed shadow-none"
-        disabled
-        title="This adventure was imported in an older format and is no longer usable."
+        class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border-amber-500/35 hover:border-amber-500/50 cursor-pointer shadow-lg shadow-amber-500/10 hover:scale-[1.01] active:scale-[0.99]"
+        title="Migrate this adventure to the current format"
+        @click.stop="emit('migrate', props.template)"
       >
-        <i class="ra ra-slash-ring text-xs sm:text-sm"></i>
-        <span class="truncate">Incompatible Format</span>
+        <i class="ra ra-wrench text-xs sm:text-sm"></i>
+        <span class="truncate">Migrate Adventure</span>
       </button>
 
       <!-- Case 3: Playable adventure -> Normal Start button -->

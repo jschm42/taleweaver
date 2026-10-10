@@ -136,18 +136,34 @@ Queries and manipulates passage exits:
 - `tw.exits.is_locked(exit_id: str) -> bool`: Returns `True` if the exit is currently locked.
 
 ### `tw.npcs`
-Inspects and repositions non-player characters:
-- `tw.npcs.move(npc_id: str, target_scene_id: str)`: Teleports or moves an NPC into another scene.
-- `tw.npcs.get(npc_id: str) -> dict | None`: Returns NPC attributes (name, current scene, HP).
-- `tw.npcs.set_dialogue(npc_id: str, text: str)`: Overrides dialogue or hints provided by the NPC.
+Inspects, dialogues with, moves, and manages Non-Player Characters:
+- `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. Also available as `tw.npcs.get(npc_id).say(text)`.
+- `tw.npcs.move(npc_id: str, target_scene_id: str, spatial_position: str = "")`: Moves an NPC to another scene. Accepts `"current"`, `"here"`, or `"player"` to move them into the protagonist's current location.
+- `tw.npcs.move_to_player(npc_id: str, spatial_position: str = "")`: Convenience shortcut to move an NPC directly into the player's current scene.
+- `tw.npcs.drop_item(npc_id: str, item_id: str, scene_id: str = None, spatial_position: str = "")`: Transfers an item from an NPC's inventory into a scene. If `scene_id` is omitted, it drops into the NPC's current scene; passing `"current"` drops it into the player's scene.
+- `tw.npcs.give_item(npc_id: str, item_id: str)`: Transfers an item from a scene into an NPC's inventory and conceals it from the scene view.
+- `tw.npcs.kill(npc_id: str, drop_inventory: bool = True)`: Kills the NPC, setting HP to 0 and marking `is_defeated: True`. When `drop_inventory=True` (default), all items held by the NPC are dropped into their scene.
+- `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. Available properties and methods on `NPCProxy`:
+  - `.name`, `.hp`, `.is_defeated`, `.current_scene_id`, `.inventory`
+  - `.say(text: str)`
+  - `.move_to(target_scene_id: str, spatial_position: str = "")` (supports `"current"`)
+  - `.move_to_player(spatial_position: str = "")`
+  - `.drop_item(item_id: str, scene_id: str = None, spatial_position: str = "")`
+  - `.give_item(item_id: str)`
+  - `.has_item(item_id: str) -> bool`
+  - `.kill(drop_inventory: bool = True)` / `.die()`
+  - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)`
 
-### `tw.objects`
+### `tw.objects` (or `tw.items`)
 Manages world objects and inventory items:
+- `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")`: Moves an object/item into a scene. Accepts `"current"` for protagonist's scene.
+- `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Transfers an item into an NPC's inventory.
 - `tw.objects.add_to_scene(item_id: str, scene_id: str)`: Spawns or moves an item into a scene.
 - `tw.objects.add_to_player(item_id: str)`: Directly places an item into the avatar's inventory.
 - `tw.objects.remove_from_player(item_id: str)`: Removes an item from the player's inventory.
 - `tw.objects.hide(item_id: str)`: Hides an object in the scene until uncovered.
 - `tw.objects.reveal(item_id: str)`: Reveals a previously hidden object.
+- `tw.objects.get(item_id: str) -> ObjectProxy`: Returns an `ObjectProxy` with `.move_to_scene(scene_id)` and `.give_to_npc(npc_id)`.
 
 ### `tw.vars` (Persistent State)
 A persistent key-value store saved into the session state under `__script_vars__`. State persists across turns, saves, and reloads:

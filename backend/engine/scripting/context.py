@@ -76,6 +76,41 @@ class PlayerProxy:
     def modify_hp(self, delta: int) -> None:
         self._changeset.player_hp_change += int(delta)
 
+    def damage(self, amount: int) -> None:
+        """Deals damage to the player."""
+        self.modify_hp(-abs(int(amount)))
+
+    def heal(self, amount: int) -> None:
+        """Restores player HP."""
+        self.modify_hp(abs(int(amount)))
+
+    def get_stat(self, stat_name: str, default: Any = 0) -> Any:
+        name_lower = str(stat_name).strip().lower()
+        if name_lower == "hp":
+            return self.hp
+        elif name_lower == "mana":
+            return self.mana
+        elif name_lower == "stamina":
+            return self.stamina
+        elif name_lower == "xp":
+            return self.xp
+        if f"__stat_{name_lower}" in self._changeset.var_updates:
+            return self._changeset.var_updates[f"__stat_{name_lower}"]
+        return self._avatar.get(name_lower, self._avatar.get(f"stat_modifier_{name_lower}", default))
+
+    def set_stat(self, stat_name: str, val: Any) -> None:
+        name_lower = str(stat_name).strip().lower()
+        if name_lower == "hp":
+            self.modify_hp(int(val) - self.hp)
+        elif name_lower == "mana":
+            self.modify_mana(int(val) - self.mana)
+        elif name_lower == "stamina":
+            self.modify_stamina(int(val) - self.stamina)
+        elif name_lower == "xp":
+            self.modify_xp(int(val) - self.xp)
+        else:
+            self._changeset.var_updates[f"__stat_{name_lower}"] = val
+
     def modify_mana(self, delta: int) -> None:
         self._changeset.player_mana_change += int(delta)
 
@@ -91,6 +126,10 @@ class PlayerProxy:
             "name": name or item_id.replace("_", " ").title(),
             "description": description or ""
         })
+
+    def add_item(self, item_id: str, name: Optional[str] = None, description: Optional[str] = None) -> None:
+        """Alias for give_item()."""
+        self.give_item(item_id, name, description)
 
     def remove_item(self, item_id: str) -> None:
         if item_id not in self._changeset.player_removed_item_ids:
@@ -150,6 +189,16 @@ class SceneProxy:
     def teleport(self, target_scene_id: str) -> None:
         self._changeset.teleport_scene_id = target_scene_id
 
+    def get_attribute(self, attr_name: str, default: Any = None) -> Any:
+        k = f"__scene_attr_{self.id}_{attr_name}"
+        if k in self._changeset.var_updates:
+            return self._changeset.var_updates[k]
+        return default
+
+    def set_attribute(self, attr_name: str, val: Any) -> None:
+        k = f"__scene_attr_{self.id}_{attr_name}"
+        self._changeset.var_updates[k] = val
+
 
 class ExitProxy:
     """Safe proxy for exit queries and lock/unlock mutations."""
@@ -171,29 +220,71 @@ class ExitProxy:
         st = self._exit_states.get(k, {})
         return bool(st.get("is_locked", False))
 
-    def unlock(self, from_scene_id: str, to_scene_id: str) -> None:
+    def unlock(self, from_or_exit_id: str, to_scene_id: Optional[str] = None) -> None:
+        if to_scene_id is not None:
+            from_scene = from_or_exit_id
+            to_scene = to_scene_id
+        elif ":" in from_or_exit_id:
+            from_scene, to_scene = from_or_exit_id.split(":", 1)
+        else:
+            from_scene = from_or_exit_id
+            to_scene = ""
+            for k in self._exit_states.keys():
+                if k.startswith(f"{from_or_exit_id}:") or k.endswith(f":{from_or_exit_id}") or k == from_or_exit_id:
+                    parts = k.split(":")
+                    if len(parts) == 2:
+                        from_scene, to_scene = parts[0], parts[1]
+                        break
+
         self._changeset.exit_updates.append({
-            "from_scene_id": from_scene_id,
-            "to_scene_id": to_scene_id,
+            "from_scene_id": from_scene,
+            "to_scene_id": to_scene,
             "is_locked": False
         })
 
-    def lock(self, from_scene_id: str, to_scene_id: str, reason: Optional[str] = None) -> None:
+    def lock(self, from_or_exit_id: str, to_scene_id: Optional[str] = None, reason: Optional[str] = None) -> None:
+        if to_scene_id is not None:
+            from_scene = from_or_exit_id
+            to_scene = to_scene_id
+            lock_reason = reason
+        elif ":" in from_or_exit_id:
+            from_scene, to_scene = from_or_exit_id.split(":", 1)
+            lock_reason = reason
+        else:
+            from_scene = from_or_exit_id
+            to_scene = ""
+            lock_reason = reason
+            for k in self._exit_states.keys():
+                if k.startswith(f"{from_or_exit_id}:") or k.endswith(f":{from_or_exit_id}") or k == from_or_exit_id:
+                    parts = k.split(":")
+                    if len(parts) == 2:
+                        from_scene, to_scene = parts[0], parts[1]
+                        break
+
         self._changeset.exit_updates.append({
-            "from_scene_id": from_scene_id,
-            "to_scene_id": to_scene_id,
+            "from_scene_id": from_scene,
+            "to_scene_id": to_scene,
             "is_locked": True,
-            "lock_description": reason or "The passage is barred."
+            "lock_description": lock_reason or "The passage is barred."
         })
 
 
 class EntityProxy:
     """Base proxy for a world entity (NPC or Object)."""
 
-    def __init__(self, entity_id: str, entity_data: dict[str, Any], changeset: ScriptChangeset):
+    def __init__(
+        self,
+        entity_id: str,
+        entity_data: dict[str, Any],
+        changeset: ScriptChangeset,
+        current_player_scene_id: str = "",
+        entity_mgr: Optional['EntityManagerProxy'] = None,
+    ):
         self._id = entity_id
         self._data = entity_data
         self._changeset = changeset
+        self._current_player_scene_id = current_player_scene_id
+        self._entity_mgr = entity_mgr
 
     @property
     def id(self) -> str:
@@ -221,6 +312,18 @@ class EntityProxy:
         self._changeset.entity_updates.append({
             "entity_id": self._id,
             "is_hidden": bool(hidden)
+        })
+
+    def get_attribute(self, attr_name: str, default: Any = None) -> Any:
+        for upd in reversed(self._changeset.entity_updates):
+            if upd.get("entity_id") == self._id and attr_name in upd:
+                return upd[attr_name]
+        return self._data.get(attr_name, default)
+
+    def set_attribute(self, attr_name: str, val: Any) -> None:
+        self._changeset.entity_updates.append({
+            "entity_id": self._id,
+            attr_name: val
         })
 
 
@@ -255,16 +358,129 @@ class NPCProxy(EntityProxy):
             "is_defeated": bool(val)
         })
 
+    @property
+    def inventory(self) -> list[Any]:
+        for upd in reversed(self._changeset.entity_updates):
+            if upd.get("entity_id") == self._id and "inventory" in upd:
+                return list(upd["inventory"])
+        return list(self._data.get("inventory") or [])
+
+    def say(self, text: str) -> None:
+        """Makes this NPC speak dialogue text."""
+        clean_text = str(text).strip()
+        formatted = f'{self.name}: "{clean_text}"'
+        self._changeset.narrative_messages.append(formatted)
+
     def move_to(self, to_scene_id: str, spatial_position: Optional[str] = None) -> None:
+        """Moves this NPC to another scene. Accepts 'current', 'here', 'player' or scene ID."""
+        target_scene = to_scene_id
+        if not target_scene or str(target_scene).strip().lower() in ("current", "here", "player"):
+            target_scene = self._changeset.teleport_scene_id or self._current_player_scene_id or self._data.get("current_scene_id", "")
         self._changeset.entity_movements.append({
             "entity_id": self._id,
-            "to_scene_id": to_scene_id,
+            "to_scene_id": target_scene,
             "to_spatial_position": spatial_position or self._data.get("spatial_position", "")
         })
+
+    def move_to_player(self, spatial_position: Optional[str] = None) -> None:
+        """Moves this NPC directly into the protagonist's current scene."""
+        self.move_to("current", spatial_position)
+
+    def drop_item(self, item_id: str, scene_id: Optional[str] = None, spatial_position: Optional[str] = None) -> Optional[dict[str, Any]]:
+        """Moves an item from this NPC's inventory into a scene (defaults to NPC/player's current scene)."""
+        iid = str(item_id).strip().upper()
+        current_inv = self.inventory
+        dropped_item = None
+        new_inv = []
+        for it in current_inv:
+            this_id = str(it.get("id") if isinstance(it, dict) else it).strip().upper()
+            if this_id == iid and dropped_item is None:
+                dropped_item = it if isinstance(it, dict) else {"id": it, "name": it}
+            else:
+                new_inv.append(it)
+
+        if not dropped_item:
+            dropped_item = {"id": item_id, "name": item_id}
+
+        target_scene = scene_id
+        if not target_scene:
+            target_scene = self.current_scene_id or self._changeset.teleport_scene_id or self._current_player_scene_id or "START"
+        elif str(target_scene).strip().lower() in ("player", "current", "here"):
+            target_scene = self._changeset.teleport_scene_id or self._current_player_scene_id or self.current_scene_id or "START"
+
+        self._changeset.entity_updates.append({
+            "entity_id": self._id,
+            "inventory": new_inv
+        })
+
+        item_raw_id = dropped_item.get("id") if isinstance(dropped_item, dict) else item_id
+        self._changeset.entity_movements.append({
+            "entity_id": item_raw_id,
+            "to_scene_id": target_scene,
+            "to_spatial_position": spatial_position or ""
+        })
+        self._changeset.entity_updates.append({
+            "entity_id": item_raw_id,
+            "current_scene_id": target_scene,
+            "is_in_inventory": False,
+            "is_hidden": False,
+        })
+        return dropped_item
+
+    def give_item(self, item_id_or_dict: Any) -> None:
+        """Moves/adds an item from a scene into this NPC's inventory."""
+        item_id = item_id_or_dict.get("id") if isinstance(item_id_or_dict, dict) else str(item_id_or_dict)
+        item_data = item_id_or_dict if isinstance(item_id_or_dict, dict) else {"id": item_id, "name": item_id}
+
+        current_inv = self.inventory
+        if not any(str(i.get("id") if isinstance(i, dict) else i).strip().upper() == str(item_id).strip().upper() for i in current_inv):
+            current_inv.append(item_data)
+            self._changeset.entity_updates.append({
+                "entity_id": self._id,
+                "inventory": current_inv
+            })
+
+        self._changeset.entity_updates.append({
+            "entity_id": item_id,
+            "current_scene_id": "INVENTORY",
+            "is_in_inventory": False,
+            "is_hidden": True,
+        })
+
+    def has_item(self, item_id: str) -> bool:
+        """Checks if the NPC possesses the specified item."""
+        iid = str(item_id).strip().upper()
+        for it in self.inventory:
+            if isinstance(it, dict) and str(it.get("id", "")).strip().upper() == iid:
+                return True
+            elif isinstance(it, str) and it.strip().upper() == iid:
+                return True
+        return False
+
+    def kill(self, drop_inventory: bool = True) -> None:
+        """Kills this NPC, setting HP to 0 and marking them defeated."""
+        self.hp = 0
+        self.is_defeated = True
+        self._changeset.entity_updates.append({
+            "entity_id": self._id,
+            "hp": 0,
+            "is_defeated": True
+        })
+        if drop_inventory:
+            for it in list(self.inventory):
+                iid = it.get("id") if isinstance(it, dict) else it
+                if iid:
+                    self.drop_item(str(iid))
+
+    def die(self) -> None:
+        """Alias for kill()."""
+        self.kill()
 
     def modify_hp(self, delta: int) -> None:
         new_hp = max(0, self.hp + int(delta))
         self.hp = new_hp
+        if new_hp == 0 and not self.is_defeated:
+            self.kill()
 
 
 class ObjectProxy(EntityProxy):
@@ -302,24 +518,119 @@ class ObjectProxy(EntityProxy):
             "locked": True
         })
 
+    def move_to_scene(self, scene_id: str, spatial_position: Optional[str] = None) -> None:
+        """Moves this item into a scene (accepts 'current' for protagonist scene)."""
+        target_scene = scene_id
+        if not target_scene or str(target_scene).strip().lower() in ("current", "here", "player"):
+            target_scene = self._changeset.teleport_scene_id or self._current_player_scene_id or "START"
+        self._changeset.entity_movements.append({
+            "entity_id": self._id,
+            "to_scene_id": target_scene,
+            "to_spatial_position": spatial_position or ""
+        })
+        self._changeset.entity_updates.append({
+            "entity_id": self._id,
+            "current_scene_id": target_scene,
+            "is_in_inventory": False,
+            "is_hidden": False,
+        })
+
+    def give_to_npc(self, npc_id: str) -> None:
+        """Transfers this item into an NPC's inventory."""
+        if self._entity_mgr:
+            self._entity_mgr.give_item(npc_id, self._data or {"id": self._id, "name": self.name})
+
 
 class EntityManagerProxy:
     """Access point for querying NPCs or objects."""
 
-    def __init__(self, entities: dict[str, dict[str, Any]], changeset: ScriptChangeset, proxy_cls: type[EntityProxy]):
+    def __init__(
+        self,
+        entities: dict[str, dict[str, Any]],
+        changeset: ScriptChangeset,
+        proxy_cls: type[EntityProxy],
+        current_player_scene_id: str = "",
+    ):
         self._entities = entities
         self._changeset = changeset
         self._proxy_cls = proxy_cls
+        self._current_player_scene_id = current_player_scene_id
 
     def get(self, entity_id: str) -> EntityProxy:
-        data = self._entities.get(entity_id, {"id": entity_id})
-        return self._proxy_cls(entity_id, data, self._changeset)
+        if entity_id in self._entities:
+            return self._proxy_cls(
+                entity_id, self._entities[entity_id], self._changeset, self._current_player_scene_id, self
+            )
+        target_upper = str(entity_id).strip().upper()
+        for eid, data in self._entities.items():
+            if str(eid).strip().upper() == target_upper:
+                return self._proxy_cls(
+                    eid, data, self._changeset, self._current_player_scene_id, self
+                )
+        target_lower = str(entity_id).strip().lower()
+        for eid, data in self._entities.items():
+            if str(data.get("name", "")).strip().lower() == target_lower:
+                return self._proxy_cls(
+                    eid, data, self._changeset, self._current_player_scene_id, self
+                )
+        return self._proxy_cls(
+            entity_id, {"id": entity_id, "name": entity_id}, self._changeset, self._current_player_scene_id, self
+        )
 
     def all(self) -> list[EntityProxy]:
         return [self.get(eid) for eid in self._entities.keys()]
 
     def exists(self, entity_id: str) -> bool:
-        return entity_id in self._entities
+        if entity_id in self._entities:
+            return True
+        target_upper = str(entity_id).strip().upper()
+        return any(str(eid).strip().upper() == target_upper for eid in self._entities.keys())
+
+    def say(self, entity_id: str, text: str) -> None:
+        """Makes an NPC speak dialogue text."""
+        ent = self.get(entity_id)
+        if isinstance(ent, NPCProxy):
+            ent.say(text)
+        else:
+            clean_text = str(text).strip()
+            self._changeset.narrative_messages.append(f'{ent.name}: "{clean_text}"')
+
+    def move(self, entity_id: str, to_scene_id: str, spatial_position: Optional[str] = None) -> None:
+        """Moves an entity or NPC to another scene. Accepts 'current' for protagonist's scene."""
+        ent = self.get(entity_id)
+        if isinstance(ent, NPCProxy):
+            ent.move_to(to_scene_id, spatial_position)
+        else:
+            target_scene = to_scene_id
+            if not target_scene or str(target_scene).strip().lower() in ("current", "here", "player"):
+                target_scene = self._changeset.teleport_scene_id or self._current_player_scene_id or ""
+            self._changeset.entity_movements.append({
+                "entity_id": entity_id,
+                "to_scene_id": target_scene,
+                "to_spatial_position": spatial_position or ""
+            })
+
+    def move_to_player(self, entity_id: str, spatial_position: Optional[str] = None) -> None:
+        """Moves an entity or NPC into the protagonist's current scene."""
+        self.move(entity_id, "current", spatial_position)
+
+    def drop_item(self, npc_id: str, item_id: str, scene_id: Optional[str] = None, spatial_position: Optional[str] = None) -> None:
+        """Transfers an item from an NPC's inventory to a scene."""
+        ent = self.get(npc_id)
+        if isinstance(ent, NPCProxy):
+            ent.drop_item(item_id, scene_id, spatial_position)
+
+    def give_item(self, npc_id: str, item_id_or_dict: Any) -> None:
+        """Transfers an item from a scene into an NPC's inventory."""
+        ent = self.get(npc_id)
+        if isinstance(ent, NPCProxy):
+            ent.give_item(item_id_or_dict)
+
+    def kill(self, entity_id: str, drop_inventory: bool = True) -> None:
+        """Kills an NPC by entity ID."""
+        ent = self.get(entity_id)
+        if isinstance(ent, NPCProxy):
+            ent.kill(drop_inventory=drop_inventory)
 
 
 class VarsProxy:
@@ -352,6 +663,14 @@ class StoryProxy:
 
     def narrate(self, message: str) -> None:
         self._changeset.narrative_messages.append(str(message).strip())
+
+    def show_message(self, message: str) -> None:
+        """Alias for narrate()."""
+        self.narrate(message)
+
+    def message(self, message: str) -> None:
+        """Alias for narrate()."""
+        self.narrate(message)
 
     def reject_action(self, reason: str) -> None:
         self._changeset.rejected_actions.append(str(reason).strip())
@@ -483,15 +802,18 @@ class GameContext:
         self.changeset = ScriptChangeset()
         self.player = PlayerProxy(avatar_data, self.changeset)
         self.npcs = EntityManagerProxy(
-            {k: v for k, v in entities.items() if v.get("npc_type") or v.get("is_npc")},
+            {k: v for k, v in entities.items() if str(v.get("entity_type") or "").upper() == "NPC" or v.get("npc_type") or v.get("is_npc")},
             self.changeset,
-            NPCProxy
+            NPCProxy,
+            current_player_scene_id=current_scene_id,
         )
         self.objects = EntityManagerProxy(
-            {k: v for k, v in entities.items() if not (v.get("npc_type") or v.get("is_npc"))},
+            {k: v for k, v in entities.items() if not (str(v.get("entity_type") or "").upper() == "NPC" or v.get("npc_type") or v.get("is_npc"))},
             self.changeset,
-            ObjectProxy
+            ObjectProxy,
+            current_player_scene_id=current_scene_id,
         )
+        self.items = self.objects
         self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
         self.exits = ExitProxy(exit_states, self.changeset)
         self.vars = VarsProxy(script_vars, self.changeset)
@@ -502,3 +824,11 @@ class GameContext:
         self.awards = AwardsProxy(self.changeset)
         self.sequences = SequencesProxy(self.changeset)
         self.dice = DiceProxy()
+
+    def narrate(self, message: str) -> None:
+        """Shortcut for tw.story.narrate()."""
+        self.story.narrate(message)
+
+    def show_message(self, message: str) -> None:
+        """Shortcut for tw.story.narrate()."""
+        self.story.narrate(message)

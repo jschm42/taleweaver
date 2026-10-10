@@ -165,3 +165,183 @@ async def test_adventure_template_scripts_property(setup_test_db):
         assert adv.scripts[0]["id"] == "SCRIPT_1"
         assert adv.original_manifest["scripts"][0]["name"] == "First Script"
 
+
+@pytest.mark.asyncio
+async def test_inline_pickup_and_proxy_helpers(setup_test_db):
+    from backend.models.world_entity import WorldEntity
+    async with TestSessionLocal() as db_session:
+        user = User(
+            id="user_pickup_test",
+            username="pickup_tester",
+            hashed_password="fake",
+            role="user",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        adv = AdventureTemplate(
+            id="adv_pickup_test",
+            title="Pickup Script Test",
+            owner_id=user.id,
+            is_ready=True,
+            original_manifest={"title": "Manifest", "scripts": []},
+        )
+        db_session.add(adv)
+
+        avatar = Avatar(
+            id="avatar_pickup_test",
+            name="Arthur",
+            user_id=user.id,
+            hp=100,
+            mana=50,
+            stamina=100,
+            inventory=[],
+        )
+        db_session.add(avatar)
+
+        state = SessionState(
+            id="state_pickup_test",
+            session_id="session_pickup_test",
+            user_id=user.id,
+            template_id=adv.id,
+            avatar_id=avatar.id,
+            current_scene_id="LAB",
+            entity_states={},
+            exit_states={},
+        )
+        db_session.add(state)
+        await db_session.flush()
+
+        manager = GameTurnManager(db=db_session, user=user, game_id="session_pickup_test")
+        manager.adventure = adv
+        manager.avatar = avatar
+        manager.state = state
+
+        # Test script using show_message and player helpers
+        code = """
+tw.story.show_message("You picked up the chocolate.")
+tw.player.damage(5)
+tw.player.add_item("BONUS_COIN", "Bonus Coin")
+tw.scene.set_attribute("found_secret", True)
+"""
+        msgs = await manager._execute_inline_script(code, "on_pickup", "CHOCOLATE")
+        assert "You picked up the chocolate." in msgs
+        assert avatar.hp == 95
+        assert any(i.get("id") == "BONUS_COIN" for i in avatar.inventory)
+        assert manager.state.entity_states["__script_vars__"]["__scene_attr_LAB_found_secret"] is True
+
+
+@pytest.mark.asyncio
+async def test_script_npc_operations_in_turn_manager(setup_test_db):
+    from backend.models.world_entity import WorldEntity
+
+    async with TestSessionLocal() as db_session:
+        user = User(
+            id="user_npc_test",
+            username="npc_tester",
+            hashed_password="fake",
+            role="user",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        adv = AdventureTemplate(
+            id="adv_npc_test",
+            title="NPC Script Test",
+            owner_id=user.id,
+            is_ready=True,
+            original_manifest={"title": "Manifest", "scripts": []},
+        )
+        db_session.add(adv)
+
+        avatar = Avatar(
+            id="avatar_npc_test",
+            name="Arthur",
+            user_id=user.id,
+            hp=100,
+            mana=50,
+            stamina=100,
+            inventory=[],
+        )
+        db_session.add(avatar)
+
+        state = SessionState(
+            id="state_npc_test",
+            session_id="session_npc_test",
+            user_id=user.id,
+            template_id=adv.id,
+            avatar_id=avatar.id,
+            current_scene_id="LAB",
+            entity_states={},
+            exit_states={},
+        )
+        db_session.add(state)
+
+        # NPC in DUNGEON with an item
+        npc_mara = WorldEntity(
+            id="NPC_MARA",
+            session_id="session_npc_test",
+            name="Mara",
+            description="A traveling scholar.",
+            entity_type="NPC",
+            current_scene_id="DUNGEON",
+            hp=40,
+            inventory=[{"id": "KEY_RUSTY", "name": "Rusty Key"}],
+        )
+        db_session.add(npc_mara)
+
+        # Object in LAB
+        item_potion = WorldEntity(
+            id="ITEM_POTION",
+            session_id="session_npc_test",
+            name="Health Potion",
+            description="A glowing health potion.",
+            entity_type="OBJECT",
+            current_scene_id="LAB",
+            is_in_inventory=False,
+            is_hidden=False,
+            inventory=[],
+        )
+        db_session.add(item_potion)
+        await db_session.flush()
+
+        manager = GameTurnManager(db=db_session, user=user, game_id="session_npc_test")
+        manager.adventure = adv
+        manager.avatar = avatar
+        manager.state = state
+
+        script = """
+# 1. NPC Speech
+tw.npcs.say("NPC_MARA", "I arrived from the dungeon!")
+
+# 2. Move NPC to protagonist's current scene
+tw.npcs.move("NPC_MARA", "current")
+
+# 3. Item transfers
+tw.npcs.drop_item("NPC_MARA", "KEY_RUSTY")
+tw.npcs.give_item("NPC_MARA", "ITEM_POTION")
+
+# 4. NPC Defeat / Kill
+tw.npcs.kill("NPC_MARA")
+"""
+        msgs = await manager._execute_inline_script(script, "test", "NPC_MARA")
+
+        # 1. Verify speech message
+        assert 'Mara: "I arrived from the dungeon!"' in msgs
+
+        # 2. Verify NPC moved to LAB
+        assert manager.state.entity_states["NPC_MARA"]["current_scene_id"] == "LAB"
+        assert npc_mara.current_scene_id == "LAB"
+
+        # 3. Verify dropped item in LAB
+        assert manager.state.entity_states["KEY_RUSTY"]["current_scene_id"] == "LAB"
+        assert manager.state.entity_states["KEY_RUSTY"]["is_in_inventory"] is False
+
+        # 4. Verify NPC killed
+        assert manager.state.entity_states["NPC_MARA"]["hp"] == 0
+        assert manager.state.entity_states["NPC_MARA"]["is_defeated"] is True
+        assert npc_mara.hp == 0
+        assert npc_mara.metadata_json.get("is_defeated") is True
+
+
+

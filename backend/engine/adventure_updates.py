@@ -5,6 +5,7 @@ import os
 import re
 import time
 import zipfile
+from copy import deepcopy
 from typing import Any, Optional
 
 from packaging.version import InvalidVersion
@@ -460,3 +461,80 @@ async def update_all_adventures(
         "updated_titles": updated_titles,
         "errors": errors,
     }
+
+
+async def migrate_single_adventure(
+    db: AsyncSession,
+    template_id: str,
+    user_id: str,
+) -> dict[str, Any]:
+    """Migrates a legacy adventure template to the current sequence-supported format.
+
+    Converts the legacy walkthrough into Sequence 1 ('Main Journey') and bumps format version
+    to CURRENT_VERSION so that the adventure is fully compatible and playable.
+    """
+    result = await db.execute(
+        select(AdventureTemplate).where(
+            AdventureTemplate.id == template_id,
+            AdventureTemplate.owner_id == user_id,
+        )
+    )
+    template = result.scalars().first()
+    if not template:
+        raise ValueError("Adventure template not found or unauthorized.")
+
+    manifest = template.original_manifest or {}
+    adv_manifest = manifest.get("adventure") if isinstance(manifest.get("adventure"), dict) else {}
+
+    walkthrough_text = (
+        template.walkthrough
+        or adv_manifest.get("walkthrough")
+        or manifest.get("walkthrough")
+        or ""
+    )
+
+    if not template.sequences or len(template.sequences) == 0:
+        sequence_1 = {
+            "id": "SEQ_1_MAIN",
+            "order": 1,
+            "title": "Main Journey",
+            "description": template.plot or adv_manifest.get("plot") or "Follow the adventure storyline.",
+            "walkthrough": walkthrough_text or "Follow the main storyline.",
+            "end_condition": template.completed_condition or adv_manifest.get("completed_condition") or "Achieve the victory condition.",
+            "exp_reward": 500,
+        }
+        template.sequences = [sequence_1]
+
+    # Synchronize manifest format version and sequences
+    if template.original_manifest and isinstance(template.original_manifest, dict):
+        new_manifest = deepcopy(template.original_manifest)
+        new_manifest["format_version"] = CURRENT_VERSION
+        new_manifest["version"] = new_manifest.get("version") or CURRENT_VERSION
+        new_manifest["sequences"] = template.sequences
+        if "adventure" in new_manifest and isinstance(new_manifest["adventure"], dict):
+            new_adv = dict(new_manifest["adventure"])
+            new_adv["sequences"] = template.sequences
+            new_manifest["adventure"] = new_adv
+        template.original_manifest = new_manifest
+    else:
+        template.original_manifest = {
+            "format_version": CURRENT_VERSION,
+            "version": CURRENT_VERSION,
+            "title": template.title,
+            "sequences": template.sequences,
+        }
+
+    template.version = CURRENT_VERSION
+    await db.commit()
+    await db.refresh(template)
+
+    return {
+        "success": True,
+        "status": "success",
+        "message": f"Adventure '{template.title}' successfully migrated to the latest format.",
+        "template_id": template.id,
+        "has_sequences": True,
+        "is_legacy_format": False,
+        "can_start": True,
+    }
+

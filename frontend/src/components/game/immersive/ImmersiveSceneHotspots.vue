@@ -155,9 +155,7 @@ function handleTraverse(exit: any) {
 
 function handleDirectTake(item: any) {
   emit('takeDirect', item)
-  if (portableItems.value.length <= 1) {
-    showDiscoveriesPopover.value = false
-  }
+  showDiscoveriesPopover.value = false
 }
 
 async function handleTakeAll() {

@@ -202,3 +202,96 @@ def test_check_syntax_empty_code():
     assert SafeAstInterpreter.check_syntax("") == []
     assert SafeAstInterpreter.check_syntax("   \n\t  ") == []
 
+
+def test_npc_speech_movement_item_transfer_and_kill():
+    avatar_data = {"name": "Hero", "hp": 100, "mana": 50, "stamina": 100, "inventory": []}
+    entities = {
+        "NPC_MARA": {
+            "id": "NPC_MARA",
+            "name": "Mara",
+            "npc_type": "FRIENDLY",
+            "current_scene_id": "GARDEN",
+            "hp": 25,
+            "is_defeated": False,
+            "inventory": [{"id": "ITEM_KEY", "name": "Key of Mara"}],
+        },
+        "NPC_GOBLIN": {
+            "id": "NPC_GOBLIN",
+            "name": "Goblin Sneak",
+            "npc_type": "HOSTILE",
+            "current_scene_id": "CAVE",
+            "hp": 15,
+            "is_defeated": False,
+            "inventory": [{"id": "DAGGER", "name": "Rusty Dagger"}],
+        },
+        "ITEM_POTION": {
+            "id": "ITEM_POTION",
+            "name": "Health Potion",
+            "current_scene_id": "LAB",
+            "is_in_inventory": False,
+            "is_hidden": False,
+        },
+    }
+
+    ctx = GameContext(
+        avatar_data=avatar_data,
+        current_scene_id="LAB",
+        entities=entities,
+        exit_states={},
+        quests=[],
+        script_vars={},
+        in_game_time=10,
+    )
+
+    runner = ScriptRunner([])
+
+    # 1. NPC speech test
+    speech_code = """
+tw.npcs.say("NPC_MARA", "Greetings, traveler!")
+tw.npcs.get("NPC_GOBLIN").say("Get away from me!")
+"""
+    runner.execute_code(speech_code, {"tw": ctx})
+    assert 'Mara: "Greetings, traveler!"' in ctx.changeset.narrative_messages
+    assert 'Goblin Sneak: "Get away from me!"' in ctx.changeset.narrative_messages
+
+    # 2. NPC movement test (to specific scene and to player scene)
+    move_code = """
+tw.npcs.move("NPC_MARA", "TOWER")
+tw.npcs.get("NPC_GOBLIN").move_to("current")
+"""
+    runner.execute_code(move_code, {"tw": ctx})
+    assert any(m["entity_id"] == "NPC_MARA" and m["to_scene_id"] == "TOWER" for m in ctx.changeset.entity_movements)
+    assert any(m["entity_id"] == "NPC_GOBLIN" and m["to_scene_id"] == "LAB" for m in ctx.changeset.entity_movements)
+
+    # 3. Item transfer: NPC drop item into scene & give item to NPC
+    item_transfer_code = """
+# NPC drops item to player's current scene
+tw.npcs.drop_item("NPC_MARA", "ITEM_KEY", "current")
+
+# Transfer item from scene to goblin's inventory
+tw.npcs.give_item("NPC_GOBLIN", "ITEM_POTION")
+"""
+    runner.execute_code(item_transfer_code, {"tw": ctx})
+    # Dropped item movement and update
+    assert any(m["entity_id"] == "ITEM_KEY" and m["to_scene_id"] == "LAB" for m in ctx.changeset.entity_movements)
+    assert any(u["entity_id"] == "ITEM_KEY" and u.get("is_in_inventory") is False for u in ctx.changeset.entity_updates)
+    # Mara inventory updated (no longer has ITEM_KEY)
+    mara_upd = next(u for u in ctx.changeset.entity_updates if u["entity_id"] == "NPC_MARA")
+    assert not any(i.get("id") == "ITEM_KEY" for i in mara_upd.get("inventory", []))
+
+    # Goblin received ITEM_POTION
+    goblin_upd = next(u for u in ctx.changeset.entity_updates if u["entity_id"] == "NPC_GOBLIN")
+    assert any(i.get("id") == "ITEM_POTION" for i in goblin_upd.get("inventory", []))
+    assert any(u["entity_id"] == "ITEM_POTION" and u.get("is_hidden") is True for u in ctx.changeset.entity_updates)
+
+    # 4. Kill NPC test
+    kill_code = """
+tw.npcs.kill("NPC_GOBLIN", drop_inventory=True)
+"""
+    runner.execute_code(kill_code, {"tw": ctx})
+    goblin_kill_upd = [u for u in ctx.changeset.entity_updates if u["entity_id"] == "NPC_GOBLIN"]
+    assert any(u.get("hp") == 0 and u.get("is_defeated") is True for u in goblin_kill_upd)
+    # DAGGER should be dropped to current scene
+    assert any(m["entity_id"] == "DAGGER" and m["to_scene_id"] == "LAB" for m in ctx.changeset.entity_movements)
+
+

@@ -253,3 +253,51 @@ async def test_sessions_and_chat_return_legacy_format(auth_client: AsyncClient, 
     assert chat_data["is_legacy_format"] is True
 
 
+@pytest.mark.asyncio
+async def test_migrate_legacy_template(auth_client: AsyncClient, db_session):
+    """Migrating a legacy adventure converts its walkthrough into Sequence 1 and updates format."""
+    user = (await db_session.execute(select(User).where(User.username == "test_user"))).scalars().first()
+
+    legacy_tpl = AdventureTemplate(
+        id="legacy-migrate-test",
+        title="Forgotten Crypt",
+        owner_id=user.id,
+        version="1.0.0",
+        walkthrough="Find the silver chalice and place it on the altar.",
+        plot="Explore the ancient crypt.",
+        completed_condition="Chalice on altar.",
+        original_manifest={
+            "version": "1.0",
+            "format_version": "1.0",
+            "title": "Forgotten Crypt",
+            "walkthrough": "Find the silver chalice and place it on the altar.",
+            "sequences": [],
+        },
+        sequences=[],
+        is_ready=True,
+    )
+    db_session.add(legacy_tpl)
+    await db_session.commit()
+
+    # Prior to migration, it is flagged as legacy
+    check = check_template_update(legacy_tpl, [])
+    assert check["is_legacy_format"] is True
+
+    # Call migrate endpoint
+    resp = await auth_client.post(f"/api/adventures/templates/{legacy_tpl.id}/migrate")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["is_legacy_format"] is False
+    assert data["can_start"] is True
+
+    # Refresh from DB
+    await db_session.refresh(legacy_tpl)
+    assert len(legacy_tpl.sequences) == 1
+    assert legacy_tpl.sequences[0]["title"] == "Main Journey"
+    assert legacy_tpl.sequences[0]["walkthrough"] == "Find the silver chalice and place it on the altar."
+    assert legacy_tpl.sequences[0]["end_condition"] == "Chalice on altar."
+    assert is_legacy_template(legacy_tpl) is False
+
+
+

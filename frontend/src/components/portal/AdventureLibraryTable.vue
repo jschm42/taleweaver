@@ -43,6 +43,7 @@ const emit = defineEmits<{
   (e: 'cancel-pending', adventureId: string): void
   (e: 'start-session', templateId: string): void
   (e: 'update-adventure', templateId: string): void
+  (e: 'migrate', template: any): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'export-adz', templateId: string, title: string): void
@@ -334,8 +335,20 @@ function getModeBadge(mode?: string): { label: string; class: string; icon: any 
               <!-- Actions Column -->
               <td class="py-3 px-3 sm:px-4 text-right">
                 <div class="flex items-center justify-end gap-1.5">
+                  <!-- Migrate Button (if legacy format) -->
+                  <button
+                    v-if="template.is_legacy_format || !template.can_start"
+                    @click="$emit('migrate', template)"
+                    class="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-white text-xs font-bold uppercase tracking-wider hover:bg-amber-500/30 transition-all flex items-center gap-1.5 shadow-sm shadow-amber-500/20 cursor-pointer"
+                    title="Migrate Adventure format"
+                  >
+                    <i class="ra ra-wrench text-xs"></i>
+                    <span class="hidden sm:inline">Migrate</span>
+                  </button>
+
                   <!-- Play / Start Button -->
                   <button
+                    v-else
                     @click="$emit('start-session', template.template_id)"
                     :disabled="props.isStartingSession"
                     class="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase tracking-wider hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-500/20 disabled:opacity-50"
@@ -381,6 +394,14 @@ function getModeBadge(mode?: string): { label: string; class: string; icon: any 
                       class="absolute right-0 top-full mt-1.5 w-48 rounded-xl bg-slate-900 border border-white/15 p-1.5 shadow-2xl z-30 divide-y divide-white/5"
                     >
                       <div class="py-1">
+                        <button
+                          v-if="template.is_legacy_format || !template.can_start"
+                          @click="$emit('migrate', template); activeMenuId = null"
+                          class="w-full text-left px-3 py-1.5 rounded-lg text-xs text-amber-300 hover:bg-amber-500/10 hover:text-white flex items-center gap-2"
+                        >
+                          <i class="ra ra-wrench text-xs"></i>
+                          <span>Migrate Format</span>
+                        </button>
                         <button
                           @click="$emit('cover', template.template_id); activeMenuId = null"
                           class="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 hover:text-white flex items-center gap-2"

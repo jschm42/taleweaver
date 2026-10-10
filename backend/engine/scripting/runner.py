@@ -90,3 +90,6 @@ class ScriptRunner:
             self.interpreter.execute(code, scope)
         except Exception as exc:
             logger.exception(f"[ScriptRunner] Unexpected error executing inline script '{script_id}': {exc}")
+            tw = scope.get("tw") or scope.get("game")
+            if tw and hasattr(tw, "changeset") and hasattr(tw.changeset, "narrative_messages"):
+                tw.changeset.narrative_messages.append(f"[Script Error ({script_id})]: {exc}")

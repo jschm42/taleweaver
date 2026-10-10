@@ -11,7 +11,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -615,12 +615,45 @@ class TurnStateApplier:
                     states[item.id]["is_in_inventory"] = True
                     state_dirty = True
                     
-                    ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.session_id == self.game_id))
+                    item_id_str = item.id.strip() if item.id else ""
+                    item_name_str = (item.name or "").strip()
+                    name_clauses = [func.upper(WorldEntity.name) == item_id_str.upper()]
+                    if item_name_str:
+                        name_clauses.append(func.upper(WorldEntity.name) == item_name_str.upper())
+
+                    ent_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            or_(
+                                func.upper(WorldEntity.id) == item_id_str.upper(),
+                                *name_clauses
+                            ),
+                            or_(
+                                WorldEntity.session_id == self.game_id,
+                                and_(WorldEntity.template_id == self.adventure.id, WorldEntity.session_id.is_(None))
+                            )
+                        ).order_by(WorldEntity.session_id.desc().nulls_last())
+                    )
                     ent_obj = ent_res.scalars().first()
                     if ent_obj:
                         meta = dict(ent_obj.metadata_json or {})
+                        if not meta.get("on_pickup_script") and not meta.get("on_pickup_text") and hasattr(self, "adventure") and self.adventure:
+                            tpl_res = await self.db.execute(
+                                select(WorldEntity).where(
+                                    or_(
+                                        func.upper(WorldEntity.id) == ent_obj.id.upper(),
+                                        func.upper(WorldEntity.name) == ent_obj.name.upper(),
+                                    ),
+                                    WorldEntity.template_id == self.adventure.id,
+                                    WorldEntity.session_id.is_(None)
+                                )
+                            )
+                            tpl_ent = tpl_res.scalars().first()
+                            if tpl_ent and tpl_ent.metadata_json:
+                                for k, v in tpl_ent.metadata_json.items():
+                                    if k not in meta:
+                                        meta[k] = v
                         if meta.get("on_pickup_script"):
-                            msgs = await self.manager._execute_inline_script(meta["on_pickup_script"], "on_pickup", item.id)
+                            msgs = await self.manager._execute_inline_script(meta["on_pickup_script"], "on_pickup", ent_obj.id)
                             system_messages.extend(msgs)
                         if meta.get("on_pickup_text"):
                             await self._save_chat_message("system", meta["on_pickup_text"])
@@ -629,10 +662,35 @@ class TurnStateApplier:
         if event.removed_inventory_item_ids:
             for item_id in event.removed_inventory_item_ids:
                 if item_id:
-                    ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.session_id == self.game_id))
+                    item_id_str = item_id.strip()
+                    ent_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            or_(
+                                func.upper(WorldEntity.id) == item_id_str.upper(),
+                                func.upper(WorldEntity.name) == item_id_str.upper(),
+                            ),
+                            or_(
+                                WorldEntity.session_id == self.game_id,
+                                and_(WorldEntity.template_id == self.adventure.id, WorldEntity.session_id.is_(None))
+                            )
+                        ).order_by(WorldEntity.session_id.desc().nulls_last())
+                    )
                     ent_obj = ent_res.scalars().first()
                     if ent_obj:
                         meta = dict(ent_obj.metadata_json or {})
+                        if not meta.get("on_drop_script") and not meta.get("on_drop_text") and hasattr(self, "adventure") and self.adventure:
+                            tpl_res = await self.db.execute(
+                                select(WorldEntity).where(
+                                    func.upper(WorldEntity.id) == item_id.strip().upper(),
+                                    WorldEntity.template_id == self.adventure.id,
+                                    WorldEntity.session_id.is_(None)
+                                )
+                            )
+                            tpl_ent = tpl_res.scalars().first()
+                            if tpl_ent and tpl_ent.metadata_json:
+                                for k, v in tpl_ent.metadata_json.items():
+                                    if k not in meta:
+                                        meta[k] = v
                         if meta.get("on_drop_script"):
                             msgs = await self.manager._execute_inline_script(meta["on_drop_script"], "on_drop", item_id)
                             system_messages.extend(msgs)

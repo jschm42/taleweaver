@@ -942,6 +942,29 @@ async def update_adventure_template(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/templates/{template_id}/migrate")
+@router.post("/{template_id}/migrate")
+async def migrate_adventure_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Migrates a legacy adventure template to the current sequence-supported format."""
+    from backend.engine.adventure_updates import migrate_single_adventure
+    try:
+        return await migrate_single_adventure(
+            db=db,
+            template_id=template_id,
+            user_id=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to migrate adventure template %s", template_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @router.get("/{template_id}", response_model=AdventureTemplateResponse)
 async def get_adventure(
     template_id: str,

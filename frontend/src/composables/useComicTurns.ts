@@ -458,6 +458,21 @@ export function useComicTurns(options: UseComicTurnsOptions) {
         currentTurn.narration = parsed.narration
         currentTurn.dialogues.push(...parsed.dialogues)
       } else if (msg.role === 'system') {
+        if (
+          currentTurn.assistantMessage ||
+          currentTurn.narration ||
+          currentTurn.dialogues.length > 0
+        ) {
+          turns.push(currentTurn)
+          currentTurn = {
+            index: turns.length,
+            systemMessages: [],
+            licenseMessage: null,
+            narration: '',
+            dialogues: [],
+            revealedItemIds: [],
+          }
+        }
         currentTurn.systemMessages.push(msg)
       }
     }

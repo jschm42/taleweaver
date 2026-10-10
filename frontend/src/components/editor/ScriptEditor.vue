@@ -90,6 +90,22 @@ const availableSnippets = computed(() => {
       label: 'Scene attribute',
       code: 'tw.scene.set_attribute("is_visited", True)\n',
     },
+    {
+      label: 'NPC speech',
+      code: 'tw.npcs.say("NPC_ID", "Greetings, traveler!")\n',
+    },
+    {
+      label: 'Move NPC to scene',
+      code: 'tw.npcs.move("NPC_ID", "current")\n',
+    },
+    {
+      label: 'Transfer item (NPC)',
+      code: '# Drop from NPC into scene:\ntw.npcs.drop_item("NPC_ID", "ITEM_ID")\n# Or give item to NPC:\n# tw.npcs.give_item("NPC_ID", "ITEM_ID")\n',
+    },
+    {
+      label: 'Defeat / Kill NPC',
+      code: 'tw.npcs.kill("NPC_ID", drop_inventory=True)\n',
+    },
   ]
 
   if (props.context === 'on_pickup' || props.context === 'on_drop') {
@@ -147,7 +163,7 @@ function initCodeMirror() {
     indentWithTabs: false,
     matchBrackets: true,
     autoCloseBrackets: true,
-    viewportMargin: 20,
+    viewportMargin: Infinity,
     readOnly: props.disabled,
     extraKeys: {
       Tab: (cm: any) => {
@@ -170,21 +186,59 @@ function initCodeMirror() {
   })
 
   isCmReady.value = true
+  setupVisibilityObservers()
   nextTick(() => {
     cmInstance?.refresh()
   })
+}
+
+let resizeObserver: ResizeObserver | null = null
+let intersectionObserver: IntersectionObserver | null = null
+
+function setupVisibilityObservers() {
+  if (!editorEl.value) return
+
+  if (typeof ResizeObserver !== 'undefined' && !resizeObserver) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          if (cmInstance) {
+            cmInstance.refresh()
+          }
+        }
+      }
+    })
+    resizeObserver.observe(editorEl.value)
+  }
+
+  if (typeof IntersectionObserver !== 'undefined' && !intersectionObserver) {
+    intersectionObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && cmInstance) {
+          cmInstance.refresh()
+        }
+      }
+    })
+    intersectionObserver.observe(editorEl.value)
+  }
 }
 
 // Watch external modelValue changes
 watch(
   () => props.modelValue,
   (newVal) => {
-    if (cmInstance && newVal !== cmInstance.getValue()) {
-      const cur = cmInstance.getCursor()
-      cmInstance.setValue(newVal || '')
-      cmInstance.setCursor(cur)
+    if (cmInstance) {
+      if ((newVal || '') !== cmInstance.getValue()) {
+        const cur = cmInstance.getCursor()
+        cmInstance.setValue(newVal || '')
+        cmInstance.setCursor(cur)
+      }
+      nextTick(() => {
+        cmInstance?.refresh()
+      })
     }
-  }
+  },
+  { immediate: true }
 )
 
 watch(
@@ -322,6 +376,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  intersectionObserver?.disconnect()
+  intersectionObserver = null
   if (cmInstance) {
     const wrapper = cmInstance.getWrapperElement()
     wrapper?.parentNode?.removeChild(wrapper)
