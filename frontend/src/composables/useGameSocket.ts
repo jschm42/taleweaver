@@ -546,8 +546,8 @@ export function useGameSocket(): UseGameSocket {
           } else if (event === 'state') {
             // Early turn snapshot: refresh scene/entities before narration streams in.
             applySessionSnapshot(data, false)
-          } else if (event === 'system') {
-            const role = data.role || 'system'
+          } else if (event === 'system' || event === 'assistant') {
+            const role = data.role || (event === 'assistant' ? 'assistant' : 'system')
             // If the backend included a user_msg_id (debug command flow), attach it to the
             // optimistically-pushed user message so the delete button becomes available.
             if (data.user_msg_id) {
@@ -777,8 +777,8 @@ export function useGameSocket(): UseGameSocket {
             _pushMessage('thought' as any, data.content)
           } else if (event === 'player_action') {
             _pushMessage('user', data.content)
-          } else if (event === 'system') {
-            const role = data.role || 'system'
+          } else if (event === 'system' || event === 'assistant') {
+            const role = data.role || (event === 'assistant' ? 'assistant' : 'system')
             _pushMessage(role, data.content, undefined, data.is_debug)
           } else if (event === 'chunk') {
             let lastMsg = messages.value[messages.value.length - 1]

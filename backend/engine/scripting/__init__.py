@@ -1,7 +1,7 @@
 """
 TaleWeaver Sandboxed Scripting Engine Package.
 """
-from backend.engine.scripting.context import GameContext, ScriptChangeset
+from backend.engine.scripting.context import GameContext, ScriptChangeset, ScriptMessage
 from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.scripting.sandbox import (
     SafeAstInterpreter,
@@ -15,6 +15,7 @@ __all__ = [
     "SafeAstInterpreter",
     "ScriptChangeset",
     "ScriptExecutionError",
+    "ScriptMessage",
     "ScriptRunner",
     "ScriptSecurityError",
     "ScriptTimeoutError",

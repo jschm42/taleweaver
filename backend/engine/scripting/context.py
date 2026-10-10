@@ -12,6 +12,16 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 
+class ScriptMessage(str):
+    """Subclass of str with an attached role ('assistant' or 'system')."""
+    role: str = "system"
+
+    def __new__(cls, content: str, role: str = "system"):
+        obj = super().__new__(cls, content)
+        obj.role = role
+        return obj
+
+
 @dataclass
 class ScriptChangeset:
     """Collected mutations produced during script execution."""
@@ -30,6 +40,7 @@ class ScriptChangeset:
     exit_updates: list[dict[str, Any]] = field(default_factory=list)
 
     narrative_messages: list[str] = field(default_factory=list)
+    system_messages: list[str] = field(default_factory=list)
     rejected_actions: list[str] = field(default_factory=list)
     new_memories: list[dict[str, Any]] = field(default_factory=list)
 
@@ -662,15 +673,24 @@ class StoryProxy:
         self._changeset = changeset
 
     def narrate(self, message: str) -> None:
+        """Emits GM narration as if told by the Game Master."""
         self._changeset.narrative_messages.append(str(message).strip())
 
     def show_message(self, message: str) -> None:
-        """Alias for narrate()."""
+        """Alias for narrate(). Emits GM narration."""
         self.narrate(message)
 
     def message(self, message: str) -> None:
-        """Alias for narrate()."""
+        """Alias for narrate(). Emits GM narration."""
         self.narrate(message)
+
+    def system_message(self, message: str) -> None:
+        """Emits a system notification message."""
+        self._changeset.system_messages.append(str(message).strip())
+
+    def system(self, message: str) -> None:
+        """Alias for system_message()."""
+        self.system_message(message)
 
     def reject_action(self, reason: str) -> None:
         self._changeset.rejected_actions.append(str(reason).strip())
@@ -826,9 +846,13 @@ class GameContext:
         self.dice = DiceProxy()
 
     def narrate(self, message: str) -> None:
-        """Shortcut for tw.story.narrate()."""
+        """Shortcut for tw.story.narrate(). Emits GM narration."""
         self.story.narrate(message)
 
     def show_message(self, message: str) -> None:
-        """Shortcut for tw.story.narrate()."""
+        """Shortcut for tw.story.narrate(). Emits GM narration."""
         self.story.narrate(message)
+
+    def system(self, message: str) -> None:
+        """Shortcut for tw.story.system_message(). Emits system notification."""
+        self.story.system_message(message)

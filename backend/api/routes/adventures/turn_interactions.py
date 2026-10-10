@@ -834,7 +834,8 @@ class TurnInteractionsManager:
                 if pickup_meta.get("on_pickup_script"):
                     script_msgs = await self.manager._execute_inline_script(pickup_meta["on_pickup_script"], "on_pickup", ent.id)
                     for sm in script_msgs:
-                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                        role = getattr(sm, "role", "system")
+                        yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
                 if pickup_meta.get("on_pickup_text"):
                     await self._save_chat_message("system", pickup_meta["on_pickup_text"])
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': pickup_meta['on_pickup_text']})}\n\n"
@@ -948,7 +949,8 @@ class TurnInteractionsManager:
                     if drop_meta.get("on_drop_script") and dropped_id:
                         script_msgs = await self.manager._execute_inline_script(drop_meta["on_drop_script"], "on_drop", str(dropped_id))
                         for sm in script_msgs:
-                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                            role = getattr(sm, "role", "system")
+                            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
                     if drop_meta.get("on_drop_text"):
                         await self._save_chat_message("system", drop_meta["on_drop_text"])
                         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': drop_meta['on_drop_text']})}\n\n"
@@ -1040,7 +1042,8 @@ class TurnInteractionsManager:
                     if meta.get("on_equip_script"):
                         msgs = await self.manager._execute_inline_script(meta["on_equip_script"], "on_equip", item_id)
                         for m in msgs:
-                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+                            role = getattr(m, "role", "system")
+                            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
                     if meta.get("on_equip_text"):
                         await self._save_chat_message("system", meta["on_equip_text"])
                         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': meta['on_equip_text']})}\n\n"
@@ -1059,7 +1062,8 @@ class TurnInteractionsManager:
                     if meta.get("on_unequip_script"):
                         msgs = await self.manager._execute_inline_script(meta["on_unequip_script"], "on_unequip", item_id)
                         for m in msgs:
-                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+                            role = getattr(m, "role", "system")
+                            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
                     if meta.get("on_unequip_text"):
                         await self._save_chat_message("system", meta["on_unequip_text"])
                         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': meta['on_unequip_text']})}\n\n"

@@ -295,3 +295,46 @@ tw.npcs.kill("NPC_GOBLIN", drop_inventory=True)
     assert any(m["entity_id"] == "DAGGER" and m["to_scene_id"] == "LAB" for m in ctx.changeset.entity_movements)
 
 
+def test_script_narration_vs_system_messages():
+    from backend.engine.scripting.context import ScriptMessage
+
+    ctx = GameContext(
+        avatar_data={"name": "Kaelen", "hp": 100},
+        current_scene_id="LIBRARY",
+        entities={},
+        exit_states={},
+        quests=[],
+        script_vars={},
+        in_game_time=0,
+    )
+    runner = ScriptRunner()
+
+    code = """
+tw.story.show_message("Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.")
+tw.narrate("Die Bibliothek verstummt.")
+tw.story.system_message("Item hinzugefügt: Schokolade")
+tw.system("Inventar aktualisiert.")
+"""
+    runner.execute_code(code, {"tw": ctx})
+
+    # Verify GM narrations are grouped in narrative_messages
+    assert len(ctx.changeset.narrative_messages) == 2
+    assert "Du nimmst das Stück Schokolade" in ctx.changeset.narrative_messages[0]
+    assert "Die Bibliothek verstummt" in ctx.changeset.narrative_messages[1]
+
+    # Verify system messages are grouped in system_messages
+    assert len(ctx.changeset.system_messages) == 2
+    assert "Item hinzugefügt: Schokolade" in ctx.changeset.system_messages[0]
+    assert "Inventar aktualisiert" in ctx.changeset.system_messages[1]
+
+    # Test ScriptMessage helper
+    sm_narration = ScriptMessage("Narration text", role="assistant")
+    sm_sys = ScriptMessage("System note", role="system")
+    assert isinstance(sm_narration, str)
+    assert sm_narration == "Narration text"
+    assert sm_narration.role == "assistant"
+    assert sm_sys == "System note"
+    assert sm_sys.role == "system"
+
+
+

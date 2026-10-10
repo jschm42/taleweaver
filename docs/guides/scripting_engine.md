@@ -173,8 +173,9 @@ A persistent key-value store saved into the session state under `__script_vars__
 - `tw.vars.delete(key: str)`: Deletes `key`.
 
 ### `tw.story`
-Injects high-priority narrative notices into the chat stream:
-- `tw.story.show_message(text: str)`: Emits an emphasized narrative story banner in the client dialogue stream.
+Injects narrative messages or system notifications into the turn stream:
+- `tw.story.show_message(text: str)` / `tw.story.narrate(text: str)` / `tw.narrate(text: str)`: Emits Game Master narration (`role: "assistant"`), displayed with the Game Master avatar, dialogue parsing, and styled exactly like standard storytelling turns (e.g. `tw.story.show_message('Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.')`).
+- `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`).
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
 
 ### `tw.memories`

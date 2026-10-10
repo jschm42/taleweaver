@@ -75,8 +75,12 @@ let cmInstance: any = null
 const availableSnippets = computed(() => {
   const common = [
     {
-      label: 'Narrate text',
-      code: 'tw.narrate("A cold breeze whispers through the hall.")\n',
+      label: 'GM Narration (Game Master)',
+      code: 'tw.story.show_message("Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.")\n',
+    },
+    {
+      label: 'System Notification',
+      code: 'tw.system("System notification message.")\n',
     },
     {
       label: 'Modify player stat',
@@ -281,7 +285,8 @@ function insertSnippet(snippetCode: string) {
 function insertNamedSnippet(type: string) {
   const snippets: Record<string, string> = {
     player: 'tw.player.damage(5)\n',
-    story: "tw.story.show_message('A strange energy hums in the air.')\n",
+    story: "tw.story.show_message('Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.')\n",
+    system: "tw.system('System notification message.')\n",
     vars: "tw.vars.set('quest_flag', True)\n",
     scene: "tw.scene.set_attribute('visited', True)\n",
     exits: "tw.exits.unlock('EXIT_ID')\n",
@@ -576,7 +581,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('story')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.show_message(text)</code>, <code>.narrate(text)</code>
+            <code>.show_message(text)</code> (GM Narration), <code>.system(text)</code> (System Note)
           </p>
         </div>
 
@@ -624,7 +629,7 @@ onBeforeUnmount(() => {
 
     <!-- Main Editor Canvas -->
     <div
-      class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-auto"
+      class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
       :style="{ minHeight: isFullscreen ? '400px' : minHeight, maxHeight: isFullscreen ? 'none' : maxHeight }"
     >
       <!-- Loading CDN Spinner / Notice -->
@@ -723,6 +728,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
+.codemirror-wrapper {
+  overflow: hidden;
+  height: 100%;
+}
+
 /* CodeMirror overrides to integrate with TaleWeaver dark theme */
 .codemirror-wrapper .CodeMirror {
   height: 100% !important;
@@ -733,6 +743,12 @@ onBeforeUnmount(() => {
   font-size: 12px !important;
   line-height: 1.6 !important;
   padding: 4px 0;
+}
+
+.codemirror-wrapper .CodeMirror-scroll {
+  height: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
 }
 
 .codemirror-wrapper .CodeMirror-gutters {

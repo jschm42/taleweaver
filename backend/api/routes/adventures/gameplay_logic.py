@@ -58,7 +58,7 @@ from backend.engine.rule_engine import (
     ToolResults,
     WorldEntityUpdate,
 )
-from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner
+from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner, ScriptMessage
 from backend.engine.skill_check import roll_attack, roll_skill_check
 from backend.engine.stat_aggregator import calculate_total_stats
 from backend.models.adventure_template import AdventureTemplate
@@ -1158,7 +1158,8 @@ class GameTurnManager:
             ):
                 sys_msgs = await self._apply_script_changeset(cs)
                 for sm in sys_msgs:
-                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                    role = getattr(sm, "role", "system")
+                    yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
 
         # Pass 1: Mechanics (strict adventures), chat progression intent (normal chat),
         # or adventure-generator tool-intent pass (generator chat mode).
@@ -1428,7 +1429,8 @@ class GameTurnManager:
                 await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
-                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                    role = getattr(sm, "role", "system")
+                    yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
 
                 # Trigger scripts for scene entry and entity interactions
                 if script_runner.scripts:
@@ -1438,7 +1440,8 @@ class GameTurnManager:
                         rule_violations.extend(cs_scene.rejected_actions)
                         sys_msgs = await self._apply_script_changeset(cs_scene, game_event)
                         for sm in sys_msgs:
-                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                            role = getattr(sm, "role", "system")
+                            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
 
                     if game_event.updated_entities:
                         for ue in game_event.updated_entities:
@@ -1446,7 +1449,8 @@ class GameTurnManager:
                             rule_violations.extend(cs_ent.rejected_actions)
                             sys_msgs = await self._apply_script_changeset(cs_ent, game_event)
                             for sm in sys_msgs:
-                                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                                role = getattr(sm, "role", "system")
+                                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
 
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
@@ -1685,7 +1689,8 @@ class GameTurnManager:
                 await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
-                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                    role = getattr(sm, "role", "system")
+                    yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
 
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
@@ -2108,7 +2113,8 @@ class GameTurnManager:
             ):
                 sys_msgs = await self._apply_script_changeset(cs_end)
                 for sm in sys_msgs:
-                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+                    role = getattr(sm, "role", "system")
+                    yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
 
         await self.db.commit()
 
@@ -2779,25 +2785,25 @@ class GameTurnManager:
         if changeset.player_hp_change:
             self.avatar.hp = max(0, min(RESOURCE_CAP, self.avatar.hp + changeset.player_hp_change))
             verb = "gain" if changeset.player_hp_change > 0 else "lose"
-            system_messages.append(f"You {verb} {abs(changeset.player_hp_change)} HP (Script).")
+            system_messages.append(ScriptMessage(f"You {verb} {abs(changeset.player_hp_change)} HP (Script).", role="system"))
             if self.avatar.hp <= 0:
                 raise GameOverException(f"{self.avatar.name} has fallen! Game Over.")
 
         if changeset.player_mana_change:
             self.avatar.mana = max(0, min(RESOURCE_CAP, self.avatar.mana + changeset.player_mana_change))
             verb = "gain" if changeset.player_mana_change > 0 else "lose"
-            system_messages.append(f"You {verb} {abs(changeset.player_mana_change)} Mana (Script).")
+            system_messages.append(ScriptMessage(f"You {verb} {abs(changeset.player_mana_change)} Mana (Script).", role="system"))
 
         if changeset.player_stamina_change:
             self.avatar.stamina = max(0, min(RESOURCE_CAP, self.avatar.stamina + changeset.player_stamina_change))
             verb = "gain" if changeset.player_stamina_change > 0 else "lose"
-            system_messages.append(f"You {verb} {abs(changeset.player_stamina_change)} Stamina (Script).")
+            system_messages.append(ScriptMessage(f"You {verb} {abs(changeset.player_stamina_change)} Stamina (Script).", role="system"))
 
         if changeset.player_new_items:
             inv = list(self.avatar.inventory or [])
             for it in changeset.player_new_items:
                 inv.append(it)
-                system_messages.append(f"Acquired: {it.get('name', it.get('id'))}")
+                system_messages.append(ScriptMessage(f"Acquired: {it.get('name', it.get('id'))}", role="system"))
             self.avatar.inventory = inv
 
         if changeset.player_removed_item_ids:
@@ -2887,7 +2893,11 @@ class GameTurnManager:
             flag_modified(self.state, "exit_states")
 
         for msg in changeset.narrative_messages:
-            system_messages.append(msg)
+            system_messages.append(ScriptMessage(msg, role="assistant"))
+            await self._save_chat_message("assistant", msg)
+
+        for msg in getattr(changeset, "system_messages", []):
+            system_messages.append(ScriptMessage(msg, role="system"))
             await self._save_chat_message("system", msg)
 
         if changeset.new_memories:
