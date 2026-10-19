@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -258,36 +259,43 @@ class SafeStaticFiles(StaticFiles):
 # Mount the entire DATA_DIR under /data for robustness, with security filters
 app.mount("/data", SafeStaticFiles(directory=os.path.abspath(settings.DATA_DIR)), name="data")
 
+# Resolve static directories relative to this file so the app works regardless of CWD
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BACKEND_DIR.parent
+BACKEND_ASSETS_DIR = BACKEND_DIR / "static" / "assets"
+FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend_dist"
+BACKEND_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Serve frontend if available (Production/Docker mode)
-if os.path.exists("frontend_dist"):
+if FRONTEND_DIST_DIR.is_dir():
     # First, define a route for assets that checks both backend and frontend folders
     @app.get("/assets/{path:path}")
     async def serve_assets(path: str):
         # 1. Try backend static assets (like catalog images)
-        backend_asset = _safe_join("backend/static/assets", path)
+        backend_asset = _safe_join(str(BACKEND_ASSETS_DIR), path)
         if backend_asset and os.path.isfile(backend_asset):
             return FileResponse(backend_asset)
-        
+
         # 2. Try frontend built assets (JS, CSS)
-        frontend_asset = _safe_join("frontend_dist/assets", path)
+        frontend_asset = _safe_join(str(FRONTEND_DIST_DIR / "assets"), path)
         if frontend_asset and os.path.isfile(frontend_asset):
             return FileResponse(frontend_asset)
-            
+
         return {"error": "Asset not found"}
 
     # Catch-all for SPA client-side routing
     @app.get("/{catchall:path}")
     async def serve_spa(catchall: str):
         # Check if the specific file exists in frontend_dist (e.g. favicon.ico)
-        full_path = _safe_join("frontend_dist", catchall)
+        full_path = _safe_join(str(FRONTEND_DIST_DIR), catchall)
         if catchall and full_path and os.path.isfile(full_path):
             return FileResponse(full_path)
-            
+
         # Otherwise serve the index.html for the SPA
-        return FileResponse("frontend_dist/index.html")
+        return FileResponse(FRONTEND_DIST_DIR / "index.html")
 else:
     # Standard mount for development
-    app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="assets")
+    app.mount("/assets", StaticFiles(directory=BACKEND_ASSETS_DIR), name="assets")
 
     @app.get("/", tags=["Development"])
     async def dev_root() -> dict:
