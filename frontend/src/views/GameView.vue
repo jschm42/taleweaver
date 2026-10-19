@@ -1609,19 +1609,24 @@ watch(showCombatDialog, (visible) => {
 })
 
 // Autonomous Agent Gameplay Loop
+let isAgentLoopRunning = false
 watch(
   [() => sheet.value?.agent_active, status, agentPaused, agentStepByStep],
   async ([agentActive, currentStatus, paused, stepByStep]) => {
+    if (isAgentLoopRunning) return
     if (agentActive && currentStatus === 'connected' && !paused && !stepByStep) {
-      // Wait 1.5 seconds so the player can follow the gameplay progression
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      // Re-verify that the agent is still active, status is connected, and we are not paused or step-by-step
-      if (sheet.value?.agent_active && status.value === 'connected' && !agentPaused.value && !agentStepByStep.value) {
-        try {
+      isAgentLoopRunning = true
+      try {
+        // Wait 1.5 seconds so the player can follow the gameplay progression
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        // Re-verify that the agent is still active, status is connected, and we are not paused or step-by-step
+        if (sheet.value?.agent_active && status.value === 'connected' && !agentPaused.value && !agentStepByStep.value) {
           await runAgentTurn()
-        } catch (err) {
-          console.error('Agent turn failed', err)
         }
+      } catch (err) {
+        console.error('Agent turn failed', err)
+      } finally {
+        isAgentLoopRunning = false
       }
     }
   },

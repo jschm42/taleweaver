@@ -959,6 +959,8 @@ class AdventureLogic:
             "compressed_history": getattr(state, "compressed_history", None),
             "agent_active": bool((state.entity_states or {}).get("__agent__", {}).get("active", False)),
             "agent_monkey_mode": bool((state.entity_states or {}).get("__agent__", {}).get("monkey_mode", False)),
+            "agent_allow_walkthrough": bool((state.entity_states or {}).get("__agent__", {}).get("allow_walkthrough", True)),
+            "agent_step_by_step": bool((state.entity_states or {}).get("__agent__", {}).get("step_by_step", False)),
             "is_debug_enabled": bool(state.is_debug_enabled),
             "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled)
         }

@@ -243,7 +243,12 @@ export function useGameSocket(): UseGameSocket {
 
     if (data.scene_id !== undefined) currentSceneId = data.scene_id || null
     if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
-    if (data.sheet) sheet.value = data.sheet
+    if (data.sheet) {
+      sheet.value = data.sheet
+      if (typeof data.sheet.agent_step_by_step === 'boolean') {
+        agentStepByStep.value = data.sheet.agent_step_by_step
+      }
+    }
     if (data.map_data) mapData.value = data.map_data
     if (data.nodes) nodes.value = data.nodes
     if (data.npc_metadata) npcMetadata.value = data.npc_metadata

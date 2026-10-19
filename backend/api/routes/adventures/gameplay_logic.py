@@ -832,12 +832,20 @@ class GameTurnManager:
             if cmd_args == "on":
                 llm_settings = self.user.llm_settings or {}
                 monkey_mode_default = bool(llm_settings.get("play_agent_monkey_mode", False))
+                walkthrough_default = bool(llm_settings.get("play_agent_allow_walkthrough", True))
+                step_default = bool(llm_settings.get("play_agent_step_by_step", False))
                 AgentService.set_agent_active(self.state, True)
                 AgentService.set_monkey_mode(self.state, monkey_mode_default)
+                AgentService.set_walkthrough_allowed(self.state, walkthrough_default)
+                AgentService.set_step_by_step(self.state, step_default)
                 await self.db.commit()
                 msg = "Autonomous Agent Gameplay Mode enabled. The AI will now play the game on your behalf."
                 if monkey_mode_default:
                     msg += " Monkey Mode is active by default from settings."
+                if not walkthrough_default:
+                    msg += " Sequence Walkthrough guidance is disabled (normal player mode)."
+                if step_default:
+                    msg += " Step-by-Step confirmation mode is enabled."
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             elif cmd_args == "off":
@@ -871,6 +879,83 @@ class GameTurnManager:
                 )
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args in ("walkthrough on", "guide on"):
+                AgentService.set_walkthrough_allowed(self.state, True)
+                await self.db.commit()
+                msg = (
+                    "Play-Agent Sequence Walkthrough guidance enabled. "
+                    "The agent may consult the current sequence walkthrough for strategic guidance."
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args in ("walkthrough off", "guide off"):
+                AgentService.set_walkthrough_allowed(self.state, False)
+                await self.db.commit()
+                msg = (
+                    "Play-Agent Sequence Walkthrough guidance disabled. "
+                    "The agent will play strictly as a regular player without walkthrough or spoiler information."
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args == "step on":
+                AgentService.set_step_by_step(self.state, True)
+                await self.db.commit()
+                msg = (
+                    "Play-Agent Step-by-Step mode enabled. "
+                    "Each action requires your confirmation (use the Next button or /agent step)."
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args == "step off":
+                AgentService.set_step_by_step(self.state, False)
+                await self.db.commit()
+                msg = (
+                    "Play-Agent Step-by-Step mode disabled. The agent will run fully autonomously."
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args in ("step", "next"):
+                agent_state = AgentService.get_agent_state(self.state)
+                if not agent_state.get("active", False):
+                    msg = "Agent mode is not active. Enable it first with /agent on."
+                    await self._save_chat_message("system", msg)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                else:
+                    try:
+                        decision = await AgentService.get_decision(
+                            self.db,
+                            self.game_id,
+                            self.user,
+                            self.state,
+                            self.avatar,
+                            self.adventure,
+                            self,
+                        )
+                        if decision and not decision.is_stuck_or_bug:
+                            yield f"event: thought\ndata: {json.dumps({'content': decision.thoughts})}\n\n"
+                            await asyncio.sleep(0.3)
+                            await self._save_chat_message("player", decision.action)
+                            yield f"event: player_action\ndata: {json.dumps({'content': decision.action})}\n\n"
+                            yield f"event: status\ndata: {json.dumps({'content': f'Agent decides: {decision.action}'})}\n\n"
+                            AgentService.reset_failures(self.state)
+                            await self.db.commit()
+                            async for chunk in self.process_turn(decision.action):
+                                yield chunk
+                            return
+                        else:
+                            desc = (
+                                decision.issue_description
+                                if decision
+                                else "Failed to generate decision."
+                            )
+                            msg = f"Agent issue detected: {desc}"
+                            await self._save_chat_message("system", msg)
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    except Exception as e:
+                        logger.exception("Agent step failed in process_turn")
+                        msg = f"Agent step failed: {str(e)}"
+                        await self._save_chat_message("system", msg)
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             elif cmd_args == "monkey on":
                 AgentService.set_monkey_mode(self.state, True)
                 await self.db.commit()
@@ -883,11 +968,11 @@ class GameTurnManager:
             elif cmd_args == "monkey off":
                 AgentService.set_monkey_mode(self.state, False)
                 await self.db.commit()
-                msg = "Play-Agent Monkey Mode disabled. The agent will return to normal walkthrough-driven behavior."
+                msg = "Play-Agent Monkey Mode disabled. The agent will return to normal behavior."
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             else:
-                msg = "Usage: /agent on | /agent off | /agent monkey on | /agent monkey off"
+                msg = "Usage: /agent on | /agent off | /agent walkthrough on/off | /agent step on/off | /agent step | /agent monkey on/off"
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             final_data = jsonable_encoder(

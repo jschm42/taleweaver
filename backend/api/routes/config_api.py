@@ -456,6 +456,8 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "play_agent_model": "",
         "play_agent_model_provider": "openai",
         "play_agent_monkey_mode": False,
+        "play_agent_allow_walkthrough": True,
+        "play_agent_step_by_step": False,
         "play_agent_openrouter_provider": "",
         "compression_model": "",
         "compression_model_provider": "openai",
@@ -568,6 +570,14 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
 
     if "play_agent_monkey_mode" not in normalized:
         normalized["play_agent_monkey_mode"] = False
+
+    if "play_agent_allow_walkthrough" not in normalized:
+        normalized["play_agent_allow_walkthrough"] = True
+    normalized["play_agent_allow_walkthrough"] = bool(normalized["play_agent_allow_walkthrough"])
+
+    if "play_agent_step_by_step" not in normalized:
+        normalized["play_agent_step_by_step"] = False
+    normalized["play_agent_step_by_step"] = bool(normalized["play_agent_step_by_step"])
 
     # Compression model normalization (fallback to small model if not set)
     if "compression_model_provider" not in normalized:
@@ -853,6 +863,8 @@ class SettingsPayload(BaseModel):
     play_agent_model: Optional[str] = ""
     play_agent_model_provider: Optional[str] = "openai"
     play_agent_monkey_mode: bool = False
+    play_agent_allow_walkthrough: bool = True
+    play_agent_step_by_step: bool = False
     play_agent_openrouter_provider: Optional[str] = ""
 
     compression_model: Optional[str] = ""

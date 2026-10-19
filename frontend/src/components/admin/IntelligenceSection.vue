@@ -558,6 +558,19 @@ const handleSave = () => {
           <input v-model="localForm.play_agent_openrouter_provider" type="text" maxlength="100" placeholder="OpenRouter Provider Routing (e.g. Together, Grok)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-sky-500 font-mono" />
         </div>
 
+        <div class="flex items-center justify-between gap-3 p-2.5 bg-cyan-500/10 rounded-lg border border-cyan-500/25">
+          <div>
+            <div class="text-xs font-bold text-cyan-200 flex items-center gap-1.5">
+              <i class="ra ra-compass text-cyan-400"></i> Sequence Walkthrough Default
+            </div>
+            <p class="text-[11px] text-cyan-300/70">Allow the Play-Agent to read the active sequence walkthrough. When disabled, the agent plays purely like a regular player with zero walkthrough hints.</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0">
+            <input type="checkbox" v-model="localForm.play_agent_allow_walkthrough" class="sr-only peer">
+            <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white"></div>
+          </label>
+        </div>
+
         <div class="flex items-center justify-between gap-3 p-2.5 bg-amber-500/10 rounded-lg border border-amber-500/25">
           <div>
             <div class="text-xs font-bold text-amber-200 flex items-center gap-1.5">

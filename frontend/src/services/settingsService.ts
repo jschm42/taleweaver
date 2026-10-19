@@ -46,6 +46,8 @@ class SettingsService {
     play_agent_model: '',
     play_agent_model_provider: 'openai',
     play_agent_monkey_mode: false,
+    play_agent_allow_walkthrough: true,
+    play_agent_step_by_step: false,
     play_agent_openrouter_provider: '',
 
     compression_model: '',

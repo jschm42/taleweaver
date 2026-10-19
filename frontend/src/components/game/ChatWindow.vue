@@ -207,9 +207,18 @@ const showImage = (path?: string | null) => {
 }
 
 const agentMonkeyMode = computed(() => Boolean(props.sheet?.agent_monkey_mode))
+const agentAllowWalkthrough = computed(() => props.sheet?.agent_allow_walkthrough ?? true)
 
 const handleMonkeyModeToggle = () => {
   emit('send', agentMonkeyMode.value ? '/agent monkey off' : '/agent monkey on')
+}
+
+const handleWalkthroughToggle = () => {
+  emit('send', agentAllowWalkthrough.value ? '/agent walkthrough off' : '/agent walkthrough on')
+}
+
+const handleStepByStepToggle = () => {
+  emit('send', agentStepByStep.value ? '/agent step off' : '/agent step on')
 }
 
 function appendText(text: string) {
@@ -1458,6 +1467,17 @@ onUnmounted(() => {
         <span>{{ agentPaused ? 'Autonomous Agent Mode is paused.' : 'Autonomous Agent Mode is active. The AI is playing the game.' }}</span>
       </div>
       <div class="flex items-center gap-2.5 select-none shrink-0">
+        <!-- Walkthrough Toggle -->
+        <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider" :class="agentAllowWalkthrough ? 'text-cyan-200 hover:text-cyan-100' : 'text-slate-400 hover:text-slate-300'">
+          <input
+            type="checkbox"
+            :checked="agentAllowWalkthrough"
+            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-cyan-600 focus:ring-cyan-500/50 focus:ring-offset-slate-950 focus:ring-1"
+            @change="handleWalkthroughToggle"
+          />
+          Walkthrough
+        </label>
+
         <!-- Monkey Mode Toggle -->
         <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider" :class="agentMonkeyMode ? 'text-amber-200 hover:text-amber-100' : 'text-indigo-300 hover:text-indigo-200'">
           <input
@@ -1473,7 +1493,8 @@ onUnmounted(() => {
         <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider text-indigo-300 hover:text-indigo-200">
           <input 
             type="checkbox" 
-            v-model="agentStepByStep" 
+            :checked="agentStepByStep"
+            @change="agentStepByStep = !agentStepByStep; handleStepByStepToggle()"
             class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1" 
           />
           Step-by-Step
