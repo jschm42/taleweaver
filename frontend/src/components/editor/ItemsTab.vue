@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Brain } from 'lucide-vue-next'
+import { hasAnyScript } from '@/utils/editor_utils'
 
 interface SceneOption {
   id: string
@@ -20,7 +22,10 @@ const props = defineProps<{
   visualsCacheVersion: number
   editorScenes?: SceneOption[]
   activeMapSceneId?: string | null
+  adventureScripts?: any[]
 }>()
+
+const hasScript = (obj: any): boolean => hasAnyScript(obj, props.adventureScripts)
 
 const emit = defineEmits<{
   (e: 'quick-regen', kind: string, id: string): void
@@ -35,6 +40,8 @@ const emit = defineEmits<{
   (e: 'request-change-item-type', itemId: string, name: string, currentItemType: string): void
   (e: 'request-move-item-to-scene', itemId: string, name: string, currentSceneId: string): void
   (e: 'request-delete-item', itemId: string, name: string): void
+  (e: 'export-entity', kind: 'item', id: string, label: string): void
+  (e: 'import-entity', kind: 'item'): void
 }>()
 
 const isContainerLocked = (obj: any): boolean => {
@@ -119,6 +126,12 @@ const activeFilterLabel = computed(() => {
 </script>
 
 <template>
+  <div class="space-y-6">
+  <div class="flex items-center justify-end">
+    <button @click="emit('import-entity', 'item')" class="text-xs font-bold text-sky-500 hover:text-sky-400 flex items-center gap-1.5 uppercase tracking-widest transition-colors" title="Import an item from a .twe file">
+      <i class="ra ra-load"></i> Import Item
+    </button>
+  </div>
   <section v-if="unfilteredTotal > 0" class="space-y-8 animate-page-in">
     <!-- ==================================================================
          Filter bar — filter the four item sections by scene.
@@ -194,7 +207,16 @@ const activeFilterLabel = computed(() => {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3 h-3 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
               <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
@@ -217,6 +239,7 @@ const activeFilterLabel = computed(() => {
               <div class="my-1 border-t border-white/5"></div>
               <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
               <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
+              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
               <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
             </div>
           </div>
@@ -255,7 +278,16 @@ const activeFilterLabel = computed(() => {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="isContainerLocked(obj)" class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100 z-10">LOCKED</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div v-if="isContainerLocked(obj)" class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">LOCKED</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3 h-3 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
@@ -279,6 +311,7 @@ const activeFilterLabel = computed(() => {
               <div class="my-1 border-t border-white/5"></div>
               <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
               <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
+              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
               <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
             </div>
           </div>
@@ -317,7 +350,16 @@ const activeFilterLabel = computed(() => {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/25 text-lime-100 z-10">SWITCH</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/25 text-lime-100">SWITCH</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3 h-3 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
@@ -342,6 +384,7 @@ const activeFilterLabel = computed(() => {
               <div class="my-1 border-t border-white/5"></div>
               <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
               <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
+              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
               <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
             </div>
           </div>
@@ -380,7 +423,16 @@ const activeFilterLabel = computed(() => {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="obj.is_hidden" class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200 z-10">HIDDEN</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div v-if="obj.is_hidden" class="px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200">HIDDEN</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3 h-3 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
@@ -408,6 +460,7 @@ const activeFilterLabel = computed(() => {
               <div class="my-1 border-t border-white/5"></div>
               <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
               <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
+              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
               <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
             </div>
           </div>
@@ -430,6 +483,7 @@ const activeFilterLabel = computed(() => {
       </button>
     </div>
   </section>
+  </div>
 </template>
 
 <style scoped>

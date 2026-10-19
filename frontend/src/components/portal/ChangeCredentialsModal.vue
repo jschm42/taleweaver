@@ -2,12 +2,14 @@
 import { ref, computed, watch } from 'vue'
 import { authState, setToken } from '@/store/auth'
 import { api } from '@/composables/useApi'
+import { usePasswordPolicy } from '@/composables/usePasswordPolicy'
 
 const props = defineProps<{
   isOpen: boolean
 }>()
 
 const emit = defineEmits(['close'])
+const { hint: passwordHint, validate: validatePassword } = usePasswordPolicy()
 
 const currentPassword = ref('')
 const newUsername = ref('')
@@ -39,11 +41,13 @@ const hasChanges = computed(() => {
   return usernameChanged || passwordFilled
 })
 
+const newPasswordError = computed(() => (newPassword.value ? validatePassword(newPassword.value) : null))
+
 const isFormValid = computed(() => {
   if (!currentPassword.value) return false
   if (!hasChanges.value) return false
   if (newPassword.value && newPassword.value !== confirmPassword.value) return false
-  if (newPassword.value && newPassword.value.length < 4) return false
+  if (newPasswordError.value) return false
   if (newUsername.value && !newUsername.value.trim()) return false
   return true
 })
@@ -76,7 +80,9 @@ async function handleSubmit() {
 
     authState.user = response.user
     
-    success.value = 'Credentials changed successfully!'
+    success.value = payload.password
+      ? 'Credentials changed. Other devices have been signed out.'
+      : 'Credentials changed successfully!'
     
     // Auto close after 1.5 seconds
     setTimeout(() => {
@@ -163,10 +169,13 @@ async function handleSubmit() {
                 v-model="newPassword"
                 type="password"
                 autocomplete="new-password"
-                placeholder="New password (min. 4 characters)..."
+                placeholder="New password..."
                 class="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-aether-primary/50 focus:ring-1 focus:ring-aether-primary/20 transition-all"
               />
             </div>
+            <p class="text-[10px] font-bold" :class="newPasswordError ? 'text-amber-400' : 'text-slate-500'">
+              {{ newPasswordError || passwordHint }}
+            </p>
           </div>
 
           <!-- Confirm Password -->

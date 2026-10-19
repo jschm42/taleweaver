@@ -29,7 +29,10 @@ const isContainerEntity = (entity: any): boolean => {
 
 const isReadableEntity = (entity: any): boolean => {
   if (!entity) return false
-  return String(entity.item_type || '').toUpperCase() === 'READABLE'
+  const itemType = String(entity.item_type || entity.metadata_json?.item_type || '').toUpperCase()
+  if (itemType === 'READABLE') return true
+  const metadata = (entity.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  return Boolean(entity.text_log_content || metadata.text_log_content)
 }
 
 const isConsumableEntity = (entity: any): boolean => {

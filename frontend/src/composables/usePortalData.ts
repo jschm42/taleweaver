@@ -46,6 +46,7 @@ export interface UsePortalDataResult {
   executeDeleteSession: () => Promise<void>
   executeDeleteAllSessions: () => Promise<void>
   copySession: (gameId: string) => Promise<void>
+  duplicateAdventure: (templateId: string) => Promise<void>
   confirmDeleteTemplate: (templateId: string, title: string) => void
   executeDeleteTemplate: () => Promise<void>
   executeDeleteAllTemplates: () => Promise<void>
@@ -86,6 +87,7 @@ export interface UsePortalDataResult {
     progress: number
     stage: 'preparing' | 'duplicating' | 'syncing' | 'completed'
     errorMsg?: string
+    itemType?: 'session' | 'adventure'
   }>
   editNoteSessionId: Ref<string | null>
   editNoteValue: Ref<string>
@@ -194,11 +196,13 @@ export function usePortalData(): UsePortalDataResult {
     progress: number
     stage: 'preparing' | 'duplicating' | 'syncing' | 'completed'
     errorMsg?: string
+    itemType?: 'session' | 'adventure'
   }>({
     isOpen: false,
     sessionTitle: '',
     progress: 0,
     stage: 'preparing',
+    itemType: 'session',
     errorMsg: undefined,
   })
   const isSeeding = ref(false)
@@ -398,6 +402,50 @@ export function usePortalData(): UsePortalDataResult {
       }
     } catch (error: any) {
       errorMsg.value = error?.message || 'Session could not be copied.'
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        errorMsg: errorMsg.value,
+      }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Duplicates an existing adventure template blueprint and assets. */
+  async function duplicateAdventure(templateId: string) {
+    const sourceTemplate = templates.value.find((entry) => entry.template_id === templateId)
+    cloneProgressState.value = {
+      isOpen: true,
+      sessionTitle: sourceTemplate?.title || 'Adventure',
+      progress: 10,
+      stage: 'preparing',
+      itemType: 'adventure',
+      errorMsg: undefined,
+    }
+
+    isLoading.value = true
+    try {
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        progress: 45,
+        stage: 'duplicating',
+      }
+      await api.duplicateAdventure(templateId)
+
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        progress: 80,
+        stage: 'syncing',
+      }
+      await fetchPortalData()
+
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        progress: 100,
+        stage: 'completed',
+      }
+    } catch (error: any) {
+      errorMsg.value = error?.message || 'Adventure could not be duplicated.'
       cloneProgressState.value = {
         ...cloneProgressState.value,
         errorMsg: errorMsg.value,
@@ -893,6 +941,7 @@ export function usePortalData(): UsePortalDataResult {
     executeDeleteSession,
     executeDeleteAllSessions,
     copySession,
+    duplicateAdventure,
     confirmDeleteTemplate,
     executeDeleteTemplate,
     executeDeleteAllTemplates,

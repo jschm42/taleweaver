@@ -1,8 +1,9 @@
-from typing import Optional, Union
-from datetime import timedelta
 import ipaddress
+import logging
+import os
 import time
 from collections import defaultdict
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -10,23 +11,27 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.account_recovery import (
+    consume_recovery_code,
+    find_user_by_reset_token,
+    set_new_password,
+)
 from backend.core.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    create_access_token,
+    MIN_PASSWORD_LENGTH,
+    aget_password_hash,
+    averify_password,
+    create_user_access_token,
     get_current_user,
-    get_password_hash,
     validate_password_strength,
 )
-from backend.core.database import get_db
 from backend.core.config import settings
+from backend.core.database import get_db
+from backend.core.login_throttle import login_throttle, recovery_throttle
+from backend.crud.crud_profile import build_user_profile_data
 from backend.models.user import User
 
 router = APIRouter()
-
-# Simple in-memory rate limiting for auth
-_login_attempts = defaultdict(list)
-LOGIN_RATE_LIMIT = 5 # attempts
-LOGIN_WINDOW = 60 # seconds
+logger = logging.getLogger(__name__)
 
 # Simple in-memory rate limiting for setup-root bootstrap
 _setup_root_attempts = defaultdict(list)
@@ -35,6 +40,10 @@ SETUP_ROOT_WINDOW = 3600  # seconds (1 hour)
 
 # IPs allowed to invoke the unauthenticated /setup-root bootstrap endpoint.
 _SETUP_ROOT_ALLOWED_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"}
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 def _client_ip_in_setup_allowlist(request: Request) -> bool:
@@ -55,9 +64,17 @@ def _client_ip_in_setup_allowlist(request: Request) -> bool:
         return client_host in _SETUP_ROOT_ALLOWED_IPS
 
 
+def _validate_new_password(password: str) -> None:
+    try:
+        validate_password_strength(password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+
 
 class UserResponse(BaseModel):
     id: str
@@ -72,140 +89,158 @@ class UserResponse(BaseModel):
     has_imported_defaults: bool = False
     adventure_count: Optional[int] = 0
     total_xp: Optional[int] = 0
+    recovery_codes_remaining: int = 0
+
 
 class SetupRootRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
+    username: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=10, max_length=256)
+
+
+class PasswordPolicy(BaseModel):
+    min_length: int
+    requires_complexity: bool
 
 
 class BootstrapStatusResponse(BaseModel):
     has_admin: bool
     has_users: bool
     app_version: str
+    password_policy: PasswordPolicy
+
+
+class RecoveryCodeResetRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=50)
+    recovery_code: str = Field(min_length=1, max_length=64)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+class ResetTokenRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+def _password_policy() -> PasswordPolicy:
+    strict = bool(getattr(settings, "STRICT_PASSWORD_POLICY", True))
+    return PasswordPolicy(
+        min_length=MIN_PASSWORD_LENGTH if strict else 4, requires_complexity=strict
+    )
+
 
 @router.post("/auth/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    # Simple Rate Limiting
-    now = time.time()
-    client_id = form_data.username 
-    _login_attempts[client_id] = [t for t in _login_attempts[client_id] if now - t < LOGIN_WINDOW]
-    if len(_login_attempts[client_id]) >= LOGIN_RATE_LIMIT:
-        logger.warning(f"Rate limit exceeded for user: {form_data.username}")
+async def login_for_access_token(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = _client_ip(request)
+    if login_throttle.is_blocked(client_ip, form_data.username):
+        logger.warning("Login throttled for username %r from %s", form_data.username, client_ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Please try again later."
+            detail="Too many login attempts. Please try again later.",
         )
-    _login_attempts[client_id].append(now)
 
-    logger.info(f"Login attempt for username: '{form_data.username}'")
-    
     result = await db.execute(select(User).filter(User.username == form_data.username))
     user = result.scalars().first()
-    
-    from backend.core.auth import verify_password
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        if user:
-            logger.warning(f"Invalid password for user '{form_data.username}'")
+
+    # Always run a hash verification so response time does not reveal unknown usernames.
+    password_ok = await averify_password(form_data.password, user.hashed_password if user else None)
+    if not user or not password_ok:
+        login_throttle.record_failure(client_ip, form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    login_throttle.reset(client_ip, form_data.username)
+    return {"access_token": create_user_access_token(user), "token_type": "bearer"}
+
+
+@router.post("/auth/recover", response_model=Token)
+async def reset_password_with_recovery_code(
+    payload: RecoveryCodeResetRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set a new password using one of the user's one-time recovery codes."""
+    client_ip = _client_ip(request)
+    if recovery_throttle.is_blocked(client_ip, payload.username):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many recovery attempts. Please try again later.",
+        )
+    _validate_new_password(payload.new_password)
+
+    result = await db.execute(select(User).filter(User.username == payload.username.strip()))
+    user = result.scalars().first()
+    if user is None or not consume_recovery_code(user, payload.recovery_code):
+        recovery_throttle.record_failure(client_ip, payload.username)
+        raise HTTPException(status_code=400, detail="Invalid username or recovery code.")
+
+    await set_new_password(user, payload.new_password)
+    await db.commit()
+    recovery_throttle.reset(client_ip, payload.username)
+    logger.info("Password reset via recovery code for user %s", user.id)
+    return {"access_token": create_user_access_token(user), "token_type": "bearer"}
+
+
+@router.post("/auth/reset-password", response_model=Token)
+async def reset_password_with_token(
+    payload: ResetTokenRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set a new password using an admin-issued one-time reset link."""
+    client_ip = _client_ip(request)
+    if recovery_throttle.is_blocked(client_ip, "reset-token"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many reset attempts. Please try again later.",
+        )
+    _validate_new_password(payload.new_password)
+
+    user = await find_user_by_reset_token(db, payload.token)
+    if user is None:
+        recovery_throttle.record_failure(client_ip, "reset-token")
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired.")
+
+    await set_new_password(user, payload.new_password)
+    await db.commit()
+    logger.info("Password reset via admin reset link for user %s", user.id)
+    return {"access_token": create_user_access_token(user), "token_type": "bearer"}
+
 
 @router.get("/auth/me", response_model=UserResponse)
 async def read_users_me(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    import os
-
     from backend.engine.adventure_importer import AdventureTemplateImporter
-    from backend.models.game_session import GameSession
-    from backend.models.avatar import Avatar
-    from sqlalchemy import func
-    
-    # 1. Trigger background import of defaults if never done
+
+    # Import default adventures on first login.
     if not current_user.has_imported_defaults:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"First login for user '{current_user.username}'. Importing default adventures...")
-        
+        logger.info(
+            "First login for user '%s'. Importing default adventures...", current_user.username
+        )
         defaults_dir = os.path.join("adventures", "default")
         try:
-            await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
+            await AdventureTemplateImporter.import_from_directory(
+                db, defaults_dir, owner_id=current_user.id, delete_after=False
+            )
             current_user.has_imported_defaults = True
             await db.commit()
         except Exception as e:
-            logger.error(f"Failed to auto-import defaults for {current_user.username}: {e}")
+            logger.error("Failed to auto-import defaults for %s: %s", current_user.username, e)
 
-    # Count unique adventures played by this user
-    result = await db.execute(
-        select(GameSession.template_id)
-        .where(GameSession.user_id == current_user.id)
-        .distinct()
-    )
-    adventure_count = len(result.scalars().all())
+    profile = await build_user_profile_data(db, current_user)
+    # Persist the healed profile image URL so the fix is applied only once.
+    if profile["profile_image_url"] != current_user.profile_image_url:
+        current_user.profile_image_url = profile["profile_image_url"]
+        await db.commit()
+    return profile
 
-    # Calculate total XP across all user's avatars
-    xp_res = await db.execute(
-        select(func.sum(Avatar.exp)).where(Avatar.user_id == current_user.id)
-    )
-    total_xp = xp_res.scalar() or 0
-
-    # Query game sessions to get the XP for completed/game-over games
-    sessions_query = await db.execute(
-        select(GameSession.id, Avatar.exp)
-        .join(Avatar, GameSession.avatar_id == Avatar.id)
-        .where(GameSession.user_id == current_user.id)
-    )
-    session_xp_map = {row[0]: row[1] for row in sessions_query.all()}
-
-    # Enrich game log with XP
-    enriched_game_log = []
-    for entry in (current_user.game_log or []):
-        s_id = entry.get("session_id")
-        xp_val = session_xp_map.get(s_id, 0)
-        enriched_game_log.append({
-            **entry,
-            "xp": xp_val
-        })
-
-    # Auto-heal legacy malformed media URL values like /data/data/users/...
-    profile_image_url = current_user.profile_image_url
-    if profile_image_url:
-        normalized_profile_image_url = profile_image_url.replace("\\", "/")
-        while normalized_profile_image_url.startswith("/data/data/"):
-            normalized_profile_image_url = normalized_profile_image_url.replace("/data/data/", "/data/", 1)
-        if normalized_profile_image_url != profile_image_url:
-            current_user.profile_image_url = normalized_profile_image_url
-            await db.commit()
-            profile_image_url = normalized_profile_image_url
-    
-    # We convert the ORM object to a dict and add the extra field
-    user_data = {
-        "id": current_user.id,
-        "username": current_user.username,
-        "role": current_user.role,
-        "profile_image_url": profile_image_url,
-        "bio": current_user.bio,
-        "default_language": current_user.default_language,
-        "earned_awards": current_user.earned_awards or [],
-        "is_admin": current_user.role == "admin",
-        "adventure_count": adventure_count,
-        "total_xp": total_xp,
-        "game_log": enriched_game_log,
-        "has_imported_defaults": current_user.has_imported_defaults
-    }
-    return user_data
 
 @router.post("/auth/setup-root")
 async def setup_root_admin(
@@ -219,7 +254,7 @@ async def setup_root_admin(
     operator has explicitly set ``ALLOW_REMOTE_SETUP=true`` in the environment.
     It also enforces strict rate limiting and password-strength requirements.
     """
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = _client_ip(http_request)
     now = time.time()
     attempts = [t for t in _setup_root_attempts[client_ip] if now - t < SETUP_ROOT_WINDOW]
     _setup_root_attempts[client_ip] = attempts
@@ -240,18 +275,13 @@ async def setup_root_admin(
     if result.scalars().first() is not None:
         raise HTTPException(status_code=400, detail="A root administrator already exists.")
 
-    try:
-        validate_password_strength(request.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+    _validate_new_password(request.password)
     _setup_root_attempts[client_ip].append(now)
 
-    hashed_password = get_password_hash(request.password)
     new_admin = User(
-        username=request.username,
-        hashed_password=hashed_password,
-        role="admin"
+        username=request.username.strip(),
+        hashed_password=await aget_password_hash(request.password),
+        role="admin",
     )
     db.add(new_admin)
     await db.commit()
@@ -268,4 +298,5 @@ async def get_bootstrap_status(db: AsyncSession = Depends(get_db)):
         has_admin=admin_result.scalars().first() is not None,
         has_users=user_result.first() is not None,
         app_version=settings.APP_VERSION,
+        password_policy=_password_policy(),
     )

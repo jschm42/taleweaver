@@ -5,12 +5,16 @@ Uses an in-memory SQLite database so tests are fully isolated and
 never touch the production database. All LLM calls are mocked to
 avoid API costs and network latency.
 """
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from unittest.mock import AsyncMock
+
+# ---------------------------------------------------------------------------
+# In-memory test database
+# ---------------------------------------------------------------------------
+from sqlalchemy.pool import StaticPool
 
 import backend.core.database as core_database
 from backend.core.auth import create_access_token, get_password_hash
@@ -18,12 +22,6 @@ from backend.core.database import get_db
 from backend.main import app
 from backend.models.base import Base
 from backend.models.user import User
-
-# ---------------------------------------------------------------------------
-# In-memory test database
-# ---------------------------------------------------------------------------
-
-from sqlalchemy.pool import StaticPool
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -99,7 +97,7 @@ def stub_world_generator(monkeypatch):
         await db.commit()
 
     monkeypatch.setattr(
-        "backend.api.routes.adventures.templates.WorldGenerator.generate_world",
+        "backend.api.routes.adventures.adventure_creation.WorldGenerator.generate_world",
         _fake_generate_world,
     )
 
@@ -191,7 +189,13 @@ def _patch_external_generation_and_media(monkeypatch, request):
         raising=False,
     )
     monkeypatch.setattr(
-        "backend.api.routes.adventures.templates.WorldGenerator.generate_world",
+        "backend.api.routes.adventures.adventure_creation.WorldGenerator.generate_world",
+        _fake_generate_world,
+        raising=False,
+    )
+    # The post-generation validate/auto-fix pass would otherwise call real LLM providers.
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.editing.auto_fix.run_auto_fix_pass_safely",
         _fake_generate_world,
         raising=False,
     )

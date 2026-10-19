@@ -1,19 +1,30 @@
 import logging
+from typing import Any, Optional
 
+from backend.engine.hard_rule_evaluator import HardRuleEvaluator
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 
 logger = logging.getLogger(__name__)
 
+
 class QuestManager:
     """
     Deterministic quest evaluation engine that complements the LLM-driven mechanics pass.
-    Ensures that technical achievements (e.g. equipping items) are correctly registered
-    even if the LLM skips them in its structured response.
+    Evaluates both structured hard rules (required item, required scene, required defeated NPC,
+    scripting guards) and heuristic keyword goals.
     """
 
-    @staticmethod
-    def evaluate_quests(avatar: Avatar, state: SessionState) -> list[str]:
+    @classmethod
+    def evaluate_quests(
+        cls,
+        avatar: Avatar,
+        state: SessionState,
+        new_inventory_items: Optional[list[Any]] = None,
+        new_scene_id: Optional[str] = None,
+        updated_entities: Optional[list[Any]] = None,
+        script_context: Optional[Any] = None,
+    ) -> list[str]:
         """
         Evaluates current unresolved quests against the current game state.
         Returns a list of quest IDs that have just been completed.
@@ -28,27 +39,48 @@ class QuestManager:
             for q in state.quests
             if str(q.get("status") or "").lower() not in terminal_statuses
         ]
-        
+
         for quest in open_quests:
             qid = quest.get("id")
+            if not qid:
+                continue
+
+            # 1. Deterministic Hard Rules with Scripting Guard
+            if HardRuleEvaluator.has_hard_rules(quest):
+                is_met, _ = HardRuleEvaluator.evaluate_hard_rules(
+                    quest,
+                    avatar,
+                    state,
+                    new_inventory_items=new_inventory_items,
+                    new_scene_id=new_scene_id,
+                    updated_entities=updated_entities,
+                    script_context=script_context,
+                )
+                if is_met:
+                    completed_ids.append(qid)
+                continue
+
+            # 2. Heuristic Soft Goal Evaluation Fallback
             goal = quest.get("goal", "").lower()
             description = quest.get("description", "").lower()
-            
-            # 1. Equipment Checks
+
+            # Equipment Checks
             if "equip" in goal or "equip" in description:
-                if QuestManager._check_equipment_goal(avatar, goal) or QuestManager._check_equipment_goal(avatar, description):
+                if cls._check_equipment_goal(avatar, goal) or cls._check_equipment_goal(
+                    avatar, description
+                ):
                     completed_ids.append(qid)
                     continue
 
-            # 2. Inventory Checks (Collect X)
+            # Inventory Checks (Collect X)
             if "collect" in goal or "find" in goal or "get" in goal:
-                if QuestManager._check_inventory_goal(avatar, goal):
+                if cls._check_inventory_goal(avatar, goal):
                     completed_ids.append(qid)
                     continue
-            
-            # 3. Location Checks (Reach X)
+
+            # Location Checks (Reach X)
             if "reach" in goal or "go to" in goal or "travel to" in goal:
-                if QuestManager._check_location_goal(state, goal):
+                if cls._check_location_goal(state, goal):
                     completed_ids.append(qid)
                     continue
 

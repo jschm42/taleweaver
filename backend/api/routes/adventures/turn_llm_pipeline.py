@@ -6,16 +6,29 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, or_, and_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.turn_context_helpers import (
+    TECHNICAL_TURN_INSTRUCTION,
+    apply_entity_overrides,
+    bable_fish_instruction,
+    orient_exits,
+    resolve_model_settings,
+    resolve_sequence_guidance,
+)
 from backend.core.llm_logger import log_structured_event
 from backend.engine.memory_manager import MemoryManager
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
+
+
+# Only the tail of the chat log is needed for Pass 1 context and generator tool intents;
+# Pass 2 loads its own memory window.
+RECENT_HISTORY_LIMIT = 12
 
 
 @dataclass
@@ -26,8 +39,12 @@ class TurnLlmContext:
     exits: list[WorldExit]
     all_scenes: list[WorldScene]
     global_unlock_rules_prompt_block: str
-    mechanics_system_prompt: str
-    narration_system_prompt: str
+    # Static prompt prefixes (stable between scene/sequence changes -> prompt-cache friendly)
+    mechanics_static_prompt: str
+    narration_static_prompt: str
+    # Volatile CURRENT STATE blocks (sent in the latest user message)
+    mechanics_state_block: str
+    narration_state_block: str
     mechanics_awards: list[dict]
     small_model_provider: str
     complex_model_provider: str
@@ -36,6 +53,20 @@ class TurnLlmContext:
     compression_model_provider: str = "openai"
     compression_model: str = ""
     compression_max_tokens: int = 4096
+
+    @property
+    def mechanics_system_prompt(self) -> str:
+        """Self-contained mechanics prompt (static + state) for single-shot callers."""
+        return f"{self.mechanics_static_prompt}\n\n{self.mechanics_state_block}"
+
+
+@dataclass
+class _WorldSnapshot:
+    current_scene: WorldScene | None
+    all_entities: list[WorldEntity]
+    exits: list[WorldExit]
+    all_scenes: list[WorldScene]
+    all_exits: list[WorldExit]
 
 
 class TurnLlmContextBuilder:
@@ -129,269 +160,190 @@ class TurnLlmContextBuilder:
             f"RULE_LOCKS_JSON: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
         )
 
-    async def build_context(self, user_msg: str, language: str | None) -> TurnLlmContext:
-        db_start = time.perf_counter()
+    async def _load_recent_history(self) -> list[dict[str, str]]:
         hist_res = await self.manager.db.execute(
             select(ChatMessage)
             .where(ChatMessage.session_id == self.manager.state.session_id)
-            .order_by(ChatMessage.created_at.asc())
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+            .limit(RECENT_HISTORY_LIMIT)
         )
-        history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
-
-        scene_res = await self.manager.db.execute(
-            select(WorldScene).where(
-                WorldScene.id == self.manager.state.current_scene_id,
-                WorldScene.session_id == self.manager.game_id,
-            )
-        )
-        current_scene = scene_res.scalars().first()
-
-        all_ent_res = await self.manager.db.execute(
-            select(WorldEntity).where(
-                WorldEntity.session_id == self.manager.game_id,
-                WorldEntity.is_in_inventory.is_(False),
-            )
-        )
-        all_entities = list(all_ent_res.scalars().all())
-
-        exit_res = await self.manager.db.execute(
-            select(WorldExit).where(
-                WorldExit.session_id == self.manager.game_id,
-                or_(
-                    WorldExit.from_scene_id == self.manager.state.current_scene_id,
-                    and_(
-                        WorldExit.to_scene_id == self.manager.state.current_scene_id,
-                        WorldExit.exit_type == "bidirectional"
-                    )
-                )
-            )
-        )
-        db_exits = list(exit_res.scalars().all())
-        exits = []
-        for e in db_exits:
-            if e.from_scene_id == self.manager.state.current_scene_id:
-                exits.append(e)
-            else:
-                exits.append(WorldExit(
-                    id=e.id,
-                    template_id=e.template_id,
-                    session_id=e.session_id,
-                    from_scene_id=e.to_scene_id,
-                    to_scene_id=e.from_scene_id,
-                    label=e.label,
-                    exit_type=e.exit_type,
-                    is_locked=e.is_locked,
-                    lock_description=e.lock_description,
-                    code_to_unlock=e.code_to_unlock,
-                    item_to_unlock=e.item_to_unlock,
-                    rule_to_unlock=e.rule_to_unlock
-                ))
-
-        overrides = self.manager.state.entity_states or {}
-        for ent in all_entities:
-            if ent.id not in overrides:
-                continue
-            ov = overrides[ent.id]
-            if "hp" in ov:
-                ent.hp = ov["hp"]
-            if "mana" in ov:
-                ent.mana = ov["mana"]
-            if "stamina" in ov:
-                ent.stamina = ov["stamina"]
-            if "spatial_position" in ov:
-                ent.spatial_position = ov["spatial_position"]
-            if "name" in ov:
-                ent.name = ov["name"]
-            if "description" in ov:
-                ent.description = ov["description"]
-            if "current_scene_id" in ov:
-                ent.current_scene_id = ov["current_scene_id"]
-            if "is_hidden" in ov:
-                ent.is_hidden = ov["is_hidden"]
-            elif str(ent.item_type or "").upper() == "CONSTRUCTABLE":
-                ent.is_hidden = True
-            if "is_in_inventory" in ov:
-                ent.is_in_inventory = ov["is_in_inventory"]
-            if "inventory" in ov:
-                ent.inventory = ov["inventory"]
-            if "switch_state" in ov:
-                ent.current_switch_state = ov["switch_state"]
-            if "notes" in ov:
-                ent.notes = ov["notes"]
-            if "moveable" in ov:
-                ent.moveable = ov["moveable"]
-            if "allowed_scenes" in ov:
-                ent.allowed_scenes = ov["allowed_scenes"]
-            ent.is_defeated = bool(ov.get("is_defeated", False))
-
-        container_payloads = [
-            {"item_type": e.item_type, "inventory": e.inventory}
-            for e in all_entities
+        return [
+            {"role": m.role, "content": m.content} for m in reversed(list(hist_res.scalars().all()))
         ]
-        contained_item_ids = AdventureLogic.collect_container_item_ids(container_payloads)
 
-        scene_entities_all = [
+    async def _load_world(self) -> _WorldSnapshot:
+        db = self.manager.db
+        game_id = self.manager.game_id
+        current_scene_id = self.manager.state.current_scene_id
+
+        scene_res = await db.execute(
+            select(WorldScene).where(
+                WorldScene.id == current_scene_id, WorldScene.session_id == game_id
+            )
+        )
+        ent_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == game_id, WorldEntity.is_in_inventory.is_(False)
+            )
+        )
+        exit_res = await db.execute(
+            select(WorldExit).where(
+                WorldExit.session_id == game_id,
+                or_(
+                    WorldExit.from_scene_id == current_scene_id,
+                    and_(
+                        WorldExit.to_scene_id == current_scene_id,
+                        WorldExit.exit_type == "bidirectional",
+                    ),
+                ),
+            )
+        )
+        scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == game_id))
+        all_exits_res = await db.execute(select(WorldExit).where(WorldExit.session_id == game_id))
+
+        all_entities = list(ent_res.scalars().all())
+        apply_entity_overrides(all_entities, self.manager.state.entity_states or {})
+        return _WorldSnapshot(
+            current_scene=scene_res.scalars().first(),
+            all_entities=all_entities,
+            exits=orient_exits(list(exit_res.scalars().all()), current_scene_id),
+            all_scenes=list(scenes_res.scalars().all()),
+            all_exits=list(all_exits_res.scalars().all()),
+        )
+
+    def _partition_scene_entities(
+        self, all_entities: list[WorldEntity]
+    ) -> tuple[list[WorldEntity], list[WorldEntity]]:
+        """Returns (visible, hidden) entities lying openly in the current scene."""
+        contained_item_ids = AdventureLogic.collect_container_item_ids(
+            [{"item_type": e.item_type, "inventory": e.inventory} for e in all_entities]
+        )
+        scene_entities = [
             e
             for e in all_entities
             if e.current_scene_id == self.manager.state.current_scene_id
             and not getattr(e, "is_in_inventory", False)
             and str(e.id or "") not in contained_item_ids
         ]
-        entities = [e for e in scene_entities_all if not getattr(e, "is_hidden", False)]
-        hidden_entities = [e for e in scene_entities_all if getattr(e, "is_hidden", False)]
+        visible = [e for e in scene_entities if not getattr(e, "is_hidden", False)]
+        hidden = [e for e in scene_entities if getattr(e, "is_hidden", False)]
+        return visible, hidden
 
-        # Mark visible NPCs in the current scene as remembered in session state
-        scene_npcs = [e for e in entities if e.entity_type == "NPC"]
-        if scene_npcs:
-            overrides = dict(self.manager.state.entity_states or {})
-            state_modified = False
-            for npc in scene_npcs:
-                if npc.id not in overrides:
-                    overrides[npc.id] = {}
-                if not isinstance(overrides[npc.id], dict):
-                    overrides[npc.id] = {}
-                if not overrides[npc.id].get("remembered"):
-                    overrides[npc.id]["remembered"] = True
-                    state_modified = True
-            if state_modified:
-                self.manager.state.entity_states = overrides
-                flag_modified(self.manager.state, "entity_states")
+    async def _remember_scene_npcs(self, visible_entities: list[WorldEntity]) -> None:
+        """Marks visible NPCs in the current scene as remembered in session state."""
+        overrides = dict(self.manager.state.entity_states or {})
+        state_modified = False
+        for npc in (e for e in visible_entities if e.entity_type == "NPC"):
+            if not isinstance(overrides.get(npc.id), dict):
+                overrides[npc.id] = {}
+            if overrides[npc.id].get("remembered"):
+                continue
+            overrides[npc.id]["remembered"] = True
+            state_modified = True
+        if state_modified:
+            self.manager.state.entity_states = overrides
+            flag_modified(self.manager.state, "entity_states")
+            await self.manager.db.flush()
 
-        other_npcs = [
+    def _remembered_off_scene_npcs(self, all_entities: list[WorldEntity]) -> list[WorldEntity]:
+        entity_states = self.manager.state.entity_states or {}
+        return [
             e
             for e in all_entities
             if e.current_scene_id != self.manager.state.current_scene_id
             and e.entity_type == "NPC"
             and not getattr(e, "is_hidden", False)
-            and (self.manager.state.entity_states or {}).get(e.id, {}).get("remembered")
+            and entity_states.get(e.id, {}).get("remembered")
         ]
 
-        all_scenes_res = await self.manager.db.execute(
-            select(WorldScene).where(WorldScene.session_id == self.manager.game_id)
+    def _build_static_prompt(self) -> str:
+        state = self.manager.state
+        adventure = self.manager.adventure
+        walkthrough, end_condition = resolve_sequence_guidance(adventure, state)
+        return MemoryManager.build_static_prompt(
+            adventure.original_prompt or "",
+            plot=state.plot or adventure.plot,
+            rules=state.rules or adventure.rules,
+            walkthrough=walkthrough,
+            completed_condition=end_condition,
+            gameover_condition=state.gameover_condition or adventure.gameover_condition,
+            is_adventure_generator=adventure.is_adventure_generator,
         )
-        all_scenes = list(all_scenes_res.scalars().all())
 
-        all_exits_res = await self.manager.db.execute(
-            select(WorldExit).where(WorldExit.session_id == self.manager.game_id)
+    def _build_state_blocks(
+        self,
+        world: _WorldSnapshot,
+        visible: list[WorldEntity],
+        hidden: list[WorldEntity],
+        global_unlock_rules_prompt_block: str,
+    ) -> tuple[str, str]:
+        """Returns the (mechanics, narration) CURRENT STATE blocks."""
+        state = self.manager.state
+        adventure = self.manager.adventure
+        state_kwargs: dict[str, Any] = {
+            "current_scene": world.current_scene,
+            "entities": visible,
+            "exits": world.exits,
+            "in_game_time": state.in_game_time,
+            "time_system": state.time_system or adventure.time_system or "calendar",
+            "time_config": state.time_config or adventure.time_config,
+            "scene_map": {s.id: s.label for s in world.all_scenes},
+            "hidden_entities": hidden,
+        }
+        mechanics_state_block = MemoryManager.build_state_block(
+            self.manager.avatar,
+            location_detail_level="concise",
+            other_npcs=self._remembered_off_scene_npcs(world.all_entities),
+            **state_kwargs,
         )
-        all_exits = list(all_exits_res.scalars().all())
+        # Keep off-scene NPC metadata out of narration context to avoid
+        # unintended dialogue from NPCs that are not physically present.
+        narration_state_block = MemoryManager.build_state_block(
+            self.manager.avatar,
+            location_detail_level="full",
+            other_npcs=None,
+            **state_kwargs,
+        )
+        session_memory_block = (
+            self.manager._build_gm_notes_prompt_block()
+            + self.manager._build_compressed_history_prompt_block()
+            + self.manager._build_world_memories_prompt_block()
+        )
+        return (
+            mechanics_state_block + session_memory_block + global_unlock_rules_prompt_block,
+            narration_state_block + session_memory_block,
+        )
 
+    async def build_context(self, user_msg: str, language: str | None) -> TurnLlmContext:
+        db_start = time.perf_counter()
+        history = await self._load_recent_history()
+        world = await self._load_world()
+        visible, hidden = self._partition_scene_entities(world.all_entities)
+        await self._remember_scene_npcs(visible)
         global_unlock_rules_prompt_block = self._build_global_unlock_rules_prompt_block(
-            all_entities=all_entities,
-            all_exits=all_exits,
-            all_scenes=all_scenes,
-            overrides=overrides,
+            all_entities=world.all_entities,
+            all_exits=world.all_exits,
+            all_scenes=world.all_scenes,
+            overrides=self.manager.state.entity_states or {},
         )
-        scene_map = {s.id: s.label for s in all_scenes}
-
         db_duration = time.perf_counter() - db_start
         logger.debug("[Turn %s] LLM Context DB prep took %.4fs", self.manager.game_id, db_duration)
 
-        # Sequence Resolution
-        active_walkthrough = ""
-        active_end_condition = self.manager.state.completed_condition or self.manager.adventure.completed_condition
-        
-        if hasattr(self.manager.adventure, 'sequences') and self.manager.adventure.sequences:
-            for i, seq in enumerate(sorted(self.manager.adventure.sequences, key=lambda x: x.get("order", 1))):
-                if seq.get("id") == self.manager.state.active_sequence_id or (not self.manager.state.active_sequence_id and i == 0):
-                    active_walkthrough = seq.get("walkthrough", "")
-                    active_end_condition = seq.get("end_condition", "")
-                    
-                    hard_reqs = []
-                    if seq.get("required_item_id"):
-                        hard_reqs.append(f"obtain item '{seq['required_item_id']}'")
-                    if seq.get("required_scene_id"):
-                        hard_reqs.append(f"enter scene '{seq['required_scene_id']}'")
-                    if seq.get("required_defeated_npc_id"):
-                        hard_reqs.append(f"defeat NPC '{seq['required_defeated_npc_id']}'")
-                    if hard_reqs:
-                        req_str = " AND ".join(hard_reqs)
-                        if active_end_condition:
-                            active_end_condition = f"{active_end_condition} (Deterministic triggers required: {req_str})"
-                        else:
-                            active_end_condition = f"Deterministic triggers required: {req_str}"
-                    break
-
-        if not active_walkthrough:
-            active_walkthrough = self.manager.state.walkthrough or self.manager.adventure.walkthrough
-
-        if active_walkthrough and hasattr(self.manager.adventure, 'generation_strictness'):
-            if self.manager.adventure.generation_strictness == 'strict':
-                active_walkthrough = f"[STRICT ADHERENCE REQUIRED] You MUST strictly follow this walkthrough. Do not allow the player to bypass these steps.\n\n{active_walkthrough}"
-            elif self.manager.adventure.generation_strictness == 'creative':
-                active_walkthrough = f"[CREATIVE FOUNDATION] Use this walkthrough as a creative foundation. Allow the player to find alternative solutions.\n\n{active_walkthrough}"
-
-        mechanics_system_prompt = MemoryManager.build_context(
-            self.manager.avatar,
-            self.manager.adventure.original_prompt or "",
-            history,
-            current_scene=current_scene,
-            entities=entities,
-            exits=exits,
-            in_game_time=self.manager.state.in_game_time,
-            awards=self.manager.adventure.awards,
-            plot=self.manager.state.plot or self.manager.adventure.plot,
-            rules=self.manager.state.rules or self.manager.adventure.rules,
-            walkthrough=active_walkthrough,
-            completed_condition=active_end_condition,
-            gameover_condition=self.manager.state.gameover_condition or self.manager.adventure.gameover_condition,
-            time_system=self.manager.state.time_system or self.manager.adventure.time_system or "calendar",
-            time_config=self.manager.state.time_config or self.manager.adventure.time_config,
-            is_adventure_generator=self.manager.adventure.is_adventure_generator,
-            location_detail_level="concise",
-            other_npcs=other_npcs,
-            scene_map=scene_map,
-            hidden_entities=hidden_entities,
-        )[0]["content"]
-
-        narration_system_prompt = MemoryManager.build_context(
-            self.manager.avatar,
-            self.manager.adventure.original_prompt or "",
-            history,
-            current_scene=current_scene,
-            entities=entities,
-            exits=exits,
-            in_game_time=self.manager.state.in_game_time,
-            awards=self.manager.adventure.awards,
-            plot=self.manager.state.plot or self.manager.adventure.plot,
-            rules=self.manager.state.rules or self.manager.adventure.rules,
-            walkthrough=active_walkthrough,
-            completed_condition=active_end_condition,
-            gameover_condition=self.manager.state.gameover_condition or self.manager.adventure.gameover_condition,
-            time_system=self.manager.state.time_system or self.manager.adventure.time_system or "calendar",
-            time_config=self.manager.state.time_config or self.manager.adventure.time_config,
-            is_adventure_generator=self.manager.adventure.is_adventure_generator,
-            location_detail_level="full",
-            # Keep off-scene NPC metadata out of narration context to avoid
-            # unintended dialogue from NPCs that are not physically present.
-            other_npcs=None,
-            scene_map=scene_map,
-            hidden_entities=hidden_entities,
-        )[0]["content"]
-
-        notes_prompt_block = self.manager._build_gm_notes_prompt_block()
-        mechanics_system_prompt += notes_prompt_block
-        narration_system_prompt += notes_prompt_block
-
-        compressed_history_prompt_block = self.manager._build_compressed_history_prompt_block()
-        mechanics_system_prompt += compressed_history_prompt_block
-        narration_system_prompt += compressed_history_prompt_block
-
-        memories_prompt_block = self.manager._build_world_memories_prompt_block()
-        mechanics_system_prompt += memories_prompt_block
-        narration_system_prompt += memories_prompt_block
-        if global_unlock_rules_prompt_block:
-            mechanics_system_prompt += global_unlock_rules_prompt_block
-        mechanics_awards = self.manager._build_mechanics_awards()
-
-        mechanics_prompt_chars = len(mechanics_system_prompt or "")
-        narration_prompt_chars = len(narration_system_prompt or "")
-        prompt_delta_chars = narration_prompt_chars - mechanics_prompt_chars
-        prompt_reduction_pct = (
-            round((prompt_delta_chars / narration_prompt_chars) * 100, 2)
-            if narration_prompt_chars
-            else 0.0
+        static_prompt = self._build_static_prompt()
+        mechanics_state_block, narration_state_block = self._build_state_blocks(
+            world, visible, hidden, global_unlock_rules_prompt_block
         )
+        narration_static_prompt = static_prompt
+        if language:
+            logger.info(
+                "[Turn %s] Bable Fish Active: Target Language = %s", self.manager.game_id, language
+            )
+            # Only the narration is player-facing; Pass 1 drafts stay in English.
+            narration_static_prompt += bable_fish_instruction(language)
+        if user_msg == "[EVALUATE STATE]":
+            mechanics_state_block += TECHNICAL_TURN_INSTRUCTION
+            narration_state_block += TECHNICAL_TURN_INSTRUCTION
+        mechanics_awards = self.manager._build_mechanics_awards()
 
         log_structured_event(
             "gm.turn.pipeline.context",
@@ -402,88 +354,27 @@ class TurnLlmContextBuilder:
             db_prep_ms=round(db_duration * 1000, 2),
             history_count=len(history),
             history_chars=sum(len(m.get("content") or "") for m in history),
-            mechanics_system_prompt_chars=mechanics_prompt_chars,
-            narration_system_prompt_chars=narration_prompt_chars,
-            prompt_delta_chars=prompt_delta_chars,
-            prompt_reduction_pct=prompt_reduction_pct,
-            entities_count=len(entities),
-            exits_count=len(exits),
+            static_prompt_chars=len(static_prompt),
+            mechanics_state_chars=len(mechanics_state_block),
+            narration_state_chars=len(narration_state_block),
+            entities_count=len(visible),
+            exits_count=len(world.exits),
             mechanics_awards_count=len(mechanics_awards),
             strict_rules=bool(self.manager.adventure.strict_rules),
             is_adventure_generator=bool(self.manager.adventure.is_adventure_generator),
         )
 
-        if language:
-            logger.info(
-                "[Turn %s] Bable Fish Active: Target Language = %s",
-                self.manager.game_id,
-                language,
-            )
-            translation_instruction = (
-                "\n\n--- BABLE FISH TRANSLATION PROTOCOL ---\n"
-                f"TARGET LANGUAGE: {language.upper()}\n"
-                f"INSTRUCTION: You MUST translate ALL your output (narration, dialogue, descriptions) into {language}. "
-                "Do NOT respond in English or the original world language if it differs. "
-                "Note: The chat history may contain messages in various languages due to previous Bable Fish settings. "
-                f"IGNORE those languages and strictly use {language} for the current turn. "
-                f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
-                "\n----------------------------------------\n"
-            )
-            mechanics_system_prompt += translation_instruction
-            narration_system_prompt += translation_instruction
-
-        if user_msg == "[EVALUATE STATE]":
-            technical_instruction = (
-                "\n\nIMPORTANT: The player just synchronized their character sheet or world state (e.g., closing a menu). "
-                "This is a TECHNICAL turn. Respond only if something meaningful changed (e.g., equipment effects). "
-                "Do NOT list available actions, do NOT provide suggestions, and do NOT use meta-formatting like '---' or 'You can:'. "
-                "Keep the narrative flow natural if you speak at all."
-            )
-            mechanics_system_prompt += technical_instruction
-            narration_system_prompt += technical_instruction
-
-        llm_settings = self.manager.user.llm_settings or {}
-        small_model_provider = (
-            llm_settings.get("small_model_provider")
-            or llm_settings.get("complex_model_provider")
-            or llm_settings.get("preferred_provider")
-            or "openai"
-        )
-        complex_model_provider = (
-            llm_settings.get("complex_model_provider")
-            or llm_settings.get("small_model_provider")
-            or llm_settings.get("preferred_provider")
-            or "openai"
-        )
-        small_model = llm_settings.get("small_model") or "gpt-4o-mini"
-        complex_model = llm_settings.get("complex_model") or "gpt-4o"
-        compression_model_provider = (
-            llm_settings.get("compression_model_provider")
-            or llm_settings.get("small_model_provider")
-            or "openai"
-        )
-        compression_model = (
-            llm_settings.get("compression_model")
-            or llm_settings.get("small_model")
-            or "gpt-4o-mini"
-        )
-        compression_max_tokens = int(llm_settings.get("compression_max_tokens") or 4096)
-
         return TurnLlmContext(
             history=history,
-            entities=entities,
-            all_entities=all_entities,
-            exits=exits,
-            all_scenes=all_scenes,
+            entities=visible,
+            all_entities=world.all_entities,
+            exits=world.exits,
+            all_scenes=world.all_scenes,
             global_unlock_rules_prompt_block=global_unlock_rules_prompt_block,
-            mechanics_system_prompt=mechanics_system_prompt,
-            narration_system_prompt=narration_system_prompt,
+            mechanics_static_prompt=static_prompt,
+            narration_static_prompt=narration_static_prompt,
+            mechanics_state_block=mechanics_state_block,
+            narration_state_block=narration_state_block,
             mechanics_awards=mechanics_awards,
-            small_model_provider=small_model_provider,
-            complex_model_provider=complex_model_provider,
-            small_model=small_model,
-            complex_model=complex_model,
-            compression_model_provider=compression_model_provider,
-            compression_model=compression_model,
-            compression_max_tokens=compression_max_tokens,
+            **resolve_model_settings(self.manager.user.llm_settings or {}),
         )

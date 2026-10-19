@@ -2,14 +2,20 @@
 # pylint: disable=unused-argument,unused-variable,using-constant-test
 # ruff: noqa: ARG001,F841,PLR0133
 
-from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import AdventureGeneratorToolIntent, ExitUpdate, GameEvent, InventoryItem, WorldEntityUpdate
+from backend.engine.rule_engine import (
+    AdventureGeneratorToolIntent,
+    ExitUpdate,
+    GameEvent,
+    InventoryItem,
+    WorldEntityUpdate,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -18,6 +24,17 @@ from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 pytestmark = pytest.mark.asyncio
+
+
+def _llm_call_text(call) -> str:
+    """Full prompt text of a mocked LLM call: system prompt, user prompt, and any messages.
+
+    The static system prompt no longer carries per-turn data (state, outcome, exits task);
+    that lives in the user message / final chat message.
+    """
+    parts = [str(arg) for arg in call.args[:2]]
+    parts.extend(str(msg.get("content", "")) for msg in call.kwargs.get("messages") or [])
+    return "\n\n".join(parts)
 
 async def _seed_game_context(db):
     """Seeds a minimal game context for turn testing."""
@@ -105,7 +122,8 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
         
         # Check if state was updated (time)
         await db.refresh(state)
-        assert state.in_game_time == 5
+        # No scene/sequence change: the message stays within the current in-game turn.
+        assert state.in_game_time == 0
         
         # Check if chat message was recorded
         res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == "session-1", ChatMessage.role == "user"))
@@ -224,7 +242,7 @@ async def test_off_scene_name_mention_without_inspect_intent_is_not_blocked(setu
 
         all_output = "".join(chunks).lower()
         assert "cannot inspect or search" not in all_output
-        assert state.in_game_time == 5
+        assert state.in_game_time == 0  # same scene -> same in-game turn
         assert mock_llm_instance.aexecute_simple_task.await_count == 1
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
         assert mock_llm_instance.stream_simple_task.await_count == 1
@@ -360,8 +378,8 @@ async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
         state.rules = "SESSION RULES"
         await db.commit()
         
-        # Mock MemoryManager.build_context to spy on arguments
-        original_build = MemoryManager.build_context
+        # Spy on the static GM prompt builder arguments
+        original_build = MemoryManager.build_static_prompt
         spy_context = {}
         
         def mock_build(*args, **kwargs):
@@ -369,7 +387,7 @@ async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
             spy_context['rules'] = kwargs.get('rules')
             return original_build(*args, **kwargs)
             
-        monkeypatch.setattr("backend.engine.memory_manager.MemoryManager.build_context", mock_build)
+        monkeypatch.setattr("backend.engine.memory_manager.MemoryManager.build_static_prompt", mock_build)
         
         # Mock LLM to avoid actual calls
         mock_llm_instance = MagicMock()
@@ -460,8 +478,14 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
             label="Stairs down",
             is_locked=False,
         ))
+        db.add(WorldScene(
+            id="CELLAR",
+            session_id="session-1",
+            label="Cellar",
+            description="A damp cellar.",
+        ))
         await db.commit()
-        
+
         mock_llm_instance = MagicMock()
         mock_event = GameEvent(
             narrative_description="You descend into the cellar.",
@@ -488,6 +512,11 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         # Assert
         await db.refresh(state)
         assert state.current_scene_id == "CELLAR"
+        # A scene change closes the in-game turn: base time advances exactly once.
+        assert state.in_game_time == adv.time_per_turn
+        # Narration is built from the new location, not the pre-turn snapshot.
+        narration_text = _llm_call_text(mock_llm_instance.stream_simple_task.await_args_list[0])
+        assert "(ID: CELLAR)" in narration_text
 
 
 async def test_chat_progression_does_not_move_on_hypothetical_text(setup_test_db, monkeypatch):
@@ -627,6 +656,7 @@ async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monke
         mock_llm_instance = MagicMock()
 
         async def _mock_mechanics(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             captured["mechanics_prompt"] = system_prompt
             return GameEvent(
                 narrative_description="OK",
@@ -638,6 +668,7 @@ async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monke
             )
 
         async def _mock_stream_simple(system_prompt, _user_prompt, _model=None, **_kwargs):
+            system_prompt = "\n\n".join([system_prompt] + [str(msg.get("content", "")) for msg in _kwargs.get("messages") or []])
             captured["narration_prompt"] = system_prompt
 
             async def _stream():
@@ -663,7 +694,7 @@ async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monke
         assert "SCENE SUMMARY: A very long description." in mechanics_prompt
         assert "..." in mechanics_prompt
 
-        assert 'UNRESOLVED QUESTS:\n[{"id":"quest-1"' in mechanics_prompt
+        assert 'OPEN QUESTS: [{"id":"quest-1"' in mechanics_prompt
         assert '"key":"fresh-award"' in mechanics_prompt
         assert '"key":"earned-award"' not in mechanics_prompt
         assert '"metadata_json"' not in mechanics_prompt
@@ -740,6 +771,7 @@ async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db
         mock_llm_instance = MagicMock()
 
         async def _mock_intent(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             captured["system_prompt"] = system_prompt
             return AdventureGeneratorToolIntent(
                 request_available_tones=True,
@@ -991,8 +1023,9 @@ async def test_unknown_pass1_error_returns_generic_sse_error(setup_test_db, monk
 
 async def test_repair_json_fixes_unescaped_quotes_and_trailing_commas():
     """_repair_json should successfully repair unescaped quotes in string values and trailing commas."""
-    from backend.core.llm_router import GameMasterLLM
     import json
+
+    from backend.core.llm_router import GameMasterLLM
 
     raw_malformed = (
         '{\n'
@@ -1124,6 +1157,7 @@ async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(setu
         mock_llm_instance = MagicMock()
 
         async def mock_progression(_system_prompt, _user_prompt, **_kwargs):
+            _system_prompt = f"{_system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             return AdventureGeneratorToolIntent(
                 completed_quest_ids=[],
                 earned_award_keys=[],
@@ -1154,9 +1188,21 @@ async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(setu
         assert user.earned_awards == []
 
 
+def _final_event_payload(chunks: list[str]) -> dict | None:
+    """Parses the data of the first `event: final` SSE chunk."""
+    import json
+
+    for chunk in chunks:
+        if "event: final" not in chunk:
+            continue
+        data_line = next((line for line in chunk.split("\n") if line.startswith("data:")), None)
+        if data_line:
+            return json.loads(data_line[5:])
+    return None
+
+
 async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, monkeypatch):
     """Lightweight chat progression pass should update quests and awards."""
-    import json
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -1188,6 +1234,7 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
         mock_llm_instance = MagicMock()
 
         async def mock_progression(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             assert "OPEN QUESTS (REDUCED):" in system_prompt
             assert "AVAILABLE UNEARNED AWARDS (REDUCED):" in system_prompt
             assert '"id":"q-1"' in system_prompt
@@ -1233,15 +1280,7 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
             for ea in earned
         )
 
-        final_payload = None
-        for chunk in chunks:
-            if "event: final" not in chunk:
-                continue
-            data_line = next((line for line in chunk.split("\n") if line.startswith("data:")), None)
-            if data_line:
-                final_payload = json.loads(data_line[5:])
-                break
-
+        final_payload = _final_event_payload(chunks)
         assert final_payload is not None
         awards = final_payload.get("awards") or []
         heroic_award = next((aw for aw in awards if aw.get("key") == "heroic-heart"), None)
@@ -1251,8 +1290,8 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
 
 async def test_traverse_exit_with_lowercase_uuid_id(setup_test_db, monkeypatch):
     """Exit traversal must resolve exit IDs case-insensitively (including lowercase uuid7 IDs)."""
-    from tests.conftest import TestSessionLocal
     from backend.models.world_entity import WorldExit, WorldScene
+    from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_game_context(db)
@@ -1374,6 +1413,7 @@ async def test_chat_mode_progression_persists_and_reuses_notes(setup_test_db, mo
         seen_progression_prompts = []
 
         async def mock_progression(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             seen_progression_prompts.append(system_prompt)
             if len(seen_progression_prompts) == 1:
                 assert "SESSION NOTES (REDUCED):" in system_prompt
@@ -1401,6 +1441,7 @@ async def test_chat_mode_progression_persists_and_reuses_notes(setup_test_db, mo
         await db.refresh(state)
         assert (state.exit_states or {}).get("__gm_notes__") == ["Innkeeper owes the player a favor"]
 
+        manager = GameTurnManager(db, "session-1", user)  # fresh manager after db.refresh(state)
         async for _ in manager.process_turn("I return to the inn"):
             pass
 
@@ -1423,6 +1464,7 @@ async def test_rpg_strict_mode_persists_and_reuses_notes(setup_test_db, monkeypa
         seen_mechanics_prompts = []
 
         async def mock_mechanics(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             seen_mechanics_prompts.append(system_prompt)
             if len(seen_mechanics_prompts) == 1:
                 assert "SESSION NOTES:" in system_prompt
@@ -1463,6 +1505,7 @@ async def test_rpg_strict_mode_persists_and_reuses_notes(setup_test_db, monkeypa
         await db.refresh(state)
         assert (state.exit_states or {}).get("__gm_notes__") == ["The sheriff distrusts the mayor"]
 
+        manager = GameTurnManager(db, "session-1", user)  # fresh manager after db.refresh(state)
         async for _ in manager.process_turn("I meet the mayor"):
             pass
 
@@ -1485,6 +1528,7 @@ async def test_story_mode_persists_and_reuses_notes(setup_test_db, monkeypatch):
         seen_mechanics_prompts = []
 
         async def mock_story_mechanics(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             seen_mechanics_prompts.append(system_prompt)
             assert "STORY MODE" in system_prompt
             if len(seen_mechanics_prompts) == 1:
@@ -1523,6 +1567,7 @@ async def test_story_mode_persists_and_reuses_notes(setup_test_db, monkeypatch):
         await db.refresh(state)
         assert (state.exit_states or {}).get("__gm_notes__") == ["Old clocktower bell rings at midnight"]
 
+        manager = GameTurnManager(db, "session-1", user)  # fresh manager after db.refresh(state)
         async for _ in manager.process_turn("I wait at the square"):
             pass
 
@@ -1545,6 +1590,7 @@ async def test_notes_are_rotated_to_maximum_size(setup_test_db, monkeypatch):
         notes = [f"note-{i}" for i in range(25)]
 
         async def mock_progression(system_prompt, _user_prompt, **_kwargs):
+            system_prompt = f"{system_prompt}\n\n{_user_prompt}"  # state lives in the user message
             if "note-24" in system_prompt:
                 return AdventureGeneratorToolIntent()
             return AdventureGeneratorToolIntent(remember_notes=notes)
@@ -1927,9 +1973,10 @@ async def test_combat_loot_done_spawns_visible_scene_loot_with_stale_overrides(s
 
 
 async def test_build_session_entities_hides_items_inside_container_inventory(setup_test_db, monkeypatch: pytest.MonkeyPatch):
+    import os
+
     from backend.api.routes.adventures.logic import AdventureLogic
     from tests.conftest import TestSessionLocal
-    import os
 
     original_isfile = os.path.isfile
     monkeypatch.setattr("os.path.isfile", lambda p: True if "crumpled-receipt.png" in p else original_isfile(p))
@@ -2745,9 +2792,9 @@ async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db
 
 
 async def test_quest_and_award_accessibility_guardrail(setup_test_db):
-    from tests.conftest import TestSessionLocal
-    from backend.models.world_entity import WorldEntity
     from backend.engine.rule_engine import GameEvent
+    from backend.models.world_entity import WorldEntity
+    from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_game_context(db)
@@ -2927,9 +2974,13 @@ async def test_combat_defeat_adds_xp(setup_test_db, monkeypatch):
 
 async def test_container_code_unlock_adds_xp(setup_test_db):
     """Verifies that unlocking a container via API or turn flow awards XP."""
-    from tests.conftest import TestSessionLocal
     from fastapi import HTTPException
-    from backend.api.routes.adventures.gameplay import unlock_container_with_code, ContainerUnlockCodeRequest
+
+    from backend.api.routes.adventures.gameplay import (
+        ContainerUnlockCodeRequest,
+        unlock_container_with_code,
+    )
+    from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_game_context(db)
@@ -3058,6 +3109,7 @@ async def test_game_loop_adjacent_only_scene_transitions(setup_test_db, monkeypa
 async def test_game_loop_lookaround_exits(setup_test_db, monkeypatch):
     """Verifies that lookaround adds compact exit instructions to the narration prompt."""
     import json
+
     from tests.conftest import TestSessionLocal
     
     async with TestSessionLocal() as db:
@@ -3123,7 +3175,7 @@ async def test_game_loop_lookaround_exits(setup_test_db, monkeypatch):
         assert "The room is dark." in full_text
         assert "Exits:" not in full_text
 
-        prompt_lookaround = mock_llm_instance.stream_simple_task.await_args_list[0].args[0]
+        prompt_lookaround = _llm_call_text(mock_llm_instance.stream_simple_task.await_args_list[0])
         assert "EXIT DESCRIPTION TASK (MANDATORY)" in prompt_lookaround
         assert "CURRENT SCENE EXITS:" in prompt_lookaround
         assert "Keep it short (max 2 sentences)." in prompt_lookaround
@@ -3145,7 +3197,7 @@ async def test_game_loop_lookaround_exits(setup_test_db, monkeypatch):
 
         assert "Exits:" not in full_text_de
 
-        prompt_lookaround_de = mock_llm_instance.stream_simple_task.await_args_list[1].args[0]
+        prompt_lookaround_de = _llm_call_text(mock_llm_instance.stream_simple_task.await_args_list[1])
         assert "EXIT DESCRIPTION TASK (MANDATORY)" in prompt_lookaround_de
         assert "CURRENT SCENE EXITS:" in prompt_lookaround_de
         assert "Keep it short (max 2 sentences)." in prompt_lookaround_de
@@ -3157,6 +3209,7 @@ async def test_game_loop_scene_change_auto_appends_narrative_exits(setup_test_db
     """Verifies that scene transitions add compact exit instructions to narration prompt."""
     import json
     from types import SimpleNamespace
+
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -3234,7 +3287,7 @@ async def test_game_loop_scene_change_auto_appends_narrative_exits(setup_test_db
         assert "You step into the hall." in full_text
         assert "Exits:" not in full_text
 
-        prompt_scene_change = mock_llm_instance.stream_simple_task.await_args_list[0].args[0]
+        prompt_scene_change = _llm_call_text(mock_llm_instance.stream_simple_task.await_args_list[0])
         assert "EXIT DESCRIPTION TASK (MANDATORY)" in prompt_scene_change
         assert "CURRENT SCENE EXITS:" in prompt_scene_change
         assert "Use exactly 1 sentence for the exit paragraph" in prompt_scene_change
@@ -3492,7 +3545,8 @@ async def test_container_rule_unlock_requires_explicit_unlock_update(setup_test_
 
         assert reasons
         assert "stays shut" in reasons[0]
-        assert "distraction" in reasons[0].lower()
+        # The rule text is never parsed for hints (no language-specific "distract" logic).
+        assert "betty" not in reasons[0].lower()
         assert any(
             up.entity_id == "CASH_REGISTER" and up.locked is True
             for up in (event.updated_entities or [])
@@ -3500,8 +3554,8 @@ async def test_container_rule_unlock_requires_explicit_unlock_update(setup_test_
 
 
 async def test_build_context_includes_global_soft_unlock_rules(setup_test_db):
-    from tests.conftest import TestSessionLocal
     from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
+    from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
         user, _adv, _avatar, state = await _seed_game_context(db)
@@ -3672,7 +3726,7 @@ async def test_off_scene_rule_unlock_flow_unlocks_container_globally(setup_test_
             chunks.append(chunk)
 
         # The mechanics prompt must include the global soft unlock rule list with IDs.
-        mechanics_prompt = mock_llm_instance.aexecute_complex_task.await_args_list[0].args[0]
+        mechanics_prompt = _llm_call_text(mock_llm_instance.aexecute_complex_task.await_args_list[0])
         assert "GLOBAL SOFT UNLOCK RULES (ADVENTURE-WIDE)" in mechanics_prompt
         assert "CASH_REGISTER" in mechanics_prompt
         assert "Protagonist distracts Betty" in mechanics_prompt
@@ -3764,6 +3818,7 @@ def test_world_generator_does_not_create_fallback_item_when_no_candidates():
 async def test_session_debug_endpoint_guard_and_payload(setup_test_db, monkeypatch):
     """Verifies that /session-debug enforces debug mode guard and returns full debug model when enabled."""
     from fastapi import HTTPException
+
     from backend.api.routes.adventures.gameplay import get_session_debug
     from tests.conftest import TestSessionLocal
 

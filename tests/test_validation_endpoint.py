@@ -48,6 +48,7 @@ async def client():
     app.dependency_overrides.clear()
     from backend.core.database import get_db
     from tests.conftest import override_get_db
+
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
@@ -77,7 +78,8 @@ async def test_structural_only_runs_no_ai_call(client, setup_test_db, monkeypatc
             ai_called["count"] += 1
             return []
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import validation as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -122,7 +124,9 @@ async def test_full_validation_runs_ai(client, setup_test_db, monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-        async def aexecute_complex_task(self, *, system_prompt, user_prompt, response_model, model, **kwargs):
+        async def aexecute_complex_task(
+            self, *, system_prompt, user_prompt, response_model, model, **kwargs
+        ):
             captured["system"] = system_prompt[:80]
             captured["user"] = user_prompt[:80]
             captured["model"] = model
@@ -145,7 +149,8 @@ async def test_full_validation_runs_ai(client, setup_test_db, monkeypatch):
                 ]
             )
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import validation as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -188,7 +193,8 @@ async def test_ai_validation_handles_empty_findings(client, setup_test_db, monke
         async def aexecute_complex_task(self, **kwargs):
             return _FakeEmptyResponse()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import validation as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -217,6 +223,7 @@ async def test_ai_skipped_when_scene_count_exceeds_limit(client, setup_test_db, 
     # Override the limit for test speed. Any value < 0 guarantees the gate
     # fires regardless of the seed data.
     from backend.core import config as config_module
+
     monkeypatch.setattr(config_module.settings, "MAX_AI_VALIDATION_SCENES", -1)
 
     ai_called = {"count": 0}
@@ -229,7 +236,8 @@ async def test_ai_skipped_when_scene_count_exceeds_limit(client, setup_test_db, 
             ai_called["count"] += 1
             return []
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import validation as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -263,7 +271,8 @@ async def test_ai_skipped_when_llm_call_fails(client, setup_test_db, monkeypatch
         async def aexecute_complex_task(self, **kwargs):
             raise RuntimeError("simulated upstream failure")
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import validation as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -311,6 +320,7 @@ async def test_unauthenticated_request_rejected(client, setup_test_db):
 async def test_structural_findings_includes_real_issues(client, setup_test_db, monkeypatch):
     """Endpoint emits an unreachable_scene finding when an extra scene is unreachable."""
     from backend.models.world_entity import WorldScene
+
     user = User(username="val_user_5", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:
         db.add(user)
@@ -332,8 +342,7 @@ async def test_structural_findings_includes_real_issues(client, setup_test_db, m
     # ORPHAN has no incoming exit and is unreachable from START.
     assert "unreachable_scene" in codes
     assert any(
-        f["code"] == "unreachable_scene" and f.get("location") == "scene:ORPHAN"
-        for f in findings
+        f["code"] == "unreachable_scene" and f.get("location") == "scene:ORPHAN" for f in findings
     )
 
 

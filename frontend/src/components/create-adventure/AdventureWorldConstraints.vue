@@ -4,27 +4,32 @@ import { AlertTriangle, Box, Check } from 'lucide-vue-next'
 import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
-const props = defineProps<{
-  minScenes: number | null
-  maxScenes: number | null
-  minItems: number | null
-  maxItems: number | null
-  minSequences: number | null
-  maxSequences: number | null
-  questGenerationEnabled: boolean
-  minQuests: number | null
-  maxQuests: number | null
-  containerGenerationEnabled: boolean
-  minContainers: number | null
-  maxContainers: number | null
-  textLogGenerationEnabled: boolean
-  minTextLogs: number | null
-  maxTextLogs: number | null
-  awardGenerationEnabled: boolean
-  minAwards: number | null
-  maxAwards: number | null
-  scriptsGenerationEnabled?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    minScenes: number | null
+    maxScenes: number | null
+    minItems: number | null
+    maxItems: number | null
+    minSequences: number | null
+    maxSequences: number | null
+    questGenerationEnabled: boolean
+    minQuests: number | null
+    maxQuests: number | null
+    containerGenerationEnabled: boolean
+    minContainers: number | null
+    maxContainers: number | null
+    textLogGenerationEnabled: boolean
+    minTextLogs: number | null
+    maxTextLogs: number | null
+    awardGenerationEnabled: boolean
+    minAwards: number | null
+    maxAwards: number | null
+    scriptsGenerationEnabled?: boolean
+  }>(),
+  {
+    scriptsGenerationEnabled: true,
+  }
+)
 
 const emit = defineEmits<{
   (e: 'update:minScenes', val: number | null): void
@@ -469,11 +474,11 @@ function updateAwardMax(val: number) {
           </tr>
 
           <!-- Custom Event Scripts Engine -->
-          <tr class="hover:bg-slate-800/30 transition-colors border-b border-indigo-500/10 cursor-pointer" :class="props.scriptsGenerationEnabled ? 'bg-indigo-500/5' : ''" @click="emit('update:scriptsGenerationEnabled', !props.scriptsGenerationEnabled)">
+          <tr class="hover:bg-slate-800/30 transition-colors border-b border-indigo-500/10 cursor-pointer" :class="(props.scriptsGenerationEnabled ?? true) ? 'bg-indigo-500/5' : ''" @click="emit('update:scriptsGenerationEnabled', !(props.scriptsGenerationEnabled ?? true))">
             <td class="py-3 text-center">
               <input
                 type="checkbox"
-                :checked="props.scriptsGenerationEnabled ?? false"
+                :checked="props.scriptsGenerationEnabled ?? true"
                 @change.stop="emit('update:scriptsGenerationEnabled', ($event.target as HTMLInputElement).checked)"
                 @click.stop
                 class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 h-4 w-4 block mx-auto cursor-pointer"
@@ -481,8 +486,8 @@ function updateAwardMax(val: number) {
             </td>
             <td class="py-3 pl-2" colspan="3">
               <div class="flex items-center gap-2">
-                <span class="text-xs font-bold uppercase tracking-widest block" :class="props.scriptsGenerationEnabled ? 'text-indigo-300' : 'text-white/90'">Event Scripts Engine</span>
-                <span v-if="props.scriptsGenerationEnabled" class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Active</span>
+                <span class="text-xs font-bold uppercase tracking-widest block" :class="(props.scriptsGenerationEnabled ?? true) ? 'text-indigo-300' : 'text-white/90'">Event Scripts Engine</span>
+                <span v-if="props.scriptsGenerationEnabled ?? true" class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Active</span>
               </div>
               <span class="text-[10px] text-white/40 block mt-0.5">Generate Python trigger scripts for deterministic puzzles & traps</span>
             </td>

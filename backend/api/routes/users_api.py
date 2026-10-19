@@ -1,8 +1,9 @@
 from __future__ import annotations
+
 import logging
 import os
 import shutil
-from typing import Any, Optional, Union
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -10,13 +11,19 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.account_api import router as account_router
 from backend.api.routes.auth_api import UserResponse
+from backend.core.account_recovery import (
+    RESET_TOKEN_TTL,
+    issue_password_reset_token,
+    set_new_password,
+)
 from backend.core.auth import (
+    aget_password_hash,
     get_current_admin,
     get_current_user,
-    get_password_hash,
     validate_password_strength,
-    verify_password,
+    validate_username,
 )
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -28,9 +35,16 @@ from backend.core.prompts import (
 from backend.core.security import encryption_util
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
-from backend.utils.path_security import ensure_within_data_dir, local_path_to_data_url, safe_data_path, sanitize_path_component
+from backend.utils.path_security import (
+    ensure_within_data_dir,
+    local_path_to_data_url,
+    safe_data_path,
+    sanitize_path_component,
+)
 
 router = APIRouter()
+# Self-service account routes (/users/me/...) live in their own module but share this router.
+router.include_router(account_router)
 logger = logging.getLogger(__name__)
 
 ADMIN_DEP = Depends(get_current_admin)
@@ -38,11 +52,14 @@ USER_DEP = Depends(get_current_user)
 DB_DEP = Depends(get_db)
 UPLOAD_FILE_DEP = File(...)
 _SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+_ALLOWED_ROLES = {"admin", "user"}
+
 
 class UserCreateRequest(BaseModel):
     username: str
     password: str
     role: str = "user"
+
 
 class UserUpdateRequest(BaseModel):
     username: Optional[str] = None
@@ -51,18 +68,14 @@ class UserUpdateRequest(BaseModel):
     bio: Optional[str] = None
     default_language: Optional[str] = None
 
+
 class BioUpdateRequest(BaseModel):
     bio: str
 
-class UserCredentialsUpdateRequest(BaseModel):
-    current_password: str
-    username: Optional[str] = None
-    password: Optional[str] = None
 
-class UserCredentialsUpdateResponse(BaseModel):
-    user: UserResponse
-    access_token: Optional[str] = None
-    token_type: Optional[str] = None
+class PasswordResetLinkResponse(BaseModel):
+    token: str
+    expires_in_hours: int
 
 
 class ProfileImageGenerateRequest(BaseModel):
@@ -94,7 +107,49 @@ def _sanitize_image_extension(filename: Optional[str]) -> str:
     return ext
 
 
-def _resolve_provider_api_key(provider: str, api_keys_dict: Optional[dict[str, str]]) -> Optional[str]:
+def _validated_username(username: str) -> str:
+    try:
+        return validate_username(username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _validated_password(password: str) -> str:
+    try:
+        validate_password_strength(password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return password
+
+
+def _validated_role(role: str) -> str:
+    if role not in _ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Unknown role '{role}'.")
+    return role
+
+
+async def _ensure_username_available(db: AsyncSession, username: str) -> None:
+    taken = await db.execute(select(User.id).where(User.username == username))
+    if taken.first() is not None:
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+
+async def _ensure_admin_remains(db: AsyncSession, user: User, new_role: str, admin: User) -> None:
+    """Block demotions that would lock everyone out of administration."""
+    if user.role != "admin" or new_role == "admin":
+        return
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="You cannot remove your own admin role.")
+    other_admins = await db.execute(
+        select(User.id).where(User.role == "admin", User.id != user.id).limit(1)
+    )
+    if other_admins.first() is None:
+        raise HTTPException(status_code=400, detail="At least one administrator must remain.")
+
+
+def _resolve_provider_api_key(
+    provider: str, api_keys_dict: Optional[dict[str, str]]
+) -> Optional[str]:
     provider_key = (provider or "").lower()
     env_key = settings.get_env_api_key(provider_key)
     if env_key:
@@ -109,10 +164,12 @@ def _resolve_provider_api_key(provider: str, api_keys_dict: Optional[dict[str, s
 
     return None
 
+
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(_admin: User = ADMIN_DEP, db: AsyncSession = DB_DEP):
     result = await db.execute(select(User))
     return result.scalars().all()
+
 
 @router.post("/users", response_model=UserResponse)
 async def create_user(
@@ -120,61 +177,54 @@ async def create_user(
     _admin: User = ADMIN_DEP,
     db: AsyncSession = DB_DEP,
 ):
-    result = await db.execute(select(User).filter(User.username == request.username))
-    if result.scalars().first():
-        raise HTTPException(status_code=400, detail="Username already registered")
-
-    try:
-        validate_password_strength(request.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    username = _validated_username(request.username)
+    await _ensure_username_available(db, username)
 
     new_user = User(
-        username=request.username,
-        hashed_password=get_password_hash(request.password),
-        role=request.role
+        username=username,
+        hashed_password=await aget_password_hash(_validated_password(request.password)),
+        role=_validated_role(request.role),
     )
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
     return new_user
 
+
 @router.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: str,
     request: UserUpdateRequest,
-    _admin: User = ADMIN_DEP,
+    admin: User = ADMIN_DEP,
     db: AsyncSession = DB_DEP,
 ):
     result = await db.execute(select(User).filter(User.id == user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
     if request.username:
-        # Check uniqueness if username changed
-        if request.username != user.username:
-            check_res = await db.execute(select(User).filter(User.username == request.username))
-            if check_res.scalars().first():
-                raise HTTPException(status_code=400, detail="Username already registered")
-        user.username = request.username
-        
+        username = _validated_username(request.username)
+        if username != user.username:
+            await _ensure_username_available(db, username)
+        user.username = username
+
     if request.role:
-        user.role = request.role
+        new_role = _validated_role(request.role)
+        await _ensure_admin_remains(db, user, new_role, admin)
+        user.role = new_role
     if request.password:
-        try:
-            validate_password_strength(request.password)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        user.hashed_password = get_password_hash(request.password)
+        # Also revokes the user's existing sessions.
+        await set_new_password(user, _validated_password(request.password))
     if request.bio is not None:
         user.bio = request.bio
     if request.default_language is not None:
         user.default_language = request.default_language
-        
+
     await db.commit()
     await db.refresh(user)
     return user
+
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, admin: User = ADMIN_DEP, db: AsyncSession = DB_DEP):
@@ -182,21 +232,42 @@ async def delete_user(user_id: str, admin: User = ADMIN_DEP, db: AsyncSession = 
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Prevent deleting yourself
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
-        
+
     await db.delete(user)
     await db.commit()
     return {"message": "User deleted"}
 
+
+@router.post("/users/{user_id}/password-reset-link", response_model=PasswordResetLinkResponse)
+async def create_password_reset_link(
+    user_id: str, _admin: User = ADMIN_DEP, db: AsyncSession = DB_DEP
+):
+    """Issue a one-time password reset token for a user (replaces any previous one)."""
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = issue_password_reset_token(user)
+    await db.commit()
+    logger.info("Admin issued a password reset link for user %s", user.id)
+    return PasswordResetLinkResponse(
+        token=token, expires_in_hours=int(RESET_TOKEN_TTL.total_seconds() // 3600)
+    )
+
+
 @router.put("/users/me/bio", response_model=UserResponse)
-async def update_my_bio(request: BioUpdateRequest, current_user: User = USER_DEP, db: AsyncSession = DB_DEP):
+async def update_my_bio(
+    request: BioUpdateRequest, current_user: User = USER_DEP, db: AsyncSession = DB_DEP
+):
     current_user.bio = request.bio
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
 
 @router.post("/users/me/profile-image", response_model=UserResponse)
 async def upload_my_profile_image(
@@ -214,7 +285,7 @@ async def upload_my_profile_image(
     file_ext = _sanitize_image_extension(file.filename)
     filename = f"{safe_user_id}_{uuid4().hex[:8]}{file_ext}"
     file_path = _ensure_within_data_dir(os.path.join(upload_dir, filename))
-    
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -222,6 +293,7 @@ async def upload_my_profile_image(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
 
 @router.post("/users/me/bio/generate")
 async def generate_my_bio(current_user: User = USER_DEP, db: AsyncSession = DB_DEP):
@@ -242,6 +314,7 @@ async def generate_my_bio(current_user: User = USER_DEP, db: AsyncSession = DB_D
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bio generation failed: {str(e)}") from e
 
+
 @router.post("/users/me/profile-image/generate", response_model=UserResponse)
 async def generate_my_profile_image(
     payload: Optional[ProfileImageGenerateRequest] = None,
@@ -253,7 +326,9 @@ async def generate_my_profile_image(
 
     t2i = settings_owner.t2i_settings or {}
     if not t2i:
-        raise HTTPException(status_code=400, detail="Visual preferences are not configured by admin.")
+        raise HTTPException(
+            status_code=400, detail="Visual preferences are not configured by admin."
+        )
 
     provider = (t2i.get("simple_model_provider") or "openai").lower()
     model = t2i.get("simple_model")
@@ -265,14 +340,14 @@ async def generate_my_profile_image(
 
     prompt_source = payload.bio if payload and payload.bio is not None else current_user.bio
     prompt = (prompt_source or "").strip() or "A fantasy roleplaying avatar"
-        
+
     target_dir = safe_data_path("users")
     safe_user_id = _sanitize_path_component(current_user.id)
     if not safe_user_id:
         raise HTTPException(status_code=400, detail="Invalid user identifier")
     ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
     filename = f"{safe_user_id}_{uuid4().hex[:8]}.{ext}"
-    
+
     try:
         logger.info(
             "Starting profile image generation for user %s with prompt: %s",
@@ -286,14 +361,14 @@ async def generate_my_profile_image(
             provider=provider,
             target_dir=target_dir,
             filename=filename,
-            provider_options=t2i
+            provider_options=t2i,
         )
         logger.info("Image generation completed. URL: %s", image_url)
-        
+
         if not image_url:
             logger.error("Image generation failed to return a URL")
             raise HTTPException(status_code=500, detail="Image generation failed to return a URL")
-            
+
         current_user.profile_image_url = _normalize_public_data_url(image_url)
         logger.info("Updating user %s profile image URL to: %s", current_user.id, image_url)
         await db.commit()
@@ -303,109 +378,3 @@ async def generate_my_profile_image(
     except Exception as e:
         logger.exception("Profile image generation failed for user %s", current_user.id)
         raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}") from e
-
-
-@router.put("/users/me/credentials", response_model=UserCredentialsUpdateResponse)
-async def update_my_credentials(
-    request: UserCredentialsUpdateRequest,
-    current_user: User = USER_DEP,
-    db: AsyncSession = DB_DEP,
-):
-    """
-    Update the user's own username and/or password.
-    Requires the current password to verify identity.
-    """
-    if not verify_password(request.current_password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=400,
-            detail="Incorrect current password."
-        )
-
-    if request.username is None and request.password is None:
-        raise HTTPException(
-            status_code=400,
-            detail="You must provide a new username or a new password."
-        )
-
-    username_changed = False
-
-    if request.username is not None:
-        new_username = request.username.strip()
-        if not new_username:
-            raise HTTPException(
-                status_code=400,
-                detail="Username cannot be empty."
-            )
-        # Check uniqueness if username changed
-        if new_username != current_user.username:
-            check_res = await db.execute(select(User).filter(User.username == new_username))
-            if check_res.scalars().first() is not None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="This username is already taken."
-                )
-            current_user.username = new_username
-            username_changed = True
-
-    if request.password is not None:
-        new_password = request.password
-        try:
-            validate_password_strength(new_password)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        current_user.hashed_password = get_password_hash(new_password)
-
-    await db.commit()
-    await db.refresh(current_user)
-
-    access_token = None
-    token_type = None
-    if username_changed:
-        from datetime import timedelta
-        from backend.core.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": current_user.username},
-            expires_delta=access_token_expires
-        )
-        token_type = "bearer"
-
-    # Fetch stats for response
-    from backend.models.game_session import GameSession
-    from backend.models.avatar import Avatar
-    from sqlalchemy import func
-
-    result = await db.execute(
-        select(GameSession.template_id)
-        .where(GameSession.user_id == current_user.id)
-        .distinct()
-    )
-    adventure_count = len(result.scalars().all())
-
-    xp_res = await db.execute(
-        select(func.sum(Avatar.exp)).where(Avatar.user_id == current_user.id)
-    )
-    total_xp = xp_res.scalar() or 0
-
-    user_response = UserResponse(
-        id=current_user.id,
-        username=current_user.username,
-        role=current_user.role,
-        profile_image_url=current_user.profile_image_url,
-        bio=current_user.bio,
-        default_language=current_user.default_language,
-        earned_awards=current_user.earned_awards or [],
-        is_admin=current_user.role == "admin",
-        adventure_count=adventure_count,
-        total_xp=total_xp,
-        game_log=current_user.game_log or [],
-        has_imported_defaults=current_user.has_imported_defaults
-    )
-
-    return UserCredentialsUpdateResponse(
-        user=user_response,
-        access_token=access_token,
-        token_type=token_type
-    )
-
-

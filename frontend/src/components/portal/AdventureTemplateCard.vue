@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
-import { MoreHorizontal, X, ScrollText } from 'lucide-vue-next'
+import { MoreHorizontal, X, ScrollText, Copy } from 'lucide-vue-next'
 import LicenseInfoPopup from '@/components/common/LicenseInfoPopup.vue'
 
 const props = defineProps<{
@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'migrate', template: AdventureTemplateSummary): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
+  (e: 'duplicate', templateId: string): void
   (e: 'exportAdz', templateId: string, title: string): void
   (e: 'exportAdv', templateId: string, title: string): void
   (e: 'delete', templateId: string, title: string): void
@@ -47,10 +48,11 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', handleClickOutside)
 })
 
-function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete' | 'update' | 'migrate'): void {
+function runAction(action: 'cover' | 'edit' | 'duplicate' | 'adz' | 'adv' | 'delete' | 'update' | 'migrate'): void {
   if (action === 'cover') emit('cover', props.template.template_id)
   else if (action === 'migrate') emit('migrate', props.template)
   else if (action === 'edit') emit('edit', props.template.template_id)
+  else if (action === 'duplicate') emit('duplicate', props.template.template_id)
   else if (action === 'adz') emit('exportAdz', props.template.template_id, props.template.title)
   else if (action === 'adv') emit('exportAdv', props.template.template_id, props.template.title)
   else if (action === 'delete') emit('delete', props.template.template_id, props.template.title)
@@ -216,10 +218,17 @@ const hasLicenseInfo = computed(() => {
               Migrate format
             </button>
             <button
-              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 flex items-center gap-2"
               @click="runAction('edit')"
             >
-              Edit blueprint
+              <span>Edit blueprint</span>
+            </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 flex items-center gap-2"
+              @click="runAction('duplicate')"
+            >
+              <Copy class="w-3.5 h-3.5" />
+              <span>Duplicate</span>
             </button>
             <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"

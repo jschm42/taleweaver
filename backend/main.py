@@ -4,11 +4,11 @@ import os
 import re
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -107,6 +107,24 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None),
+        )
+    logger.exception(
+        "Unhandled server error processing %s %s: %s", request.method, request.url.path, exc
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error occurred.", "error": str(exc)},
+    )
+
 
 # Security: Allowed hosts
 # Configured via ALLOWED_HOSTS in .env (default: "*" = allow all).
@@ -225,7 +243,17 @@ class SafeStaticFiles(StaticFiles):
                     except Exception as e:
                         logger.warning("Dynamic thumbnail generation failed for %s: %s", source_full, e)
 
-        return await super().get_response(path, scope)
+        resp = await super().get_response(path, scope)
+        if resp.status_code == 200:
+            check_path = full_path if (full_path and os.path.isfile(full_path)) else self.lookup_path(path)[0]
+            if check_path and os.path.isfile(check_path):
+                try:
+                    with open(check_path, "rb") as f:
+                        if b"<svg" in f.read(512).lower():
+                            resp.headers["Content-Type"] = "image/svg+xml"
+                except OSError:
+                    pass
+        return resp
 
 # Mount the entire DATA_DIR under /data for robustness, with security filters
 app.mount("/data", SafeStaticFiles(directory=os.path.abspath(settings.DATA_DIR)), name="data")

@@ -62,6 +62,8 @@ export interface EntityEditData {
   on_enter_scene_text?: string | null
   on_open_exit_script?: string | null
   on_open_exit_text?: string | null
+  on_exit_used_script?: string | null
+  on_exit_used_text?: string | null
   on_defeat_script?: string | null
   on_defeat_text?: string | null
   on_protagonist_enters_scene_script?: string | null
@@ -144,6 +146,16 @@ export interface AwardCreateData {
   is_earned?: boolean
 }
 
+export type EntityBundleKind = 'protagonist' | 'npc' | 'item'
+
+export interface EntityBundleImportResult {
+  kind: EntityBundleKind
+  entity_id: string
+  name: string
+  has_image: boolean
+  warnings: string[]
+}
+
 /**
  * Service for entity editing operations
  */
@@ -171,6 +183,38 @@ export const entityService = {
     }
     const payload = await res.json()
     return { new_id: payload.new_id, source_id: payload.source_id }
+  },
+
+  /** Downloads a protagonist, NPC, or item (including its image) as a .twe bundle. */
+  async exportEntityBundle(adventureId: string, kind: EntityBundleKind, entityId?: string): Promise<Blob> {
+    const path = kind === 'protagonist'
+      ? 'protagonist'
+      : `entity/${encodeURIComponent(entityId || '')}`
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/transfer/${path}`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || 'Failed to export entity')
+    }
+    return await res.blob()
+  },
+
+  /** Imports a .twe bundle. NPCs/items are added; a protagonist replaces the current one. */
+  async importEntityBundle(adventureId: string, file: File, expectedKind: EntityBundleKind): Promise<EntityBundleImportResult> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('expected_kind', expectedKind)
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/transfer/import`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || 'Failed to import entity')
+    }
+    return await res.json()
   },
 
   async generateTraits(adventureId: string, name: string, description: string, targetType: string, targetField?: 'goal' | 'character'): Promise<{ goal: string, character: string }> {

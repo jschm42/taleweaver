@@ -132,6 +132,24 @@ const availableSnippets = computed(() => {
     ]
   }
 
+  if (props.context === 'special_action') {
+    return [
+      {
+        label: 'React to a critical success',
+        code: "if special['crit']:\n    tw.story.show_message('A devastating blow!')\n",
+      },
+      {
+        label: 'Remember who used the special',
+        code: "tw.vars.set('last_special_caster', special['caster'])\n",
+      },
+      {
+        label: 'Backfire on failure',
+        code: "if not special['success']:\n    tw.player.damage(5)\n    tw.story.show_message('The spell backfires! (-5 HP)')\n",
+      },
+      ...common,
+    ]
+  }
+
   if (props.context === 'on_enter_scene' || props.context === 'on_protagonist_enters_scene') {
     return [
       {
@@ -139,6 +157,45 @@ const availableSnippets = computed(() => {
         code: 'if not tw.scene.get_attribute("visited", False):\n    tw.scene.set_attribute("visited", True)\n    tw.narrate("You step into the chamber for the first time.")\n',
       },
       ...common,
+    ]
+  }
+
+  if (['switch_success', 'switch_failure', 'transition_success', 'transition_failure'].includes(props.context || '')) {
+    return [
+      {
+        label: 'Flip / change another switch',
+        code: 'tw.switches.set_state("OTHER_SWITCH", "ON")\ntw.story.narrate("You hear heavy machinery hum to life in the distance.")\n',
+      },
+      {
+        label: 'Inspect switch state',
+        code: 'if tw.switches.get_state("LEVER_ID") == "ACTIVE":\n    tw.vars.set("puzzle_solved", True)\n    tw.story.narrate("The final seal is broken!")\n',
+      },
+      ...common,
+    ]
+  }
+
+  if (props.context === 'guard_expression') {
+    return [
+      {
+        label: 'Check quest / script flag',
+        code: "tw.vars.get('puzzle_solved', False) == True",
+      },
+      {
+        label: 'Check switch state',
+        code: "tw.switches.get('SWITCH_ID') == 'ON'",
+      },
+      {
+        label: 'Check player inventory item',
+        code: "tw.player.has_item('KEY_ID')",
+      },
+      {
+        label: 'Combined guard (AND / OR)',
+        code: "tw.vars.get('flag_a', False) and tw.switches.get('LEVER') == 'ACTIVE'",
+      },
+      {
+        label: 'Check player stat threshold',
+        code: "tw.player.get_stat('hp', 100) > 50",
+      },
     ]
   }
 
@@ -291,6 +348,7 @@ function insertNamedSnippet(type: string) {
     scene: "tw.scene.set_attribute('visited', True)\n",
     exits: "tw.exits.unlock('EXIT_ID')\n",
     npcs: "tw.npcs.move('NPC_ID', 'SCENE_ID')\n",
+    switches: "tw.switches.set_state('SWITCH_ID', 'ON')\n",
   }
   if (snippets[type]) {
     insertSnippet(snippets[type])
@@ -624,13 +682,27 @@ onBeforeUnmount(() => {
             <code>.get(id)</code>, <code>.move(id, target_scene)</code>
           </p>
         </div>
+
+        <div class="p-2 bg-slate-950/70 border border-white/5 rounded-lg space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400">tw.switches</span>
+            <button type="button" @click="insertNamedSnippet('switches')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans">
+            <code>.get_state(id)</code>, <code>.set_state(id, s)</code>, <code>.flip(id)</code>, <code>.is_state(id, s)</code>
+          </p>
+        </div>
       </div>
     </div>
 
     <!-- Main Editor Canvas -->
     <div
       class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
-      :style="{ minHeight: isFullscreen ? '400px' : minHeight, maxHeight: isFullscreen ? 'none' : maxHeight }"
+      :style="{
+        '--cm-min-height': isFullscreen ? '400px' : minHeight,
+        minHeight: isFullscreen ? '400px' : minHeight,
+        maxHeight: isFullscreen ? 'none' : maxHeight,
+      }"
     >
       <!-- Loading CDN Spinner / Notice -->
       <div
@@ -736,7 +808,7 @@ onBeforeUnmount(() => {
 /* CodeMirror overrides to integrate with TaleWeaver dark theme */
 .codemirror-wrapper .CodeMirror {
   height: 100% !important;
-  min-height: 120px;
+  min-height: var(--cm-min-height, 120px);
   background-color: transparent !important;
   color: #e2e8f0 !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
@@ -747,8 +819,7 @@ onBeforeUnmount(() => {
 
 .codemirror-wrapper .CodeMirror-scroll {
   height: 100% !important;
-  overflow-x: auto !important;
-  overflow-y: auto !important;
+  min-height: var(--cm-min-height, 120px);
 }
 
 .codemirror-wrapper .CodeMirror-gutters {

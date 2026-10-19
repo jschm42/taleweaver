@@ -140,14 +140,11 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       if (dlg.isNarration && !speakNarration) continue
       if (!dlg.isNarration && !speakDialogues) continue
       
-      let textToSpeak = dlg.text
-      if (dlg.voiceTag) {
-        textToSpeak = `<${dlg.voiceTag}> ${textToSpeak}`
-      }
-      if (dlg.speaker && dlg.speaker !== 'Game Master') {
-        textToSpeak = `${dlg.speaker}: ${textToSpeak}`
-      }
+      const textToSpeak = dlg.voiceTag ? `<${dlg.voiceTag}> ${dlg.text}` : dlg.text
+      const isNpcLine = Boolean(dlg.speaker) && dlg.speaker !== 'Game Master'
 
+      // The speaker is passed as a voice hint (resolved via npcMetadata), never
+      // prefixed into the text, so the name is not read aloud.
       void audioService.enqueueSpeak(textToSpeak, {
         sceneDescription: currentSceneDescription.value,
         adventureId: sheet.value?.adventure_id || undefined,
@@ -156,7 +153,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
         sceneName: sheet.value?.current_scene || undefined,
         tone: sheet.value?.adventure_tone || undefined,
         npcMetadata: npcMetadata.value,
-        voiceOverride: dlg.speaker !== 'Game Master' ? dlg.speaker : undefined,
+        voiceOverride: isNpcLine ? dlg.speaker : undefined,
         style: dlg.voiceTag || undefined,
       })
     }

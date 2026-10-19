@@ -1,5 +1,14 @@
 import { ref, watch } from 'vue'
 import { api } from '@/composables/useApi'
+import {
+  buildSafeRetryText,
+  buildSegmentRequests,
+  buildSpeechSegments,
+  isSpeakableSegment,
+  normalizeDialoguePrefixes,
+  resolveNpcVoice,
+  type SegmentRequest,
+} from '@/services/ttsText'
 
 type SpeakOptions = {
   sceneDescription?: string
@@ -9,11 +18,92 @@ type SpeakOptions = {
   sceneName?: string
   tone?: string
   npcMetadata?: Record<string, any>
-  segmentedVoices?: boolean
   interruptCurrent?: boolean
   useTextChunking?: boolean
   style?: string
+  /** Fallback voice (or NPC name resolvable via npcMetadata) for segments without a speaker voice. */
   voiceOverride?: string
+}
+
+type RequestContext = {
+  scene_description?: string
+  adventure_id?: string
+  session_id?: string
+  title?: string
+  scene_name?: string
+  tone?: string
+  language?: string
+}
+
+type QueuedSegment = {
+  request: SegmentRequest
+  context: RequestContext
+  /** Raw text of the speak() call this segment belongs to (used by UI highlighting). */
+  displayText: string
+  /** Normalized text of the speak() call (used for "is this bubble speaking" checks). */
+  ttsText: string
+}
+
+type PreparedSegment = { segment: QueuedSegment, audio: Promise<Blob | null> }
+
+// Retrying with simplified text cannot help when the provider is overloaded or rate-limited.
+const NON_RETRYABLE_STATUSES = new Set([429, 503, 504])
+const BABEL_FISH_LANG_KEY = 'tw_bable_fish_lang'
+
+function normalizeText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
+}
+
+function normalizeOptionalText(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined
+  if (typeof value === 'string') return value.trim() || undefined
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value)
+  }
+  return undefined
+}
+
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* storage unavailable (private mode) */
+  }
+}
+
+function errorStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown } | null)?.status
+  return typeof status === 'number' ? status : undefined
+}
+
+function inferAudioMimeType(url: string): string {
+  const path = new URL(url).pathname.toLowerCase()
+  if (path.endsWith('.wav')) return 'audio/wav'
+  if (path.endsWith('.mp3')) return 'audio/mpeg'
+  if (path.endsWith('.ogg')) return 'audio/ogg'
+  return ''
+}
+
+function buildRequestContext(options: SpeakOptions): RequestContext {
+  return {
+    scene_description: normalizeOptionalText(options.sceneDescription),
+    adventure_id: normalizeOptionalText(options.adventureId),
+    session_id: normalizeOptionalText(options.sessionId),
+    title: normalizeOptionalText(options.title),
+    scene_name: normalizeOptionalText(options.sceneName),
+    tone: normalizeOptionalText(options.tone),
+    language: readStorage(BABEL_FISH_LANG_KEY) || undefined,
+  }
 }
 
 class AudioService {
@@ -22,11 +112,29 @@ class AudioService {
   private currentAudio: HTMLAudioElement | null = null
   private currentObjectUrl: string | null = null
   private currentBufferSource: AudioBufferSourceNode | null = null
+  private resolveCurrentPlayback: (() => void) | null = null
   private playbackToken = 0
   private lastTtsRequestAt = 0
   private audioContext: AudioContext | null = null
-  private speakQueueTail: Promise<void> = Promise.resolve()
-  private speakQueueGeneration = 0
+  private segmentQueue: QueuedSegment[] = []
+  private pipeline: { token: number, promise: Promise<void> } | null = null
+
+  public isUnlocked = ref(false)
+  public isPlaying = ref(false)
+  public isGenerating = ref(false)
+  public currentlyGeneratingContent = ref<string | null>(null)
+  public lastError = ref<string | null>(null)
+  public currentText = ref<string | null>(null)
+  public autoSpeechEnabled = ref(false)
+  public useTextChunking = ref(readStorage('tts_use_chunking') !== 'false')
+  public speechRate = ref<number>(parseFloat(readStorage('tts_speech_rate') ?? '1'))
+  public ttsDebugEnabled = ref(readStorage(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
+
+  constructor() {
+    watch(this.speechRate, (val) => writeStorage('tts_speech_rate', String(val)))
+    watch(this.ttsDebugEnabled, (val) => writeStorage(AudioService.TTS_DEBUG_STORAGE_KEY, val ? 'true' : 'false'))
+    watch(this.useTextChunking, (val) => writeStorage('tts_use_chunking', val ? 'true' : 'false'))
+  }
 
   /** Call this once from any direct user-gesture handler (e.g. send button).
    *  Resumes the AudioContext so that subsequent async play() calls are allowed. */
@@ -39,16 +147,6 @@ class AudioService {
     }
     this.isUnlocked.value = true
   }
-  public isUnlocked = ref(false)
-  public isPlaying = ref(false)
-  public isGenerating = ref(false)
-  public currentlyGeneratingContent = ref<string | null>(null)
-  public lastError = ref<string | null>(null)
-  public currentText = ref<string | null>(null)
-  public autoSpeechEnabled = ref(false)
-  public useTextChunking = ref(localStorage.getItem('tts_use_chunking') !== 'false')
-  public speechRate = ref<number>(parseFloat(localStorage.getItem('tts_speech_rate') ?? '1'))
-  public ttsDebugEnabled = ref(localStorage.getItem(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
 
   private setPlaybackError(err: unknown): void {
     const rawMessage = err instanceof Error ? err.message : String(err)
@@ -65,173 +163,10 @@ class AudioService {
     this.lastError.value = rawMessage
   }
 
-  private normalizeDialoguePrefixes(text: string): string {
-    // Convert markdown-style speaker labels to plain labels for more reliable
-    // downstream TTS interpretation.
-    const normalizedPrefixes = text.replace(/^\*\*([^*:\n]+)\*\*:\s*/gm, '$1: ')
-
-    // Remove markdown bold markers from the whole prompt so raw "**" never
-    // reaches the TTS model.
-    return normalizedPrefixes
-      .replace(/\*\*([^*\n]+)\*\*/g, '$1')
-      .replace(/\*\*/g, '')
-  }
-
   private getSafeSpeechRate(): number {
     const rate = this.speechRate.value
     if (!Number.isFinite(rate)) return 1
     return Math.min(2, Math.max(0.5, rate))
-  }
-
-  private splitIntoSpeechSegments(text: string, useChunking = true): Array<{ speaker?: string, text: string }> {
-    const normalized = text.replace(/\r\n?/g, '\n').trim()
-    if (!normalized) return []
-
-    if (!useChunking) {
-      this.logDebug('splitIntoSpeechSegments (No Chunking)', { textLength: normalized.length })
-      return [{ text: normalized }]
-    }
-
-    // Default chunked behavior (split by paragraphs)
-    const paragraphs = normalized
-      .split(/\n\s*\n/)
-      .map(p => p.trim())
-      .filter(Boolean)
-
-    const speakerPattern = /^(?:\*\*([^*:\n]+)\*\*|([^:\n]+)):\s*([\s\S]*)$/
-    const nonSpeakerLabels = new Set(['note', 'warning', 'caution', 'info', 'location', 'status', 'time', 'goal', 'quest', 'tip', 'hinweis'])
-    const segments: Array<{ speaker?: string, text: string }> = []
-
-    for (const paragraph of paragraphs) {
-      const match = paragraph.match(speakerPattern)
-      if (match) {
-        const rawSpeaker = (match[1] || match[2] || '').trim()
-        const spokenText = (match[3] || '').trim()
-        if (spokenText && !nonSpeakerLabels.has(rawSpeaker.toLowerCase()) && this.looksLikeSpeakerLabel(rawSpeaker)) {
-          segments.push({ speaker: rawSpeaker, text: spokenText })
-          continue
-        }
-      }
-      segments.push({ text: paragraph })
-    }
-
-    return segments
-  }
-
-  private looksLikeSpeakerLabel(value: string): boolean {
-    const normalized = String(value || '').trim()
-    if (!normalized || normalized.length > 50) return false
-    const words = normalized.split(/\s+/).filter(Boolean)
-    if (words.length > 6) return false
-    return /^[\p{L}\p{N}][\p{L}\p{N} '\-.,()]*$/u.test(normalized)
-  }
-
-  private chunkSegmentText(text: string, maxChars = 1200): string[] {
-    const normalized = text.trim()
-    if (!normalized) return []
-    if (normalized.length <= maxChars) return [normalized]
-
-    const sentenceParts = normalized.split(/(?<=[.!?])\s+/)
-    const chunks: string[] = []
-    let current = ''
-
-    for (const part of sentenceParts) {
-      const candidate = current ? `${current} ${part}` : part
-      if (candidate.length <= maxChars) {
-        current = candidate
-        continue
-      }
-
-      if (current) chunks.push(current)
-
-      if (part.length <= maxChars) {
-        current = part
-      } else {
-        for (let i = 0; i < part.length; i += maxChars) {
-          chunks.push(part.slice(i, i + maxChars))
-        }
-        current = ''
-      }
-    }
-
-    if (current) chunks.push(current)
-    return chunks
-  }
-
-  private sanitizeSegmentForTts(text: string): string {
-    return String(text || '')
-      // Keep image alt text but drop URLs from markdown images.
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-      // Drop standalone portrait marker lines that should never be spoken.
-      .replace(/^\s*[^\n]*-portrait\s*$/gim, '')
-      // Normalize excessive whitespace after removals.
-      .replace(/\s{2,}/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  }
-
-  private isSpeakableSegment(text: string): boolean {
-    const trimmed = String(text || '').trim()
-    if (!trimmed) return false
-    // Skip punctuation-only fragments such as a lone '[' that can trigger
-    // provider moderation/validation failures while conveying no speech.
-    return /[\p{L}\p{N}]/u.test(trimmed)
-  }
-
-  private buildSafeRetryText(text: string): string {
-    return String(text || '')
-      // Drop inline direction tags for retry if provider blocks the original.
-      .replace(/\[[^\]\n]{1,120}\]/g, ' ')
-      // Keep retry payload compatible with provider speaker parsing quirks.
-      .replace(/(\d{1,2}):(\d{2})/g, '$1__TW_TIME_COLON__$2')
-      .replace(/:\s+/g, ', ')
-      .replace(/__TW_TIME_COLON__/g, ':')
-      // Remove repeated punctuation noise that may be flagged.
-      .replace(/[!?.]{4,}/g, '...')
-      .replace(/\s{2,}/g, ' ')
-      .trim()
-  }
-
-  private buildFallbackSegments(text: string, useChunking = true): Array<{ speaker?: string, text: string }> {
-    const baseSegments = this.splitIntoSpeechSegments(text, useChunking)
-    
-    if (!useChunking) {
-      console.info('[AudioService] Chunking DISABLED. Final segments count:', baseSegments.length)
-      this.logDebug('Final segments for TTS (No Chunking)', { count: baseSegments.length, baseSegments })
-      return baseSegments
-    }
-
-    const segments: Array<{ speaker?: string, text: string }> = []
-    for (const seg of baseSegments) {
-      const chunks = this.chunkSegmentText(seg.text)
-      for (const chunk of chunks) {
-        segments.push({ speaker: seg.speaker, text: chunk })
-      }
-    }
-    this.logDebug('Final segments for TTS (Chunked)', { count: segments.length, segments })
-    return segments
-  }
-
-  private buildSegmentRequests(
-    segments: Array<{ speaker?: string, text: string }>,
-    npcMetadata: Record<string, any> | undefined,
-  ): Array<{ requestText: string, voiceOverride?: string, speaker?: string }> {
-    const requests: Array<{ requestText: string, voiceOverride?: string, speaker?: string }> = []
-
-    for (const segment of segments) {
-      const speaker = segment.speaker?.trim() || undefined
-      // Single-voice generation: keep only spoken content to avoid reading
-      // speaker names out loud.
-      const requestText = this.sanitizeSegmentForTts(segment.text)
-      if (!this.isSpeakableSegment(requestText)) {
-        continue
-      }
-      const voiceOverride = this.resolveNpcVoice(speaker, npcMetadata)
-
-      requests.push({ requestText, voiceOverride, speaker })
-    }
-
-    return requests
   }
 
   private logDebug(message: string, payload?: unknown): void {
@@ -244,29 +179,11 @@ class AudioService {
   }
 
   private async waitForTtsRequestSlot(): Promise<void> {
-    const now = Date.now()
-    const elapsed = now - this.lastTtsRequestAt
-    const waitMs = AudioService.TTS_REQUEST_MIN_INTERVAL_MS - elapsed
+    const waitMs = AudioService.TTS_REQUEST_MIN_INTERVAL_MS - (Date.now() - this.lastTtsRequestAt)
     if (waitMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, waitMs))
     }
     this.lastTtsRequestAt = Date.now()
-  }
-
-  private resolveNpcVoice(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): string | undefined {
-    if (!speaker || !npcMetadata) return undefined
-
-    const exact = npcMetadata[speaker]
-    if (exact?.voice) return String(exact.voice)
-
-    const loweredSpeaker = speaker.toLowerCase()
-    for (const [key, value] of Object.entries(npcMetadata)) {
-      if (key.toLowerCase() === loweredSpeaker && value && typeof value === 'object' && value.voice) {
-        return String(value.voice)
-      }
-    }
-
-    return undefined
   }
 
   private async fetchAudioBlob(audioUrl: string): Promise<Blob> {
@@ -285,247 +202,261 @@ class AudioService {
       throw new Error('Audio payload is empty')
     }
 
-    const path = new URL(resolvedUrl).pathname.toLowerCase()
-    const inferredMimeType = path.endsWith('.wav')
-      ? 'audio/wav'
-      : path.endsWith('.mp3')
-        ? 'audio/mpeg'
-        : path.endsWith('.ogg')
-          ? 'audio/ogg'
-          : ''
-
+    const inferredMimeType = inferAudioMimeType(resolvedUrl)
     // Header-only WAV files are silent and typically indicate failed upstream synthesis.
     if (inferredMimeType === 'audio/wav' && blob.size <= 44) {
       throw new Error('Audio payload is header-only (silent WAV)')
     }
-
     if (blob.type || !inferredMimeType) {
       return blob
     }
-
     return new Blob([blob], { type: inferredMimeType })
+  }
+
+  private async requestAudio(text: string, context: RequestContext, voiceOverride?: string): Promise<{ blob: Blob, url: string }> {
+    await this.waitForTtsRequestSlot()
+    const { audio_url } = await api.generateTTS({ ...context, text, voice_override: voiceOverride })
+    return { blob: await this.fetchAudioBlob(audio_url), url: audio_url }
+  }
+
+  private async fetchSegmentAudio(segment: QueuedSegment, token: number): Promise<Blob | null> {
+    if (token !== this.playbackToken) return null
+    const { request, context } = segment
+    this.logDebug('TTS segment request', {
+      speaker: request.speaker || null,
+      voice: request.voiceOverride || null,
+      textLength: request.requestText.length,
+    })
+
+    const retryText = buildSafeRetryText(request.requestText)
+    try {
+      return (await this.requestAudio(request.requestText, context, request.voiceOverride)).blob
+    } catch (err) {
+      const status = errorStatus(err)
+      const isNonRetryable = status !== undefined && NON_RETRYABLE_STATUSES.has(status)
+      const canRetry = !isNonRetryable && retryText !== request.requestText && isSpeakableSegment(retryText)
+      if (isNonRetryable) this.setPlaybackError(err)
+      if (!canRetry || token !== this.playbackToken) {
+        // Do not abort the whole queue because one segment failed upstream.
+        this.logDebug('TTS segment failed; skipping', { status, error: String(err) })
+        return null
+      }
+    }
+
+    try {
+      // Retry without vocal tags / tone in case the provider blocked the original prompt.
+      this.logDebug('TTS segment retry with safe text', { retryLength: retryText.length })
+      return (await this.requestAudio(retryText, { ...context, tone: undefined }, request.voiceOverride)).blob
+    } catch (retryErr) {
+      this.logDebug('TTS segment retry failed; skipping', { error: String(retryErr) })
+      return null
+    }
   }
 
   private async playAudioBlobWithHtmlAudio(blob: Blob): Promise<void> {
     this.currentObjectUrl = URL.createObjectURL(blob)
-    this.currentAudio = new Audio(this.currentObjectUrl)
-    this.currentAudio.muted = false
-    this.currentAudio.volume = 1
-    this.currentAudio.playbackRate = this.getSafeSpeechRate()
+    const audio = new Audio(this.currentObjectUrl)
+    this.currentAudio = audio
+    audio.playbackRate = this.getSafeSpeechRate()
+
+    const releaseObjectUrl = () => {
+      if (this.currentObjectUrl) {
+        URL.revokeObjectURL(this.currentObjectUrl)
+        this.currentObjectUrl = null
+      }
+      this.currentAudio = null
+      this.resolveCurrentPlayback = null
+    }
 
     await new Promise<void>((resolve, reject) => {
-      if (!this.currentAudio) {
-        resolve()
-        return
-      }
-
-      this.currentAudio.onended = () => {
-        if (this.currentObjectUrl) {
-          URL.revokeObjectURL(this.currentObjectUrl)
-          this.currentObjectUrl = null
-        }
-        this.currentAudio = null
+      // stop() pauses the element, which never fires 'ended'; let it settle the promise instead.
+      this.resolveCurrentPlayback = resolve
+      audio.onended = () => {
+        releaseObjectUrl()
         resolve()
       }
-
-      this.currentAudio.onerror = () => {
-        const mediaErr = this.currentAudio?.error
-        const errMsg = `Audio playback failed - code:${mediaErr?.code ?? '?'} msg:${mediaErr?.message ?? '?'}`
+      audio.onerror = () => {
+        const errMsg = `Audio playback failed - code:${audio.error?.code ?? '?'} msg:${audio.error?.message ?? '?'}`
         console.error('[TTS]', errMsg)
-        if (this.currentObjectUrl) {
-          URL.revokeObjectURL(this.currentObjectUrl)
-          this.currentObjectUrl = null
-        }
-        this.currentAudio = null
+        releaseObjectUrl()
         reject(new Error(errMsg))
       }
+      audio.play().catch(reject)
+    })
+  }
 
-      this.currentAudio.play().catch(reject)
+  private async playAudioBufferWithWebAudio(context: AudioContext, blob: Blob): Promise<void> {
+    const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
+
+    await new Promise<void>((resolve, reject) => {
+      const source = context.createBufferSource()
+      source.buffer = audioBuffer
+      // WebAudio playbackRate also shifts pitch; keep WAV (Gemini PCM) within a
+      // small speed-up range to avoid chipmunk-like artifacts.
+      const isWav = (blob.type || '').toLowerCase().includes('wav')
+      const requestedRate = this.getSafeSpeechRate()
+      source.playbackRate.value = isWav ? Math.min(1.1, Math.max(1.0, requestedRate)) : requestedRate
+      source.connect(context.destination)
+      this.currentBufferSource = source
+      source.onended = () => {
+        this.currentBufferSource = null
+        resolve()
+      }
+      try {
+        source.start()
+      } catch (err) {
+        this.currentBufferSource = null
+        reject(err)
+      }
     })
   }
 
   private async playAudioBlob(blob: Blob): Promise<void> {
-    if (!blob.size) {
-      throw new Error('Audio payload is empty')
-    }
-
-    if (this.audioContext?.state === 'running') {
-      // Prefer Web Audio API: decodeAudioData + BufferSource.
-      // This completely avoids HTMLAudioElement.play() autoplay restrictions
-      // and correctly handles sample-rate resampling (e.g. 24 kHz WAV in a
-      // 44.1/48 kHz AudioContext) without distortion.
+    const context = this.audioContext
+    if (context?.state === 'running') {
+      // Prefer Web Audio: avoids HTMLAudioElement autoplay restrictions and
+      // resamples 24 kHz WAV correctly.
       try {
-        const arrayBuffer = await blob.arrayBuffer()
-        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
-
-        await new Promise<void>((resolve, reject) => {
-          if (!this.audioContext) { resolve(); return }
-
-          const source = this.audioContext.createBufferSource()
-          source.buffer = audioBuffer
-          // For WAV (Gemini 2.5 PCM), allow only a very small speed-up to avoid
-          // chipmunk-like pitch artifacts.
-          const isWav = (blob.type || '').toLowerCase().includes('wav')
-          const requestedRate = this.getSafeSpeechRate()
-          const wavSafeRate = Math.min(1.1, Math.max(1.0, requestedRate))
-          source.playbackRate.value = isWav ? wavSafeRate : requestedRate
-          source.connect(this.audioContext.destination)
-          this.currentBufferSource = source
-
-          source.onended = () => {
-            this.currentBufferSource = null
-            resolve()
-          }
-
-          try {
-            source.start()
-          } catch (err) {
-            this.currentBufferSource = null
-            reject(err)
-          }
-        })
+        await this.playAudioBufferWithWebAudio(context, blob)
         return
       } catch (err) {
-        this.logDebug('WebAudio decode failed; falling back to HTMLAudio', {
-          error: String(err),
-          blobType: blob.type,
-          blobSize: blob.size,
-        })
+        this.logDebug('WebAudio decode failed; falling back to HTMLAudio', { error: String(err), blobType: blob.type })
       }
     }
-
-    // Fallback: HTMLAudioElement (before any user gesture OR when WebAudio decode fails).
     await this.playAudioBlobWithHtmlAudio(blob)
   }
 
-  private normalizeText(value: unknown): string {
-    if (typeof value === 'string') return value.trim()
-    if (value === null || value === undefined) return ''
-    return String(value).trim()
+  private planSegments(normalizedText: string, options: SpeakOptions): QueuedSegment[] {
+    const ttsText = normalizeDialoguePrefixes(normalizedText)
+    const useChunking = typeof options.useTextChunking === 'boolean' ? options.useTextChunking : this.useTextChunking.value
+    const requests = buildSegmentRequests(buildSpeechSegments(ttsText, useChunking), options.npcMetadata)
+    const fallbackVoice = resolveNpcVoice(options.voiceOverride, options.npcMetadata) ?? options.voiceOverride
+    const context = buildRequestContext(options)
+    this.logDebug('TTS plan', { totalLength: ttsText.length, requests: requests.length, useChunking })
+
+    return requests.map(request => ({
+      request: { ...request, voiceOverride: request.voiceOverride ?? fallbackVoice },
+      context,
+      displayText: normalizedText,
+      ttsText,
+    }))
   }
 
-  private normalizeOptionalText(value: unknown): string | undefined {
-    if (value === null || value === undefined) return undefined
-    if (typeof value === 'string') {
-      const normalized = value.trim()
-      return normalized || undefined
+  private prepareNext(token: number): PreparedSegment | null {
+    const segment = this.segmentQueue.shift()
+    if (!segment) return null
+    this.isGenerating.value = true
+    this.currentlyGeneratingContent.value = segment.displayText
+    return { segment, audio: this.fetchSegmentAudio(segment, token) }
+  }
+
+  /** Plays queued segments in order while generating the next one in the background,
+   *  including across separate speak()/enqueueSpeak() calls. */
+  private async runPipeline(token: number): Promise<void> {
+    this.isPlaying.value = true
+    try {
+      let pending = this.prepareNext(token)
+      while (pending) {
+        const { segment, audio } = pending
+        const blob = await audio
+        if (token !== this.playbackToken) return
+
+        pending = this.prepareNext(token)
+        if (!pending) {
+          this.isGenerating.value = false
+          this.currentlyGeneratingContent.value = null
+        }
+        if (blob) {
+          this.currentText.value = segment.ttsText
+          await this.playAudioBlob(blob).catch((err) => {
+            this.logDebug('TTS segment playback failed; continuing', { error: String(err) })
+          })
+        }
+        if (token !== this.playbackToken) return
+        // Items enqueued while the last segment was playing.
+        pending ??= this.prepareNext(token)
+      }
+    } catch (err) {
+      console.error('TTS Playback failed', err)
+      this.setPlaybackError(err)
+    } finally {
+      if (token === this.playbackToken) {
+        this.resetPlaybackState()
+      }
     }
-    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-      return String(value)
-    }
-    return undefined
   }
 
-  constructor() {
+  private ensurePipeline(): Promise<void> {
+    const token = this.playbackToken
+    if (this.pipeline?.token === token) return this.pipeline.promise
 
-    watch(this.speechRate, (val) => {
-      localStorage.setItem('tts_speech_rate', String(val))
+    const promise = this.runPipeline(token).finally(() => {
+      if (this.pipeline?.promise === promise) this.pipeline = null
     })
-
-    watch(this.ttsDebugEnabled, (val) => {
-      localStorage.setItem(AudioService.TTS_DEBUG_STORAGE_KEY, val ? 'true' : 'false')
-    })
-
-    watch(this.useTextChunking, (val) => {
-      console.info('[AudioService] useTextChunking state updated:', val)
-      localStorage.setItem('tts_use_chunking', val ? 'true' : 'false')
-    })
-
+    this.pipeline = { token, promise }
+    return promise
   }
 
+  private resetPlaybackState(): void {
+    this.isPlaying.value = false
+    this.isGenerating.value = false
+    this.currentlyGeneratingContent.value = null
+    this.currentText.value = null
+  }
+
+  /** Queue text behind whatever is currently playing (used by auto-speak). */
   public enqueueSpeak(text: unknown, options: SpeakOptions = {}): Promise<void> {
-    const queuedGeneration = this.speakQueueGeneration
-    this.speakQueueTail = this.speakQueueTail
-      .catch(() => {})
-      .then(async () => {
-        if (queuedGeneration !== this.speakQueueGeneration) return
-        await this.speak(text, { ...options, interruptCurrent: false })
-      })
+    return this.speak(text, { ...options, interruptCurrent: false })
+  }
 
-    return this.speakQueueTail
+  async speak(text: unknown, options: SpeakOptions = {}): Promise<void> {
+    const normalizedText = normalizeText(text)
+    if (!normalizedText) return
+    // Direct/manual speak interrupts current playback. Queued speak is appended.
+    if (options.interruptCurrent ?? true) {
+      this.stop()
+    }
+    this.lastError.value = null
+
+    const segments = this.planSegments(normalizedText, options)
+    if (segments.length === 0) {
+      this.logDebug('TTS skipped: no speakable segments after sanitization')
+      return
+    }
+    this.segmentQueue.push(...segments)
+    return this.ensurePipeline()
   }
 
   /**
-   * Generates a TTS audio file and triggers a browser download.
+   * Generates a TTS audio file for the whole text and triggers a browser download.
    */
   public async download(text: unknown, options: SpeakOptions = {}): Promise<void> {
-    const normalizedText = this.normalizeText(text)
+    const normalizedText = normalizeText(text)
     if (!normalizedText) return
-    const ttsText = this.normalizeDialoguePrefixes(normalizedText)
 
-    const {
-      sceneDescription,
-      adventureId,
-      sessionId,
-      title,
-      sceneName,
-      tone,
-      voiceOverride,
-    } = options
-
-    const normalizedSceneDescription = this.normalizeOptionalText(sceneDescription)
-    const normalizedAdventureId = this.normalizeOptionalText(adventureId)
-    const normalizedSessionId = this.normalizeOptionalText(sessionId)
-    const normalizedTitle = this.normalizeOptionalText(title)
-    const normalizedSceneName = this.normalizeOptionalText(sceneName)
-    const normalizedTone = this.normalizeOptionalText(tone)
+    const [request] = buildSegmentRequests(buildSpeechSegments(normalizeDialoguePrefixes(normalizedText), false), options.npcMetadata)
+    if (!request) return
 
     this.isGenerating.value = true
     this.currentlyGeneratingContent.value = normalizedText
-
     try {
-      // For download, we try to get the whole block as one segment if possible.
-      // We use buildFallbackSegments with useChunking=false to get a single request.
-      const segments = this.buildFallbackSegments(ttsText, false)
-      const requests = this.buildSegmentRequests(segments, npcMetadata)
+      const voice = request.voiceOverride ?? resolveNpcVoice(options.voiceOverride, options.npcMetadata) ?? options.voiceOverride
+      const { blob, url } = await this.requestAudio(request.requestText, buildRequestContext(options), voice)
+      const extension = new URL(url, window.location.origin).pathname.split('.').pop() || 'wav'
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const safeTitle = (normalizeOptionalText(options.title) || 'adventure').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      const safeScene = (normalizeOptionalText(options.sceneName) || 'scene').replace(/[^a-z0-9]/gi, '_').toLowerCase()
 
-      if (requests.length === 0) return
-
-      for (let i = 0; i < requests.length; i++) {
-        const request = requests[i]
-        
-        let finalVoiceOverride = request.voiceOverride
-        if (!finalVoiceOverride && voiceOverride) {
-            finalVoiceOverride = voiceOverride
-        }
-
-        await this.waitForTtsRequestSlot()
-        
-        const bableFishLang = localStorage.getItem('tw_bable_fish_lang') || undefined
-        const { audio_url } = await api.generateTTS({
-          text: request.requestText,
-          language: bableFishLang,
-          scene_description: normalizedSceneDescription,
-          adventure_id: normalizedAdventureId,
-          session_id: normalizedSessionId,
-          title: normalizedTitle,
-          scene_name: normalizedSceneName,
-          tone: normalizedTone,
-          voice_override: finalVoiceOverride,
-        })
-
-        const blob = await this.fetchAudioBlob(audio_url)
-        const url = window.URL.createObjectURL(blob)
-        
-        const a = document.createElement('a')
-        a.href = url
-        
-        // Generate a descriptive filename
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-        const safeTitle = (normalizedTitle || 'adventure').replace(/[^a-z0-9]/gi, '_').toLowerCase()
-        const safeScene = (normalizedSceneName || 'scene').replace(/[^a-z0-9]/gi, '_').toLowerCase()
-        
-        a.download = `taleweaver_${safeTitle}_${safeScene}_${timestamp}.wav`
-        
-        document.body.appendChild(a)
-        a.click()
-        
-        // Cleanup
-        setTimeout(() => {
-          window.URL.revokeObjectURL(url)
-          document.body.removeChild(a)
-        }, 100)
-      }
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = `taleweaver_${safeTitle}_${safeScene}_${timestamp}.${extension}`
+      document.body.appendChild(anchor)
+      anchor.click()
+      setTimeout(() => {
+        URL.revokeObjectURL(objectUrl)
+        anchor.remove()
+      }, 100)
     } catch (err) {
       console.error('[AudioService] Download failed', err)
       this.setPlaybackError(err)
@@ -535,185 +466,9 @@ class AudioService {
     }
   }
 
-  async speak(text: unknown, options: SpeakOptions = {}) {
-    const normalizedText = this.normalizeText(text)
-    if (!normalizedText) return
-    this.lastError.value = null
-    const ttsText = this.normalizeDialoguePrefixes(normalizedText)
-
-    const {
-      sceneDescription,
-      adventureId,
-      sessionId,
-      title,
-      sceneName,
-      tone,
-      npcMetadata,
-      interruptCurrent = true,
-      useTextChunking,
-    } = options
-
-    // Direct/manual speak interrupts current playback. Queued speak is serialized.
-    if (interruptCurrent) {
-      this.stop()
-    }
-
-    const token = this.playbackToken
-    const normalizedSceneDescription = this.normalizeOptionalText(sceneDescription)
-    const normalizedAdventureId = this.normalizeOptionalText(adventureId)
-    const normalizedSessionId = this.normalizeOptionalText(sessionId)
-    const normalizedTitle = this.normalizeOptionalText(title)
-    const normalizedSceneName = this.normalizeOptionalText(sceneName)
-    const normalizedTone = this.normalizeOptionalText(tone)
-    const shouldUseChunking = typeof useTextChunking === 'boolean' ? useTextChunking : this.useTextChunking.value
-    this.logDebug('Starting speak sequence', { textLength: ttsText.length, useChunking: shouldUseChunking })
-    const segments = this.buildFallbackSegments(ttsText, shouldUseChunking)
-    const requests = this.buildSegmentRequests(segments, npcMetadata)
-
-    this.logDebug('TTS plan', {
-      totalLength: ttsText.length,
-      segments: segments.length,
-      requests: requests.length,
-      strategy: 'single-voice-segmented',
-    })
-
-    try {
-      this.currentlyGeneratingContent.value = normalizedText
-      this.currentText.value = ttsText
-      this.isPlaying.value = true
-
-      if (requests.length === 0) {
-        this.logDebug('TTS skipped: no speakable segments after sanitization')
-        return
-      }
-
-      const prepareSegmentAudio = async (index: number): Promise<Blob | null> => {
-        if (token !== this.playbackToken) {
-          throw new Error('TTS playback cancelled before generation.')
-        }
-
-        const request = requests[index]
-
-        this.logDebug('TTS segment request', {
-          index,
-          mode: request.voiceOverride ? 'single-speaker-override' : 'single-speaker-default',
-          speaker: request.speaker || null,
-          textLength: request.requestText.length,
-        })
-
-        try {
-          await this.waitForTtsRequestSlot()
-          const { audio_url } = await api.generateTTS({
-            text: request.requestText,
-            scene_description: normalizedSceneDescription,
-            adventure_id: normalizedAdventureId,
-            session_id: normalizedSessionId,
-            title: normalizedTitle,
-            scene_name: normalizedSceneName,
-            tone: normalizedTone,
-            voice_override: request.voiceOverride,
-          })
-
-          return await this.fetchAudioBlob(audio_url)
-        } catch (err) {
-          const retryText = this.buildSafeRetryText(request.requestText)
-          if (retryText && retryText !== request.requestText && this.isSpeakableSegment(retryText)) {
-            try {
-              this.logDebug('TTS segment retry with safe text', {
-                index,
-                speaker: request.speaker || null,
-                originalLength: request.requestText.length,
-                retryLength: retryText.length,
-              })
-
-              await this.waitForTtsRequestSlot()
-              const { audio_url } = await api.generateTTS({
-                text: retryText,
-                scene_description: normalizedSceneDescription,
-                adventure_id: normalizedAdventureId,
-                session_id: normalizedSessionId,
-                title: normalizedTitle,
-                scene_name: normalizedSceneName,
-                // Retry with reduced prompt complexity to avoid provider blocks.
-                tone: undefined,
-                // Any non-null value disables style context server-side.
-                // Invalid values are safely ignored and backend falls back to default voice.
-                voice_override: request.voiceOverride ?? '__AUTO_RETRY_NO_STYLE__',
-              })
-
-              return await this.fetchAudioBlob(audio_url)
-            } catch (retryErr) {
-              this.logDebug('TTS segment retry failed; skipping', {
-                index,
-                speaker: request.speaker || null,
-                error: String(retryErr),
-              })
-            }
-          }
-
-          // Do not abort full auto-speech because one segment failed upstream.
-          this.logDebug('TTS segment failed; skipping', {
-            index,
-            speaker: request.speaker || null,
-            textLength: request.requestText.length,
-            error: String(err),
-          })
-          return null
-        }
-      }
-
-      // Pipeline mode: while one segment is playing, generate and prefetch the next.
-      this.isGenerating.value = true
-      let nextAudioPromise: Promise<Blob | null> | null = prepareSegmentAudio(0)
-
-      for (let index = 0; index < requests.length; index++) {
-        if (token !== this.playbackToken) return
-        if (!nextAudioPromise) break
-
-        const currentAudioBlob = await nextAudioPromise
-
-        const hasNext = index + 1 < requests.length
-        if (hasNext) {
-          nextAudioPromise = prepareSegmentAudio(index + 1)
-        } else {
-          nextAudioPromise = null
-          this.isGenerating.value = false
-        }
-
-        if (token !== this.playbackToken) return
-        if (!currentAudioBlob) {
-          continue
-        }
-
-        try {
-          await this.playAudioBlob(currentAudioBlob)
-        } catch (err) {
-          // Continue with following chunks if one segment fails during playback.
-          this.logDebug('TTS chunk playback failed; continuing with next chunk', {
-            index,
-            error: String(err),
-          })
-        }
-      }
-
-      this.isGenerating.value = false
-      this.currentlyGeneratingContent.value = null
-    } catch (err) {
-      console.error('TTS Playback failed', err)
-      this.setPlaybackError(err)
-    } finally {
-      if (token === this.playbackToken) {
-        this.isPlaying.value = false
-        this.isGenerating.value = false
-        this.currentlyGeneratingContent.value = null
-        this.currentText.value = null
-      }
-    }
-  }
-
   stop() {
-    this.speakQueueGeneration += 1
     this.playbackToken += 1
+    this.segmentQueue = []
     if (this.currentBufferSource) {
       try { this.currentBufferSource.stop() } catch { /* already stopped */ }
       this.currentBufferSource = null
@@ -726,10 +481,10 @@ class AudioService {
       URL.revokeObjectURL(this.currentObjectUrl)
       this.currentObjectUrl = null
     }
-    this.isPlaying.value = false
-    this.isGenerating.value = false
-    this.currentlyGeneratingContent.value = null
-    this.currentText.value = null
+    const resolvePlayback = this.resolveCurrentPlayback
+    this.resolveCurrentPlayback = null
+    resolvePlayback?.()
+    this.resetPlaybackState()
     this.lastError.value = null
   }
 

@@ -11,9 +11,7 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronUp,
-  Sparkles,
   X,
-  Play,
 } from 'lucide-vue-next'
 import { adventureService } from '@/services/adventureService'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
@@ -71,20 +69,29 @@ const filteredScripts = computed(() => {
 // ---------------------------------------------------------------------------
 
 const TRIGGER_OPTIONS = [
+  { value: 'on_init', label: 'On Session Init', desc: 'Runs once at adventure start to configure state and variables' },
   { value: 'on_turn_start', label: 'On Turn Start', desc: 'Runs before player prompt and GM logic' },
   { value: 'on_enter_scene', label: 'On Enter Scene', desc: 'Runs when player enters target scene' },
   { value: 'on_interact', label: 'On Interact', desc: 'Runs when interacting with target entity/item' },
+  { value: 'on_logic_pass_done', label: 'On Logic Pass Done', desc: 'Runs after game mechanics and state mutations finish, before narration' },
+  { value: 'on_narration_done', label: 'On Narration Done', desc: 'Runs after narration generation completes' },
   { value: 'on_turn_end', label: 'On Turn End', desc: 'Runs after scene narrative and entity mutations' },
 ] as const
 
 function getTriggerBadgeClass(trigger: string): string {
   switch (trigger) {
+    case 'on_init':
+      return 'bg-teal-500/15 text-teal-300 border-teal-500/30'
     case 'on_turn_start':
       return 'bg-sky-500/15 text-sky-300 border-sky-500/30'
     case 'on_enter_scene':
       return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
     case 'on_interact':
       return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    case 'on_logic_pass_done':
+      return 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+    case 'on_narration_done':
+      return 'bg-pink-500/15 text-pink-300 border-pink-500/30'
     case 'on_turn_end':
       return 'bg-purple-500/15 text-purple-300 border-purple-500/30'
     default:
@@ -325,6 +332,18 @@ const SNIPPET_TEMPLATES = [
     label: 'Dice Roll Check',
     code: '# Roll a safe die (1 to 20)\nroll = tw.dice.d20()\nif roll >= 12:\n    tw.story.show_message("You skillfully dodge the falling rocks! (Roll: " + str(roll) + ")")\nelse:\n    tw.player.damage(10)\n    tw.story.show_message("A falling boulder grazes your shoulder! (Roll: " + str(roll) + ")")\n',
   },
+  {
+    label: 'Switch Mechanism State',
+    code: '# Inspect or toggle switch mechanism\ncurrent = tw.switches.get_state("LEVER_01")\nif current == "OFF":\n    tw.switches.set_state("LEVER_01", "ON")\n    tw.story.show_message("You pull the lever. Heavy gears churn inside the wall!")\n',
+  },
+  {
+    label: 'Console Log',
+    code: '# Output diagnostic messages to server terminal console\ntw.log("Inspecting player state: HP=" + str(tw.player.hp))\n# print("Or use standard print for quick inspection")\n',
+  },
+  {
+    label: 'In-Game Debug Message',
+    code: '# Emits an in-game notification (only visible when Debug Mode is ON)\ntw.debug("Door trap triggered for scene: " + str(tw.scene.id))\n',
+  },
 ]
 
 function insertSnippet(code: string) {
@@ -345,6 +364,7 @@ function handleTabKey(e: KeyboardEvent) {
     }, 0)
   }
 }
+
 </script>
 
 <template>
@@ -767,9 +787,23 @@ function handleTabKey(e: KeyboardEvent) {
                 </div>
 
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span class="font-bold text-emerald-400">tw.switches</span>
+                  <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    <code>tw.switches.get_state(id)</code>, <code>tw.switches.set_state(id, state)</code>, <code>tw.switches.flip(id)</code>
+                  </p>
+                </div>
+
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.story & tw.game</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
                     <code>tw.story.show_message(text)</code>, <code>tw.game.set_victory(msg)</code>, <code>tw.game.set_game_over(msg)</code>
+                  </p>
+                </div>
+
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span class="font-bold text-emerald-400">tw.log & tw.debug</span>
+                  <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    <code>tw.log("msg")</code>, <code>print("msg")</code> (server console), <code>tw.debug("msg")</code> (in-game when Debug ON)
                   </p>
                 </div>
               </div>

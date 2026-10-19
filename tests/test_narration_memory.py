@@ -1,6 +1,5 @@
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.models.adventure_template import AdventureTemplate
@@ -192,7 +191,10 @@ async def test_build_narration_messages_zero_memory(setup_test_db):
 
 
 async def test_build_narration_messages_system_events_merged_cleanly(setup_test_db):
-    """Verifies that intermediate system messages (e.g. dice rolls) are safely merged into user turn."""
+    """Current-turn system events are merged into the user turn; past-turn events are dropped.
+
+    Past events were already narrated, so repeating them only costs tokens.
+    """
     from tests.conftest import TestSessionLocal
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_context(db, max_memory_turns_state=5)
@@ -217,7 +219,35 @@ async def test_build_narration_messages_system_events_merged_cleanly(setup_test_
         for m in messages[1:]:
             assert m["role"] in {"user", "assistant"}
 
-        assert "Strength DC 15: Rolled 12 (Fail)" in messages[1]["content"]
+        assert messages[1] == {"role": "user", "content": "I kick the door"}
         assert messages[2] == {"role": "assistant", "content": "The door rattles but stays shut."}
         assert "Agility DC 10: Rolled 18 (Success)" in messages[3]["content"]
         assert messages[-1]["role"] == "user"
+
+
+async def test_build_narration_messages_prepends_turn_context_and_skips_debug(setup_test_db):
+    """Per-turn context goes into the final user message; debug lines never reach the LLM."""
+    from tests.conftest import TestSessionLocal
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_context(db, max_memory_turns_state=5)
+        manager = GameTurnManager(db, "session-mem-1", user)
+        manager.state = state
+        manager.adventure = adv
+        manager.avatar = avatar
+
+        db.add(ChatMessage(session_id="session-mem-1", role="user", content="I open the chest"))
+        db.add(ChatMessage(session_id="session-mem-1", role="system", content="[DEBUG LOG] Turn completed"))
+        db.add(ChatMessage(session_id="session-mem-1", role="system", content="Added Gold to your inventory."))
+        await db.commit()
+
+        messages, _ = await manager._build_narration_messages(
+            "Static system prompt", "I open the chest", turn_context="CURRENT STATE:\nTURN RESOLUTION:"
+        )
+
+        # Assert
+        assert messages[0] == {"role": "system", "content": "Static system prompt"}
+        final = messages[-1]["content"]
+        assert final.startswith("CURRENT STATE:")
+        assert "PLAYER ACTION:\nI open the chest" in final
+        assert "[Game Event: Added Gold to your inventory.]" in final
+        assert "[DEBUG LOG]" not in final

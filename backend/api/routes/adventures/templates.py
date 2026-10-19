@@ -1,19 +1,26 @@
 from __future__ import annotations
+
 import logging
-import os
-import re
-import shutil
-import uuid
-import glob
 from copy import deepcopy
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.adventure_creation import (
+    GenerationJob,
+    create_adventure_records,
+    run_background_generation,
+)
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.manifest_export import (
+    backfill_item_start_scenes,
+    backfill_manifest_metadata,
+    normalize_protagonist_items,
+    serialize_exit,
+)
 from backend.api.routes.adventures.schemas import (
     AdventureTemplateResponse,
     AdventureTemplateSummaryResponse,
@@ -24,13 +31,9 @@ from backend.api.routes.adventures.schemas import (
     TemplateFieldGenerationRequest,
     TemplateFieldGenerationResponse,
 )
-from backend.schemas.adventure import (
-    GeneratorSurprisePresetRequest,
-    GeneratorSurprisePresetResponse,
-)
+from backend.api.routes.adventures.template_reset import rebuild_template_world
 from backend.core.auth import get_current_user
-from backend.core.config import settings
-from backend.core.database import AsyncSessionLocal, get_db
+from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
     STORY_IDEA_GENERATION_SYSTEM_PROMPT,
@@ -38,382 +41,24 @@ from backend.core.prompts import (
     TEMPLATE_FIELD_GENERATION_SYSTEM_PROMPT,
     TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE,
 )
-from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
-from backend.utils.path_security import (
-    data_url_to_local_path,
-    ensure_within_data_dir as ensure_within_data_dir_shared,
-    local_path_to_data_url,
-    sanitize_path_component as sanitize_path_component_shared,
+from backend.schemas.adventure import (
+    GeneratorSurprisePresetRequest,
+    GeneratorSurprisePresetResponse,
 )
-from backend.utils.text_utils import generate_adventure_id, generate_session_id
+
+# WorldGenerator is re-exported so tests can patch ``templates.WorldGenerator.generate_world``.
+__all__ = ["WorldGenerator", "router"]
 
 router = APIRouter(tags=["Adventures"])
 logger = logging.getLogger(__name__)
-
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-_SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-
-
-def _normalize_data_asset_url(source_url: Optional[str]) -> Optional[str]:
-    """Normalize legacy relative asset URLs to the canonical /data/... form."""
-    if not isinstance(source_url, str):
-        return source_url
-
-    candidate = source_url.strip()
-    if not candidate:
-        return candidate
-
-    lowered = candidate.lower()
-    if lowered.startswith(("http://", "https://", "data:", "blob:")):
-        return candidate
-    if candidate.startswith("/data/"):
-        return candidate
-    if candidate.startswith("/"):
-        return f"/data{candidate}"
-    return f"/data/{candidate.lstrip('/')}"
-
-
-def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
-    return sanitize_path_component_shared(value)
-
-
-def _ensure_within_data_dir(path: str) -> str:
-    return ensure_within_data_dir_shared(path)
-
-
-def _find_existing_data_asset_path(filename: str) -> Optional[str]:
-    if not filename:
-        return None
-
-    search_roots = [
-        _ensure_within_data_dir(
-            os.path.join(settings.DATA_DIR, "adventures", "library")
-        ),
-        _ensure_within_data_dir(
-            os.path.join(settings.DATA_DIR, "adventures", "sessions")
-        ),
-    ]
-
-    for root in search_roots:
-        if not os.path.isdir(root):
-            continue
-        pattern = os.path.join(root, "**", filename)
-        for candidate in glob.iglob(pattern, recursive=True):
-            try:
-                resolved = _ensure_within_data_dir(candidate)
-            except ValueError:
-                continue
-            if os.path.isfile(resolved):
-                return resolved
-    return None
-
-
-def _copy_data_asset_to_session(
-    session_id: str,
-    bucket: str,
-    source_url: Optional[str],
-    cache: dict[str, str],
-) -> Optional[str]:
-    normalized_source_url = _normalize_data_asset_url(source_url)
-    if not isinstance(
-        normalized_source_url, str
-    ) or not normalized_source_url.startswith("/data/"):
-        return source_url
-
-    cached = cache.get(normalized_source_url)
-    if cached:
-        return cached
-
-    safe_session_id = _sanitize_path_component(session_id)
-    safe_bucket = _sanitize_path_component(bucket)
-    if not safe_session_id or not safe_bucket:
-        logger.warning(
-            "Skipping asset copy due to invalid session/bucket: %s / %s",
-            session_id,
-            bucket,
-        )
-        return source_url
-
-    source_path = data_url_to_local_path(normalized_source_url)
-    if not source_path:
-        logger.warning(
-            "Skipping asset copy for unsafe source URL: %s", normalized_source_url
-        )
-        return source_url
-
-    if not os.path.isfile(source_path):
-        fallback_path = _find_existing_data_asset_path(os.path.basename(source_path))
-        if not fallback_path:
-            return normalized_source_url
-        source_path = fallback_path
-
-    ext = os.path.splitext(source_path)[1].lower()
-    if ext not in _SAFE_IMAGE_EXTENSIONS:
-        ext = ".png"
-
-    target_dir = _ensure_within_data_dir(
-        os.path.join(
-            settings.DATA_DIR,
-            "adventures",
-            "sessions",
-            safe_session_id,
-            "visuals",
-            safe_bucket,
-        )
-    )
-    os.makedirs(target_dir, exist_ok=True)
-
-    target_name = f"{uuid.uuid4().hex}{ext}"
-    target_path = _ensure_within_data_dir(os.path.join(target_dir, target_name))
-    try:
-        shutil.copy2(source_path, target_path)
-    except OSError:
-        logger.exception(
-            "Failed copying asset to session folder: %s -> %s", source_path, target_path
-        )
-        return source_url
-
-    target_url = local_path_to_data_url(target_path)
-    cache[normalized_source_url] = target_url
-    return target_url
-
-
-async def _materialize_initial_session_from_template(
-    db: AsyncSession,
-    template_id: str,
-    session_id: str,
-) -> None:
-    """Ensure the initial session is a complete session-owned copy of template world + visuals."""
-    session_res = await db.execute(
-        select(GameSession).where(GameSession.id == session_id)
-    )
-    game_session = session_res.scalars().first()
-    if not game_session:
-        return
-
-    avatar_res = await db.execute(
-        select(Avatar).where(Avatar.id == game_session.avatar_id)
-    )
-    avatar = avatar_res.scalars().first()
-    state_res = await db.execute(
-        select(SessionState).where(SessionState.session_id == session_id)
-    )
-    session_state = state_res.scalars().first()
-    template_res = await db.execute(
-        select(AdventureTemplate).where(AdventureTemplate.id == template_id)
-    )
-    template = template_res.scalars().first()
-
-    asset_copy_cache: dict[str, str] = {}
-    copied_cover = _copy_data_asset_to_session(
-        session_id, "cover", template.image_url if template else None, asset_copy_cache
-    )
-    if copied_cover:
-        game_session.adventure_image_url = copied_cover
-
-    session_avatar = None
-    if avatar:
-        # Heal template avatar image on the fly if corrupted
-        healed_image = AdventureLogic.heal_template_avatar_profile_image(
-            template_id, avatar.profile_image
-        )
-        if healed_image != avatar.profile_image:
-            avatar.profile_image = healed_image
-            db.add(avatar)
-            await db.flush()
-
-        # Clone the template avatar to create a session-specific avatar,
-        # so that we do not modify the original template avatar's data or image path.
-        session_avatar = Avatar(
-            user_id=avatar.user_id,
-            template_id=template_id,
-            name=avatar.name,
-            role=avatar.role,
-            description=avatar.description,
-            goal=avatar.goal,
-            character=avatar.character,
-            profile_image=avatar.profile_image,
-            hp=avatar.hp,
-            max_hp=avatar.max_hp,
-            stamina=avatar.stamina,
-            max_stamina=avatar.max_stamina,
-            mana=avatar.mana,
-            max_mana=avatar.max_mana,
-            strength=avatar.strength,
-            dexterity=avatar.dexterity,
-            intelligence=avatar.intelligence,
-            wisdom=avatar.wisdom,
-            charisma=avatar.charisma,
-            armor_class=avatar.armor_class,
-            stats=deepcopy(avatar.stats or {}),
-            inventory=deepcopy(avatar.inventory or []),
-            equipment=normalize_equipment_keys(avatar.equipment),
-            status_effects=deepcopy(avatar.status_effects or []),
-        )
-        db.add(session_avatar)
-        await db.flush()
-
-        # Resolve any string item IDs in equipment/inventory to full item dicts.
-        # The template avatar stores equipment as ID references (e.g. "MainHand": "LONGSWORD");
-        # this step expands them to full item dictionaries so the char sheet renders them correctly.
-        template_entity_rows = await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.template_id == template_id,
-                WorldEntity.session_id.is_(None),
-                WorldEntity.entity_type == "OBJECT",
-            )
-        )
-        template_entities_by_id = {e.id: e for e in template_entity_rows.scalars().all() if e.id}
-        if template_entities_by_id:
-            from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
-            _backfill_avatar_items_from_template_entities(session_avatar, template_entities_by_id)
-
-        # Link session and state to the cloned session avatar
-        game_session.avatar_id = session_avatar.id
-        if session_state:
-            session_state.avatar_id = session_avatar.id
-
-        # Copy the protagonist image for the session avatar
-        copied_protagonist = _copy_data_asset_to_session(
-            session_id, "protagonist", session_avatar.profile_image, asset_copy_cache
-        )
-        if copied_protagonist:
-            session_avatar.profile_image = copied_protagonist
-
-    existing_scene_res = await db.execute(
-        select(WorldScene.id).where(WorldScene.session_id == session_id).limit(1)
-    )
-    has_session_scenes = existing_scene_res.scalar_one_or_none() is not None
-
-    if not has_session_scenes:
-        scenes_res = await db.execute(
-            select(WorldScene).where(
-                WorldScene.template_id == template_id,
-                WorldScene.session_id.is_(None),
-            )
-        )
-        for scene in scenes_res.scalars().all():
-            copied_scene_image = _copy_data_asset_to_session(
-                session_id, "scenes", scene.image_url, asset_copy_cache
-            )
-            db.add(
-                WorldScene(
-                    id=scene.id,
-                    session_id=session_id,
-                    template_id=None,
-                    label=scene.label,
-                    description=scene.description,
-                    image_url=copied_scene_image or scene.image_url,
-                )
-            )
-
-        exits_res = await db.execute(
-            select(WorldExit).where(
-                WorldExit.template_id == template_id,
-                WorldExit.session_id.is_(None),
-            )
-        )
-        for exit_row in exits_res.scalars().all():
-            db.add(
-                WorldExit(
-                    session_id=session_id,
-                    template_id=None,
-                    from_scene_id=exit_row.from_scene_id,
-                    to_scene_id=exit_row.to_scene_id,
-                    label=exit_row.label,
-                    exit_type=exit_row.exit_type,
-                    is_locked=exit_row.is_locked,
-                    lock_description=exit_row.lock_description,
-                    code_to_unlock=exit_row.code_to_unlock,
-                    item_to_unlock=exit_row.item_to_unlock,
-                    rule_to_unlock=exit_row.rule_to_unlock,
-                )
-            )
-
-        entities_res = await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.template_id == template_id,
-                WorldEntity.session_id.is_(None),
-            )
-        )
-        for entity in entities_res.scalars().all():
-            copied_entity_image = _copy_data_asset_to_session(
-                session_id, "entities", entity.image_url, asset_copy_cache
-            )
-            db.add(
-                WorldEntity(
-                    id=entity.id,
-                    session_id=session_id,
-                    template_id=None,
-                    entity_type=entity.entity_type,
-                    name=entity.name,
-                    description=entity.description,
-                    current_scene_id=entity.current_scene_id,
-                    spatial_position=entity.spatial_position,
-                    image_url=copied_entity_image or entity.image_url,
-                    item_type=entity.item_type,
-                    wearable_slots=entity.wearable_slots,
-                    is_in_inventory=entity.is_in_inventory,
-                    is_hidden=entity.is_hidden,
-                    is_portable=entity.is_portable,
-                    combination_ingredients=entity.combination_ingredients,
-                    reveals_item_id=entity.reveals_item_id,
-                    is_final_state=entity.is_final_state,
-                    state_comment=entity.state_comment,
-                    npc_type=entity.npc_type,
-                    movement_type=entity.movement_type,
-                    hp=entity.hp,
-                    max_hp=entity.max_hp,
-                    mana=entity.mana,
-                    max_mana=entity.max_mana,
-                    stamina=entity.stamina,
-                    max_stamina=entity.max_stamina,
-                    stat_modifier_strength=entity.stat_modifier_strength,
-                    stat_modifier_dexterity=entity.stat_modifier_dexterity,
-                    stat_modifier_intelligence=entity.stat_modifier_intelligence,
-                    stat_modifier_wisdom=entity.stat_modifier_wisdom,
-                    stat_modifier_charisma=entity.stat_modifier_charisma,
-                    stat_modifier_armor_class=entity.stat_modifier_armor_class,
-                    inventory=deepcopy(entity.inventory),
-                    metadata_json=deepcopy(entity.metadata_json),
-                )
-            )
-
-    if session_state:
-        entity_rows = await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.template_id == template_id,
-                WorldEntity.session_id.is_(None),
-            )
-        )
-        entity_images: dict[str, Optional[str]] = {}
-        for ent in entity_rows.scalars().all():
-            if not ent.id:
-                continue
-            copied_entity_image = _copy_data_asset_to_session(
-                session_id, "entities", ent.image_url, asset_copy_cache
-            )
-            entity_images[ent.id] = copied_entity_image or ent.image_url
-
-        entity_states = deepcopy(session_state.entity_states or {})
-        raw_snapshot = entity_states.get("__asset_snapshot__")
-        snapshot = dict(raw_snapshot) if isinstance(raw_snapshot, dict) else {}
-        snapshot["cover"] = game_session.adventure_image_url
-        snapshot["protagonist"] = (
-            session_avatar.profile_image
-            if session_avatar
-            else (avatar.profile_image if avatar else snapshot.get("protagonist"))
-        )
-        snapshot["entity_images"] = entity_images
-        entity_states["__asset_snapshot__"] = snapshot
-        session_state.entity_states = entity_states
 
 
 @router.post("/story-idea/suggest", response_model=StoryIdeaSuggestionResponse)
@@ -434,9 +79,7 @@ async def suggest_story_idea(
     selected_tone = payload.selected_tone or {}
     tone_label = ""
     if isinstance(selected_tone, dict):
-        tone_label = str(
-            selected_tone.get("name") or selected_tone.get("id") or ""
-        ).strip()
+        tone_label = str(selected_tone.get("name") or selected_tone.get("id") or "").strip()
 
     title = (payload.title or "").strip()
     story_idea = (payload.story_idea or "").strip()
@@ -461,9 +104,7 @@ async def suggest_story_idea(
         )
     except Exception as exc:
         logger.error("Failed to suggest story idea: %s", exc)
-        raise HTTPException(
-            status_code=500, detail="Failed to generate story idea."
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to generate story idea.") from exc
 
     final_title = suggestion.title.strip()[:50]
     if has_existing_input and title:
@@ -548,8 +189,14 @@ def _generate_fallback_surprise_preset(
     ]
 
     choice = random.choice(archetypes)
-    matched_tone = next((t for t in choice["tone_candidates"] if t in available_tones), available_tones[0] if available_tones else "Mystery")
-    matched_style = next((s for s in choice["style_candidates"] if s in available_styles), available_styles[0] if available_styles else "dark-fantasy")
+    matched_tone = next(
+        (t for t in choice["tone_candidates"] if t in available_tones),
+        available_tones[0] if available_tones else "Mystery",
+    )
+    matched_style = next(
+        (s for s in choice["style_candidates"] if s in available_styles),
+        available_styles[0] if available_styles else "dark-fantasy",
+    )
 
     return GeneratorSurprisePresetResponse(
         title=choice["title"],
@@ -603,10 +250,22 @@ async def generate_surprise_preset(
     )
 
     available_tones = req.available_tones or [
-        "Heroic", "Grimdark", "Whimsical", "Mystery", "Cyberpunk", "Horror", "Sci-Fi", "Satirical"
+        "Heroic",
+        "Grimdark",
+        "Whimsical",
+        "Mystery",
+        "Cyberpunk",
+        "Horror",
+        "Sci-Fi",
+        "Satirical",
     ]
     available_styles = req.available_styles or [
-        "cinematic-realism", "dark-fantasy", "anime", "pixel-art", "vintage-comic", "watercolor"
+        "cinematic-realism",
+        "dark-fantasy",
+        "anime",
+        "pixel-art",
+        "vintage-comic",
+        "watercolor",
     ]
     language = req.language or current_user.default_language or "English"
 
@@ -658,13 +317,101 @@ async def generate_surprise_preset(
 
         return preset
     except Exception as exc:
-        logger.warning("World-gen LLM surprise preset generation failed, using diverse archetype fallback: %s", exc)
+        logger.warning(
+            "World-gen LLM surprise preset generation failed, using diverse archetype fallback: %s",
+            exc,
+        )
         return _generate_fallback_surprise_preset(available_tones, available_styles, language)
 
 
-@router.post(
-    "/{template_id}/generate-field", response_model=TemplateFieldGenerationResponse
+_GENERATABLE_FIELD_LIMITS = {
+    "plot": 5000,
+    "rules": 5000,
+    "intro_text": 20000,
+    "walkthrough": 20000,
+    "completed_condition": 2000,
+    "gameover_condition": 2000,
+    "tts_director_notes": 5000,
+}
+_GENERATABLE_FIELD_LABELS = {
+    "plot": "Adventure Plot (Secret)",
+    "rules": "Adventure Rules / Mechanics",
+    "intro_text": "Session Intro Text",
+    "walkthrough": "GM Walkthrough (Solution Path)",
+    "completed_condition": "Win Conditions",
+    "gameover_condition": "Loss Conditions",
+    "tts_director_notes": "Director's TTS Notes",
+}
+_FIELD_CONTEXT_KEYS = (
+    "original_prompt",
+    "plot",
+    "rules",
+    "intro_text",
+    "walkthrough",
+    "completed_condition",
+    "gameover_condition",
+    "completed_guard_expression",
+    "gameover_guard_expression",
+    "tts_director_notes",
 )
+
+
+def _small_model_choice(user: User) -> tuple[str, str]:
+    llm_settings = user.llm_settings or {}
+    provider = (
+        llm_settings.get("small_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    return provider, llm_settings.get("small_model") or "gpt-4o-mini"
+
+
+def _field_generation_context(
+    payload: TemplateFieldGenerationRequest, adv: AdventureTemplate
+) -> dict[str, str]:
+    context = {"title": payload.title or adv.title}
+    for key in _FIELD_CONTEXT_KEYS:
+        context[key] = getattr(payload, key, None) or getattr(adv, key, None) or ""
+    return context
+
+
+def _other_fields_block(context: dict[str, str], target_field: str) -> str:
+    """Bullet list of the other filled-in fields, used as generation context."""
+    lines = []
+    for key, value in context.items():
+        if key == target_field or key in ("title", "original_prompt"):
+            continue
+        text = value.strip() if value else ""
+        if text:
+            label = _GENERATABLE_FIELD_LABELS.get(key, key.replace("_", " ").title())
+            lines.append(f"- {label}: {text}\n\n")
+    return "".join(lines)
+
+
+def _tone_name(adv: AdventureTemplate) -> str:
+    tone = adv.selected_tone
+    if not isinstance(tone, dict):
+        return "Neutral"
+    return tone.get("name") or tone.get("id") or "Neutral"
+
+
+def _clean_generated_field_text(text: str, label: str, max_len: int) -> str:
+    """Strip an echoed "<label>:" prefix and code fences, then enforce the DB length."""
+    cleaned = text.strip()
+    prefix = f"{label}:"
+    if cleaned.lower().startswith(prefix.lower()):
+        cleaned = cleaned[len(prefix) :].strip()
+
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    return cleaned[:max_len]
+
+
+@router.post("/{template_id}/generate-field", response_model=TemplateFieldGenerationResponse)
 async def generate_template_field(
     template_id: str,
     payload: TemplateFieldGenerationRequest,
@@ -675,8 +422,7 @@ async def generate_template_field(
     # 1. Fetch template and check ownership
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -684,90 +430,28 @@ async def generate_template_field(
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
     # 2. Get user's LLM settings for small model
-    llm_settings = current_user.llm_settings or {}
-    provider = (
-        llm_settings.get("small_model_provider")
-        or llm_settings.get("complex_model_provider")
-        or llm_settings.get("preferred_provider")
-        or "openai"
-    )
-    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    provider, model = _small_model_choice(current_user)
 
     gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
 
     # 3. Determine the target field and limits
-    field_limits = {
-        "plot": 5000,
-        "rules": 5000,
-        "intro_text": 20000,
-        "walkthrough": 20000,
-        "completed_condition": 2000,
-        "gameover_condition": 2000,
-        "tts_director_notes": 5000,
-    }
-    field_labels = {
-        "plot": "Adventure Plot (Secret)",
-        "rules": "Adventure Rules / Mechanics",
-        "intro_text": "Session Intro Text",
-        "walkthrough": "GM Walkthrough (Solution Path)",
-        "completed_condition": "Win Conditions",
-        "gameover_condition": "Loss Conditions",
-        "tts_director_notes": "Director's TTS Notes",
-    }
-
     target_field = payload.field
-    if target_field not in field_limits:
-        raise HTTPException(
-            status_code=400, detail="Invalid field name for generation."
-        )
+    if target_field not in _GENERATABLE_FIELD_LIMITS:
+        raise HTTPException(status_code=400, detail="Invalid field name for generation.")
 
-    max_len = field_limits[target_field]
-    label = field_labels[target_field]
+    max_len = _GENERATABLE_FIELD_LIMITS[target_field]
+    label = _GENERATABLE_FIELD_LABELS[target_field]
 
-    # 4. Construct the prompt context using provided or saved values
-    # We prefer the payload values if provided, falling back to database values.
-    context_data = {
-        "title": payload.title or adv.title,
-        "original_prompt": payload.original_prompt or adv.original_prompt or "",
-        "plot": payload.plot or adv.plot or "",
-        "rules": payload.rules or adv.rules or "",
-        "intro_text": payload.intro_text or adv.intro_text or "",
-        "walkthrough": payload.walkthrough or adv.walkthrough or "",
-        "completed_condition": payload.completed_condition
-        or adv.completed_condition
-        or "",
-        "gameover_condition": payload.gameover_condition
-        or adv.gameover_condition
-        or "",
-        "tts_director_notes": payload.tts_director_notes
-        or adv.tts_director_notes
-        or "",
-    }
+    # 4. Construct the prompt context, preferring payload values over saved ones.
+    context_data = _field_generation_context(payload, adv)
 
     # Remove the target field from context so it's not self-referential
     context_data[target_field] = ""
 
-    # Compile details of other fields
-    other_fields_block = ""
-    for f, val in context_data.items():
-        if f == target_field or f in ("title", "original_prompt"):
-            continue
-        val_str = val.strip() if val else ""
-        if val_str:
-            other_fields_block += f"- {field_labels[f]}: {val_str}\n\n"
-
-    # Narrative tone & language if available
-    tone_str = "Neutral"
-    if adv.selected_tone and isinstance(adv.selected_tone, dict):
-        tone_str = (
-            adv.selected_tone.get("name") or adv.selected_tone.get("id") or "Neutral"
-        )
-
-    language_str = adv.language or "English"
-
+    other_fields_block = _other_fields_block(context_data, target_field)
     system_prompt = TEMPLATE_FIELD_GENERATION_SYSTEM_PROMPT.format(
-        language=language_str,
-        tone=tone_str,
+        language=adv.language or "English",
+        tone=_tone_name(adv),
         label=label,
     )
 
@@ -787,28 +471,11 @@ async def generate_template_field(
         )
     except Exception as exc:
         logger.error("Failed to generate template field %s: %s", target_field, exc)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to generate {label}."
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Failed to generate {label}.") from exc
 
-    # Clean up generated text
-    cleaned = generated_text.strip()
-    prefix_to_strip = f"{label}:"
-    if cleaned.lower().startswith(prefix_to_strip.lower()):
-        cleaned = cleaned[len(prefix_to_strip) :].strip()
-
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
-
-    # Enforce database length constraints
-    cleaned = cleaned[:max_len]
-
-    return TemplateFieldGenerationResponse(generated_text=cleaned)
+    return TemplateFieldGenerationResponse(
+        generated_text=_clean_generated_field_text(generated_text, label, max_len)
+    )
 
 
 @router.get("/templates", response_model=list[AdventureTemplateSummaryResponse])
@@ -830,9 +497,7 @@ async def list_templates(
             (WorldScene.template_id == GameSession.template_id)
             & (WorldScene.id == SessionState.current_scene_id),
         )
-        .where(
-            (GameSession.user_id == current_user.id) & (GameSession.status == "active")
-        )
+        .where((GameSession.user_id == current_user.id) & (GameSession.status == "active"))
         .order_by(GameSession.created_at.desc())
     )
     latest_by_template = {}
@@ -847,8 +512,6 @@ async def list_templates(
     from backend.engine.adventure_updates import (
         check_template_update,
         scan_available_adventure_files,
-        update_all_adventures,
-        update_single_adventure,
     )
 
     available_files = scan_available_adventure_files()
@@ -876,11 +539,7 @@ async def list_templates(
                 progress=AdventureLogic.calculate_quest_progress(template.quests),
                 quest_count=len(template.quests or []),
                 completed_quest_count=len(
-                    [
-                        q
-                        for q in (template.quests or [])
-                        if q.get("status") == "completed"
-                    ]
+                    [q for q in (template.quests or []) if q.get("status") == "completed"]
                 ),
                 active_game_id=(game_session.id if game_session else None),
                 has_active_session=(game_session is not None),
@@ -910,6 +569,7 @@ async def update_all_adventure_templates(
 ):
     """Updates all adventure templates for the user that have newer versions in /adventures."""
     from backend.engine.adventure_updates import update_all_adventures
+
     try:
         return await update_all_adventures(
             db=db,
@@ -917,7 +577,7 @@ async def update_all_adventure_templates(
         )
     except Exception as e:
         logger.exception("Failed to update all adventure templates")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/templates/{template_id}/update")
@@ -929,6 +589,7 @@ async def update_adventure_template(
 ):
     """Updates an individual adventure template from its matching file in /adventures."""
     from backend.engine.adventure_updates import update_single_adventure
+
     try:
         return await update_single_adventure(
             db=db,
@@ -936,10 +597,10 @@ async def update_adventure_template(
             user_id=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to update adventure template %s", template_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/templates/{template_id}/migrate")
@@ -951,6 +612,7 @@ async def migrate_adventure_template(
 ):
     """Migrates a legacy adventure template to the current sequence-supported format."""
     from backend.engine.adventure_updates import migrate_single_adventure
+
     try:
         return await migrate_single_adventure(
             db=db,
@@ -958,11 +620,10 @@ async def migrate_adventure_template(
             user_id=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to migrate adventure template %s", template_id)
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{template_id}", response_model=AdventureTemplateResponse)
@@ -974,8 +635,7 @@ async def get_adventure(
     """Returns the details of a single adventure by its ID."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -988,9 +648,15 @@ async def get_adventure(
         if ea.get("template_id") == adv.id or ea.get("adventure_id") == adv.id
     }
     enriched_awards = [
-        {**aw, "is_earned": aw.get("key") in user_earned_keys}
-        for aw in (adv.awards or [])
+        {**aw, "is_earned": aw.get("key") in user_earned_keys} for aw in (adv.awards or [])
     ]
+
+    if (
+        not adv.sequences
+        and isinstance(adv.original_manifest, dict)
+        and adv.original_manifest.get("sequences")
+    ):
+        adv.sequences = adv.original_manifest.get("sequences")
 
     response_data = AdventureTemplateResponse.model_validate(adv).model_dump()
     response_data["awards"] = enriched_awards
@@ -1008,470 +674,25 @@ async def create_adventure(
     Creates a new adventure template, initializes the protagonist avatar and first game session,
     and starts the background world generation task.
     """
-    # Allow only one active portal generation per user at a time.
-    active_generation_query = await db.execute(
-        select(AdventureTemplate.id)
-        .where(AdventureTemplate.owner_id == current_user.id)
-        .where(AdventureTemplate.is_ready.is_(False))
-        .where(
-            or_(
-                AdventureTemplate.creation_status.is_(None),
-                AdventureTemplate.creation_status.notin_(["Failed", "Cancelled"]),
-            )
-        )
-        .limit(1)
-    )
-    active_generation_id = active_generation_query.scalar_one_or_none()
-    if active_generation_id:
-        raise HTTPException(
-            status_code=409,
-            detail="Adventure generation already running for this user. Please wait until it finishes or cancel it.",
-        )
-
-    # 1. Create the template record
-    new_id = payload.id or generate_adventure_id(payload.title)
-
-    # Backward compatibility for pacing configs
-    pacing_minutes = payload.pacing_minutes or payload.time_per_turn
-    if payload.pacing and isinstance(payload.pacing, dict):
-        pacing_minutes = payload.pacing.get("minutes_per_turn", pacing_minutes)
-
-    chat_mode = (payload.rule_enforcement_mode or "rpg") == "chat"
-
-    source_template = None
-    cover_source_manifest = None
-    cover_source_adventure_id_value = None
-    if payload.cover_source_adventure_id:
-        source_res = await db.execute(
-            select(AdventureTemplate).where(
-                AdventureTemplate.id == payload.cover_source_adventure_id,
-                AdventureTemplate.owner_id == current_user.id,
-            )
-        )
-        source_template = source_res.scalars().first()
-        if not source_template:
-            raise HTTPException(
-                status_code=404, detail="Cover source adventure not found."
-            )
-        cover_source_adventure_id_value = source_template.id
-        cover_source_manifest = deepcopy(source_template.original_manifest or {})
-
-    cover_source_name = payload.cover_source_adventure_name
-    if source_template and not cover_source_name:
-        cover_source_name = source_template.title
-
-    adv = AdventureTemplate(
-        id=new_id,
-        owner_id=current_user.id,
-        title=payload.title,
-        original_prompt=payload.original_prompt,
-        strict_rules=payload.rule_enforcement_mode != "chat",
-        rule_enforcement_mode=payload.rule_enforcement_mode or "rpg",
-        generation_strictness=payload.generation_strictness or "creative",
-        sequences=payload.sequences,
-        time_per_turn=payload.time_per_turn,
-        pacing_minutes=pacing_minutes,
-        max_time_per_turn=payload.max_time_per_turn,
-        max_memory_turns=payload.max_memory_turns if payload.max_memory_turns is not None else 10,
-        clock_enabled=payload.clock_enabled or False,
-        time_system=payload.time_system or "calendar",
-        time_config=payload.time_config,
-        generate_scene_images=payload.generate_scene_images,
-        generate_npc_images=payload.generate_npc_images,
-        generate_item_images=payload.generate_item_images,
-        selected_image_styles=payload.selected_image_styles,
-        selected_tone=payload.selected_tone,
-        min_scenes=payload.min_scenes,
-        max_scenes=payload.max_scenes,
-        container_generation_enabled=payload.container_generation_enabled,
-        scripts_generation_enabled=payload.scripts_generation_enabled,
-        min_containers=payload.min_containers,
-        max_containers=payload.max_containers,
-        min_items=payload.min_items,
-        max_items=payload.max_items,
-        text_log_generation_enabled=payload.text_log_generation_enabled,
-        min_text_logs=payload.min_text_logs,
-        max_text_logs=payload.max_text_logs,
-        award_generation_enabled=(
-            False if chat_mode else payload.award_generation_enabled
-        ),
-        min_awards=payload.min_awards,
-        max_awards=payload.max_awards,
-        can_damage_npcs=payload.can_damage_npcs,
-        npcs_can_damage_protagonist=payload.npcs_can_damage_protagonist,
-        is_ready=True if payload.skip_generation else False,
-        creation_status="Ready" if payload.skip_generation else "Initializing...",
-        original_manifest=payload.original_manifest,
-        teaser=payload.teaser,
-        version=payload.version,
-        language=payload.language,
-        intro_text=payload.intro_text,
-        is_adventure_generator=payload.is_adventure_generator,
-        cover_source_adventure_id=(source_template.id if source_template else None),
-        cover_source_adventure_name=cover_source_name,
-        cover_similarity_percent=max(
-            0, min(100, int(payload.cover_similarity_percent or 0))
-        ),
-        allow_reuse_source_assets=bool(payload.allow_reuse_source_assets),
-    )
-    db.add(adv)
-
-    # 2. Create the Avatar
-    avatar = Avatar(
-        user_id=current_user.id,
-        template_id=new_id,
-        name=payload.avatar_name or f"Hero of {payload.title}",
-        role="Protagonist",
-        description="A mysterious wanderer...",
-        hp=200,
-        stamina=200,
-        mana=200,
-        exp=0,
-        stats={"str": 10, "int": 10, "wis": 10, "dex": 10, "cha": 10, "ac": 10},
-    )
-    db.add(avatar)
-    await db.flush()  # Ensure avatar.id is available
-
-    # 3. Create the first GameSession
-    session = GameSession(
-        id=generate_session_id(payload.title),
-        user_id=current_user.id,
-        avatar_id=avatar.id,
-        template_id=new_id,
-        adventure_title=payload.title,
-        status="active",
-    )
-    db.add(session)
-    await db.flush()
-
-    # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
-    os.makedirs(
-        os.path.join(settings.DATA_DIR, "adventures", "sessions", session.id),
-        exist_ok=True,
-    )
-
-    asset_copy_cache: dict[str, str] = {}
-    copied_cover_url = _copy_data_asset_to_session(
-        session.id, "cover", adv.image_url, asset_copy_cache
-    )
-    copied_protagonist_url = _copy_data_asset_to_session(
-        session.id, "protagonist", avatar.profile_image, asset_copy_cache
-    )
-
-    session.adventure_image_url = copied_cover_url or adv.image_url
-    avatar.profile_image = copied_protagonist_url or avatar.profile_image
-
-    # Create an initial SessionState (GameState alias) to capture template snapshot and asset mapping for newly created session.
-    manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adv)
-
-    # Build entity image map from any existing template entities
-    ent_rows = await db.execute(
-        select(WorldEntity).where(WorldEntity.template_id == new_id)
-    )
-    template_entities = ent_rows.scalars().all()
-    entity_images = {
-        e.id: e.image_url for e in template_entities if getattr(e, "id", None)
-    }
-
-    asset_snapshot = {
-        "cover": session.adventure_image_url,
-        "protagonist": avatar.profile_image,
-        "entity_images": entity_images,
-    }
-
-    initial_entity_states = {
-        AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
-        "__asset_snapshot__": asset_snapshot,
-    }
-    for ent in template_entities:
-        if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
-            continue
-        metadata_json = dict(getattr(ent, "metadata_json", None) or {})
-        code_to_unlock = metadata_json.get("code_to_unlock")
-        item_to_unlock = metadata_json.get("item_to_unlock")
-        rule_to_unlock = metadata_json.get("rule_to_unlock")
-        if code_to_unlock or item_to_unlock or rule_to_unlock:
-            initial_entity_states[ent.id] = {"locked": True}
-        else:
-            locked = metadata_json.get("locked")
-            if isinstance(locked, bool):
-                initial_entity_states[ent.id] = {"locked": locked}
-
-    new_state = SessionState(
-        session_id=session.id,
-        user_id=current_user.id,
-        template_id=new_id,
-        avatar_id=avatar.id,
-        current_scene_id="START",
-        in_game_time=0,
-        quests=deepcopy(adv.quests or []),
-        entity_states=initial_entity_states,
-        start_datetime=AdventureLogic.resolve_start_datetime(adv.original_manifest, time_config=adv.time_config),
-        plot=adv.plot,
-        rules=adv.rules,
-        walkthrough=adv.walkthrough,
-        completed_condition=adv.completed_condition,
-        gameover_condition=adv.gameover_condition,
-        tts_director_notes=adv.tts_director_notes,
-        selected_image_styles=deepcopy(adv.selected_image_styles),
-        selected_tone=deepcopy(adv.selected_tone),
-    )
-    db.add(new_state)
-
-    await db.commit()
-    initial_session_id = session.id
-
-    # 4. Trigger background generation
-    async def run_gen():
-        # We need a fresh session for background task to avoid closure issues
-        import backend.core.database as core_database
-
-        async with core_database.AsyncSessionLocal() as bg_db:
-            try:
-                # Refresh user in new session
-                user_res = await bg_db.execute(
-                    select(User).where(User.id == current_user.id)
-                )
-                bg_user = user_res.scalars().first()
-
-                # Set intermediate status
-                adv_res = await bg_db.execute(
-                    select(AdventureTemplate).where(AdventureTemplate.id == new_id)
-                )
-                bg_adv = adv_res.scalars().first()
-                if bg_adv:
-                    bg_adv.creation_status = "Generating world structure"
-                    await bg_db.commit()
-
-                # In cover mode, if a category is on "auto" (min=None, max=None), derive tight
-                # bounds from the source manifest so the cover has approximately the same
-                # asset density as the original adventure.
-                eff_min_sequences = payload.min_sequences
-                eff_max_sequences = payload.max_sequences
-                eff_min_scenes = payload.min_scenes
-                eff_max_scenes = payload.max_scenes
-                eff_min_items = payload.min_items
-                eff_max_items = payload.max_items
-                eff_min_containers = payload.min_containers
-                eff_max_containers = payload.max_containers
-                eff_min_text_logs = payload.min_text_logs
-                eff_max_text_logs = payload.max_text_logs
-                eff_min_quests = payload.min_quests
-                eff_max_quests = payload.max_quests
-                eff_min_awards = payload.min_awards
-                eff_max_awards = payload.max_awards
-
-                if cover_source_manifest:
-                    src_scenes = cover_source_manifest.get("scenes") or []
-                    src_sequences = cover_source_manifest.get("sequences") or []
-                    src_npcs = cover_source_manifest.get("npcs") or []
-                    src_objects = cover_source_manifest.get("objects") or []
-                    src_quests = cover_source_manifest.get("quests") or []
-                    src_awards = cover_source_manifest.get("awards") or []
-
-                    src_scene_count = len(src_scenes)
-                    src_sequence_count = len(src_sequences)
-                    src_npc_count = len(src_npcs)  # noqa: F841 – kept for future use
-                    src_object_count = len(src_objects)
-                    src_container_count = sum(
-                        1
-                        for o in src_objects
-                        if isinstance(o, dict)
-                        and str(o.get("item_type", "")).upper() == "CONTAINER"
-                    )
-                    src_readable_count = sum(
-                        1
-                        for o in src_objects
-                        if isinstance(o, dict)
-                        and str(o.get("item_type", "")).upper() == "READABLE"
-                    )
-                    src_quest_count = len(src_quests)
-                    src_award_count = len(src_awards)
-
-                    def _cover_bounds(
-                        src_count: int, hard_min: int = 1
-                    ) -> tuple[int, int]:
-                        """Return (min, max) that bracket src_count by ±1, clamped to hard_min."""
-                        lo = max(hard_min, src_count - 1)
-                        hi = max(lo, src_count + 1)
-                        return lo, hi
-
-                    if (
-                        payload.min_scenes is None
-                        and payload.max_scenes is None
-                        and src_scene_count > 0
-                    ):
-                        eff_min_scenes, eff_max_scenes = _cover_bounds(
-                            src_scene_count, hard_min=1
-                        )
-
-                    if (
-                        payload.min_sequences is None
-                        and payload.max_sequences is None
-                        and src_sequence_count > 0
-                    ):
-                        eff_min_sequences, eff_max_sequences = _cover_bounds(
-                            src_sequence_count, hard_min=0
-                        )
-
-                    if (
-                        payload.min_items is None
-                        and payload.max_items is None
-                        and src_object_count > 0
-                    ):
-                        eff_min_items, eff_max_items = _cover_bounds(
-                            src_object_count, hard_min=1
-                        )
-
-                    if (
-                        payload.container_generation_enabled
-                        and payload.min_containers is None
-                        and payload.max_containers is None
-                        and src_container_count > 0
-                    ):
-                        eff_min_containers, eff_max_containers = _cover_bounds(
-                            src_container_count, hard_min=0
-                        )
-
-                    if (
-                        payload.text_log_generation_enabled
-                        and payload.min_text_logs is None
-                        and payload.max_text_logs is None
-                        and src_readable_count > 0
-                    ):
-                        eff_min_text_logs, eff_max_text_logs = _cover_bounds(
-                            src_readable_count, hard_min=0
-                        )
-
-                    if (
-                        payload.quest_generation_enabled
-                        and not chat_mode
-                        and payload.min_quests is None
-                        and payload.max_quests is None
-                        and src_quest_count > 0
-                    ):
-                        eff_min_quests, eff_max_quests = _cover_bounds(
-                            src_quest_count, hard_min=1
-                        )
-
-                    if (
-                        payload.award_generation_enabled
-                        and not chat_mode
-                        and payload.min_awards is None
-                        and payload.max_awards is None
-                        and src_award_count > 0
-                    ):
-                        eff_min_awards, eff_max_awards = _cover_bounds(
-                            src_award_count, hard_min=1
-                        )
-
-                await WorldGenerator.generate_world(
-                    db=bg_db,
-                    user=bg_user,
-                    template_id=new_id,
-                    title=payload.title,
-                    original_prompt=payload.original_prompt or "",
-                    sequences=payload.sequences,
-                    min_sequences=eff_min_sequences,
-                    max_sequences=eff_max_sequences,
-                    generation_strictness=payload.generation_strictness or "creative",
-                    generate_scene_images=payload.generate_scene_images,
-                    generate_npc_images=payload.generate_npc_images,
-                    generate_item_images=payload.generate_item_images,
-                    automatic_npc_voice_assignment=payload.automatic_npc_voice_assignment,
-                    min_scenes=eff_min_scenes,
-                    max_scenes=eff_max_scenes,
-                    container_generation_enabled=payload.container_generation_enabled,
-                    scripts_generation_enabled=payload.scripts_generation_enabled,
-                    min_containers=eff_min_containers,
-                    max_containers=eff_max_containers,
-                    text_log_generation_enabled=bool(
-                        payload.text_log_generation_enabled
-                    ),
-                    min_text_logs=eff_min_text_logs,
-                    max_text_logs=eff_max_text_logs,
-                    quest_generation_enabled=(not chat_mode)
-                    and bool(payload.quest_generation_enabled),
-                    min_quests=eff_min_quests,
-                    max_quests=eff_max_quests,
-                    min_items=eff_min_items,
-                    max_items=eff_max_items,
-                    award_generation_enabled=(
-                        False if chat_mode else payload.award_generation_enabled
-                    ),
-                    min_awards=eff_min_awards,
-                    max_awards=eff_max_awards,
-                    can_damage_npcs=payload.can_damage_npcs,
-                    npcs_can_damage_protagonist=payload.npcs_can_damage_protagonist,
-                    selected_image_styles=adv.selected_image_styles,
-                    language=payload.language,
-                    cover_source_manifest=cover_source_manifest,
-                    cover_source_adventure_id=cover_source_adventure_id_value,
-                    cover_source_adventure_name=(
-                        cover_source_name if source_template else None
-                    ),
-                    cover_similarity_percent=max(
-                        0, min(100, int(payload.cover_similarity_percent or 0))
-                    ),
-                    allow_reuse_source_assets=bool(payload.allow_reuse_source_assets),
-                )
-
-                await _materialize_initial_session_from_template(
-                    db=bg_db,
-                    template_id=new_id,
-                    session_id=initial_session_id,
-                )
-
-                # Finalize template
-                adv_res = await bg_db.execute(
-                    select(AdventureTemplate).where(AdventureTemplate.id == new_id)
-                )
-                bg_adv = adv_res.scalars().first()
-                if bg_adv:
-                    bg_adv.is_ready = True
-                    bg_adv.creation_status = "Ready"
-                    await bg_db.commit()
-            except Exception as e:
-                logger.exception(f"Background generation failed for {new_id}: {e}")
-                # Record error in template
-                adv_res = await bg_db.execute(
-                    select(AdventureTemplate).where(AdventureTemplate.id == new_id)
-                )
-                bg_adv = adv_res.scalars().first()
-                if bg_adv:
-                    scene_count_res = await bg_db.execute(
-                        select(WorldScene.id)
-                        .where(WorldScene.template_id == new_id)
-                        .limit(1)
-                    )
-                    entity_count_res = await bg_db.execute(
-                        select(WorldEntity.id)
-                        .where(WorldEntity.template_id == new_id)
-                        .limit(1)
-                    )
-                    has_world_data = bool(
-                        scene_count_res.scalar_one_or_none()
-                        or entity_count_res.scalar_one_or_none()
-                    )
-
-                    if is_image_moderation_error(e):
-                        bg_adv.is_ready = True
-                        bg_adv.creation_status = "Ready"
-                        bg_adv.creation_error = (
-                            "Notice: One or more images were blocked by safety filters and replaced with placeholders. "
-                            "You can regenerate them later in the editor."
-                        )
-                        await bg_db.commit()
-                        return
-
-                    bg_adv.creation_status = "Failed"
-                    bg_adv.creation_error = str(e)
-                    await bg_db.commit()
-
+    created = await create_adventure_records(db, payload, current_user)
     if not payload.skip_generation:
-        background_tasks.add_task(run_gen)
+        background_tasks.add_task(
+            run_background_generation,
+            GenerationJob(
+                payload=payload,
+                user_id=current_user.id,
+                template_id=created.template.id,
+                session_id=created.session.id,
+                selected_image_styles=created.template.selected_image_styles,
+                cover=created.cover,
+            ),
+        )
 
-    return {"game_id": session.id, "adventure_id": new_id, "avatar_id": avatar.id}
+    return {
+        "game_id": created.session.id,
+        "adventure_id": created.template.id,
+        "avatar_id": created.avatar.id,
+    }
 
 
 @router.post("/{template_id}/reset")
@@ -1481,154 +702,71 @@ async def reset_adventure(
     current_user: User = Depends(get_current_user),
 ):
     """Rebuilds the template world data from original_manifest, preserving existing image URLs."""
-    from sqlalchemy import delete as sa_delete
-
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
     if not adv:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
     if not adv.original_manifest:
-        raise HTTPException(
-            status_code=400, detail="No original manifest to reset from."
-        )
+        raise HTTPException(status_code=400, detail="No original manifest to reset from.")
 
-    manifest = adv.original_manifest
-
-    # Collect existing image URLs so they survive the reset.
-    existing_scene_images: dict[str, str | None] = {}
-    existing_entity_images: dict[str, str | None] = {}
-
-    scene_res = await db.execute(
-        select(WorldScene).where(WorldScene.template_id == template_id)
-    )
-    for s in scene_res.scalars().all():
-        existing_scene_images[s.id] = s.image_url
-
-    entity_res = await db.execute(
-        select(WorldEntity).where(WorldEntity.template_id == template_id)
-    )
-    for e in entity_res.scalars().all():
-        existing_entity_images[e.id] = e.image_url
-
-    # Wipe old template-level world data.
-    await db.execute(sa_delete(WorldScene).where(WorldScene.template_id == template_id))
-    await db.execute(
-        sa_delete(WorldEntity).where(WorldEntity.template_id == template_id)
-    )
-
-    # Rebuild scenes from manifest.
-    for scene_def in manifest.get("scenes", []):
-        scene_id = scene_def.get("id")
-        if not scene_id:
-            continue
-        db.add(
-            WorldScene(
-                id=scene_id,
-                template_id=template_id,
-                label=scene_def.get("name") or scene_def.get("label") or scene_id,
-                description=scene_def.get("description", ""),
-                image_url=existing_scene_images.get(scene_id),
-            )
-        )
-
-    # Rebuild NPCs from manifest.
-    for npc_def in manifest.get("npcs", []):
-        npc_id = npc_def.get("id")
-        if not npc_id:
-            continue
-        db.add(
-            WorldEntity(
-                id=npc_id,
-                template_id=template_id,
-                entity_type="NPC",
-                name=npc_def.get("name", ""),
-                description=npc_def.get("description", ""),
-                current_scene_id=npc_def.get("start_scene_id"),
-                image_url=existing_entity_images.get(npc_id),
-            )
-        )
-
-    # Rebuild objects from manifest.
-    for obj_def in manifest.get("objects", []):
-        obj_id = obj_def.get("id")
-        if not obj_id:
-            continue
-        item_type = str(obj_def.get("item_type") or "PICKABLE").upper()
-        metadata_json = {}
-        if item_type == "CONTAINER":
-            code_to_unlock = str(obj_def.get("code_to_unlock") or "").strip()
-            item_to_unlock = str(obj_def.get("item_to_unlock") or "").strip().upper()
-            rule_to_unlock = str(obj_def.get("rule_to_unlock") or "").strip()
-            if code_to_unlock:
-                code_to_unlock = code_to_unlock[:32]
-                item_to_unlock = ""
-                rule_to_unlock = ""
-            elif item_to_unlock:
-                from backend.utils.text_utils import slugify
-
-                item_to_unlock = slugify(item_to_unlock).upper().replace("-", "_")[:64]
-                code_to_unlock = ""
-                rule_to_unlock = ""
-            elif rule_to_unlock:
-                rule_to_unlock = rule_to_unlock[:500]
-                code_to_unlock = ""
-                item_to_unlock = ""
-            else:
-                code_to_unlock = ""
-                item_to_unlock = ""
-                rule_to_unlock = ""
-            metadata_json = {
-                "code_to_unlock": code_to_unlock,
-                "item_to_unlock": item_to_unlock,
-                "rule_to_unlock": rule_to_unlock,
-                "locked": bool(code_to_unlock or item_to_unlock or rule_to_unlock),
-            }
-        db.add(
-            WorldEntity(
-                id=obj_id,
-                template_id=template_id,
-                entity_type="OBJECT",
-                name=obj_def.get("name", ""),
-                description=obj_def.get("description", ""),
-                current_scene_id=obj_def.get("start_scene_id"),
-                image_url=existing_entity_images.get(obj_id),
-                spatial_position=obj_def.get("spatial_position"),
-                item_type=item_type,
-                wearable_slots=obj_def.get("wearable_slots") or [],
-                is_hidden=bool(obj_def.get("is_hidden", False)),
-                reveal_rule=obj_def.get("reveal_rule") or None,
-                unlock_rule=None,
-                is_portable=bool(obj_def.get("is_portable", True)),
-                combination_ingredients=obj_def.get("combination_ingredients") or [],
-                reveals_item_id=obj_def.get("reveals_item_id") or None,
-                inventory=obj_def.get("inventory") or [],
-                metadata_json=metadata_json,
-            )
-        )
-
-    # Restore protagonist image from manifest protagonist data.
-    prot_def = manifest.get("protagonist", {})
-    if prot_def:
-        av_res = await db.execute(
-            select(Avatar)
-            .where(Avatar.template_id == template_id)
-            .order_by(Avatar.created_at.asc(), Avatar.id.asc())
-            .limit(1)
-        )
-        avatar = av_res.scalars().first()
-        if avatar:
-            # Restore static fields; preserve generated profile_image.
-            avatar.name = prot_def.get("name") or avatar.name
-            avatar.role = prot_def.get("role") or avatar.role
-            avatar.description = prot_def.get("description") or avatar.description
-
+    await rebuild_template_world(db, adv)
     await db.commit()
     return {"status": "reset", "template_id": template_id}
+
+
+_SESSION_SYNCED_NARRATIVE_FIELDS = (
+    "plot",
+    "rules",
+    "walkthrough",
+    "completed_condition",
+    "gameover_condition",
+    "completed_guard_expression",
+    "gameover_guard_expression",
+    "tts_director_notes",
+)
+_SESSION_SYNC_TRIGGER_TIME_FIELDS = (
+    "time_system",
+    "time_config",
+    "clock_enabled",
+    "pacing_minutes",
+    "time_per_turn",
+    "max_time_per_turn",
+)
+_SESSION_SYNCED_TIME_FIELDS = ("time_system", "time_config")
+
+
+def _apply_sequences_update(adv: AdventureTemplate, sequences: Optional[list]) -> None:
+    """Store sequences on the template and mirror them into the original manifest."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    adv.sequences = list(sequences or [])
+    flag_modified(adv, "sequences")
+    manifest = deepcopy(adv.original_manifest or {})
+    manifest["sequences"] = adv.sequences
+    adv.original_manifest = manifest
+    flag_modified(adv, "original_manifest")
+
+
+async def _sync_updates_to_sessions(db: AsyncSession, template_id: str, update_data: dict) -> None:
+    """Propagate narrative and time settings changes to the template's sessions."""
+    triggers = (*_SESSION_SYNCED_NARRATIVE_FIELDS, *_SESSION_SYNC_TRIGGER_TIME_FIELDS)
+    if not any(f in update_data for f in triggers):
+        return
+    synced = [
+        f
+        for f in (*_SESSION_SYNCED_NARRATIVE_FIELDS, *_SESSION_SYNCED_TIME_FIELDS)
+        if f in update_data
+    ]
+    session_res = await db.execute(
+        select(SessionState).where(SessionState.template_id == template_id)
+    )
+    for state in session_res.scalars().all():
+        for f in synced:
+            setattr(state, f, update_data[f])
 
 
 @router.patch("/{template_id}", response_model=AdventureTemplateResponse)
@@ -1641,8 +779,7 @@ async def update_adventure(
     """Partially updates an adventure template's metadata, narrative fields, or configuration."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -1650,12 +787,9 @@ async def update_adventure(
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
     update_data = payload.model_dump(exclude_unset=True)
-    if "max_containers" in update_data and update_data["max_containers"] is not None:
-        update_data["max_containers"] = max(
-            0, min(30, int(update_data["max_containers"]))
-        )
+    if update_data.get("max_containers") is not None:
+        update_data["max_containers"] = max(0, min(30, int(update_data["max_containers"])))
 
-    # Apply updates to template
     for field, value in update_data.items():
         setattr(adv, field, value)
 
@@ -1663,31 +797,10 @@ async def update_adventure(
     if "rule_enforcement_mode" in update_data and "strict_rules" not in update_data:
         adv.strict_rules = update_data["rule_enforcement_mode"] != "chat"
 
-    # Sync to active sessions if narrative fields changed
-    narrative_fields = {
-        "plot",
-        "rules",
-        "walkthrough",
-        "completed_condition",
-        "gameover_condition",
-        "tts_director_notes",
-    }
-    time_fields = {"time_system", "time_config", "clock_enabled", "pacing_minutes", "time_per_turn", "max_time_per_turn"}
-    if any(f in update_data for f in narrative_fields) or any(f in update_data for f in time_fields):
-        from backend.models.session_state import SessionState
+    if "sequences" in update_data:
+        _apply_sequences_update(adv, update_data["sequences"])
 
-        session_res = await db.execute(
-            select(SessionState).where(SessionState.template_id == template_id)
-        )
-        active_states = session_res.scalars().all()
-        for state in active_states:
-            for f in narrative_fields:
-                if f in update_data:
-                    setattr(state, f, update_data[f])
-            if "time_system" in update_data:
-                state.time_system = update_data["time_system"]
-            if "time_config" in update_data:
-                state.time_config = update_data["time_config"]
+    await _sync_updates_to_sessions(db, template_id, update_data)
 
     await db.commit()
     await db.refresh(adv)
@@ -1699,8 +812,7 @@ async def update_adventure(
         if ea.get("template_id") == adv.id or ea.get("adventure_id") == adv.id
     }
     enriched_awards = [
-        {**aw, "is_earned": aw.get("key") in user_earned_keys}
-        for aw in (adv.awards or [])
+        {**aw, "is_earned": aw.get("key") in user_earned_keys} for aw in (adv.awards or [])
     ]
 
     response_data = AdventureTemplateResponse.model_validate(adv).model_dump()
@@ -1714,14 +826,13 @@ async def get_adventure_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from backend.models.world_entity import WorldEntity, WorldScene
     from backend.models.avatar import Avatar
-    
+    from backend.models.world_entity import WorldEntity, WorldScene
+
     """Retrieves the generation status and potential errors for an adventure."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -1732,19 +843,66 @@ async def get_adventure_status(
     if adv.is_ready:
         avatar = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
         avatar = avatar.scalars().first()
-        
-        scenes = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None)))
+
+        scenes = await db.execute(
+            select(WorldScene).where(
+                WorldScene.template_id == template_id, WorldScene.session_id.is_(None)
+            )
+        )
         scenes = scenes.scalars().all()
-        
-        entities = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None)))
+
+        entities = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None)
+            )
+        )
         entities = entities.scalars().all()
-        
+
         stats = {
-            "cover": {"generated": 1 if not adv.cover_source_adventure_id else 0, "reused": 1 if adv.cover_source_adventure_id else 0},
-            "protagonist": {"generated": 1 if avatar and not getattr(avatar, "source_asset_id", None) else 0, "reused": 1 if avatar and getattr(avatar, "source_asset_id", None) else 0},
-            "scene": {"generated": len([s for s in scenes if not getattr(s, "source_asset_id", None)]), "reused": len([s for s in scenes if getattr(s, "source_asset_id", None)])},
-            "npc": {"generated": len([e for e in entities if e.entity_type == "NPC" and not getattr(e, "source_asset_id", None)]), "reused": len([e for e in entities if e.entity_type == "NPC" and getattr(e, "source_asset_id", None)])},
-            "item": {"generated": len([e for e in entities if e.entity_type == "OBJECT" and not getattr(e, "source_asset_id", None)]), "reused": len([e for e in entities if e.entity_type == "OBJECT" and getattr(e, "source_asset_id", None)])},
+            "cover": {
+                "generated": 1 if not adv.cover_source_adventure_id else 0,
+                "reused": 1 if adv.cover_source_adventure_id else 0,
+            },
+            "protagonist": {
+                "generated": 1 if avatar and not getattr(avatar, "source_asset_id", None) else 0,
+                "reused": 1 if avatar and getattr(avatar, "source_asset_id", None) else 0,
+            },
+            "scene": {
+                "generated": len([s for s in scenes if not getattr(s, "source_asset_id", None)]),
+                "reused": len([s for s in scenes if getattr(s, "source_asset_id", None)]),
+            },
+            "npc": {
+                "generated": len(
+                    [
+                        e
+                        for e in entities
+                        if e.entity_type == "NPC" and not getattr(e, "source_asset_id", None)
+                    ]
+                ),
+                "reused": len(
+                    [
+                        e
+                        for e in entities
+                        if e.entity_type == "NPC" and getattr(e, "source_asset_id", None)
+                    ]
+                ),
+            },
+            "item": {
+                "generated": len(
+                    [
+                        e
+                        for e in entities
+                        if e.entity_type == "OBJECT" and not getattr(e, "source_asset_id", None)
+                    ]
+                ),
+                "reused": len(
+                    [
+                        e
+                        for e in entities
+                        if e.entity_type == "OBJECT" and getattr(e, "source_asset_id", None)
+                    ]
+                ),
+            },
         }
 
     return {
@@ -1762,9 +920,7 @@ async def get_adventure_state(
     current_user: User = Depends(get_current_user),
 ):
     """Returns the current runtime state for the latest session of this template for the user."""
-    state = await AdventureLogic.resolve_session_state(
-        db, template_id, user_id=current_user.id
-    )
+    state = await AdventureLogic.resolve_session_state(db, template_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session state not found.")
 
@@ -1787,9 +943,7 @@ async def patch_adventure_state(
     current_user: User = Depends(get_current_user),
 ):
     """Patch mutable fields on the active session state (e.g. scene_id)."""
-    state = await AdventureLogic.resolve_session_state(
-        db, template_id, user_id=current_user.id
-    )
+    state = await AdventureLogic.resolve_session_state(db, template_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session state not found.")
 
@@ -1801,8 +955,8 @@ async def patch_adventure_state(
         try:
             state.in_game_time = int(payload.get("in_game_time"))
             updated = True
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+            logger.warning("Ignoring invalid in_game_time %r", payload.get("in_game_time"))
 
     if updated:
         await db.commit()
@@ -1864,8 +1018,7 @@ async def cancel_adventure_generation(
     """Signals a background generation task to stop by updating the template status."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -1889,8 +1042,7 @@ async def cancel_adventure(
     """Cancels an active adventure generation."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -1913,8 +1065,7 @@ async def delete_adventure(
     """Delete an adventure template and all associated scenes, entities, maps, etc."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()
@@ -1932,14 +1083,9 @@ async def export_adventure_manifest(
     current_user: User = Depends(get_current_user),
 ):
     """Exports the raw/original manifest stored in the template with minor backfills if needed."""
-    from copy import deepcopy
-    from typing import Any
-    from backend.models.world_entity import WorldEntity, WorldExit
-
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adventure = result.scalars().first()
@@ -1947,200 +1093,23 @@ async def export_adventure_manifest(
         raise HTTPException(status_code=404, detail="Original manifest not found.")
 
     manifest = deepcopy(adventure.original_manifest)
-
-    # Backfill basic metadata if not present in the original manifest
-    if "version" not in manifest:
-        manifest["version"] = adventure.version or "1.0"
-    if "id" not in manifest:
-        manifest["id"] = adventure.id
-    if "title" not in manifest:
-        manifest["title"] = adventure.title
-    if "time_per_turn" not in manifest:
-        manifest["time_per_turn"] = adventure.time_per_turn
-    if "generate_npc_images" not in manifest:
-        manifest["generate_npc_images"] = adventure.generate_npc_images or False
-    if "generate_item_images" not in manifest:
-        manifest["generate_item_images"] = adventure.generate_item_images or False
-    if "automatic_cover_generation" not in manifest:
-        manifest["automatic_cover_generation"] = False
-    if "cover_source_adventure_id" not in manifest:
-        manifest["cover_source_adventure_id"] = adventure.cover_source_adventure_id
-    if "cover_source_adventure_name" not in manifest:
-        manifest["cover_source_adventure_name"] = adventure.cover_source_adventure_name
-    if "cover_similarity_percent" not in manifest:
-        manifest["cover_similarity_percent"] = adventure.cover_similarity_percent
-    if "allow_reuse_source_assets" not in manifest:
-        manifest["allow_reuse_source_assets"] = adventure.allow_reuse_source_assets
-
-    # Backfill start_scene_id for items/objects from WorldEntity table if missing in original manifest,
-    # but only if the scene ID exists in the original manifest's scenes.
-
-    # Extract items from legacy protagonist format and normalize to ID references
-    protagonist = manifest.get("protagonist")
-    if isinstance(protagonist, dict):
-        objects = manifest.setdefault("objects", [])
-
-        def add_object_if_new(obj_dict):
-            if not obj_dict or not obj_dict.get("id"):
-                return
-            # Normalize to OBJECT entity_type if missing
-            obj_copy = dict(obj_dict)
-            if "entity_type" not in obj_copy:
-                obj_copy["entity_type"] = "OBJECT"
-            if not any(o.get("id") == obj_copy["id"] for o in objects):
-                objects.append(obj_copy)
-
-        inv = protagonist.get("starting_inventory", [])
-        cleaned_inv = []
-        for item in inv:
-            if isinstance(item, dict):
-                add_object_if_new(item)
-                cleaned_inv.append(item.get("id"))
-            else:
-                cleaned_inv.append(item)
-        if "starting_inventory" in protagonist:
-            protagonist["starting_inventory"] = cleaned_inv
-
-        equip = protagonist.get("starting_equipment", {})
-        cleaned_equip = {}
-        for slot, item in equip.items():
-            if isinstance(item, dict):
-                add_object_if_new(item)
-                cleaned_equip[slot] = item.get("id")
-            else:
-                cleaned_equip[slot] = item
-
-        # Clean up legacy root-level equipment slots
-        legacy_slots = [
-            "Head",
-            "Neck",
-            "Chest",
-            "Back",
-            "Hands",
-            "Waist",
-            "Legs",
-            "Feet",
-            "MainHand",
-            "OffHand",
-            "Fingers",
-            "Trinket",
-        ]
-        for slot in legacy_slots:
-            if slot in protagonist:
-                item = protagonist[slot]
-                if isinstance(item, dict):
-                    add_object_if_new(item)
-                    protagonist[slot] = item.get("id")
-                    cleaned_equip[slot] = item.get("id")
-                else:
-                    cleaned_equip[slot] = item
-                # Remove from root to keep it clean if desired, or just replace with ID.
-                # Since the user sees it at root and it should be references, replacing with ID is fine.
-                protagonist.pop(
-                    slot, None
-                )  # Let's move it entirely to starting_equipment
-
-        # Collect objects in scene
-        items_in_scene = set()
-        for obj in objects:
-            scene_id = obj.get("current_scene_id") or obj.get("start_scene_id")
-            if scene_id and scene_id != "INVENTORY":
-                items_in_scene.add(obj.get("id"))
-
-        # Priority Deduplication: Scene > Inventory > Equipped
-        final_inv = []
-        for item_id in cleaned_inv:
-            if not item_id:
-                continue
-            if item_id in items_in_scene:
-                continue
-            if item_id not in final_inv:
-                final_inv.append(item_id)
-
-        final_equip = {}
-        for slot, item_id in cleaned_equip.items():
-            if not item_id:
-                continue
-            if item_id in items_in_scene:
-                continue
-            if item_id in final_inv:
-                continue
-            if item_id in final_equip.values():
-                continue
-            final_equip[slot] = item_id
-
-        protagonist["starting_inventory"] = final_inv
-
-        if final_equip:
-            protagonist["starting_equipment"] = final_equip
-        else:
-            protagonist.pop("starting_equipment", None)
+    backfill_manifest_metadata(manifest, adventure)
+    normalize_protagonist_items(manifest)
 
     entity_res = await db.execute(
         select(WorldEntity.id, WorldEntity.current_scene_id).where(
             WorldEntity.template_id == template_id
         )
     )
-    entity_scene_map = {
-        row.id: row.current_scene_id for row in entity_res.all() if row.id
-    }
-    valid_scene_ids = {
-        s.get("id")
-        for s in manifest.get("scenes", [])
-        if isinstance(s, dict) and s.get("id")
-    }
-
-    def _ensure_item_locations(
-        items: list[dict[str, Any]] | None,
-    ) -> list[dict[str, Any]] | None:
-        if not items:
-            return items
-
-        normalized_items: list[dict[str, Any]] = []
-        for item in items:
-            item_copy = dict(item)
-            item_id = item_copy.get("id")
-            if not item_copy.get("start_scene_id") and item_id in entity_scene_map:
-                scene_id = entity_scene_map[item_id]
-                if scene_id in valid_scene_ids:
-                    item_copy["start_scene_id"] = scene_id
-            normalized_items.append(item_copy)
-        return normalized_items
-
-    items_res = _ensure_item_locations(manifest.get("items"))
-    if items_res is not None:
-        manifest["items"] = items_res
-    elif "items" in manifest:
-        manifest.pop("items")
-
-    objects_res = _ensure_item_locations(manifest.get("objects"))
-    if objects_res is not None:
-        manifest["objects"] = objects_res
-    elif "objects" in manifest:
-        manifest.pop("objects")
+    backfill_item_start_scenes(
+        manifest, {row.id: row.current_scene_id for row in entity_res.all() if row.id}
+    )
 
     # Sync exits from world_exits table to reflect world editor updates
-    exit_res = await db.execute(
-        select(WorldExit).where(WorldExit.template_id == template_id)
-    )
+    exit_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
     db_exits = exit_res.scalars().all()
     if db_exits:
-        manifest["exits"] = [
-            {
-                "id": x.id,
-                "from_scene_id": x.from_scene_id,
-                "to_scene_id": x.to_scene_id,
-                "label": x.label,
-                "exit_type": str(x.exit_type or "one_way").strip().lower(),
-                "is_bidirectional": (str(x.exit_type or "").strip().lower() == "bidirectional"),
-                "is_locked": x.is_locked,
-                "lock_description": x.lock_description,
-                "code_to_unlock": x.code_to_unlock,
-                "item_to_unlock": x.item_to_unlock,
-                "rule_to_unlock": x.rule_to_unlock,
-            }
-            for x in db_exits
-        ]
+        manifest["exits"] = [serialize_exit(x) for x in db_exits]
 
     return manifest
 
@@ -2158,10 +1127,10 @@ async def export_adventure_adv(
         manifest = await AdventureExporter.build_full_manifest(db, template_id)
         return manifest
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Export failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{template_id}/export/adz")
@@ -2180,15 +1149,13 @@ async def export_adventure_adz(
         return StreamingResponse(
             io.BytesIO(zip_data),
             media_type="application/zip",
-            headers={
-                "Content-Disposition": f"attachment; filename=adventure_{template_id}.adz"
-            },
+            headers={"Content-Disposition": f"attachment; filename=adventure_{template_id}.adz"},
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("ADZ Export failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{template_id}/export/session")
@@ -2233,8 +1200,7 @@ async def get_adventure_generation_logs(
     """Retrieves the live detailed generation logs (history) for an adventure template."""
     result = await db.execute(
         select(AdventureTemplate).where(
-            (AdventureTemplate.id == template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adv = result.scalars().first()

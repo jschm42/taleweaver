@@ -92,6 +92,8 @@ class CommandParser:
             return f"[TRIGGER_OPEN] {args}"
         elif command == "/container_take_all":
             return f"[TRIGGER_CONTAINER_TAKE_ALL] {args}"
+        elif command == "/container_take_item":
+            return f"[TRIGGER_CONTAINER_TAKE_ITEM] {args}"
         elif command == "/container_drop_scene":
             return f"[TRIGGER_CONTAINER_DROP_SCENE] {args}"
         elif command == "/say" or command == "/speak":
@@ -145,6 +147,7 @@ class CommandParser:
             "- `/take <item>`: Pick up an item from the room.",
             "- `/open <container>`: Open a container item.",
             "- `/container_take_all <container>`: Take all items from a container.",
+            "- `/container_take_item <container> | <item>`: Take a single item from a container.",
             "- `/container_drop_scene <container>`: Drop all container items into the scene.",
             "- `/unequip <slot>`: Remove an item from a slot.",
             "- `/consume <item>`: Use a consumable item.",

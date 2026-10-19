@@ -177,8 +177,21 @@ export function useGameSocket(): UseGameSocket {
     localStorage.setItem('tw_bable_fish_lang', newLang)
   })
 
+  // Scene/sequence the session is currently in (from server snapshots). Live messages are
+  // stamped with it so the story feed can group pages per scene before the history reloads.
+  let currentSceneId: string | null = null
+  let currentSequenceId: string | null = null
+
   function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[], is_debug?: boolean): void {
-    messages.value.push({ role, content, timestamp: new Date(), itemIds, is_debug } as any)
+    messages.value.push({
+      role,
+      content,
+      timestamp: new Date(),
+      itemIds,
+      is_debug,
+      scene_id: currentSceneId,
+      sequence_id: currentSequenceId,
+    } as any)
   }
 
   function emitSystemMessage(content: string): void {
@@ -228,6 +241,8 @@ export function useGameSocket(): UseGameSocket {
       messages.value = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
     }
 
+    if (data.scene_id !== undefined) currentSceneId = data.scene_id || null
+    if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
     if (data.sheet) sheet.value = data.sheet
     if (data.map_data) mapData.value = data.map_data
     if (data.nodes) nodes.value = data.nodes
@@ -462,7 +477,6 @@ export function useGameSocket(): UseGameSocket {
     }
     let receivedFinalEvent = false
     let receivedErrorEvent = false
-    let hadSceneTransition = false
     const controller = new AbortController()
     activeChatController = controller
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
@@ -598,10 +612,8 @@ export function useGameSocket(): UseGameSocket {
               statusText.value = ''
             }
           } else if (event === 'scene_transition') {
-            // Clear previous scene's chat bubbles; the LLM will narrate the new scene
-            hadSceneTransition = true
+            // The story feed starts a new page per scene; previous scenes stay browsable.
             isSceneTransitioning.value = true
-            messages.value = []
             applySessionSnapshot(data, false)
           } else if (event === 'adventure_generator_proposal') {
             generatorProposal.value = data.request || data
@@ -619,10 +631,8 @@ export function useGameSocket(): UseGameSocket {
         lastUserAction.value = ''
         const snapshot = await fetchSessionSnapshot(currentGameId)
         if (snapshot) {
-          // After a scene transition the SSE stream already built the new-scene
-          // messages in memory. Re-loading ALL DB history here would re-inject
-          // bubbles from previous scenes, so we only sync non-message state.
-          applySessionSnapshot(snapshot, !hadSceneTransition)
+          // Reload the authoritative history (incl. scene/sequence per message).
+          applySessionSnapshot(snapshot, true)
         }
       }
 

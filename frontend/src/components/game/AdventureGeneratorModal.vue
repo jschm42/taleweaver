@@ -27,6 +27,7 @@ import GeneratorProgressStream, { type LogEntry } from './generator/GeneratorPro
 import GeneratorAssetStats, { type AssetStatsMap } from './generator/GeneratorAssetStats.vue'
 import GeneratorLightbox from './generator/GeneratorLightbox.vue'
 import AdventureRuleModeSelector from '@/components/create-adventure/AdventureRuleModeSelector.vue'
+import AutoValidateFixToggle from '@/components/create-adventure/AutoValidateFixToggle.vue'
 
 const props = defineProps<{
   open: boolean
@@ -180,6 +181,7 @@ const form = ref({
   units_per_turn: 1,
   max_units_per_turn: null as number | null,
   generation_strictness: 'creative' as 'creative' | 'strict',
+  auto_validate_and_fix: true,
 })
 
 const generatorMode = ref<'simple' | 'advanced'>(
@@ -865,6 +867,8 @@ onBeforeUnmount(() => {
                 v-model:rule-enforcement-mode="form.rule_enforcement_mode"
               />
             </template>
+
+            <AutoValidateFixToggle v-model="form.auto_validate_and_fix" class="mx-auto" />
           </div>
 
           <!-- BODY: PROGRESS VIEW -->

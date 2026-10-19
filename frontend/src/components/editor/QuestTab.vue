@@ -2,18 +2,61 @@
 import { ref, computed } from 'vue'
 import { entityService } from '@/services/entityService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import { formatObjectIds } from '@/utils/editor_utils'
-
+import { ShieldCheck, Package, MapPin, Swords } from 'lucide-vue-next'
 
 const props = defineProps<{
   adventure: any
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null }>
+  editorObjects?: any[]
+  editorScenes?: any[]
+  editorNpcs?: any[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update-quests', quests: any[]): void
   (e: 'notify', message: string, type?: 'error' | 'success' | 'info'): void
 }>()
+
+const availableItems = computed(() => {
+  const list =
+    props.editorObjects && props.editorObjects.length > 0
+      ? props.editorObjects
+      : props.adventure?.objects || []
+  return list
+    .map((item: any) => ({
+      id: String(item.id || item.entity_id || '').trim(),
+      name: item.name || item.id || 'Unnamed Item',
+    }))
+    .filter((i: any) => Boolean(i.id))
+})
+
+const availableScenes = computed(() => {
+  const list =
+    props.editorScenes && props.editorScenes.length > 0
+      ? props.editorScenes
+      : props.adventure?.scenes || []
+  return list
+    .map((scene: any) => ({
+      id: String(scene.id || '').trim(),
+      name: scene.label || scene.name || scene.id || 'Unnamed Scene',
+    }))
+    .filter((s: any) => Boolean(s.id))
+})
+
+const availableNpcs = computed(() => {
+  const list =
+    props.editorNpcs && props.editorNpcs.length > 0
+      ? props.editorNpcs
+      : props.adventure?.npcs || []
+  return list
+    .map((npc: any) => ({
+      id: String(npc.id || npc.entity_id || '').trim(),
+      name: npc.name || npc.id || 'Unnamed NPC',
+    }))
+    .filter((n: any) => Boolean(n.id))
+})
 
 const sideQuests = computed<any[]>(() => {
   const raw = props.adventure?.quests
@@ -38,9 +81,15 @@ const modalQuest = ref<any>({
   id: '',
   title: '',
   description: '',
+  goal: '',
+  impact: '',
   exp_reward: 50,
   is_main: false,
-  status: 'open'
+  status: 'open',
+  required_item_id: '',
+  required_scene_id: '',
+  required_defeated_npc_id: '',
+  guard_expression: '',
 })
 
 // Auto generation state
@@ -104,9 +153,15 @@ async function autoGenerateNewQuest() {
       id: 'quest_' + Math.random().toString(36).substring(2, 11),
       title: result.title,
       description: result.description,
+      goal: '',
+      impact: '',
       exp_reward: 50,
       is_main: false,
-      status: 'open'
+      status: 'open',
+      required_item_id: '',
+      required_scene_id: '',
+      required_defeated_npc_id: '',
+      guard_expression: '',
     }
     showModal.value = true
   } catch (error) {
@@ -123,16 +178,35 @@ function openAddModal() {
     id: 'quest_' + Math.random().toString(36).substring(2, 11),
     title: '',
     description: '',
+    goal: '',
+    impact: '',
     exp_reward: 50,
     is_main: false,
-    status: 'open'
+    status: 'open',
+    required_item_id: '',
+    required_scene_id: '',
+    required_defeated_npc_id: '',
+    guard_expression: '',
   }
   showModal.value = true
 }
 
 function openEditModal(quest: any) {
   isNewQuest.value = false
-  modalQuest.value = { ...quest, is_main: false }
+  modalQuest.value = {
+    id: quest.id,
+    title: quest.title || '',
+    description: quest.description || '',
+    goal: quest.goal || '',
+    impact: quest.impact || '',
+    exp_reward: quest.exp_reward ?? 50,
+    is_main: false,
+    status: quest.status || 'open',
+    required_item_id: quest.required_item_id || '',
+    required_scene_id: quest.required_scene_id || '',
+    required_defeated_npc_id: quest.required_defeated_npc_id || '',
+    guard_expression: quest.guard_expression || quest.completion_guard_expression || '',
+  }
   showModal.value = true
 }
 
@@ -224,7 +298,15 @@ function confirmDeleteQuest() {
 
         <div>
           <div class="flex items-start justify-between gap-4 mb-3">
-            <h4 class="text-sm font-bold text-white leading-snug group-hover:text-blue-300 transition-colors">{{ quest.title }}</h4>
+            <div>
+              <h4 class="text-sm font-bold text-white leading-snug group-hover:text-blue-300 transition-colors">{{ quest.title }}</h4>
+              <div v-if="quest.required_item_id || quest.required_scene_id || quest.required_defeated_npc_id || quest.guard_expression" class="flex items-center gap-1.5 mt-1.5">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-[9px] font-mono font-bold text-emerald-400 border border-emerald-500/20">
+                  <ShieldCheck class="w-2.5 h-2.5" />
+                  Hard Rules Active
+                </span>
+              </div>
+            </div>
             <span class="px-2.5 py-1 rounded-lg bg-blue-500/10 text-[10px] font-black text-blue-400 uppercase tracking-wider border border-blue-500/20 shrink-0">
               {{ quest.exp_reward }} XP
             </span>
@@ -256,8 +338,8 @@ function confirmDeleteQuest() {
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="showModal" class="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60">
-        <div class="modal-content w-full max-w-lg bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-modal-in">
-          <div class="p-10 space-y-8">
+        <div class="modal-content w-full max-w-2xl max-h-[90vh] flex flex-col bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-modal-in">
+          <div class="p-8 sm:p-10 space-y-6 flex-1 min-h-0 overflow-y-auto">
             <!-- Modal Header -->
             <div class="flex justify-between items-center">
               <div class="space-y-1">
@@ -271,42 +353,45 @@ function confirmDeleteQuest() {
 
             <!-- Modal Form Fields -->
             <div class="space-y-5">
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Quest Title <span class="text-red-400">*</span></label>
-                  <span :class="['text-xs font-bold tracking-widest', (modalQuest.title || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
-                    {{ (modalQuest.title || '').length }} / 100
-                  </span>
-                  <button 
-                    v-if="isNewQuest"
-                    type="button"
-                    @click="generateFullQuest"
-                    :disabled="isGeneratingNewQuest"
-                    class="text-[10px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-wider transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    <i class="ra ra-cycle" :class="{ 'animate-spin': isGeneratingNewQuest }"></i>
-                    <span>{{ isGeneratingNewQuest ? 'Generating...' : 'Auto-Generate' }}</span>
-                  </button>
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div class="sm:col-span-3 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Quest Title <span class="text-red-400">*</span></label>
+                    <span :class="['text-xs font-bold tracking-widest', (modalQuest.title || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (modalQuest.title || '').length }} / 100
+                    </span>
+                    <button 
+                      v-if="isNewQuest"
+                      type="button"
+                      @click="generateFullQuest"
+                      :disabled="isGeneratingNewQuest"
+                      class="text-[10px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-wider transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <i class="ra ra-cycle" :class="{ 'animate-spin': isGeneratingNewQuest }"></i>
+                      <span>{{ isGeneratingNewQuest ? 'Generating...' : 'Auto-Generate' }}</span>
+                    </button>
+                  </div>
+                  <input 
+                    v-model="modalQuest.title" 
+                    maxlength="100"
+                    placeholder="e.g. Find the Lost Key" 
+                    class="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-sm font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" 
+                  />
                 </div>
-                <input 
-                  v-model="modalQuest.title" 
-                  maxlength="100"
-                  placeholder="e.g. Find the Lost Key" 
-                  class="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3.5 text-base font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" 
-                />
+
+                <div class="space-y-2">
+                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">XP Reward</label>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="9999" 
+                    v-model.number="modalQuest.exp_reward" 
+                    class="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-sm font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" 
+                  />
+                </div>
               </div>
 
-              <div class="space-y-2">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">XP Reward</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="9999" 
-                  v-model.number="modalQuest.exp_reward" 
-                  class="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-sm font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" 
-                />
-              </div>
-
+              <!-- Description -->
               <div class="space-y-2">
                 <div class="flex items-center justify-between">
                   <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Description <span class="text-red-400">*</span></label>
@@ -327,11 +412,180 @@ function confirmDeleteQuest() {
                 <ReferenceTextarea
                   v-model="modalQuest.description"
                   :maxlength="1000"
-                  :rows="4"
+                  :rows="3"
                   :options="props.referenceOptions || []"
                   placeholder="Explain what the protagonist needs to do..."
                   class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
                 />
+              </div>
+
+              <!-- Soft Rule: Narrative Goal -->
+              <div class="space-y-1.5 p-4 rounded-2xl bg-black/40 border border-white/5">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-black text-amber-400 uppercase tracking-widest">
+                    Narrative Goal (Soft Rule)
+                  </label>
+                  <span class="text-[10px] text-slate-500 font-mono">Evaluated by GM LLM</span>
+                </div>
+                <p class="text-[11px] text-slate-400">
+                  Narrative goal or context condition evaluated by the GM LLM to determine quest completion.
+                </p>
+                <input
+                  v-model="modalQuest.goal"
+                  type="text"
+                  placeholder="e.g. Find the merchant's lost ledger and return it to him in the marketplace."
+                  class="w-full bg-slate-900/90 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-slate-600"
+                />
+              </div>
+
+              <!-- Hard Rules: Deterministic Completion Triggers -->
+              <div class="space-y-3.5 p-4 rounded-2xl bg-black/40 border border-white/5">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <ShieldCheck class="w-4 h-4 text-emerald-400" />
+                    <label class="block text-xs font-black text-emerald-400 uppercase tracking-widest">
+                      Deterministic Completion Triggers (Hard Rules)
+                    </label>
+                  </div>
+                  <span class="text-[10px] text-slate-500 font-mono">Engine Enforced</span>
+                </div>
+                <p class="text-[11px] text-slate-400">
+                  Optional hard conditions enforced deterministically by the game engine. When configured, the quest completes automatically when these conditions are fulfilled.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  <!-- Item Hard Rule -->
+                  <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
+                    <div class="flex items-center justify-between">
+                      <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                        <Package class="w-3.5 h-3.5 text-emerald-400" />
+                        Obtain Item
+                      </span>
+                      <button
+                        v-if="modalQuest.required_item_id"
+                        type="button"
+                        @click="modalQuest.required_item_id = ''"
+                        class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <select
+                      v-model="modalQuest.required_item_id"
+                      class="w-full bg-black/60 border border-white/10 focus:border-emerald-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                    >
+                      <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
+                      <option
+                        v-for="item in availableItems"
+                        :key="item.id"
+                        :value="item.id"
+                        class="bg-slate-900 text-white"
+                      >
+                        {{ item.name }} ({{ item.id }})
+                      </option>
+                      <option
+                        v-if="modalQuest.required_item_id && !availableItems.some(i => i.id === modalQuest.required_item_id)"
+                        :value="modalQuest.required_item_id"
+                        class="bg-slate-900 text-amber-300"
+                      >
+                        {{ modalQuest.required_item_id }} (Custom ID)
+                      </option>
+                    </select>
+                    <span class="block text-[10px] text-slate-500">Protagonist acquires item X</span>
+                  </div>
+
+                  <!-- Scene Hard Rule -->
+                  <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
+                    <div class="flex items-center justify-between">
+                      <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                        <MapPin class="w-3.5 h-3.5 text-sky-400" />
+                        Enter Scene
+                      </span>
+                      <button
+                        v-if="modalQuest.required_scene_id"
+                        type="button"
+                        @click="modalQuest.required_scene_id = ''"
+                        class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <select
+                      v-model="modalQuest.required_scene_id"
+                      class="w-full bg-black/60 border border-white/10 focus:border-sky-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                    >
+                      <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
+                      <option
+                        v-for="scene in availableScenes"
+                        :key="scene.id"
+                        :value="scene.id"
+                        class="bg-slate-900 text-white"
+                      >
+                        {{ scene.name }} ({{ scene.id }})
+                      </option>
+                      <option
+                        v-if="modalQuest.required_scene_id && !availableScenes.some(s => s.id === modalQuest.required_scene_id)"
+                        :value="modalQuest.required_scene_id"
+                        class="bg-slate-900 text-amber-300"
+                      >
+                        {{ modalQuest.required_scene_id }} (Custom ID)
+                      </option>
+                    </select>
+                    <span class="block text-[10px] text-slate-500">Protagonist enters Scene X</span>
+                  </div>
+
+                  <!-- NPC Defeat Hard Rule -->
+                  <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
+                    <div class="flex items-center justify-between">
+                      <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                        <Swords class="w-3.5 h-3.5 text-rose-400" />
+                        Defeat NPC
+                      </span>
+                      <button
+                        v-if="modalQuest.required_defeated_npc_id"
+                        type="button"
+                        @click="modalQuest.required_defeated_npc_id = ''"
+                        class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <select
+                      v-model="modalQuest.required_defeated_npc_id"
+                      class="w-full bg-black/60 border border-white/10 focus:border-rose-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                    >
+                      <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
+                      <option
+                        v-for="npc in availableNpcs"
+                        :key="npc.id"
+                        :value="npc.id"
+                        class="bg-slate-900 text-white"
+                      >
+                        {{ npc.name }} ({{ npc.id }})
+                      </option>
+                      <option
+                        v-if="modalQuest.required_defeated_npc_id && !availableNpcs.some(n => n.id === modalQuest.required_defeated_npc_id)"
+                        :value="modalQuest.required_defeated_npc_id"
+                        class="bg-slate-900 text-amber-300"
+                      >
+                        {{ modalQuest.required_defeated_npc_id }} (Custom ID)
+                      </option>
+                    </select>
+                    <span class="block text-[10px] text-slate-500">Protagonist defeats NPC X</span>
+                  </div>
+                </div>
+
+                <!-- Scripting Guard Expression -->
+                <div class="space-y-2 p-3 rounded-xl bg-slate-900/80 border border-white/5 mt-3">
+                  <ScriptEditor
+                    v-model="modalQuest.guard_expression"
+                    label="Deterministic Guard Rule (Python Expression)"
+                    help-text="Optional deterministic Python boolean condition. The quest only completes when this condition evaluates to True."
+                    context="guard_expression"
+                    placeholder="e.g. tw.vars.get('ledger_returned') == True or tw.player.has_item('MERCHANT_LEDGER')"
+                    min-height="90px"
+                  />
+                </div>
               </div>
             </div>
 

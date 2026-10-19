@@ -1,9 +1,11 @@
-import pytest
 import json
+
+import pytest
 from pydantic import BaseModel
-from typing import Any, Optional
+
 from backend.core.llm_router import GameMasterLLM
 from backend.models.user import User
+
 
 class MockSchema(BaseModel):
     name: str
@@ -40,8 +42,11 @@ async def test_deepseek_fallback_injects_schema(monkeypatch):
     captured = {}
     async def fake_acompletion(**kwargs):
         captured.update(kwargs)
-        class _Msg: content = '{"name": "Deep", "age": 1}'
-        class _Choice: message = _Msg(); finish_reason = "stop"
+        class _Msg:
+            content = '{"name": "Deep", "age": 1}'
+        class _Choice:
+            message = _Msg()
+            finish_reason = "stop"
         class _Resp:
             choices = [_Choice()]
             @staticmethod
@@ -190,8 +195,11 @@ async def test_anthropic_fallback_injects_schema(monkeypatch):
     captured = {}
     async def fake_acompletion(**kwargs):
         captured.update(kwargs)
-        class _Msg: content = '{"name": "Claude", "age": 3}'
-        class _Choice: message = _Msg(); finish_reason = "stop"
+        class _Msg:
+            content = '{"name": "Claude", "age": 3}'
+        class _Choice:
+            message = _Msg()
+            finish_reason = "stop"
         class _Resp:
             choices = [_Choice()]
             @staticmethod
@@ -207,7 +215,13 @@ async def test_anthropic_fallback_injects_schema(monkeypatch):
         model="claude-3-5-sonnet"
     )
 
-    assert "SCHEMA:" in captured["messages"][0]["content"]
+    # Anthropic system prompts are sent as a cacheable content block.
+    system_blocks = captured["messages"][0]["content"]
+    assert isinstance(system_blocks, list)
+    assert "SCHEMA:" in system_blocks[0]["text"]
+    assert system_blocks[0]["cache_control"] == {"type": "ephemeral"}
+    # Presentation-only schema keys are stripped to save tokens.
+    assert '"title"' not in system_blocks[0]["text"]
     assert captured["response_format"] == {"type": "json_object"}
 
 @pytest.mark.asyncio
@@ -220,8 +234,11 @@ async def test_openrouter_fallback_injects_schema(monkeypatch):
     captured = {}
     async def fake_acompletion(**kwargs):
         captured.update(kwargs)
-        class _Msg: content = '{"name": "OR", "age": 5}'
-        class _Choice: message = _Msg(); finish_reason = "stop"
+        class _Msg:
+            content = '{"name": "OR", "age": 5}'
+        class _Choice:
+            message = _Msg()
+            finish_reason = "stop"
         class _Resp:
             choices = [_Choice()]
             @staticmethod
@@ -244,9 +261,10 @@ async def test_openrouter_fallback_injects_schema(monkeypatch):
 @pytest.mark.asyncio
 async def test_world_generator_image_fallback_with_assets_path(monkeypatch):
     """Test that WorldGenerator triggers placeholder generation for 'assets/' paths."""
+    from unittest.mock import AsyncMock, MagicMock
+
     from backend.engine.world_generator import WorldGenerator
     from backend.models.adventure import AdventureTemplate
-    from unittest.mock import AsyncMock, MagicMock
 
     # Minimal mock of DB and Adventure
     db = AsyncMock()
@@ -307,8 +325,11 @@ async def test_minimax_fallback_injects_schema(monkeypatch):
     captured = {}
     async def fake_acompletion(**kwargs):
         captured.update(kwargs)
-        class _Msg: content = '{"name": "Mini", "age": 27}'
-        class _Choice: message = _Msg(); finish_reason = "stop"
+        class _Msg:
+            content = '{"name": "Mini", "age": 27}'
+        class _Choice:
+            message = _Msg()
+            finish_reason = "stop"
         class _Resp:
             choices = [_Choice()]
             @staticmethod

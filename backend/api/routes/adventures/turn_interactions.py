@@ -21,9 +21,9 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
 from backend.core.awards import SPOILER_SEEKER_AWARD
 from backend.core.config import settings
-from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
+from backend.engine.switch_service import SwitchService
+from backend.engine.trigger_service import TriggerService
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -135,16 +135,10 @@ class TurnInteractionsManager:
     async def _spawn_scene_item(self, *args, **kwargs):
         return await self.manager._spawn_scene_item(*args, **kwargs)
 
-    async def _handle_traverse_exit(self, exit_ref: str, language: str | None = None) -> AsyncGenerator[str, None]:
-        """Performs scene exit traversal and triggers an LLM narration pass for the new scene."""
-        import json
-        from sqlalchemy import or_, and_, func
+    async def _resolve_traversal_exit(self, exit_ref: str) -> WorldExit | None:
+        """Resolves an exit by DB id or 'FROM::TO' scene composite key."""
+        from sqlalchemy import and_, func, or_
 
-        current_scene_id = str(self.state.current_scene_id or "").strip()
-        world_exit = None
-
-        # Support both a direct exit DB-ID and a 'FROM::TO' scene composite key
-        # (map edges expose from/to but have no id field)
         if "::" in exit_ref:
             parts = exit_ref.split("::", 1)
             from_id, to_id = parts[0].strip(), parts[1].strip()
@@ -170,26 +164,91 @@ class TurnInteractionsManager:
                     ),
                 )
             )
-            world_exit = exit_res.scalars().first()
-        else:
-            # Lookup by exit DB primary key (case-insensitive for UUIDs and custom string keys)
-            clean_ref = exit_ref.strip()
-            exit_res = await self.db.execute(
-                select(WorldExit).where(
-                    or_(
-                        WorldExit.session_id == self.state.session_id,
-                        and_(
-                            WorldExit.template_id == self.state.template_id,
-                            WorldExit.session_id.is_(None),
-                        ),
+            return exit_res.scalars().first()
+
+        clean_ref = exit_ref.strip()
+        exit_res = await self.db.execute(
+            select(WorldExit).where(
+                or_(
+                    WorldExit.session_id == self.state.session_id,
+                    and_(
+                        WorldExit.template_id == self.state.template_id,
+                        WorldExit.session_id.is_(None),
                     ),
-                    or_(
-                        WorldExit.id == clean_ref,
-                        func.lower(WorldExit.id) == clean_ref.lower(),
-                    ),
-                )
+                ),
+                or_(
+                    WorldExit.id == clean_ref,
+                    func.lower(WorldExit.id) == clean_ref.lower(),
+                ),
             )
-            world_exit = exit_res.scalars().first()
+        )
+        return exit_res.scalars().first()
+
+    async def _fire_traversal_triggers(
+        self,
+        current_scene_id: str,
+        world_exit: WorldExit,
+    ) -> list[str]:
+        """Fires on_leave_scene, on_open_exit, and on_exit_used triggers."""
+        from sqlalchemy import and_, or_
+
+        messages: list[str] = []
+        old_sc_res = await self.db.execute(
+            select(WorldScene).where(
+                or_(
+                    WorldScene.session_id == self.state.session_id,
+                    and_(WorldScene.template_id == self.state.template_id, WorldScene.session_id.is_(None)),
+                ),
+                WorldScene.id == current_scene_id,
+            )
+        )
+        old_scene = old_sc_res.scalars().first()
+        if old_scene and (old_scene.on_leave_scene_script or old_scene.on_leave_scene_text):
+            msgs = await TriggerService.execute_trigger(
+                self.db,
+                self.state,
+                "on_leave_scene",
+                old_scene.id,
+                script_code=old_scene.on_leave_scene_script,
+                narrative_text=old_scene.on_leave_scene_text,
+            )
+            messages.extend(msgs)
+
+        if world_exit.on_open_exit_script or world_exit.on_open_exit_text:
+            msgs = await TriggerService.execute_trigger(
+                self.db,
+                self.state,
+                "on_open_exit",
+                world_exit.id,
+                script_code=world_exit.on_open_exit_script,
+                narrative_text=world_exit.on_open_exit_text,
+            )
+            messages.extend(msgs)
+
+        if getattr(world_exit, "on_exit_used_script", None) or getattr(
+            world_exit, "on_exit_used_text", None
+        ):
+            msgs = await TriggerService.execute_trigger(
+                self.db,
+                self.state,
+                "on_exit_used",
+                world_exit.id,
+                script_code=world_exit.on_exit_used_script,
+                narrative_text=world_exit.on_exit_used_text,
+            )
+            messages.extend(msgs)
+
+        return messages
+
+    async def _handle_traverse_exit(
+        self, exit_ref: str, language: str | None = None
+    ) -> AsyncGenerator[str, None]:
+        """Performs scene exit traversal and triggers an LLM narration pass for the new scene."""
+        import json
+        from sqlalchemy import and_, func, or_
+
+        current_scene_id = str(self.state.current_scene_id or "").strip()
+        world_exit = await self._resolve_traversal_exit(exit_ref)
 
         if not world_exit:
             err = f"Exit '{exit_ref}' not found."
@@ -213,7 +272,6 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
-        # Resolve target scene label
         scene_res = await self.db.execute(
             select(WorldScene).where(
                 or_(
@@ -235,9 +293,23 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
-        # Commit the scene change with canonical scene ID
+        for m in await self._fire_traversal_triggers(current_scene_id, world_exit):
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+
         self.state.current_scene_id = scene.id
         await self.db.commit()
+
+        if scene.on_enter_scene_script or scene.on_enter_scene_text:
+            msgs = await TriggerService.execute_trigger(
+                self.db,
+                self.state,
+                "on_enter_scene",
+                scene.id,
+                script_code=scene.on_enter_scene_script,
+                narrative_text=scene.on_enter_scene_text,
+            )
+            for m in msgs:
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
 
         # Signal frontend to clear old chat bubbles
         yield f"event: scene_transition\ndata: {json.dumps({'scene_id': scene.id, 'scene_label': scene.label})}\n\n"
@@ -258,13 +330,22 @@ class TurnInteractionsManager:
             async for chunk in self._run_llm_cycle(narration_prompt, False, language=language):
                 yield chunk
         except Exception as exc:
-            user_safe_error = _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
+            user_safe_error = (
+                _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
+            )
             yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()
-        debug_info = await DebugEngine.handle_debug_command(self.db, self.state, cmd_args, user=self.user, adventure=self.adventure, avatar=self.avatar)
-        
+        debug_info = await DebugEngine.handle_debug_command(
+            self.db,
+            self.state,
+            cmd_args,
+            user=self.user,
+            adventure=self.adventure,
+            avatar=self.avatar,
+        )
+
         # Handle status overrides from debug engine
         if debug_info.startswith("[TRIGGER_GAME_OVER]"):
             await self._finalize_session("game_over", debug_info)
@@ -284,7 +365,6 @@ class TurnInteractionsManager:
             dropped_info = await self._debug_drop_npc_items()
             debug_info = f"DEBUG: {dropped_info}"
 
-        
         # New: Combat Debug Commands
         elif cmd_args == "win_fight":
             combat = self._read_combat_state()
@@ -309,7 +389,11 @@ class TurnInteractionsManager:
                 combat["status_note"] = f"Combat won via debug command. (+{xp_gained} XP)"
 
                 loot_items = await self._normalize_loot_items(
-                    list(combat.get("enemy", {}).get("inventory") or (enemy_ent.inventory if enemy_ent else []) or [])
+                    list(
+                        combat.get("enemy", {}).get("inventory")
+                        or (enemy_ent.inventory if enemy_ent else [])
+                        or []
+                    )
                 )
                 combat["loot_pending"] = bool(loot_items)
                 combat["loot_items"] = loot_items
@@ -319,7 +403,13 @@ class TurnInteractionsManager:
                     states[enemy_id] = {}
                 states[enemy_id]["hp"] = 0
                 states[enemy_id]["inventory"] = []
-                enemy_is_killable = (states[enemy_id].get("is_killable") if "is_killable" in states[enemy_id] else enemy_ent.is_killable if enemy_ent else True)
+                enemy_is_killable = (
+                    states[enemy_id].get("is_killable")
+                    if "is_killable" in states[enemy_id]
+                    else enemy_ent.is_killable
+                    if enemy_ent
+                    else True
+                )
                 if enemy_is_killable:
                     states[enemy_id]["is_defeated"] = True
                     states[enemy_id]["is_attackable"] = False
@@ -331,8 +421,10 @@ class TurnInteractionsManager:
                     loot_msg = "Victory! Loot available. Use /loot take <item>, /loot leave <item>, /loot done"
                     self._append_combat_log(combat, loot_msg, "loot")
                 self._set_combat_state(combat)
-                debug_info = f"DEBUG: Combat forced to VICTORY (loot phase enabled). (+{xp_gained} XP)"
-        
+                debug_info = (
+                    f"DEBUG: Combat forced to VICTORY (loot phase enabled). (+{xp_gained} XP)"
+                )
+
         elif cmd_args == "loose_fight":
             combat = self._read_combat_state()
             if combat and combat.get("active"):
@@ -340,10 +432,10 @@ class TurnInteractionsManager:
                 combat["outcome"] = "defeat"
                 combat["player"]["hp"] = 0
                 combat["status_note"] = "Combat lost via debug command."
-                
+
                 # Sync back to avatar
                 self.avatar.hp = 0
-                
+
                 self._append_combat_log(combat, combat["status_note"], "outcome")
                 self._set_combat_state(combat)
                 debug_info = "DEBUG: Combat forced to DEFEAT."
@@ -351,16 +443,22 @@ class TurnInteractionsManager:
         if debug_info.startswith("[DEBUG_LOG_OFF]"):
             await self.db.commit()
             map_payload = await self._build_map_payload()
-            final_data = jsonable_encoder({
-                **map_payload,
-                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
-                'combat': AdventureLogic.get_combat_snapshot(self.state),
-                'awards': self.adventure.awards if self.adventure else [],
-                'game_over_reason': self.state.session.status_note if self.state.session else None,
-                **self._build_prompt_suggestions_payload(),
-                **self._build_terminal_flags_payload(),
-                'status': 'success'
-            })
+            final_data = jsonable_encoder(
+                {
+                    **map_payload,
+                    "sheet": await AdventureLogic.build_sheet_snapshot(
+                        self.avatar, self.state, self.db
+                    ),
+                    "combat": AdventureLogic.get_combat_snapshot(self.state),
+                    "awards": self.adventure.awards if self.adventure else [],
+                    "game_over_reason": self.state.session.status_note
+                    if self.state.session
+                    else None,
+                    **self._build_prompt_suggestions_payload(),
+                    **self._build_terminal_flags_payload(),
+                    "status": "success",
+                }
+            )
             yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
             return
 
@@ -372,7 +470,9 @@ class TurnInteractionsManager:
 
         # Send debug info as a system message so it appears in chat.
         # Include both IDs so the frontend can attach them for deletion.
-        system_chat_msg = ChatMessage(session_id=self.state.session_id, role="system", content=debug_info)
+        system_chat_msg = ChatMessage(
+            session_id=self.state.session_id, role="system", content=debug_info
+        )
         self.db.add(system_chat_msg)
         await self.db.flush()
         system_msg_id = str(system_chat_msg.id)
@@ -380,34 +480,44 @@ class TurnInteractionsManager:
         await self.db.commit()
         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True, 'id': system_msg_id, 'user_msg_id': user_msg_id})}\n\n"
 
-        final_data = jsonable_encoder({
-            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
-            'entities': await AdventureLogic.build_session_entities(self.db, self.state),
-            'combat': AdventureLogic.get_combat_snapshot(self.state),
-            **self._build_prompt_suggestions_payload(),
-            **self._build_terminal_flags_payload(),
-            'status': 'success',
-        })
+        final_data = jsonable_encoder(
+            {
+                "sheet": await AdventureLogic.build_sheet_snapshot(
+                    self.avatar, self.state, self.db
+                ),
+                "entities": await AdventureLogic.build_session_entities(self.db, self.state),
+                "combat": AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_prompt_suggestions_payload(),
+                **self._build_terminal_flags_payload(),
+                "status": "success",
+            }
+        )
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _handle_debug_gen_item(self, prompt: str) -> AsyncGenerator[str, None]:
         """Debug helper to force-generate an item based on a prompt."""
-        instruction = f"DEBUG COMMAND: The user wants you to generate an item now. Instruction: {prompt}"
+        instruction = (
+            f"DEBUG COMMAND: The user wants you to generate an item now. Instruction: {prompt}"
+        )
         # We temporarily set the prompt as if it was the user message
         async for chunk in self._run_llm_cycle(instruction, self.avatar):
             yield chunk
 
         map_payload = await self._build_map_payload()
-        final_data = jsonable_encoder({
-            **map_payload,
-            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
-            'combat': AdventureLogic.get_combat_snapshot(self.state),
-            'awards': self.adventure.awards,
-            'game_over_reason': self.state.session.status_note if self.state.session else None,
-            **self._build_prompt_suggestions_payload(),
-            **self._build_terminal_flags_payload(),
-            'status': 'success'
-        })
+        final_data = jsonable_encoder(
+            {
+                **map_payload,
+                "sheet": await AdventureLogic.build_sheet_snapshot(
+                    self.avatar, self.state, self.db
+                ),
+                "combat": AdventureLogic.get_combat_snapshot(self.state),
+                "awards": self.adventure.awards,
+                "game_over_reason": self.state.session.status_note if self.state.session else None,
+                **self._build_prompt_suggestions_payload(),
+                **self._build_terminal_flags_payload(),
+                "status": "success",
+            }
+        )
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _debug_drop_npc_items(self) -> str:
@@ -416,7 +526,7 @@ class TurnInteractionsManager:
             select(WorldEntity).where(
                 WorldEntity.session_id == self.game_id,
                 WorldEntity.entity_type == "NPC",
-                WorldEntity.current_scene_id == self.state.current_scene_id
+                WorldEntity.current_scene_id == self.state.current_scene_id,
             )
         )
         npcs = res.scalars().all()
@@ -569,7 +679,7 @@ class TurnInteractionsManager:
 
     def _avatar_inventory_ids(self) -> set[str]:
         ids: set[str] = set()
-        for item in (self.avatar.inventory or []):
+        for item in self.avatar.inventory or []:
             if not isinstance(item, dict):
                 continue
             raw_id = str(item.get("id") or "").strip().upper()
@@ -649,57 +759,73 @@ class TurnInteractionsManager:
         if current_state == target_state:
             return f"{switch_entity.name} is already set to {target_state}."
 
-        transitions = config.get("transitions")
-        transition = None
-        if isinstance(transitions, list):
-            wildcard_candidate = None
-            for candidate in transitions:
-                if not isinstance(candidate, dict):
-                    continue
-                from_state = str(candidate.get("from") or "").strip().upper()
-                to_state = str(candidate.get("to") or "").strip().upper()
-                if not to_state or to_state != target_state:
-                    continue
-                if from_state:
-                    if from_state == current_state:
-                        transition = candidate
-                        break
-                elif wildcard_candidate is None:
-                    wildcard_candidate = candidate
-            if transition is None:
-                transition = wildcard_candidate
+        transition = SwitchService.resolve_transition(config, current_state, target_state)
+        script_context = await self.manager._build_script_context()
+        runner = self.manager._get_script_runner()
 
         if transition is not None:
-            gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
-            required_item = str(gates.get("item") or "").strip().upper()
-            required_code = str(gates.get("code") or "").strip()
-            required_rule = str(gates.get("rule") or "").strip()
-            fail_message = str(transition.get("fail_message") or "").strip()
-
-            if required_item and required_item not in self._avatar_inventory_ids():
-                return fail_message or f"{switch_entity.name} does not move."
-
-            if required_code and str(provided_code or "").strip() != required_code:
-                return fail_message or f"{switch_entity.name} does not move."
-
-            if required_rule and not self._switch_story_flags().get(required_rule, False):
-                return fail_message or f"{switch_entity.name} does not move."
+            allowed, fail_msg = SwitchService.evaluate_transition_gates(
+                transition=transition,
+                context=script_context,
+                provided_code=provided_code,
+                avatar_inventory_ids=self._avatar_inventory_ids(),
+                story_flags=self._switch_story_flags(),
+                switch_name=switch_entity.name,
+            )
+            if not allowed:
+                SwitchService.execute_transition_triggers(
+                    runner=runner,
+                    config=config,
+                    transition=transition,
+                    success=False,
+                    context=script_context,
+                    switch_id=switch_entity.id,
+                )
+                await self.manager._apply_script_changeset(script_context.changeset)
+                return fail_msg or f"{switch_entity.name} does not move."
 
         entry["switch_state"] = target_state
         session_states[switch_entity.id] = entry
         self.state.entity_states = session_states
         flag_modified(self.state, "entity_states")
 
-        narration = config.get("narration") if isinstance(config.get("narration"), dict) else {}
-        state_change_notes = narration.get("on_state_change") if isinstance(narration.get("on_state_change"), dict) else {}
-        state_note = str(state_change_notes.get(target_state) or "").strip()
+        SwitchService.execute_transition_triggers(
+            runner=runner,
+            config=config,
+            transition=transition,
+            success=True,
+            context=script_context,
+            switch_id=switch_entity.id,
+        )
+        script_messages = await self.manager._apply_script_changeset(script_context.changeset)
 
-        outcome_notes = await self._apply_switch_outcomes(config.get("outcomes") if isinstance(config.get("outcomes"), list) else [], target_state)
+        narration = config.get("narration") if isinstance(config.get("narration"), dict) else {}
+        state_change_notes = (
+            narration.get("on_state_change")
+            if isinstance(narration.get("on_state_change"), dict)
+            else {}
+        )
+        state_note = str(state_change_notes.get(target_state) or "").strip()
+        trans_success_msg = (
+            str(transition.get("success_message") or "").strip() if transition else ""
+        )
+
+        outcome_notes = await self._apply_switch_outcomes(
+            config.get("outcomes") if isinstance(config.get("outcomes"), list) else [], target_state
+        )
         message = f"{switch_entity.name} set to {target_state}."
+        if trans_success_msg:
+            message = f"{message} {trans_success_msg}"
         if state_note:
             message = f"{message} {state_note}"
         if outcome_notes:
             message = f"{message} {' '.join(outcome_notes)}"
+        if script_messages:
+            user_script_messages = [
+                str(m) for m in script_messages if not str(m).strip().startswith("[DEBUG")
+            ]
+            if user_script_messages:
+                message = f"{message} {' '.join(user_script_messages)}"
         return message
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
@@ -708,15 +834,19 @@ class TurnInteractionsManager:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_payload = await self._build_map_payload()
-            final_data = jsonable_encoder({
-                **map_payload,
-                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
-                **self._build_prompt_suggestions_payload(),
-                **self._build_terminal_flags_payload(),
-            })
+            final_data = jsonable_encoder(
+                {
+                    **map_payload,
+                    "sheet": await AdventureLogic.build_sheet_snapshot(
+                        self.avatar, self.state, self.db
+                    ),
+                    **self._build_prompt_suggestions_payload(),
+                    **self._build_terminal_flags_payload(),
+                }
+            )
             yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
             return
-            
+
         if response.startswith("[TRIGGER_TAKE_DIRECT]"):
             entity_id_or_name = response[21:].strip()
             take_npc = await self._find_scene_npc_by_hint(entity_id_or_name)
@@ -742,7 +872,10 @@ class TurnInteractionsManager:
                 adv_id = (
                     getattr(self.manager.adventure, "id", None)
                     if hasattr(self.manager, "adventure") and self.manager.adventure
-                    else (getattr(self.avatar, "template_id", None) or getattr(self.state, "template_id", None))
+                    else (
+                        getattr(self.avatar, "template_id", None)
+                        or getattr(self.state, "template_id", None)
+                    )
                 )
                 if adv_id:
                     tpl_res = await self.db.execute(
@@ -771,7 +904,8 @@ class TurnInteractionsManager:
                     break
 
             already_in_inv = bool(
-                ent and any(
+                ent
+                and any(
                     (isinstance(i, dict) and str(i.get("id") or "").lower() == ent.id.lower())
                     or (isinstance(i, str) and i.lower() == ent.id.lower())
                     for i in (self.avatar.inventory or [])
@@ -790,12 +924,14 @@ class TurnInteractionsManager:
             elif ent and ent.is_portable and str(ent.item_type or "").upper() != "SWITCH":
                 # Move to inventory
                 new_inv = list(self.avatar.inventory or [])
-                item_dict = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
+                item_dict = jsonable_encoder(
+                    {c.name: getattr(ent, c.name) for c in ent.__table__.columns}
+                )
                 item_dict["is_in_inventory"] = True
                 item_dict["current_scene_id"] = "INVENTORY"
                 new_inv.append(item_dict)
                 self.avatar.inventory = new_inv
-                
+
                 # Update DB entity directly
                 ent.is_in_inventory = True
                 ent.current_scene_id = "INVENTORY"
@@ -811,18 +947,26 @@ class TurnInteractionsManager:
                 response = f"Added {ent.name} to your inventory."
                 await self._check_special_action_unlocks("FIND_ITEM", ent.id)
 
-                pickup_meta = dict(ent.metadata_json or {}) if isinstance(ent.metadata_json, dict) else {}
+                pickup_meta = (
+                    dict(ent.metadata_json or {}) if isinstance(ent.metadata_json, dict) else {}
+                )
                 adv_id = (
                     getattr(self.manager.adventure, "id", None)
                     if hasattr(self.manager, "adventure") and self.manager.adventure
-                    else (getattr(self.avatar, "template_id", None) or getattr(self.state, "template_id", None))
+                    else (
+                        getattr(self.avatar, "template_id", None)
+                        or getattr(self.state, "template_id", None)
+                    )
                 )
-                if adv_id and (not pickup_meta.get("on_pickup_script") and not pickup_meta.get("on_pickup_text")):
+                if adv_id and (
+                    not pickup_meta.get("on_pickup_script")
+                    and not pickup_meta.get("on_pickup_text")
+                ):
                     tpl_res = await self.db.execute(
                         select(WorldEntity).where(
                             func.upper(WorldEntity.id) == ent.id.upper(),
                             WorldEntity.template_id == adv_id,
-                            WorldEntity.session_id.is_(None)
+                            WorldEntity.session_id.is_(None),
                         )
                     )
                     tpl_ent = tpl_res.scalars().first()
@@ -832,7 +976,9 @@ class TurnInteractionsManager:
                                 pickup_meta[k] = v
 
                 if pickup_meta.get("on_pickup_script"):
-                    script_msgs = await self.manager._execute_inline_script(pickup_meta["on_pickup_script"], "on_pickup", ent.id)
+                    script_msgs = await self.manager._execute_inline_script(
+                        pickup_meta["on_pickup_script"], "on_pickup", ent.id
+                    )
                     for sm in script_msgs:
                         role = getattr(sm, "role", "system")
                         yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
@@ -852,7 +998,7 @@ class TurnInteractionsManager:
                         }
             else:
                 response = "You cannot take that."
-        
+
         elif response.startswith("[TRIGGER_WALKTHROUGH_REVEAL]"):
             self.avatar.exp = (self.avatar.exp or 0) - WALKTHROUGH_REVEAL_COST
             self.state.is_walkthrough_revealed = True
@@ -875,22 +1021,27 @@ class TurnInteractionsManager:
             )
             already_earned = any(
                 ea.get("key") == award_key
-                and (ea.get("adventure_id") == adv_id or ea.get("session_id") == self.state.session_id)
+                and (
+                    ea.get("adventure_id") == adv_id
+                    or ea.get("session_id") == self.state.session_id
+                )
                 for ea in user_awards
             )
             if not already_earned:
-                user_awards.append({
-                    "key": award_key,
-                    "title": SPOILER_SEEKER_AWARD["title"],
-                    "description": SPOILER_SEEKER_AWARD["description"],
-                    "tier": SPOILER_SEEKER_AWARD["tier"],
-                    "requirement": SPOILER_SEEKER_AWARD["requirement"],
-                    "template_id": adv_id,
-                    "adventure_id": adv_id,
-                    "adventure_title": adv_title,
-                    "session_id": self.state.session_id,
-                    "earned_at": now,
-                })
+                user_awards.append(
+                    {
+                        "key": award_key,
+                        "title": SPOILER_SEEKER_AWARD["title"],
+                        "description": SPOILER_SEEKER_AWARD["description"],
+                        "tier": SPOILER_SEEKER_AWARD["tier"],
+                        "requirement": SPOILER_SEEKER_AWARD["requirement"],
+                        "template_id": adv_id,
+                        "adventure_id": adv_id,
+                        "adventure_title": adv_title,
+                        "session_id": self.state.session_id,
+                        "earned_at": now,
+                    }
+                )
                 self.user.earned_awards = user_awards
                 flag_modified(self.user, "earned_awards")
                 await self.manager._save_chat_message(
@@ -911,14 +1062,14 @@ class TurnInteractionsManager:
                     if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
                         item_idx = idx
                         break
-                
+
                 if item_idx == -1:
                     response = f"You don't have '{item_name}' in your inventory."
                 else:
                     new_inventory = list(self.avatar.inventory)
                     dropped_item = new_inventory.pop(item_idx)
                     self.avatar.inventory = new_inventory
-                    
+
                     # Spawn in scene
                     await self._spawn_scene_item(dropped_item)
                     response = f"You dropped {dropped_item.get('name')}."
@@ -928,17 +1079,32 @@ class TurnInteractionsManager:
                     adv_id = (
                         getattr(self.manager.adventure, "id", None)
                         if hasattr(self.manager, "adventure") and self.manager.adventure
-                        else (getattr(self.avatar, "template_id", None) or getattr(self.state, "template_id", None))
+                        else (
+                            getattr(self.avatar, "template_id", None)
+                            or getattr(self.state, "template_id", None)
+                        )
                     )
-                    if dropped_id and adv_id and (not drop_meta.get("on_drop_script") and not drop_meta.get("on_drop_text")):
+                    if (
+                        dropped_id
+                        and adv_id
+                        and (
+                            not drop_meta.get("on_drop_script")
+                            and not drop_meta.get("on_drop_text")
+                        )
+                    ):
                         ent_res = await self.db.execute(
-                            select(WorldEntity).where(
+                            select(WorldEntity)
+                            .where(
                                 func.upper(WorldEntity.id) == str(dropped_id).strip().upper(),
                                 or_(
                                     WorldEntity.session_id == self.game_id,
-                                    and_(WorldEntity.template_id == adv_id, WorldEntity.session_id.is_(None))
-                                )
-                            ).order_by(WorldEntity.session_id.desc().nulls_last())
+                                    and_(
+                                        WorldEntity.template_id == adv_id,
+                                        WorldEntity.session_id.is_(None),
+                                    ),
+                                ),
+                            )
+                            .order_by(WorldEntity.session_id.desc().nulls_last())
                         )
                         db_ent = ent_res.scalars().first()
                         if db_ent and db_ent.metadata_json:
@@ -947,7 +1113,9 @@ class TurnInteractionsManager:
                                     drop_meta[k] = v
 
                     if drop_meta.get("on_drop_script") and dropped_id:
-                        script_msgs = await self.manager._execute_inline_script(drop_meta["on_drop_script"], "on_drop", str(dropped_id))
+                        script_msgs = await self.manager._execute_inline_script(
+                            drop_meta["on_drop_script"], "on_drop", str(dropped_id)
+                        )
                         for sm in script_msgs:
                             role = getattr(sm, "role", "system")
                             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
@@ -960,8 +1128,14 @@ class TurnInteractionsManager:
             if not container_hint:
                 response = "Usage: /open <container>"
             else:
-                scene_container, inventory_container, _ = await self._resolve_container_target(container_hint)
-                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                scene_container, inventory_container, _ = await self._resolve_container_target(
+                    container_hint
+                )
+                container_name = (
+                    (scene_container.name if scene_container else inventory_container.get("name"))
+                    if (scene_container or inventory_container)
+                    else None
+                )
                 if not container_name:
                     response = f"No container named '{container_hint}' was found."
                 else:
@@ -969,7 +1143,9 @@ class TurnInteractionsManager:
                     if is_locked:
                         response = f"{container_name} is locked."
                     else:
-                        container_inventory = await self._get_container_inventory(scene_container, inventory_container)
+                        container_inventory = await self._get_container_inventory(
+                            scene_container, inventory_container
+                        )
                         response = f"{container_name} contains {len(container_inventory)} item(s)."
 
         if response.startswith("[TRIGGER_SWITCH]"):
@@ -981,8 +1157,16 @@ class TurnInteractionsManager:
             if not container_hint:
                 response = "Usage: /container_take_all <container>"
             else:
-                scene_container, inventory_container, inventory_idx = await self._resolve_container_target(container_hint)
-                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                (
+                    scene_container,
+                    inventory_container,
+                    inventory_idx,
+                ) = await self._resolve_container_target(container_hint)
+                container_name = (
+                    (scene_container.name if scene_container else inventory_container.get("name"))
+                    if (scene_container or inventory_container)
+                    else None
+                )
                 if not container_name:
                     response = f"No container named '{container_hint}' was found."
                 else:
@@ -990,7 +1174,9 @@ class TurnInteractionsManager:
                     if is_locked:
                         response = f"{container_name} is locked."
                     else:
-                        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                        raw_items = await self._get_container_inventory(
+                            scene_container, inventory_container
+                        )
                         normalized_items = await self._normalize_container_items(raw_items)
                         if not normalized_items:
                             response = f"{container_name} is empty."
@@ -1000,16 +1186,30 @@ class TurnInteractionsManager:
                                 new_inventory.append(item)
                                 await self._move_container_item_to_inventory(item)
                             self.avatar.inventory = new_inventory
-                            await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                            await self._clear_container_inventory(
+                                scene_container, inventory_container, inventory_idx
+                            )
                             response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+
+        if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):
+            take_args = response.replace("[TRIGGER_CONTAINER_TAKE_ITEM]", "").strip()
+            response = await self._take_single_container_item(take_args)
 
         if response.startswith("[TRIGGER_CONTAINER_DROP_SCENE]"):
             container_hint = response.replace("[TRIGGER_CONTAINER_DROP_SCENE]", "").strip()
             if not container_hint:
                 response = "Usage: /container_drop_scene <container>"
             else:
-                scene_container, inventory_container, inventory_idx = await self._resolve_container_target(container_hint)
-                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                (
+                    scene_container,
+                    inventory_container,
+                    inventory_idx,
+                ) = await self._resolve_container_target(container_hint)
+                container_name = (
+                    (scene_container.name if scene_container else inventory_container.get("name"))
+                    if (scene_container or inventory_container)
+                    else None
+                )
                 if not container_name:
                     response = f"No container named '{container_hint}' was found."
                 else:
@@ -1017,7 +1217,9 @@ class TurnInteractionsManager:
                     if is_locked:
                         response = f"{container_name} is locked."
                     else:
-                        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                        raw_items = await self._get_container_inventory(
+                            scene_container, inventory_container
+                        )
                         normalized_items = await self._normalize_container_items(raw_items)
                         if not normalized_items:
                             response = f"{container_name} is empty."
@@ -1026,21 +1228,29 @@ class TurnInteractionsManager:
                                 moved = await self._move_container_item_to_scene(item)
                                 if not moved:
                                     await self._spawn_scene_item(item)
-                            await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                            await self._clear_container_inventory(
+                                scene_container, inventory_container, inventory_idx
+                            )
                             response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
 
         if response.startswith("[TRIGGER_EQUIP]"):
             parts = response.replace("[TRIGGER_EQUIP]", "").strip().split("|", 1)
             item_id = parts[0].strip() if len(parts) > 0 else ""
             msg = parts[1].strip() if len(parts) > 1 else response
-            
+
             if item_id and item_id != "None":
-                ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.session_id == self.state.session_id))
+                ent_res = await self.db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.id == item_id, WorldEntity.session_id == self.state.session_id
+                    )
+                )
                 ent_obj = ent_res.scalars().first()
                 if ent_obj:
                     meta = dict(ent_obj.metadata_json or {})
                     if meta.get("on_equip_script"):
-                        msgs = await self.manager._execute_inline_script(meta["on_equip_script"], "on_equip", item_id)
+                        msgs = await self.manager._execute_inline_script(
+                            meta["on_equip_script"], "on_equip", item_id
+                        )
                         for m in msgs:
                             role = getattr(m, "role", "system")
                             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
@@ -1053,14 +1263,20 @@ class TurnInteractionsManager:
             parts = response.replace("[TRIGGER_UNEQUIP]", "").strip().split("|", 1)
             item_id = parts[0].strip() if len(parts) > 0 else ""
             msg = parts[1].strip() if len(parts) > 1 else response
-            
+
             if item_id and item_id != "None":
-                ent_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.session_id == self.state.session_id))
+                ent_res = await self.db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.id == item_id, WorldEntity.session_id == self.state.session_id
+                    )
+                )
                 ent_obj = ent_res.scalars().first()
                 if ent_obj:
                     meta = dict(ent_obj.metadata_json or {})
                     if meta.get("on_unequip_script"):
-                        msgs = await self.manager._execute_inline_script(meta["on_unequip_script"], "on_unequip", item_id)
+                        msgs = await self.manager._execute_inline_script(
+                            meta["on_unequip_script"], "on_unequip", item_id
+                        )
                         for m in msgs:
                             role = getattr(m, "role", "system")
                             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
@@ -1074,7 +1290,7 @@ class TurnInteractionsManager:
             action_msg = self._consume_item_now(item_name)
             await self._save_chat_message("system", action_msg)
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': action_msg})}\n\n"
-            response = action_msg # Allow it to fall through to persist and yield final state
+            response = action_msg  # Allow it to fall through to persist and yield final state
 
         # PERSIST AND YIELD RESPONSE (For all commands including equip/unequip)
         if response and not response.startswith("[TRIGGER_"):
@@ -1083,10 +1299,17 @@ class TurnInteractionsManager:
 
         # Check sequence progress deterministically
         adv = getattr(self.manager, "adventure", None)
+        script_context = None
+        if hasattr(self, "manager") and hasattr(self.manager, "_build_script_context"):
+            try:
+                script_context = await self.manager._build_script_context()
+            except Exception as exc:
+                logger.warning("Could not build script context for sequence evaluation: %s", exc)
         seq_messages = AdventureLogic.evaluate_sequence_progress(
             adventure=adv,
             state=self.state,
             avatar=self.avatar,
+            script_context=script_context,
         )
         if seq_messages:
             for seq_msg in seq_messages:
@@ -1097,19 +1320,24 @@ class TurnInteractionsManager:
         if self.pending_pickup_trigger:
             # Caller chains an LLM pass, which emits the final event itself.
             return
-        final_data = jsonable_encoder({
-            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
-            'entities': await AdventureLogic.build_session_entities(self.db, self.state),
-            'combat': AdventureLogic.get_combat_snapshot(self.state),
-            'active_sequence': AdventureLogic.resolve_active_sequence(adv, self.state),
-            **self._build_prompt_suggestions_payload(),
-            **self._build_terminal_flags_payload(),
-        })
+        final_data = jsonable_encoder(
+            {
+                "sheet": await AdventureLogic.build_sheet_snapshot(
+                    self.avatar, self.state, self.db
+                ),
+                "entities": await AdventureLogic.build_session_entities(self.db, self.state),
+                "combat": AdventureLogic.get_combat_snapshot(self.state),
+                "active_sequence": AdventureLogic.resolve_active_sequence(adv, self.state),
+                **self._build_prompt_suggestions_payload(),
+                **self._build_terminal_flags_payload(),
+            }
+        )
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
-        self.stop_requested = True # Stop after direct slash response
+        self.stop_requested = True  # Stop after direct slash response
 
-
-    async def _resolve_container_target(self, hint: str) -> tuple[WorldEntity | None, dict[str, Any] | None, int | None]:
+    async def _resolve_container_target(
+        self, hint: str
+    ) -> tuple[WorldEntity | None, dict[str, Any] | None, int | None]:
         normalized_hint = (hint or "").strip().lower()
         if not normalized_hint:
             return None, None, None
@@ -1139,7 +1367,9 @@ class TurnInteractionsManager:
 
         return None, None, None
 
-    async def _get_container_inventory(self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None) -> list[Any]:
+    async def _get_container_inventory(
+        self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None
+    ) -> list[Any]:
         if scene_container:
             states = dict(self.state.entity_states or {})
             state_inv = (states.get(scene_container.id) or {}).get("inventory")
@@ -1166,7 +1396,9 @@ class TurnInteractionsManager:
             )
             ent = ent_res.scalars().first()
             if ent:
-                item_data = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
+                item_data = jsonable_encoder(
+                    {c.name: getattr(ent, c.name) for c in ent.__table__.columns}
+                )
                 metadata = dict(ent.metadata_json or {})
                 for key in [
                     "hp_change",
@@ -1256,22 +1488,73 @@ class TurnInteractionsManager:
         inventory_container: dict[str, Any] | None,
         inventory_idx: int | None,
     ) -> None:
+        await self._set_container_inventory(scene_container, inventory_container, inventory_idx, [])
+
+    async def _take_single_container_item(self, args: str) -> str:
+        """Handle `/container_take_item <container> | <item id or name>`."""
+        container_hint, _, item_hint = (part.strip() for part in args.partition("|"))
+        if not container_hint or not item_hint:
+            return "Usage: /container_take_item <container> | <item>"
+
+        scene_container, inventory_container, inventory_idx = await self._resolve_container_target(
+            container_hint
+        )
+        source = scene_container or inventory_container
+        if not source:
+            return f"No container named '{container_hint}' was found."
+        container_name = (
+            scene_container.name if scene_container else inventory_container.get("name")
+        )
+        if self._is_container_locked(scene_container, inventory_container):
+            return f"{container_name} is locked."
+
+        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+        wanted = item_hint.lower()
+        match_idx = None
+        match_item: dict[str, Any] | None = None
+        for idx, raw in enumerate(raw_items):
+            normalized = await self._normalize_container_item_ref(raw)
+            if not normalized:
+                continue
+            candidates = {str(normalized.get(k) or "").lower() for k in ("id", "name")}
+            if wanted in candidates:
+                match_idx, match_item = idx, normalized
+                break
+        if match_idx is None or match_item is None:
+            return f"{container_name} does not contain '{item_hint}'."
+
+        await self._move_container_item_to_inventory(match_item)
+        self.avatar.inventory = [*(self.avatar.inventory or []), match_item]
+        remaining = [raw for idx, raw in enumerate(raw_items) if idx != match_idx]
+        await self._set_container_inventory(
+            scene_container, inventory_container, inventory_idx, remaining
+        )
+        return f"You take {match_item.get('name') or item_hint} from {container_name}."
+
+    async def _set_container_inventory(
+        self,
+        scene_container: WorldEntity | None,
+        inventory_container: dict[str, Any] | None,
+        inventory_idx: int | None,
+        items: list[Any],
+    ) -> None:
         if scene_container:
-            scene_container.inventory = []
+            scene_container.inventory = list(items)
             self.db.add(scene_container)
 
             states = dict(self.state.entity_states or {})
             if scene_container.id not in states:
                 states[scene_container.id] = {}
-            states[scene_container.id]["inventory"] = []
+            states[scene_container.id]["inventory"] = list(items)
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
 
         if inventory_container is not None and inventory_idx is not None:
             updated_inventory = list(self.avatar.inventory or [])
-            if 0 <= inventory_idx < len(updated_inventory) and isinstance(updated_inventory[inventory_idx], dict):
+            if 0 <= inventory_idx < len(updated_inventory) and isinstance(
+                updated_inventory[inventory_idx], dict
+            ):
                 updated_container = dict(updated_inventory[inventory_idx])
-                updated_container["inventory"] = []
+                updated_container["inventory"] = list(items)
                 updated_inventory[inventory_idx] = updated_container
                 self.avatar.inventory = updated_inventory
-

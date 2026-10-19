@@ -6,6 +6,7 @@ import { api } from '@/composables/useApi'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { formatObjectIds } from '@/utils/editor_utils'
+import { getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 
 const props = defineProps<{
   open: boolean
@@ -14,10 +15,13 @@ const props = defineProps<{
   format: string
   content: string
   imageUrl?: string | null
+  canTake?: boolean
+  isTaking?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'take'): void
 }>()
 
 const { language } = useGameSocket()
@@ -25,6 +29,7 @@ const { addNotification } = useNotifications()
 const translatedContent = ref('')
 const translatedLanguage = ref('')
 const isTranslating = ref(false)
+const imgFailed = ref(false)
 
 const formatLabel = (value: string) => {
   const normalized = String(value || '').toUpperCase()
@@ -34,6 +39,32 @@ const formatLabel = (value: string) => {
 }
 
 const normalizedFormat = computed(() => formatLabel(props.format))
+
+const formatIcon = computed(() => {
+  switch (normalizedFormat.value) {
+    case 'BOOK':
+      return 'ra-book'
+    case 'SCROLL':
+      return 'ra-scroll-unfurled'
+    case 'SIGN':
+      return 'ra-wooden-sign'
+    case 'DOCUMENT':
+    default:
+      return 'ra-quill-ink'
+  }
+})
+
+const resolvedImageUrl = computed(() => {
+  if (!hasRenderableImagePath(props.imageUrl)) return ''
+  return getImageUrl(props.imageUrl, { thumbnail: true }) || props.imageUrl || ''
+})
+
+watch(
+  () => props.imageUrl,
+  () => {
+    imgFailed.value = false
+  },
+)
 
 const contentTypographyClass = computed(() => {
   switch (normalizedFormat.value) {
@@ -121,14 +152,20 @@ watch(
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <div v-if="open" class="fixed inset-0 z-[120] flex items-center justify-center p-4">
+      <div v-if="open" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="emit('close')" />
 
         <div class="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-3xl border border-slate-700 bg-slate-950 shadow-2xl flex flex-col">
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
             <div class="min-w-0 flex items-start gap-3">
-              <div v-if="imageUrl" class="w-10 h-10 rounded-lg overflow-hidden border border-slate-800 bg-slate-900/80 shrink-0">
-                <img :src="imageUrl" class="w-full h-full object-contain" />
+              <div class="w-10 h-10 rounded-lg overflow-hidden border border-slate-800 bg-slate-900/80 shrink-0 flex items-center justify-center">
+                <img
+                  v-if="resolvedImageUrl && !imgFailed"
+                  :src="resolvedImageUrl"
+                  class="w-full h-full object-contain"
+                  @error="imgFailed = true"
+                />
+                <i v-else :class="['ra text-amber-400/90 text-lg', formatIcon]"></i>
               </div>
               <div class="min-w-0">
                 <h3 class="text-lg font-black uppercase tracking-wide text-amber-100 truncate">{{ title }}</h3>
@@ -136,6 +173,16 @@ watch(
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <button
+                v-if="canTake"
+                :disabled="isTaking"
+                class="px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 hover:text-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="emit('take')"
+                title="Take this item into your inventory"
+              >
+                <i :class="isTaking ? 'ra ra-hourglass' : 'ra ra-backpack'"></i>
+                <span>{{ isTaking ? 'Taking...' : 'Take' }}</span>
+              </button>
               <button
                 :disabled="!canTranslate || isTranslating"
                 class="px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2"

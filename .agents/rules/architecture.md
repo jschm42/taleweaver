@@ -25,38 +25,47 @@ TaleWeaver adventures are represented as self-contained blueprints following spe
 * **`objects`**: Interactive scene items or inventory objects (`CONTAINER`, `SWITCH`, `WEAPON`, `WEARABLE`, `CONSUMABLE`, `KEY`, `READABLE`, `CONSTRUCTABLE`). Containers support locks and nested items; switches hold finite state machines (`switch_states`, `switch_actions`).
 * **`quests`**: Main and side quests with clear objectives and EXP rewards.
 * **`awards`**: Achievements (`bronze`, `silver`, `gold`) evaluated during turn execution.
-* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`) via the `tw` GameContext API.
+* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message.
 
 ---
 
 ## 2. In-Game Turn Loop & Multi-Pass Pipeline (`GameTurnManager`)
 
-Every player turn executes through a deterministic, guardrailed multi-pass architecture in [gameplay_logic.py](file:///d:/DEV/repositories/git/taleweaver/backend/api/routes/adventures/gameplay_logic.py):
+Every player message executes through a deterministic, guardrailed multi-pass architecture in [gameplay_logic.py](file:///d:/DEV/repositories/git/taleweaver/backend/api/routes/adventures/gameplay_logic.py), with shared building blocks in `turn_pass_flow.py` (guardrail chain, turn clock) and `turn_prompt_layout.py` (message layout):
 
 ```mermaid
 graph TD
-    A["Player Turn Input"] --> B["Pre-Turn Hook (on_turn_start)"]
-    B --> C["Pass 1: Mechanics Evaluation (Fast/Small Model)"]
+    A["Player Message"] --> C["Pass 1: Mechanics Evaluation (Fast/Small Model)"]
     C --> D["Dice Resolution (Skill Checks / Attacks)"]
     D --> E["Pass 1.5: Deterministic Rule Enforcement & Reversion"]
     E -->|Valid updates applied| F["Apply Game State Mutations"]
     E -->|Violations gathered| G["Override Narrative with rule_violations"]
-    F --> H["Pass 2: Narration Generation (Creative/Complex Model)"]
-    G --> H
-    H --> I["Post-Turn (Checkpoints, Telemetry, Persistence)"]
+    F --> T{"Scene or sequence changed?"}
+    G --> T
+    T -->|yes| U["In-game turn: on_turn_end -> time_per_turn + status ticks -> on_turn_start"]
+    T -->|no| H
+    U --> H["Pass 2: Narration Generation (Creative/Complex Model)"]
+    H --> I["Post-Message (Checkpoints, Telemetry, Persistence)"]
 ```
 
-### Pre-Turn Hook: `on_turn_start`
-* Sandboxed Python scripts run before player action is parsed.
-* Can apply passive damage, environment effects, or trigger game over/victory conditions.
+### In-Game Turns (Turn Clock)
+* An **in-game turn** spans all player messages within one scene and active sequence. It is NOT the same as a player message.
+* Only when the scene or the active sequence changes (`turn_pass_flow.crossed_turn_boundary`), the engine runs `on_turn_end` (old turn), advances `time_per_turn` and status-effect ticks, then runs `on_turn_start` (new turn).
+* LLM-requested `extra_time_minutes` still applies on any message. Per-message script logic belongs in `on_logic_pass_done` / `on_narration_done`.
+
+### Prompt Layout (Token Efficiency)
+* System prompts are **static** (persona, adventure frame, rules, formatting, voice direction) so providers can cache them across messages; Anthropic models get explicit `cache_control` breakpoints (`backend/core/llm_request_tuning.py`).
+* Everything volatile (CURRENT STATE block: time, location, NPCs, character sheet, notes, memories, compressed history; quests/awards; outcome; violations; reminders) goes into the **latest user message**.
+* Pass 2 history contains only player/GM messages of previous turns; system events are kept for the current message only, and `[DEBUG` lines are never sent.
 
 ### Pass 1: Mechanics Evaluation (Small/Fast Model)
-* Uses `small_model` (e.g. Gemini Flash / GPT-4o-mini) with structured output schema `GameEvent`.
-* Evaluates player intent against current scene state.
+* Uses `small_model` (e.g. Gemini Flash / GPT-4o-mini) with the trimmed structured output schema `MechanicsIntent` (strict/story) or `ChatProgressionIntent` (chat mode) from `backend/engine/llm_intents.py`, converted to `GameEvent` afterwards. Backend-filled result fields and generator tools are never sent to the model.
+* Evaluates player intent against current scene state plus the tail of the last GM narration (to resolve references like "open it").
 * Generates requested state updates:
   * Skill checks (`requested_skill_checks`) & attacks (`requested_attacks`).
   * Entity updates (opening containers, moving items, flipping switches).
   * Exit lock state changes & proposed scene transitions (`new_scene_id`).
+* Its `narrative_description` is a short English draft; translation happens in Pass 2 only.
 * **Rule**: Spontaneous/dynamic item generation is strictly disabled. Items must already exist in world/NPC definitions.
 
 ### Mechanics Resolution: Deterministic Dice Engine
@@ -67,27 +76,29 @@ graph TD
 ### Pass 1.5: Rule Validation & Reversion (Critical Guardrail)
 * **Design Rule**: Never parse freeform text to identify which entity or container the player is interacting with.
 * Instead, systematically inspect any state updates requested by the LLM in Pass 1:
-  * **Containers**: Validate if `item_to_unlock` is in the player's inventory, or if `unlock_code` matches. Enforce that key items are actively referenced.
-  * **Exits & Movement**: Validate exit locks, destination scene graph connectivity, and prevent accidental teleports from hypothetical chat.
+  * **Containers & Exits (Deterministic Unlock Guard)**: Validate if `item_to_unlock` is in inventory, `unlock_code` matches, or if deterministic guard `unlock_expression` evaluates to truthy. Execute `on_unlock_success` or `on_unlock_failure` scripts accordingly.
+  * **Exits & Movement**: Validate exit locks, destination scene graph connectivity, and fire transition hooks (`on_leave_scene`, `on_open_exit`, `on_exit_used`, `on_enter_scene`) while preventing accidental teleports from hypothetical chat.
   * **Switches**: Verify state transitions match allowed `switch_states`.
-  * **Constructables**: Validate that all `combination_ingredients` are present in player inventory.
+  * **Constructables**: Validate that all `combination_ingredients` are present in player inventory and verify `craft_guard_expression`.
+  * **Quests & Awards (Deterministic Hard Rules & Scripting Guards)**: Validate LLM-proposed quest completions and award grants against defined hard rules (`required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`). If any configured hard rule is unmet, the completion/grant is reverted and recorded as a rule violation, forcing Pass 2 to narrate the unmet condition.
   * **Hidden Entities**: Require explicit search/inspection actions before revealing hidden NPCs or items.
 * **Reversion Mechanism**: Any invalid state change is immediately **reverted** back to its pre-turn database state.
 * Violations are recorded into the `rule_violations` list.
 
 ### Pass 2: Narration Generation (Complex/Creative Model)
 * Uses `complex_model` (e.g. Gemini Pro / Claude Opus / GPT-4o) with streaming narration.
-* Injects:
+* Receives a TURN RESOLUTION block in the latest user message:
   1. Technical outcome JSON (pruned `GameEvent` summary).
   2. Draft narration from Pass 1.
   3. **Critical Violation Overrides**: If `rule_violations` contains entries, `game_event.narrative_description` is replaced with the failure reason.
   4. Vocal/TTS style tags (`[excited]`, `<sigh>`, `<whisper>`) for atmospheric speech.
+* The narration view of the location never contains lock secrets (codes, key items, unlock rules); unlocks are resolved by Pass 1 and the guardrails.
 * **Enforcement**: This forces the creative model to narrate failure accurately rather than hallucinating success.
 
-### Post-Turn: Persistence & Checkpoints
+### Post-Message: Persistence & Checkpoints
 * Updates committed to SQLite `SessionState`.
 * Checkpoints created on milestones (`SCENE_CHANGE`, `QUEST_UPDATE`, `AWARD_GRANTED`).
-* Performance metrics logged via `log_structured_event` (p50/p90 latency monitoring).
+* Performance metrics logged via `log_structured_event` (p50/p90 latency monitoring); narration token usage (incl. cached prompt tokens) as `gm.turn.pipeline.tokens`.
 
 ---
 

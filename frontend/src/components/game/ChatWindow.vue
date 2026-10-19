@@ -642,6 +642,9 @@ function formatVoiceTags(text: string): string {
     // Check if tag is "leading" in its context (start of string, whitespace, quotes, or colon)
     if (!prevChar || /[\s"':]/.test(prevChar)) {
       const label = escapeHtml(tag.slice(1, -1).trim())
+      if (/^DEBUG/i.test(label)) {
+        return match
+      }
       return `<span class="voice-tag-label">${label}</span>`
     }
     
@@ -656,6 +659,13 @@ function fixNewlines(text: string | null | undefined): string {
 
 function displayMessageContent(msg: ChatMessage): string {
   let content = msg.content
+  const isDebug = (msg as any).is_debug || /^\s*(\[DEBUG|DEBUG:|--- DEBUG)/i.test(content)
+  if (!isDebug) {
+    content = content
+      .replace(/\s*\[DEBUG:\s*Trigger fired\][^\n]*/gi, '')
+      .replace(/\s*\[DEBUG\][^\n]*/gi, '')
+      .trim()
+  }
   if (msg.role === 'system') {
     content = content
       .replace(/^\s*\[system\]\s*/i, '')

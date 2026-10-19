@@ -33,6 +33,7 @@ import AboutModal from '@/components/portal/AboutModal.vue'
 import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
 import CloneProgressModal from '@/components/portal/CloneProgressModal.vue'
+import ExportProgressModal from '@/components/portal/ExportProgressModal.vue'
 import GenerationProgressModal from '@/components/portal/GenerationProgressModal.vue'
 import MigrateAdventureModal from '@/components/portal/MigrateAdventureModal.vue'
 import type { AdventureTemplateSummary } from '@/types'
@@ -91,6 +92,7 @@ const {
   executeDeleteSession,
   executeDeleteAllSessions,
   copySession,
+  duplicateAdventure,
   confirmDeleteTemplate,
   executeDeleteTemplate,
   executeDeleteAllTemplates,
@@ -432,6 +434,7 @@ onUnmounted(() => {
               @migrate="openMigrateModal"
               @cover="openCoverCreate"
               @edit="editAdventure"
+              @duplicate="duplicateAdventure"
               @export-adz="exportAdventureAdz"
               @export-adv="exportAdventureAdv"
               @delete="confirmDeleteTemplate"
@@ -461,6 +464,7 @@ onUnmounted(() => {
               @migrate="openMigrateModal"
               @cover="openCoverCreate"
               @edit="editAdventure"
+              @duplicate="duplicateAdventure"
               @export-adz="exportAdventureAdz"
               @export-adv="exportAdventureAdv"
               @delete="confirmDeleteTemplate"
@@ -607,6 +611,7 @@ onUnmounted(() => {
         :progress="cloneProgressState.progress"
         :stage="cloneProgressState.stage"
         :error-msg="cloneProgressState.errorMsg"
+        :item-type="cloneProgressState.itemType"
         @close="cloneProgressState.isOpen = false"
       />
 

@@ -31,6 +31,7 @@ const emit = defineEmits<{
   (e: 'migrate', template: any): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
+  (e: 'duplicate', templateId: string): void
   (e: 'export-adz', templateId: string, title: string): void
   (e: 'export-adv', templateId: string, title: string): void
   (e: 'delete', templateId: string, title: string): void
@@ -81,7 +82,7 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 xl:gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 xl:gap-4">
       <PortalCreateAdventureCard @click="$emit('create')" />
 
       <GenerateWorldCard @generate="$emit('generate-world')" />
@@ -119,6 +120,7 @@ onUnmounted(() => {
         @migrate="(tpl) => $emit('migrate', tpl)"
         @cover="(id) => $emit('cover', id)"
         @edit="(id) => $emit('edit', id)"
+        @duplicate="(id) => $emit('duplicate', id)"
         @export-adz="(id, title) => $emit('export-adz', id, title)"
         @export-adv="(id, title) => $emit('export-adv', id, title)"
         @delete="(id, title) => $emit('delete', id, title)"

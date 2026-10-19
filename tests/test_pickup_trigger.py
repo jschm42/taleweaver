@@ -83,7 +83,7 @@ async def _seed_template(username: str, trigger: dict | None) -> str:
 async def test_pickup_trigger_chains_llm_pass(client, setup_test_db, monkeypatch, trigger, expect_prompt, expect_text):
     prompts: list[str] = []
 
-    async def fake_cycle(self, user_msg, auto_visualize, language=None):
+    async def fake_cycle(self, user_msg, auto_visualize, language=None, narration_only=False):
         prompts.append(user_msg)
         yield 'event: final\ndata: {"status": "success"}\n\n'
 

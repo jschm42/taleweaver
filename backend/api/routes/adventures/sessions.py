@@ -33,10 +33,11 @@ from backend.models.game_session import GameSession
 from backend.models.session_checkpoint import SessionCheckpoint
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from sqlalchemy import delete
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.game_state import GameState
 from backend.models.world_map import WorldMap
+from backend.engine.scripting.context import GameContext
+from backend.engine.scripting.runner import ScriptRunner
 from backend.schemas.checkpoint import RestoreCheckpointResponse, SessionCheckpointResponse
 from backend.utils.path_security import (
     data_url_to_local_path,
@@ -62,7 +63,20 @@ ITEM_INTEGRITY_FIELDS = [
 ]
 
 _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-_SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+_SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"}
+
+
+def _is_svg_file(file_path: str, ext: str = "") -> bool:
+    """Check if file is an SVG by extension or header sniffing."""
+    if ext.lower() == ".svg" or file_path.lower().endswith(".svg"):
+        return True
+    if not os.path.isfile(file_path):
+        return False
+    try:
+        with open(file_path, "rb") as f:
+            return b"<svg" in f.read(512).lower()
+    except OSError:
+        return False
 
 
 def _normalize_data_asset_url(source_url: Optional[str]) -> Optional[str]:
@@ -221,6 +235,11 @@ def _copy_data_asset_to_session(
             shutil.copy2(source_thumb_path, target_thumb_path)
         except OSError:
             logger.warning("Failed copying asset thumbnail to session folder: %s -> %s", source_thumb_path, target_thumb_path)
+    elif _is_svg_file(target_path, ext):
+        try:
+            shutil.copy2(target_path, target_thumb_path)
+        except OSError:
+            logger.warning("Failed copying SVG asset thumbnail to session folder: %s -> %s", target_path, target_thumb_path)
     else:
         try:
             from PIL import Image
@@ -694,6 +713,54 @@ async def start_session_for_template(
     initial_turns = adv_turns if adv_turns is not None else (configured_turns or 10)
     initial_compression = bool(user_llm_settings.get("enable_history_compression", True))
 
+    # Execute adventure initialization script and on_init triggers if configured
+    manifest = getattr(adventure, "original_manifest", None) or {}
+    adv_scripts = manifest.get("scripts", [])
+    adv_init_script = manifest.get("init_script") or getattr(adventure, "init_script", None)
+    init_narrative_messages: list[str] = []
+
+    if adv_init_script or any(
+        isinstance(s, dict) and s.get("trigger") == "on_init" for s in adv_scripts
+    ):
+        entities_map = {ent.id: ent.__dict__.copy() for ent in template_entities if ent.id}
+        avatar_dict = {
+            "name": avatar.name,
+            "hp": avatar.hp,
+            "mana": avatar.mana,
+            "stamina": avatar.stamina,
+            "inventory": list(avatar.inventory or []),
+            "status_effects": list(avatar.status_effects or []),
+        }
+        init_context = GameContext(
+            avatar_data=avatar_dict,
+            current_scene_id=first_scene_id,
+            entities=entities_map,
+            exit_states={},
+            quests=deepcopy(adventure.quests or []),
+            script_vars={},
+            in_game_time=0,
+            story_flags={},
+            is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
+        )
+        runner = ScriptRunner(scripts=adv_scripts, init_script=adv_init_script)
+        cs = runner.run_init_script(init_context)
+
+        script_vars = dict(cs.var_updates)
+        script_vars["__init_script_executed__"] = True
+        initial_entity_states["__script_vars__"] = script_vars
+
+        if getattr(cs, "story_flag_updates", None):
+            initial_entity_states["__switch_story_flags__"] = dict(cs.story_flag_updates)
+
+        if cs.player_hp_change:
+            avatar.hp = max(0, min(avatar.max_hp, avatar.hp + cs.player_hp_change))
+        if cs.player_mana_change:
+            avatar.mana = max(0, min(avatar.max_mana, avatar.mana + cs.player_mana_change))
+        if cs.player_stamina_change:
+            avatar.stamina = max(0, min(avatar.max_stamina, avatar.stamina + cs.player_stamina_change))
+
+        init_narrative_messages.extend([str(m) for m in cs.narrative_messages])
+
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0,
@@ -709,6 +776,8 @@ async def start_session_for_template(
         walkthrough=adventure.walkthrough,
         completed_condition=adventure.completed_condition,
         gameover_condition=adventure.gameover_condition,
+        completed_guard_expression=adventure.completed_guard_expression,
+        gameover_guard_expression=adventure.gameover_guard_expression,
         tts_director_notes=adventure.tts_director_notes,
         selected_image_styles=deepcopy(adventure.selected_image_styles),
         selected_tone=deepcopy(adventure.selected_tone)
@@ -736,6 +805,9 @@ async def start_session_for_template(
     intro_text = (adventure.intro_text or "").strip()
     if intro_text:
         db.add(ChatMessage(session_id=new_session.id, role="system", content=intro_text))
+
+    for msg in init_narrative_messages:
+        db.add(ChatMessage(session_id=new_session.id, role="system", content=msg))
     
     # --- DEEP CLONE WORLD DATA ---
     # 1. Clone Scenes
@@ -1127,6 +1199,8 @@ async def copy_session(
             walkthrough=original_state.walkthrough,
             completed_condition=original_state.completed_condition,
             gameover_condition=original_state.gameover_condition,
+            completed_guard_expression=original_state.completed_guard_expression,
+            gameover_guard_expression=original_state.gameover_guard_expression,
             tts_director_notes=original_state.tts_director_notes,
             selected_image_styles=deepcopy(original_state.selected_image_styles),
             selected_tone=deepcopy(original_state.selected_tone),

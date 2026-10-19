@@ -3,8 +3,11 @@
  * SceneTransitionOverlay — Atmospheric scene transition curtain
  *
  * Displays a cinematic loading veil with rotating compass rose, destination banner,
- * and fantasy shimmer effect when traversing between scenes.
+ * and fantasy shimmer effect when traversing between scenes. When the destination
+ * scene has an image, it is revealed behind the veil with a slow Ken Burns drift
+ * and layered gradient vignettes.
  */
+import { ref, watch } from 'vue'
 import { Compass, Sparkles } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -12,7 +15,20 @@ const props = defineProps<{
   targetSceneName?: string | null
   exitLabel?: string | null
   statusText?: string | null
+  backgroundImageUrl?: string | null
 }>()
+
+const imageLoaded = ref(false)
+const imageFailed = ref(false)
+
+watch(
+  () => props.backgroundImageUrl,
+  () => {
+    imageLoaded.value = false
+    imageFailed.value = false
+  },
+)
+
 function formatSceneTitle(name?: string | null): string {
   if (!name) return ''
   const trimmed = String(name).trim()
@@ -30,8 +46,39 @@ function formatSceneTitle(name?: string | null): string {
   <Transition name="scene-veil">
     <div
       v-if="props.active"
-      class="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 select-none bg-slate-950/90 backdrop-blur-xl bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900/80 via-slate-950/95 to-slate-950"
+      class="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 select-none overflow-hidden bg-slate-950"
     >
+      <!-- Destination Scene Backdrop -->
+      <div class="absolute inset-0 pointer-events-none">
+        <img
+          v-if="props.backgroundImageUrl && !imageFailed"
+          :src="props.backgroundImageUrl"
+          alt=""
+          class="scene-backdrop absolute inset-0 w-full h-full object-cover object-center"
+          :class="{ 'is-loaded': imageLoaded }"
+          @load="imageLoaded = true"
+          @error="imageFailed = true"
+        />
+
+        <!-- Base radial veil (also the fallback when no image is available) -->
+        <div
+          class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900/30 via-slate-950/70 to-slate-950"
+        ></div>
+
+        <!-- Cinematic letterbox gradients (top & bottom) -->
+        <div class="absolute inset-0 bg-gradient-to-b from-slate-950 via-transparent to-slate-950/95"></div>
+        <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent"></div>
+
+        <!-- Warm/cool color wash for a magical tint -->
+        <div class="absolute inset-0 color-wash mix-blend-soft-light"></div>
+
+        <!-- Drifting light sweep -->
+        <div class="absolute inset-0 light-sweep mix-blend-screen"></div>
+
+        <!-- Soft edge vignette -->
+        <div class="absolute inset-0 shadow-[inset_0_0_180px_60px_rgba(2,6,23,0.95)]"></div>
+      </div>
+
       <!-- Ambient Glow Orb -->
       <div class="absolute w-72 h-72 rounded-full bg-amber-500/10 blur-3xl pointer-events-none animate-pulse"></div>
 
@@ -52,15 +99,15 @@ function formatSceneTitle(name?: string | null): string {
 
       <!-- Destination Information -->
       <div class="flex flex-col items-center text-center max-w-md px-4 z-10">
-        <span class="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] text-amber-400/90 mb-1.5 flex items-center gap-1.5">
+        <span class="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] text-amber-400/90 mb-1.5 flex items-center gap-1.5 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
           <span>Traveling to</span>
         </span>
 
-        <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-md">
+        <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
           {{ formatSceneTitle(props.targetSceneName) || 'New Location' }}
         </h2>
 
-        <p class="text-xs sm:text-sm text-slate-400 italic mt-2">
+        <p class="text-xs sm:text-sm text-slate-300 italic mt-2 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
           <template v-if="props.exitLabel">
             Passing through <span class="text-amber-200/90 font-semibold not-italic">"{{ props.exitLabel }}"</span>...
           </template>
@@ -75,7 +122,7 @@ function formatSceneTitle(name?: string | null): string {
         </div>
 
         <!-- Subtext / Status Note -->
-        <span class="text-[10px] uppercase font-bold text-slate-500 tracking-widest mt-3">
+        <span class="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-3 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
           {{ props.statusText || 'Weaving scene narrative...' }}
         </span>
       </div>
@@ -98,6 +145,59 @@ function formatSceneTitle(name?: string | null): string {
 .scene-veil-leave-to {
   opacity: 0;
   transform: scale(0.98);
+}
+
+/* Destination backdrop: blurred & dim until loaded, then sharpens and drifts */
+.scene-backdrop {
+  opacity: 0;
+  filter: blur(18px) saturate(0.6) brightness(0.5);
+  transform: scale(1.15);
+  transition:
+    opacity 1.2s ease-out,
+    filter 1.8s ease-out;
+}
+
+.scene-backdrop.is-loaded {
+  opacity: 0.85;
+  filter: blur(1.5px) saturate(1.15) brightness(0.75);
+  animation: kenBurns 14s ease-out forwards;
+}
+
+@keyframes kenBurns {
+  from {
+    transform: scale(1.15) translate3d(1.5%, 1%, 0);
+  }
+  to {
+    transform: scale(1.03) translate3d(-1%, -0.5%, 0);
+  }
+}
+
+.color-wash {
+  background:
+    radial-gradient(ellipse at 20% 15%, rgba(251, 191, 36, 0.45), transparent 55%),
+    radial-gradient(ellipse at 85% 85%, rgba(139, 92, 246, 0.4), transparent 55%);
+}
+
+.light-sweep {
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(253, 230, 138, 0.08) 45%,
+    rgba(253, 230, 138, 0.16) 50%,
+    rgba(253, 230, 138, 0.08) 55%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  animation: lightSweep 6s ease-in-out infinite;
+}
+
+@keyframes lightSweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 /* Custom animations */
@@ -138,5 +238,12 @@ function formatSceneTitle(name?: string | null): string {
 
 .animate-shimmer-sweep {
   animation: shimmerSweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-backdrop.is-loaded,
+  .light-sweep {
+    animation: none;
+  }
 }
 </style>

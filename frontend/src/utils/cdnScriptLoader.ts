@@ -263,14 +263,53 @@ class _MockStory:
     def narrate(self, text):
         print(f"[tw.story.narrate] {text}")
 
+class _MockSwitch:
+    def __init__(self, switch_id="SWITCH"):
+        self.id = switch_id
+        self.state = "OFF"
+    def get_state(self):
+        return self.state
+    def set_state(self, s, apply_outcomes=True):
+        self.state = s
+        print(f"[tw.switch.{self.id}] set_state: {s}")
+    def flip(self, s=None):
+        self.state = s or ("ON" if self.state == "OFF" else "OFF")
+        print(f"[tw.switch.{self.id}] flip -> {self.state}")
+        return self.state
+    def toggle(self):
+        return self.flip()
+    def is_state(self, s):
+        return self.state == s
+
+class _MockSwitches:
+    def __init__(self):
+        self._switches = {}
+    def get(self, switch_id):
+        if switch_id not in self._switches:
+            self._switches[switch_id] = _MockSwitch(switch_id)
+        return self._switches[switch_id]
+    def get_state(self, switch_id):
+        return self.get(switch_id).get_state()
+    def set_state(self, switch_id, s):
+        self.get(switch_id).set_state(s)
+    def set(self, switch_id, s):
+        self.set_state(switch_id, s)
+    def flip(self, switch_id, s=None):
+        return self.get(switch_id).flip(s)
+    def is_state(self, switch_id, s):
+        return self.get(switch_id).is_state(s)
+
 class _MockTW:
     def __init__(self):
         self.player = _MockPlayer()
         self.scene = _MockScene()
         self.story = _MockStory()
+        self.switches = _MockSwitches()
         self.vars = {}
     def get_npc(self, npc_id): 
         return _MockNPC(npc_id)
+    def switch(self, switch_id):
+        return self.switches.get(switch_id)
     def narrate(self, text): 
         self.story.narrate(text)
     def say(self, speaker, text): 
@@ -279,6 +318,7 @@ class _MockTW:
         print(f"[LOG] {text}")
 
 tw = _MockTW()
+game = tw
 `
 
   try {

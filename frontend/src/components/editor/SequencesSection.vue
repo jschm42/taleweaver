@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import {
   Plus,
   Trash2,
@@ -14,6 +15,8 @@ import {
   MapPin,
   Swords,
   ShieldCheck,
+  Sparkles,
+  Code2,
 } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -87,6 +90,7 @@ const availableNpcs = computed(() => {
 
 const showModal = ref(false)
 const isNewSequence = ref(false)
+const activeModalTab = ref<'general' | 'advanced'>('general')
 const modalSequence = ref<any>({
   id: '',
   order: 1,
@@ -97,7 +101,12 @@ const modalSequence = ref<any>({
   required_item_id: '',
   required_scene_id: '',
   required_defeated_npc_id: '',
+  guard_expression: '',
   exp_reward: 50,
+  on_start_sequence_script: '',
+  on_start_sequence_text: '',
+  on_end_sequence_script: '',
+  on_end_sequence_text: '',
 })
 
 const showDeleteConfirm = ref(false)
@@ -109,6 +118,7 @@ function openAddModal() {
     return
   }
   isNewSequence.value = true
+  activeModalTab.value = 'general'
   const nextOrder = sequences.value.length + 1
   const randSlug = Math.random().toString(36).substring(2, 8).toUpperCase()
   modalSequence.value = {
@@ -121,13 +131,19 @@ function openAddModal() {
     required_item_id: '',
     required_scene_id: '',
     required_defeated_npc_id: '',
+    guard_expression: '',
     exp_reward: 50,
+    on_start_sequence_script: '',
+    on_start_sequence_text: '',
+    on_end_sequence_script: '',
+    on_end_sequence_text: '',
   }
   showModal.value = true
 }
 
 function openEditModal(seq: any) {
   isNewSequence.value = false
+  activeModalTab.value = 'general'
   modalSequence.value = {
     id: seq.id || `SEQ_${seq.order || 1}`,
     order: seq.order || 1,
@@ -138,7 +154,12 @@ function openEditModal(seq: any) {
     required_item_id: seq.required_item_id || '',
     required_scene_id: seq.required_scene_id || '',
     required_defeated_npc_id: seq.required_defeated_npc_id || '',
+    guard_expression: seq.guard_expression || seq.completion_guard_expression || '',
     exp_reward: seq.exp_reward ?? 50,
+    on_start_sequence_script: seq.on_start_sequence_script || '',
+    on_start_sequence_text: seq.on_start_sequence_text || '',
+    on_end_sequence_script: seq.on_end_sequence_script || '',
+    on_end_sequence_text: seq.on_end_sequence_text || '',
   }
   showModal.value = true
 }
@@ -311,7 +332,7 @@ function confirmDelete() {
               </div>
 
               <!-- Hard Rules Tags (if any) -->
-              <div v-if="seq.required_item_id || seq.required_scene_id || seq.required_defeated_npc_id" class="flex flex-wrap items-center gap-2 pt-1.5">
+              <div v-if="seq.required_item_id || seq.required_scene_id || seq.required_defeated_npc_id || seq.guard_expression || seq.completion_guard_expression" class="flex flex-wrap items-center gap-2 pt-1.5">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hard Rules:</span>
                 <span v-if="seq.required_item_id" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium">
                   <Package class="w-3.5 h-3.5 text-emerald-400" />
@@ -324,6 +345,10 @@ function confirmDelete() {
                 <span v-if="seq.required_defeated_npc_id" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] font-medium">
                   <Swords class="w-3.5 h-3.5 text-rose-400" />
                   <span>Defeat: <strong class="font-mono text-white">{{ seq.required_defeated_npc_id }}</strong></span>
+                </span>
+                <span v-if="seq.guard_expression || seq.completion_guard_expression" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium">
+                  <Code2 class="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Guard: <strong class="font-mono text-white">{{ seq.guard_expression || seq.completion_guard_expression }}</strong></span>
                 </span>
               </div>
             </div>
@@ -368,278 +393,371 @@ function confirmDelete() {
       </div>
     </div>
 
-    <!-- Edit/Add Modal (Larger, Non-clipping Scrollable Container) -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 md:p-8 bg-black/85 backdrop-blur-md flex items-center justify-center animate-fade-in"
-      @click.self="closeModal"
-    >
-      <div class="relative bg-slate-900 border border-white/10 rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] my-auto">
-        <!-- Fixed Header -->
-        <div class="shrink-0 flex items-center justify-between border-b border-white/5 pb-4">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-              <BookOpen class="w-4 h-4 text-amber-400" />
+    <!-- Edit/Add Modal (Adaptive Scrollable Container) -->
+    <Teleport to="body">
+      <div
+        v-if="showModal"
+        class="fixed inset-0 z-[200] p-4 sm:p-6 bg-black/85 backdrop-blur-md flex items-center justify-center animate-fade-in"
+        @click.self="closeModal"
+      >
+        <div class="relative bg-slate-900 border border-white/10 rounded-3xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden my-auto">
+          <!-- Fixed Header -->
+          <div class="shrink-0 px-6 sm:px-8 pt-6 pb-4 flex items-center justify-between border-b border-white/5 bg-slate-900">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                <BookOpen class="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <h3 class="text-base font-black text-white uppercase tracking-wider">
+                  {{ isNewSequence ? 'Add New Sequence' : 'Edit Sequence' }}
+                </h3>
+                <p class="text-[11px] text-slate-400">
+                  Configure narrative goals and completion triggers for this chapter.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 class="text-base font-black text-white uppercase tracking-wider">
-                {{ isNewSequence ? 'Add New Sequence' : 'Edit Sequence' }}
-              </h3>
+            <button @click="closeModal" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+
+          <!-- Tabs -->
+          <div class="shrink-0 px-6 sm:px-8 border-b border-white/10 flex gap-6 pt-3 bg-slate-900">
+            <button
+              type="button"
+              @click="activeModalTab = 'general'"
+              :class="['pb-2 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeModalTab === 'general' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              General
+            </button>
+            <button
+              type="button"
+              @click="activeModalTab = 'advanced'"
+              :class="['pb-2 text-xs font-black uppercase tracking-widest transition-colors border-b-2 flex items-center gap-1.5', activeModalTab === 'advanced' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              <Sparkles class="w-3.5 h-3.5" />
+              <span>Advanced Triggers</span>
+              <span v-if="modalSequence.on_start_sequence_script || modalSequence.on_end_sequence_script" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            </button>
+          </div>
+
+          <!-- Scrollable Content Body -->
+          <div class="flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5 space-y-5">
+            <div v-show="activeModalTab === 'general'" class="space-y-5">
+            <!-- Title & XP -->
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div class="sm:col-span-3 space-y-1">
+                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Sequence Title *</label>
+                <input
+                  v-model="modalSequence.title"
+                  type="text"
+                  maxlength="80"
+                  placeholder="e.g. The Escape From Cell Block C"
+                  class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all"
+                />
+              </div>
+              <div class="space-y-1">
+                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">EXP Reward</label>
+                <input
+                  v-model.number="modalSequence.exp_reward"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-1">
+              <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Narrative Description</label>
+              <textarea
+                v-model="modalSequence.description"
+                rows="3"
+                placeholder="What occurs in this chapter? Key story events and narrative backdrop for the GM."
+                class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all resize-y"
+              ></textarea>
+            </div>
+
+            <!-- Soft Rule: Narrative End Condition -->
+            <div class="space-y-1.5 p-4 rounded-2xl bg-black/40 border border-white/5">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-black text-amber-400 uppercase tracking-widest">
+                  Narrative End Condition (Soft Rule)
+                </label>
+                <span class="text-[10px] text-slate-500 font-mono">Evaluated by GM LLM</span>
+              </div>
               <p class="text-[11px] text-slate-400">
-                Configure narrative goals and completion triggers for this chapter.
+                Narrative or contextual condition evaluated by the GM LLM to determine chapter completion.
+              </p>
+              <input
+                v-model="modalSequence.end_condition"
+                type="text"
+                placeholder="e.g. Player convinces the gatekeeper or solves the courtyard riddle."
+                class="w-full bg-slate-900/90 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-slate-600"
+              />
+            </div>
+
+            <!-- Hard Rules: Deterministic Triggers -->
+            <div class="space-y-3.5 p-4 rounded-2xl bg-black/40 border border-white/5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <ShieldCheck class="w-4 h-4 text-emerald-400" />
+                  <label class="block text-xs font-black text-emerald-400 uppercase tracking-widest">
+                    Deterministic Completion Triggers (Hard Rules)
+                  </label>
+                </div>
+                <span class="text-[10px] text-slate-500 font-mono">Engine Enforced</span>
+              </div>
+              <p class="text-[11px] text-slate-400">
+                Optional hard conditions enforced deterministically by the game engine. When configured, the sequence automatically advances when these conditions are fulfilled.
+              </p>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                <!-- Item Hard Rule (prot erhält item X) -->
+                <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                      <Package class="w-3.5 h-3.5 text-emerald-400" />
+                      Obtain Item
+                    </span>
+                    <button
+                      v-if="modalSequence.required_item_id"
+                      type="button"
+                      @click="modalSequence.required_item_id = ''"
+                      class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                      title="Clear item requirement"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <select
+                    v-model="modalSequence.required_item_id"
+                    class="w-full bg-black/60 border border-white/10 focus:border-emerald-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                  >
+                    <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
+                    <option
+                      v-for="item in availableItems"
+                      :key="item.id"
+                      :value="item.id"
+                      class="bg-slate-900 text-white"
+                    >
+                      {{ item.name }} ({{ item.id }})
+                    </option>
+                    <option
+                      v-if="modalSequence.required_item_id && !availableItems.some(i => i.id === modalSequence.required_item_id)"
+                      :value="modalSequence.required_item_id"
+                      class="bg-slate-900 text-amber-300"
+                    >
+                      {{ modalSequence.required_item_id }} (Custom ID)
+                    </option>
+                  </select>
+                  <span class="block text-[10px] text-slate-500">Protagonist acquires item X</span>
+                </div>
+
+                <!-- Scene Hard Rule (prot betritt Scene X) -->
+                <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                      <MapPin class="w-3.5 h-3.5 text-sky-400" />
+                      Enter Scene
+                    </span>
+                    <button
+                      v-if="modalSequence.required_scene_id"
+                      type="button"
+                      @click="modalSequence.required_scene_id = ''"
+                      class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                      title="Clear scene requirement"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <select
+                    v-model="modalSequence.required_scene_id"
+                    class="w-full bg-black/60 border border-white/10 focus:border-sky-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                  >
+                    <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
+                    <option
+                      v-for="scene in availableScenes"
+                      :key="scene.id"
+                      :value="scene.id"
+                      class="bg-slate-900 text-white"
+                    >
+                      {{ scene.name }} ({{ scene.id }})
+                    </option>
+                    <option
+                      v-if="modalSequence.required_scene_id && !availableScenes.some(s => s.id === modalSequence.required_scene_id)"
+                      :value="modalSequence.required_scene_id"
+                      class="bg-slate-900 text-amber-300"
+                    >
+                      {{ modalSequence.required_scene_id }} (Custom ID)
+                    </option>
+                  </select>
+                  <span class="block text-[10px] text-slate-500">Protagonist enters Scene X</span>
+                </div>
+
+                <!-- NPC Defeat Hard Rule (prot besiegt NPC X) -->
+                <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                      <Swords class="w-3.5 h-3.5 text-rose-400" />
+                      Defeat NPC
+                    </span>
+                    <button
+                      v-if="modalSequence.required_defeated_npc_id"
+                      type="button"
+                      @click="modalSequence.required_defeated_npc_id = ''"
+                      class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                      title="Clear NPC requirement"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <select
+                    v-model="modalSequence.required_defeated_npc_id"
+                    class="w-full bg-black/60 border border-white/10 focus:border-rose-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                  >
+                    <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
+                    <option
+                      v-for="npc in availableNpcs"
+                      :key="npc.id"
+                      :value="npc.id"
+                      class="bg-slate-900 text-white"
+                    >
+                      {{ npc.name }} ({{ npc.id }})
+                    </option>
+                    <option
+                      v-if="modalSequence.required_defeated_npc_id && !availableNpcs.some(n => n.id === modalSequence.required_defeated_npc_id)"
+                      :value="modalSequence.required_defeated_npc_id"
+                      class="bg-slate-900 text-amber-300"
+                    >
+                      {{ modalSequence.required_defeated_npc_id }} (Custom ID)
+                    </option>
+                  </select>
+                  <span class="block text-[10px] text-slate-500">Protagonist defeats NPC X</span>
+                </div>
+              </div>
+
+              <!-- Deterministic Guard Rule (Expression) -->
+              <div class="space-y-2 p-3 rounded-xl bg-slate-900/80 border border-white/5 mt-3">
+                <ScriptEditor
+                  v-model="modalSequence.guard_expression"
+                  label="Deterministic Guard Rule (Python Expression)"
+                  help-text="Optional deterministic Python boolean condition evaluated in addition to the completion triggers above. The sequence only completes when this condition evaluates to True."
+                  context="guard_expression"
+                  placeholder="e.g. tw.vars.get('puzzle_solved') == True or tw.player.has_item('KEY')"
+                  min-height="90px"
+                />
+                <p class="text-[10px] text-slate-500">
+                  Optional deterministic Python condition evaluated in addition to the completion triggers above. The sequence only completes when this condition evaluates to True.
+                </p>
+              </div>
+            </div>
+
+            <!-- Walkthrough -->
+            <div class="space-y-1">
+              <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">GM Solution Path (Walkthrough)</label>
+              <textarea
+                v-model="modalSequence.walkthrough"
+                rows="2"
+                placeholder="Solution steps for this specific sequence..."
+                class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all resize-y"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Advanced Tab: Sequence Transitions -->
+          <div v-show="activeModalTab === 'advanced'" class="space-y-6">
+            <div class="space-y-1">
+              <p class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                <Sparkles class="w-4 h-4" /> Sequence Transition Triggers
+              </p>
+              <p class="text-[11px] text-slate-400">
+                Execute scripts or narrative cues when entering or completing this sequence chapter.
               </p>
             </div>
-          </div>
-          <button @click="closeModal" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
 
-        <!-- Scrollable Content Body -->
-        <div class="flex-1 overflow-y-auto space-y-5 pr-1.5 -mr-1.5 my-4">
-          <!-- Title & XP -->
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div class="sm:col-span-3 space-y-1">
-              <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Sequence Title *</label>
-              <input
-                v-model="modalSequence.title"
-                type="text"
-                maxlength="80"
-                placeholder="e.g. The Escape From Cell Block C"
-                class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all"
+            <!-- Start Sequence Trigger -->
+            <div class="space-y-4 border border-white/5 bg-black/30 p-4 rounded-2xl">
+              <ScriptEditor
+                v-model="modalSequence.on_start_sequence_script"
+                label="On Start Sequence Script"
+                help-text="Executed immediately when this sequence becomes active."
+                context="start_sequence"
+                min-height="100px"
               />
+              <div class="space-y-1">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Start Sequence Text</label>
+                <textarea
+                  v-model="modalSequence.on_start_sequence_text"
+                  rows="2"
+                  placeholder="e.g. Chapter 2 begins: The sky darkens as thunder rumbles in the distance."
+                  class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
+                ></textarea>
+              </div>
             </div>
-            <div class="space-y-1">
-              <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">EXP Reward</label>
-              <input
-                v-model.number="modalSequence.exp_reward"
-                type="number"
-                min="0"
-                max="10000"
-                class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all"
+
+            <!-- End Sequence Trigger -->
+            <div class="space-y-4 border border-white/5 bg-black/30 p-4 rounded-2xl">
+              <ScriptEditor
+                v-model="modalSequence.on_end_sequence_script"
+                label="On End Sequence Script"
+                help-text="Executed immediately when this sequence is completed."
+                context="end_sequence"
+                min-height="100px"
               />
-            </div>
-          </div>
-
-          <!-- Description -->
-          <div class="space-y-1">
-            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Narrative Description</label>
-            <textarea
-              v-model="modalSequence.description"
-              rows="3"
-              placeholder="What occurs in this chapter? Key story events and narrative backdrop for the GM."
-              class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all resize-y"
-            ></textarea>
-          </div>
-
-          <!-- Soft Rule: Narrative End Condition -->
-          <div class="space-y-1.5 p-4 rounded-2xl bg-black/40 border border-white/5">
-            <div class="flex items-center justify-between">
-              <label class="block text-xs font-black text-amber-400 uppercase tracking-widest">
-                Narrative End Condition (Soft Rule)
-              </label>
-              <span class="text-[10px] text-slate-500 font-mono">Evaluated by GM LLM</span>
-            </div>
-            <p class="text-[11px] text-slate-400">
-              Narrative or contextual condition evaluated by the GM LLM to determine chapter completion.
-            </p>
-            <input
-              v-model="modalSequence.end_condition"
-              type="text"
-              placeholder="e.g. Player convinces the gatekeeper or solves the courtyard riddle."
-              class="w-full bg-slate-900/90 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-slate-600"
-            />
-          </div>
-
-          <!-- Hard Rules: Deterministic Triggers -->
-          <div class="space-y-3.5 p-4 rounded-2xl bg-black/40 border border-white/5">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <ShieldCheck class="w-4 h-4 text-emerald-400" />
-                <label class="block text-xs font-black text-emerald-400 uppercase tracking-widest">
-                  Deterministic Completion Triggers (Hard Rules)
-                </label>
-              </div>
-              <span class="text-[10px] text-slate-500 font-mono">Engine Enforced</span>
-            </div>
-            <p class="text-[11px] text-slate-400">
-              Optional hard conditions enforced deterministically by the game engine. When configured, the sequence automatically advances when these conditions are fulfilled.
-            </p>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-              <!-- Item Hard Rule (prot erhält item X) -->
-              <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
-                    <Package class="w-3.5 h-3.5 text-emerald-400" />
-                    Obtain Item
-                  </span>
-                  <button
-                    v-if="modalSequence.required_item_id"
-                    type="button"
-                    @click="modalSequence.required_item_id = ''"
-                    class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
-                    title="Clear item requirement"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <select
-                  v-model="modalSequence.required_item_id"
-                  class="w-full bg-black/60 border border-white/10 focus:border-emerald-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
-                >
-                  <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
-                  <option
-                    v-for="item in availableItems"
-                    :key="item.id"
-                    :value="item.id"
-                    class="bg-slate-900 text-white"
-                  >
-                    {{ item.name }} ({{ item.id }})
-                  </option>
-                  <option
-                    v-if="modalSequence.required_item_id && !availableItems.some(i => i.id === modalSequence.required_item_id)"
-                    :value="modalSequence.required_item_id"
-                    class="bg-slate-900 text-amber-300"
-                  >
-                    {{ modalSequence.required_item_id }} (Custom ID)
-                  </option>
-                </select>
-                <span class="block text-[10px] text-slate-500">Protagonist acquires item X</span>
-              </div>
-
-              <!-- Scene Hard Rule (prot betritt Scene X) -->
-              <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
-                    <MapPin class="w-3.5 h-3.5 text-sky-400" />
-                    Enter Scene
-                  </span>
-                  <button
-                    v-if="modalSequence.required_scene_id"
-                    type="button"
-                    @click="modalSequence.required_scene_id = ''"
-                    class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
-                    title="Clear scene requirement"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <select
-                  v-model="modalSequence.required_scene_id"
-                  class="w-full bg-black/60 border border-white/10 focus:border-sky-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
-                >
-                  <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
-                  <option
-                    v-for="scene in availableScenes"
-                    :key="scene.id"
-                    :value="scene.id"
-                    class="bg-slate-900 text-white"
-                  >
-                    {{ scene.name }} ({{ scene.id }})
-                  </option>
-                  <option
-                    v-if="modalSequence.required_scene_id && !availableScenes.some(s => s.id === modalSequence.required_scene_id)"
-                    :value="modalSequence.required_scene_id"
-                    class="bg-slate-900 text-amber-300"
-                  >
-                    {{ modalSequence.required_scene_id }} (Custom ID)
-                  </option>
-                </select>
-                <span class="block text-[10px] text-slate-500">Protagonist enters Scene X</span>
-              </div>
-
-              <!-- NPC Defeat Hard Rule (prot besiegt NPC X) -->
-              <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-white/5">
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
-                    <Swords class="w-3.5 h-3.5 text-rose-400" />
-                    Defeat NPC
-                  </span>
-                  <button
-                    v-if="modalSequence.required_defeated_npc_id"
-                    type="button"
-                    @click="modalSequence.required_defeated_npc_id = ''"
-                    class="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
-                    title="Clear NPC requirement"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <select
-                  v-model="modalSequence.required_defeated_npc_id"
-                  class="w-full bg-black/60 border border-white/10 focus:border-rose-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
-                >
-                  <option value="" class="bg-slate-900 text-slate-400">-- None (Optional) --</option>
-                  <option
-                    v-for="npc in availableNpcs"
-                    :key="npc.id"
-                    :value="npc.id"
-                    class="bg-slate-900 text-white"
-                  >
-                    {{ npc.name }} ({{ npc.id }})
-                  </option>
-                  <option
-                    v-if="modalSequence.required_defeated_npc_id && !availableNpcs.some(n => n.id === modalSequence.required_defeated_npc_id)"
-                    :value="modalSequence.required_defeated_npc_id"
-                    class="bg-slate-900 text-amber-300"
-                  >
-                    {{ modalSequence.required_defeated_npc_id }} (Custom ID)
-                  </option>
-                </select>
-                <span class="block text-[10px] text-slate-500">Protagonist defeats NPC X</span>
+              <div class="space-y-1">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On End Sequence Text</label>
+                <textarea
+                  v-model="modalSequence.on_end_sequence_text"
+                  rows="2"
+                  placeholder="e.g. Chapter Complete! You catch your breath as the dungeon gates seal shut behind you."
+                  class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
+                ></textarea>
               </div>
             </div>
-          </div>
-
-          <!-- Walkthrough -->
-          <div class="space-y-1">
-            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">GM Solution Path (Walkthrough)</label>
-            <textarea
-              v-model="modalSequence.walkthrough"
-              rows="2"
-              placeholder="Solution steps for this specific sequence..."
-              class="w-full bg-black/60 border border-white/10 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-all resize-y"
-            ></textarea>
           </div>
         </div>
 
-        <!-- Fixed Footer -->
-        <div class="shrink-0 flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-          <button
-            @click="closeModal"
-            class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            @click="saveSequence"
-            :disabled="!modalSequence.title.trim() || isSaving"
-            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black uppercase text-xs tracking-widest transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
-          >
-            <Check class="w-4 h-4" />
-            <span>Save Sequence</span>
-          </button>
+          <!-- Fixed Footer -->
+          <div class="shrink-0 px-6 sm:px-8 py-4 flex items-center justify-end gap-3 border-t border-white/5 bg-slate-950/60">
+            <button
+              @click="closeModal"
+              class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              @click="saveSequence"
+              :disabled="!modalSequence.title.trim() || isSaving"
+              class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black uppercase text-xs tracking-widest transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
+            >
+              <Check class="w-4 h-4" />
+              <span>Save Sequence</span>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Delete Confirmation Modal -->
-    <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" @click.self="cancelDelete">
-      <div class="bg-slate-900 border border-rose-500/20 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
-        <h4 class="text-sm font-black text-white uppercase tracking-wider">Delete Sequence?</h4>
-        <p class="text-xs text-slate-400">
-          Are you sure you want to remove this sequence chapter? Remaining sequences will be re-ordered.
-        </p>
-        <div class="flex items-center justify-end gap-3 pt-2">
-          <button @click="cancelDelete" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-bold text-slate-300">
-            Cancel
-          </button>
-          <button @click="confirmDelete" class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white uppercase tracking-wider">
-            Delete
-          </button>
+    <Teleport to="body">
+      <div v-if="showDeleteConfirm" class="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" @click.self="cancelDelete">
+        <div class="bg-slate-900 border border-rose-500/20 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
+          <h4 class="text-sm font-black text-white uppercase tracking-wider">Delete Sequence?</h4>
+          <p class="text-xs text-slate-400">
+            Are you sure you want to remove this sequence chapter? Remaining sequences will be re-ordered.
+          </p>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button @click="cancelDelete" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-bold text-slate-300">
+              Cancel
+            </button>
+            <button @click="confirmDelete" class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white uppercase tracking-wider">
+              Delete
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>

@@ -42,6 +42,8 @@ class SessionState(Base, TimestampMixin):
     walkthrough = Column(String(20000), nullable=True)
     completed_condition = Column(String(1000), nullable=True)
     gameover_condition = Column(String(1000), nullable=True)
+    completed_guard_expression = Column(String(2000), nullable=True)
+    gameover_guard_expression = Column(String(2000), nullable=True)
     
     # Active Sequence Tracking
     active_sequence_id = Column(String(100), nullable=True)

@@ -43,7 +43,104 @@ cinematic voice acting, comic-style narrative feeds, and deterministic Python ev
   </tr>
 </table>
 
-<sub><i>Watch the <a href="https://youtu.be/lbAxVuU0SnQ">TaleWeaver Video Preview</a> or explore the full <a href="docs/SCREENSHOTS.md">Screenshot Guide</a>.</i></sub>
+<p align="center">
+  <em>For detailed descriptions and feature breakdowns of each screen, see the <a href="docs/SCREENSHOTS.md">Screenshot Guide</a>.</em>
+</p>
+
+## 1. The Vision
+
+Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
+
+## 2. Core Features
+
+### 🧠 The Omniscient AI Gamemaster
+* **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
+* **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
+* **Cover Mode (Sequels & Variations):** Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets.
+
+### 🎭 Immersive In-Game Interface & Comic Turn Feed
+* **Comic-Style Turn Presentation:** Dynamic turn rendering that separates narrator exposition from character dialogue using expressive comic speech bubbles, speaker avatars, and action markers.
+* **Dynamic Character Stage:** Visual character staging area displaying active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback.
+* **Streamlined In-Game HUD:** Modernized HUD featuring a real-time In-Game Clock, contextual action quickbar, expandable Character Sheet, and dedicated modals for locked containers, switches, and combat.
+
+### 🛠️ Fully-Featured Adventure Editor & AI Validation
+* **Complete World Customization:** The Adventure Editor provides dedicated tabs to edit, refine, and build adventure templates: Scenes, Directed Map Routing, NPCs, Items, Switches, Containers, Quests, Awards, Tone, Visuals, and Scripts.
+* **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, switch outcomes, and event scripts directly from the UI with reference autocomplete.
+* **Bidirectional Route Mapping:** Visual route editor for bidirectional and one-way paths with lock descriptions, passcodes, and item unlock conditions.
+* **Sandboxed Python Event Scripts:** Author deterministic, reactive game logic directly in the World-Editor or via AI World-Builder generation. Safely queries and modifies scenes, exits, items, NPCs, avatar stats, variables, and victory conditions without host escapes. See the [Scripting Engine Guide](docs/scripting_engine.md).
+* **Dual-Tier AI & Structural Validation:** Built-in world validation engine that checks graph connectivity, reachable scenes, valid exit endpoints, proper container contents, and crafting ingredient completeness, alongside deep LLM story critiques that detect plot holes, logic inconsistencies, and puzzle dead-ends.
+* **One-Click AI Fix Proposals:** Automatically generate and apply intelligent AI repairs for broken exits, missing keys, or narrative inconsistencies directly from the editor's Validation Tab.
+
+### 🎯 Quests & Meta-Progression
+* **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log.
+* **Achievement System:** Unlock custom, AI-generated awards (Bronze, Silver, Gold) for exceptional problem-solving and out-of-the-box thinking.
+
+### ⚙️ Deep RPG Mechanics
+* **Strict Rule Enforcement:** While the narrative flows freely, a strict 2-pass RPG rulebook (Mechanics + Narrative) runs in the background.
+* **State Management:** Manage Hitpoints, Stamina, and Mana, while reacting to plot-driven status effects (e.g., Poisoned, Blessed).
+* **Loot & Inventory System:** Dedicated isolated inventory system with specific equipment slots (Head, Chest, Rings, etc.).
+* **Tactical Combat Dialog:** Dedicated combat modal with contextual actions (attack, run, rest, consume) plus integrated loot resolution flow.
+* **Container Gameplay:** Containers can be generated in scenes and inventory, support locked/unlocked states, and may require a code or item condition before access.
+* **Text-Log Discovery System:** Readable objects can contain structured text logs (document, scroll, book, sign) that can be opened directly from scene and inventory interactions.
+
+### 🎧 The Playable Audiobook & Voice Input (Cinematic Audio)
+* **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
+* **Speech-to-Text & Push-to-Talk (PTT):** True hands-free roleplaying! Hold down the interactive microphone UI button or hotkeys (`V`, `B`, or `T`) to record and speak directly to NPCs and the GM. Releases auto-transcribe and submit immediately.
+* **In-Character Speech Shortcuts:** Hold down `B`, `T`, or `Shift` to automatically prepend `/say ` to your transcription, allowing seamless in-character dialogue.
+* **Background Whisper Model Loading:** Configurable local Whisper model preloads in a background thread to prevent UI blocking, with real-time state logging (idle, loading, active, error).
+
+### 🗺️ Visuals & Sensory Immersion
+* **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
+* **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages.
+
+### 🧠 Bring Your Own Model (BYOK) & Privacy First
+* **Cloud-Tier Intelligence:** Designed to harness the reasoning power of flagship models (Anthropic Opus 5.x, OpenAI 5.x, DeepSeek v4 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.
+* **Self-Hosted & Tenant-Ready:** Run the backend completely on your own hardware via Docker. Built on SQLite with UUID-based primary keys, your game progress and prompts remain local and private on your machine.
+* **Local Tinkering (Experimental):** While the core engine relies on high-tier models for complex JSON generation, we offer highly experimental support for local execution via **Ollama**. Perfect for developers looking to push the boundaries of local inference, though not yet recommended for stable gameplay.
+
+### Persistent Game Progress & Memory
+* **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
+* **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
+* **Continuous Auto-Save Milestones:** TaleWeaver now creates automatic checkpoints at major story milestones (scene changes, quest milestones, award events).
+* **Chronicles Timeline + Rollback:** Open the new Chronicles timeline in-game and restore to any recent checkpoint. Rollback performs a hard timeline rewind by restoring stored state and removing future messages after that checkpoint.
+* **Retention Policy:** To keep sessions fast and compact, only the five most recent checkpoints are retained per game session.
+
+### Media & Immersion
+* Optional AI-generated images to enhance the aesthetic.
+* **Import/Export:** Adventures can be backed up or shared.
+* **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
+
+### Recent Feature Highlights
+
+#### 🌟 What's New in v0.6.0-beta
+* **Immersive In-Game & Comic Turn Engine**: Fully reimagined interactive gameplay UI. The narrative feed is rendered as comic-style panels with speaker portraits, custom speech bubbles, and action cues (`ImmersiveStoryFeed`, `useComicTurns`). Scenes now feature interactive point-and-click hotspots (`ImmersiveSceneHotspots`) for room exits and item inspections, a dedicated NPC character stage (`ImmersiveCharacterStage`), voice-tag speech synchronization, and a modernized HUD with an in-game clock widget.
+* **Sandboxed Python Scripting Engine**: Secure, deterministic event logic running in an isolated AST interpreter sandbox (`backend/engine/scripting`). Creators and AI world generators can craft rich lifecycle event triggers (`on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`) affecting scenes, inventory, NPC state, stats, custom persistent variables, and victory/defeat rules. Includes an in-editor scripting workbench (`ScriptsTab.vue`) with linting, priority queues, and test execution.
+* **Dynamic World Generation & Script Synthesis**: TaleWeaver's world generator can now synthesize complete deterministic Python event scripts tailored to the generated adventure's lore, plot, and puzzle constraints.
+* **Enhanced World-Editor & AI Validation**: Full-featured in-browser authoring environment with dedicated tabs for Scenes, Directed Graph Map Routing, Inhabitants, Items, Switches, Containers, and Event Scripts. Includes a dual-tier validation suite (`ValidationTab.vue`) combining structural graph auditing (connectivity, broken links, missing ingredients) with semantic LLM story validation.
+* **One-Click AI Fix Proposals**: Automated AI diagnostic assistant (`AIFixSuggestionsModal.vue`) that analyzes world errors and applies one-click structural repairs to scenes, exits, and entities.
+* **Session Runtime Architecture & Asset Isolation**: Independent session state lifecycle with isolated asset folders, runtime entity snapshots, milestone-driven auto-checkpoints, and timeline rewind capabilities.
+
+#### Previous Highlights
+* **Whisper Speech-to-Text & Push-to-Talk** (`1f14273`, `6c3f1c2`, `52e7312`): OpenAI Whisper integration featuring background model preloading, hands-free recording overlays, automatic transcription submission, and a Shift/hotkey (B/T) shortcut to speak in-character (`/say `) to NPCs.
+* **Interactive World Map with Pathfinding** (`3e66a99`): Fully interactive world map visualization with pathfinding, panning, and zooming capabilities for navigating adventure scenes.
+* **Fully Functional Adventure Editor** (`ec53b2e`, `50e1657`): The Adventure Editor is now fully functional to edit, refine, and build adventure templates. Includes full CRUD management for scenes, exits, quests, NPCs, items, containers, and switch outcomes directly from the UI, with visual asset configuration and bidirectional route mapping.
+* **Cover Mode (Sequels & Variations)**: Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets to preserve the sensory feel of the original adventure.
+* **Centralized API Client + Proxy Config** (`47f4fa5`): Refactored frontend to use a centralized API client with backend configuration routes and updated nginx proxy configuration for security.
+* **Exit Unlock Rules + Bidirectional Exits** (`2825346`, `109f5c2`, `59ecf98`): Global soft unlock rules for exits and containers, bidirectional exit persistence as a single database row, and explicit rule distraction for container unlocks.
+* **SWITCH Item Type** (`be98796`): Added support for the SWITCH item type and related gameplay mechanics.
+* **Kimi (Moonshot) Provider** (`37e3c85`): New LLM provider support for Kimi/Moonshot with authentication handling and UI integration.
+* **Rule Mode Enforcement** (`be752eb`): Added `resolveRuleModeFromAdventure` to dynamically determine rule enforcement mode per adventure.
+* **Enhanced Combat Initiation** (`4f2fd83`): Improved combat logic to handle enemy-initiated attacks and NPC damage settings.
+* **Image URL Validation + Stale Fallback** (`503c06e`): Validation for usable image URLs with automatic fallback for stale local image URLs in adventure generation.
+* **System Message Flow** (`e3fe80f`): Added `emitSystemMessage` function integrated into game command flow and socket handling for richer feedback.
+* **LLM Blank JSON Retry Logic** (`14c9beb`): Implemented automatic retry logic for blank JSON responses in LLM interactions to improve generation reliability.
+* **Chronicles Checkpoints + Timeline Restore** (`617f682`, `4d02263`, `79fc42f`): Added milestone-based auto-checkpoints, a dedicated in-game Chronicles timeline, and rollback restore flow for recent session states.
+* **Container Unlock Rules + Generated Containers** (`9e26e8c`, `39688df`, `0bb4c0f`): Added generated container entities with lock-state rules plus code/item-based unlock requirements.
+* **Text-Log Generation + Readable Inventory Integration** (`329c835`, `dabbee3`): Added generated text logs and richer readable-item handling with content/format support in inventory and scene flows.
+* **Session Notes + Combat Loot Handling** (`60214f6`): Added editable session notes in the game/portal flow and structured post-combat loot handling in the gameplay UI.
+* **Enhanced Import + Session Management** (`5c4cd9b`): Improved adventure import flow and session lifecycle behavior to make play sessions more robust.
+* **Ollama Model Management + Bulk Deletion Tools** (`f5f6576`): Added admin-facing Ollama model management plus portal actions for deleting all sessions/templates.
+* **Path Traversal Security Hardening** (`b6c17cc`, `62eb16e`, `15f0dc5`, `91b4fd2`, `3dccb87`, `f3cfb03`, `0559f8f`, `2761c7d`): Hardened path handling across API and media routes to mitigate uncontrolled path expression risks.
 
 ---
 

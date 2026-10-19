@@ -41,7 +41,10 @@ onUnmounted(() => {
 
 <template>
   <div 
-    class="adventure-card flex flex-col rounded-xl border border-white/10 bg-aether-surface/30 relative overflow-hidden group cursor-pointer hover:border-aether-primary/40 hover:shadow-[0_0_20px_rgba(56,189,248,0.05)] transition-all duration-200"
+    class="adventure-card flex flex-col rounded-xl border bg-aether-surface/30 relative overflow-hidden group cursor-pointer transition-all duration-200 h-full w-full"
+    :class="props.pending.hasError 
+      ? 'border-red-500/30 hover:border-red-500/50 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]' 
+      : 'border-white/10 hover:border-aether-primary/40 hover:shadow-[0_0_20px_rgba(56,189,248,0.05)]'"
     @click="emit('click')"
   >
     <div class="absolute inset-0 animate-shimmer opacity-30 pointer-events-none"></div>
@@ -73,30 +76,51 @@ onUnmounted(() => {
         v-if="!props.pending.hasError && props.pending.kind === 'creation'"
         class="absolute top-3 right-3 p-1.5 rounded-lg bg-black/40 border border-white/10 text-slate-400 hover:text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
         @click.stop="emit('cancel', props.pending.adventureId)"
-        title="Abbrechen"
+        title="Cancel"
       >
         <X class="w-4 h-4" />
       </button>
     </div>
 
-    <div class="p-2.5 sm:p-5 lg:p-6 flex-1 flex flex-col gap-1.5 sm:gap-2">
-      <h3 class="text-[11px] sm:text-xl lg:text-2xl font-black text-white leading-tight tracking-tight line-clamp-2 sm:line-clamp-1 break-words">{{ props.pending.title }}</h3>
-      <p class="hidden sm:block text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem]">
-        {{ props.pending.hasError ? props.pending.status : currentSaying }}
-      </p>
-      
-      <span
-        v-if="!props.pending.hasError"
-        class="hidden sm:flex text-[10px] font-bold text-sky-400/80 uppercase tracking-widest items-center gap-1.5 mt-1 animate-pulse"
-      >
-        <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
-        Click for details
-      </span>
+    <!-- Content Area -->
+    <div class="p-2.5 sm:p-5 lg:p-6 lg:pt-5 flex flex-col gap-2 sm:gap-4 flex-1 w-full min-w-0">
+      <div class="space-y-1 sm:space-y-2 flex-1 min-w-0">
+        <h3 class="text-[11px] sm:text-lg lg:text-xl font-black text-white leading-tight line-clamp-2 sm:line-clamp-1 tracking-tight break-words">
+          {{ props.pending.title }}
+        </h3>
+        
+        <div class="hidden sm:block min-w-0">
+          <p
+            :class="[
+              'text-[11px] sm:text-xs font-bold uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem] max-h-[2.75rem] overflow-hidden break-words',
+              props.pending.hasError ? 'text-red-400/90' : 'text-slate-500',
+            ]"
+            :title="props.pending.hasError ? props.pending.status : undefined"
+          >
+            {{ props.pending.hasError ? props.pending.status : currentSaying }}
+          </p>
+        </div>
+        
+        <span
+          v-if="!props.pending.hasError"
+          class="hidden sm:flex text-[10px] font-bold text-sky-400/80 uppercase tracking-widest items-center gap-1.5 mt-1 animate-pulse"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+          Click for details
+        </span>
+        <span
+          v-else
+          class="hidden sm:flex text-[10px] font-bold text-red-400/80 uppercase tracking-widest items-center gap-1.5 mt-1"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+          Click card for log
+        </span>
+      </div>
 
       <div class="mt-auto pt-2 sm:pt-4">
         <button
           v-if="props.pending.hasError"
-          class="w-full px-2 sm:px-3 py-2 sm:py-3 rounded-md sm:rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
+          class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors cursor-pointer"
           @click.stop="emit('removeFailed', props.pending.adventureId, props.pending.kind)"
         >
           <span class="sm:hidden">Remove</span>

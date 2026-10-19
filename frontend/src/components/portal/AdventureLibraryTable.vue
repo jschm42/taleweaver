@@ -17,7 +17,8 @@ import {
   Plus,
   Compass,
   ArrowDownToLine,
-  Loader2
+  Loader2,
+  Copy
 } from 'lucide-vue-next'
 import { formatCatalogLabel } from '@/composables/usePortalFilters'
 import PendingAdventureCard from './PendingAdventureCard.vue'
@@ -26,7 +27,7 @@ const props = defineProps<{
   visibleTemplates: AdventureTemplateSummary[]
   allFilteredTemplates: AdventureTemplateSummary[]
   pendingCards: any[]
-  isSeeding: boolean
+  isSeeding?: boolean
   loadingWordIndex: number
   isStartingSession?: boolean
   startingSessionTemplateId?: string | null
@@ -46,6 +47,7 @@ const emit = defineEmits<{
   (e: 'migrate', template: any): void
   (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
+  (e: 'duplicate', templateId: string): void
   (e: 'export-adz', templateId: string, title: string): void
   (e: 'export-adv', templateId: string, title: string): void
   (e: 'delete', templateId: string, title: string): void
@@ -408,6 +410,13 @@ function getModeBadge(mode?: string): { label: string; class: string; icon: any 
                         >
                           <Image class="w-3.5 h-3.5" />
                           <span>Generate Cover</span>
+                        </button>
+                        <button
+                          @click="$emit('duplicate', template.template_id); activeMenuId = null"
+                          class="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 hover:text-white flex items-center gap-2"
+                        >
+                          <Copy class="w-3.5 h-3.5" />
+                          <span>Duplicate</span>
                         </button>
                         <button
                           @click="$emit('export-adz', template.template_id, template.title); activeMenuId = null"

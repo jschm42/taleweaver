@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import { formatObjectIds } from '@/utils/editor_utils'
 
 defineProps<{
@@ -175,66 +176,185 @@ const emit = defineEmits<{
         </div>
 
         <!-- Conditions -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
-          <div class="space-y-4">
-            <div class="flex justify-between items-center">
-              <label class="block text-xs font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
-              <span v-if="editingField === 'completed_condition'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
-                {{ tempValue.length }} / 2000
-              </span>
-            </div>
-            <div v-if="editingField === 'completed_condition'" class="space-y-4 animate-fade-in">
-              <ReferenceTextarea
-                :model-value="tempValue"
-                :rows="4"
-                :options="referenceOptions || []"
-                class-name="w-full bg-black/60 border border-emerald-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y"
-                placeholder="What must the player achieve?"
-                @update:model-value="emit('update:tempValue', $event)"
-              />
-              <div class="flex gap-4">
-                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['completed_condition'] || tempValue.length > 2000" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                <button type="button" @click="emit('generate-field', 'completed_condition')" :disabled="isSaving || isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
-                  <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['completed_condition'] }"></i>
-                  <span>AI Generate</span>
-                </button>
-                <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
-              </div>
-            </div>
-            <div v-else @click="emit('start-edit', 'completed_condition', form.completed_condition)" class="group relative cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/30 rounded-2xl p-6 transition-all duration-300">
-              <p v-if="form.completed_condition" class="text-base text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.completed_condition)"></p>
-              <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center">Define Victory Conditions</p>
-            </div>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+              <i class="ra ra-trophy text-emerald-400"></i> Outcome Criteria (Victory & Defeat)
+            </h3>
+            <span class="text-[11px] text-slate-500 font-medium">
+              Best Practice: Use either a soft narrative rule OR a scripted guard per outcome, but not both.
+            </span>
           </div>
 
-          <div class="space-y-4">
-            <div class="flex justify-between items-center">
-              <label class="block text-xs font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
-              <span v-if="editingField === 'gameover_condition'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
-                {{ tempValue.length }} / 2000
-              </span>
-            </div>
-            <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
-              <ReferenceTextarea
-                :model-value="tempValue"
-                :rows="4"
-                :options="referenceOptions || []"
-                class-name="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y"
-                placeholder="How can the adventure fail?"
-                @update:model-value="emit('update:tempValue', $event)"
-              />
-              <div class="flex gap-4">
-                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['gameover_condition'] || tempValue.length > 2000" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                <button type="button" @click="emit('generate-field', 'gameover_condition')" :disabled="isSaving || isGeneratingField?.['gameover_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
-                  <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['gameover_condition'] }"></i>
-                  <span>AI Generate</span>
-                </button>
-                <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['gameover_condition']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <!-- WIN CONDITIONS COLUMN -->
+            <div class="space-y-6 bg-slate-950/40 p-6 rounded-3xl border border-emerald-500/20">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                  <label class="text-xs font-black text-emerald-400 uppercase tracking-[0.3em]">Win Conditions</label>
+                </div>
+                <span v-if="form.completed_condition && form.completed_guard_expression" class="text-[10px] text-amber-400 font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                  Dual rules configured
+                </span>
+              </div>
+
+              <!-- Soft Rule (completed_condition) -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold tracking-widest uppercase text-slate-400">Soft Rule</span>
+                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">AI GM Evaluated</span>
+                  </div>
+                  <span v-if="editingField === 'completed_condition'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ tempValue.length }} / 2000
+                  </span>
+                </div>
+
+                <div v-if="editingField === 'completed_condition'" class="space-y-4 animate-fade-in">
+                  <ReferenceTextarea
+                    :model-value="tempValue"
+                    :rows="4"
+                    :options="referenceOptions || []"
+                    class-name="w-full bg-black/60 border border-emerald-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y"
+                    placeholder="Describe how the player achieves victory in prose..."
+                    @update:model-value="emit('update:tempValue', $event)"
+                  />
+                  <div class="flex gap-4">
+                    <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['completed_condition'] || tempValue.length > 2000" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                    <button type="button" @click="emit('generate-field', 'completed_condition')" :disabled="isSaving || isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
+                      <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['completed_condition'] }"></i>
+                      <span>AI Generate</span>
+                    </button>
+                    <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="emit('start-edit', 'completed_condition', form.completed_condition)" class="group relative cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/30 rounded-2xl p-4 transition-all duration-300">
+                  <p v-if="form.completed_condition" class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.completed_condition)"></p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-2">Click to set soft victory condition</p>
+                </div>
+              </div>
+
+              <!-- Hard Rule Guard (completed_guard_expression) -->
+              <div class="space-y-2 pt-2 border-t border-emerald-500/10">
+                <div class="flex justify-between items-center">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold tracking-widest uppercase text-emerald-400">Hard Rule Guard</span>
+                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">Deterministic Engine</span>
+                  </div>
+                  <span v-if="editingField === 'completed_guard_expression'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ tempValue.length }} / 2000
+                  </span>
+                </div>
+
+                <div v-if="editingField === 'completed_guard_expression'" class="space-y-3 animate-fade-in">
+                  <ScriptEditor
+                    :model-value="tempValue"
+                    label="Win Guard Expression (Safe Python)"
+                    help-text="Deterministic boolean condition evaluated by the engine. Must evaluate to True for victory."
+                    context="guard_expression"
+                    placeholder="e.g. tw.vars.get('boss_defeated') == True and tw.player.has_item('MOB_LEDGER')"
+                    min-height="80px"
+                    @update:model-value="emit('update:tempValue', $event)"
+                  />
+                  <div class="flex gap-4">
+                    <button @click="emit('save-field')" :disabled="isSaving || tempValue.length > 2000" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save Guard</button>
+                    <button @click="emit('cancel-edit')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="emit('start-edit', 'completed_guard_expression', form.completed_guard_expression)" class="group relative cursor-pointer bg-slate-900/80 hover:bg-slate-900 border border-emerald-500/20 hover:border-emerald-500/40 rounded-2xl p-4 transition-all duration-300 font-mono">
+                  <div v-if="form.completed_guard_expression" class="flex items-center gap-2 text-xs text-emerald-300">
+                    <i class="ra ra-shield text-emerald-400"></i>
+                    <code class="text-xs break-all">{{ form.completed_guard_expression }}</code>
+                  </div>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-2 font-sans">Click to set scripted win guard</p>
+                </div>
               </div>
             </div>
-            <div v-else @click="emit('start-edit', 'gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-6 transition-all duration-300">
-              <p v-if="form.gameover_condition" class="text-base text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.gameover_condition)"></p>
-              <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center">Define Failure Conditions</p>
+
+            <!-- LOSS CONDITIONS COLUMN -->
+            <div class="space-y-6 bg-slate-950/40 p-6 rounded-3xl border border-red-500/20">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                  <label class="text-xs font-black text-red-400 uppercase tracking-[0.3em]">Loss Conditions</label>
+                </div>
+                <span v-if="form.gameover_condition && form.gameover_guard_expression" class="text-[10px] text-amber-400 font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                  Dual rules configured
+                </span>
+              </div>
+
+              <!-- Soft Rule (gameover_condition) -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold tracking-widest uppercase text-slate-400">Soft Rule</span>
+                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">AI GM Evaluated</span>
+                  </div>
+                  <span v-if="editingField === 'gameover_condition'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ tempValue.length }} / 2000
+                  </span>
+                </div>
+
+                <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
+                  <ReferenceTextarea
+                    :model-value="tempValue"
+                    :rows="4"
+                    :options="referenceOptions || []"
+                    class-name="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y"
+                    placeholder="Describe failure or death circumstances in prose..."
+                    @update:model-value="emit('update:tempValue', $event)"
+                  />
+                  <div class="flex gap-4">
+                    <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['gameover_condition'] || tempValue.length > 2000" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                    <button type="button" @click="emit('generate-field', 'gameover_condition')" :disabled="isSaving || isGeneratingField?.['gameover_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
+                      <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['gameover_condition'] }"></i>
+                      <span>AI Generate</span>
+                    </button>
+                    <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['gameover_condition']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="emit('start-edit', 'gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-4 transition-all duration-300">
+                  <p v-if="form.gameover_condition" class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.gameover_condition)"></p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-2">Click to set soft failure condition</p>
+                </div>
+              </div>
+
+              <!-- Hard Rule Guard (gameover_guard_expression) -->
+              <div class="space-y-2 pt-2 border-t border-red-500/10">
+                <div class="flex justify-between items-center">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold tracking-widest uppercase text-red-400">Hard Rule Guard</span>
+                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-mono">Deterministic Engine</span>
+                  </div>
+                  <span v-if="editingField === 'gameover_guard_expression'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ tempValue.length }} / 2000
+                  </span>
+                </div>
+
+                <div v-if="editingField === 'gameover_guard_expression'" class="space-y-3 animate-fade-in">
+                  <ScriptEditor
+                    :model-value="tempValue"
+                    label="Loss Guard Expression (Safe Python)"
+                    help-text="Deterministic boolean condition evaluated by the engine. When True, immediately triggers Game Over."
+                    context="guard_expression"
+                    placeholder="e.g. tw.vars.get('countdown') <= 0 or tw.vars.get('cover_blown') == True"
+                    min-height="80px"
+                    @update:model-value="emit('update:tempValue', $event)"
+                  />
+                  <div class="flex gap-4">
+                    <button @click="emit('save-field')" :disabled="isSaving || tempValue.length > 2000" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save Guard</button>
+                    <button @click="emit('cancel-edit')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="emit('start-edit', 'gameover_guard_expression', form.gameover_guard_expression)" class="group relative cursor-pointer bg-slate-900/80 hover:bg-slate-900 border border-red-500/20 hover:border-red-500/40 rounded-2xl p-4 transition-all duration-300 font-mono">
+                  <div v-if="form.gameover_guard_expression" class="flex items-center gap-2 text-xs text-red-300">
+                    <i class="ra ra-skull text-red-400"></i>
+                    <code class="text-xs break-all">{{ form.gameover_guard_expression }}</code>
+                  </div>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-2 font-sans">Click to set scripted loss guard</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

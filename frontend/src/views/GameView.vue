@@ -87,12 +87,14 @@ const unlockModalError = ref('')
 const containerBusy = ref(false)
 const containerCodeBusy = ref(false)
 const showTextLogModal = ref(false)
+const isTakingTextLog = ref(false)
 const activeTextLog = ref<{
   id: string
   title: string
   format: string
   content: string
   imageUrl?: string | null
+  rawEntity?: any
 } | null>(null)
 const activeContainer = ref<{
   id: string
@@ -116,7 +118,12 @@ const exitUnlockModalTarget = ref<any>(null)
 const exitUnlockBusy = ref(false)
 const exitUnlockError = ref('')
 const exitTraversalBusy = ref<string>('')
-const sceneTransitionTarget = ref<{ label: string; targetSceneName: string; targetSceneId: string } | null>(null)
+const sceneTransitionTarget = ref<{
+  label: string
+  targetSceneName: string
+  targetSceneId: string
+  targetSceneImage?: string | null
+} | null>(null)
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -557,7 +564,10 @@ const markContainerUnlockedLocally = (containerId: string) => {
 
 const isReadableEntity = (entity: any): boolean => {
   if (!entity) return false
-  return String(entity.item_type || '').toUpperCase() === 'READABLE'
+  const itemType = String(entity.item_type || entity.metadata_json?.item_type || '').toUpperCase()
+  if (itemType === 'READABLE') return true
+  const metadata = (entity.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  return Boolean(entity.text_log_content || metadata.text_log_content)
 }
 
 const extractTextLogPayload = (entity: any) => {
@@ -575,6 +585,7 @@ const extractTextLogPayload = (entity: any) => {
     format: ['DOCUMENT', 'SCROLL', 'BOOK', 'SIGN'].includes(format) ? format : 'DOCUMENT',
     content,
     imageUrl: entity?.image_url || null,
+    rawEntity: entity,
   }
 }
 
@@ -732,6 +743,37 @@ const handleUnlockItemSubmit = async (itemId: string) => {
   }
 }
 
+const handleUnlockDirectSubmit = async () => {
+  if (!unlockModalContainer.value || unlockModalBusy.value) return
+  const containerId = String(unlockModalContainer.value.id || '').trim()
+  if (!containerId) return
+
+  unlockModalBusy.value = true
+  unlockModalError.value = ''
+  try {
+    await api.unlockContainer(props.id, containerId)
+    markContainerUnlockedLocally(containerId)
+    addNotification(`${unlockModalContainer.value.name || 'Container'} unlocked.`, 'success')
+
+    const source = activeCodeContainer.value?.source
+    showUnlockModal.value = false
+    unlockModalContainer.value = null
+    clearContainerCodeState()
+
+    if (source === 'scene') {
+      const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromEntity(container)
+    } else {
+      const container = (inventoryItems.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromInventoryItem(container)
+    }
+  } catch (error: any) {
+    unlockModalError.value = error?.message || "Guard condition not met. The container remains locked."
+  } finally {
+    unlockModalBusy.value = false
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Exit interactions
 // ---------------------------------------------------------------------------
@@ -800,6 +842,24 @@ const resolveSceneName = (sceneId?: string | null): string => {
   return formatSceneIdToTitle(raw)
 }
 
+const resolveSceneImage = (sceneId?: string | null): string | null => {
+  if (!sceneId) return null
+  const raw = String(sceneId).trim()
+  if (!raw) return null
+  const upper = raw.toUpperCase()
+  const safe = raw.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+
+  const node = nodes.value?.[safe] || nodes.value?.[upper] || nodes.value?.[raw]
+  if (node?.image_url) return String(node.image_url)
+
+  const mapNodes = Array.isArray(mapData.value?.nodes) ? mapData.value.nodes : []
+  const found = mapNodes.find((n: any) => {
+    const nid = String(n.id || n.key || '').trim().toUpperCase()
+    return nid === upper || nid === safe
+  })
+  return found?.image_url ? String(found.image_url) : null
+}
+
 const currentSceneName = computed(() => {
   const curId = sheet.value?.scene_id || sheet.value?.current_scene_id || sheet.value?.current_scene
   if (!curId) return 'Unknown Location'
@@ -814,6 +874,7 @@ const traverseSceneExit = async (exit: any, exitRef: string) => {
     label: exitDisplayName(exit),
     targetSceneName,
     targetSceneId: targetId,
+    targetSceneImage: exit?.target_scene_image || resolveSceneImage(targetId),
   }
   try {
     // Use the sendMessage pipeline so the scene transition triggers
@@ -872,6 +933,28 @@ const handleExitUnlockItemSubmit = async (itemId: string) => {
   }
 }
 
+const handleExitUnlockDirectSubmit = async () => {
+  if (!exitUnlockModalTarget.value || exitUnlockBusy.value) return
+  const exitId = String(exitUnlockModalTarget.value.id || '').trim()
+  if (!exitId) return
+
+  exitUnlockBusy.value = true
+  exitUnlockError.value = ''
+  try {
+    await api.unlockExit(props.id, exitId)
+    markExitUnlockedLocally(exitId)
+    const target = exitUnlockModalTarget.value
+    addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
+    showExitUnlockModal.value = false
+    exitUnlockModalTarget.value = null
+    await traverseSceneExit({ ...(target || {}), is_locked: false }, exitId)
+  } catch (error: any) {
+    exitUnlockError.value = error?.message || 'Guard condition not met. The exit remains locked.'
+  } finally {
+    exitUnlockBusy.value = false
+  }
+}
+
 const markExitUnlockedLocally = (exitId: string) => {
   const normalized = String(exitId || '').trim()
   if (!normalized || !mapData.value) return
@@ -882,6 +965,7 @@ const markExitUnlockedLocally = (exitId: string) => {
     edge.code_to_unlock = ''
     edge.item_to_unlock = ''
     edge.rule_to_unlock = ''
+    edge.unlock_expression = ''
   }
 }
 
@@ -1063,6 +1147,12 @@ const handleContainerTakeAll = async () => {
   await runContainerAction((id) => `/container_take_all ${id}`)
 }
 
+const handleContainerTakeItem = async (item: any) => {
+  const itemRef = String(item?.id || item?.name || '').trim()
+  if (!itemRef) return
+  await runContainerAction((id) => `/container_take_item ${id} | ${itemRef}`)
+}
+
 const handleContainerDropToScene = async () => {
   await runContainerAction((id) => `/container_drop_scene ${id}`)
 }
@@ -1146,10 +1236,6 @@ const sceneExits = computed<any[]>(() => {
 
 const isExitLocked = (exit: any): boolean => {
   if (!exit) return false
-  const code = String(exit.code_to_unlock || '').trim()
-  const item = String(exit.item_to_unlock || '').trim()
-  const rule = String(exit.rule_to_unlock || '').trim()
-  if (!code && !item && !rule) return Boolean(exit.is_locked)
   return Boolean(exit.is_locked)
 }
 
@@ -1172,6 +1258,7 @@ const exitLockBadge = (exit: any): ExitLockBadge | null => {
   if (!exit || !isExitLocked(exit)) return null
   const code = String(exit.code_to_unlock || '').trim()
   const item = String(exit.item_to_unlock || '').trim()
+  const expr = String(exit.unlock_expression || '').trim()
   const rule = String(exit.rule_to_unlock || '').trim()
   const description = String(exit.lock_description || '').trim()
 
@@ -1180,6 +1267,9 @@ const exitLockBadge = (exit: any): ExitLockBadge | null => {
   }
   if (item) {
     return { label: `Requires ${item}`, icon: 'ra ra-key', detail: description || `Requires the ${item}` }
+  }
+  if (expr) {
+    return { label: 'Guarded Exit', icon: 'ra ra-lock', detail: description || 'Protected by scripted condition' }
   }
   if (rule) {
     return { label: `Rule: ${rule}`, icon: 'ra ra-scroll-unfurled', detail: description || `Requires: ${rule}` }
@@ -1249,6 +1339,39 @@ useGameUiFeedback({
 const handleTakeDirect = async (entity: any) => {
   if (isActionInputBlocked.value) return
   await sendMessage(`/take_direct ${entity.id || entity.name}`)
+}
+
+const isItemInInventory = (entityOrId: any): boolean => {
+  if (!entityOrId) return false
+  if (typeof entityOrId === 'object') {
+    if (entityOrId.is_in_inventory === true || entityOrId.current_scene_id === 'INVENTORY') {
+      return true
+    }
+  }
+  const rawId = typeof entityOrId === 'string' ? entityOrId : entityOrId.id
+  const normId = String(rawId || '').trim().toLowerCase()
+  if (!normId) return false
+  return (inventoryItems.value || []).some((item: any) => {
+    const itemId = String(typeof item === 'string' ? item : item?.id || '').trim().toLowerCase()
+    return itemId === normId
+  })
+}
+
+const canTakeTextLog = computed(() => {
+  const entity = activeTextLog.value?.rawEntity
+  if (!entity) return false
+  if (entity.is_portable === false) return false
+  return !isItemInInventory(entity)
+})
+
+const handleTextLogTake = async () => {
+  if (!activeTextLog.value?.rawEntity || isTakingTextLog.value) return
+  isTakingTextLog.value = true
+  try {
+    await handleTakeDirect(activeTextLog.value.rawEntity)
+  } finally {
+    isTakingTextLog.value = false
+  }
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
@@ -1395,8 +1518,9 @@ const handleSheetChanged = async () => {
   sheetDirty.value = false
 }
 
-const handleCombatAttack = async () => {
-  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/attack')
+const handleCombatAttack = async (targetId: string | null = null) => {
+  const command = targetId ? `/attack ${targetId}` : '/attack'
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, command)
   if (!dispatched) {
     const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
     addNotification(blockedMsg, 'info')
@@ -1431,8 +1555,9 @@ const handleCombatRest = async () => {
   }
 }
 
-const handleCombatSpecial = async (actionId: string) => {
-  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/special ${actionId}`)
+const handleCombatSpecial = async (actionId: string, targetId: string | null = null) => {
+  const command = targetId ? `/special ${actionId} ${targetId}` : `/special ${actionId}`
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, command)
   if (!dispatched) {
     const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
     addNotification(blockedMsg, 'info')
@@ -1714,6 +1839,7 @@ watch(
       :player-sheet="sheet"
       :evaluating="isCombatEvaluating"
       :is-debug="!!sheet?.debug_mode"
+      :scene-image="currentSceneImage"
       @attack="handleCombatAttack"
       @run="handleCombatRun"
       @rest="handleCombatRest"
@@ -1745,6 +1871,7 @@ watch(
       :busy="containerBusy"
       @close="closeContainerModal"
       @take-all="handleContainerTakeAll"
+      @take-item="handleContainerTakeItem"
       @drop-to-scene="handleContainerDropToScene"
       @item-hover="(item, event) => handleHover(item, event)"
       @item-leave="hoveredEntity = null"
@@ -1759,6 +1886,7 @@ watch(
       @close="showUnlockModal = false"
       @submit-code="handleUnlockCodeSubmit"
       @use-key-item="handleUnlockItemSubmit"
+      @unlock-direct="handleUnlockDirectSubmit"
     />
 
     <ContainerUnlockModal
@@ -1773,6 +1901,7 @@ watch(
       @close="showExitUnlockModal = false"
       @submit-code="handleExitUnlockCodeSubmit"
       @use-key-item="handleExitUnlockItemSubmit"
+      @unlock-direct="handleExitUnlockDirectSubmit"
     />
 
     <SwitchStateModal
@@ -1803,6 +1932,9 @@ watch(
       :format="activeTextLog?.format || 'DOCUMENT'"
       :content="activeTextLog?.content || ''"
       :image-url="activeTextLog?.imageUrl || null"
+      :can-take="canTakeTextLog"
+      :is-taking="isTakingTextLog"
+      @take="handleTextLogTake"
       @close="closeTextLogModal"
     />
 

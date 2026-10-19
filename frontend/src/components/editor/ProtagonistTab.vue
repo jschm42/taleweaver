@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { Plus, Trash2, Hammer } from 'lucide-vue-next'
+import { Plus, Trash2, Hammer, Sparkles, HeartPulse, Activity } from 'lucide-vue-next'
 import { formatObjectIds } from '@/utils/editor_utils'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
+import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
 
 const props = defineProps<{
   debugData: any
@@ -13,6 +15,7 @@ const props = defineProps<{
   ruleEnforcementMode: string
   isSavingText: boolean
   referenceOptions: any[]
+  adventureId?: string
 }>()
 
 const emit = defineEmits<{
@@ -23,9 +26,30 @@ const emit = defineEmits<{
   (e: 'toggle-menu', id: string, event: MouseEvent): void
   (e: 'save-field', field: string, value: any): void
   (e: 'create-new-item', target: { type: 'equipment' | 'inventory'; key?: string; index?: number }): void
+  (e: 'special-attacks-saved'): void
+  (e: 'export-entity', kind: 'protagonist', id: null, label: string): void
+  (e: 'import-entity', kind: 'protagonist'): void
 }>()
 
 const activeEditId = ref<string | null>(null)
+const activeSubTab = ref<'general' | 'advanced'>('general')
+
+const localHpScript = ref(props.debugData?.protagonist?.on_hp_change_script || '')
+const localHpText = ref(props.debugData?.protagonist?.on_hp_change_text || '')
+const localStatusScript = ref(props.debugData?.protagonist?.on_status_change_script || '')
+const localStatusText = ref(props.debugData?.protagonist?.on_status_change_text || '')
+
+watch(() => props.debugData?.protagonist, (p) => {
+  if (!p) return
+  localHpScript.value = p.on_hp_change_script || ''
+  localHpText.value = p.on_hp_change_text || ''
+  localStatusScript.value = p.on_status_change_script || ''
+  localStatusText.value = p.on_status_change_text || ''
+}, { deep: true, immediate: true })
+
+function saveProtagonistTrigger(field: string, val: any) {
+  emit('save-field', field, val)
+}
 
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
@@ -101,12 +125,42 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
 <template>
   <div class="space-y-8 animate-page-in">
-    <section v-if="debugData?.protagonist" class="space-y-4 bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
-      <div class="flex items-center justify-between">
-        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
-      </div>
+    <!-- Subtabs -->
+    <div v-if="debugData?.protagonist" class="flex gap-6 border-b border-white/10 pb-2">
+      <button
+        type="button"
+        @click="activeSubTab = 'general'"
+        :class="['text-xs font-black uppercase tracking-widest pb-2 transition-colors border-b-2', activeSubTab === 'general' ? 'text-emerald-400 border-emerald-400' : 'text-slate-500 border-transparent hover:text-white']"
+      >
+        General
+      </button>
+      <button
+        type="button"
+        @click="activeSubTab = 'advanced'"
+        :class="['text-xs font-black uppercase tracking-widest pb-2 transition-colors border-b-2 flex items-center gap-1.5', activeSubTab === 'advanced' ? 'text-emerald-400 border-emerald-400' : 'text-slate-500 border-transparent hover:text-white']"
+      >
+        <Sparkles class="w-3.5 h-3.5" />
+        <span>Advanced Triggers</span>
+        <span v-if="debugData.protagonist.on_hp_change_script || debugData.protagonist.on_status_change_script" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+      </button>
+    </div>
 
-      <div class="bg-black/20 border border-white/5 rounded-3xl p-6 flex flex-col md:flex-row gap-6 backdrop-blur-md shadow-inner">
+    <!-- General Subtab -->
+    <div v-show="activeSubTab === 'general'" class="space-y-8">
+      <section v-if="debugData?.protagonist" class="space-y-4 bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
+          <div class="flex items-center gap-4">
+            <button @click="emit('import-entity', 'protagonist')" class="text-xs font-bold text-sky-500 hover:text-sky-400 flex items-center gap-1.5 uppercase tracking-widest transition-colors" title="Replace the protagonist with one from a .twe file">
+              <i class="ra ra-load"></i> Import
+            </button>
+            <button @click="emit('export-entity', 'protagonist', null, debugData.protagonist.name)" class="text-xs font-bold text-teal-500 hover:text-teal-400 flex items-center gap-1.5 uppercase tracking-widest transition-colors" title="Export the protagonist incl. portrait as a .twe file">
+              <i class="ra ra-save"></i> Export
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-black/20 border border-white/5 rounded-3xl p-6 flex flex-col md:flex-row gap-6 backdrop-blur-md shadow-inner">
         <div class="shrink-0 relative group">
           <div class="w-full md:w-56 h-72 md:h-80 rounded-2xl overflow-hidden bg-slate-800 border border-white/10 shadow-lg relative">
             <img
@@ -627,7 +681,103 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
           </div>
         </div>
       </div>
-    </section>
+      </section>
+
+      <section
+        v-if="debugData?.protagonist && adventureId && ruleEnforcementMode !== 'chat'"
+        class="mt-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5"
+      >
+        <SpecialAttacksEditor
+          :adventure-id="adventureId"
+          target-type="protagonist"
+          :target-id="debugData.protagonist.id"
+          :owner-name="debugData.protagonist.name"
+          :attacks="debugData.protagonist.stats?.special_actions ?? []"
+          :reference-options="referenceOptions"
+          @saved="emit('special-attacks-saved')"
+        />
+      </section>
+      </div> <!-- End general subtab -->
+
+      <!-- Advanced Tab: Protagonist Status Change Triggers -->
+      <div v-show="activeSubTab === 'advanced'" class="space-y-6 pt-2">
+        <div class="space-y-1">
+          <p class="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+            <Sparkles class="w-4 h-4" /> Protagonist Status Triggers
+          </p>
+          <p class="text-[11px] text-slate-400">
+            Define transition scripts and cues executed when protagonist stats change (e.g. taking damage or gaining/losing status effects).
+          </p>
+        </div>
+
+        <!-- On HP Change Trigger -->
+        <div class="space-y-4 border border-white/5 bg-black/30 p-6 rounded-3xl">
+          <div class="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
+            <HeartPulse class="w-4 h-4" /> On HP Change Trigger
+          </div>
+          <ScriptEditor
+            v-model="localHpScript"
+            label="On HP Change Script"
+            help-text="Executed immediately when protagonist HP changes (e.g. check if HP <= 0, trigger low-health event, etc.)."
+            context="protagonist_hp_change"
+            min-height="120px"
+            @blur="saveProtagonistTrigger('on_hp_change_script', localHpScript)"
+          />
+          <div class="space-y-1">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On HP Change Text</label>
+            <textarea
+              v-model="localHpText"
+              rows="3"
+              placeholder="e.g. Your vision flashes red as agonizing pain shoots through your body."
+              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500/50 outline-none resize-y"
+              @blur="saveProtagonistTrigger('on_hp_change_text', localHpText)"
+            ></textarea>
+          </div>
+          <div class="flex justify-end">
+            <button
+              type="button"
+              @click="saveProtagonistTrigger('on_hp_change_script', localHpScript); saveProtagonistTrigger('on_hp_change_text', localHpText)"
+              class="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+            >
+              Save HP Trigger
+            </button>
+          </div>
+        </div>
+
+        <!-- On Status Change Trigger -->
+        <div class="space-y-4 border border-white/5 bg-black/30 p-6 rounded-3xl">
+          <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
+            <Activity class="w-4 h-4" /> On Status Change Trigger
+          </div>
+          <ScriptEditor
+            v-model="localStatusScript"
+            label="On Status Change Script"
+            help-text="Executed immediately when protagonist status effects or conditions change."
+            context="protagonist_status_change"
+            min-height="120px"
+            @blur="saveProtagonistTrigger('on_status_change_script', localStatusScript)"
+          />
+          <div class="space-y-1">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Status Change Text</label>
+            <textarea
+              v-model="localStatusText"
+              rows="3"
+              placeholder="e.g. A tingling sensation spreads across your skin as your condition shifts."
+              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
+              @blur="saveProtagonistTrigger('on_status_change_text', localStatusText)"
+            ></textarea>
+          </div>
+          <div class="flex justify-end">
+            <button
+              type="button"
+              @click="saveProtagonistTrigger('on_status_change_script', localStatusScript); saveProtagonistTrigger('on_status_change_text', localStatusText)"
+              class="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+            >
+              Save Status Trigger
+            </button>
+          </div>
+        </div>
+      </div>
   </div>
 </template>
 

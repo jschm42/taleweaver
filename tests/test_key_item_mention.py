@@ -1,9 +1,9 @@
-import pytest
-from sqlalchemy import select
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate, ExitUpdate
+from backend.engine.rule_engine import ExitUpdate, GameEvent, WorldEntityUpdate
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -14,8 +14,9 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.fixture(autouse=True)
 def mock_llm_semantic_mention(monkeypatch):
-    from backend.core.llm_router import GameMasterLLM
     import re
+
+    from backend.core.llm_router import GameMasterLLM
 
     # Mock decryption/API key lookup to bypass key validation error in tests
     monkeypatch.setattr(GameMasterLLM, "_get_decrypted_key", lambda self, provider: "dummy_key")
@@ -25,16 +26,14 @@ def mock_llm_semantic_mention(monkeypatch):
         player_msg = player_msg_parts[1].rstrip('"') if len(player_msg_parts) > 1 else ""
         player_msg_low = player_msg.lower()
         
-        referenced = False
-        if "required item id: box_key" in user_prompt.lower():
-            if re.search(r"\b(key|schlüssel)\b", player_msg_low):
-                referenced = True
-        elif "required item id: card" in user_prompt.lower():
-            if re.search(r"\b(card|karte)\b", player_msg_low):
-                referenced = True
-        elif "required item id: screwdriver" in user_prompt.lower():
-            if re.search(r"\b(screwdriver|schraubenzieher|schraubendreher)\b", player_msg_low):
-                referenced = True
+        item_patterns = {
+            "required item id: box_key": r"\b(key|schlüssel)\b",
+            "required item id: card": r"\b(card|karte)\b",
+            "required item id: screwdriver": r"\b(screwdriver|schraubenzieher|schraubendreher)\b",
+        }
+        prompt_low = user_prompt.lower()
+        pattern = next((p for marker, p in item_patterns.items() if marker in prompt_low), None)
+        referenced = bool(pattern and re.search(pattern, player_msg_low))
         return response_model(referenced=referenced)
 
     monkeypatch.setattr(GameMasterLLM, "aexecute_simple_task", mock_aexecute_task)
@@ -310,7 +309,9 @@ async def test_rule_violations_modify_narrative_description(setup_test_db, monke
         # Capture the prompt passed to stream_simple_task
         captured_prompts = []
         async def mock_stream(system_prompt, user_prompt, model_name=None, *args, **kwargs):
-            captured_prompts.append(system_prompt)
+            # Per-turn blocks (outcome, violations) live in the final chat message.
+            message_texts = [str(m.get("content", "")) for m in kwargs.get("messages") or []]
+            captured_prompts.append("\n\n".join([system_prompt, *message_texts]))
             # Yield empty/dummy chunk
             yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The box remains locked."))])
 
@@ -351,8 +352,8 @@ async def test_rule_violations_modify_narrative_description(setup_test_db, monke
 
 async def test_resolve_session_exit_prefers_session_scoped(setup_test_db):
     """Verifies that _resolve_session_exit prefers the session-scoped exit over the template-scoped exit."""
-    from tests.conftest import TestSessionLocal
     from backend.api.routes.adventures.gameplay import _resolve_session_exit
+    from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_game_context(db)

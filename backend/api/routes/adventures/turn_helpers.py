@@ -15,8 +15,7 @@ class TurnManagerLike(Protocol):
     adventure: Any
     user: Any
 
-    def _get_gm_notes(self) -> list[str]:
-        ...
+    def _get_gm_notes(self) -> list[str]: ...
 
 
 class TurnProgressionBuilder:
@@ -45,7 +44,8 @@ class TurnProgressionBuilder:
         earned_keys = {
             entry.get("key")
             for entry in earned_awards
-            if entry.get("key") and (
+            if entry.get("key")
+            and (
                 entry.get("template_id") == self.manager.adventure.id
                 or entry.get("adventure_id") == self.manager.adventure.id
             )
@@ -143,7 +143,7 @@ class TurnProgressionBuilder:
     @staticmethod
     def build_chat_progression_scenes(session_scenes: list[WorldScene]) -> list[dict]:
         reduced_scenes = []
-        for scene in (session_scenes or []):
+        for scene in session_scenes or []:
             reduced_scenes.append(
                 {
                     "id": scene.id,
@@ -199,7 +199,8 @@ class TurnProgressionBuilder:
         )
 
     @staticmethod
-    def build_progression_event(intent: AdventureGeneratorToolIntent) -> GameEvent:
+    def build_progression_event(intent: AdventureGeneratorToolIntent | Any) -> GameEvent:
+        """Maps a chat-mode progression intent onto a GameEvent for the guardrail chain."""
         return GameEvent(
             narrative_description=intent.narrative_description or "",
             hp_change=intent.hp_change,
@@ -223,6 +224,8 @@ class TurnProgressionBuilder:
             exit_label=intent.exit_label,
             moved_entities=intent.moved_entities,
             updated_entities=intent.updated_entities,
+            updated_exits=getattr(intent, "updated_exits", None),
+            discovered_entity_ids=intent.discovered_entity_ids,
             deleted_entities=intent.deleted_entities,
             extra_time_minutes=intent.extra_time_minutes,
         )
@@ -321,14 +324,12 @@ class TurnSessionStateHelper:
             existing = []
 
         forget_set = {
-            str(note).strip().lower()
-            for note in (forget_notes or [])
-            if str(note).strip()
+            str(note).strip().lower() for note in (forget_notes or []) if str(note).strip()
         }
         if forget_set:
             existing = [n for n in existing if n.strip().lower() not in forget_set]
 
-        for note in (remember_notes or []):
+        for note in remember_notes or []:
             normalized = str(note).strip()
             if not normalized:
                 continue
@@ -366,17 +367,16 @@ class TurnSessionStateHelper:
                 active_memories.append(m)
         if not active_memories:
             return ""
-        lines = "\n".join(f"- {m['description']} (Emotion: {m['emotion']})" for m in active_memories)
+        lines = "\n".join(
+            f"- {m['description']} (Emotion: {m['emotion']})" for m in active_memories
+        )
         return "\n\nWORLD MEMORIES (LONG-TERM CONSEQUENCES):\n" + lines
 
     def build_compressed_history_prompt_block(self) -> str:
         data = getattr(self.manager.state, "compressed_history", None)
         if not data:
             return ""
-        if isinstance(data, dict):
-            summary_text = data.get("summary") or ""
-        else:
-            summary_text = str(data)
+        summary_text = (data.get("summary") or "") if isinstance(data, dict) else str(data)
         summary_text = summary_text.strip()
         if not summary_text:
             return ""
@@ -411,14 +411,21 @@ class TurnCombatStateHelper:
         self.manager.state.combat_json = combat
         flag_modified(self.manager.state, "entity_states")
 
-    def append_combat_log(self, combat: dict[str, Any], text: str, entry_type: str = "log") -> None:
+    def append_combat_log(
+        self,
+        combat: dict[str, Any],
+        text: str,
+        entry_type: str = "log",
+        data: dict[str, Any] | None = None,
+    ) -> None:
         logs = list(combat.get("log") or [])
-        logs.append(
-            {
-                "round": combat.get("round", 1),
-                "type": entry_type,
-                "text": text,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-        )
+        entry: dict[str, Any] = {
+            "round": combat.get("round", 1),
+            "type": entry_type,
+            "text": text,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        if data:
+            entry["data"] = data
+        logs.append(entry)
         combat["log"] = logs[-80:]

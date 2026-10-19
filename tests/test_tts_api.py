@@ -18,7 +18,11 @@ pytestmark = pytest.mark.asyncio
 async def _enable_tts_for_test_user(api_key: str = "test-api-key") -> None:
     """Enable TTS for the seeded test user with valid settings."""
     async with TestSessionLocal() as session:
-        user = (await session.execute(select(User).where(User.username == "test_user"))).scalars().first()
+        user = (
+            (await session.execute(select(User).where(User.username == "test_user")))
+            .scalars()
+            .first()
+        )
         assert user is not None
         user.tts_settings = {
             "enabled": True,
@@ -40,14 +44,22 @@ async def _create_template_avatar_and_session(
 ) -> None:
     """Seed a minimal adventure template, avatar, and active game session."""
     async with TestSessionLocal() as session:
-        user = (await session.execute(select(User).where(User.username == "test_user"))).scalars().first()
+        user = (
+            (await session.execute(select(User).where(User.username == "test_user")))
+            .scalars()
+            .first()
+        )
         assert user is not None
 
         template = (
-            await session.execute(
-                select(AdventureTemplate).where(AdventureTemplate.id == template_id)
+            (
+                await session.execute(
+                    select(AdventureTemplate).where(AdventureTemplate.id == template_id)
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if template is None:
             template = AdventureTemplate(
                 id=template_id,
@@ -59,8 +71,8 @@ async def _create_template_avatar_and_session(
             session.add(template)
 
         avatar = (
-            await session.execute(select(Avatar).where(Avatar.id == avatar_id))
-        ).scalars().first()
+            (await session.execute(select(Avatar).where(Avatar.id == avatar_id))).scalars().first()
+        )
         if avatar is None:
             avatar = Avatar(
                 id=avatar_id,
@@ -73,8 +85,10 @@ async def _create_template_avatar_and_session(
             session.add(avatar)
 
         game_session = (
-            await session.execute(select(GameSession).where(GameSession.id == session_id))
-        ).scalars().first()
+            (await session.execute(select(GameSession).where(GameSession.id == session_id)))
+            .scalars()
+            .first()
+        )
         if game_session is None:
             game_session = GameSession(
                 id=session_id,
@@ -88,9 +102,12 @@ async def _create_template_avatar_and_session(
         await session.commit()
 
 
-def _build_fake_httpx_response(audio_payload: bytes, mime_type: str = "audio/L16;rate=24000") -> MagicMock:
+def _build_fake_httpx_response(
+    audio_payload: bytes, mime_type: str = "audio/L16;rate=24000"
+) -> MagicMock:
     """Create a fake httpx response that returns raw PCM audio for the TTS engine."""
     import base64
+
     encoded = base64.b64encode(audio_payload).decode("ascii")
 
     class FakeResponse:
@@ -128,7 +145,9 @@ async def test_generate_tts_accepts_non_uuid_ids(auth_client: AsyncClient, monke
     async def fake_generate_speech(**kwargs):
         return "/data/audio/test.wav"
 
-    monkeypatch.setattr("backend.api.routes.tts_api.TTSEngine.generate_speech", fake_generate_speech)
+    monkeypatch.setattr(
+        "backend.api.routes.tts_api.TTSEngine.generate_speech", fake_generate_speech
+    )
 
     payload = {
         "text": "Hello from TaleWeaver.",
@@ -196,9 +215,7 @@ async def test_tts_writes_audio_under_session_folder_when_session_id_present(
 
 
 @pytest.mark.asyncio
-async def test_tts_falls_back_to_global_audio_folder_without_session_id(
-    tmp_path, monkeypatch
-):
+async def test_tts_falls_back_to_global_audio_folder_without_session_id(tmp_path, monkeypatch):
     """Legacy callers (connection test, manual TTS) without a session id must still
     persist into the global ``<DATA_DIR>/audio/`` folder.
     """
@@ -233,9 +250,7 @@ async def test_tts_falls_back_to_global_audio_folder_without_session_id(
 
 
 @pytest.mark.asyncio
-async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(
-    tmp_path, monkeypatch
-):
+async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(tmp_path, monkeypatch):
     """An unsafe/invalid session id must not crash the engine and must fall back
     to the global ``/data/audio/`` folder, never writing outside ``DATA_DIR``.
     """
@@ -271,3 +286,96 @@ async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(
     assert os.path.isfile(written_file), f"Expected file at {written_file}"
     # No traversal artifacts should be created under DATA_DIR.
     assert not (tmp_path / "etc").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("voice_override", "expected_voice"),
+    [("Kore", "Kore"), ("Unknown Speaker", "Puck"), (None, "Puck")],
+)
+async def test_generate_tts_applies_only_known_voice_overrides(
+    auth_client: AsyncClient, monkeypatch, voice_override, expected_voice
+):
+    """NPC voice overrides must reach the engine when they name a known Google voice."""
+    # Arrange
+    await _enable_tts_for_test_user()
+    captured: dict = {}
+
+    async def fake_generate_speech(**kwargs):
+        captured.update(kwargs)
+        return "/data/audio/test.wav"
+
+    monkeypatch.setattr(
+        "backend.api.routes.tts_api.TTSEngine.generate_speech", fake_generate_speech
+    )
+
+    # Act
+    resp = await auth_client.post(
+        "/api/tts/generate", json={"text": "Halt!", "voice_override": voice_override}
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert captured["voice"] == expected_voice
+
+
+@pytest.mark.asyncio
+async def test_gemini_api_key_is_sent_as_header_not_in_url(tmp_path, monkeypatch):
+    """The Google API key must never be embedded in the request URL (it leaks into logs)."""
+    # Arrange
+    from backend.core.config import settings
+    from backend.engine.tts_engine import TTSEngine
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    captured_urls: list[str] = []
+
+    async def fake_post(url, json, timeout=None):
+        captured_urls.append(url)
+        return _build_fake_httpx_response(b"\x00\x00\x10\x00")
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        instance = MagicMock()
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.post = fake_post
+        mock_client_cls.return_value = instance
+
+        # Act
+        audio_url = await TTSEngine.generate_speech(
+            text="Test line", voice="Puck", api_key="secret-key-123"
+        )
+
+    # Assert
+    assert audio_url is not None
+    assert captured_urls and all("secret-key-123" not in url for url in captured_urls)
+    assert mock_client_cls.call_args.kwargs["headers"] == {"x-goog-api-key": "secret-key-123"}
+
+
+@pytest.mark.asyncio
+async def test_elevenlabs_rate_limit_raises_rate_limit_error(monkeypatch):
+    """ElevenLabs 429 responses must surface as TTSRateLimitError (HTTP 429), not a 500."""
+    # Arrange
+    import httpx
+
+    from backend.engine.tts_engine import TTSEngine, TTSRateLimitError
+
+    monkeypatch.setattr(
+        "backend.engine.tts_engine._wait_for_tts_request_slot", AsyncMock(return_value=None)
+    )
+    rate_limited = httpx.Response(429, headers={"Retry-After": "3"})
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        instance = MagicMock()
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.post = AsyncMock(return_value=rate_limited)
+        mock_client_cls.return_value = instance
+
+        # Act / Assert
+        with pytest.raises(TTSRateLimitError):
+            await TTSEngine.generate_speech(
+                text="Hello",
+                provider="elevenlabs",
+                elevenlabs_voice_id="voice-1",
+                api_key="el-key",
+            )

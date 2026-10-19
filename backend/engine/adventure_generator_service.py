@@ -1,7 +1,7 @@
-from typing import Optional, Union
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,53 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_tone(val: Any) -> Optional[str]:
+    if not val:
+        return None
+    if isinstance(val, dict):
+        return val.get("id") or val.get("name") or str(val)
+    return str(val)
+
+
+def _create_initial_template(
+    new_id: str,
+    user: User,
+    request: AdventureGenerationRequest,
+    images_enabled: bool,
+) -> AdventureTemplate:
+    return AdventureTemplate(
+        id=new_id,
+        owner_id=user.id,
+        title=request.title,
+        original_prompt=request.prompt,
+        min_scenes=request.min_scenes,
+        max_scenes=request.max_scenes,
+        min_items=getattr(request, "min_items", None),
+        max_items=getattr(request, "max_items", None),
+        container_generation_enabled=getattr(request, "container_generation_enabled", True),
+        scripts_generation_enabled=getattr(request, "scripts_generation_enabled", False),
+        min_containers=getattr(request, "min_containers", None),
+        max_containers=getattr(request, "max_containers", None),
+        text_log_generation_enabled=getattr(request, "text_log_generation_enabled", True),
+        min_text_logs=getattr(request, "min_text_logs", None),
+        max_text_logs=getattr(request, "max_text_logs", None),
+        generate_scene_images=images_enabled,
+        selected_image_styles=request.selected_image_styles,
+        selected_tone=_clean_tone(request.selected_tone),
+        min_awards=request.min_awards,
+        max_awards=request.max_awards,
+        award_generation_enabled=request.award_generation_enabled,
+        quest_generation_enabled=getattr(request, "quest_generation_enabled", True),
+        min_quests=getattr(request, "min_quests", None),
+        max_quests=getattr(request, "max_quests", None),
+        sequences=getattr(request, "sequences", None),
+        generation_strictness=getattr(request, "generation_strictness", "creative"),
+        creation_status="Initializing...",
+        is_ready=False,
+    )
+
 
 class AdventureGeneratorService:
     @staticmethod
@@ -28,9 +75,18 @@ class AdventureGeneratorService:
         """Returns the list of available narrative tones."""
         catalog = user.tone_catalog or []
         if not catalog:
-            return ["Heroic", "Grimdark", "Whimsical", "Horror", "Satirical", "Mystery", "Serious", "Cyberpunk", "Post-Apocalyptic"]
+            return [
+                "Heroic",
+                "Grimdark",
+                "Whimsical",
+                "Horror",
+                "Satirical",
+                "Mystery",
+                "Serious",
+                "Cyberpunk",
+                "Post-Apocalyptic",
+            ]
         return [t.get("id") or t.get("name") for t in catalog if t.get("id") or t.get("name")]
-
 
     @staticmethod
     async def generate_adventure(
@@ -43,53 +99,9 @@ class AdventureGeneratorService:
         Triggers the world generation and saves the new template to the user's library.
         Returns the ID of the new adventure.
         """
-        def clean_tone(val):
-            if not val: return None
-            if isinstance(val, dict):
-                return val.get("id") or val.get("name") or str(val)
-            return str(val)
-
-        # Image confirmation sets this switch for the whole generation pipeline.
-        # "without images" must disable all AI image-generation branches.
         images_enabled = bool(request.generate_scene_images)
-
-        # 1. Create a new AdventureTemplate entry
-
         new_id = str(uuid.uuid4())
-        new_template = AdventureTemplate(
-            id=new_id,
-            owner_id=user.id,
-            title=request.title,
-            original_prompt=request.prompt,
-            min_scenes=request.min_scenes,
-            max_scenes=request.max_scenes,
-            min_items=getattr(request, "min_items", None),
-            max_items=getattr(request, "max_items", None),
-            container_generation_enabled=getattr(request, "container_generation_enabled", True),
-            scripts_generation_enabled=getattr(request, "scripts_generation_enabled", False),
-            min_containers=getattr(request, "min_containers", None),
-            max_containers=getattr(request, "max_containers", None),
-            text_log_generation_enabled=getattr(request, "text_log_generation_enabled", True),
-            min_text_logs=getattr(request, "min_text_logs", None),
-            max_text_logs=getattr(request, "max_text_logs", None),
-            generate_scene_images=images_enabled,
-            selected_image_styles=request.selected_image_styles,
-            selected_tone=clean_tone(request.selected_tone),
-
-
-            min_awards=request.min_awards,
-            max_awards=request.max_awards,
-            award_generation_enabled=request.award_generation_enabled,
-            quest_generation_enabled=getattr(request, "quest_generation_enabled", True),
-            min_quests=getattr(request, "min_quests", None),
-            max_quests=getattr(request, "max_quests", None),
-            min_sequences=getattr(request, "min_sequences", None),
-            max_sequences=getattr(request, "max_sequences", None),
-            sequences=getattr(request, "sequences", None),
-            generation_strictness=getattr(request, "generation_strictness", "creative"),
-            creation_status="Initializing...",
-            is_ready=False
-        )
+        new_template = _create_initial_template(new_id, user, request, images_enabled)
         db.add(new_template)
         await db.flush()
 
@@ -99,7 +111,7 @@ class AdventureGeneratorService:
         logger.info(f"Starting background generation for adventure '{request.title}' ({new_id})")
 
         try:
-            # Note: We await here because the GameTurnManager expects a resolution 
+            # Note: We await here because the GameTurnManager expects a resolution
             # to narrate back to the player. In a production environment, this might
             # be a Celery task or similar, but for TaleWeaver's current architecture,
             # awaiting is consistent with how manual generation works.
@@ -138,7 +150,6 @@ class AdventureGeneratorService:
                 status_callback=progress_callback,
             )
 
-            
             # Re-fetch or refresh to ensure we have the latest state before final update
             await db.refresh(new_template)
             new_template.is_ready = True
@@ -147,10 +158,10 @@ class AdventureGeneratorService:
 
             if progress_callback:
                 await progress_callback("Adventure generation complete. Finalizing...")
-            
+
             logger.info(f"Adventure generation successful: {new_id}")
             return new_id
-            
+
         except Exception as e:
             logger.exception(f"Adventure generation failed for {new_id}: {e}")
 
@@ -175,7 +186,8 @@ class AdventureGeneratorService:
                 new_template.creation_status = "Failed"
                 new_template.creation_error = str(e)
                 await db.flush()
-            except:
-                pass
+            except Exception as update_err:
+                logger.warning(
+                    "Could not persist failure status for adventure %s: %s", new_id, update_err
+                )
             raise e
-

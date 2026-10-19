@@ -48,6 +48,16 @@ CHECK FOR (only emit `warn`-level findings, never invent errors):
    scene descriptions and NPC dialogue broadly match that tone. Emit a
    finding only on strong, obvious mismatches.
 
+9. **Sequence and narrative pacing contradictions**: For each linear sequence,
+   verify that prerequisites (`required_scene_id`, `required_item_id`,
+   `required_defeated_npc_id`, `end_condition`) make narrative sense and do
+   not contradict previous or subsequent sequences, or require unattainable items.
+
+10. **Guard expression & script consistency**: For scenes, exits, items, or
+    sequences with custom guard expressions or scripts, verify that their intended
+    conditions and narrative hints align with how the player solves them in the
+    walkthrough.
+
 OUTPUT FORMAT:
 Return a SINGLE JSON object (not a bare array) with the following shape:
 {
@@ -71,7 +81,7 @@ CONSTRAINTS:
   missed issues.
 - `severity` is always `"warn"` — do not invent errors.
 - `location` should follow the convention `scene:<id>`, `object:<id>`,
-  `npc:<id>`, `exit:<id>`, `quest:<id>`, or `adventure:<field>`.
+  `npc:<id>`, `exit:<id>`, `quest:<id>`, `sequence:<id>`, or `adventure:<field>`.
 - `context` is optional but should hold machine-readable hints (ids, codes).
 - Do not propose fixes — only describe the inconsistency.
 - Reply with ONLY the JSON object, no markdown fence, no commentary.
@@ -88,6 +98,9 @@ Plot: {plot}
 Rules: {rules}
 Intro Text: {intro_text}
 
+=== SEQUENCES ({sequence_count}) ===
+{sequences_json}
+
 === SCENES ({scene_count}) ===
 {scenes_json}
 
@@ -103,8 +116,8 @@ Intro Text: {intro_text}
 === QUESTS ({quest_count}) ===
 {quests_json}
 
-=== WALKTHROUGH ===
-{walkthrough}
+=== GAME SCRIPTS & HOOKS ({script_count}) ===
+{scripts_json}
 
 Identify any of the issues listed in your system instructions. Return ONLY the JSON object with a top-level "findings" key.
 """

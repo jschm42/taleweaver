@@ -12,6 +12,7 @@ import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpText
 import AdventureStatusAlerts from '@/components/create-adventure/AdventureStatusAlerts.vue'
 import AdventureBasicInfo from '@/components/create-adventure/AdventureBasicInfo.vue'
 import AdventureGameSettings from '@/components/create-adventure/AdventureGameSettings.vue'
+import AutoValidateFixToggle from '@/components/create-adventure/AutoValidateFixToggle.vue'
 import AdventureAssetSettings from '@/components/create-adventure/AdventureAssetSettings.vue'
 import AdventureCatalogSelector from '@/components/create-adventure/AdventureCatalogSelector.vue'
 import AdventureRuleModeSelector from '@/components/create-adventure/AdventureRuleModeSelector.vue'
@@ -45,6 +46,7 @@ const form = ref({
   max_items: null as number | null,
   container_generation_enabled: true,
   scripts_generation_enabled: true,
+  auto_validate_and_fix: true,
   min_sequences: null as number | null,
   max_sequences: null as number | null,
   min_containers: null as number | null,
@@ -484,13 +486,8 @@ async function loadCoverSource() {
       form.value.time_auto = false
     }
 
-    if (source.scripts_generation_enabled !== undefined) {
-      form.value.scripts_generation_enabled = !!source.scripts_generation_enabled
-    } else if (Array.isArray(source.scripts) && source.scripts.length > 0) {
-      form.value.scripts_generation_enabled = true
-    } else if (Array.isArray(source.original_manifest?.scripts) && source.original_manifest.scripts.length > 0) {
-      form.value.scripts_generation_enabled = true
-    }
+    // Always default the scripts generation engine to true, even for cover generation
+    form.value.scripts_generation_enabled = true
   } catch (error: any) {
     sourceAdventure.value = null
     errorMsg.value = error?.message || 'Failed to load source adventure for cover mode.'
@@ -834,6 +831,7 @@ onMounted(() => {
 
       <!-- Action Button (Centered at bottom) -->
       <div class="mt-6 sm:mt-10 flex flex-col items-center gap-2 sm:gap-3 px-2">
+        <AutoValidateFixToggle v-model="form.auto_validate_and_fix" class="mb-2" />
         <button
           @click="handleCreate"
           :disabled="isGenerating || isLoadingCatalogs || !hasLlmConfig"

@@ -1,8 +1,12 @@
 export interface ChatMessage {
+  id?: string
   role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info'
   content: string
   timestamp: Date
   itemIds?: string[]
+  /** Scene/sequence the message belongs to; the story feed shows one page per scene/sequence. */
+  scene_id?: string | null
+  sequence_id?: string | null
 }
 
 /** Character sheet snapshot pushed by the server after every action. */
@@ -47,7 +51,7 @@ export interface CharacterSheet {
   adventure_tone?: string | null
   is_debug_enabled?: boolean
   debug_mode?: boolean
-  special_actions?: any[]
+  special_actions?: SpecialAttack[]
   unlocked_actions?: string[]
   agent_active?: boolean
   agent_monkey_mode?: boolean
@@ -71,42 +75,154 @@ export interface InventoryItem {
   [key: string]: unknown
 }
 
+export type SpecialCategory = 'MAGIC' | 'MELEE' | 'RANGED' | 'SOCIAL' | 'OTHER'
+export type CombatStat =
+  | 'hp' | 'mana' | 'stamina'
+  | 'strength' | 'dexterity' | 'intelligence' | 'wisdom' | 'charisma' | 'armor_class'
+export type SuccessStat = 'strength' | 'dexterity' | 'intelligence' | 'wisdom' | 'charisma'
+
+/** One stat change of a special attack, e.g. `{ target: 'target', stat: 'hp', amount: '-2d6' }`. */
+export interface SpecialEffect {
+  target: 'target' | 'self'
+  stat: CombatStat
+  amount: string
+}
+
+/** Special attack definition as stored on the protagonist (stats) or an NPC (metadata_json). */
+export interface SpecialAttack {
+  id: string
+  name: string
+  description?: string
+  action_type: 'ATTACK' | 'HEAL' | 'UTILITY'
+  category?: SpecialCategory | null
+  cost_type?: 'mana' | 'stamina' | null
+  cost?: number | null
+  mana_cost?: number
+  success_stat?: SuccessStat | null
+  difficulty?: number | null
+  effects?: SpecialEffect[]
+  damage_type?: 'FIXED' | 'ROLLED' | null
+  damage_value?: string | null
+  outcome_description?: string | null
+  is_locked?: boolean
+  unlock_condition_type?: 'READ_ITEM' | 'FIND_ITEM' | null
+  unlock_condition_target?: string | null
+  unlock_required_item_id?: string | null
+  unlock_required_scene_id?: string | null
+  unlock_required_defeated_npc_id?: string | null
+  unlock_guard_expression?: string | null
+  unlock_text?: string | null
+  on_success_script?: string | null
+  on_success_text?: string | null
+  on_failure_script?: string | null
+  on_failure_text?: string | null
+}
+
+/** Special attack as normalized by the combat engine (always has cost, category and effects). */
+export interface NormalizedSpecialAttack extends SpecialAttack {
+  category: SpecialCategory
+  cost_type: 'mana' | 'stamina'
+  cost: number
+  success_stat: SuccessStat
+  effects: SpecialEffect[]
+  targets_enemy: boolean
+  locked?: boolean
+  has_unlock_guard?: boolean
+}
+
+export interface AppliedEffect {
+  entity: string
+  name?: string
+  stat: CombatStat
+  delta: number
+  roll?: string
+}
+
+/** Structured payload attached to combat log entries; drives the arena animations. */
+export interface CombatEventData {
+  kind:
+    | 'attack' | 'special' | 'initiative' | 'turn' | 'rest' | 'consume' | 'run'
+    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over'
+  actor?: string | null
+  target?: string | null
+  entity?: string
+  label?: string
+  action_name?: string
+  category?: SpecialCategory
+  stat?: string
+  rolled?: boolean
+  d20?: number
+  modifier?: number
+  total?: number
+  dc?: number
+  success?: boolean
+  crit?: boolean
+  fumble?: boolean
+  cost?: { type: 'mana' | 'stamina'; amount: number }
+  effects?: AppliedEffect[]
+  order?: InitiativeEntry[]
+  round?: number
+  xp?: number
+}
+
 export interface CombatLogEntry {
   round: number
   type: string
   text: string
   timestamp?: string
+  data?: CombatEventData
+}
+
+export interface InitiativeEntry {
+  id: string
+  name: string
+  roll: number
+  bonus: number
+  total: number
+}
+
+export interface CombatantState {
+  id: string
+  name: string
+  image_url?: string | null
+  hp: number
+  max_hp?: number
+  stamina?: number
+  max_stamina?: number
+  mana?: number
+  max_mana?: number
+  ac?: number
+  stats?: Partial<Record<SuccessStat, number>>
+  modifiers?: Partial<Record<CombatStat, number>>
+}
+
+export interface CombatEnemyState extends CombatantState {
+  armor_mod?: number
+  dexterity_mod?: number
+  inventory?: InventoryItem[]
+  engaged?: boolean
+  defeated?: boolean
+  fled?: boolean
+  special_actions?: NormalizedSpecialAttack[]
+}
+
+export interface CombatPlayerState extends CombatantState {
+  special_actions?: NormalizedSpecialAttack[]
 }
 
 export interface CombatState {
   active: boolean
   round: number
   turn: 'player' | 'enemy'
-  player: {
-    name: string
-    image_url?: string | null
-    hp: number
-    max_hp?: number
-    ac?: number
-    stamina?: number
-    max_stamina?: number
-    mana?: number
-    max_mana?: number
-  }
-  enemy: {
-    id: string
-    name: string
-    image_url?: string | null
-    hp: number
-    max_hp?: number
-    armor_mod?: number
-    dexterity_mod?: number
-    stamina?: number
-    max_stamina?: number
-    mana?: number
-    max_mana?: number
-    inventory?: InventoryItem[]
-  }
+  active_actor?: string | null
+  player: CombatPlayerState
+  /** Current target (kept for single-enemy consumers). */
+  enemy: CombatEnemyState
+  enemies?: CombatEnemyState[]
+  target_id?: string | null
+  initiative?: InitiativeEntry[]
+  turn_index?: number
+  xp_gained?: number
   loot_pending?: boolean
   loot_items?: InventoryItem[]
   outcome?: string | null

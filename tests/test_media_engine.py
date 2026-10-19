@@ -1,4 +1,5 @@
 """Tests for MediaEngine provider routing and Ollama fallback behavior."""
+
 import os
 
 import pytest
@@ -39,7 +40,9 @@ async def test_generate_image_ollama_uses_litellm_payload(monkeypatch):
     async def fake_save_b64(_b64, _target_dir, _filename, _image_format="jpeg", _image_quality=85):
         return "/data/adventures/test/generated.png"
 
-    monkeypatch.setattr("backend.engine.media_engine.litellm.image_generation", fake_image_generation)
+    monkeypatch.setattr(
+        "backend.engine.media_engine.litellm.image_generation", fake_image_generation
+    )
     monkeypatch.setattr(MediaEngine, "_save_b64_image", fake_save_b64)
 
     result = await MediaEngine.generate_image(
@@ -70,7 +73,9 @@ async def test_generate_image_ollama_falls_back_to_direct_http(monkeypatch):
         assert kwargs["model"] == "x/flux2-klein"
         return "/data/adventures/test/fallback.png"
 
-    monkeypatch.setattr("backend.engine.media_engine.litellm.image_generation", fake_image_generation)
+    monkeypatch.setattr(
+        "backend.engine.media_engine.litellm.image_generation", fake_image_generation
+    )
     monkeypatch.setattr(MediaEngine, "_generate_image_ollama_direct", fake_direct)
 
     result = await MediaEngine.generate_image(
@@ -105,12 +110,16 @@ async def test_generate_image_black_forest_labs_uses_direct_polling_flow(monkeyp
 
     def fake_post(url, headers=None, json=None, timeout=None):
         post_calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
-        return _FakeResponse(200, {"id": "req-1", "polling_url": "https://api.bfl.ai/v1/poll/req-1"})
+        return _FakeResponse(
+            200, {"id": "req-1", "polling_url": "https://api.bfl.ai/v1/poll/req-1"}
+        )
 
     def fake_get(url, headers=None, timeout=None):
         get_calls.append({"url": url, "headers": headers, "timeout": timeout})
         if url == "https://api.bfl.ai/v1/poll/req-1":
-            return _FakeResponse(200, {"status": "Ready", "result": {"sample": "https://delivery.bfl.ai/sample.png"}})
+            return _FakeResponse(
+                200, {"status": "Ready", "result": {"sample": "https://delivery.bfl.ai/sample.png"}}
+            )
         if url == "https://delivery.bfl.ai/sample.png":
             return _FakeResponse(200, content=b"image-bytes")
         raise AssertionError(f"Unexpected GET url: {url}")
@@ -155,7 +164,9 @@ async def test_generate_image_ollama_raises_if_local_generation_fails(monkeypatc
     async def fake_direct(**_kwargs):
         return None
 
-    monkeypatch.setattr("backend.engine.media_engine.litellm.image_generation", fake_image_generation)
+    monkeypatch.setattr(
+        "backend.engine.media_engine.litellm.image_generation", fake_image_generation
+    )
     monkeypatch.setattr(MediaEngine, "_generate_image_ollama_direct", fake_direct)
 
     with pytest.raises(RuntimeError, match="Ollama image generation failed"):
@@ -197,7 +208,13 @@ async def test_generate_entity_image_forwards_style_instruction(monkeypatch):
         adventure_id="adv-1",
         entity_id="OBJ_1",
         entity_type="OBJECT",
-        user_config={"t2i_settings": {"provider": "ollama", "simple_model": "x/flux2-klein", "ollama_url": "http://localhost:11434"}},
+        user_config={
+            "t2i_settings": {
+                "provider": "ollama",
+                "simple_model": "x/flux2-klein",
+                "ollama_url": "http://localhost:11434",
+            }
+        },
         api_keys={},
         style_instruction="pixel art, warm rim light",
     )
@@ -256,3 +273,35 @@ async def test_generate_placeholder_uses_static_npc_silhouette(tmp_path, monkeyp
     with open(copied_path, encoding="utf-8") as dst:
         copied_svg = dst.read()
     assert copied_svg == expected_svg
+
+
+async def test_generate_thumbnail_handles_svg(tmp_path, monkeypatch):
+    """MediaEngine._generate_thumbnail should copy SVG assets without invoking Pillow."""
+    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+    target_dir = tmp_path / "adventures" / "library" / "test_adv" / "items"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    svg_file = target_dir / "datapad.svg"
+    svg_file.write_text("<svg>datapad</svg>", encoding="utf-8")
+
+    thumb_path = await MediaEngine._generate_thumbnail(str(svg_file))
+    assert thumb_path is not None
+    assert os.path.exists(thumb_path)
+    assert thumb_path.endswith("_thumb.svg")
+    with open(thumb_path, encoding="utf-8") as f:
+        assert f.read() == "<svg>datapad</svg>"
+
+
+async def test_generate_thumbnail_handles_svg_with_png_extension(tmp_path, monkeypatch):
+    """MediaEngine._generate_thumbnail should detect SVG header even if extension is .png."""
+    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+    target_dir = tmp_path / "adventures" / "library" / "test_adv" / "items"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    svg_named_png = target_dir / "datapad.png"
+    svg_named_png.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+
+    thumb_path = await MediaEngine._generate_thumbnail(str(svg_named_png))
+    assert thumb_path is not None
+    assert os.path.exists(thumb_path)
+    assert thumb_path.endswith("_thumb.png")
+    with open(thumb_path, encoding="utf-8") as f:
+        assert "<svg" in f.read()

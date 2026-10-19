@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Save, X, AlertTriangle } from 'lucide-vue-next'
+import { Save, X, AlertTriangle, Brain } from 'lucide-vue-next'
 import { getItemIcon } from '@/utils/game_icons'
-import { formatObjectIds, type VisualKind } from '@/utils/editor_utils'
+import { formatObjectIds, type VisualKind, hasAnyScript } from '@/utils/editor_utils'
 
 const props = defineProps<{
   form: any
@@ -18,7 +18,11 @@ const props = defineProps<{
   editorScenes: any[]
   editorObjects: any[]
   ruleEnforcementMode: string
+  adventureScripts?: any[]
 }>()
+
+const hasScript = (ent: any): boolean =>
+  hasAnyScript(ent, props.adventureScripts || props.adventure?.scripts || props.debugData?.adventure?.scripts)
 
 const emit = defineEmits<{
   (e: 'start-edit', field: string, value: string): void
@@ -296,6 +300,13 @@ function handlePacingInput(event: Event) {
                      <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
                   </div>
                   <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80"></div>
+                  <div
+                    v-if="hasScript(scene)"
+                    class="absolute top-3 left-3 z-30 p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                    title="Contains custom event script(s)"
+                  >
+                    <Brain class="w-3.5 h-3.5 text-purple-400" />
+                  </div>
                   <div class="absolute inset-x-0 bottom-0 p-4">
                     <div class="font-black text-sm text-white tracking-wide uppercase truncate drop-shadow-md">{{ scene.label || scene.name }}</div>
                   </div>
@@ -339,6 +350,13 @@ function handlePacingInput(event: Event) {
                     <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
                   </div>
                   <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+                  <div
+                    v-if="hasScript(npc)"
+                    class="absolute top-2 left-2 z-10 p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                    title="Contains custom event script(s)"
+                  >
+                    <Brain class="w-3.5 h-3.5 text-purple-400" />
+                  </div>
                   <div class="absolute bottom-0 left-0 right-0 p-3">
                     <div class="text-xs font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ npc.name }}</div>
                     <div v-if="npc.role" class="text-[9px] text-slate-300 font-bold uppercase tracking-tighter truncate opacity-70">{{ npc.role }}</div>
@@ -400,6 +418,13 @@ function handlePacingInput(event: Event) {
                     <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
                   </div>
                   <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+                  <div
+                    v-if="hasScript(obj)"
+                    class="absolute top-2 left-2 z-10 p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                    title="Contains custom event script(s)"
+                  >
+                    <Brain class="w-3.5 h-3.5 text-purple-400" />
+                  </div>
                   <div class="absolute bottom-0 left-0 right-0 p-2">
                     <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
                     

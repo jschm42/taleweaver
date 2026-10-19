@@ -44,42 +44,47 @@ const currentState = computed(() => {
   ).trim().toUpperCase()
 })
 
-// Keyboard navigation
+// Keyboard navigation (indexes over all states, starting at the active one)
 const focusedIndex = ref(0)
-const targetStates = computed(() =>
-  allStates.value.filter(s => s.toUpperCase() !== currentState.value)
-)
+const isCurrent = (state: string) => state.toUpperCase() === currentState.value
 
 watch(() => props.open, (isOpen) => {
-  if (isOpen) focusedIndex.value = 0
+  if (!isOpen) return
+  const idx = allStates.value.findIndex(isCurrent)
+  focusedIndex.value = idx === -1 ? 0 : idx
 })
 
 const onKeyDown = (event: KeyboardEvent) => {
   if (!props.open || props.busy) return
 
+  const states = allStates.value
+  const handled = ['Escape', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Enter', ' ']
+  if (!handled.includes(event.key)) return
+
+  event.preventDefault()
+  event.stopPropagation()
+
   if (event.key === 'Escape') {
     emit('close')
     return
   }
-
-  const states = targetStates.value
   if (!states.length) return
 
   if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    event.preventDefault()
     focusedIndex.value = (focusedIndex.value + 1) % states.length
-  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    focusedIndex.value = (focusedIndex.value - 1 + states.length) % states.length
-  } else if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    const state = states[focusedIndex.value]
-    if (state) emit('selectState', state.toUpperCase())
+    return
   }
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    focusedIndex.value = (focusedIndex.value - 1 + states.length) % states.length
+    return
+  }
+
+  const state = states[focusedIndex.value]
+  if (state && !isCurrent(state)) emit('selectState', state.toUpperCase())
 }
 
-onMounted(() => window.addEventListener('keydown', onKeyDown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
+onMounted(() => window.addEventListener('keydown', onKeyDown, { capture: true }))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture: true }))
 </script>
 
 <template>
@@ -109,8 +114,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
                   <i v-else class="ra ra-lever text-2xl text-lime-400"></i>
                 </div>
                 <div>
-                  <p class="text-[9px] uppercase tracking-[0.25em] text-lime-500 font-black">Switch</p>
-                  <h3 class="text-base font-black text-white leading-tight mt-0.5">{{ switchEntity.name || 'Switch' }}</h3>
+                  <h3 class="text-base font-black text-white leading-tight">{{ switchEntity.name || 'Switch' }}</h3>
                 </div>
               </div>
               <button
@@ -129,65 +133,51 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
                 "{{ switchEntity.description }}"
               </p>
 
-              <!-- Current state indicator -->
-              <div class="flex items-center gap-2.5">
-                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Current state:</span>
-                <span class="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-black text-lime-400 font-mono tracking-wider">
-                  {{ currentState }}
-                </span>
-              </div>
-
               <!-- State selection buttons -->
               <div class="space-y-2.5">
                 <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Select new state</p>
 
-                <!-- All states list — current is disabled/greyed, others are clickable -->
+                <!-- All states list — active is brightly highlighted with checkmark, others are selectable -->
                 <div class="grid gap-2" :class="allStates.length > 3 ? 'grid-cols-2' : 'grid-cols-1'">
                   <button
                     v-for="(state, idx) in allStates"
                     :key="state"
-                    :disabled="busy || state.toUpperCase() === currentState"
+                    :disabled="busy || isCurrent(state)"
                     :class="[
                       'relative group flex items-center gap-3 px-4 py-3.5 rounded-2xl border font-bold text-sm transition-all duration-200',
-                      state.toUpperCase() === currentState
-                        ? 'bg-lime-500/10 border-lime-500/30 text-lime-400 cursor-default'
-                        : focusedIndex === targetStates.indexOf(state) && targetStates.includes(state)
-                          ? 'bg-lime-500 border-lime-400 text-slate-950 shadow-lg shadow-lime-500/25 cursor-pointer scale-[1.02]'
-                          : 'bg-slate-800/40 border-slate-700/60 text-slate-300 hover:bg-lime-500/10 hover:border-lime-500/40 hover:text-lime-300 cursor-pointer'
+                      isCurrent(state)
+                        ? 'bg-lime-500 border-lime-400 text-slate-950 shadow-lg shadow-lime-500/25 cursor-default'
+                        : 'bg-slate-800/40 border-slate-700/60 text-slate-300 hover:bg-slate-800/70 hover:border-slate-500 hover:text-white cursor-pointer',
+                      focusedIndex === idx ? 'ring-2 ring-lime-300/70 ring-offset-2 ring-offset-slate-900' : '',
+                      focusedIndex === idx && !isCurrent(state) ? '!bg-slate-800/90 !border-lime-500/80 !text-white scale-[1.01]' : ''
                     ]"
-                    @click="state.toUpperCase() !== currentState && emit('selectState', state.toUpperCase())"
-                    @mouseenter="() => { const ti = targetStates.indexOf(state); if (ti !== -1) focusedIndex = ti }"
+                    @click="!isCurrent(state) && emit('selectState', state.toUpperCase())"
+                    @mouseenter="focusedIndex = idx"
                   >
-                    <!-- Current state checkmark -->
+                    <!-- Current active state checkmark -->
                     <span
                       v-if="state.toUpperCase() === currentState"
-                      class="w-5 h-5 rounded-full bg-lime-500/20 border border-lime-500/40 flex items-center justify-center shrink-0"
+                      class="w-5 h-5 rounded-full bg-slate-950/20 border border-slate-950/25 flex items-center justify-center shrink-0"
                     >
-                      <i class="ra ra-check text-[10px] text-lime-400"></i>
+                      <svg class="w-3.5 h-3.5 text-slate-950 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
                     </span>
                     <!-- Non-current state arrow -->
                     <span
                       v-else
                       class="w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all"
-                      :class="focusedIndex === targetStates.indexOf(state) && targetStates.includes(state)
-                        ? 'bg-slate-950/30 border-slate-950/30'
-                        : 'bg-slate-700/40 border-slate-600/60 group-hover:border-lime-400/60'"
+                      :class="focusedIndex === idx
+                        ? 'bg-lime-500/20 border-lime-500/50 text-lime-400'
+                        : 'bg-slate-700/40 border-slate-600/60 text-slate-400 group-hover:border-slate-400 group-hover:text-white'"
                     >
-                      <i class="ra ra-angle-right text-[10px] transition-colors"
-                         :class="focusedIndex === targetStates.indexOf(state) && targetStates.includes(state)
-                           ? 'text-slate-950'
-                           : 'text-slate-400 group-hover:text-lime-400'"
-                      ></i>
+                      <i class="ra ra-angle-right text-[10px]"></i>
                     </span>
 
                     <span class="font-mono tracking-wider">{{ state.toUpperCase() }}</span>
 
                     <span
-                      v-if="state.toUpperCase() === currentState"
-                      class="ml-auto text-[9px] font-black uppercase tracking-widest text-lime-500/70"
-                    >Active</span>
-                    <span
-                      v-else-if="busy"
+                      v-if="busy && !isCurrent(state) && focusedIndex === idx"
                       class="ml-auto"
                     >
                       <i class="ra ra-hourglass text-xs animate-spin opacity-50"></i>

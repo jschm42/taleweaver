@@ -60,6 +60,26 @@ _OBJECT_ENTITY_KEYS = {
     "switch_initial_state",
     "switch_transitions",
     "switch_outcomes",
+    "on_pickup_script",
+    "on_pickup_text",
+    "on_drop_script",
+    "on_drop_text",
+    "on_equip_script",
+    "on_equip_text",
+    "on_unequip_script",
+    "on_unequip_text",
+    "unlock_expression",
+    "on_unlock_success_script",
+    "on_unlock_success_text",
+    "on_unlock_failure_script",
+    "on_unlock_failure_text",
+    "on_read_script",
+    "on_read_text",
+    "craft_guard_expression",
+    "on_craft_success_script",
+    "on_craft_success_text",
+    "on_craft_failure_script",
+    "on_craft_failure_text",
 }
 
 _NPC_ENTITY_KEYS = {
@@ -83,6 +103,10 @@ _NPC_ENTITY_KEYS = {
     "is_killable",
     "inventory",
     "metadata_json",
+    "on_defeat_script",
+    "on_defeat_text",
+    "on_protagonist_enters_scene_script",
+    "on_protagonist_enters_scene_text",
 }
 
 _SYSTEM_ENTITY_KEYS = {"pk", "session_id", "created_at", "updated_at", "template_id"}
@@ -129,6 +153,145 @@ def _prune_none(value: Any) -> Any:
     return value
 
 
+_INLINE_OBJECT_SCRIPT_KEYS = (
+    "on_pickup_script",
+    "on_pickup_text",
+    "on_drop_script",
+    "on_drop_text",
+    "on_equip_script",
+    "on_equip_text",
+    "on_unequip_script",
+    "on_unequip_text",
+    "unlock_expression",
+    "on_unlock_success_script",
+    "on_unlock_success_text",
+    "on_unlock_failure_script",
+    "on_unlock_failure_text",
+    "on_read_script",
+    "on_read_text",
+    "craft_guard_expression",
+    "on_craft_success_script",
+    "on_craft_success_text",
+    "on_craft_failure_script",
+    "on_craft_failure_text",
+)
+
+
+def _extract_item_script_metadata(metadata: dict[str, Any], filtered: dict[str, Any]) -> None:
+    for script_key in _INLINE_OBJECT_SCRIPT_KEYS:
+        val = metadata.pop(script_key, None)
+        if val:
+            filtered[script_key] = val
+
+
+def _extract_item_switch_metadata(
+    metadata: dict[str, Any], filtered: dict[str, Any], item_type: str
+) -> None:
+    if item_type == "SWITCH":
+        switch_config = metadata.pop("switch", {})
+        if not isinstance(switch_config, dict):
+            switch_config = {}
+        filtered["switch_states"] = (
+            switch_config.get("states") or metadata.pop("switch_states", []) or []
+        )
+        filtered["switch_initial_state"] = (
+            switch_config.get("initial_state") or metadata.pop("switch_initial_state", "") or ""
+        )
+        filtered["switch_transitions"] = (
+            switch_config.get("transitions") or metadata.pop("switch_transitions", []) or []
+        )
+        filtered["switch_outcomes"] = switch_config.get("outcomes") or []
+        filtered["on_success_script"] = (
+            switch_config.get("on_success_script") or metadata.pop("on_success_script", "") or ""
+        )
+        filtered["on_failure_script"] = (
+            switch_config.get("on_failure_script") or metadata.pop("on_failure_script", "") or ""
+        )
+        return
+    metadata.pop("switch", None)
+    metadata.pop("switch_states", None)
+    metadata.pop("switch_initial_state", None)
+    metadata.pop("switch_transitions", None)
+    metadata.pop("on_success_script", None)
+    metadata.pop("on_failure_script", None)
+
+
+def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
+    if not isinstance(filtered.get("metadata_json"), dict):
+        return
+    metadata = dict(filtered["metadata_json"])
+    for stat_key in _STAT_MODIFIER_KEYS:
+        if stat_key in metadata and metadata.get(stat_key) == filtered.get(stat_key):
+            metadata.pop(stat_key, None)
+
+    item_type = str(filtered.get("item_type") or "").upper()
+    hp_change = metadata.pop("hp_change", None)
+    stamina_change = metadata.pop("stamina_change", None)
+    mana_change = metadata.pop("mana_change", None)
+    filtered["hp_change"] = hp_change if hp_change is not None else 0
+    filtered["stamina_change"] = stamina_change if stamina_change is not None else 0
+    filtered["mana_change"] = mana_change if mana_change is not None else 0
+
+    if item_type == "READABLE":
+        filtered["text_log_content"] = metadata.pop("text_log_content", "")
+        filtered["text_log_format"] = metadata.pop("text_log_format", "DOCUMENT")
+    else:
+        metadata.pop("text_log_content", None)
+        metadata.pop("text_log_format", None)
+        metadata.pop("on_read_script", None)
+        metadata.pop("on_read_text", None)
+
+    if item_type == "CONTAINER":
+        filtered["code_to_unlock"] = metadata.pop("code_to_unlock", "")
+        filtered["item_to_unlock"] = metadata.pop("item_to_unlock", "")
+        filtered["rule_to_unlock"] = metadata.pop("rule_to_unlock", "")
+    else:
+        metadata.pop("code_to_unlock", None)
+        metadata.pop("item_to_unlock", None)
+        metadata.pop("rule_to_unlock", None)
+        metadata.pop("unlock_expression", None)
+        metadata.pop("on_unlock_success_script", None)
+        metadata.pop("on_unlock_success_text", None)
+        metadata.pop("on_unlock_failure_script", None)
+        metadata.pop("on_unlock_failure_text", None)
+    metadata.pop("locked", None)
+
+    if item_type != "CONSTRUCTABLE":
+        metadata.pop("craft_guard_expression", None)
+        metadata.pop("on_craft_success_script", None)
+        metadata.pop("on_craft_success_text", None)
+        metadata.pop("on_craft_failure_script", None)
+        metadata.pop("on_craft_failure_text", None)
+
+    _extract_item_switch_metadata(metadata, filtered, item_type)
+    _extract_item_script_metadata(metadata, filtered)
+
+    if metadata:
+        filtered["metadata_json"] = metadata
+    else:
+        filtered.pop("metadata_json", None)
+
+
+def _normalize_exported_npc_metadata(filtered: dict[str, Any]) -> None:
+    if not isinstance(filtered.get("metadata_json"), dict):
+        return
+    metadata = dict(filtered["metadata_json"])
+    for script_key in (
+        "on_defeat_script",
+        "on_defeat_text",
+        "on_protagonist_enters_scene_script",
+        "on_protagonist_enters_scene_text",
+    ):
+        val = metadata.pop(script_key, None)
+        if val:
+            filtered[script_key] = val
+
+    if metadata:
+        filtered["metadata_json"] = metadata
+    else:
+        filtered.pop("metadata_json", None)
+
+
 def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
     """Serialize a world entity with type-specific keys and no None values."""
     raw = {
@@ -151,67 +314,13 @@ def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
         if key in allowed_keys and value is not None
     }
 
-    # Keep stat modifiers canonical at top level for objects to avoid duplicated ADV fields.
-    if entity_type == "OBJECT" and isinstance(filtered.get("metadata_json"), dict):
-        metadata = dict(filtered["metadata_json"])
-        for stat_key in _STAT_MODIFIER_KEYS:
-            if stat_key in metadata and metadata.get(stat_key) == filtered.get(stat_key):
-                metadata.pop(stat_key, None)
-
-        item_type = str(filtered.get("item_type") or "").upper()
-
-        # 1. Consumption fields
-        hp_change = metadata.pop("hp_change", None)
-        stamina_change = metadata.pop("stamina_change", None)
-        mana_change = metadata.pop("mana_change", None)
-        filtered["hp_change"] = hp_change if hp_change is not None else 0
-        filtered["stamina_change"] = stamina_change if stamina_change is not None else 0
-        filtered["mana_change"] = mana_change if mana_change is not None else 0
-
-        # 2. Readable fields
-        if item_type == "READABLE":
-            filtered["text_log_content"] = metadata.pop("text_log_content", "")
-            filtered["text_log_format"] = metadata.pop("text_log_format", "DOCUMENT")
-        else:
-            metadata.pop("text_log_content", None)
-            metadata.pop("text_log_format", None)
-
-        # 3. Container lock fields
-        if item_type == "CONTAINER":
-            filtered["code_to_unlock"] = metadata.pop("code_to_unlock", "")
-            filtered["item_to_unlock"] = metadata.pop("item_to_unlock", "")
-            filtered["rule_to_unlock"] = metadata.pop("rule_to_unlock", "")
-            metadata.pop("locked", None)
-        else:
-            metadata.pop("code_to_unlock", None)
-            metadata.pop("item_to_unlock", None)
-            metadata.pop("rule_to_unlock", None)
-            metadata.pop("locked", None)
-
-        # 4. Switch fields
-        if item_type == "SWITCH":
-            switch_config = metadata.pop("switch", {})
-            if not isinstance(switch_config, dict):
-                switch_config = {}
-            filtered["switch_states"] = switch_config.get("states") or metadata.pop("switch_states", []) or []
-            filtered["switch_initial_state"] = switch_config.get("initial_state") or metadata.pop("switch_initial_state", "") or ""
-            filtered["switch_transitions"] = switch_config.get("transitions") or metadata.pop("switch_transitions", []) or []
-            filtered["switch_outcomes"] = switch_config.get("outcomes") or []
-        else:
-            metadata.pop("switch", None)
-            metadata.pop("switch_states", None)
-            metadata.pop("switch_initial_state", None)
-            metadata.pop("switch_transitions", None)
-
-        # Clean up flat consumable effects
-        metadata.pop("effects", None)
-
-        if metadata:
-            filtered["metadata_json"] = metadata
-        else:
-            filtered.pop("metadata_json", None)
+    if entity_type == "OBJECT":
+        _normalize_exported_object_metadata(filtered)
+    elif entity_type == "NPC":
+        _normalize_exported_npc_metadata(filtered)
 
     return filtered
+
 
 class AdventureExporter:
     @staticmethod
@@ -225,13 +334,17 @@ class AdventureExporter:
             raise ValueError("Adventure not found")
 
         # 1. Fetch World State
-        scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+        scene_res = await db.execute(
+            select(WorldScene).where(WorldScene.template_id == template_id)
+        )
         scenes = scene_res.scalars().all()
-        
+
         exit_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
         exits = exit_res.scalars().all()
-        
-        entity_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+
+        entity_res = await db.execute(
+            select(WorldEntity).where(WorldEntity.template_id == template_id)
+        )
         entities = entity_res.scalars().all()
 
         avatar_res = await db.execute(
@@ -250,13 +363,14 @@ class AdventureExporter:
         local_final_inventory: list[str] = []
         local_final_equipment: dict[str, str] = {}
         if avatar:
+
             def _normalize_item(item: Any) -> str | None:
                 if isinstance(item, dict):
                     return item.get("id")
                 return item
 
             cleaned_inventory: list[str] = []
-            for item in (avatar.inventory or []):
+            for item in avatar.inventory or []:
                 item_id = _normalize_item(item)
                 if item_id:
                     cleaned_inventory.append(item_id)
@@ -292,26 +406,31 @@ class AdventureExporter:
                     continue
                 local_final_equipment[slot] = item_id
 
-        # 2. Serialize to Dictionary
         def to_dict(obj):
-            if not obj: return None
-            data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns if c.name not in _SYSTEM_ENTITY_KEYS}
+            if not obj:
+                return None
+            data = {
+                c.name: getattr(obj, c.name)
+                for c in obj.__table__.columns
+                if c.name not in _SYSTEM_ENTITY_KEYS
+            }
             if isinstance(obj, WorldScene):
                 decor = data.get("decorative_objects")
                 if not isinstance(decor, list):
                     decor = []
-                data["decorative_objects"] = [str(d) for d in decor if isinstance(d, (str, int, float))]
+                data["decorative_objects"] = [
+                    str(d) for d in decor if isinstance(d, (str, int, float))
+                ]
             if isinstance(obj, WorldExit):
                 exit_type = str(getattr(obj, "exit_type", "one_way") or "one_way").strip().lower()
                 data["exit_type"] = exit_type
-                data["is_bidirectional"] = (exit_type == "bidirectional")
+                data["is_bidirectional"] = exit_type == "bidirectional"
             return data
 
         # Build standard manifest structure according to docs/specs/adventure_format.md
         manifest = {
             "format": "TaleWeaver",
             "version": CURRENT_VERSION,
-            
             "adventure": {
                 "title": adv.title,
                 "teaser": adv.teaser,
@@ -322,7 +441,6 @@ class AdventureExporter:
                 "license_url": adv.license_url,
                 "language": adv.language,
                 "original_prompt": adv.original_prompt,
-
                 "image_url": adv.image_url,
                 "rule_enforcement_mode": adv.rule_enforcement_mode,
                 "time_per_turn": adv.time_per_turn,
@@ -358,6 +476,8 @@ class AdventureExporter:
                 "walkthrough": adv.walkthrough,
                 "completed_condition": adv.completed_condition,
                 "gameover_condition": adv.gameover_condition,
+                "completed_guard_expression": adv.completed_guard_expression,
+                "gameover_guard_expression": adv.gameover_guard_expression,
                 "tts_director_notes": adv.tts_director_notes,
                 "starting_timestamp": adv.starting_timestamp,
                 "is_adventure_generator": adv.is_adventure_generator,
@@ -372,8 +492,6 @@ class AdventureExporter:
                 "cover_similarity_percent": adv.cover_similarity_percent,
                 "allow_reuse_source_assets": adv.allow_reuse_source_assets,
             },
-
-            
             "protagonist": {
                 "name": avatar.name if avatar else "Hero",
                 "role": avatar.role if avatar else "Protagonist",
@@ -399,17 +517,18 @@ class AdventureExporter:
                 "starting_inventory": list(local_final_inventory) if avatar else [],
                 "starting_equipment": dict(local_final_equipment) if avatar else {},
             },
-            
             "scenes": [to_dict(s) for s in scenes],
             "exits": [to_dict(e) for e in exits],
             "npcs": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "NPC"],
-            "objects": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "OBJECT"],
+            "objects": [
+                _serialize_world_entity(ent) for ent in entities if ent.entity_type == "OBJECT"
+            ],
             "quests": adv.quests or [],
             "awards": adv.awards or [],
             "sequences": adv.sequences or [],
             "scripts": (adv.original_manifest or {}).get("scripts", []),
         }
-        
+
         return manifest
 
     @staticmethod
@@ -418,30 +537,30 @@ class AdventureExporter:
         Creates an ADZ (Adventure Zip) bundle containing the manifest and all local images.
         """
         manifest = await AdventureExporter.build_full_manifest(db, template_id)
-        
+
         # Gather local assets
         adventure_dir = _safe_data_path("adventures", "library", template_id)
         if not os.path.exists(adventure_dir):
             # Legacy fallback for pre-migration adventures.
             adventure_dir = _safe_data_path("adventures", template_id)
-        asset_mapping = {} # local_path -> zip_path
-        
-        # Update manifest to point to relative paths in the zip
+        asset_mapping = {}  # local_path -> zip_path
+
         def localize_path(path):
-            if not path or not path.startswith("/data/"): return path
+            if not path or not path.startswith("/data/"):
+                return path
 
             local_full = data_url_to_local_path(path)
             if not local_full:
                 logger.warning("Skipping unsafe asset path during ADZ export: %s", path)
                 return path
-            
+
             if os.path.exists(local_full):
                 fname = _safe_zip_asset_name(local_full)
                 zip_rel = f"assets/{fname}"
                 asset_mapping[local_full] = zip_rel
                 return zip_rel
-            
-            # Fallback: search in adventure_dir if not found directly 
+
+            # Fallback: search in adventure_dir if not found directly
             # (handles cases where path might be different but file exists there)
             fname = _safe_zip_asset_name(path)
             for root, _dirs, files in os.walk(adventure_dir):
@@ -450,13 +569,15 @@ class AdventureExporter:
                     zip_rel = f"assets/{fname}"
                     asset_mapping[local_full] = zip_rel
                     return zip_rel
-            
+
             return path
 
         # Localize all image fields
         manifest["adventure"]["image_url"] = localize_path(manifest["adventure"].get("image_url"))
         if manifest["protagonist"]:
-            manifest["protagonist"]["profile_image"] = localize_path(manifest["protagonist"].get("profile_image"))
+            manifest["protagonist"]["profile_image"] = localize_path(
+                manifest["protagonist"].get("profile_image")
+            )
         for s in manifest["scenes"]:
             s["image_url"] = localize_path(s.get("image_url"))
         for n in manifest["npcs"]:
@@ -471,12 +592,11 @@ class AdventureExporter:
             # Use jsonable_encoder to handle datetime and other non-serializable objects
             encoded_manifest = jsonable_encoder(manifest)
             zip_file.writestr("adventure.adv", json.dumps(encoded_manifest, indent=2))
-            
+
             # 2. Add Assets
             for local_full, zip_rel in asset_mapping.items():
                 if os.path.exists(local_full):
                     safe_local_full = _ensure_within_data_dir(local_full)
                     zip_file.write(safe_local_full, zip_rel)
-                    
-        return zip_buffer.getvalue()
 
+        return zip_buffer.getvalue()

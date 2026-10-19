@@ -1,23 +1,37 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{
-  sessionTitle: string
-  progress: number
-  stage: 'preparing' | 'duplicating' | 'syncing' | 'completed'
-  errorMsg?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    sessionTitle: string
+    progress: number
+    stage: 'preparing' | 'duplicating' | 'syncing' | 'completed'
+    errorMsg?: string
+    itemType?: 'session' | 'adventure'
+  }>(),
+  {
+    itemType: 'session',
+  }
+)
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const isAdventure = computed(() => props.itemType === 'adventure')
+
+const modalHeader = computed(() => {
+  return isAdventure.value ? 'Duplicate Adventure' : 'Clone Session'
+})
+
 const stageText = computed(() => {
-  if (props.errorMsg) return 'Clone Failed'
-  if (props.stage === 'completed') return 'Clone Completed'
+  if (props.errorMsg) return isAdventure.value ? 'Duplication Failed' : 'Clone Failed'
+  if (props.stage === 'completed') return isAdventure.value ? 'Duplication Completed' : 'Clone Completed'
   if (props.stage === 'syncing') return 'Refreshing Portal Data...'
-  if (props.stage === 'duplicating') return 'Duplicating Session World...'
-  return 'Preparing Clone Operation...'
+  if (props.stage === 'duplicating') {
+    return isAdventure.value ? 'Duplicating Adventure Blueprint & Assets...' : 'Duplicating Session World...'
+  }
+  return isAdventure.value ? 'Preparing Duplication...' : 'Preparing Clone Operation...'
 })
 
 const canClose = computed(() => Boolean(props.errorMsg) || props.stage === 'completed')
@@ -42,7 +56,7 @@ const canClose = computed(() => Boolean(props.errorMsg) || props.stage === 'comp
           <i v-else class="ra ra-sideswipe text-xl"></i>
         </div>
         <div>
-          <h3 class="text-lg font-black text-white font-display uppercase tracking-wider">Clone Session</h3>
+          <h3 class="text-lg font-black text-white font-display uppercase tracking-wider">{{ modalHeader }}</h3>
           <p class="text-xs text-slate-400 mt-0.5">Target: <span class="font-bold text-aether-primary">{{ props.sessionTitle }}</span></p>
         </div>
       </div>

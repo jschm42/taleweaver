@@ -78,6 +78,8 @@ class AdventureTemplate(Base, TimestampMixin):
     walkthrough: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
     completed_condition: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     gameover_condition: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    completed_guard_expression: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    gameover_guard_expression: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     tts_director_notes: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
     original_prompt: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
     starting_timestamp: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
@@ -121,5 +123,23 @@ class AdventureTemplate(Base, TimestampMixin):
         manifest["scripts"] = list(value or [])
         self.original_manifest = manifest
         flag_modified(self, "original_manifest")
+
+    @property
+    def init_script(self) -> Optional[str]:
+        """Returns init_script from original_manifest if present."""
+        if not self.original_manifest or not isinstance(self.original_manifest, dict):
+            return None
+        return self.original_manifest.get("init_script")
+
+    @init_script.setter
+    def init_script(self, value: Optional[str]) -> None:
+        """Sets init_script inside original_manifest and marks original_manifest modified."""
+        from sqlalchemy.orm.attributes import flag_modified
+        manifest = dict(self.original_manifest or {})
+        cleaned = str(value).strip() if value is not None else ""
+        manifest["init_script"] = cleaned if cleaned else None
+        self.original_manifest = manifest
+        flag_modified(self, "original_manifest")
+
 
     

@@ -6,6 +6,7 @@ import { visualService } from '@/services/visualService'
 import type { VisualKind } from '@/services/visualService'
 import { entityService } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
+import { useEntityTransfer } from '@/composables/useEntityTransfer'
 
 // Icons & Assets
 
@@ -38,6 +39,7 @@ import CreateSceneForm from '@/components/editor/CreateSceneForm.vue'
 import SceneRoutePanel from '@/components/editor/SceneRoutePanel.vue'
 import ExitRoutePanel from '@/components/editor/ExitRoutePanel.vue'
 import EditExitModal from '@/components/editor/EditExitModal.vue'
+import NpcCombatModal from '@/components/editor/NpcCombatModal.vue'
 
 // Utilities
 import { 
@@ -95,7 +97,17 @@ const exitModalForm = ref({
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
+  on_open_exit_script: '',
+  on_open_exit_text: '',
+  on_exit_used_script: '',
+  on_exit_used_text: '',
+  unlock_expression: '',
+  on_unlock_success_script: '',
+  on_unlock_success_text: '',
+  on_unlock_failure_script: '',
+  on_unlock_failure_text: '',
 })
+
 const editForm = ref({
   name: '',
   teaser: '',
@@ -629,7 +641,7 @@ const form = ref({
   min_items: null as number | null,
   max_items: null as number | null,
   container_generation_enabled: true,
-  scripts_generation_enabled: false,
+  scripts_generation_enabled: true,
   min_containers: null as number | null,
   max_containers: null as number | null,
   text_log_generation_enabled: true,
@@ -645,6 +657,8 @@ const form = ref({
   walkthrough: '',
   completed_condition: '',
   gameover_condition: '',
+  completed_guard_expression: '',
+  gameover_guard_expression: '',
   tts_director_notes: '',
   selected_style_id: '',
   selected_tone_id: '',
@@ -678,6 +692,8 @@ async function handleGenerateField(field: string) {
       walkthrough: form.value.walkthrough,
       completed_condition: form.value.completed_condition,
       gameover_condition: form.value.gameover_condition,
+      completed_guard_expression: form.value.completed_guard_expression,
+      gameover_guard_expression: form.value.gameover_guard_expression,
       tts_director_notes: form.value.tts_director_notes
     })
     tempValue.value = fixNewlines(result.generated_text)
@@ -707,6 +723,8 @@ async function saveField() {
     walkthrough: 20000,
     completed_condition: 2000,
     gameover_condition: 2000,
+    completed_guard_expression: 2000,
+    gameover_guard_expression: 2000,
     tts_director_notes: 5000
   }
 
@@ -875,7 +893,7 @@ async function fetchAdventure() {
     form.value.min_items = data.min_items !== undefined ? data.min_items : null
     form.value.max_items = data.max_items !== undefined ? data.max_items : null
     form.value.container_generation_enabled = data.container_generation_enabled ?? true
-    form.value.scripts_generation_enabled = data.scripts_generation_enabled ?? false
+    form.value.scripts_generation_enabled = data.scripts_generation_enabled ?? true
     form.value.min_containers = data.min_containers !== undefined ? data.min_containers : null
     form.value.max_containers = data.max_containers !== undefined ? data.max_containers : null
     form.value.text_log_generation_enabled = data.text_log_generation_enabled ?? true
@@ -891,6 +909,8 @@ async function fetchAdventure() {
     form.value.walkthrough = data.walkthrough || ''
     form.value.completed_condition = data.completed_condition || ''
     form.value.gameover_condition = data.gameover_condition || ''
+    form.value.completed_guard_expression = data.completed_guard_expression || ''
+    form.value.gameover_guard_expression = data.gameover_guard_expression || ''
     form.value.tts_director_notes = data.tts_director_notes || ''
 
     form.value.selected_style_id = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
@@ -916,6 +936,8 @@ async function fetchAdventure() {
     isLoading.value = false
   }
 }
+
+const { exportEntity, importEntity } = useEntityTransfer(() => props.adventureId, fetchDebugInfo)
 
 async function fetchDebugInfo() {
   if (!props.adventureId) return
@@ -984,6 +1006,9 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
   const selectedNpc = type === 'npc'
     ? (debugData.value?.npcs || []).find((entry: any) => String(entry.id) === String(id))
     : null
+  const selectedScene = type === 'scene'
+    ? (editorScenes.value || []).find((entry: any) => String(entry.id) === String(id))
+    : null
 
   editEntityContext.value = { type, id }
   const resolvedDescription = type === 'object'
@@ -1015,7 +1040,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
         : [],
     text_log_content: fixNewlines(metadata?.text_log_content || ''),
     text_log_format: String(metadata?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
-    entity_id: String(selectedObject?.id || selectedNpc?.id || id || ''),
+    entity_id: String(selectedObject?.id || selectedNpc?.id || selectedScene?.id || id || ''),
     wearable_slots_input: selectedObject?.wearable_slots || [],
     combination_ingredients_input: Array.isArray(selectedObject?.combination_ingredients)
       ? [...selectedObject.combination_ingredients]
@@ -1043,16 +1068,33 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_equip_text: selectedObject?.on_equip_text || metadata?.on_equip_text || '',
     on_unequip_script: selectedObject?.on_unequip_script || metadata?.on_unequip_script || '',
     on_unequip_text: selectedObject?.on_unequip_text || metadata?.on_unequip_text || '',
-    on_enter_scene_script: selectedObject?.on_enter_scene_script || metadata?.on_enter_scene_script || '',
-    on_enter_scene_text: selectedObject?.on_enter_scene_text || metadata?.on_enter_scene_text || '',
+    on_enter_scene_script: selectedScene?.on_enter_scene_script || selectedObject?.on_enter_scene_script || metadata?.on_enter_scene_script || '',
+    on_enter_scene_text: selectedScene?.on_enter_scene_text || selectedObject?.on_enter_scene_text || metadata?.on_enter_scene_text || '',
     on_open_exit_script: selectedObject?.on_open_exit_script || metadata?.on_open_exit_script || '',
     on_open_exit_text: selectedObject?.on_open_exit_text || metadata?.on_open_exit_text || '',
+    on_exit_used_script: selectedObject?.on_exit_used_script || metadata?.on_exit_used_script || '',
+    on_exit_used_text: selectedObject?.on_exit_used_text || metadata?.on_exit_used_text || '',
     on_defeat_script: selectedNpc?.on_defeat_script || metadata?.on_defeat_script || '',
     on_defeat_text: selectedNpc?.on_defeat_text || metadata?.on_defeat_text || '',
     on_protagonist_enters_scene_script: selectedNpc?.on_protagonist_enters_scene_script || metadata?.on_protagonist_enters_scene_script || '',
     on_protagonist_enters_scene_text: selectedNpc?.on_protagonist_enters_scene_text || metadata?.on_protagonist_enters_scene_text || '',
+    unlock_expression: selectedObject?.unlock_expression || metadata?.unlock_expression || '',
+    on_unlock_success_script: selectedObject?.on_unlock_success_script || metadata?.on_unlock_success_script || '',
+    on_unlock_success_text: selectedObject?.on_unlock_success_text || metadata?.on_unlock_success_text || '',
+    on_unlock_failure_script: selectedObject?.on_unlock_failure_script || metadata?.on_unlock_failure_script || '',
+    on_unlock_failure_text: selectedObject?.on_unlock_failure_text || metadata?.on_unlock_failure_text || '',
+    craft_guard_expression: selectedObject?.craft_guard_expression || metadata?.craft_guard_expression || '',
+    on_craft_success_script: selectedObject?.on_craft_success_script || metadata?.on_craft_success_script || '',
+    on_craft_success_text: selectedObject?.on_craft_success_text || metadata?.on_craft_success_text || '',
+    on_craft_failure_script: selectedObject?.on_craft_failure_script || metadata?.on_craft_failure_script || '',
+    on_craft_failure_text: selectedObject?.on_craft_failure_text || metadata?.on_craft_failure_text || '',
+    on_read_script: selectedObject?.on_read_script || metadata?.on_read_script || '',
+    on_read_text: selectedObject?.on_read_text || metadata?.on_read_text || '',
+    on_leave_scene_script: selectedScene?.on_leave_scene_script || metadata?.on_leave_scene_script || '',
+    on_leave_scene_text: selectedScene?.on_leave_scene_text || metadata?.on_leave_scene_text || '',
   }
   showEditModal.value = true
+
 }
 
 async function saveEntityText(data: any) {
@@ -1318,7 +1360,22 @@ async function saveEntityText(data: any) {
       on_protagonist_enters_scene_text: editEntityContext.value.type === 'npc' ? data.on_protagonist_enters_scene_text : undefined,
       on_enter_scene_script: editEntityContext.value.type === 'scene' ? data.on_enter_scene_script : undefined,
       on_enter_scene_text: editEntityContext.value.type === 'scene' ? data.on_enter_scene_text : undefined,
+      on_leave_scene_script: editEntityContext.value.type === 'scene' ? data.on_leave_scene_script : undefined,
+      on_leave_scene_text: editEntityContext.value.type === 'scene' ? data.on_leave_scene_text : undefined,
+      unlock_expression: editEntityContext.value.type === 'object' ? data.unlock_expression : undefined,
+      on_unlock_success_script: editEntityContext.value.type === 'object' ? data.on_unlock_success_script : undefined,
+      on_unlock_success_text: editEntityContext.value.type === 'object' ? data.on_unlock_success_text : undefined,
+      on_unlock_failure_script: editEntityContext.value.type === 'object' ? data.on_unlock_failure_script : undefined,
+      on_unlock_failure_text: editEntityContext.value.type === 'object' ? data.on_unlock_failure_text : undefined,
+      craft_guard_expression: editEntityContext.value.type === 'object' ? data.craft_guard_expression : undefined,
+      on_craft_success_script: editEntityContext.value.type === 'object' ? data.on_craft_success_script : undefined,
+      on_craft_success_text: editEntityContext.value.type === 'object' ? data.on_craft_success_text : undefined,
+      on_craft_failure_script: editEntityContext.value.type === 'object' ? data.on_craft_failure_script : undefined,
+      on_craft_failure_text: editEntityContext.value.type === 'object' ? data.on_craft_failure_text : undefined,
+      on_read_script: editEntityContext.value.type === 'object' ? data.on_read_script : undefined,
+      on_read_text: editEntityContext.value.type === 'object' ? data.on_read_text : undefined,
     })
+
     // Redirect if we renamed the scene we are currently viewing
     if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {
       router.replace({
@@ -1381,6 +1438,17 @@ async function saveChanges() {
   }
 }
 
+const specialAttacksNpc = ref<any | null>(null)
+
+async function onSpecialAttacksSaved() {
+  await fetchDebugInfo()
+  if (specialAttacksNpc.value) {
+    const refreshed = editorNpcs.value.find((npc: any) => npc.id === specialAttacksNpc.value?.id)
+    specialAttacksNpc.value = refreshed ?? null
+  }
+  addNotification('Combat settings saved.', 'success')
+}
+
 async function saveProtagonistField(field: string, newValue: any) {
   const p = debugData.value?.protagonist
   if (!p) return
@@ -1408,7 +1476,12 @@ async function saveProtagonistField(field: string, newValue: any) {
         acc[k] = v ? (typeof v === 'string' ? v : (v?.id || null)) : null
         return acc
       }, {}) : {}),
+      on_hp_change_script: field === 'on_hp_change_script' ? String(newValue || '') : p.on_hp_change_script,
+      on_hp_change_text: field === 'on_hp_change_text' ? String(newValue || '') : p.on_hp_change_text,
+      on_status_change_script: field === 'on_status_change_script' ? String(newValue || '') : p.on_status_change_script,
+      on_status_change_text: field === 'on_status_change_text' ? String(newValue || '') : p.on_status_change_text,
     }
+
     await entityService.saveEntityText(props.adventureId, updatePayload as any)
     await Promise.all([fetchAdventure(), fetchDebugInfo()])
     addNotification('Protagonist updated successfully.', 'success')
@@ -1758,6 +1831,7 @@ async function handleUpdateScripts(newScripts: any[]) {
   }
 }
 
+
 const goBack = () => {
   const from = route.query.from as string
   if (from) {
@@ -2022,8 +2096,18 @@ function openCreateExitModal() {
     code_to_unlock: '',
     item_to_unlock: '',
     rule_to_unlock: '',
+    on_open_exit_script: '',
+    on_open_exit_text: '',
+    on_exit_used_script: '',
+    on_exit_used_text: '',
+    unlock_expression: '',
+    on_unlock_success_script: '',
+    on_unlock_success_text: '',
+    on_unlock_failure_script: '',
+    on_unlock_failure_text: '',
   }
   showExitModal.value = true
+
 }
 
 function requestDeleteRouteExit(exitId: string) {
@@ -2205,8 +2289,18 @@ function openEditExitModal(exitId: string) {
     code_to_unlock: String(exit.code_to_unlock || ''),
     item_to_unlock: String(exit.item_to_unlock || ''),
     rule_to_unlock: String(exit.rule_to_unlock || ''),
+    on_open_exit_script: String(exit.on_open_exit_script || ''),
+    on_open_exit_text: String(exit.on_open_exit_text || ''),
+    on_exit_used_script: String(exit.on_exit_used_script || ''),
+    on_exit_used_text: String(exit.on_exit_used_text || ''),
+    unlock_expression: String(exit.unlock_expression || ''),
+    on_unlock_success_script: String(exit.on_unlock_success_script || ''),
+    on_unlock_success_text: String(exit.on_unlock_success_text || ''),
+    on_unlock_failure_script: String(exit.on_unlock_failure_script || ''),
+    on_unlock_failure_text: String(exit.on_unlock_failure_text || ''),
   }
   showExitModal.value = true
+
 }
 
 async function saveExitModal(formData: any) {
@@ -2244,6 +2338,15 @@ async function saveExitModal(formData: any) {
         code_to_unlock: formData.code_to_unlock || undefined,
         item_to_unlock: formData.item_to_unlock || undefined,
         rule_to_unlock: formData.rule_to_unlock || undefined,
+        on_open_exit_script: formData.on_open_exit_script || undefined,
+        on_open_exit_text: formData.on_open_exit_text || undefined,
+        on_exit_used_script: formData.on_exit_used_script || undefined,
+        on_exit_used_text: formData.on_exit_used_text || undefined,
+        unlock_expression: formData.unlock_expression || undefined,
+        on_unlock_success_script: formData.on_unlock_success_script || undefined,
+        on_unlock_success_text: formData.on_unlock_success_text || undefined,
+        on_unlock_failure_script: formData.on_unlock_failure_script || undefined,
+        on_unlock_failure_text: formData.on_unlock_failure_text || undefined,
       })
       addNotification('Exit created.', 'success')
     } else {
@@ -2261,16 +2364,27 @@ async function saveExitModal(formData: any) {
         code_to_unlock: formData.code_to_unlock,
         item_to_unlock: formData.item_to_unlock,
         rule_to_unlock: formData.rule_to_unlock,
+        on_open_exit_script: formData.on_open_exit_script,
+        on_open_exit_text: formData.on_open_exit_text,
+        on_exit_used_script: formData.on_exit_used_script,
+        on_exit_used_text: formData.on_exit_used_text,
+        unlock_expression: formData.unlock_expression,
+        on_unlock_success_script: formData.on_unlock_success_script,
+        on_unlock_success_text: formData.on_unlock_success_text,
+        on_unlock_failure_script: formData.on_unlock_failure_script,
+        on_unlock_failure_text: formData.on_unlock_failure_text,
         locked:
           formData.locked !== undefined
             ? formData.locked
             : Boolean(
                 formData.code_to_unlock ||
                   formData.item_to_unlock ||
-                  formData.rule_to_unlock,
+                  formData.rule_to_unlock ||
+                  formData.unlock_expression,
               ),
       })
       addNotification('Exit updated.', 'success')
+
     }
     activeEditExitId.value = null
     isCreateExitMode.value = false
@@ -2518,8 +2632,12 @@ watch(
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
               @toggle-menu="toggleMenu"
+              :adventure-id="props.adventureId"
               @save-field="saveProtagonistField"
               @create-new-item="createNewItemForProtagonist"
+              @special-attacks-saved="onSpecialAttacksSaved"
+              @export-entity="exportEntity"
+              @import-entity="importEntity"
             />
 
             <ItemsTab
@@ -2535,6 +2653,7 @@ watch(
               :visuals-cache-version="visualsCacheVersion"
               :editor-scenes="editorScenes"
               :active-map-scene-id="activeMapSceneId"
+              :adventure-scripts="adventure?.scripts || debugData?.adventure?.scripts || []"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -2547,6 +2666,8 @@ watch(
               @request-change-item-type="requestChangeItemType"
               @request-move-item-to-scene="requestMoveItemToScene"
               @request-delete-item="requestDeleteItem"
+              @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @import-entity="importEntity"
             />
 
             <InhabitantsTab
@@ -2561,6 +2682,7 @@ watch(
               :rule-enforcement-mode="form.rule_enforcement_mode"
               :visuals-cache-version="visualsCacheVersion"
               :editor-scenes="editorScenes"
+              :adventure-scripts="adventure?.scripts || debugData?.adventure?.scripts || []"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -2572,6 +2694,9 @@ watch(
               @clear-hover="clearHover"
               @request-move-npc-to-scene="requestMoveNpcToScene"
               @open-create-npc="() => openCreateNpc()"
+              @open-special-attacks="(npc: any) => (specialAttacksNpc = npc)"
+              @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @import-entity="importEntity"
             />
 
             <ScenesTab
@@ -2584,6 +2709,7 @@ watch(
               :active-menu-id="activeMenuId"
               :visuals-cache-version="visualsCacheVersion"
               :is-setting-start-scene="isSettingStartScene"
+              :adventure-scripts="adventure?.scripts || debugData?.adventure?.scripts || []"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -2620,6 +2746,7 @@ watch(
               :visuals-cache-version="visualsCacheVersion"
               :rule-enforcement-mode="form.rule_enforcement_mode"
               :return-tab-label="getTabLabel(sceneEditorReturnTab)"
+              :adventure-scripts="adventure?.scripts || debugData?.adventure?.scripts || []"
               @back="closeSceneEditorDialog"
               @open-text-edit="openTextEdit"
               @open-create-item="openCreateItem"
@@ -2674,6 +2801,9 @@ watch(
               v-if="activeTab === 'quest'"
               :adventure="adventure"
               :reference-options="referenceOptions"
+              :editor-scenes="editorScenes"
+              :editor-objects="editorAllItems"
+              :editor-npcs="editorNpcs"
               @update-quests="handleUpdateQuests"
               @notify="addNotification"
             />
@@ -2682,6 +2812,9 @@ watch(
               v-if="activeTab === 'awards'"
               :adventure="adventure"
               :reference-options="referenceOptions"
+              :editor-scenes="editorScenes"
+              :editor-objects="editorAllItems"
+              :editor-npcs="editorNpcs"
               @update-awards="handleUpdateAwards"
               @notify="addNotification"
             />
@@ -2773,8 +2906,10 @@ watch(
       :is-saving="isSavingText"
       :adventure-id="adventureId"
       :is-create-entity-mode="isCreateEntityMode"
+      :npc-data="editEntityContext?.type === 'npc' ? editorNpcs.find((n: any) => n.id === editEntityContext?.id) : null"
       @close="closeEditEntityModal"
       @save="saveEntityText"
+      @combat-saved="onSpecialAttacksSaved"
     />
 
     <ItemTypeSelectorModal
@@ -2813,6 +2948,15 @@ watch(
       :is-saving="isMovingItem"
       @close="closeMoveItemModal"
       @confirm="confirmMoveEntityToScene"
+    />
+
+    <NpcCombatModal
+      :open="!!specialAttacksNpc"
+      :adventure-id="props.adventureId"
+      :npc="specialAttacksNpc"
+      :reference-options="referenceOptions"
+      @close="specialAttacksNpc = null"
+      @saved="onSpecialAttacksSaved"
     />
 
     <EditExitModal

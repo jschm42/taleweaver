@@ -133,6 +133,18 @@ def _select_static_placeholder_asset(category: str) -> Optional[str]:
     return os.path.join(_FRONTEND_SVG_ROOT, "items", filename)
 
 
+def _is_svg_image_file(file_path: str, ext: str) -> bool:
+    if ext.lower() == ".svg":
+        return True
+    if not os.path.isfile(file_path):
+        return False
+    try:
+        with open(file_path, "rb") as f:
+            return b"<svg" in f.read(512).lower()
+    except OSError:
+        return False
+
+
 def _resolve_output_dir(target_dir: str) -> str:
     """Resolve an output directory to a validated location inside DATA_DIR."""
     candidate = str(target_dir or "").strip()
@@ -307,15 +319,16 @@ class MediaEngine:
             if os.path.exists(thumb_path):
                 return thumb_path
 
+            if _is_svg_image_file(safe_filepath, ext):
+                shutil.copy2(safe_filepath, thumb_path)
+                return thumb_path
+
             # Use to_thread for blocking PIL operations
             def _resize():
                 with Image.open(safe_filepath) as img:
-                    # Maintain aspect ratio
                     img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                    # For JPEGs, ensure RGB mode
-                    if img.mode in ("RGBA", "P"):
-                        img = img.convert("RGB")
-                    img.save(thumb_path, optimize=True, quality=80)
+                    img_to_save = img.convert("RGB") if img.mode in ("RGBA", "P") else img
+                    img_to_save.save(thumb_path, optimize=True, quality=80)
                 return thumb_path
 
             return await asyncio.to_thread(_resize)

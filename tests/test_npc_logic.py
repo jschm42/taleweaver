@@ -1,14 +1,16 @@
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from sqlalchemy import select
+
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import GameEvent, EntityMovement, WorldEntityUpdate
+from backend.engine.rule_engine import EntityMovement, GameEvent, WorldEntityUpdate
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene, WorldExit
+from backend.models.world_entity import WorldEntity, WorldScene
 
 pytestmark = pytest.mark.asyncio
 
@@ -182,7 +184,8 @@ async def test_talk_command_removed_and_say_used_for_direct_dialog(setup_test_db
             
         # Assert
         assert any("Unknown command: /talk" in c for c in talk_chunks if "event: system" in c)
-        assert captured_user_msg[0] == 'Say out loud: "Hello, Marge"'
+        # Pass 1 receives the CURRENT STATE block followed by the player action.
+        assert captured_user_msg[0].endswith('PLAYER ACTION:\nSay out loud: "Hello, Marge"')
 
         # Verify original user chat messages are persisted
         res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == "session-npc", ChatMessage.role == "user"))
@@ -194,8 +197,8 @@ async def test_talk_command_removed_and_say_used_for_direct_dialog(setup_test_db
 
 async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monkeypatch):
     """Verifies NPC inventories are synced and fallback name-matching is used when spawning scene items."""
-    from tests.conftest import TestSessionLocal
     from backend.engine.memory_manager import MemoryManager
+    from tests.conftest import TestSessionLocal
     
     async with TestSessionLocal() as db:
         user, adv, avatar, state, npc = await _seed_npc_context(db)
@@ -234,14 +237,16 @@ async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monk
         # Verify _build_chat_rule_pass_prompt appends allow_dynamic_items instructions (permanently disabled)
         state.allow_dynamic_items = False
         await db.commit()
-        prompt_disabled = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
-        assert "DYNAMIC ITEMS IS DISABLED" in prompt_disabled
-        assert "You must ONLY move/use pre-defined items" in prompt_disabled
+        # The rule lives in the static rule-pass system prompt; the per-turn block only carries data.
+        from backend.core import prompts
+
+        assert "DYNAMIC ITEMS ARE DISABLED" in prompts.GM_CHAT_PROGRESSION_RULES_PROMPT
+        assert "only move/use pre-defined items" in prompts.GM_CHAT_PROGRESSION_RULES_PROMPT
 
         state.allow_dynamic_items = True
         await db.commit()
-        prompt_enabled = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
-        assert "DYNAMIC ITEMS IS DISABLED" in prompt_enabled
+        state_block = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
+        assert "KITCHEN_KEY" in state_block
 
         # 4. Test fallback name matching when spawning an item in _spawn_scene_item
         key_obj = WorldEntity(
@@ -301,8 +306,8 @@ async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monk
 
 async def test_npc_memory_visibility(setup_test_db, monkeypatch):
     """Verifies that only visible NPCs in the current scene are remembered and passed to the GM."""
-    from tests.conftest import TestSessionLocal
     from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
+    from tests.conftest import TestSessionLocal
     
     async with TestSessionLocal() as db:
         user, adv, avatar, state, npc = await _seed_npc_context(db)

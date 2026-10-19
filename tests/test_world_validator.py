@@ -119,12 +119,12 @@ def test_container_inventory_orphan_emits_error():
         "id": "chest_01",
         "entity_type": "OBJECT",
         "item_type": "CONTAINER",
-        "inventory": [{"item_id": "PHANTOM_GOLD"}],
+        "inventory": ["PHANTOM_GOLD", {"item_id": "PHANTOM_SILVER"}],
     })
     payload["entities_all"] = payload["objects"]
     findings = validate_adventure(payload)
     miss = _codes(findings, "container_inventory_orphan")
-    assert len(miss) == 1
+    assert {f.context["missing_ref"] for f in miss} == {"PHANTOM_GOLD", "PHANTOM_SILVER"}
 
 
 def test_locked_but_no_unlock_key_emits_warn():
@@ -164,11 +164,11 @@ def test_npc_overpowered_emits_warn():
         "id": "dragon",
         "entity_type": "NPC",
         "npc_type": "MONSTER",
-        "hp": 999,
+        "hp": 80,
         "stamina": 200,
         "mana": 200,
-        "strength": 50,
-        "armor_class": 30,
+        "stat_modifier_strength": 25,
+        "stat_modifier_armor_class": 2,
     })
     payload["entities_all"] = payload["npcs"]
     findings = validate_adventure(payload)
@@ -199,12 +199,23 @@ def test_rpg_mode_with_combatants_emits_warn_in_chat_mode():
         "hp": 50,
         "stamina": 50,
         "mana": 0,
-        "is_attackable": True,
+        "metadata_json": {"attack_mode": "ATTACK_ON_SIGHT"},
     })
     payload["entities_all"] = payload["npcs"]
     findings = validate_adventure(payload)
     miss = _codes(findings, "rpg_mode_required_for_combat")
     assert len(miss) == 1
+
+
+def test_attackable_npc_in_chat_mode_is_not_flagged():
+    # is_attackable defaults to True on every NPC row, so it alone is no combat signal.
+    payload = _empty_adventure(
+        adventure_overrides={"rule_enforcement_mode": "chat"},
+    )
+    payload["npcs"].append({"id": "baker", "entity_type": "NPC", "is_attackable": True})
+    payload["entities_all"] = payload["npcs"]
+    findings = validate_adventure(payload)
+    assert _codes(findings, "rpg_mode_required_for_combat") == []
 
 
 def test_decorative_objects_overflow_emits_warn():
@@ -303,15 +314,16 @@ def test_findings_sorted_errors_first_then_by_code():
     assert last_error_index < first_warn_index
 
 
-def test_quest_references_missing_entity_emits_error():
+def test_quest_references_missing_item_emits_error():
     payload = _empty_adventure(
         adventure_overrides={
-            "quests": [{"id": "q1", "target_object_id": "PHANTOM_KEY"}],
+            "quests": [{"id": "q1", "title": "Key", "required_item_id": "PHANTOM_KEY"}],
         },
     )
     findings = validate_adventure(payload)
-    miss = _codes(findings, "quest_references_missing_entity")
+    miss = _codes(findings, "quest_references_missing_item")
     assert len(miss) == 1
+    assert miss[0].location == "quest:q1"
 
 
 def test_container_inventory_too_large_emits_warn():

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import StatBar from './StatBar.vue'
+import SheetSpecialsPanel from './SheetSpecialsPanel.vue'
 import type { CharacterSheet, InventoryItem } from '@/types'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -23,7 +24,7 @@ const emit = defineEmits<{
   itemContextmenu: [item: any, event: MouseEvent]
 }>()
 
-type TabType = 'inventory' | 'equipment' | 'ailments'
+type TabType = 'inventory' | 'equipment' | 'ailments' | 'specials'
 const activeTab = ref<TabType>('inventory')
 const showBio = ref(false)
 const brokenImages = ref<Record<string, boolean>>({})
@@ -32,6 +33,10 @@ const stateChanged = ref(false)
 const inventoryList = computed(() => props.sheet?.inventory ?? [])
 const equipment = computed<Record<string, InventoryItem | null>>(() => props.sheet?.equipment ?? {})
 const statusEffects = computed(() => props.sheet?.status_effects ?? [])
+const unlockedSpecialCount = computed(() => {
+  const unlocked = new Set(props.sheet?.unlocked_actions ?? [])
+  return (props.sheet?.special_actions ?? []).filter((a) => unlocked.has(a.id)).length
+})
 
 const equippedCount = computed(() => {
   return Object.values(equipment.value).filter(item => !!item).length
@@ -92,26 +97,43 @@ const showImage = (path?: string | null) => {
   return !!path && !brokenImages.value[path]
 }
 
+const isReadableItem = (item: any): boolean => {
+  if (!item) return false
+  const itemType = String(item.item_type || item.metadata_json?.item_type || '').toUpperCase()
+  if (itemType === 'READABLE') return true
+  const metadata = (item.metadata_json && typeof item.metadata_json === 'object') ? item.metadata_json : {}
+  return Boolean(item.text_log_content || metadata.text_log_content)
+}
+
 const isInteractable = (item: any) => {
   if (!item) return false
+  if (isReadableItem(item)) return true
+  const itemType = String(item.item_type || '').toUpperCase()
+  if (itemType === 'CONTAINER' || itemType === 'CONSUMABLE') return true
   const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
-  return isEquippable || item.item_type === 'CONSUMABLE' || String(item.item_type || '').toUpperCase() === 'CONTAINER' || String(item.item_type || '').toUpperCase() === 'READABLE'
+  return isEquippable
 }
 
 const handleInventoryClick = (item: any) => {
   if (!item) return
+  if (isReadableItem(item)) {
+    emit('readItem', item)
+    return
+  }
+  const itemType = String(item.item_type || '').toUpperCase()
+  if (itemType === 'CONTAINER') {
+    emit('openContainer', item)
+    return
+  }
+  if (itemType === 'CONSUMABLE') {
+    stateChanged.value = true
+    emit('consume', item.name)
+    return
+  }
   const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
-  
   if (isEquippable) {
     stateChanged.value = true
     emit('equip', item.name)
-  } else if (item.item_type === 'CONSUMABLE') {
-    stateChanged.value = true
-    emit('consume', item.name)
-  } else if (String(item.item_type || '').toUpperCase() === 'CONTAINER') {
-    emit('openContainer', item)
-  } else if (String(item.item_type || '').toUpperCase() === 'READABLE') {
-    emit('readItem', item)
   }
 }
 
@@ -332,6 +354,27 @@ const onClose = () => {
                   {{ statusEffects.length }}
                 </span>
               </button>
+
+              <!-- Tab 4: Special Attacks -->
+              <button
+                :class="[
+                  'flex-1 flex items-center justify-center gap-1 sm:gap-2 py-1.5 sm:py-2.5 px-1.5 sm:px-4 rounded-xl font-bold uppercase tracking-wider text-[11px] sm:text-xs md:text-sm transition-all select-none',
+                  activeTab === 'specials'
+                    ? 'bg-slate-800 text-amber-400 shadow-md border border-slate-700/80'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                ]"
+                @click="activeTab = 'specials'"
+              >
+                <i class="ra ra-crystal-wand text-xs sm:text-base"></i>
+                <span class="hidden md:inline truncate">Specials</span>
+                <span class="md:hidden">Skills</span>
+                <span
+                  class="text-[9px] sm:text-xs font-mono font-bold px-1 sm:px-1.5 py-0.5 rounded-md"
+                  :class="activeTab === 'specials' ? 'bg-amber-400/15 text-amber-300' : 'bg-slate-800/80 text-slate-400'"
+                >
+                  {{ unlockedSpecialCount }}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -371,7 +414,7 @@ const onClose = () => {
                   <template v-if="inventoryList[idx-1]">
                     <!-- READ/NOTE tag -->
                     <div 
-                      v-if="String(inventoryList[idx-1].item_type || '').toUpperCase() === 'READABLE'" 
+                      v-if="isReadableItem(inventoryList[idx-1])" 
                       class="absolute top-1 left-1 z-20 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-black tracking-wide border leading-none"
                       :class="Boolean(inventoryList[idx-1].is_read) ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-200 border-amber-500/40'"
                     >
@@ -407,7 +450,7 @@ const onClose = () => {
 
               <!-- Quick Instruction Hint -->
               <div class="mt-4 pt-3 border-t border-slate-800/40 flex items-center justify-between text-xxs text-slate-500 flex-wrap gap-2">
-                <span>💡 Click item to equip or consume.</span>
+                <span>💡 Click item to equip, consume, open, or read.</span>
                 <span>Right-click or hold for actions.</span>
               </div>
             </div>
@@ -498,6 +541,8 @@ const onClose = () => {
             <!-- ============================================== -->
             <!-- TAB 3: AILMENTS & BUFFS -->
             <!-- ============================================== -->
+            <SheetSpecialsPanel v-else-if="activeTab === 'specials'" :sheet="sheet" :is-debug="isDebug" />
+
             <div v-else-if="activeTab === 'ailments'" class="flex flex-col h-full">
               
               <!-- When No Effects: Perfect Condition Banner -->

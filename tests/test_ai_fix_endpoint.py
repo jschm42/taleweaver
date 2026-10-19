@@ -1,7 +1,5 @@
 """Integration tests for the AI fix suggestion / apply endpoints."""
 
-import json
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -47,45 +45,55 @@ async def _seed_simple_adventure(db: AsyncSession, *, owner: User) -> str:
     db.add(tpl)
     await db.flush()
 
-    db.add(WorldScene(
-        id="START",
-        template_id=tpl.id,
-        label="Start",
-        description="A dusty entrance hall.",
-    ))
-    db.add(WorldScene(
-        id="OBSERVATION_LOUNGE",
-        template_id=tpl.id,
-        label="Observation Lounge",
-        description="A quiet observation lounge.",
-    ))
-    db.add(WorldEntity(
-        id="OLD_LIBRARIAN",
-        template_id=tpl.id,
-        entity_type="NPC",
-        name="Old Librarian",
-        description="A wizened keeper.",
-        current_scene_id="START",
-    ))
-    db.add(WorldEntity(
-        id="SAFE_01",
-        template_id=tpl.id,
-        entity_type="OBJECT",
-        name="Safe",
-        description="A heavy steel safe.",
-        current_scene_id="START",
-        item_type="CONTAINER",
-    ))
-    db.add(WorldExit(
-        template_id=tpl.id,
-        from_scene_id="START",
-        to_scene_id="OBSERVATION_LOUNGE",
-        label="A heavy oak door",
-        is_locked=True,
-        code_to_unlock="1331",
-        lock_description="Requires a code to unlock.",
-        exit_type="one_way",
-    ))
+    db.add(
+        WorldScene(
+            id="START",
+            template_id=tpl.id,
+            label="Start",
+            description="A dusty entrance hall.",
+        )
+    )
+    db.add(
+        WorldScene(
+            id="OBSERVATION_LOUNGE",
+            template_id=tpl.id,
+            label="Observation Lounge",
+            description="A quiet observation lounge.",
+        )
+    )
+    db.add(
+        WorldEntity(
+            id="OLD_LIBRARIAN",
+            template_id=tpl.id,
+            entity_type="NPC",
+            name="Old Librarian",
+            description="A wizened keeper.",
+            current_scene_id="START",
+        )
+    )
+    db.add(
+        WorldEntity(
+            id="SAFE_01",
+            template_id=tpl.id,
+            entity_type="OBJECT",
+            name="Safe",
+            description="A heavy steel safe.",
+            current_scene_id="START",
+            item_type="CONTAINER",
+        )
+    )
+    db.add(
+        WorldExit(
+            template_id=tpl.id,
+            from_scene_id="START",
+            to_scene_id="OBSERVATION_LOUNGE",
+            label="A heavy oak door",
+            is_locked=True,
+            code_to_unlock="1331",
+            lock_description="Requires a code to unlock.",
+            exit_type="one_way",
+        )
+    )
     await db.commit()
     return tpl.id
 
@@ -104,6 +112,7 @@ async def client():
     app.dependency_overrides.clear()
     from backend.core.database import get_db
     from tests.conftest import override_get_db
+
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
@@ -138,8 +147,6 @@ async def test_suggest_fix_returns_proposals(client, setup_test_db, monkeypatch)
             }
         ]
 
-
-
     class _Wrapper:
         proposals = [_Proposal()]
 
@@ -147,15 +154,20 @@ async def test_suggest_fix_returns_proposals(client, setup_test_db, monkeypatch)
         def __init__(self, *args, **kwargs):
             pass
 
-        async def aexecute_complex_task(self, *, system_prompt, user_prompt, response_model, model, **kwargs):
+        async def aexecute_complex_task(
+            self, *, system_prompt, user_prompt, response_model, model, **kwargs
+        ):
             captured["system_starts_with_assistant"] = "assistant" in system_prompt.lower()
             captured["user_contains_finding"] = "orphaned_container_code" in user_prompt
             captured["user_contains_location"] = "object:SAFE_01" in user_prompt
             captured["model"] = model
-            captured["schema_keys"] = list(response_model.model_json_schema().get("properties", {}).keys())
+            captured["schema_keys"] = list(
+                response_model.model_json_schema().get("properties", {}).keys()
+            )
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -217,7 +229,8 @@ async def test_suggest_fix_rejects_more_than_three(client, setup_test_db, monkey
         async def aexecute_complex_task(self, **kwargs):
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -281,15 +294,17 @@ async def test_suggest_fix_timeout_returns_200_with_error(client, setup_test_db,
 
         async def aexecute_complex_task(self, **kwargs):
             await _asyncio.sleep(120)
-            return None
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
     monkeypatch.setattr(
-        "backend.core.config.settings.AI_FIX_SUGGEST_TIMEOUT_SECONDS", 0.05,
+        "backend.core.config.settings.AI_FIX_SUGGEST_TIMEOUT_SECONDS",
+        0.05,
         raising=False,
     )
     import backend.core.config as _config_module
+
     monkeypatch.setattr(_config_module.settings, "AI_FIX_SUGGEST_TIMEOUT_SECONDS", 0.05)
 
     resp = await client.post(
@@ -333,7 +348,8 @@ async def test_suggest_fix_runtime_error_returns_200_with_error(client, setup_te
         async def aexecute_complex_task(self, **kwargs):
             raise RuntimeError("Upstream bad gateway")
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -356,7 +372,9 @@ async def test_suggest_fix_runtime_error_returns_200_with_error(client, setup_te
 
 
 async def test_suggest_fix_all_missing_keys_returns_config_message(
-    client, setup_test_db, monkeypatch,
+    client,
+    setup_test_db,
+    monkeypatch,
 ):
     """When every provider in the chain fails with 'no API key', the user sees a config hint."""
 
@@ -375,7 +393,8 @@ async def test_suggest_fix_all_missing_keys_returns_config_message(
         def __init__(self, *args, **kwargs):
             raise ValueError(f"No API key configured for provider: {kwargs.get('provider')}")
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _NoKeyLLM)
 
     resp = await client.post(
@@ -400,7 +419,9 @@ async def test_suggest_fix_all_missing_keys_returns_config_message(
 
 
 async def test_suggest_fix_all_timeouts_returns_timeout_message(
-    client, setup_test_db, monkeypatch,
+    client,
+    setup_test_db,
+    monkeypatch,
 ):
     """When every provider times out, the message tells the user to retry."""
 
@@ -430,9 +451,11 @@ async def test_suggest_fix_all_timeouts_returns_timeout_message(
             await _asyncio.sleep(2)
             raise _asyncio.TimeoutError()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _SlowLLM)
     import backend.core.config as _config_module
+
     monkeypatch.setattr(_config_module.settings, "AI_FIX_SUGGEST_TIMEOUT_SECONDS", 0.05)
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_PROVIDER", "anthropic")
 
@@ -493,12 +516,15 @@ async def test_suggest_fix_uses_focused_prompt(client, setup_test_db, monkeypatc
         def __init__(self, *args, **kwargs):
             pass
 
-        async def aexecute_complex_task(self, *, system_prompt, user_prompt, response_model, model, **kwargs):
+        async def aexecute_complex_task(
+            self, *, system_prompt, user_prompt, response_model, model, **kwargs
+        ):
             captured["user_prompt"] = user_prompt
             captured["user_prompt_bytes"] = len(user_prompt.encode("utf-8"))
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     resp = await client.post(
@@ -573,7 +599,7 @@ async def test_suggest_fix_falls_back_on_timeout(client, setup_test_db, monkeypa
             attempts.append("fallback")
             return _FallbackWrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
 
     primary_calls = {"n": 0}
     fallback_calls = {"n": 0}
@@ -590,6 +616,7 @@ async def test_suggest_fix_falls_back_on_timeout(client, setup_test_db, monkeypa
 
     monkeypatch.setattr(editor_module, "GameMasterLLM", _factory)
     import backend.core.config as _config_module
+
     monkeypatch.setattr(_config_module.settings, "AI_FIX_SUGGEST_TIMEOUT_SECONDS", 0.05)
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_PROVIDER", "anthropic")
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_MODEL", "claude-test")
@@ -672,7 +699,7 @@ async def test_suggest_fix_falls_back_to_user_small_provider(client, setup_test_
             attempts.append("openai")
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
 
     def _factory(*args, **kwargs):
         provider = kwargs.get("provider")
@@ -684,6 +711,7 @@ async def test_suggest_fix_falls_back_to_user_small_provider(client, setup_test_
 
     monkeypatch.setattr(editor_module, "GameMasterLLM", _factory)
     import backend.core.config as _config_module
+
     monkeypatch.setattr(_config_module.settings, "AI_FIX_SUGGEST_TIMEOUT_SECONDS", 0.05)
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_PROVIDER", "anthropic")
 
@@ -724,8 +752,6 @@ async def test_suggest_fix_skips_provider_with_missing_api_key(client, setup_tes
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
-    import asyncio as _asyncio
-
     attempts: list[str] = []
 
     class _DeepseekLLM:
@@ -756,7 +782,7 @@ async def test_suggest_fix_skips_provider_with_missing_api_key(client, setup_tes
 
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
 
     def _factory(*args, **kwargs):
         provider = kwargs.get("provider")
@@ -768,6 +794,7 @@ async def test_suggest_fix_skips_provider_with_missing_api_key(client, setup_tes
 
     monkeypatch.setattr(editor_module, "GameMasterLLM", _factory)
     import backend.core.config as _config_module
+
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_PROVIDER", "anthropic")
 
     resp = await client.post(
@@ -789,7 +816,9 @@ async def test_suggest_fix_skips_provider_with_missing_api_key(client, setup_tes
 
 
 async def test_suggest_fix_clean_error_when_all_providers_unavailable(
-    client, setup_test_db, monkeypatch,
+    client,
+    setup_test_db,
+    monkeypatch,
 ):
     """If the chain has no usable provider, the endpoint must return 200 with empty proposals + a clean error."""
 
@@ -811,9 +840,11 @@ async def test_suggest_fix_clean_error_when_all_providers_unavailable(
         def __init__(self, *args, **kwargs):
             raise ValueError("No API key configured for provider: deepseek")
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _UnavailLLM)
     import backend.core.config as _config_module
+
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_PROVIDER", "openai")
     monkeypatch.setattr(_config_module.settings, "AI_FIX_FALLBACK_MODEL", "gpt-4o-mini")
 
@@ -835,6 +866,7 @@ async def test_suggest_fix_clean_error_when_all_providers_unavailable(
     assert payload["error"]
     assert "deepseek" not in payload["error"].lower()
     assert "openai" not in payload["error"].lower()
+
 
 async def test_suggest_fix_cache_hit_skips_llm(client, setup_test_db, monkeypatch):
     """A repeat request for the same finding signature must return cached proposals."""
@@ -877,7 +909,8 @@ async def test_suggest_fix_cache_hit_skips_llm(client, setup_test_db, monkeypatc
             calls["n"] += 1
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     body = {
@@ -943,7 +976,8 @@ async def test_apply_fix_evicts_cache(client, setup_test_db, monkeypatch):
         async def aexecute_complex_task(self, **kwargs):
             return _Wrapper()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     body_req = {
@@ -962,7 +996,9 @@ async def test_apply_fix_evicts_cache(client, setup_test_db, monkeypatch):
 
     async with TestSessionLocal() as db:
         from sqlalchemy import select as _sel
+
         from backend.models.ai_fix_cache import AIFixCache
+
         res = await db.execute(_sel(AIFixCache).where(AIFixCache.template_id == tpl_id))
         assert len(res.scalars().all()) == 1
 
@@ -974,12 +1010,14 @@ async def test_apply_fix_evicts_cache(client, setup_test_db, monkeypatch):
             "proposal": {
                 "title": "Inline hint",
                 "summary": "x",
-                "patches": [{
-                    "target_type": "npc",
-                    "target_id": "OLD_LIBRARIAN",
-                    "description": "Drop digits.",
-                    "field_updates": {"description": "Updated."},
-                }],
+                "patches": [
+                    {
+                        "target_type": "npc",
+                        "target_id": "OLD_LIBRARIAN",
+                        "description": "Drop digits.",
+                        "field_updates": {"description": "Updated."},
+                    }
+                ],
             },
         },
     )
@@ -987,7 +1025,9 @@ async def test_apply_fix_evicts_cache(client, setup_test_db, monkeypatch):
 
     async with TestSessionLocal() as db:
         from sqlalchemy import select as _sel
+
         from backend.models.ai_fix_cache import AIFixCache
+
         res = await db.execute(_sel(AIFixCache).where(AIFixCache.template_id == tpl_id))
         assert len(res.scalars().all()) == 0
 
@@ -1005,12 +1045,14 @@ async def test_apply_fix_resolves_exit_by_composite_id(client, setup_test_db):
         "title": "Lower the door lock",
         "summary": "Drop the lock code.",
         "rationale": None,
-        "patches": [{
-            "target_type": "exit",
-            "target_id": "START->OBSERVATION_LOUNGE",
-            "description": "Replace the code.",
-            "field_updates": {"code_to_unlock": "0000"},
-        }],
+        "patches": [
+            {
+                "target_type": "exit",
+                "target_id": "START->OBSERVATION_LOUNGE",
+                "description": "Replace the code.",
+                "field_updates": {"code_to_unlock": "0000"},
+            }
+        ],
     }
 
     resp = await client.post(
@@ -1028,6 +1070,7 @@ async def test_apply_fix_resolves_exit_by_composite_id(client, setup_test_db):
 
     async with TestSessionLocal() as db:
         from sqlalchemy import select as _sel
+
         res = await db.execute(
             _sel(WorldExit).where(
                 WorldExit.template_id == tpl_id,
@@ -1053,12 +1096,14 @@ async def test_apply_fix_resolves_exit_by_from_scene_only(client, setup_test_db)
         "title": "Unlock the door",
         "summary": "Drop the lock.",
         "rationale": None,
-        "patches": [{
-            "target_type": "exit",
-            "target_id": "START",
-            "description": "Match by outgoing scene.",
-            "field_updates": {"locked": False},
-        }],
+        "patches": [
+            {
+                "target_type": "exit",
+                "target_id": "START",
+                "description": "Match by outgoing scene.",
+                "field_updates": {"locked": False},
+            }
+        ],
     }
 
     resp = await client.post(
@@ -1075,6 +1120,7 @@ async def test_apply_fix_resolves_exit_by_from_scene_only(client, setup_test_db)
 
     async with TestSessionLocal() as db:
         from sqlalchemy import select as _sel
+
         res = await db.execute(
             _sel(WorldExit).where(
                 WorldExit.template_id == tpl_id,
@@ -1099,12 +1145,14 @@ async def test_apply_fix_resolves_exit_by_label(client, setup_test_db):
         "title": "Update door rule",
         "summary": "Drop code_to_unlock via label lookup.",
         "rationale": None,
-        "patches": [{
-            "target_type": "exit",
-            "target_id": "A heavy oak door",
-            "description": "Match by label.",
-            "field_updates": {"code_to_unlock": "9999"},
-        }],
+        "patches": [
+            {
+                "target_type": "exit",
+                "target_id": "A heavy oak door",
+                "description": "Match by label.",
+                "field_updates": {"code_to_unlock": "9999"},
+            }
+        ],
     }
 
     resp = await client.post(
@@ -1121,6 +1169,7 @@ async def test_apply_fix_resolves_exit_by_label(client, setup_test_db):
 
     async with TestSessionLocal() as db:
         from sqlalchemy import select as _sel
+
         res = await db.execute(
             _sel(WorldExit).where(
                 WorldExit.template_id == tpl_id,
@@ -1157,25 +1206,29 @@ async def test_apply_fix_with_stale_uuid_still_404(client, setup_test_db):
     }
     async with TestSessionLocal() as db:
         await db.execute(_del(AIFixCache).where(AIFixCache.template_id == tpl_id))
-        db.add(AIFixCache(
-            template_id=tpl_id,
-            user_id=user_id,
-            finding_signature=stale_sig,
-            response=cache_payload,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        ))
+        db.add(
+            AIFixCache(
+                template_id=tpl_id,
+                user_id=user_id,
+                finding_signature=stale_sig,
+                response=cache_payload,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+        )
         await db.commit()
 
     proposal = {
         "title": "Phantom patch",
         "summary": "Targets an exit that no longer exists.",
         "rationale": None,
-        "patches": [{
-            "target_type": "exit",
-            "target_id": "DECONTAMINATION_CHAMBER",
-            "description": "Patches a stale ref.",
-            "field_updates": {"locked": False},
-        }],
+        "patches": [
+            {
+                "target_type": "exit",
+                "target_id": "DECONTAMINATION_CHAMBER",
+                "description": "Patches a stale ref.",
+                "field_updates": {"locked": False},
+            }
+        ],
     }
 
     resp = await client.post(
@@ -1234,7 +1287,7 @@ async def test_apply_fix_to_npc_description(client, setup_test_db):
         f"/api/adventures/{tpl_id}/editor/validate/findings/apply-fix",
         headers=_auth_headers("fix_user_apply_npc"),
         json={
-            "finding_signature": "warn|orphaned_container_code|object:SAFE_01|{\"code\":\"4289\"}",
+            "finding_signature": 'warn|orphaned_container_code|object:SAFE_01|{"code":"4289"}',
             "proposal": chosen_proposal,
         },
     )
@@ -1245,9 +1298,9 @@ async def test_apply_fix_to_npc_description(client, setup_test_db):
 
     async with TestSessionLocal() as db:
         ent_res = await db.execute(
-            __import__("sqlalchemy").select(WorldEntity).where(
-                WorldEntity.template_id == tpl_id, WorldEntity.id == "OLD_LIBRARIAN"
-            )
+            __import__("sqlalchemy")
+            .select(WorldEntity)
+            .where(WorldEntity.template_id == tpl_id, WorldEntity.id == "OLD_LIBRARIAN")
         )
         ent = ent_res.scalars().first()
         assert ent is not None
@@ -1296,9 +1349,9 @@ async def test_apply_fix_to_object_container_code(client, setup_test_db):
 
     async with TestSessionLocal() as db:
         ent_res = await db.execute(
-            __import__("sqlalchemy").select(WorldEntity).where(
-                WorldEntity.template_id == tpl_id, WorldEntity.id == "SAFE_01"
-            )
+            __import__("sqlalchemy")
+            .select(WorldEntity)
+            .where(WorldEntity.template_id == tpl_id, WorldEntity.id == "SAFE_01")
         )
         ent = ent_res.scalars().first()
         assert ent is not None
@@ -1394,9 +1447,9 @@ async def test_apply_fix_rejects_unknown_field(client, setup_test_db):
     assert resp.status_code == 200, resp.text
     async with TestSessionLocal() as db:
         ent_res = await db.execute(
-            __import__("sqlalchemy").select(WorldEntity).where(
-                WorldEntity.template_id == tpl_id, WorldEntity.id == "OLD_LIBRARIAN"
-            )
+            __import__("sqlalchemy")
+            .select(WorldEntity)
+            .where(WorldEntity.template_id == tpl_id, WorldEntity.id == "OLD_LIBRARIAN")
         )
         ent = ent_res.scalars().first()
         assert ent is not None
@@ -1417,20 +1470,22 @@ async def test_apply_fix_to_protagonist(client, setup_test_db):
         db.add(user)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
-        db.add(Avatar(
-            user_id=user.id,
-            template_id=tpl_id,
-            name="Hero",
-            description="A traveler.",
-            hp=100,
-            max_hp=100,
-            mana=50,
-            max_mana=50,
-            stamina=80,
-            max_stamina=80,
-            equipment={},
-            inventory=[],
-        ))
+        db.add(
+            Avatar(
+                user_id=user.id,
+                template_id=tpl_id,
+                name="Hero",
+                description="A traveler.",
+                hp=100,
+                max_hp=100,
+                mana=50,
+                max_mana=50,
+                stamina=80,
+                max_stamina=80,
+                equipment={},
+                inventory=[],
+            )
+        )
         await db.commit()
 
     chosen_proposal = {
@@ -1518,7 +1573,8 @@ async def test_apply_fix_does_not_call_llm(client, setup_test_db, monkeypatch):
             _count()
             raise AssertionError("LLM must not be called from /apply-fix")
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     proposal = {
@@ -1572,8 +1628,10 @@ async def test_apply_fix_removes_finding_from_persisted_validation_run(client, s
             "context": {},
         }
         from datetime import datetime, timezone
+
         from backend.api.routes.adventures.editor import _finding_signature
         from backend.schemas.validation import ValidationFinding
+
         sig1 = _finding_signature(ValidationFinding(**finding1))
 
         run = ValidationRun(
@@ -1619,12 +1677,9 @@ async def test_apply_fix_removes_finding_from_persisted_validation_run(client, s
 
     # Verify DB persistence directly
     async with TestSessionLocal() as db:
-        res = await db.execute(
-            select(ValidationRun).where(ValidationRun.template_id == tpl_id)
-        )
+        res = await db.execute(select(ValidationRun).where(ValidationRun.template_id == tpl_id))
         persisted_run = res.scalars().first()
         assert persisted_run is not None
         assert len(persisted_run.ai_findings) == 1
         assert persisted_run.ai_findings[0]["code"] == "plot_hole"
         assert persisted_run.warning_count == 1
-

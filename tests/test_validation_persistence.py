@@ -1,7 +1,5 @@
 """Tests for the persistent ValidationRun storage and /validation/latest endpoint."""
 
-from typing import List
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -55,6 +53,7 @@ async def client():
     app.dependency_overrides.clear()
     from backend.core.database import get_db
     from tests.conftest import override_get_db
+
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
@@ -83,10 +82,8 @@ async def test_validation_run_is_persisted_after_run(client, setup_test_db):
     assert body["ai_skipped_reason"] == "ai_not_requested"
 
     async with TestSessionLocal() as db:
-        res = await db.execute(
-            select(ValidationRun).where(ValidationRun.template_id == tpl_id)
-        )
-        runs: List[ValidationRun] = list(res.scalars().all())
+        res = await db.execute(select(ValidationRun).where(ValidationRun.template_id == tpl_id))
+        runs: list[ValidationRun] = list(res.scalars().all())
         assert len(runs) == 1
         run = runs[0]
         assert run.user_id == user.id
@@ -142,9 +139,7 @@ async def test_latest_validation_returns_last_run_per_user(client, setup_test_db
     assert payload["ai_skipped_reason"] == "ai_not_requested"
 
     async with TestSessionLocal() as db:
-        res = await db.execute(
-            select(ValidationRun).where(ValidationRun.template_id == tpl_id)
-        )
+        res = await db.execute(select(ValidationRun).where(ValidationRun.template_id == tpl_id))
         assert len(list(res.scalars().all())) == 2
 
 
@@ -182,11 +177,9 @@ async def test_validation_runs_are_scoped_per_user(client, setup_test_db):
 
 async def test_validation_template_delete_cascades_to_runs(client, setup_test_db):
     """The FK from validation_runs.template_id -> adventure_templates.id must use ON DELETE CASCADE."""
-    from sqlalchemy import ForeignKey, inspect as _inspect
+    from sqlalchemy import ForeignKey
 
-    fk_columns = list(
-        ValidationRun.__table__.c.template_id.foreign_keys
-    )
+    fk_columns = list(ValidationRun.__table__.c.template_id.foreign_keys)
     assert fk_columns, "ValidationRun.template_id must be a FK"
     fk: ForeignKey = fk_columns[0]
     assert fk.ondelete == "CASCADE", (
@@ -221,9 +214,7 @@ async def test_validation_persists_ai_when_requested(client, setup_test_db, monk
             self.context = None
 
     class _Resp:
-        findings = [
-            _Finding("orphaned_container_code", "Container orphan.")
-        ]
+        findings = [_Finding("orphaned_container_code", "Container orphan.")]
 
     class _FakeLLM:
         def __init__(self, *args, **kwargs):
@@ -232,7 +223,8 @@ async def test_validation_persists_ai_when_requested(client, setup_test_db, monk
         async def aexecute_complex_task(self, **kwargs):
             return _Resp()
 
-    from backend.api.routes.adventures import editor as editor_module
+    from backend.api.routes.adventures.editing import validation as editor_module
+
     monkeypatch.setattr(editor_module, "GameMasterLLM", _FakeLLM)
 
     post = await client.post(

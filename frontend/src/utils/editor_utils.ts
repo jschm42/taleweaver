@@ -107,3 +107,50 @@ export function formatObjectIds(text: string | null | undefined): string {
   const escaped = escapeHtml(withNewlines)
   return escaped.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">$1</span>')
 }
+
+export function hasAnyScript(entity: any, topLevelScripts?: any[]): boolean {
+  if (!entity || typeof entity !== 'object') return false
+
+  // 1. Direct inline script fields on entity
+  for (const [key, val] of Object.entries(entity)) {
+    if (typeof val === 'string' && val.trim()) {
+      if (key.endsWith('_script') || key === 'unlock_expression' || key === 'guard_expression') {
+        return true
+      }
+    }
+  }
+
+  // 2. Inline script fields stored inside metadata / metadata_json
+  const metadata = (entity.metadata_json && typeof entity.metadata_json === 'object')
+    ? entity.metadata_json
+    : ((entity.metadata && typeof entity.metadata === 'object') ? entity.metadata : null)
+
+  if (metadata) {
+    for (const [key, val] of Object.entries(metadata)) {
+      if (typeof val === 'string' && val.trim()) {
+        if (key.endsWith('_script') || key === 'unlock_expression' || key === 'guard_expression') {
+          return true
+        }
+      }
+    }
+  }
+
+  // 3. Explicit scripts array attached to entity
+  if (Array.isArray(entity.scripts) && entity.scripts.length > 0) {
+    return true
+  }
+
+  // 4. Targeted by top-level adventure scripts
+  if (Array.isArray(topLevelScripts) && entity.id) {
+    const entityId = String(entity.id).trim().toUpperCase()
+    for (const sc of topLevelScripts) {
+      if (!sc) continue
+      const target = String(sc.target_id || sc.target || '').trim().toUpperCase()
+      if (target && target === entityId) {
+        return true
+      }
+    }
+  }
+
+  return false
+}

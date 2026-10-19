@@ -56,7 +56,12 @@ const props = defineProps<{
   isCheckpointSaving?: boolean
   exitTraversalBusy?: string
   isSceneTransitioning?: boolean
-  sceneTransitionTarget?: { label: string; targetSceneName: string; targetSceneId?: string } | null
+  sceneTransitionTarget?: {
+    label: string
+    targetSceneName: string
+    targetSceneId?: string
+    targetSceneImage?: string | null
+  } | null
   exitUnlockBusy?: boolean
   turnError?: { message: string; action: string } | null
   worldMemories?: any[]
@@ -107,6 +112,16 @@ const activeSceneImageUrl = computed(() => {
   }
   if (props.adventureImage && showImage(props.adventureImage)) {
     return getImageUrl(props.adventureImage)
+  }
+  return null
+})
+
+const transitionSceneImageUrl = computed(() => {
+  const path = props.sceneTransitionTarget?.targetSceneImage
+  if (path && showImage(path)) return getImageUrl(path)
+  // Narrative-driven transitions: the scene_transition event already applied the new scene image.
+  if (props.isSceneTransitioning && props.currentSceneImage && showImage(props.currentSceneImage)) {
+    return getImageUrl(props.currentSceneImage)
   }
   return null
 })
@@ -291,6 +306,7 @@ defineExpose({
           :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
           :exit-label="props.sceneTransitionTarget?.label"
           :status-text="props.statusText"
+          :background-image-url="transitionSceneImageUrl"
         />
 
         <!-- Cinematic Movie-Style Sequence Title Overlay -->

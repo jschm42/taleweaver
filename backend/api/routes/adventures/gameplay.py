@@ -1,24 +1,33 @@
 from __future__ import annotations
+
 import json
 import logging
-from typing import Any, AsyncGenerator, cast
+import re
+from collections.abc import AsyncGenerator
+from typing import Any, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select, or_, and_, func
-import re
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.config import settings
-
+from backend.api.routes.adventures.agent_turn_stream import ensure_agent_active, stream_agent_turn
+from backend.api.routes.adventures.chat_snapshot import (
+    apply_pending_sequence_progress,
+    build_awards_for_snapshot,
+    build_session_map,
+    load_chat_history,
+    load_full_world_debug,
+    resolve_prompt_suggestions,
+)
 from backend.api.routes.adventures.gameplay_logic import (
-    GameTurnManager,
     WALKTHROUGH_REVEAL_COST,
+    GameTurnManager,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.engine.adventure_updates import is_legacy_session
 from backend.api.routes.adventures.schemas import (
     ChatRequest,
     ChatResponse,
@@ -27,31 +36,64 @@ from backend.api.routes.adventures.schemas import (
     TranslateTextRequest,
     TranslateTextResponse,
 )
+from backend.api.routes.adventures.session_debug_payload import build_session_debug_payload
+from backend.api.routes.adventures.unlock_service import (
+    SwitchFlipRunner,
+    add_system_message,
+    avatar_has_item,
+    award_unlock_xp,
+    enforce_container_guard,
+    enforce_exit_guard,
+    fire_container_unlock_success,
+    inventory_item_name,
+    load_avatar,
+    load_session_object,
+    mark_container_unlocked,
+    open_exit,
+    require_avatar,
+    require_value,
+    resolve_switch_flip,
+)
 from backend.core.auth import get_current_user
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
     BABLE_FISH_TRANSLATION_SYSTEM_PROMPT,
     BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE,
 )
-from backend.engine.map_engine import MapEngine
+from backend.engine.adventure_updates import is_legacy_session
+from backend.engine.trigger_service import TriggerService
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene, WorldExit
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)
 
 TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
-INVALID_CONTAINER_CODE_MESSAGE = "The lock gives a mocking click. That code won't open this container."
+# Hard-coded, static error message used for any client-visible turn failure path.
+# A module-level constant lets static-analysis tools verify that no exception text is
+# ever forwarded to the response body.
+CLIENT_TURN_ERROR_DETAIL = "Unable to process this turn."
+INVALID_CONTAINER_CODE_MESSAGE = (
+    "The lock gives a mocking click. That code won't open this container."
+)
 
 
 class ContainerUnlockCodeRequest(BaseModel):
     code: str
+
+
+async def _require_session_state(db: AsyncSession, game_id: str, current_user: User) -> SessionState:
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return state
 
 
 def _terminal_flags_from_state(state: SessionState) -> tuple[bool, bool]:
@@ -69,346 +111,6 @@ def _terminal_flags_from_state(state: SessionState) -> tuple[bool, bool]:
     )
     input_locked = status == "game_over" and game_over_sent
     return pending_terminal_epilogue, input_locked
-
-async def _build_session_debug_payload(
-    db: AsyncSession,
-    state: SessionState,
-    adventure: AdventureTemplate | None,
-    avatar: Avatar | None,
-    current_user: User,
-) -> dict[str, Any]:
-    """Assembles unified debug data including all NPCs with stats/locations, full map with NPC indicators, and complete items matrix."""
-    # 1. Scenes
-    scenes_res = await db.execute(
-        select(WorldScene).where(
-            or_(
-                WorldScene.session_id == state.session_id,
-                and_(WorldScene.template_id == state.template_id, WorldScene.session_id.is_(None)),
-            )
-        ).order_by(WorldScene.id)
-    )
-    scenes_all = scenes_res.scalars().all()
-    scene_lookup: dict[str, WorldScene] = {}
-    for s in scenes_all:
-        if s.id not in scene_lookup or s.session_id == state.session_id:
-            scene_lookup[s.id] = s
-
-    scene_names: dict[str, str] = {s.id: (s.label or s.id) for s in scene_lookup.values()}
-
-    # 2. Exits
-    exits_res = await db.execute(
-        select(WorldExit).where(
-            or_(
-                WorldExit.session_id == state.session_id,
-                and_(WorldExit.template_id == state.template_id, WorldExit.session_id.is_(None)),
-            )
-        )
-    )
-    exits_all = exits_res.scalars().all()
-    exit_lookup: dict[str, WorldExit] = {}
-    for ex in exits_all:
-        key = f"{ex.from_scene_id}->{ex.to_scene_id}"
-        if key not in exit_lookup or ex.session_id == state.session_id:
-            exit_lookup[key] = ex
-
-    exit_overrides = state.exit_states or {}
-    exits_data = []
-    for ex in exit_lookup.values():
-        over = exit_overrides.get(ex.id, {})
-        exits_data.append({
-            "id": ex.id,
-            "from_scene_id": ex.from_scene_id,
-            "to_scene_id": ex.to_scene_id,
-            "label": ex.label or "Passage",
-            "is_locked": bool(over.get("is_locked", ex.is_locked)),
-            "is_secret": bool(over.get("is_secret", getattr(ex, "is_secret", False))),
-            "lock_description": ex.lock_description,
-        })
-
-    # 3. Entities
-    ent_res = await db.execute(
-        select(WorldEntity).where(
-            or_(
-                WorldEntity.session_id == state.session_id,
-                and_(WorldEntity.template_id == state.template_id, WorldEntity.session_id.is_(None)),
-            )
-        ).order_by(WorldEntity.id)
-    )
-    entities_all = ent_res.scalars().all()
-    entity_lookup: dict[str, WorldEntity] = {}
-    for ent in entities_all:
-        if ent.id not in entity_lookup or ent.session_id == state.session_id:
-            entity_lookup[ent.id] = ent
-
-    entity_overrides = state.entity_states or {}
-
-    # 4. NPCs & scene_npcs mapping
-    npcs_data = []
-    scene_npcs: dict[str, list[dict[str, Any]]] = {}
-    for s_id in scene_lookup.keys():
-        scene_npcs[s_id] = []
-
-    for ent in entity_lookup.values():
-        if ent.entity_type != "NPC":
-            continue
-        over = entity_overrides.get(ent.id, {})
-        loc_id = over.get("current_scene_id") or getattr(ent, "current_scene_id", None) or getattr(ent, "start_scene_id", None) or "UNKNOWN"
-        loc_name = scene_names.get(loc_id, loc_id)
-        hp = over.get("hp", getattr(ent, "hp", 100) if getattr(ent, "hp", None) is not None else 100)
-        max_hp = over.get("max_hp", getattr(ent, "max_hp", 100) if getattr(ent, "max_hp", None) is not None else 100)
-        stamina = over.get("stamina", getattr(ent, "stamina", 50) if getattr(ent, "stamina", None) is not None else 50)
-        max_stamina = over.get("max_stamina", getattr(ent, "max_stamina", 50) if getattr(ent, "max_stamina", None) is not None else 50)
-        mana = over.get("mana", getattr(ent, "mana", 50) if getattr(ent, "mana", None) is not None else 50)
-        max_mana = over.get("max_mana", getattr(ent, "max_mana", 50) if getattr(ent, "max_mana", None) is not None else 50)
-        is_defeated = bool(over.get("is_defeated", False))
-        is_alive = not is_defeated and hp > 0
-        is_hidden = bool(over.get("is_hidden", getattr(ent, "is_hidden", False)))
-        is_hostile = bool(over.get("is_hostile", getattr(ent, "is_hostile", False)))
-        inv = over.get("inventory", getattr(ent, "inventory", None) or [])
-        notes = over.get("notes") or getattr(ent, "notes", None) or ""
-        is_moveable = bool(over.get("moveable")) if over.get("moveable") is not None else (bool(getattr(ent, "moveable", False)) if getattr(ent, "moveable", None) is not None else (str(getattr(ent, "movement_type", "") or "").upper() == "MOVABLE"))
-        allowed_scenes = over.get("allowed_scenes") or getattr(ent, "allowed_scenes", None) or []
-
-        npc_info = {
-            "id": ent.id,
-            "name": ent.name,
-            "description": getattr(ent, "description", "") or "",
-            "role": getattr(ent, "role", None) or getattr(ent, "npc_type", None) or (getattr(ent, "metadata_json", None) or {}).get("role") or "NPC",
-            "image_url": getattr(ent, "image_url", None),
-            "current_scene_id": loc_id,
-            "current_scene_name": loc_name,
-            "start_scene_id": getattr(ent, "start_scene_id", None) or getattr(ent, "current_scene_id", "UNKNOWN"),
-            "hp": hp,
-            "max_hp": max_hp,
-            "stamina": stamina,
-            "max_stamina": max_stamina,
-            "mana": mana,
-            "max_mana": max_mana,
-            "is_alive": is_alive,
-            "is_defeated": is_defeated,
-            "is_hidden": is_hidden,
-            "is_hostile": is_hostile,
-            "inventory": inv,
-            "notes": notes,
-            "moveable": is_moveable,
-            "allowed_scenes": allowed_scenes,
-            "is_in_current_scene": loc_id == state.current_scene_id,
-            "stats": {
-                "strength": getattr(ent, "stat_modifier_strength", 0) or 10,
-                "dexterity": getattr(ent, "stat_modifier_dexterity", 0) or 10,
-                "intelligence": getattr(ent, "stat_modifier_intelligence", 0) or 10,
-                "wisdom": getattr(ent, "stat_modifier_wisdom", 0) or 10,
-                "charisma": getattr(ent, "stat_modifier_charisma", 0) or 10,
-                "armor_class": getattr(ent, "stat_modifier_armor_class", 0) or 10,
-            },
-        }
-        npcs_data.append(npc_info)
-
-        if loc_id not in scene_npcs:
-            scene_npcs[loc_id] = []
-        scene_npcs[loc_id].append({
-            "id": ent.id,
-            "name": ent.name,
-            "image_url": ent.image_url,
-            "hp": hp,
-            "max_hp": max_hp,
-            "is_alive": is_alive,
-            "is_hidden": is_hidden,
-            "notes": notes,
-            "moveable": is_moveable,
-            "allowed_scenes": allowed_scenes,
-        })
-
-    # 5. Items Matrix (Avatar, Scenes, Containers, NPCs)
-    items_data = []
-
-    # A) Avatar inventory
-    if avatar and avatar.inventory:
-        for itm in avatar.inventory:
-            if isinstance(itm, dict):
-                items_data.append({
-                    "id": itm.get("id") or itm.get("key") or itm.get("name"),
-                    "name": itm.get("name") or "Unnamed Item",
-                    "description": itm.get("description") or "",
-                    "item_type": itm.get("item_type") or "PICKABLE",
-                    "slot": itm.get("slot"),
-                    "image_url": itm.get("image_url"),
-                    "location_type": "avatar",
-                    "location_id": avatar.id,
-                    "location_name": f"Hero ({avatar.name})",
-                    "is_hidden": False,
-                    "is_portable": True,
-                    "is_locked": False,
-                    "switch_state": None,
-                    "is_open": False,
-                    "metadata": itm.get("metadata_json") or {},
-                })
-
-    # B) Scene entities (non-NPC)
-    for ent in entity_lookup.values():
-        if ent.entity_type == "NPC":
-            continue
-        over = entity_overrides.get(ent.id, {})
-        loc_id = over.get("current_scene_id") or getattr(ent, "current_scene_id", None) or getattr(ent, "start_scene_id", None) or "UNKNOWN"
-        loc_name = scene_names.get(loc_id, loc_id)
-        is_hidden = bool(over.get("is_hidden", getattr(ent, "is_hidden", False)))
-        is_locked = bool(over.get("is_locked", getattr(ent, "is_locked", False)))
-        switch_state = over.get("switch_state", getattr(ent, "switch_state", None))
-        is_open = bool(over.get("is_open", getattr(ent, "is_open", False)))
-        is_portable = getattr(ent, "is_portable", True) if getattr(ent, "is_portable", None) is not None else True
-
-        items_data.append({
-            "id": ent.id,
-            "name": ent.name,
-            "description": ent.description or "",
-            "item_type": ent.item_type or ent.entity_type or "OBJECT",
-            "slot": getattr(ent, "slot", None),
-            "image_url": ent.image_url,
-            "location_type": "scene",
-            "location_id": loc_id,
-            "location_name": loc_name,
-            "is_hidden": is_hidden,
-            "is_portable": is_portable,
-            "is_locked": is_locked,
-            "switch_state": switch_state,
-            "is_open": is_open,
-            "metadata": ent.metadata_json or {},
-        })
-
-        # Items inside containers
-        ent_inv = over.get("inventory", getattr(ent, "inventory", None) or [])
-        if ent_inv and isinstance(ent_inv, list):
-            for c_itm in ent_inv:
-                if isinstance(c_itm, dict):
-                    items_data.append({
-                        "id": c_itm.get("id") or c_itm.get("name"),
-                        "name": c_itm.get("name") or "Unnamed Item",
-                        "description": c_itm.get("description") or "",
-                        "item_type": c_itm.get("item_type") or "PICKABLE",
-                        "slot": c_itm.get("slot"),
-                        "image_url": c_itm.get("image_url"),
-                        "location_type": "container",
-                        "location_id": ent.id,
-                        "location_name": f"{ent.name} (in {loc_name})",
-                        "is_hidden": is_hidden,
-                        "is_portable": True,
-                        "is_locked": False,
-                        "switch_state": None,
-                        "is_open": False,
-                        "metadata": c_itm.get("metadata_json") or {},
-                    })
-
-    # C) NPC inventory items
-    for npc in npcs_data:
-        for n_itm in npc["inventory"]:
-            if isinstance(n_itm, dict):
-                items_data.append({
-                    "id": n_itm.get("id") or n_itm.get("name"),
-                    "name": n_itm.get("name") or "Unnamed Item",
-                    "description": n_itm.get("description") or "",
-                    "item_type": n_itm.get("item_type") or "PICKABLE",
-                    "slot": n_itm.get("slot"),
-                    "image_url": n_itm.get("image_url"),
-                    "location_type": "npc",
-                    "location_id": npc["id"],
-                    "location_name": f"{npc['name']} (in {npc['current_scene_name']})",
-                    "is_hidden": npc["is_hidden"],
-                    "is_portable": True,
-                    "is_locked": False,
-                    "switch_state": None,
-                    "is_open": False,
-                    "metadata": n_itm.get("metadata_json") or {},
-                })
-
-    # 6. Map nodes structure
-    nodes_data = {}
-    for s in scene_lookup.values():
-        nodes_data[s.id] = {
-            "id": s.id,
-            "label": s.label or s.id,
-            "description": s.description or "",
-            "image_url": s.image_url,
-            "is_current": s.id == state.current_scene_id,
-            "npcs": scene_npcs.get(s.id, []),
-        }
-
-    blueprint_data = None
-    try:
-        from backend.api.routes.adventures.editor import _build_adventure_editor_assets
-        blueprint_obj = await _build_adventure_editor_assets(state.template_id, db)
-        blueprint_data = blueprint_obj.model_dump()
-    except Exception as exc:
-        logger.warning("Could not build blueprint assets for debug: %s", exc)
-
-    return {
-        "session": {
-            "id": state.session_id,
-            "template_id": state.template_id,
-            "adventure_title": adventure.title if adventure else (state.session.adventure_title if state.session else "Adventure"),
-            "current_scene_id": state.current_scene_id,
-            "current_scene_name": scene_names.get(state.current_scene_id, state.current_scene_id),
-            "in_game_time": state.in_game_time,
-            "time_system": state.time_system,
-            "is_debug_enabled": state.is_debug_enabled,
-            "status": state.session.status if state.session else "active",
-            "status_note": state.session.status_note if state.session else None,
-        },
-        "avatar": {
-            "id": avatar.id if avatar else None,
-            "name": avatar.name if avatar else "Protagonist",
-            "hp": avatar.hp if avatar else 100,
-            "max_hp": avatar.max_hp if avatar else 100,
-            "stamina": avatar.stamina if avatar else 50,
-            "max_stamina": avatar.max_stamina if avatar else 50,
-            "mana": avatar.mana if avatar else 50,
-            "max_mana": avatar.max_mana if avatar else 50,
-            "exp": avatar.exp if avatar else 0,
-            "stats": {
-                "strength": getattr(avatar, "strength", 10) if avatar else 10,
-                "dexterity": getattr(avatar, "dexterity", 10) if avatar else 10,
-                "intelligence": getattr(avatar, "intelligence", 10) if avatar else 10,
-                "wisdom": getattr(avatar, "wisdom", 10) if avatar else 10,
-                "charisma": getattr(avatar, "charisma", 10) if avatar else 10,
-                "armor_class": getattr(avatar, "armor_class", 10) if avatar else 10,
-            },
-        },
-        "npcs": npcs_data,
-        "scene_npcs": scene_npcs,
-        "items": items_data,
-        "map": {
-            "nodes": nodes_data,
-            "exits": exits_data,
-            "current_scene_id": state.current_scene_id,
-            "scene_npcs": scene_npcs,
-        },
-        "blueprint": blueprint_data,
-        "runtime": {
-            "current_scene_id": state.current_scene_id,
-            "in_game_time": state.in_game_time,
-            "is_debug_enabled": state.is_debug_enabled,
-            "entity_overrides": entity_overrides,
-            "exit_overrides": exit_overrides,
-            "quests": state.quests or [],
-            "world_memories": state.world_memories or [],
-        },
-        "raw": {
-            "session_id": state.session_id,
-            "template_id": state.template_id,
-            "current_scene_id": state.current_scene_id,
-            "in_game_time": state.in_game_time,
-            "is_debug_enabled": state.is_debug_enabled,
-            "entity_states": state.entity_states or {},
-            "exit_states": state.exit_states or {},
-            "quests": state.quests or [],
-            "world_memories": state.world_memories or [],
-            "avatar_stats": {
-                "hp": avatar.hp if avatar else None,
-                "mana": avatar.mana if avatar else None,
-                "stamina": avatar.stamina if avatar else None,
-                "exp": avatar.exp if avatar else None,
-            },
-        },
-    }
 
 
 @router.get("/{game_id}/session-debug")
@@ -429,13 +131,15 @@ async def get_session_debug(
             detail="Debug mode is not enabled for this session. Type /debug on to activate.",
         )
 
-    adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == state.template_id))
+    adv_res = await db.execute(
+        select(AdventureTemplate).where(AdventureTemplate.id == state.template_id)
+    )
     adventure = adv_res.scalars().first()
 
     cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = cv_res.scalars().first()
 
-    return await _build_session_debug_payload(db, state, adventure, avatar, current_user)
+    return await build_session_debug_payload(db, state, adventure, avatar)
 
 
 @router.get("/{game_id}/chat", response_model=ChatResponse)
@@ -450,114 +154,58 @@ async def get_chat_history(
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == state.template_id))
+    adv_res = await db.execute(
+        select(AdventureTemplate).where(AdventureTemplate.id == state.template_id)
+    )
     adventure = adv_res.scalars().first()
-    
+
     cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = cv_res.scalars().first()
 
-    chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id).order_by(ChatMessage.created_at.asc()))
-    history = [{"id": m.id, "role": m.role, "content": m.content} for m in chat_res.scalars().all()]
-    
-    # Use the canonical template map so all sessions of the same adventure share one topology.
-    world_map = await AdventureLogic.get_or_create_map(db, state.template_id)
-    map_dict = MapEngine.to_dict(world_map) if world_map else None
-    if map_dict is not None:
-        map_dict["current_scene_id"] = MapEngine._safe_id(state.current_scene_id)
-        # Heal stale image_url values (e.g. from deleted sessions) in the map nodes
-        for node in map_dict.get("nodes", {}).values():
-            if isinstance(node, dict) and node.get("image_url"):
-                node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(node["image_url"])
-    
-    # Augment with adjacent unvisited scenes
-    if world_map:
-        exit_query = select(WorldExit).where(
-            or_(
-                WorldExit.session_id == state.session_id,
-                WorldExit.template_id == state.template_id
-            )
-        )
-        exits_res = await db.execute(exit_query)
-        exits = list(exits_res.scalars().all())
-        map_dict = MapEngine.augment_map_data(map_dict, exits, state.current_scene_id)
-
+    map_dict = await build_session_map(db, state)
     entities = await AdventureLogic.build_session_entities(db, state)
-    
     scene_image = await AdventureLogic.resolve_scene_image(db, state, state.current_scene_id)
     pending_terminal_epilogue, input_locked = _terminal_flags_from_state(state)
-
-    full_world_debug = None
-    if include_full_world and (settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled):
-        try:
-            from backend.api.routes.adventures.editor import _build_adventure_editor_assets
-            full_world_debug = await _build_adventure_editor_assets(state.template_id, db)
-        except Exception as exc:
-            logger.warning("Could not build full_world debug payload: %s", exc)
-
-    prompt_suggestions = GameTurnManager.extract_prompt_suggestions(state.exit_states or {})
-    if not prompt_suggestions:
-        try:
-            manager = GameTurnManager(db, state.session_id, current_user)
-            if await manager.initialize():
-                ctx = await manager.suggestions.build_player_only_suggestion_context()
-                prompt_suggestions = manager.suggestions.fallback_prompt_suggestions(
-                    scene_label=ctx.get("scene_label", ""),
-                    visible_objects=ctx.get("visible_objects", []),
-                    visible_npcs=ctx.get("visible_npcs", []),
-                    inventory_items=ctx.get("inventory_items", []),
-                )
-                manager.suggestions.set_prompt_suggestions_state(prompt_suggestions)
-                await db.commit()
-        except Exception as exc:
-            logger.warning("Could not build fallback prompt suggestions on session load: %s", exc)
-
-    if adventure and avatar:
-        seq_messages = AdventureLogic.evaluate_sequence_progress(
-            adventure=adventure,
-            state=state,
-            avatar=avatar,
-        )
-        if seq_messages:
-            for seq_msg in seq_messages:
-                db.add(ChatMessage(session_id=state.session_id, role="system", content=seq_msg))
-            await db.commit()
-            chat_res = await db.execute(
-                select(ChatMessage).where(ChatMessage.session_id == state.session_id).order_by(ChatMessage.created_at.asc())
-            )
-            history = [{"id": m.id, "role": m.role, "content": m.content} for m in chat_res.scalars().all()]
-
-    active_sequence = AdventureLogic.resolve_active_sequence(adventure, state)
+    full_world_debug = await load_full_world_debug(db, state, include_full_world)
+    prompt_suggestions = await resolve_prompt_suggestions(db, state, current_user)
+    await apply_pending_sequence_progress(db, state, adventure, avatar)
+    history = await load_chat_history(db, state.session_id)
+    session_status = state.session.status if state.session else None
 
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
         combat=AdventureLogic.get_combat_snapshot(state),
         map_data=map_dict,
-        nodes=await AdventureLogic.get_all_scene_metadata(db, state.template_id, session_id=state.session_id),
-        entities=entities,
-        npc_metadata=await AdventureLogic.get_npc_metadata(db, state.template_id, session_id=state.session_id),
-        image_url=scene_image,
-        adventure_image=AdventureLogic.resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
-        active_sequence=active_sequence,
-        quests=state.quests,
-        awards=AdventureLogic.build_awards_payload(
-            user_earned_awards=current_user.earned_awards,
-            adventure_awards=(adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(state).get("adventure") or {}).get("awards")) or [],
-            adventure_id=adventure.id if adventure else state.template_id,
-            session_id=state.session_id,
+        nodes=await AdventureLogic.get_all_scene_metadata(
+            db, state.template_id, session_id=state.session_id
         ),
+        entities=entities,
+        npc_metadata=await AdventureLogic.get_npc_metadata(
+            db, state.template_id, session_id=state.session_id
+        ),
+        image_url=scene_image,
+        adventure_image=AdventureLogic.resolve_session_asset(
+            state, "cover", adventure.image_url if adventure else None
+        ),
+        active_sequence=AdventureLogic.resolve_active_sequence(adventure, state),
+        scene_id=state.current_scene_id,
+        sequence_id=state.active_sequence_id,
+        quests=state.quests,
+        awards=build_awards_for_snapshot(state, adventure, current_user),
         is_completed=state.is_completed,
-        game_over=state.session.status == "game_over" if state.session else False,
-        game_completed=state.session.status == "completed" if state.session else False,
+        game_over=session_status == "game_over",
+        game_completed=session_status == "completed",
         status_note=state.session.status_note if state.session else None,
         input_locked=input_locked,
         pending_terminal_epilogue=pending_terminal_epilogue,
         prompt_suggestions=prompt_suggestions,
         world_memories=state.world_memories or [],
         world_rumors=state.world_rumors or [],
-        is_legacy_format=is_legacy_session(session=state.session if state else None, state=state, template=adventure),
+        is_legacy_format=is_legacy_session(session=state.session, state=state, template=adventure),
         full_world=full_world_debug,
     )
+
 
 @router.post("/{game_id}/chat")
 async def post_chat_message(
@@ -567,16 +215,13 @@ async def post_chat_message(
     current_user: User = Depends(get_current_user),
 ):
     """Processes a user message and returns a streaming response."""
-    # Hard-coded, static error message used for any client-visible failure
-    # path. Defined as a module-level constant so static-analysis tools can
-    # verify that no exception text is ever forwarded to the response body.
-    _CLIENT_ERROR_DETAIL = "Unable to process this turn."
-
     try:
         manager = GameTurnManager(db, game_id, current_user)
         turn_id = uuid4().hex
 
-        async def _stream_with_turn_id(source: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+        async def _stream_with_turn_id(
+            source: AsyncGenerator[str, None],
+        ) -> AsyncGenerator[str, None]:
             try:
                 async for chunk in source:
                     if isinstance(chunk, str) and chunk.startswith("event:"):
@@ -590,7 +235,7 @@ async def post_chat_message(
                 yield (
                     f"id: {turn_id}\n"
                     "event: error\n"
-                    f"data: {json.dumps({'detail': _CLIENT_ERROR_DETAIL, 'retryable': True})}\n\n"
+                    f"data: {json.dumps({'detail': CLIENT_TURN_ERROR_DETAIL, 'retryable': True})}\n\n"
                 )
 
         try:
@@ -601,7 +246,7 @@ async def post_chat_message(
             )
         except Exception:
             logger.exception("Failed to initialize chat stream for session %s", game_id)
-            raise HTTPException(status_code=500, detail=_CLIENT_ERROR_DETAIL)
+            raise HTTPException(status_code=500, detail=CLIENT_TURN_ERROR_DETAIL) from None
 
         return StreamingResponse(
             _stream_with_turn_id(turn_stream),
@@ -612,7 +257,7 @@ async def post_chat_message(
         raise
     except Exception:
         logger.exception("Failed to start chat turn for session %s", game_id)
-        raise HTTPException(status_code=500, detail="Unable to process this turn.")
+        raise HTTPException(status_code=500, detail=CLIENT_TURN_ERROR_DETAIL) from None
 
 
 @router.post("/{game_id}/agent/turn")
@@ -621,112 +266,11 @@ async def run_agent_turn(
     current_user: User = Depends(get_current_user),
 ):
     """Computes an agent decision based on walkthrough & game state, then executes the turn."""
-    import json
-    import asyncio
-    from fastapi.encoders import jsonable_encoder
-    from backend.api.routes.adventures.agent_logic import AgentService
-    from backend.core.database import AsyncSessionLocal
-
-    # Pre-flight check to raise direct HTTP exceptions if session invalid or agent not active
-    async with AsyncSessionLocal() as db:
-        manager = GameTurnManager(db, game_id, current_user)
-        if not await manager.initialize():
-            raise HTTPException(status_code=404, detail="Game session not found.")
-        agent_state = AgentService.get_agent_state(manager.state)
-        if not agent_state.get("active", False):
-            raise HTTPException(status_code=400, detail="Agent is not enabled for this session.")
-
-    turn_id = uuid4().hex
-
-    async def _agent_stream() -> AsyncGenerator[str, None]:
-        yield f"event: status\ndata: {json.dumps({'content': 'Agent is thinking...'})}\n\n"
-        
-        async with AsyncSessionLocal() as db:
-            manager = GameTurnManager(db, game_id, current_user)
-            await manager.initialize()
-            state = manager.state
-
-            try:
-                decision_err = False
-                try:
-                    decision = await AgentService.get_decision(
-                        db, game_id, current_user, state, manager.avatar, manager.adventure, manager
-                    )
-                except asyncio.CancelledError:
-                    logger.info("Agent turn stream cancelled during LLM decision call.")
-                    await db.rollback()
-                    raise
-                except Exception as exc:
-                    logger.exception("Agent decision failed")
-                    decision = None
-                    decision_err = True
-
-                if not decision or decision.is_stuck_or_bug:
-                    desc = decision.issue_description if decision else (
-                        "Agent decision generation failed due to an internal error."
-                        if decision_err
-                        else "Agent did not return a valid decision."
-                    )
-                    thoughts = decision.thoughts if decision else "Failed to get decision thoughts."
-                    action = decision.action if decision else "None"
-                    
-                    hist_res = await db.execute(
-                        select(ChatMessage)
-                        .where(ChatMessage.session_id == game_id)
-                        .order_by(ChatMessage.created_at.desc())
-                        .limit(5)
-                    )
-                    recent_msgs = list(reversed(list(hist_res.scalars().all())))
-                    history_summary = " | ".join([f"{m.role}: {m.content}" for m in recent_msgs])
-                    
-                    failures = AgentService.increment_failure(state)
-                    AgentService.log_issue(state.session_id, thoughts, action, desc, history_summary)
-                    await db.commit()
-
-                    msg = f"Agent issue detected: {desc} (Attempt {failures}/3)"
-                    if failures >= 3:
-                        msg += " - Agent mode has been deactivated."
-                    
-                    await manager._save_chat_message("system", msg)
-                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-                    
-                    final_data = jsonable_encoder({
-                        'sheet': await AdventureLogic.build_sheet_snapshot(manager.avatar, state, db),
-                        'entities': await AdventureLogic.build_session_entities(db, state),
-                        'combat': AdventureLogic.get_combat_snapshot(state),
-                        'prompt_suggestions': GameTurnManager.extract_prompt_suggestions(state.exit_states or {}),
-                        **manager._build_terminal_flags_payload(),
-                        'status': 'success',
-                    })
-                    yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
-                    return
-
-                yield f"event: thought\ndata: {json.dumps({'content': decision.thoughts})}\n\n"
-                await asyncio.sleep(0.5)
-                
-                await manager._save_chat_message("player", decision.action)
-                yield f"event: player_action\ndata: {json.dumps({'content': decision.action})}\n\n"
-                yield f"event: status\ndata: {json.dumps({'content': f'Agent decides: {decision.action}'})}\n\n"
-                
-                AgentService.reset_failures(state)
-                await db.commit()
-
-                try:
-                    async for chunk in manager.process_turn(decision.action):
-                        yield chunk
-                except asyncio.CancelledError:
-                    logger.info("Agent turn stream cancelled during gameplay process_turn.")
-                    await db.rollback()
-                    raise
-            except asyncio.CancelledError:
-                logger.info("Agent turn stream cancelled, rolling back db session.")
-                await db.rollback()
-                raise
-
+    await ensure_agent_active(game_id, current_user)
     return StreamingResponse(
-        _agent_stream(),
+        stream_agent_turn(game_id, current_user),
         media_type="text/event-stream",
-        headers={"X-Taleweaver-Turn-Id": turn_id},
+        headers={"X-Taleweaver-Turn-Id": uuid4().hex},
     )
 
 
@@ -775,7 +319,9 @@ async def translate_text(
         llm = GameMasterLLM(current_user, provider=small_model_provider, model_category="small")
     except ValueError:
         logger.warning("Invalid LLM configuration for translation (user %s)", current_user.id)
-        raise HTTPException(status_code=400, detail="Selected translation model is unavailable.") from None
+        raise HTTPException(
+            status_code=400, detail="Selected translation model is unavailable."
+        ) from None
 
     system_prompt = BABLE_FISH_TRANSLATION_SYSTEM_PROMPT
     user_prompt = BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE.format(
@@ -804,52 +350,55 @@ async def translate_text(
 
     return TranslateTextResponse(translated_text=cleaned or source_text, language=target_language)
 
+
+_WALKTHROUGH_STEP_RE = re.compile(
+    r"^(?:(?:Schritt|Step)\s*\d+[:.]?|\d+[.)])\s*(.*)", re.IGNORECASE
+)
+
+
+def _walkthrough_heading(stripped: str) -> tuple[str, bool] | None:
+    """Returns (title, keep the line as content) when the line starts a new step."""
+    step_match = _WALKTHROUGH_STEP_RE.match(stripped)
+    if step_match:
+        title = step_match.group(1).strip()
+        return title, not title
+    if stripped.startswith(("# ", "## ", "### ")):
+        return stripped.lstrip("#").strip(), False
+    return None
+
+
+def _append_walkthrough_step(steps: list[dict[str, str]], title: str, content: list[str]) -> None:
+    if content or title:
+        steps.append(
+            {"title": title or f"Step {len(steps) + 1}", "content": "\n".join(content).strip()}
+        )
+
+
 def _parse_walkthrough_steps(text: str) -> list[dict[str, str]]:
     """Parse walkthrough markdown/text into structured steps if possible."""
     if not text or not text.strip():
         return []
-    lines = text.strip().splitlines()
     steps: list[dict[str, str]] = []
     current_title = ""
     current_content: list[str] = []
 
-    step_pattern = re.compile(r"^(?:(?:Schritt|Step)\s*\d+[:.]?|\d+[.)])\s*(.*)", re.IGNORECASE)
-
-    for line in lines:
+    for line in text.strip().splitlines():
         stripped = line.strip()
-        m = step_pattern.match(stripped)
-        if m:
-            if current_content or current_title:
-                steps.append({
-                    "title": current_title or f"Step {len(steps) + 1}",
-                    "content": "\n".join(current_content).strip(),
-                })
-                current_content = []
-            matched_title = m.group(1).strip()
-            current_title = matched_title if matched_title else f"Step {len(steps) + 1}"
-            if not matched_title:
-                current_content.append(stripped)
-        elif stripped.startswith(("# ", "## ", "### ")):
-            if current_content or current_title:
-                steps.append({
-                    "title": current_title or f"Step {len(steps) + 1}",
-                    "content": "\n".join(current_content).strip(),
-                })
-                current_content = []
-            current_title = stripped.lstrip("#").strip()
-        else:
+        heading = _walkthrough_heading(stripped)
+        if heading is None:
             current_content.append(line)
+            continue
+        _append_walkthrough_step(steps, current_title, current_content)
+        new_title, keep_line = heading
+        current_title = new_title or f"Step {len(steps) + 1}"
+        current_content = [stripped] if keep_line else []
 
-    if current_content or current_title:
-        steps.append({
-            "title": current_title or f"Step {len(steps) + 1}",
-            "content": "\n".join(current_content).strip(),
-        })
+    _append_walkthrough_step(steps, current_title, current_content)
 
     if len(steps) <= 1:
         paragraphs = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
         if len(paragraphs) > 1:
-            steps = [{"title": f"Step {i+1}", "content": p} for i, p in enumerate(paragraphs)]
+            steps = [{"title": f"Step {i + 1}", "content": p} for i, p in enumerate(paragraphs)]
 
     return steps
 
@@ -969,10 +518,20 @@ async def mark_text_log_read(
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
 
+    clean_id = (entity_id or "").strip()
     ent_res = await db.execute(
         select(WorldEntity).where(
-            WorldEntity.session_id == state.session_id,
-            WorldEntity.id == entity_id,
+            or_(
+                WorldEntity.session_id == state.session_id,
+                and_(
+                    WorldEntity.template_id == state.template_id,
+                    WorldEntity.session_id.is_(None),
+                ),
+            ),
+            or_(
+                WorldEntity.id == clean_id,
+                func.lower(WorldEntity.id) == clean_id.lower(),
+            ),
         )
     )
     entity = ent_res.scalars().first()
@@ -989,6 +548,19 @@ async def mark_text_log_read(
     entity_states[entity.id] = override_entry
 
     state.entity_states = entity_states
+    flag_modified(state, "entity_states")
+
+    meta = dict(entity.metadata_json or {})
+    if meta.get("on_read_script") or meta.get("on_read_text"):
+        await TriggerService.execute_trigger(
+            db,
+            state,
+            "on_read",
+            entity.id,
+            script_code=meta.get("on_read_script"),
+            narrative_text=meta.get("on_read_text"),
+        )
+
     await db.commit()
 
     return {"status": "ok", "entity_id": entity.id, "is_read": True}
@@ -1003,64 +575,28 @@ async def unlock_container_with_code(
     current_user: User = Depends(get_current_user),
 ):
     """Deterministically unlocks a container when the provided code matches code_to_unlock."""
-    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found.")
-
-    ent_res = await db.execute(
-        select(WorldEntity).where(
-            WorldEntity.session_id == state.session_id,
-            WorldEntity.id == entity_id,
-        )
-    )
-    entity = ent_res.scalars().first()
-    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "CONTAINER":
-        raise HTTPException(status_code=404, detail="Container not found.")
-
+    state = await _require_session_state(db, game_id, current_user)
+    entity = await load_session_object(db, state, entity_id, "CONTAINER", "Container not found.")
     metadata_json = dict(entity.metadata_json or {})
-    expected_code = str(metadata_json.get("code_to_unlock") or "").strip()
-    if not expected_code:
-        raise HTTPException(status_code=400, detail="This container does not require a code.")
-
-    submitted_code = str(payload.code or "").strip()
-    if not submitted_code:
-        raise HTTPException(status_code=400, detail="Code is required.")
+    expected_code = require_value(
+        metadata_json.get("code_to_unlock"), "This container does not require a code."
+    )
+    submitted_code = require_value(payload.code, "Code is required.")
     if submitted_code.lower() != expected_code.lower():
         raise HTTPException(status_code=403, detail=INVALID_CONTAINER_CODE_MESSAGE)
 
-    entity_states = dict(state.entity_states or {})
-    entry = dict(entity_states.get(entity.id) or {})
-    
-    # Check if already unlocked to avoid double XP
-    was_locked = entry.get("locked") if "locked" in entry else True
+    await enforce_container_guard(db, state, entity, metadata_json)
 
-    entry["locked"] = False
-    entity_states[entity.id] = entry
-    state.entity_states = entity_states
-    
-    if was_locked:
-        cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
-        avatar = cv_res.scalars().first()
+    # Only the first unlock grants XP.
+    if mark_container_unlocked(state, entity.id):
+        avatar = await load_avatar(db, state)
         if avatar:
-            xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or 100
-            avatar.exp = (avatar.exp or 0) + xp_reward
-            db.add(
-                ChatMessage(
-                    session_id=state.session_id,
-                    role="system",
-                    content=f"Unlocked {entity.name} with the correct code!",
-                )
-            )
-            db.add(
-                ChatMessage(
-                    session_id=state.session_id,
-                    role="system",
-                    content=f"you gained {xp_reward} XP",
-                )
-            )
-            
-    await db.commit()
+            xp_reward = award_unlock_xp(avatar, metadata_json)
+            add_system_message(db, state, f"Unlocked {entity.name} with the correct code!")
+            add_system_message(db, state, f"you gained {xp_reward} XP")
+        await fire_container_unlock_success(db, state, entity, metadata_json)
 
+    await db.commit()
     return {"status": "ok", "entity_id": entity.id, "locked": False}
 
 
@@ -1077,82 +613,61 @@ async def unlock_container_with_item(
     current_user: User = Depends(get_current_user),
 ):
     """Deterministically unlocks a container when the player possesses the required item."""
-    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found.")
-
-    ent_res = await db.execute(
-        select(WorldEntity).where(
-            WorldEntity.session_id == state.session_id,
-            WorldEntity.id == entity_id,
-        )
-    )
-    entity = ent_res.scalars().first()
-    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "CONTAINER":
-        raise HTTPException(status_code=404, detail="Container not found.")
-
+    state = await _require_session_state(db, game_id, current_user)
+    entity = await load_session_object(db, state, entity_id, "CONTAINER", "Container not found.")
     metadata_json = dict(entity.metadata_json or {})
-    expected_item_id = str(metadata_json.get("item_to_unlock") or "").strip().upper()
-    if not expected_item_id:
-        raise HTTPException(status_code=400, detail="This container does not require an item to unlock.")
-
-    submitted_item_id = str(payload.item_id or "").strip().upper()
-    if not submitted_item_id:
-        raise HTTPException(status_code=400, detail="Item ID is required.")
+    expected_item_id = require_value(
+        metadata_json.get("item_to_unlock"), "This container does not require an item to unlock."
+    ).upper()
+    submitted_item_id = require_value(payload.item_id, "Item ID is required.").upper()
     if submitted_item_id != expected_item_id:
         raise HTTPException(status_code=403, detail="This item cannot unlock this container.")
 
-    # Check if the player possesses the item in their inventory
-    cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
-    avatar = cv_res.scalars().first()
-    if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found.")
-
-    inventory_ids = {
-        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
-        for item in (avatar.inventory or [])
-    }
-
-    if submitted_item_id not in inventory_ids:
+    avatar = await require_avatar(db, state)
+    if not avatar_has_item(avatar, submitted_item_id):
         raise HTTPException(status_code=403, detail="You do not possess the required key item.")
 
-    entity_states = dict(state.entity_states or {})
-    entry = dict(entity_states.get(entity.id) or {})
-    
-    was_locked = entry.get("locked") if "locked" in entry else True
+    await enforce_container_guard(db, state, entity, metadata_json)
 
-    entry["locked"] = False
-    entity_states[entity.id] = entry
-    state.entity_states = entity_states
-    
-    if was_locked:
-        xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or 100
-        avatar.exp = (avatar.exp or 0) + xp_reward
-        
-        # Resolve item name for narration
-        item_name = submitted_item_id
-        for item in (avatar.inventory or []):
-            if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item_id:
-                item_name = item.get("name") or item_name
-                break
+    # Only the first unlock grants XP.
+    if mark_container_unlocked(state, entity.id):
+        xp_reward = award_unlock_xp(avatar, metadata_json)
+        item_name = inventory_item_name(avatar, submitted_item_id)
+        add_system_message(db, state, f"Unlocked {entity.name} using {item_name}!")
+        add_system_message(db, state, f"you gained {xp_reward} XP")
+        await fire_container_unlock_success(db, state, entity, metadata_json)
 
-        db.add(
-            ChatMessage(
-                session_id=state.session_id,
-                role="system",
-                content=f"Unlocked {entity.name} using {item_name}!",
-            )
-        )
-        db.add(
-            ChatMessage(
-                session_id=state.session_id,
-                role="system",
-                content=f"you gained {xp_reward} XP",
-            )
-        )
-        
     await db.commit()
+    return {"status": "ok", "entity_id": entity.id, "locked": False}
 
+
+@router.post("/{game_id}/containers/{entity_id}/unlock")
+async def unlock_container(
+    game_id: str,
+    entity_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deterministically unlocks a container directly (evaluating unlock_expression if present)."""
+    state = await _require_session_state(db, game_id, current_user)
+    entity = await load_session_object(db, state, entity_id, "CONTAINER", "Container not found.")
+    metadata_json = dict(entity.metadata_json or {})
+    if metadata_json.get("code_to_unlock"):
+        raise HTTPException(status_code=400, detail="This container requires a passcode.")
+    if metadata_json.get("item_to_unlock"):
+        raise HTTPException(status_code=400, detail="This container requires a key item.")
+
+    await enforce_container_guard(db, state, entity, metadata_json)
+
+    # Only the first unlock grants XP.
+    if mark_container_unlocked(state, entity.id):
+        avatar = await load_avatar(db, state)
+        if avatar:
+            award_unlock_xp(avatar, metadata_json)
+            add_system_message(db, state, f"Unlocked {entity.name}!")
+        await fire_container_unlock_success(db, state, entity, metadata_json)
+
+    await db.commit()
     return {"status": "ok", "entity_id": entity.id, "locked": False}
 
 
@@ -1166,38 +681,6 @@ class SwitchFlipItemRequest(BaseModel):
     item_id: str
 
 
-def _get_switch_config(entity: WorldEntity) -> dict:
-    """Returns the parsed switch config from metadata_json."""
-    raw = entity.metadata_json or {}
-    return raw.get("switch") or {}
-
-
-def _resolve_switch_transition(config: dict, current_state: str, target_state: str) -> dict | None:
-    """Finds the matching transition definition for current -> target (or None).
-
-    Matching precedence:
-    1. Exact from/to match (both fields specified).
-    2. Wildcard match (only ``to`` specified) — applies regardless of current state.
-    """
-    transitions = config.get("transitions") or []
-    if not isinstance(transitions, list):
-        return None
-
-    wildcard_match: dict | None = None
-    for t in transitions:
-        if not isinstance(t, dict):
-            continue
-        from_s = str(t.get("from") or "").strip().upper()
-        to_s = str(t.get("to") or "").strip().upper()
-        if not to_s or to_s != target_state:
-            continue
-        if from_s and from_s == current_state:
-            return t
-        if not from_s and wildcard_match is None:
-            wildcard_match = t
-    return wildcard_match
-
-
 @router.post("/{game_id}/switches/{entity_id}/flip-code")
 async def flip_switch_with_code(
     game_id: str,
@@ -1207,66 +690,20 @@ async def flip_switch_with_code(
     current_user: User = Depends(get_current_user),
 ):
     """Deterministically flips a switch when the provided code matches the transition gate code."""
-    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found.")
-
-    ent_res = await db.execute(
-        select(WorldEntity).where(
-            WorldEntity.session_id == state.session_id,
-            WorldEntity.id == entity_id,
-        )
+    state = await _require_session_state(db, game_id, current_user)
+    flip = await resolve_switch_flip(db, state, entity_id, payload.target_state)
+    required_code = require_value(
+        flip.gates.get("code"), "This transition does not require a code."
     )
-    entity = ent_res.scalars().first()
-    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "SWITCH":
-        raise HTTPException(status_code=404, detail="Switch not found.")
+    submitted_code = require_value(payload.code, "Code is required.")
 
-    config = _get_switch_config(entity)
-    states = config.get("states") or []
-    allowed_states = [str(s).strip().upper() for s in states if str(s).strip()]
-
-    target_state = str(payload.target_state or "").strip().upper()
-    if target_state not in allowed_states:
-        raise HTTPException(status_code=400, detail=f"Invalid target state '{target_state}'.")
-
-    session_states = dict(state.entity_states or {})
-    entry = dict(session_states.get(entity.id) or {})
-    configured_current = str(config.get("initial_state") or (allowed_states[0] if allowed_states else "")).strip().upper()
-    current_state = str(entry.get("switch_state") or configured_current).strip().upper()
-
-    if current_state == target_state:
-        raise HTTPException(status_code=400, detail=f"Switch is already in state '{target_state}'.")
-
-    transition = _resolve_switch_transition(config, current_state, target_state)
-    if transition is None:
-        raise HTTPException(status_code=400, detail="No transition definition found for this state change.")
-
-    gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
-    required_code = str(gates.get("code") or "").strip()
-    if not required_code:
-        raise HTTPException(status_code=400, detail="This transition does not require a code.")
-
-    submitted_code = str(payload.code or "").strip()
-    if not submitted_code:
-        raise HTTPException(status_code=400, detail="Code is required.")
+    runner = await SwitchFlipRunner.create(db, game_id, current_user, state, flip)
     if submitted_code.lower() != required_code.lower():
-        fail_message = str(transition.get("fail_message") or "").strip()
-        raise HTTPException(status_code=403, detail=fail_message or "Incorrect code. The switch does not move.")
-
-    entry["switch_state"] = target_state
-    session_states[entity.id] = entry
-    state.entity_states = session_states
-
-    db.add(
-        ChatMessage(
-            session_id=state.session_id,
-            role="system",
-            content=f"{entity.name} switched to {target_state} using the correct code.",
-        )
+        await runner.fail(flip.fail_message or "Incorrect code. The switch does not move.")
+    await runner.enforce_gate_expression()
+    return await runner.succeed(
+        state, f"{flip.entity.name} switched to {flip.target_state} using the correct code."
     )
-
-    await db.commit()
-    return {"status": "ok", "entity_id": entity.id, "switch_state": target_state}
 
 
 @router.post("/{game_id}/switches/{entity_id}/flip-item")
@@ -1278,86 +715,26 @@ async def flip_switch_with_item(
     current_user: User = Depends(get_current_user),
 ):
     """Deterministically flips a switch when the player possesses the required item."""
-    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found.")
+    state = await _require_session_state(db, game_id, current_user)
+    flip = await resolve_switch_flip(db, state, entity_id, payload.target_state)
+    required_item_id = require_value(
+        flip.gates.get("item"), "This transition does not require an item."
+    ).upper()
+    submitted_item_id = require_value(payload.item_id, "Item ID is required.").upper()
 
-    ent_res = await db.execute(
-        select(WorldEntity).where(
-            WorldEntity.session_id == state.session_id,
-            WorldEntity.id == entity_id,
-        )
-    )
-    entity = ent_res.scalars().first()
-    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "SWITCH":
-        raise HTTPException(status_code=404, detail="Switch not found.")
-
-    config = _get_switch_config(entity)
-    states = config.get("states") or []
-    allowed_states = [str(s).strip().upper() for s in states if str(s).strip()]
-
-    target_state = str(payload.target_state or "").strip().upper()
-    if target_state not in allowed_states:
-        raise HTTPException(status_code=400, detail=f"Invalid target state '{target_state}'.")
-
-    session_states = dict(state.entity_states or {})
-    entry = dict(session_states.get(entity.id) or {})
-    configured_current = str(config.get("initial_state") or (allowed_states[0] if allowed_states else "")).strip().upper()
-    current_state = str(entry.get("switch_state") or configured_current).strip().upper()
-
-    if current_state == target_state:
-        raise HTTPException(status_code=400, detail=f"Switch is already in state '{target_state}'.")
-
-    transition = _resolve_switch_transition(config, current_state, target_state)
-    if transition is None:
-        raise HTTPException(status_code=400, detail="No transition definition found for this state change.")
-
-    gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
-    required_item_id = str(gates.get("item") or "").strip().upper()
-    if not required_item_id:
-        raise HTTPException(status_code=400, detail="This transition does not require an item.")
-
-    submitted_item_id = str(payload.item_id or "").strip().upper()
-    if not submitted_item_id:
-        raise HTTPException(status_code=400, detail="Item ID is required.")
+    runner = await SwitchFlipRunner.create(db, game_id, current_user, state, flip)
     if submitted_item_id != required_item_id:
-        fail_message = str(transition.get("fail_message") or "").strip()
-        raise HTTPException(status_code=403, detail=fail_message or "This item cannot activate the switch.")
+        await runner.fail(flip.fail_message or "This item cannot activate the switch.")
 
-    # Verify the player has the item
-    cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
-    avatar = cv_res.scalars().first()
-    if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found.")
+    avatar = await require_avatar(db, state)
+    if not avatar_has_item(avatar, submitted_item_id):
+        await runner.fail("You do not possess the required item.")
+    await runner.enforce_gate_expression()
 
-    inventory_ids = {
-        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
-        for item in (avatar.inventory or [])
-    }
-    if submitted_item_id not in inventory_ids:
-        raise HTTPException(status_code=403, detail="You do not possess the required item.")
-
-    entry["switch_state"] = target_state
-    session_states[entity.id] = entry
-    state.entity_states = session_states
-
-    # Resolve item name for narration
-    item_name = submitted_item_id
-    for item in (avatar.inventory or []):
-        if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item_id:
-            item_name = item.get("name") or item_name
-            break
-
-    db.add(
-        ChatMessage(
-            session_id=state.session_id,
-            role="system",
-            content=f"{entity.name} switched to {target_state} using {item_name}.",
-        )
+    item_name = inventory_item_name(avatar, submitted_item_id)
+    return await runner.succeed(
+        state, f"{flip.entity.name} switched to {flip.target_state} using {item_name}."
     )
-
-    await db.commit()
-    return {"status": "ok", "entity_id": entity.id, "switch_state": target_state}
 
 
 # ---------------------------------------------------------------------------
@@ -1367,7 +744,9 @@ async def flip_switch_with_item(
 INVALID_EXIT_CODE_MESSAGE = "That code does not open this way."
 
 
-async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: str) -> WorldExit | None:
+async def _resolve_session_exit(
+    db: AsyncSession, state: SessionState, exit_id: str
+) -> WorldExit | None:
     """Returns the exit used for the current session, preferring the session-scoped row."""
     clean_id = (exit_id or "").strip()
     res = await db.execute(
@@ -1395,7 +774,7 @@ async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: 
             select(WorldExit).where(
                 WorldExit.session_id == state.session_id,
                 WorldExit.from_scene_id == resolved.from_scene_id,
-                WorldExit.to_scene_id == resolved.to_scene_id
+                WorldExit.to_scene_id == resolved.to_scene_id,
             )
         )
         session_exit = session_res.scalars().first()
@@ -1403,6 +782,13 @@ async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: 
             return session_exit
 
     return resolved
+
+
+async def _require_session_exit(db: AsyncSession, state: SessionState, exit_id: str) -> WorldExit:
+    world_exit = await _resolve_session_exit(db, state, exit_id)
+    if not world_exit:
+        raise HTTPException(status_code=404, detail="Exit not found.")
+    return world_exit
 
 
 class ExitUnlockCodeRequest(BaseModel):
@@ -1422,34 +808,17 @@ async def unlock_exit_with_code(
     current_user: User = Depends(get_current_user),
 ):
     """Unlocks an exit by validating a submitted access code."""
-    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found.")
-
-    world_exit = await _resolve_session_exit(db, state, exit_id)
-    if not world_exit:
-        raise HTTPException(status_code=404, detail="Exit not found.")
-
-    expected = str(world_exit.code_to_unlock or "").strip()
-    if not expected:
-        raise HTTPException(status_code=400, detail="This exit does not require a code.")
-
-    submitted = str(payload.code or "").strip()
-    if not submitted:
-        raise HTTPException(status_code=400, detail="Code is required.")
+    state = await _require_session_state(db, game_id, current_user)
+    world_exit = await _require_session_exit(db, state, exit_id)
+    expected = require_value(world_exit.code_to_unlock, "This exit does not require a code.")
+    submitted = require_value(payload.code, "Code is required.")
     if submitted.lower() != expected.lower():
         raise HTTPException(status_code=403, detail=INVALID_EXIT_CODE_MESSAGE)
 
-    world_exit.is_locked = False
-    db.add(
-        ChatMessage(
-            session_id=state.session_id,
-            role="system",
-            content=f"{world_exit.label or 'The exit'} accepts the code and the way is open.",
-        )
+    await enforce_exit_guard(db, state, world_exit)
+    return await open_exit(
+        db, state, world_exit, f"{world_exit.label or 'The exit'} accepts the code and the way is open."
     )
-    await db.commit()
-    return {"status": "ok", "exit_id": world_exit.id, "is_locked": False}
 
 
 @router.post("/{game_id}/exits/{exit_id}/unlock-item")
@@ -1461,52 +830,98 @@ async def unlock_exit_with_item(
     current_user: User = Depends(get_current_user),
 ):
     """Unlocks an exit when the player possesses the required key item."""
-    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found.")
-
-    world_exit = await _resolve_session_exit(db, state, exit_id)
-    if not world_exit:
-        raise HTTPException(status_code=404, detail="Exit not found.")
-
-    expected_item = str(world_exit.item_to_unlock or "").strip().upper()
-    if not expected_item:
-        raise HTTPException(status_code=400, detail="This exit does not require an item to unlock.")
-
-    submitted_item = str(payload.item_id or "").strip().upper()
-    if not submitted_item:
-        raise HTTPException(status_code=400, detail="Item ID is required.")
+    state = await _require_session_state(db, game_id, current_user)
+    world_exit = await _require_session_exit(db, state, exit_id)
+    expected_item = require_value(
+        world_exit.item_to_unlock, "This exit does not require an item to unlock."
+    ).upper()
+    submitted_item = require_value(payload.item_id, "Item ID is required.").upper()
     if submitted_item != expected_item:
         raise HTTPException(status_code=403, detail="This item cannot unlock this exit.")
 
-    av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
-    avatar = av_res.scalars().first()
-    if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found.")
-
-    inventory_ids = {
-        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
-        for item in (avatar.inventory or [])
-    }
-    if submitted_item not in inventory_ids:
+    avatar = await require_avatar(db, state)
+    if not avatar_has_item(avatar, submitted_item):
         raise HTTPException(status_code=403, detail="You do not possess the required key item.")
+    item_name = inventory_item_name(avatar, submitted_item)
 
-    item_name = submitted_item
-    for item in (avatar.inventory or []):
-        if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item:
-            item_name = item.get("name") or item_name
-            break
+    await enforce_exit_guard(db, state, world_exit)
+    return await open_exit(
+        db,
+        state,
+        world_exit,
+        f"{world_exit.label or 'The exit'} yields to {item_name} and the way is open.",
+    )
 
-    world_exit.is_locked = False
-    db.add(
-        ChatMessage(
-            session_id=state.session_id,
-            role="system",
-            content=f"{world_exit.label or 'The exit'} yields to {item_name} and the way is open.",
+
+@router.post("/{game_id}/exits/{exit_id}/unlock")
+async def unlock_exit(
+    game_id: str,
+    exit_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deterministically unlocks an exit directly (evaluating unlock_expression if present)."""
+    state = await _require_session_state(db, game_id, current_user)
+    world_exit = await _require_session_exit(db, state, exit_id)
+    if world_exit.code_to_unlock:
+        raise HTTPException(status_code=400, detail="This exit requires a passcode.")
+    if world_exit.item_to_unlock:
+        raise HTTPException(status_code=400, detail="This exit requires a key item.")
+
+    await enforce_exit_guard(db, state, world_exit)
+    return await open_exit(
+        db, state, world_exit, f"{world_exit.label or 'The exit'} unlocks and the way is open."
+    )
+
+
+async def _fire_gameplay_exit_triggers(
+    db: AsyncSession,
+    state: SessionState,
+    world_exit: WorldExit,
+    current_scene_id: str,
+) -> None:
+    """Executes on_leave_scene, on_open_exit, and on_exit_used triggers."""
+    old_sc_res = await db.execute(
+        select(WorldScene).where(
+            or_(
+                WorldScene.session_id == state.session_id,
+                and_(WorldScene.template_id == state.template_id, WorldScene.session_id.is_(None)),
+            ),
+            WorldScene.id == current_scene_id,
         )
     )
-    await db.commit()
-    return {"status": "ok", "exit_id": world_exit.id, "is_locked": False}
+    old_scene = old_sc_res.scalars().first()
+    if old_scene and (old_scene.on_leave_scene_script or old_scene.on_leave_scene_text):
+        await TriggerService.execute_trigger(
+            db,
+            state,
+            "on_leave_scene",
+            old_scene.id,
+            script_code=old_scene.on_leave_scene_script,
+            narrative_text=old_scene.on_leave_scene_text,
+        )
+
+    if world_exit.on_open_exit_script or world_exit.on_open_exit_text:
+        await TriggerService.execute_trigger(
+            db,
+            state,
+            "on_open_exit",
+            world_exit.id,
+            script_code=world_exit.on_open_exit_script,
+            narrative_text=world_exit.on_open_exit_text,
+        )
+
+    if getattr(world_exit, "on_exit_used_script", None) or getattr(
+        world_exit, "on_exit_used_text", None
+    ):
+        await TriggerService.execute_trigger(
+            db,
+            state,
+            "on_exit_used",
+            world_exit.id,
+            script_code=world_exit.on_exit_used_script,
+            narrative_text=world_exit.on_exit_used_text,
+        )
 
 
 @router.post("/{game_id}/exits/{exit_id}/traverse")
@@ -1526,15 +941,22 @@ async def traverse_exit(
         raise HTTPException(status_code=404, detail="Exit not found.")
 
     if world_exit.is_locked:
-        raise HTTPException(status_code=403, detail=str(world_exit.lock_description or "The way is locked."))
+        raise HTTPException(
+            status_code=403, detail=str(world_exit.lock_description or "The way is locked.")
+        )
 
     current_scene_id = str(state.current_scene_id or "").strip().upper()
     if world_exit.from_scene_id == current_scene_id:
         target_scene_id = world_exit.to_scene_id
-    elif world_exit.exit_type.lower() == "bidirectional" and world_exit.to_scene_id == current_scene_id:
+    elif (
+        world_exit.exit_type.lower() == "bidirectional"
+        and world_exit.to_scene_id == current_scene_id
+    ):
         target_scene_id = world_exit.from_scene_id
     else:
-        raise HTTPException(status_code=400, detail="This exit does not connect to the current scene.")
+        raise HTTPException(
+            status_code=400, detail="This exit does not connect to the current scene."
+        )
 
     scene_res = await db.execute(
         select(WorldScene).where(
@@ -1552,6 +974,8 @@ async def traverse_exit(
     if not scene:
         raise HTTPException(status_code=400, detail="The target scene is not available.")
 
+    await _fire_gameplay_exit_triggers(db, state, world_exit, current_scene_id)
+
     state.current_scene_id = target_scene_id
 
     db.add(
@@ -1561,5 +985,16 @@ async def traverse_exit(
             content=f"You pass through {world_exit.label or 'the exit'} into {scene.label}.",
         )
     )
+
+    if scene.on_enter_scene_script or scene.on_enter_scene_text:
+        await TriggerService.execute_trigger(
+            db,
+            state,
+            "on_enter_scene",
+            scene.id,
+            script_code=scene.on_enter_scene_script,
+            narrative_text=scene.on_enter_scene_text,
+        )
+
     await db.commit()
     return {"status": "ok", "exit_id": world_exit.id, "scene_id": target_scene_id}

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Brain } from 'lucide-vue-next'
 import { getImageUrl, getOriginalImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
+import { hasAnyScript } from '@/utils/editor_utils'
 
 const props = defineProps<{
   editorScenes: any[]
@@ -11,7 +13,11 @@ const props = defineProps<{
   visualsCacheVersion: number
   isSettingStartScene?: boolean
   adventureId?: string
+  adventureScripts?: any[]
 }>()
+
+const hasScript = (scene: any): boolean =>
+  hasAnyScript(scene, props.adventureScripts || props.debugData?.adventure?.scripts)
 
 const emit = defineEmits<{
   (e: 'open-scene', sceneId: string): void
@@ -134,9 +140,18 @@ function isStartScene(scene: any): boolean {
           activeMenuId === scene.id ? 'z-[180]' : 'z-0',
         ]"
       >
-        <div v-if="isStartScene(scene)" class="absolute top-3 left-3 z-40 inline-flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow-lg">
-          <span>★</span>
-          <span>Start</span>
+        <div class="absolute top-3 left-3 z-40 flex items-center gap-1.5">
+          <div v-if="isStartScene(scene)" class="inline-flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow-lg">
+            <span>★</span>
+            <span>Start</span>
+          </div>
+          <div
+            v-if="hasScript(scene)"
+            class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+            title="Contains custom event script(s)"
+          >
+            <Brain class="w-3.5 h-3.5 text-purple-400" />
+          </div>
         </div>
         <div class="absolute inset-0 rounded-2xl overflow-hidden">
           <img

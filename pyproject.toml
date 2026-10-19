@@ -108,8 +108,8 @@ ignore = [
 "tests/*" = ["S101", "S105", "S106", "ARG001", "F841", "PLR0133", "N802", "N806"]
 "alembic/*" = ["C901", "PLR0912", "PLR0915", "UP007", "UP035"]
 "backend/api/routes/adventures/gameplay_logic.py" = ["E701", "I001", "C901", "PLR0911", "PLR0912", "PLR0915", "PLR1714"]
+"backend/engine/scripting/sandbox.py" = ["N802", "N815", "C901", "PLR0911"]
 "backend/core/prompts.py" = ["S608"]
-"backend/engine/tts_engine.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
 "scripts/*" = ["C901", "PLR0912", "PLR0915", "E402", "S603", "S607"]
 
 # Allow fixable violations to be fixed automatically

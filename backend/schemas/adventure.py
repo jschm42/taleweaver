@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -8,9 +8,14 @@ class QuestSchema(BaseModel):
     title: str
     description: str
     goal: str
-    impact: str
+    impact: str = ""
     exp_reward: int
-    status: Literal["open", "completed"] = "open"
+    status: Literal["open", "completed", "failed"] = "open"
+    required_item_id: Optional[str] = ""
+    required_scene_id: Optional[str] = ""
+    required_defeated_npc_id: Optional[str] = ""
+    guard_expression: Optional[str] = ""
+
 
 class SequenceSchema(BaseModel):
     id: str
@@ -22,7 +27,14 @@ class SequenceSchema(BaseModel):
     required_item_id: Optional[str] = ""
     required_scene_id: Optional[str] = ""
     required_defeated_npc_id: Optional[str] = ""
+    guard_expression: Optional[str] = ""
+    completion_guard_expression: Optional[str] = ""
     exp_reward: Optional[int] = 50
+    on_start_sequence_script: Optional[str] = ""
+    on_start_sequence_text: Optional[str] = ""
+    on_end_sequence_script: Optional[str] = ""
+    on_end_sequence_text: Optional[str] = ""
+
 
 class AwardSchema(BaseModel):
     key: str
@@ -31,6 +43,11 @@ class AwardSchema(BaseModel):
     tier: Literal["bronze", "silver", "gold", "negative"]
     requirement: str
     is_earned: bool = False
+    required_item_id: Optional[str] = ""
+    required_scene_id: Optional[str] = ""
+    required_defeated_npc_id: Optional[str] = ""
+    guard_expression: Optional[str] = ""
+
 
 class AdventureTemplateBase(BaseModel):
     title: str = Field(..., max_length=50)
@@ -51,12 +68,12 @@ class AdventureTemplateBase(BaseModel):
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
     time_config: Optional[dict[str, Any]] = None
-    
+
     generate_npc_images: bool = True
     generate_item_images: bool = True
     generate_scene_images: bool = True
     automatic_cover_generation: bool = True
-    
+
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     game_over_rules: Optional[dict[str, Any]] = None
@@ -68,8 +85,9 @@ class AdventureTemplateBase(BaseModel):
     min_items: Optional[int] = None
     max_items: Optional[int] = None
     container_generation_enabled: bool = True
-    scripts_generation_enabled: bool = False
+    scripts_generation_enabled: bool = True
     scripts: Optional[list[dict[str, Any]]] = None
+    init_script: Optional[str] = None
     min_sequences: Optional[int] = None
     max_sequences: Optional[int] = 15
     sequences: Optional[list[SequenceSchema]] = None
@@ -78,7 +96,7 @@ class AdventureTemplateBase(BaseModel):
     text_log_generation_enabled: bool = True
     min_text_logs: Optional[int] = None
     max_text_logs: Optional[int] = None
-    
+
     award_generation_enabled: bool = True
     min_awards: Optional[int] = None
     max_awards: Optional[int] = None
@@ -87,13 +105,14 @@ class AdventureTemplateBase(BaseModel):
     max_quests: Optional[int] = None
     is_adventure_generator: bool = False
 
-
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
     rules: Optional[str] = None
     intro_text: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+    completed_guard_expression: Optional[str] = None
+    gameover_guard_expression: Optional[str] = None
     tts_director_notes: Optional[str] = None
 
     # GM Capabilities
@@ -102,6 +121,7 @@ class AdventureTemplateBase(BaseModel):
 
 class AdventureTemplateCreate(AdventureTemplateBase):
     pass
+
 
 class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
@@ -131,6 +151,7 @@ class AdventureTemplateUpdate(BaseModel):
     container_generation_enabled: Optional[bool] = None
     scripts_generation_enabled: Optional[bool] = None
     scripts: Optional[list[dict[str, Any]]] = None
+    init_script: Optional[str] = None
     min_sequences: Optional[int] = None
     max_sequences: Optional[int] = None
     sequences: Optional[list[SequenceSchema]] = None
@@ -148,21 +169,23 @@ class AdventureTemplateUpdate(BaseModel):
     max_quests: Optional[int] = None
     quests: Optional[list[QuestSchema]] = None
     is_adventure_generator: Optional[bool] = None
-    
+
     # Editable Narrative Meta
     plot: Optional[str] = None
     rules: Optional[str] = None
     intro_text: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+    completed_guard_expression: Optional[str] = None
+    gameover_guard_expression: Optional[str] = None
     tts_director_notes: Optional[str] = None
 
     # GM Capabilities
     allow_dynamic_items: Optional[bool] = None
-    
+
     # Status and Warnings
     creation_error: Optional[str] = None
-    
+
     # Extra fields for frontend convenience
     selected_style_id: Optional[str] = None
     selected_tone_id: Optional[str] = None
@@ -181,12 +204,15 @@ class AdventureTemplateUpdate(BaseModel):
             return [{"id": s, "name": s.capitalize()} for s in v]
         return v
 
+
 class AdventureTemplateInDBBase(AdventureTemplateBase):
     id: str
     model_config = {"from_attributes": True}
 
+
 class AdventureTemplate(AdventureTemplateInDBBase):
     pass
+
 
 class AdventureTemplateDebugResponse(BaseModel):
     adventure: dict[str, Any]

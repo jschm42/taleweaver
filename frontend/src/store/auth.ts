@@ -28,6 +28,7 @@ export interface User {
   game_log?: any[] | null
   adventure_count?: number
   total_xp?: number
+  recovery_codes_remaining?: number
 }
 
 export const authState = reactive({

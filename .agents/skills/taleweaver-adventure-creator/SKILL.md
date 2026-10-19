@@ -21,6 +21,18 @@ You must use linear sequences and specific entity tags to outline the story chro
 2.  **Scenes (`[Scene: X]`)**: Specific locations within a sequence.
 3.  **NPCs (`[NPC: X]`)**: Characters the player interacts with.
 4.  **Items (`[Item: X]`)**: Important objects the player acquires or uses.
+5.  **Sidequests (`[Sidequest: X]`)**: Optional side-quests (non-main). Supports both soft narrative goals and deterministic hard rules:
+    - `Goal: <narrative condition>`: Evaluated by the GM LLM (soft rule).
+    - `Required Item: <ITEM_ID>`: Deterministic hard rule: completed upon obtaining item.
+    - `Required Scene: <SCENE_ID>`: Deterministic hard rule: completed upon entering scene.
+    - `Defeat NPC: <NPC_ID>`: Deterministic hard rule: completed upon defeating NPC.
+    - `Guard: <python expression>`: Deterministic Python script condition.
+6.  **Awards (`[Award: X]`)**: Optional achievements/trophies. Supports both soft narrative requirements and deterministic hard rules:
+    - `Requirement: <narrative condition>`: Evaluated by the GM LLM (soft rule).
+    - `Required Item: <ITEM_ID>`: Deterministic hard rule: awarded upon obtaining item.
+    - `Required Scene: <SCENE_ID>`: Deterministic hard rule: awarded upon entering scene.
+    - `Defeat NPC: <NPC_ID>`: Deterministic hard rule: awarded upon defeating NPC.
+    - `Guard: <python expression>`: Deterministic Python script condition.
 
 ## Example Format
 

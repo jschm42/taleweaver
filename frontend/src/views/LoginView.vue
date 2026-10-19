@@ -4,6 +4,12 @@ import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState, setToken } from '@/store/auth'
 import { configState, refreshConfig } from '@/store/config'
+import BackgroundSlideshow from '@/components/common/BackgroundSlideshow.vue'
+import RecoveryCodeForm from '@/components/auth/RecoveryCodeForm.vue'
+
+const backgroundImages = [1, 2, 3].map(
+  (n) => `${import.meta.env.BASE_URL}assets/background/background${n}.jpg`,
+)
 
 const router = useRouter()
 const username = ref('')
@@ -12,6 +18,7 @@ const error = ref('')
 const isLoggingIn = ref(false)
 const rememberMe = ref(false)
 const showPassword = ref(false)
+const isRecovering = ref(false)
 
 onMounted(() => {
   const savedUsername = localStorage.getItem('remembered_username')
@@ -29,39 +36,56 @@ async function handleLogin() {
   
   try {
     const res = await api.login(username.value, password.value)
-    setToken(res.access_token, rememberMe.value)
-    
-    if (rememberMe.value) {
-      localStorage.setItem('remembered_username', username.value)
-    } else {
-      localStorage.removeItem('remembered_username')
-    }
-    
-    // Fetch user details
-    const user = await api.getMe()
-    authState.user = user
-    authState.isAuthenticated = true
-    authState.isInitialized = true
-    
-    // Fetch settings/config since we now have a token
-    try {
-      await refreshConfig()
-    } catch (confErr) {
-      console.error('Failed to refresh config after login:', confErr)
-    }
-    
-    router.push('/')
+    await completeSignIn(res.access_token)
   } catch (err: any) {
-    error.value = 'Invalid credentials. Please try again.'
+    error.value = err?.status === 429
+      ? 'Too many failed attempts. Please wait a minute and try again.'
+      : 'Invalid credentials. Please try again.'
     console.error('Login failed:', err)
   } finally {
     isLoggingIn.value = false
+  }
+}
+
+async function completeSignIn(token: string) {
+  setToken(token, rememberMe.value)
+
+  if (rememberMe.value) {
+    localStorage.setItem('remembered_username', username.value)
+  } else {
+    localStorage.removeItem('remembered_username')
+  }
+
+  authState.user = await api.getMe()
+  authState.isAuthenticated = true
+  authState.isInitialized = true
+
+  // Fetch settings/config since we now have a token
+  try {
+    await refreshConfig()
+  } catch (confErr) {
+    console.error('Failed to refresh config after login:', confErr)
+  }
+
+  router.push('/')
+}
+
+async function handleRecovered(token: string, recoveredUsername: string) {
+  username.value = recoveredUsername
+  try {
+    await completeSignIn(token)
+  } catch (err) {
+    console.error('Sign-in after recovery failed:', err)
+    isRecovering.value = false
+    error.value = 'Password was reset. Please sign in with your new password.'
   }
 }
 </script>
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-[#02060c] relative overflow-hidden">
+    <BackgroundSlideshow :images="backgroundImages" />
+
     <!-- Animated Background Orbs -->
     <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-aether-primary/10 rounded-full blur-[120px] animate-pulse"></div>
     <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 rounded-full blur-[120px] animate-pulse" style="animation-delay: 2s"></div>
@@ -75,7 +99,14 @@ async function handleLogin() {
         <p class="text-aether-primary/40 text-xxs font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v{{ configState.appVersion }}</p>
       </div>
 
-      <form @submit.prevent="handleLogin" class="space-y-6">
+      <RecoveryCodeForm
+        v-if="isRecovering"
+        :initial-username="username"
+        @recovered="handleRecovered"
+        @cancel="isRecovering = false"
+      />
+
+      <form v-else @submit.prevent="handleLogin" class="space-y-6">
         <div class="space-y-2">
           <label class="text-xxs font-black text-slate-500 uppercase tracking-widest ml-1">Username</label>
           <div class="relative">
@@ -135,6 +166,14 @@ async function handleLogin() {
         >
           <i v-if="isLoggingIn" class="ra ra-cycle animate-spin"></i>
           <span v-else>Begin Journey</span>
+        </button>
+
+        <button
+          type="button"
+          class="w-full text-xxs font-black uppercase tracking-widest text-slate-500 hover:text-aether-primary transition-colors"
+          @click="isRecovering = true; error = ''"
+        >
+          Forgot your password?
         </button>
       </form>
 

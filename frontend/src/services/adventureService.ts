@@ -32,6 +32,7 @@ export interface Adventure {
   max_text_logs?: number | null
   awards?: any[]
   scripts?: any[]
+  init_script?: string | null
   allow_dynamic_items: boolean
   can_damage_npcs: boolean
   npcs_can_damage_protagonist: boolean
@@ -41,6 +42,8 @@ export interface Adventure {
   walkthrough?: string
   completed_condition?: string
   gameover_condition?: string
+  completed_guard_expression?: string
+  gameover_guard_expression?: string
   tts_director_notes?: string
   selected_image_styles?: any[]
   selected_tone?: any
@@ -84,6 +87,7 @@ export interface AdventureFormData {
   max_text_logs: number | null
   awards: any[]
   scripts?: any[]
+  init_script?: string | null
   allow_dynamic_items: boolean
   can_damage_npcs: boolean
   npcs_can_damage_protagonist: boolean
@@ -93,6 +97,8 @@ export interface AdventureFormData {
   walkthrough: string
   completed_condition: string
   gameover_condition: string
+  completed_guard_expression: string
+  gameover_guard_expression: string
   tts_director_notes: string
   selected_style_id: string
   selected_tone_id: string
@@ -189,6 +195,8 @@ export const adventureService = {
     walkthrough?: string
     completed_condition?: string
     gameover_condition?: string
+    completed_guard_expression?: string
+    gameover_guard_expression?: string
     tts_director_notes?: string
   }): Promise<{ generated_text: string }> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/generate-field`, {

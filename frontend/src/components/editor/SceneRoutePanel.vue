@@ -8,8 +8,9 @@ import {
   isObjectEntity, 
   mergeUniqueById, 
   formatObjectIds,
+  hasAnyScript,
 } from '@/utils/editor_utils'
-import { Save, X, Trash2, ArrowLeft, Sparkles } from 'lucide-vue-next'
+import { Save, X, Trash2, ArrowLeft, Sparkles, Brain } from 'lucide-vue-next'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 
 const props = defineProps<{
@@ -25,7 +26,11 @@ const props = defineProps<{
   visualsCacheVersion: number
   ruleEnforcementMode: string
   returnTabLabel?: string
+  adventureScripts?: any[]
 }>()
+
+const hasScript = (ent: any): boolean =>
+  hasAnyScript(ent, props.adventureScripts || props.debugData?.adventure?.scripts)
 
 const emit = defineEmits<{
   (e: 'back'): void
@@ -723,7 +728,16 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-sky-400/50 bg-sky-500/20 text-sky-100">NPC</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-sky-400/50 bg-sky-500/20 text-sky-100">NPC</div>
+              <div
+                v-if="hasScript(npc)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3.5 h-3.5 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ npc.name || npc.id }}</div>
               <div class="text-[9px] text-sky-200/80 uppercase tracking-widest truncate mt-1">{{ npc.id }}</div>
@@ -791,7 +805,16 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3.5 h-3.5 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
               <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
@@ -859,7 +882,16 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100">SWITCH</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100">SWITCH</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3.5 h-3.5 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
               <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
@@ -926,7 +958,16 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
+            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
+              <div
+                v-if="hasScript(obj)"
+                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                title="Contains custom event script(s)"
+              >
+                <Brain class="w-3.5 h-3.5 text-purple-400" />
+              </div>
+            </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
               <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>

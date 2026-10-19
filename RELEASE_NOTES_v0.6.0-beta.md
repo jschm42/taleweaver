@@ -51,7 +51,7 @@ Adventures now support deterministic, tamper-proof event logic alongside TaleWea
   * TaleWeaver's world generator can automatically synthesize Python event scripts tailored to the generated adventure's lore and puzzle constraints (`scripts_generation_enabled`).
 * **Adventure Import/Export Support**:
   * Scripts are fully serialized and restored within the adventure `.adv` / `.adz` world manifest.
-* Read the full [Scripting Engine Guide](docs/guides/scripting_engine.md) for detailed syntax and practical examples.
+* Read the full [Scripting Engine Guide](docs/scripting_engine.md) for detailed syntax and practical examples.
 
 ---
 

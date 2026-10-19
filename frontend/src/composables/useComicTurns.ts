@@ -1,35 +1,9 @@
 import { ref, computed, watch, type Ref } from 'vue'
 import DOMPurify from 'dompurify'
 import type { ChatMessage } from '@/types'
+import { buildComicPages, type ComicTurn, type DialogueSegment } from './comicPages'
 
-export interface DialogueSegment {
-  speaker: string
-  speakerEntity?: any
-  target?: string
-  targetEntity?: any
-  avatarUrl?: string | null
-  isPlayer?: boolean
-  text: string
-  isAction?: boolean
-  voiceTag?: string
-  isNarration?: boolean
-}
-
-export interface ComicTurn {
-  index: number
-  userMessage?: ChatMessage | null
-  userIsDialogue?: boolean
-  userTargetName?: string | null
-  userTargetEntity?: any
-  userSpeechText?: string
-  assistantMessage?: ChatMessage | null
-  systemMessages: ChatMessage[]
-  licenseMessage?: ChatMessage | null
-  narration: string
-  dialogues: DialogueSegment[]
-  revealedItemIds: string[]
-  timestamp?: string
-}
+export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
 
 export interface UseComicTurnsOptions {
   messages: Ref<ChatMessage[]>
@@ -178,64 +152,9 @@ export function parseUserMessage(
   return { isDialogue: false, speechText: raw }
 }
 
-const GERMAN_TO_ENGLISH_TAGS: Record<string, string> = {
-  neugierig: 'curious',
-  amüsiert: 'amused',
-  amusiert: 'amused',
-  aufgeregt: 'excited',
-  begeistert: 'excited',
-  flüstert: 'whispers',
-  flüsternd: 'whispers',
-  geflüstert: 'whispers',
-  lacht: 'laughs',
-  lachend: 'laughs',
-  lächelt: 'amused',
-  lächelnd: 'amused',
-  kichert: 'giggles',
-  kichernd: 'giggles',
-  seufzt: 'sighs',
-  seufzend: 'sighs',
-  wütend: 'angry',
-  zornig: 'angry',
-  verärgert: 'frustrated',
-  frustriert: 'frustrated',
-  ängstlich: 'panicked',
-  panisch: 'panicked',
-  überrascht: 'surprised',
-  erstaunt: 'amazed',
-  nachdenklich: 'thoughtful',
-  ernst: 'serious',
-  ruhig: 'calm',
-  gelassen: 'calm',
-  spöttisch: 'mocking',
-  sarkastisch: 'sarcastic',
-  ironisch: 'sarcastic',
-  traurig: 'sad',
-  schnell: 'very fast',
-  'sehr schnell': 'very fast',
-  langsam: 'very slow',
-  'sehr langsam': 'very slow',
-  schreiend: 'shouting',
-  schreit: 'shouting',
-  nervös: 'nervous',
-  nervos: 'nervous',
-  gelangweilt: 'bored',
-  müde: 'tired',
-  mude: 'tired',
-  erleichtert: 'relieved',
-  verwirrt: 'confused',
-  sanft: 'gentle',
-  streng: 'stern',
-  warmherzig: 'warmly',
-  kalt: 'coldly',
-  spielerisch: 'playfully',
-  fröhlich: 'cheerfully',
-  frohlich: 'cheerfully',
-}
-
-export function normalizeTagToEnglish(tag: string): string {
-  const norm = tag.trim().toLowerCase()
-  return GERMAN_TO_ENGLISH_TAGS[norm] || norm
+/** Voice tags are always English; only normalize casing and whitespace. */
+export function normalizeVoiceTag(tag: string): string {
+  return tag.trim().toLowerCase()
 }
 
 export function parseAssistantContent(
@@ -274,14 +193,14 @@ export function parseAssistantContent(
       const isBold = Boolean(match[2] || match[4])
       let speakerName = (match[3] || match[5] || match[6] || '').trim()
       const rawSpeech = (match[7] || '').trim()
-      let voiceTag = match[1] ? normalizeTagToEnglish(match[1]) : undefined
+      let voiceTag = match[1] ? normalizeVoiceTag(match[1]) : undefined
       let speechText = rawSpeech
 
       // Check if rawSpeech starts with a voice tag (e.g. [amused] "Ah...", "[amused]" "Ah...", "[amused] "Ah...")
       const tagInSpeechMatch = speechText.match(/^"?\[([^\]\n]+)\]"?\s*"?\s*([\s\S]*)$/)
       if (tagInSpeechMatch) {
         if (!voiceTag) {
-          voiceTag = normalizeTagToEnglish(tagInSpeechMatch[1])
+          voiceTag = normalizeVoiceTag(tagInSpeechMatch[1])
         }
         speechText = tagInSpeechMatch[2].trim()
       }
@@ -340,7 +259,7 @@ export function parseAssistantContent(
       let voiceTag: string | undefined = undefined
       const tagMatch = narrationText.match(/^\[([^\]\n]+)\]\s*(.*)$/)
       if (tagMatch) {
-        voiceTag = normalizeTagToEnglish(tagMatch[1])
+        voiceTag = normalizeVoiceTag(tagMatch[1])
         narrationText = tagMatch[2].trim()
       }
 
@@ -371,7 +290,8 @@ export function renderFormattedHtml(text: string): string {
   const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const withVoiceTags = escaped.replace(/(\[[^\]\n]+\])/g, (match, tag) => {
     const raw = tag.slice(1, -1).trim()
-    const en = normalizeTagToEnglish(raw)
+    if (/^DEBUG/i.test(raw)) return match
+    const en = normalizeVoiceTag(raw)
     return `<span class="comic-voice-tag">[${en}]</span>`
   })
   const withBolds = withVoiceTags.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-bold">$1</strong>')
@@ -387,108 +307,13 @@ export function useComicTurns(options: UseComicTurnsOptions) {
   const { messages, entities, npcMetadata, sheet } = options
   const viewingTurnIndex = ref<number | null>(null)
 
-  const gameTurns = computed<ComicTurn[]>(() => {
-    const msgs = messages.value || []
-    if (!msgs.length) return []
-
-    const turns: ComicTurn[] = []
-    let currentTurn: ComicTurn = {
-      index: 0,
-      systemMessages: [],
-      licenseMessage: null,
-      narration: '',
-      dialogues: [],
-      revealedItemIds: [],
-    }
-
-    for (let i = 0; i < msgs.length; i++) {
-      const msg = msgs[i]
-      if (msg.role === 'license_info') {
-        currentTurn.licenseMessage = msg
-        continue
-      }
-
-      if (msg.role === 'user') {
-        if (
-          currentTurn.userMessage ||
-          currentTurn.assistantMessage ||
-          currentTurn.narration ||
-          currentTurn.systemMessages.length ||
-          currentTurn.licenseMessage
-        ) {
-          turns.push(currentTurn)
-          currentTurn = {
-            index: turns.length,
-            systemMessages: [],
-            licenseMessage: null,
-            narration: '',
-            dialogues: [],
-            revealedItemIds: [],
-          }
-        }
-        currentTurn.userMessage = msg
-        const userParsed = parseUserMessage(msg, entities.value, npcMetadata.value)
-        currentTurn.userIsDialogue = userParsed.isDialogue
-        currentTurn.userTargetName = userParsed.targetName
-        currentTurn.userTargetEntity = userParsed.targetEntity
-        currentTurn.userSpeechText = userParsed.speechText
-        currentTurn.timestamp = msg.timestamp
-      } else if (msg.role === 'assistant') {
-        if (
-          currentTurn.assistantMessage ||
-          currentTurn.narration ||
-          currentTurn.dialogues.length > 0
-        ) {
-          turns.push(currentTurn)
-          currentTurn = {
-            index: turns.length,
-            systemMessages: [],
-            licenseMessage: null,
-            narration: '',
-            dialogues: [],
-            revealedItemIds: [],
-          }
-        }
-        currentTurn.assistantMessage = msg
-        currentTurn.timestamp = msg.timestamp || currentTurn.timestamp
-        if (msg.itemIds && Array.isArray(msg.itemIds)) {
-          currentTurn.revealedItemIds.push(...msg.itemIds)
-        }
-        const parsed = parseAssistantContent(msg.content, sheet.value, entities.value, npcMetadata.value)
-        currentTurn.narration = parsed.narration
-        currentTurn.dialogues.push(...parsed.dialogues)
-      } else if (msg.role === 'system') {
-        if (
-          currentTurn.assistantMessage ||
-          currentTurn.narration ||
-          currentTurn.dialogues.length > 0
-        ) {
-          turns.push(currentTurn)
-          currentTurn = {
-            index: turns.length,
-            systemMessages: [],
-            licenseMessage: null,
-            narration: '',
-            dialogues: [],
-            revealedItemIds: [],
-          }
-        }
-        currentTurn.systemMessages.push(msg)
-      }
-    }
-
-    if (
-      currentTurn.userMessage ||
-      currentTurn.assistantMessage ||
-      currentTurn.narration ||
-      currentTurn.systemMessages.length ||
-      currentTurn.licenseMessage
-    ) {
-      turns.push(currentTurn)
-    }
-
-    return turns
-  })
+  const gameTurns = computed<ComicTurn[]>(() =>
+    buildComicPages(messages.value || [], {
+      parseUser: (msg) => parseUserMessage(msg, entities.value, npcMetadata.value),
+      parseAssistant: (content) =>
+        parseAssistantContent(content, sheet.value, entities.value, npcMetadata.value),
+    })
+  )
 
   const activeTurnIndex = computed(() => {
     if (viewingTurnIndex.value !== null && viewingTurnIndex.value >= 0 && viewingTurnIndex.value < gameTurns.value.length) {
@@ -521,8 +346,10 @@ export function useComicTurns(options: UseComicTurnsOptions) {
 
   const activeSpeakers = computed<Set<string>>(() => {
     const speakers = new Set<string>()
-    if (!activeTurn.value) return speakers
-    for (const d of activeTurn.value.dialogues) {
+    // Highlight the NPCs speaking in the latest exchange of the page.
+    const latestExchange = activeTurn.value?.exchanges[activeTurn.value.exchanges.length - 1]
+    if (!latestExchange) return speakers
+    for (const d of latestExchange.dialogues) {
       if (d.isPlayer) continue
       if (d.speaker) speakers.add(d.speaker.toLowerCase())
       if (d.speakerEntity?.id) speakers.add(String(d.speakerEntity.id).toLowerCase())

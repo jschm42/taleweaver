@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
 import { configState, refreshConfig } from '@/store/config'
 import { api } from '@/composables/useApi'
+import { isPublicRoute } from '@/router'
 import GlobalHeader from '@/components/GlobalHeader.vue'
 
 const router = useRouter()
@@ -44,7 +45,7 @@ async function checkAuth() {
       }
     } else {
       // Only redirect to login if we are not already on a public page
-      if (route.name !== 'setup' && route.name !== 'login' && route.name !== 'error') {
+      if (!isPublicRoute(route.name)) {
         router.push('/login')
       }
     }

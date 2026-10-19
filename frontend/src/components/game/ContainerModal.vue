@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   takeAll: []
+  takeItem: [item: any]
   dropToScene: []
   itemHover: [item: any, event: MouseEvent]
   itemLeave: []
@@ -48,7 +49,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
     <Transition name="fade">
       <div
         v-if="open"
-        class="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+        class="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
         @click.self="emit('close')"
       >
         <div class="w-full max-w-4xl bg-slate-900 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden">
@@ -67,7 +68,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
               <div
                 v-for="item in items"
                 :key="item.id || item.name"
-                class="bg-slate-950/50 border border-slate-800 rounded-2xl p-2 flex flex-col items-center gap-2"
+                class="bg-slate-950/50 border border-slate-800 rounded-2xl p-2 flex flex-col items-center gap-2 transition-colors"
+                :class="busy ? 'opacity-60 cursor-wait' : 'cursor-pointer hover:border-emerald-500/60 hover:bg-emerald-500/10'"
+                role="button"
+                :title="`Take ${item.name || item.id}`"
+                @click="!busy && emit('takeItem', item)"
                 @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"
                 @mouseleave="emit('itemLeave')"
               >

@@ -28,6 +28,7 @@ const emit = defineEmits<{
   close: []
   submitCode: [code: string]
   useKeyItem: [itemId: string]
+  unlockDirect: []
 }>()
 
 const codeInput = ref('')
@@ -67,6 +68,15 @@ const requiredRule = computed(() => {
     props.container?.rule_to_unlock
     || resolvedMetadata.value.rule_to_unlock
     || props.container?.metadata?.rule_to_unlock
+    || ''
+  ).trim()
+})
+
+const unlockExpression = computed(() => {
+  return String(
+    props.container?.unlock_expression
+    || resolvedMetadata.value.unlock_expression
+    || props.container?.metadata?.unlock_expression
     || ''
   ).trim()
 })
@@ -128,6 +138,11 @@ const handleUseKey = () => {
   emit('useKeyItem', itemId)
 }
 
+const handleUnlockDirect = () => {
+  if (props.busy) return
+  emit('unlockDirect')
+}
+
 const onKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && props.open && !props.busy) {
     emit('close')
@@ -150,7 +165,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
     <Transition name="fade">
       <div
         v-if="open && container"
-        class="fixed inset-0 z-[130] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+        class="fixed inset-0 z-[210] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         @click.self="emit('close')"
       >
         <div class="w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden" @click.stop>
@@ -271,6 +286,33 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
               </div>
             </div>
 
+            <!-- DETERMINISTIC SCRIPT GUARD REQUIREMENT -->
+            <div v-else-if="unlockExpression" class="space-y-4">
+              <div class="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex items-start gap-3">
+                <div class="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <Lock class="w-4.5 h-4.5 text-emerald-400" />
+                </div>
+                <div class="space-y-1">
+                  <p class="text-xs font-black uppercase tracking-wider text-emerald-400">Guarded Mechanism</p>
+                  <p class="text-sm text-slate-300 leading-relaxed">
+                    This {{ entityNoun }} is held by a mechanism or condition in the world.
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex justify-end pt-1">
+                <button
+                  @click="handleUnlockDirect"
+                  :disabled="busy"
+                  :class="['w-full py-3 text-white font-black uppercase tracking-wider text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50',
+                    effectiveAccent === 'cyan' ? 'bg-cyan-600 hover:bg-cyan-500 shadow-cyan-500/10' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/10']"
+                >
+                  <Unlock class="w-4 h-4" />
+                  <span>Attempt Unlock</span>
+                </button>
+              </div>
+            </div>
+
             <!-- RULE/PUZZLE REQUIREMENT -->
             <div v-else-if="requiredRule" class="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex items-start gap-3">
               <div class="w-9 h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -279,8 +321,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
               <div class="space-y-1">
                 <p class="text-xs font-black uppercase tracking-wider text-cyan-400">Locked by Event/Puzzle</p>
                 <p class="text-sm text-slate-300 leading-relaxed">
-                  This container cannot be opened directly. You must satisfy a condition or solve a puzzle in the world first.
+                  This {{ entityNoun }} cannot be opened directly. You must satisfy a condition or solve a puzzle in the world first.
                 </p>
+              </div>
+            </div>
+
+            <!-- DIRECT UNLOCK / MECHANISM FALLBACK -->
+            <div v-else class="space-y-4">
+              <div class="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex items-start gap-3">
+                <div class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <Lock class="w-4.5 h-4.5 text-slate-300" />
+                </div>
+                <div class="space-y-1">
+                  <p class="text-xs font-black uppercase tracking-wider text-slate-300">Locked {{ entityNoun }}</p>
+                  <p class="text-sm text-slate-300 leading-relaxed">
+                    The way is currently barred. You can attempt to unlock or open it.
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex justify-end pt-1">
+                <button
+                  @click="handleUnlockDirect"
+                  :disabled="busy"
+                  :class="['w-full py-3 text-white font-black uppercase tracking-wider text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50',
+                    effectiveAccent === 'cyan' ? 'bg-cyan-600 hover:bg-cyan-500 shadow-cyan-500/10' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/10']"
+                >
+                  <Unlock class="w-4 h-4" />
+                  <span>Attempt Unlock</span>
+                </button>
               </div>
             </div>
           </div>

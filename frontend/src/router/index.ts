@@ -50,6 +50,11 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue'),
     },
     {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('@/views/ResetPasswordView.vue'),
+    },
+    {
       path: '/setup',
       name: 'setup',
       component: () => import('@/views/SetupView.vue'),
@@ -62,19 +67,22 @@ const router = createRouter({
   ],
 })
 
+const PUBLIC_ROUTE_NAMES = new Set(['login', 'setup', 'error', 'reset-password'])
+
+export function isPublicRoute(name: unknown): boolean {
+  return typeof name === 'string' && PUBLIC_ROUTE_NAMES.has(name)
+}
+
 router.beforeEach(async (to, _from, next) => {
   // If we're not initialized yet, we don't know the auth state or if setup is needed.
   // We allow the navigation to proceed, and App.vue will handle the final redirection
   // once the bootstrap status is known.
   if (!authState.isInitialized) {
-    if (to.name === 'login' || to.name === 'setup' || to.name === 'error') {
-      return next()
-    }
     // Continue navigation; App.vue will redirect if necessary after init.
     return next()
   }
 
-  if (to.name === 'login' || to.name === 'setup' || to.name === 'error') {
+  if (isPublicRoute(to.name)) {
     return next()
   }
 

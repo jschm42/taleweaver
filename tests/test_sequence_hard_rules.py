@@ -1,20 +1,23 @@
 """Unit tests for Sequence Hard Rules (Deterministic Completion Triggers)."""
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
-from backend.schemas.adventure import SequenceSchema
-from backend.engine.world_schemas import SequenceSchema as ManifestSequenceSchema
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier
 from backend.core.world_validator import validate_adventure
+from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
+from backend.engine.world_schemas import SequenceSchema as ManifestSequenceSchema
+from backend.schemas.adventure import SequenceSchema
 
 
 def _setup_mock_manager(active_seq_id="SEQ_1"):
     mock_manager = MagicMock()
     mock_res = MagicMock()
     mock_res.scalars.return_value.all.return_value = []
-    mock_res.scalars.return_value.first.return_value = MagicMock(exit_type="one_way", label="Crypt", name="NPC")
+    mock_res.scalars.return_value.first.return_value = MagicMock(
+        exit_type="one_way", label="Crypt", name="NPC"
+    )
     mock_manager.db = MagicMock()
     mock_manager.db.execute = AsyncMock(return_value=mock_res)
     mock_manager.db.flush = AsyncMock()
@@ -43,6 +46,7 @@ def _setup_mock_manager(active_seq_id="SEQ_1"):
     mock_manager._apply_adventure_generator_tools = AsyncMock()
     mock_manager._queue_checkpoint = MagicMock()
     mock_manager._award_combat_victory_xp = MagicMock(return_value=50)
+    mock_manager._execute_inline_script = AsyncMock(return_value=[])
 
     return mock_manager
 
@@ -248,6 +252,60 @@ def test_world_validator_catches_missing_sequence_references():
     assert npc_errs[0].context["required_defeated_npc_id"] == "MISSING_BOSS"
 
 
+@pytest.mark.asyncio
+async def test_hard_rule_guard_expression_completion():
+    """Verify that satisfying sequence guard_expression completes the sequence."""
+    mock_manager = _setup_mock_manager("SEQ_1")
+    mock_manager.state.entity_states = {"__script_vars__": {"valve_purged": True}}
+    mock_manager.adventure.sequences = [
+        {
+            "id": "SEQ_1",
+            "order": 1,
+            "title": "Purge the Valve",
+            "guard_expression": "tw.vars.get('valve_purged') == True",
+            "exp_reward": 80,
+        },
+        {
+            "id": "SEQ_2",
+            "order": 2,
+            "title": "Escape Facility",
+            "exp_reward": 100,
+        },
+    ]
+
+    applier = TurnStateApplier(mock_manager)
+    event = GameEvent(narrative_description="Valve purged.", sequence_completed=False)
+    await applier._apply_game_event(event)
+
+    assert event.sequence_completed is True
+    assert mock_manager.avatar.exp == 80
+    assert mock_manager.state.active_sequence_id == "SEQ_2"
+
+
+@pytest.mark.asyncio
+async def test_hard_rule_guard_expression_blocks_unmet():
+    """Verify that unmet sequence guard_expression blocks completion even if LLM reports completed."""
+    mock_manager = _setup_mock_manager("SEQ_1")
+    mock_manager.state.entity_states = {"__script_vars__": {"valve_purged": False}}
+    mock_manager.adventure.sequences = [
+        {
+            "id": "SEQ_1",
+            "order": 1,
+            "title": "Purge the Valve",
+            "guard_expression": "tw.vars.get('valve_purged') == True",
+            "exp_reward": 80,
+        },
+    ]
+
+    applier = TurnStateApplier(mock_manager)
+    event = GameEvent(narrative_description="I think I'm done.", sequence_completed=True)
+    await applier._apply_game_event(event)
+
+    # Hard guard rule fails -> completion reverted
+    assert event.sequence_completed is False
+    assert mock_manager.avatar.exp == 0
+
+
 def test_world_generator_extract_sequences_with_hard_rules():
     """Verify that WorldGenerator._extract_sequences_from_prompt parses hard rule tags."""
     from backend.engine.world_generator import WorldGenerator
@@ -299,7 +357,7 @@ def test_world_generator_preprocess_manifest_normalizes_sequence_hard_rules():
                 "required_scene_id": "none",
                 "required_defeated_npc_id": "NULL",
             }
-        ]
+        ],
     }
 
     WorldGenerator.preprocess_manifest_object_ids(manifest_dict)
@@ -311,4 +369,3 @@ def test_world_generator_preprocess_manifest_normalizes_sequence_hard_rules():
     assert seq["required_item_id"] == "GOLD_KEY"
     assert seq["required_scene_id"] == ""
     assert seq["required_defeated_npc_id"] == ""
-

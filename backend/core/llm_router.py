@@ -4,35 +4,61 @@ import logging
 import re
 import time
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Optional, TypeVar
 
 import litellm
 from pydantic import BaseModel, ValidationError
 
+from backend.core.llm_json_repair import (
+    attempt_repair_truncated_json,
+    is_truncated_json,
+    repair_json,
+)
 from backend.core.llm_logger import log_llm_interaction, log_structured_event
+from backend.core.llm_provider_config import (
+    apply_provider_endpoint,
+    is_minimax_model,
+    json_schema_instruction,
+    normalize_model,
+    uses_json_mode_fallback,
+)
+from backend.core.llm_request_tuning import apply_prompt_cache_markers
+from backend.core.llm_stream_filters import clean_stream_thinking, clean_stream_voice_tags
 from backend.core.security import encryption_util
+from backend.core.voice_tags import VOICE_TAG_SET
 from backend.models.user import User
-from backend.core.voice_tags import GERMAN_TO_ENGLISH_VOICE_TAGS, VOICE_TAG_SET
 
 T = TypeVar("T", bound=BaseModel)
+
+_TRUNCATED_RESPONSE_MESSAGE = (
+    "LLM response was truncated (token limit). "
+    "Please increase the token limit in Settings (Intelligence) and retry."
+)
+
+
+@dataclass
+class _StructuredRequest:
+    kwargs: dict[str, Any]
+    normalized_model: str
+    json_mode: bool
+    system_prompt: str
+
+
 logger = logging.getLogger(__name__)
 
-# Compile regex pattern to match voice tags (English + German fallback normalization)
+# Compile regex pattern to match (English-only) voice tags.
 # Sort by length descending to match longest first
-_all_tags = set(VOICE_TAG_SET) | set(GERMAN_TO_ENGLISH_VOICE_TAGS.keys())
-_sorted_tags = sorted(_all_tags, key=len, reverse=True)
+_sorted_tags = sorted(VOICE_TAG_SET, key=len, reverse=True)
 _tag_pattern = "|".join(re.escape(t) for t in _sorted_tags)
 
 BRACKETED_RE = re.compile(
-    rf"^\s*\[(?P<tag>{_tag_pattern})\]\s*:?\s*(?P<rest>.*)",
-    re.IGNORECASE | re.DOTALL
+    rf"^\s*\[(?P<tag>{_tag_pattern})\]\s*:?\s*(?P<rest>.*)", re.IGNORECASE | re.DOTALL
 )
 
 UNBRACKETED_RE = re.compile(
-    rf"^\s*(?P<tag>{_tag_pattern})\s*:?\s*\n\s*(?P<rest>.*)",
-    re.IGNORECASE | re.DOTALL
+    rf"^\s*(?P<tag>{_tag_pattern})\s*:?\s*\n\s*(?P<rest>.*)", re.IGNORECASE | re.DOTALL
 )
-
 
 
 class GameMasterLLM:
@@ -40,7 +66,6 @@ class GameMasterLLM:
     DEFAULT_COMPLEX_MAX_TOKENS = 8192
     DEFAULT_GENERATOR_MAX_TOKENS = 16384
     DEFAULT_COMPRESSION_MAX_TOKENS = 4096
-
 
     @staticmethod
     def _is_transient_llm_error(exc: Exception) -> bool:
@@ -55,7 +80,10 @@ class GameMasterLLM:
             or "connecterror" in err_type
             or "readtimeout" in err_type
             or "connecttimeout" in err_type
-            or ("deepseekexception" in err_type and ("timeout" in err_msg or "connection" in err_msg))
+            or (
+                "deepseekexception" in err_type
+                and ("timeout" in err_msg or "connection" in err_msg)
+            )
             or "disconnected" in err_msg
             or "connection reset" in err_msg
             or "connection timed out" in err_msg
@@ -89,7 +117,9 @@ class GameMasterLLM:
                 unique.append(provider)
         return unique
 
-    def _retry_kwargs_with_openrouter_provider_order(self, kwargs: dict, providers: list[str]) -> dict:
+    def _retry_kwargs_with_openrouter_provider_order(
+        self, kwargs: dict, providers: list[str]
+    ) -> dict:
         """Build retry kwargs that explicitly prefer providers OpenRouter says are available."""
         retry_kwargs = dict(kwargs)
         extra_body = dict(retry_kwargs.get("extra_body") or {})
@@ -105,7 +135,9 @@ class GameMasterLLM:
         max_transient_retries = 4
         for attempt in range(max_transient_retries):
             try:
-                return self._get_litellm().completion(**kwargs, request_timeout=self.request_timeout)
+                return self._get_litellm().completion(
+                    **kwargs, request_timeout=self.request_timeout
+                )
             except Exception as exc:
                 if self.provider == "openrouter":
                     available_providers = self._extract_openrouter_available_providers(exc)
@@ -115,8 +147,12 @@ class GameMasterLLM:
                             kwargs.get("model"),
                             ",".join(available_providers),
                         )
-                        retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
-                        return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
+                        retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(
+                            kwargs, available_providers
+                        )
+                        return self._get_litellm().completion(
+                            **retry_kwargs, request_timeout=self.request_timeout
+                        )
 
                     err_str = str(exc)
                     if "removed during routing" in err_str or "No endpoints found" in err_str:
@@ -130,7 +166,9 @@ class GameMasterLLM:
                             new_extra_body = dict(extra_body)
                             new_extra_body.pop("provider", None)
                             retry_kwargs["extra_body"] = new_extra_body
-                            return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
+                            return self._get_litellm().completion(
+                                **retry_kwargs, request_timeout=self.request_timeout
+                            )
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
                     backoff_delay = 0.75 * (attempt + 1)
@@ -161,7 +199,9 @@ class GameMasterLLM:
                     attempt + 1,
                     max_transient_retries,
                 )
-                return await self._get_litellm().acompletion(**kwargs, request_timeout=self.request_timeout)
+                return await self._get_litellm().acompletion(
+                    **kwargs, request_timeout=self.request_timeout
+                )
             except Exception as exc:
                 if self.provider == "openrouter":
                     available_providers = self._extract_openrouter_available_providers(exc)
@@ -171,13 +211,17 @@ class GameMasterLLM:
                             kwargs.get("model"),
                             ",".join(available_providers),
                         )
-                        retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
+                        retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(
+                            kwargs, available_providers
+                        )
                         logger.info(
                             "GameMasterLLM calling LLM (Fallback) for user %s with model %s",
                             self.user.id,
                             kwargs.get("model"),
                         )
-                        return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
+                        return await self._get_litellm().acompletion(
+                            **retry_kwargs, request_timeout=self.request_timeout
+                        )
 
                     err_str = str(exc)
                     if "removed during routing" in err_str or "No endpoints found" in err_str:
@@ -191,7 +235,9 @@ class GameMasterLLM:
                             new_extra_body = dict(extra_body)
                             new_extra_body.pop("provider", None)
                             retry_kwargs["extra_body"] = new_extra_body
-                            return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
+                            return await self._get_litellm().acompletion(
+                                **retry_kwargs, request_timeout=self.request_timeout
+                            )
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
                     backoff_delay = 0.75 * (attempt + 1)
@@ -231,13 +277,13 @@ class GameMasterLLM:
         # Further refine: find first [ or { and last ] or }
         first_json_char = -1
         for i, char in enumerate(content):
-            if char in ('{', '['):
+            if char in ("{", "["):
                 first_json_char = i
                 break
 
         last_json_char = -1
         for i, char in enumerate(reversed(content)):
-            if char in ('}', ']'):
+            if char in ("}", "]"):
                 last_json_char = len(content) - 1 - i
                 break
 
@@ -248,157 +294,18 @@ class GameMasterLLM:
 
     @staticmethod
     def _is_truncated_json(content: str) -> bool:
-        """
-        Heuristic: detect whether the JSON content is truncated mid-string
-        (e.g. a token-limit cutoff). Returns True when the last meaningful
-        character suggests the LLM ran out of tokens before closing the JSON.
-        """
-        if not content:
-            return False
-        stripped = content.rstrip()
-        if not stripped:
-            return False
-        # A well-formed JSON document ends with } or ]
-        if stripped[-1] in (']', '}'):
-            return False
-        # If the last non-whitespace char is a quote followed by a colon or
-        # comma, or the string appears to end mid-value, treat as truncated.
-        return True
+        """Heuristic: True when the JSON content looks cut off (e.g. token limit)."""
+        return is_truncated_json(content)
 
     @staticmethod
     def _attempt_repair_truncated_json(content: str) -> str:
-        """
-        Try to close an obviously truncated JSON document so json.loads can
-        parse it. Strategy: walk the string tracking quote/escape state and
-        brace/bracket depth. If we end inside an unterminated string, find
-        the start of that incomplete string and truncate back to the last
-        safe structural delimiter (`,`, `{`, or `[`) before it. Then close
-        any unclosed braces/brackets. This is a best-effort heuristic and
-        may not produce semantically valid output, but is useful for
-        capturing more complete error context.
-        """
-        if not content:
-            return content
-
-        in_string = False
-        escape_next = False
-        string_open_at = -1
-        stack: list[str] = []
-
-        for i, ch in enumerate(content):
-            if escape_next:
-                escape_next = False
-                continue
-            if ch == '\\':
-                escape_next = True
-                continue
-            if ch == '"':
-                if in_string:
-                    in_string = False
-                    string_open_at = -1
-                else:
-                    in_string = True
-                    string_open_at = i
-                continue
-            if in_string:
-                continue
-            if ch == '{':
-                stack.append('}')
-            elif ch == '[':
-                stack.append(']')
-            elif ch in ('}', ']'):
-                if stack and stack[-1] == ch:
-                    stack.pop()
-
-        if in_string and string_open_at >= 0:
-            # Look for the last safe structural delimiter before the
-            # unterminated string. Safe = , { [ — a colon is unsafe
-            # because it would leave a key without a value. If we land
-            # on a comma we strip it (and any preceding whitespace) so
-            # the resulting JSON doesn't have a trailing comma.
-            last_safe = -1
-            last_safe_kind = ''
-            for i in range(string_open_at - 1, -1, -1):
-                if content[i] in (',', '{', '['):
-                    last_safe = i
-                    last_safe_kind = content[i]
-                    break
-            if last_safe >= 0 and last_safe_kind == ',':
-                # Strip the trailing comma so the result is valid JSON
-                repaired = content[:last_safe].rstrip()
-            elif last_safe >= 0:
-                repaired = content[: last_safe + 1]
-            else:
-                # Nothing safe before the unterminated string at all.
-                # Drop the whole document.
-                repaired = ""
-        else:
-            repaired = content
-
-        # Strip any trailing comma (or comma+whitespace) from the close-out
-        # point so the appended closing braces/brackets produce valid JSON.
-        repaired = re.sub(r',\s*$', '', repaired)
-
-        # Close any open structures
-        while stack:
-            repaired += stack.pop()
-        return repaired
+        """Best-effort close-out of a truncated JSON document (see llm_json_repair)."""
+        return attempt_repair_truncated_json(content)
 
     @staticmethod
     def _repair_json(content: str) -> str:
-        """
-        Attempts to repair common minor JSON syntax errors like trailing commas
-        and single quotes around keys/values.
-        """
-        if not content:
-            return ""
-        
-        # 1. Strip trailing commas before closing braces or brackets
-        content = re.sub(r',\s*([\}\]])', r'\1', content)
-        
-        # 2. Try parsing to see if it is already valid
-        try:
-            json.loads(content)
-            return content
-        except json.JSONDecodeError:
-            pass
-            
-        # 3. Handle single quotes for keys (e.g. 'key': -> "key":)
-        content = re.sub(r"'\s*([a-zA-Z0-9_-]+)\s*'\s*:", r'"\1":', content)
-        
-        # 4. Handle single quotes for string values (e.g. : 'value' -> : "value")
-        def _replace_val(match):
-            val = match.group(1)
-            # Escape double quotes since they will be wrapped in double quotes now
-            val = val.replace('"', r'\"')
-            # Unescape single quotes
-            val = val.replace(r"\'", "'")
-            return f': "{val}"'
-            
-        content = re.sub(r":\s*'([^'\\]*(?:\\.[^'\\]*)*)'", _replace_val, content)
-
-        # 5. Try parsing again; if it still fails, attempt to fix unescaped double quotes inside values
-        try:
-            json.loads(content)
-            return content
-        except json.JSONDecodeError:
-            pass
-
-        def _fix_unescaped_line_quotes(line: str) -> str:
-            # Match standard JSON field line: `"key": "..."` or `"..."` with possible trailing comma
-            m = re.match(r'^(\s*"(?:[^"\\]|\\.)+"\s*:\s*")(.*)("[\s,]*)$', line)
-            if m:
-                prefix, val, suffix = m.group(1), m.group(2), m.group(3)
-                if '"' in val:
-                    # Escape any double quotes that are not already preceded by backslash
-                    escaped_val = re.sub(r'(?<!\\)"', r'\"', val)
-                    return f"{prefix}{escaped_val}{suffix}"
-            return line
-
-        lines = content.splitlines(keepends=True)
-        content = "".join(_fix_unescaped_line_quotes(l) for l in lines)
-        
-        return content
+        """Repairs common minor JSON syntax errors (see llm_json_repair)."""
+        return repair_json(content)
 
     @staticmethod
     def clean_thinking_tags(text: str) -> str:
@@ -431,27 +338,35 @@ class GameMasterLLM:
         return ""
 
     @staticmethod
-    async def _append_generation_log_async(adventure_id: Optional[str], log_type: str, content: str, image_url: Optional[str] = None):
+    async def _append_generation_log_async(
+        adventure_id: Optional[str], log_type: str, content: str, image_url: Optional[str] = None
+    ):
         """Append a status, thinking, or image generation log to the adventure template's generation_logs list."""
         if not adventure_id:
             return
         try:
-            from backend.core.database import AsyncSessionLocal
-            from backend.models.adventure_template import AdventureTemplate
-            from sqlalchemy import select
             import datetime
 
+            from sqlalchemy import select
+
+            from backend.core.database import AsyncSessionLocal
+            from backend.models.adventure_template import AdventureTemplate
+
             async with AsyncSessionLocal() as db:
-                res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == adventure_id))
+                res = await db.execute(
+                    select(AdventureTemplate).where(AdventureTemplate.id == adventure_id)
+                )
                 adv = res.scalars().first()
                 if adv:
                     logs = list(adv.generation_logs or [])
-                    logs.append({
-                        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                        "type": log_type,
-                        "content": content,
-                        "image_url": image_url
-                    })
+                    logs.append(
+                        {
+                            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                            "type": log_type,
+                            "content": content,
+                            "image_url": image_url,
+                        }
+                    )
                     adv.generation_logs = logs
                     await db.commit()
         except Exception as e:
@@ -459,8 +374,7 @@ class GameMasterLLM:
 
     @staticmethod
     def _to_canonical_voice_tag(tag: str) -> str:
-        lowered = tag.strip().lower()
-        return GERMAN_TO_ENGLISH_VOICE_TAGS.get(lowered, lowered)
+        return tag.strip().lower()
 
     @staticmethod
     def normalize_voice_tags(text: str) -> str:
@@ -491,12 +405,8 @@ class GameMasterLLM:
         speaker_re = re.compile(
             r"^(?P<speaker>\s*(?:\*\*[^*:\n]+?\*\*|[^\n:]{1,60}):\s*)(?P<speech>.*)$"
         )
-        tag_extract_re = re.compile(
-            r'^"?\[(?P<tag>[^\]\n]+)\]"?\s*"?\s*(?P<body>.*)$'
-        )
-        para_tag_re = re.compile(
-            r'^\s*\[(?P<tag>[^\]\n]+)\]\s*(?P<body>.*)$'
-        )
+        tag_extract_re = re.compile(r'^"?\[(?P<tag>[^\]\n]+)\]"?\s*"?\s*(?P<body>.*)$')
+        para_tag_re = re.compile(r"^\s*\[(?P<tag>[^\]\n]+)\]\s*(?P<body>.*)$")
 
         for line in lines:
             trimmed = line.strip()
@@ -512,7 +422,16 @@ class GameMasterLLM:
                 if tag_match:
                     canon_tag = GameMasterLLM._to_canonical_voice_tag(tag_match.group("tag"))
                     body = tag_match.group("body").strip()
-                    body = body.rstrip('"').rstrip('”').rstrip('»').lstrip('"').lstrip('“').lstrip('„').lstrip('«').strip()
+                    body = (
+                        body.rstrip('"')
+                        .rstrip("”")
+                        .rstrip("»")
+                        .lstrip('"')
+                        .lstrip("“")
+                        .lstrip("„")
+                        .lstrip("«")
+                        .strip()
+                    )
                     normalized_lines.append(f'{speaker_part}[{canon_tag}] "{body}"')
                     continue
                 normalized_lines.append(line)
@@ -535,65 +454,8 @@ class GameMasterLLM:
     @staticmethod
     async def _clean_stream_voice_tags(stream):
         """Async generator that buffers the start of the stream and normalizes voice tags."""
-        buffer = ""
-        prefix_processed = False
-        last_chunk = None
-
-        async for chunk in stream:
-            try:
-                delta = chunk.choices[0].delta.content
-            except (AttributeError, IndexError, TypeError):
-                delta = None
-
-            if not isinstance(delta, str) or not delta:
-                yield chunk
-                continue
-
-            if prefix_processed:
-                yield chunk
-                continue
-
-            buffer += delta
-            last_chunk = chunk
-
-            ready_to_flush = (
-                len(buffer) >= 60
-                or "\n" in buffer
-                or ("]" in buffer and len(buffer) >= 15)
-                or (len(buffer) >= 30 and "[" not in buffer)
-            )
-            if ready_to_flush:
-                normalized = GameMasterLLM.normalize_voice_tags(buffer)
-                try:
-                    chunk.choices[0].delta.content = normalized
-                except Exception:
-                    try:
-                        delta_obj = chunk.choices[0].delta
-                        if hasattr(delta_obj, "model_copy"):
-                            new_delta = delta_obj.model_copy(update={"content": normalized})
-                        else:
-                            new_delta = delta_obj.copy(update={"content": normalized})
-                        chunk.choices[0].delta = new_delta
-                    except Exception as e:
-                        logger.warning("Failed to modify streaming chunk content: %s", e)
-                yield chunk
-                prefix_processed = True
-
-        if not prefix_processed and last_chunk is not None:
-            normalized = GameMasterLLM.normalize_voice_tags(buffer)
-            try:
-                last_chunk.choices[0].delta.content = normalized
-            except Exception:
-                try:
-                    delta_obj = last_chunk.choices[0].delta
-                    if hasattr(delta_obj, "model_copy"):
-                        new_delta = delta_obj.model_copy(update={"content": normalized})
-                    else:
-                        new_delta = delta_obj.copy(update={"content": normalized})
-                    last_chunk.choices[0].delta = new_delta
-                except Exception as e:
-                    logger.warning("Failed to modify streaming chunk content: %s", e)
-            yield last_chunk
+        async for chunk in clean_stream_voice_tags(stream, GameMasterLLM.normalize_voice_tags):
+            yield chunk
 
     @staticmethod
     async def _with_stream_timeout(
@@ -628,7 +490,7 @@ class GameMasterLLM:
                     "Stream timed out after %.1fs without generating any content.",
                     initial_timeout,
                 )
-                raise TimeoutError("The AI model did not respond in time.")
+                raise TimeoutError("The AI model did not respond in time.") from None
             except Exception as e:
                 if has_content:
                     logger.warning(
@@ -651,70 +513,7 @@ class GameMasterLLM:
     @staticmethod
     async def _clean_stream_thinking(stream):
         """Async generator that strips <think>...</think> blocks from stream chunks on-the-fly."""
-        in_think = False
-        buffer = ""
-        
-        async for chunk in stream:
-            try:
-                delta = chunk.choices[0].delta.content
-            except (AttributeError, IndexError, TypeError):
-                delta = None
-                
-            if not isinstance(delta, str) or not delta:
-                yield chunk
-                continue
-                
-            buffer += delta
-            cleaned_delta = ""
-            
-            while buffer:
-                if not in_think:
-                    think_idx = buffer.find("<think>")
-                    if think_idx != -1:
-                        cleaned_delta += buffer[:think_idx]
-                        in_think = True
-                        buffer = buffer[think_idx + 7:]
-                    else:
-                        partial_match = False
-                        for i in range(1, 7):
-                            tag_part = "<think"[:i]
-                            if buffer.endswith(tag_part):
-                                keep_len = len(buffer) - i
-                                cleaned_delta += buffer[:keep_len]
-                                buffer = buffer[keep_len:]
-                                partial_match = True
-                                break
-                        if not partial_match:
-                            cleaned_delta += buffer
-                            buffer = ""
-                else:
-                    end_idx = buffer.find("</think>")
-                    if end_idx != -1:
-                        in_think = False
-                        buffer = buffer[end_idx + 8:]
-                    else:
-                        partial_match = False
-                        for i in range(1, 8):
-                            tag_part = "</think"[:i]
-                            if buffer.endswith(tag_part):
-                                buffer = buffer[-i:]
-                                partial_match = True
-                                break
-                        if not partial_match:
-                            buffer = ""
-            
-            try:
-                chunk.choices[0].delta.content = cleaned_delta
-            except Exception:
-                try:
-                    delta_obj = chunk.choices[0].delta
-                    if hasattr(delta_obj, "model_copy"):
-                        new_delta = delta_obj.model_copy(update={"content": cleaned_delta})
-                    else:
-                        new_delta = delta_obj.copy(update={"content": cleaned_delta})
-                    chunk.choices[0].delta = new_delta
-                except Exception as e:
-                    logger.warning("Failed to modify streaming chunk content: %s", e)
+        async for chunk in clean_stream_thinking(stream):
             yield chunk
 
     @staticmethod
@@ -735,7 +534,11 @@ class GameMasterLLM:
         else:
             provider_specific = getattr(message, "provider_specific_fields", None) or {}
 
-        nested = provider_specific.get("reasoning_content") if isinstance(provider_specific, dict) else None
+        nested = (
+            provider_specific.get("reasoning_content")
+            if isinstance(provider_specific, dict)
+            else None
+        )
         if isinstance(nested, str) and nested.strip():
             return nested
         return ""
@@ -800,8 +603,19 @@ class GameMasterLLM:
         if isinstance(value, str):
             normalized = value.strip().lower()
             return normalized in {
-                "1", "true", "yes", "on", "enabled",
-                "0", "false", "no", "off", "disabled", "", "none", "null",
+                "1",
+                "true",
+                "yes",
+                "on",
+                "enabled",
+                "0",
+                "false",
+                "no",
+                "off",
+                "disabled",
+                "",
+                "none",
+                "null",
             }
         return False
 
@@ -836,6 +650,70 @@ class GameMasterLLM:
         litellm.add_usage = False
         return litellm
 
+    _CATEGORY_PREFIXES = {
+        "generator": "generator_",
+        "complex": "complex_",
+        "compression": "compression_",
+    }
+
+    @staticmethod
+    def _category_setting(llm_settings: dict, prefix: str, key: str) -> Any:
+        """Granular per-category setting with a fallback to the global/legacy name."""
+        value = llm_settings.get(f"{prefix}{key}")
+        return llm_settings.get(key) if value is None else value
+
+    def _default_max_tokens(self, model_category: str) -> int:
+        defaults = {
+            "generator": self.DEFAULT_GENERATOR_MAX_TOKENS,
+            "complex": self.DEFAULT_COMPLEX_MAX_TOKENS,
+            "compression": self.DEFAULT_COMPRESSION_MAX_TOKENS,
+        }
+        return defaults.get(model_category, self.DEFAULT_SMALL_MAX_TOKENS)
+
+    def _load_runtime_settings(self, model_category: str) -> None:
+        """Timeouts and OpenAI-compatible endpoint bases from the app settings."""
+        from backend.core.config import settings
+
+        raw_timeout = settings.INTELLIGENCE_TIMEOUT
+        if model_category == "generator":
+            raw_timeout = getattr(settings, "WORLDBUILDING_TIMEOUT", settings.INTELLIGENCE_TIMEOUT)
+        self.request_timeout = self._coerce_int(raw_timeout, default=settings.INTELLIGENCE_TIMEOUT)
+        self.stream_chunk_timeout = float(getattr(settings, "STREAM_CHUNK_TIMEOUT", 12.0) or 12.0)
+        self.stream_initial_timeout = float(
+            getattr(settings, "STREAM_INITIAL_TIMEOUT", 40.0) or 40.0
+        )
+        self.kimi_api_base = (
+            getattr(settings, "KIMI_API_BASE", "https://api.moonshot.ai/v1")
+            or "https://api.moonshot.ai/v1"
+        ).rstrip("/")
+        self.minimax_api_base = (
+            getattr(settings, "MINIMAX_API_BASE", "https://api.minimax.io/v1")
+            or "https://api.minimax.io/v1"
+        ).rstrip("/")
+
+    def _resolve_enable_thinking(
+        self, llm_settings: dict, prefix: str, model_category: str
+    ) -> bool:
+        """Thinking stays disabled unless explicitly configured truthy.
+
+        The small model (fast structured extraction) never inherits the global flag:
+        thinking there only adds latency before the narration can start.
+        """
+        key = f"{prefix}enable_thinking"
+        raw_value = llm_settings.get(key)
+        if raw_value is None and model_category != "small":
+            key = "enable_thinking"
+            raw_value = llm_settings.get(key)
+        if raw_value is not None and not self._is_supported_bool_value(raw_value):
+            logger.warning(
+                "Invalid thinking setting '%s'=%r for user '%s'. Falling back to False.",
+                key,
+                raw_value,
+                getattr(self.user, "username", "unknown"),
+            )
+            return False
+        return self._coerce_bool(raw_value, default=False)
+
     def __init__(self, user: User, provider: str = "openai", model_category: str = "small"):
         """
         Initialize the router for a specific user, provider and model category (small/complex).
@@ -844,84 +722,29 @@ class GameMasterLLM:
         self.provider = (provider or "openai").lower()
         self.api_key = None
         self.api_base = None
-        
+
         llm_settings = self.user.llm_settings or {}
-        
-        if model_category == "generator":
-            prefix = "generator_"
-        elif model_category == "complex":
-            prefix = "complex_"
-        elif model_category == "compression":
-            prefix = "compression_"
-        else:
-            prefix = "small_"
+        prefix = self._CATEGORY_PREFIXES.get(model_category, "small_")
+        self._load_runtime_settings(model_category)
 
-        from backend.core.config import settings
-        if model_category == "generator":
-            self.request_timeout = self._coerce_int(
-                getattr(settings, "WORLDBUILDING_TIMEOUT", settings.INTELLIGENCE_TIMEOUT),
-                default=settings.INTELLIGENCE_TIMEOUT,
-            )
-        else:
-            self.request_timeout = self._coerce_int(
-                settings.INTELLIGENCE_TIMEOUT,
-                default=settings.INTELLIGENCE_TIMEOUT,
-            )
-        self.stream_chunk_timeout = float(getattr(settings, "STREAM_CHUNK_TIMEOUT", 12.0) or 12.0)
-        self.stream_initial_timeout = float(getattr(settings, "STREAM_INITIAL_TIMEOUT", 40.0) or 40.0)
-        self.kimi_api_base = (getattr(settings, "KIMI_API_BASE", "https://api.moonshot.ai/v1") or "https://api.moonshot.ai/v1").rstrip("/")
-        self.minimax_api_base = (getattr(settings, "MINIMAX_API_BASE", "https://api.minimax.io/v1") or "https://api.minimax.io/v1").rstrip("/")
-        
-        # Pull granular settings with fallbacks to global/legacy names.
-        # Thinking must stay disabled unless explicitly configured truthy.
-        enable_thinking_key = f"{prefix}enable_thinking"
-        raw_enable_thinking = llm_settings.get(enable_thinking_key)
-        if raw_enable_thinking is None:
-            enable_thinking_key = "enable_thinking"
-            raw_enable_thinking = llm_settings.get(enable_thinking_key)
-
-        if raw_enable_thinking is not None and not self._is_supported_bool_value(raw_enable_thinking):
-            logger.warning(
-                "Invalid thinking setting '%s'=%r for user '%s'. Falling back to False.",
-                enable_thinking_key,
-                raw_enable_thinking,
-                getattr(self.user, "username", "unknown"),
-            )
-            self.enable_thinking = False
-        else:
-            self.enable_thinking = self._coerce_bool(raw_enable_thinking, default=False)
-
-        raw_max_thinking_tokens = llm_settings.get(f"{prefix}max_thinking_tokens")
-        if raw_max_thinking_tokens is None:
-            raw_max_thinking_tokens = llm_settings.get("max_thinking_tokens")
-        self.max_thinking_tokens = self._coerce_int(raw_max_thinking_tokens, default=1024)
-
-        raw_max_tokens = llm_settings.get(f"{prefix}max_tokens")
-        if raw_max_tokens is None:
-            raw_max_tokens = llm_settings.get("max_tokens")
-        
-        if model_category == "generator":
-            default_max_tokens = self.DEFAULT_GENERATOR_MAX_TOKENS
-        elif model_category == "complex":
-            default_max_tokens = self.DEFAULT_COMPLEX_MAX_TOKENS
-        elif model_category == "compression":
-            default_max_tokens = self.DEFAULT_COMPRESSION_MAX_TOKENS
-        else:
-            default_max_tokens = self.DEFAULT_SMALL_MAX_TOKENS
-            
-        self.max_tokens = self._coerce_int(raw_max_tokens, default=default_max_tokens)
-
+        self.enable_thinking = self._resolve_enable_thinking(llm_settings, prefix, model_category)
+        self.max_thinking_tokens = self._coerce_int(
+            self._category_setting(llm_settings, prefix, "max_thinking_tokens"), default=1024
+        )
+        self.max_tokens = self._coerce_int(
+            self._category_setting(llm_settings, prefix, "max_tokens"),
+            default=self._default_max_tokens(model_category),
+        )
         # OpenRouter provider routing preferences
-        raw_openrouter_provider = llm_settings.get(f"{prefix}openrouter_provider")
-        if raw_openrouter_provider is None:
-            raw_openrouter_provider = llm_settings.get("openrouter_provider")
-        self.openrouter_provider = (raw_openrouter_provider or "").strip()
+        self.openrouter_provider = (
+            self._category_setting(llm_settings, prefix, "openrouter_provider") or ""
+        ).strip()
 
         if self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:
             self.api_key = self._get_decrypted_key(self.provider)
-            
+
         self.model_category = model_category
         logger.info(
             "Router initialized: category=%s, provider=%s, thinking=%s, max_tokens=%s, timeout=%ss",
@@ -934,58 +757,23 @@ class GameMasterLLM:
 
     def _normalize_model(self, model: str) -> str:
         """Return a LiteLLM-friendly model slug for the configured provider."""
-        normalized = (model or "").strip()
-        if not normalized:
-            raise ValueError(f"No model configured for provider '{self.provider}'.")
+        return normalize_model(self.provider, model)
 
-        if self.provider == "ollama":
-            return normalized
+    def _prepare_cacheable_messages(self, kwargs: dict, normalized_model: str) -> None:
+        """Adds prompt-cache breakpoints on a copy of the messages (caller lists stay untouched)."""
+        messages = kwargs.get("messages")
+        if not messages:
+            return
+        kwargs["messages"] = deepcopy(messages)
+        apply_prompt_cache_markers(kwargs["messages"], self.provider, normalized_model)
 
-        if self.provider == "google" or self.provider == "gemini":
-            # LiteLLM expects 'gemini/...' for Google Gemini models.
-            if not normalized.startswith("gemini/"):
-                return f"gemini/{normalized}"
-            return normalized
-
-        if self.provider == "openrouter":
-            # OpenRouter model ids often require provider prefixes (e.g. openai/gpt-5-mini).
-            # Only strip an optional leading openrouter/ wrapper if present.
-            if normalized.lower().startswith("openrouter/"):
-                return normalized.split("/", 1)[1].strip()
-            return normalized
-
-        if self.provider == "anthropic":
-            # Ensure Anthropic requests cannot be misrouted through OpenAI-compatible defaults.
-            if normalized.startswith("anthropic/"):
-                return normalized
-            return f"anthropic/{normalized}"
-
-        if self.provider == "kimi":
-            # Kimi (Moonshot) uses an OpenAI-compatible endpoint and expects raw model ids.
-            if normalized.lower().startswith("kimi/"):
-                return normalized.split("/", 1)[1].strip()
-            return normalized
-
-        if self.provider == "minimax":
-            # MiniMax uses an OpenAI-compatible endpoint and expects raw model ids.
-            if normalized.lower().startswith("minimax/"):
-                return normalized.split("/", 1)[1].strip()
-            return normalized
-
-        if "/" in normalized:
-            return normalized.split("/", 1)[1].strip()
-
-        return normalized
-    
     def _apply_thinking_settings(self, kwargs: dict) -> None:
         """Inject thinking parameters based on user settings and provider."""
         # MiniMax defaults to thinking-on server-side, so we must explicitly opt-out
         # when the user has not enabled thinking in their settings.
         if self.provider == "minimax":
             kwargs["thinking"] = (
-                {"type": "adaptive"}
-                if self.enable_thinking
-                else {"type": "disabled"}
+                {"type": "adaptive"} if self.enable_thinking else {"type": "disabled"}
             )
             return
 
@@ -993,10 +781,7 @@ class GameMasterLLM:
             return
 
         # LiteLLM maps 'thinking' to provider-specific params (budget_tokens for Anthropic, etc.)
-        kwargs["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": self.max_thinking_tokens
-        }
+        kwargs["thinking"] = {"type": "enabled", "budget_tokens": self.max_thinking_tokens}
 
     def _apply_openrouter_provider_routing(self, kwargs: dict) -> None:
         """Inject provider routing ordering into OpenRouter requests if configured."""
@@ -1008,7 +793,9 @@ class GameMasterLLM:
         if not self.openrouter_provider:
             return
 
-        providers = [p.strip() for p in self.openrouter_provider.split(",") if p.strip() and "/" not in p]
+        providers = [
+            p.strip() for p in self.openrouter_provider.split(",") if p.strip() and "/" not in p
+        ]
         if not providers:
             return
 
@@ -1021,7 +808,7 @@ class GameMasterLLM:
 
     def _get_decrypted_key(self, provider: str) -> str:
         from backend.core.config import settings
-        
+
         # 1. Check environment variables first (precedence)
         env_key = settings.get_env_api_key(provider)
         if env_key:
@@ -1030,7 +817,7 @@ class GameMasterLLM:
         # 2. Fallback to database
         if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
             raise ValueError(f"No API key configured for provider: {provider}")
-        
+
         encrypted_key = self.user.encrypted_api_keys[provider]
         return encryption_util.decrypt_key(encrypted_key)
 
@@ -1076,15 +863,16 @@ class GameMasterLLM:
         """
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
-        
+
         normalized_model = self._normalize_model(model)
 
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
+            "max_tokens": self.max_tokens
+            + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
 
@@ -1110,7 +898,7 @@ class GameMasterLLM:
             elif self.provider == "minimax":
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
-        
+
         # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
         openai_compatible_providers = ("kimi", "minimax", "deepseek")
         if (
@@ -1138,7 +926,7 @@ class GameMasterLLM:
         result = response.choices[0].message.content or ""
         result = self.clean_thinking_tags(result)
         result = self.normalize_voice_tags(result)
-        
+
         log_llm_interaction(
             model=model,
             provider=self.provider,
@@ -1153,7 +941,7 @@ class GameMasterLLM:
             phase=phase,
             metadata=metadata,
         )
-        
+
         return result
 
     async def aexecute_simple_task(
@@ -1173,15 +961,16 @@ class GameMasterLLM:
         """
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
-        
+
         normalized_model = self._normalize_model(model)
 
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
+            "max_tokens": self.max_tokens
+            + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
 
@@ -1207,7 +996,7 @@ class GameMasterLLM:
             elif self.provider == "minimax":
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
-        
+
         # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
         openai_compatible_providers = ("kimi", "minimax", "deepseek")
         if (
@@ -1218,7 +1007,7 @@ class GameMasterLLM:
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
 
         self._apply_openrouter_provider_routing(kwargs)
-        
+
         log_structured_event(
             "gm.turn.request",
             model=normalized_model,
@@ -1231,11 +1020,11 @@ class GameMasterLLM:
         )
 
         response = await self._acompletion_with_openrouter_fallback(kwargs)
-        
+
         result = response.choices[0].message.content or ""
         result = self.clean_thinking_tags(result)
         result = self.normalize_voice_tags(result)
-        
+
         log_llm_interaction(
             model=model,
             provider=self.provider,
@@ -1250,7 +1039,7 @@ class GameMasterLLM:
             phase=phase,
             metadata=metadata,
         )
-        
+
         return result
 
     async def stream_simple_task(
@@ -1272,16 +1061,19 @@ class GameMasterLLM:
         if messages is None:
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ]
-        
+
         normalized_model = self._normalize_model(model)
 
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
+            "max_tokens": self.max_tokens
+            + (self.max_thinking_tokens if self.enable_thinking else 0),
             "stream": True,
+            # Report token usage (incl. cached prompt tokens) in the final stream chunk.
+            "stream_options": {"include_usage": True},
         }
         self._apply_thinking_settings(kwargs)
 
@@ -1307,7 +1099,7 @@ class GameMasterLLM:
             elif self.provider == "minimax":
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
-        
+
         # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
         openai_compatible_providers = ("kimi", "minimax", "deepseek")
         if (
@@ -1318,7 +1110,7 @@ class GameMasterLLM:
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
 
         self._apply_openrouter_provider_routing(kwargs)
-        
+
         log_structured_event(
             "gm.turn.stream.request",
             model=normalized_model,
@@ -1330,6 +1122,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
+        self._prepare_cacheable_messages(kwargs, normalized_model)
         raw_stream = await self._acompletion_with_openrouter_fallback(kwargs)
         timed_stream = self._with_stream_timeout(
             raw_stream,
@@ -1338,6 +1131,191 @@ class GameMasterLLM:
         )
         stream = self._clean_stream_thinking(timed_stream)
         return self._clean_stream_voice_tags(stream)
+
+    @staticmethod
+    def _structured_response_format(json_mode: bool, minimax: bool, response_model: type[T]) -> Any:
+        """MiniMax rejects response_format; JSON-mode providers get json_object."""
+        if minimax:
+            return None
+        return {"type": "json_object"} if json_mode else response_model
+
+    def _build_structured_request(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_model: type[T],
+        model: str,
+    ) -> _StructuredRequest:
+        """Builds LiteLLM kwargs for a structured-output (Pydantic) task."""
+        normalized_model = self._normalize_model(model)
+        json_mode = uses_json_mode_fallback(self.provider, normalized_model)
+        if json_mode:
+            # Inject the schema into the prompt since strict enforcement is bypassed.
+            system_prompt += json_schema_instruction(response_model)
+
+        kwargs: dict[str, Any] = {
+            "model": normalized_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": self.max_tokens
+            + (self.max_thinking_tokens if self.enable_thinking and not json_mode else 0),
+        }
+        response_format = self._structured_response_format(
+            json_mode, is_minimax_model(self.provider, normalized_model), response_model
+        )
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+        if not json_mode:
+            self._apply_thinking_settings(kwargs)
+        if self.provider == "ollama":
+            self._validate_ollama_model(model)
+        apply_provider_endpoint(
+            kwargs,
+            provider=self.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            kimi_api_base=self.kimi_api_base,
+            minimax_api_base=self.minimax_api_base,
+        )
+        self._apply_openrouter_provider_routing(kwargs)
+        self._prepare_cacheable_messages(kwargs, normalized_model)
+        return _StructuredRequest(kwargs, normalized_model, json_mode, system_prompt)
+
+    def _log_structured_request(
+        self, request: _StructuredRequest, response_model: type[T], log_context: dict[str, Any]
+    ) -> None:
+        log_structured_event(
+            "gm.turn.request",
+            model=request.normalized_model,
+            provider=self.provider,
+            response_model=response_model.__name__,
+            **log_context,
+        )
+
+    def _log_structured_response(
+        self,
+        request: _StructuredRequest,
+        response: Any,
+        model: str,
+        user_prompt: str,
+        response_model: type[T],
+        log_context: dict[str, Any],
+    ) -> None:
+        log_llm_interaction(
+            model=model,
+            provider=self.provider,
+            system_prompt=request.system_prompt,
+            user_prompt=user_prompt,
+            response_content=response.choices[0].message.content or "",
+            raw_response=response.model_dump(),
+            event_type="gm.turn.response",
+            adventure_id=log_context["adventure_id"],
+            game_id=log_context["game_id"],
+            operation=log_context["operation"],
+            phase=log_context["phase"],
+            metadata={
+                **(log_context["metadata"] or {}),
+                "response_model": response_model.__name__,
+            },
+        )
+
+    @staticmethod
+    def _is_blank_response(response: Any) -> bool:
+        content = response.choices[0].message.content
+        return content is None or not str(content).strip()
+
+    @staticmethod
+    def _empty_content_error(finish_reason: Any) -> ValueError:
+        if finish_reason == "length":
+            return ValueError(
+                "LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings."
+            )
+        return ValueError("No content returned from LLM for complex task.")
+
+    @staticmethod
+    def _content_preview(content: str) -> str:
+        return content[:280].replace("\n", " ").strip()
+
+    def _parse_json_payload(self, content: str, finish_reason: Any) -> Any:
+        """Parses LLM JSON, attempting a best-effort repair of malformed documents."""
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as exc:
+            if finish_reason == "length" or self._is_truncated_json(content):
+                logger.error(
+                    "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
+                    len(content),
+                    finish_reason,
+                    content,
+                )
+                raise ValueError(_TRUNCATED_RESPONSE_MESSAGE) from exc
+            repaired = self._attempt_repair_truncated_json(content)
+            data = None
+            if repaired != content:
+                try:
+                    data = json.loads(repaired)
+                    logger.warning(
+                        "LLM response was malformed but could be repaired. Original length: %d.",
+                        len(content),
+                    )
+                except json.JSONDecodeError:
+                    data = None
+            if data is None:
+                logger.error(
+                    "LLM response was not valid JSON. Length: %d, finish_reason: %s. Full content: %s",
+                    len(content),
+                    finish_reason,
+                    content,
+                )
+                raise ValueError(
+                    f"Failed to parse LLM response as JSON. Preview: {self._content_preview(content)}"
+                ) from exc
+            return data
+
+    @staticmethod
+    def _as_mapping(data: Any, response_model: type[T]) -> dict:
+        if isinstance(data, list) and data:
+            logger.warning(
+                f"LLM returned a list for {response_model.__name__}. Taking first element."
+            )
+            data = data[0]
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"LLM returned {type(data).__name__} but a mapping was expected for {response_model.__name__}."
+            )
+        return data
+
+    def _parse_structured_content(self, response: Any, response_model: type[T]) -> T:
+        """Turns a completion response into the requested Pydantic model."""
+        content = response.choices[0].message.content
+        finish_reason = response.choices[0].finish_reason
+        if not content:
+            logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
+            raise self._empty_content_error(finish_reason)
+
+        try:
+            content = self._clean_json_string(self.clean_thinking_tags(content))
+            if not content:
+                logger.error(
+                    "LLM returned content that was empty after JSON cleanup. Raw response: %s",
+                    response.model_dump(),
+                )
+                raise self._empty_content_error(finish_reason)
+            data = self._parse_json_payload(self._repair_json(content), finish_reason)
+            return response_model(**self._as_mapping(data, response_model))
+        except json.JSONDecodeError as exc:
+            if finish_reason == "length" or self._is_truncated_json(content):
+                raise ValueError(_TRUNCATED_RESPONSE_MESSAGE) from exc
+            raise ValueError(
+                f"Failed to parse LLM response as JSON. Preview: {self._content_preview(content)}"
+            ) from exc
+        except ValidationError as exc:
+            raise ValueError(
+                f"LLM returned JSON that does not match expected schema {response_model.__name__}. "
+                f"Preview: {self._content_preview(content)}. Validation: {exc}"
+            ) from exc
 
     async def aexecute_complex_task(
         self,
@@ -1355,211 +1333,31 @@ class GameMasterLLM:
         """
         Async version of execute_complex_task.
         """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        normalized_model = self._normalize_model(model)
-        # Gemini and Anthropic often fail with complex Pydantic schemas in strict tool-use mode
-        # Anthropic has a 24-optional-parameter limit in their grammar compiler.
-        # Fallback to standard JSON mode (prompt-injected schema) for these models.
-        is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
-        is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
-        is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
-        is_kimi = "kimi" in normalized_model.lower() or "moonshot" in normalized_model.lower() or self.provider == "kimi"
-        is_minimax = "minimax" in normalized_model.lower() or self.provider == "minimax"
-        # Only treat as OpenRouter when the provider is explicitly openrouter; key-prefix
-        # detection would falsely match MiniMax/kimi/deepseek keys that also start with "sk-or-v1".
-        is_openrouter = self.provider == "openrouter"
-
-        # Many non-OpenAI providers (including DeepSeek on some platforms) do not support 
-        # complex Pydantic models in response_format (structured outputs).
-        # We fall back to standard JSON mode with prompt-injected schemas for these.
-        # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
-        use_json_mode_fallback = is_anthropic or is_deepseek or is_kimi or is_minimax or is_openrouter
-
-        if use_json_mode_fallback:
-            # Inject schema into prompt since we are bypassing strict tool enforcement
-            schema_json = json.dumps(response_model.model_json_schema(), separators=(",", ":"))
-            system_prompt += (
-                f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
-                f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
-                f"DO NOT include any markdown formatting or text outside the JSON.\n"
-                f"CRITICAL: Do NOT translate the JSON key names. The JSON keys MUST be exactly identical to the schema keys in English.\n"
-                f"SCHEMA:\n{schema_json}"
-            )
-            messages[0]["content"] = system_prompt
-
-        allow_thinking = not use_json_mode_fallback
-
-        kwargs = {
-            "model": normalized_model,
-            "messages": messages,
-            "response_format": ({"type": "json_object"} if use_json_mode_fallback and not is_minimax else (None if is_minimax else response_model)),
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking and allow_thinking else 0),
+        log_context = {
+            "adventure_id": adventure_id,
+            "game_id": game_id,
+            "operation": operation,
+            "phase": phase,
+            "metadata": metadata,
         }
-        if kwargs.get("response_format") is None:
-            kwargs.pop("response_format", None)
+        request = self._build_structured_request(system_prompt, user_prompt, response_model, model)
+        self._log_structured_request(request, response_model, log_context)
 
-        if allow_thinking:
-            self._apply_thinking_settings(kwargs)
+        response = await self._acompletion_with_openrouter_fallback(request.kwargs)
+        if request.json_mode and self._is_blank_response(response):
+            response = await self._retry_blank_json_content_async(request.kwargs, response)
 
-        if self.provider == "ollama":
-            self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
-
-        self._apply_openrouter_provider_routing(kwargs)
-
-        log_structured_event(
-            "gm.turn.request",
-            model=normalized_model,
-            provider=self.provider,
-            response_model=response_model.__name__,
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata=metadata,
-        )
-
-        response = await self._acompletion_with_openrouter_fallback(kwargs)
-        
-        content = response.choices[0].message.content
-        if use_json_mode_fallback and (content is None or not str(content).strip()):
-            response = await self._retry_blank_json_content_async(kwargs, response)
-            content = response.choices[0].message.content
-        
         # Log thinking/reasoning if present
         if adventure_id:
-            thinking_text = self.extract_thinking(content or "", response.choices[0].message)
+            message = response.choices[0].message
+            thinking_text = self.extract_thinking(message.content or "", message)
             if thinking_text:
                 await self._append_generation_log_async(adventure_id, "thinking", thinking_text)
-        
-        log_llm_interaction(
-            model=model,
-            provider=self.provider,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_content=content or "",
-            raw_response=response.model_dump(),
-            event_type="gm.turn.response",
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata={
-                **(metadata or {}),
-                "response_model": response_model.__name__,
-            },
+
+        self._log_structured_response(
+            request, response, model, user_prompt, response_model, log_context
         )
-        
-        finish_reason = response.choices[0].finish_reason
-
-        if not content:
-            logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
-            if finish_reason == "length":
-                raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
-            raise ValueError("No content returned from LLM for complex task.")
-            
-        try:
-            content = self.clean_thinking_tags(content)
-            content = self._clean_json_string(content)
-            if not content:
-                logger.error("LLM returned content that was empty after JSON cleanup. Raw response: %s", response.model_dump())
-                if finish_reason == "length":
-                    raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
-                raise ValueError("No content returned from LLM for complex task.")
-            content = self._repair_json(content)
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError as exc:
-                if finish_reason == "length" or self._is_truncated_json(content):
-                    logger.error(
-                        "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
-                        len(content), finish_reason, content,
-                    )
-                    raise ValueError(
-                        "LLM response was truncated (token limit). "
-                        "Please increase the token limit in Settings (Intelligence) and retry."
-                    ) from exc
-                # Best-effort: try to close the JSON and re-parse for diagnostic purposes
-                repaired = self._attempt_repair_truncated_json(content)
-                if repaired != content:
-                    try:
-                        data = json.loads(repaired)
-                        logger.warning(
-                            "LLM response was malformed but could be repaired. Original length: %d.",
-                            len(content),
-                        )
-                    except json.JSONDecodeError:
-                        data = None
-                else:
-                    data = None
-                if data is None:
-                    logger.error(
-                        "LLM response was not valid JSON. Length: %d, finish_reason: %s. Full content: %s",
-                        len(content), finish_reason, content,
-                    )
-                    preview = content[:280].replace("\n", " ").strip()
-                    raise ValueError(
-                        f"Failed to parse LLM response as JSON. Preview: {preview}"
-                    ) from exc
-            if isinstance(data, list) and len(data) > 0:
-                logger.warning(f"LLM returned a list for {response_model.__name__}. Taking first element.")
-                data = data[0]
-
-            if not isinstance(data, dict):
-                raise ValueError(f"LLM returned {type(data).__name__} but a mapping was expected for {response_model.__name__}.")
-
-            return response_model(**data)
-        except json.JSONDecodeError as exc:
-            if finish_reason == "length":
-                raise ValueError(
-                    "LLM response was truncated (token limit). "
-                    "Please increase the token limit in Settings (Intelligence) and retry."
-                ) from exc
-            if self._is_truncated_json(content):
-                raise ValueError(
-                    "LLM response was truncated (token limit). "
-                    "Please increase the token limit in Settings (Intelligence) and retry."
-                ) from exc
-            preview = content[:280].replace("\n", " ").strip()
-            raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc
-        except ValidationError as exc:
-            preview = content[:280].replace("\n", " ").strip()
-            raise ValueError(
-                f"LLM returned JSON that does not match expected schema {response_model.__name__}. "
-                f"Preview: {preview}. Validation: {exc}"
-            ) from exc
+        return self._parse_structured_content(response, response_model)
 
     def execute_complex_task(
         self,
@@ -1576,196 +1374,24 @@ class GameMasterLLM:
     ) -> T:
         """
         Strict mechanics task (Strict Mode).
-        Uses 'response_format' to force the LLM to return standard JSON 
+        Uses 'response_format' to force the LLM to return standard JSON
         that matches the given Pydantic model.
         """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        # litellm will translate the Pydantic model into a JSON schema 
-        # for providers that support structured outputs (e.g. OpenAI).
-        normalized_model = self._normalize_model(model)
-        is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
-        is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
-        is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
-        is_kimi = "kimi" in normalized_model.lower() or "moonshot" in normalized_model.lower() or self.provider == "kimi"
-        is_minimax = "minimax" in normalized_model.lower() or self.provider == "minimax"
-        # Only treat as OpenRouter when the provider is explicitly openrouter; key-prefix
-        # detection would falsely match MiniMax/kimi/deepseek keys that also start with "sk-or-v1".
-        is_openrouter = self.provider == "openrouter"
-
-        # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
-        use_json_mode_fallback = is_anthropic or is_deepseek or is_kimi or is_minimax or is_openrouter
-
-        if use_json_mode_fallback:
-            # Inject schema into prompt since we are bypassing strict enforcement
-            schema_json = json.dumps(response_model.model_json_schema(), separators=(",", ":"))
-            system_prompt += (
-                f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
-                f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
-                f"DO NOT include any markdown formatting or text outside the JSON.\n"
-                f"CRITICAL: Do NOT translate the JSON key names. The JSON keys MUST be exactly identical to the schema keys in English.\n"
-                f"SCHEMA:\n{schema_json}"
-            )
-            messages[0]["content"] = system_prompt
-
-        allow_thinking = not use_json_mode_fallback
-
-        kwargs = {
-            "model": normalized_model,
-            "messages": messages,
-            "response_format": ({"type": "json_object"} if use_json_mode_fallback and not is_minimax else (None if is_minimax else response_model)),
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking and allow_thinking else 0),
+        log_context = {
+            "adventure_id": adventure_id,
+            "game_id": game_id,
+            "operation": operation,
+            "phase": phase,
+            "metadata": metadata,
         }
-        if kwargs.get("response_format") is None:
-            kwargs.pop("response_format", None)
+        request = self._build_structured_request(system_prompt, user_prompt, response_model, model)
+        self._log_structured_request(request, response_model, log_context)
 
-        if allow_thinking:
-            self._apply_thinking_settings(kwargs)
+        response = self._completion_with_openrouter_fallback(request.kwargs)
+        if request.json_mode and self._is_blank_response(response):
+            response = self._retry_blank_json_content(request.kwargs, response)
 
-        if self.provider == "ollama":
-            self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                # Route through OpenAI-compatible chat endpoint to avoid provider-specific
-                # request fields that some local dependency combos reject (e.g. usage).
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-
-        # Auto-detect OpenRouter keys or provider
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
-
-        self._apply_openrouter_provider_routing(kwargs)
-
-        log_structured_event(
-            "gm.turn.request",
-            model=normalized_model,
-            provider=self.provider,
-            response_model=response_model.__name__,
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata=metadata,
+        self._log_structured_response(
+            request, response, model, user_prompt, response_model, log_context
         )
-
-        response = self._completion_with_openrouter_fallback(kwargs)
-        
-        content = response.choices[0].message.content
-        if use_json_mode_fallback and (content is None or not str(content).strip()):
-            response = self._retry_blank_json_content(kwargs, response)
-            content = response.choices[0].message.content
-        
-        log_llm_interaction(
-            model=model,
-            provider=self.provider,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_content=content or "",
-            raw_response=response.model_dump(),
-            event_type="gm.turn.response",
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata={
-                **(metadata or {}),
-                "response_model": response_model.__name__,
-            },
-        )
-        
-        finish_reason = response.choices[0].finish_reason
-
-        if not content:
-            logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
-            if finish_reason == "length":
-                raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
-            raise ValueError("No content returned from LLM for complex task.")
-            
-        try:
-            content = self.clean_thinking_tags(content)
-            content = self._clean_json_string(content)
-            if not content:
-                logger.error("LLM returned content that was empty after JSON cleanup. Raw response: %s", response.model_dump())
-                if finish_reason == "length":
-                    raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
-                raise ValueError("No content returned from LLM for complex task.")
-            content = self._repair_json(content)
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError as exc:
-                if finish_reason == "length" or self._is_truncated_json(content):
-                    logger.error(
-                        "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
-                        len(content), finish_reason, content,
-                    )
-                    raise ValueError(
-                        "LLM response was truncated (token limit). "
-                        "Please increase the token limit in Settings (Intelligence) and retry."
-                    ) from exc
-                repaired = self._attempt_repair_truncated_json(content)
-                if repaired != content:
-                    try:
-                        data = json.loads(repaired)
-                        logger.warning(
-                            "LLM response was malformed but could be repaired. Original length: %d.",
-                            len(content),
-                        )
-                    except json.JSONDecodeError:
-                        data = None
-                else:
-                    data = None
-                if data is None:
-                    logger.error(
-                        "LLM response was not valid JSON. Length: %d, finish_reason: %s. Full content: %s",
-                        len(content), finish_reason, content,
-                    )
-                    preview = content[:280].replace("\n", " ").strip()
-                    raise ValueError(
-                        f"Failed to parse LLM response as JSON. Preview: {preview}"
-                    ) from exc
-            return response_model(**data)
-        except json.JSONDecodeError as exc:
-            if finish_reason == "length":
-                raise ValueError(
-                    "LLM response was truncated (token limit). "
-                    "Please increase the token limit in Settings (Intelligence) and retry."
-                ) from exc
-            if self._is_truncated_json(content):
-                raise ValueError(
-                    "LLM response was truncated (token limit). "
-                    "Please increase the token limit in Settings (Intelligence) and retry."
-                ) from exc
-            preview = content[:280].replace("\n", " ").strip()
-            raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc
-        except ValidationError as exc:
-            preview = content[:280].replace("\n", " ").strip()
-            raise ValueError(
-                f"LLM returned JSON that does not match expected schema {response_model.__name__}. "
-                f"Preview: {preview}. Validation: {exc}"
-            ) from exc
+        return self._parse_structured_content(response, response_model)

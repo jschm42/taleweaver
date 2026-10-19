@@ -1,4 +1,5 @@
 """Tests for strict provider routing behavior in GameMasterLLM."""
+
 import pytest
 from pydantic import BaseModel
 
@@ -69,7 +70,10 @@ def test_openrouter_normalizes_prefixed_model(monkeypatch):
         encrypted_api_keys={"openrouter": "encrypted-placeholder"},
     )
 
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "sk-or-v1-test",
+    )
 
     router = GameMasterLLM(user, provider="openrouter")
 
@@ -112,7 +116,10 @@ def test_kimi_routes_via_moonshot_openai_compatible_endpoint(monkeypatch):
         encrypted_api_keys={"kimi": "encrypted-placeholder"},
     )
 
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-kimi-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "sk-kimi-test",
+    )
     router = GameMasterLLM(user, provider="kimi")
 
     captured = {}
@@ -154,7 +161,10 @@ def test_openrouter_retries_with_available_providers_on_provider_mismatch(monkey
         llm_settings={},
         encrypted_api_keys={"openrouter": "encrypted-placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "sk-or-v1-test",
+    )
     router = GameMasterLLM(user, provider="openrouter")
 
     calls = []
@@ -202,7 +212,10 @@ async def test_openrouter_async_retries_with_available_providers_on_provider_mis
         llm_settings={},
         encrypted_api_keys={"openrouter": "encrypted-placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "sk-or-v1-test",
+    )
     router = GameMasterLLM(user, provider="openrouter")
 
     calls = []
@@ -254,7 +267,9 @@ async def test_openrouter_routing_funnel_rejection_retries_without_provider_filt
         },
         encrypted_api_keys={"openrouter": "placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test"
+    )
     router = GameMasterLLM(user, provider="openrouter", model_category="small")
 
     calls = []
@@ -298,30 +313,41 @@ async def test_openrouter_routing_funnel_rejection_retries_without_provider_filt
     assert "provider" not in calls[1].get("extra_body", {})
 
 
-
 def test_thinking_defaults_to_disabled_when_not_configured(monkeypatch):
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "test-key",
+    )
     user = _make_user(llm_settings={"small_model": "gpt-4o-mini"})
     router = GameMasterLLM(user, provider="openai", model_category="small")
     assert router.enable_thinking is False
 
 
 def test_thinking_string_false_is_treated_as_disabled(monkeypatch):
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "test-key",
+    )
     user = _make_user(llm_settings={"small_enable_thinking": "false"})
     router = GameMasterLLM(user, provider="openai", model_category="small")
     assert router.enable_thinking is False
 
 
 def test_thinking_string_true_is_treated_as_enabled(monkeypatch):
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "test-key",
+    )
     user = _make_user(llm_settings={"small_enable_thinking": "true"})
     router = GameMasterLLM(user, provider="openai", model_category="small")
     assert router.enable_thinking is True
 
 
 def test_invalid_thinking_value_logs_warning_and_falls_back_to_false(monkeypatch, caplog):
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "test-key",
+    )
     user = _make_user(llm_settings={"small_enable_thinking": "definitely"})
 
     caplog.set_level("WARNING")
@@ -336,7 +362,9 @@ async def test_aexecute_simple_task(monkeypatch):
     user = _make_user(
         encrypted_api_keys={"openai": "encrypted-placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test"
+    )
     router = GameMasterLLM(user, provider="openai")
 
     captured = {}
@@ -377,7 +405,9 @@ async def test_stream_simple_task_openai_non_prefixed_model_sets_provider(monkey
     user = _make_user(
         encrypted_api_keys={"openai": "encrypted-placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test"
+    )
     router = GameMasterLLM(user, provider="openai")
 
     captured = {}
@@ -419,7 +449,9 @@ async def test_aexecute_complex_task_fallback_injects_schema_into_sent_system_pr
         required: str
 
     user = _make_user(encrypted_api_keys={"openai": "encrypted-placeholder"})
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test"
+    )
     router = GameMasterLLM(user, provider="openai")
 
     captured = {}
@@ -461,7 +493,9 @@ async def test_aexecute_complex_task_gemini_direct_uses_structured_outputs(monke
         required: str
 
     user = _make_user(encrypted_api_keys={"google": "encrypted-placeholder"})
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test"
+    )
     router = GameMasterLLM(user, provider="google")
 
     captured = {}
@@ -506,7 +540,10 @@ async def test_aexecute_complex_task_kimi_uses_json_mode_fallback(monkeypatch):
     user = _make_user(
         encrypted_api_keys={"kimi": "encrypted-placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-kimi-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "sk-kimi-test",
+    )
     router = GameMasterLLM(user, provider="kimi")
 
     captured = {}
@@ -550,7 +587,9 @@ async def test_aexecute_complex_task_surfaces_schema_validation_failure(monkeypa
         required: str
 
     user = _make_user(encrypted_api_keys={"openai": "encrypted-placeholder"})
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test"
+    )
     router = GameMasterLLM(user, provider="openai")
 
     class _Msg:
@@ -587,7 +626,9 @@ async def test_aexecute_complex_task_treats_empty_cleaned_content_as_no_content(
         required: str
 
     user = _make_user(encrypted_api_keys={"openai": "encrypted-placeholder"})
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test"
+    )
     router = GameMasterLLM(user, provider="openai")
 
     class _Msg:
@@ -627,7 +668,9 @@ def test_openrouter_provider_routing_single_provider(monkeypatch):
         },
         encrypted_api_keys={"openrouter": "placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test"
+    )
     router = GameMasterLLM(user, provider="openrouter", model_category="small")
 
     captured = {}
@@ -674,7 +717,9 @@ async def test_openrouter_provider_routing_comma_separated(monkeypatch):
         },
         encrypted_api_keys={"openrouter": "placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test"
+    )
     router = GameMasterLLM(user, provider="openrouter", model_category="complex")
 
     captured = {}
@@ -720,7 +765,9 @@ def test_openrouter_no_provider_routing_when_empty(monkeypatch):
         },
         encrypted_api_keys={"openrouter": "placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test"
+    )
     router = GameMasterLLM(user, provider="openrouter", model_category="small")
 
     captured = {}
@@ -762,7 +809,9 @@ async def test_acompletion_retries_on_transient_socket_timeout(monkeypatch):
         llm_settings={"complex_model_provider": "deepseek"},
         encrypted_api_keys={"deepseek": "placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-test"
+    )
     router = GameMasterLLM(user, provider="deepseek", model_category="complex")
 
     call_count = 0
@@ -784,7 +833,11 @@ async def test_acompletion_retries_on_transient_socket_timeout(monkeypatch):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise litellm.Timeout("DeepseekException - Connection timed out. Timeout passed=60.0, time taken=0.015 seconds", model="deepseek-chat", llm_provider="deepseek")
+            raise litellm.Timeout(
+                "DeepseekException - Connection timed out. Timeout passed=60.0, time taken=0.015 seconds",
+                model="deepseek-chat",
+                llm_provider="deepseek",
+            )
         return _Resp()
 
     monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
@@ -807,7 +860,9 @@ def test_completion_retries_on_transient_socket_timeout(monkeypatch):
         llm_settings={"small_model_provider": "openai"},
         encrypted_api_keys={"openai": "placeholder"},
     )
-    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-test")
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-test"
+    )
     router = GameMasterLLM(user, provider="openai", model_category="small")
 
     call_count = 0
@@ -829,7 +884,9 @@ def test_completion_retries_on_transient_socket_timeout(monkeypatch):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise litellm.APIConnectionError("Connection closed by peer", model="gpt-4o", llm_provider="openai")
+            raise litellm.APIConnectionError(
+                "Connection closed by peer", model="gpt-4o", llm_provider="openai"
+            )
         return _Resp()
 
     monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
@@ -844,3 +901,16 @@ def test_completion_retries_on_transient_socket_timeout(monkeypatch):
     assert out == "sync recovered"
 
 
+def test_openrouter_model_normalization_adds_author_prefix(monkeypatch):
+    user = _make_user(encrypted_api_keys={"openrouter": "encrypted-placeholder"})
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test"
+    )
+    router = GameMasterLLM(user, provider="openrouter")
+
+    assert router._normalize_model("gpt-4o-mini") == "openai/gpt-4o-mini"
+    assert router._normalize_model("openrouter/gpt-4o-mini") == "openai/gpt-4o-mini"
+    assert router._normalize_model("claude-3-5-sonnet") == "anthropic/claude-3-5-sonnet"
+    assert router._normalize_model("anthropic/claude-3-haiku") == "anthropic/claude-3-haiku"
+    assert router._normalize_model("gemini-2.5-flash") == "google/gemini-2.5-flash"
+    assert router._normalize_model("deepseek-chat") == "deepseek/deepseek-chat"

@@ -521,7 +521,7 @@ class WorldGenerator:
         min_scenes: Optional[int] = None,
         max_scenes: Optional[int] = None,
         container_generation_enabled: bool = True,
-        scripts_generation_enabled: bool = False,
+        scripts_generation_enabled: bool = True,
         min_containers: Optional[int] = None,
         max_containers: Optional[int] = None,
         text_log_generation_enabled: bool = True,

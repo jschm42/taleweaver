@@ -1,5 +1,4 @@
 import uuid6
-
 from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import synonym
 
@@ -10,87 +9,125 @@ class WorldScene(Base, TimestampMixin):
     """
     A pre-generated location in the game world.
     """
+
     __tablename__ = "world_scenes"
 
     pk = Column(Integer, primary_key=True, autoincrement=True)
-    id = Column(String(50), nullable=False) # Unique within an adventure (e.g. "FOREST_START")
-    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
-    session_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True)
-    
-    label = Column(String(100), nullable=False) # Human readable name
-    description = Column(String(2000), nullable=False) # Atmospheric description
-    image_url = Column(String(255), nullable=True) # Scene visual link
-    decorative_objects = Column(JSON, nullable=True) # Static, non-interactable background details
+    id = Column(String(50), nullable=False)  # Unique within an adventure (e.g. "FOREST_START")
+    template_id = Column(
+        String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True
+    )
+    session_id = Column(
+        String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True
+    )
+
+    label = Column(String(100), nullable=False)  # Human readable name
+    description = Column(String(2000), nullable=False)  # Atmospheric description
+    image_url = Column(String(255), nullable=True)  # Scene visual link
+    decorative_objects = Column(JSON, nullable=True)  # Static, non-interactable background details
     on_enter_scene_script = Column(String(5000), nullable=True)
     on_enter_scene_text = Column(String(5000), nullable=True)
+    on_leave_scene_script = Column(String(5000), nullable=True)
+    on_leave_scene_text = Column(String(5000), nullable=True)
     adventure_id = synonym("template_id")
+
 
 class WorldExit(Base, TimestampMixin):
     """
     A connection between two scenes, with optional lock state.
     """
+
     __tablename__ = "world_exits"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
-    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
-    session_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True)
-    
+    template_id = Column(
+        String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True
+    )
+    session_id = Column(
+        String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True
+    )
+
     from_scene_id = Column(String(50), nullable=False)
     to_scene_id = Column(String(50), nullable=False)
-    
-    label = Column(String(100), nullable=False) # e.g. "a heavy oak door"
+
+    label = Column(String(100), nullable=False)  # e.g. "a heavy oak door"
     exit_type = Column(String(20), default="one_way", nullable=False)
     is_locked = Column(Boolean, default=False, nullable=False)
-    lock_description = Column(String(255), nullable=True) # e.g. "The door is bolted from the other side."
+    lock_description = Column(
+        String(255), nullable=True
+    )  # e.g. "The door is bolted from the other side."
     code_to_unlock = Column(String(50), nullable=True)
     item_to_unlock = Column(String(50), nullable=True)
     rule_to_unlock = Column(String(500), nullable=True)
+    unlock_expression = Column(String(500), nullable=True)
     on_open_exit_script = Column(String(5000), nullable=True)
     on_open_exit_text = Column(String(5000), nullable=True)
+    on_exit_used_script = Column(String(5000), nullable=True)
+    on_exit_used_text = Column(String(5000), nullable=True)
+    on_unlock_success_script = Column(String(5000), nullable=True)
+    on_unlock_success_text = Column(String(5000), nullable=True)
+    on_unlock_failure_script = Column(String(5000), nullable=True)
+    on_unlock_failure_text = Column(String(5000), nullable=True)
     adventure_id = synonym("template_id")
+
 
 class WorldEntity(Base, TimestampMixin):
     """
     An NPC or Object that exists within the world and has a position.
     """
+
     __tablename__ = "world_entities"
 
     pk = Column(Integer, primary_key=True, autoincrement=True)
-    id = Column(String(50), nullable=False) # e.g. "OLD_LIBRARIAN"
-    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
-    session_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True)
-    
-    entity_type = Column(String(20), nullable=False) # "NPC" or "OBJECT"
+    id = Column(String(50), nullable=False)  # e.g. "OLD_LIBRARIAN"
+    template_id = Column(
+        String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True
+    )
+    session_id = Column(
+        String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True
+    )
+
+    entity_type = Column(String(20), nullable=False)  # "NPC" or "OBJECT"
     name = Column(String(100), nullable=False)
     description = Column(String(1000), nullable=False)
-    
+
     current_scene_id = Column(String(50), nullable=False)
-    spatial_position = Column(String(255), nullable=True) # e.g. "inside the desk"
+    spatial_position = Column(String(255), nullable=True)  # e.g. "inside the desk"
     image_url = Column(String(255), nullable=True)
-    
+
     # Advanced Item Management
-    item_type = Column(String(50), nullable=True) # e.g. "CONSUMABLE", "WEAPON", "KEY", "STATIC"
-    wearable_slots = Column(JSON, nullable=True) # e.g. ["Head", "Neck"]
+    item_type = Column(String(50), nullable=True)  # e.g. "CONSUMABLE", "WEAPON", "KEY", "STATIC"
+    wearable_slots = Column(JSON, nullable=True)  # e.g. ["Head", "Neck"]
     is_in_inventory = Column(Boolean, default=False, nullable=False)
     is_hidden = Column(Boolean, default=False, nullable=False)
-    reveal_rule = Column(String(500), nullable=True)  # GM rule that triggers reveal (e.g. 'If the prot searches under the table')
-    unlock_rule = Column(String(500), nullable=True)  # Optional hint rule for opening container items
-    
+    reveal_rule = Column(
+        String(500), nullable=True
+    )  # GM rule that triggers reveal (e.g. 'If the prot searches under the table')
+    unlock_rule = Column(
+        String(500), nullable=True
+    )  # Optional hint rule for opening container items
+
     is_portable = Column(Boolean, default=True, nullable=False)
-    combination_ingredients = Column(JSON, nullable=True) # List of entity IDs
+    combination_ingredients = Column(JSON, nullable=True)  # List of entity IDs
     reveals_item_id = Column(String(50), nullable=True)
     is_final_state = Column(Boolean, default=False, nullable=False)
     state_comment = Column(String(1000), nullable=True)
 
     # NPC Specific Fields
-    npc_type = Column(String(50), nullable=True) # HUMANOID, ANIMAL, MONSTER, BEING
-    movement_type = Column(String(50), nullable=True) # STATIONARY, MOVABLE
-    moveable = Column(Boolean, default=False, nullable=False) # Whether NPC can move between scenes
-    allowed_scenes = Column(JSON, default=list, nullable=True) # Allowed scenes list; empty/null = all scenes
-    notes = Column(String(1000), nullable=True) # Dynamic status/condition notes for GM and narration
+    npc_type = Column(String(50), nullable=True)  # HUMANOID, ANIMAL, MONSTER, BEING
+    movement_type = Column(String(50), nullable=True)  # STATIONARY, MOVABLE
+    moveable = Column(Boolean, default=False, nullable=False)  # Whether NPC can move between scenes
+    allowed_scenes = Column(
+        JSON, default=list, nullable=True
+    )  # Allowed scenes list; empty/null = all scenes
+    notes = Column(
+        String(1000), nullable=True
+    )  # Dynamic status/condition notes for GM and narration
     goal = Column(String(1000), nullable=True)
     character = Column(String(1000), nullable=True)
-    hp = Column(JSON, nullable=True) # Store as JSON to allow for {current: 10, max: 10} or similar if needed, or just Integer. User asked for Hitpoints.
+    hp = Column(
+        JSON, nullable=True
+    )  # Store as JSON to allow for {current: 10, max: 10} or similar if needed, or just Integer. User asked for Hitpoints.
     # Actually, let's keep it simple as Integers since user said "Hitpoints, Mana, Stamina"
     hp = Column(Integer, nullable=True)
     max_hp = Column(Integer, nullable=True)
@@ -98,7 +135,7 @@ class WorldEntity(Base, TimestampMixin):
     max_mana = Column(Integer, nullable=True)
     stamina = Column(Integer, nullable=True)
     max_stamina = Column(Integer, nullable=True)
-    voice = Column(String(50), nullable=True) # Optional Google TTS voice for this NPC
+    voice = Column(String(50), nullable=True)  # Optional Google TTS voice for this NPC
 
     # Stat Modifiers
     stat_modifier_strength = Column(Integer, nullable=True)
@@ -112,5 +149,5 @@ class WorldEntity(Base, TimestampMixin):
 
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)
-    metadata_json = Column(JSON, default=dict, nullable=False) # For stats or dynamic state
+    metadata_json = Column(JSON, default=dict, nullable=False)  # For stats or dynamic state
     adventure_id = synonym("template_id")

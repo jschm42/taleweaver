@@ -24,7 +24,7 @@ def test_chat_tool_intent_suffix_blocks_walkthrough_spoilers() -> None:
 
 
 def test_chat_rule_pass_prompt_requires_executed_movement_for_scene_change() -> None:
-    chat_rule_pass = prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT
+    chat_rule_pass = prompts.GM_CHAT_PROGRESSION_RULES_PROMPT
     assert "Set `new_scene_id` ONLY when the movement is actually executed this turn" in chat_rule_pass
     assert "not for plans, intentions, hypotheticals, or future goals" in chat_rule_pass
 
@@ -32,7 +32,7 @@ def test_chat_rule_pass_prompt_requires_executed_movement_for_scene_change() -> 
 def test_mechanics_and_rule_pass_prompts_block_solution_path_spoilers() -> None:
     mechanics = prompts.GM_MECHANICS_SUFFIX
     story_mechanics = prompts.GM_STORY_MECHANICS_SUFFIX
-    chat_rule_pass = prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT
+    chat_rule_pass = prompts.GM_CHAT_PROGRESSION_RULES_PROMPT
 
     assert "never provide exact step-by-step solution paths" in mechanics
     assert "never provide exact step-by-step solution paths" in story_mechanics
@@ -77,18 +77,34 @@ def test_world_and_gm_prompts_include_puzzle_contract_and_patterns() -> None:
     puzzle_contract = prompts.PUZZLE_JSON_ENFORCEMENT_BLOCK
     puzzle_patterns = prompts.PUZZLE_DESIGN_PATTERNS_BLOCK
 
-    prompt_targets = [
-        prompts.WORLD_GENERATION_SYSTEM_PROMPT,
+    runtime_prompts = [
         prompts.GM_MECHANICS_SUFFIX,
         prompts.GM_STORY_MECHANICS_SUFFIX,
         prompts.GM_CHAT_TOOL_INTENT_SUFFIX,
-        prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT,
+        prompts.GM_CHAT_PROGRESSION_RULES_PROMPT,
     ]
 
-    for prompt_text in prompt_targets:
-        assert puzzle_contract in prompt_text
-    # World generation prompt retains design patterns, while runtime prompts omit them to save tokens
+    # The puzzle contract and design patterns are world-design guidance: only world
+    # generation needs them; runtime turn prompts omit them to save tokens.
+    assert puzzle_contract in prompts.WORLD_GENERATION_SYSTEM_PROMPT
     assert puzzle_patterns in prompts.WORLD_GENERATION_SYSTEM_PROMPT
+    for prompt_text in runtime_prompts:
+        assert puzzle_contract not in prompt_text
+        assert puzzle_patterns not in prompt_text
+
+
+def test_gm_system_prompt_is_static_and_state_block_carries_live_data() -> None:
+    template = prompts.GAME_MASTER_SYSTEM_PROMPT_TEMPLATE
+    # Volatile data must not live in the cacheable system prompt.
+    for volatile_field in ("{time_str}", "{location_context}", "{sheet_json}"):
+        assert volatile_field not in template
+        assert volatile_field in prompts.GM_STATE_BLOCK_TEMPLATE
+
+
+def test_mechanics_suffixes_take_no_per_turn_placeholders() -> None:
+    for suffix in (prompts.GM_MECHANICS_SUFFIX, prompts.GM_STORY_MECHANICS_SUFFIX):
+        assert "{quests_json}" not in suffix
+        assert "{awards_json}" not in suffix
 
 
 def test_world_generation_prompts_define_directional_exit_contract() -> None:

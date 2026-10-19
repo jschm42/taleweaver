@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
+import { Lock, Sparkles, ChevronDown, ChevronRight } from 'lucide-vue-next'
 
 const props = defineProps<{
   show: boolean
@@ -18,8 +19,15 @@ const props = defineProps<{
     code_to_unlock?: string
     item_to_unlock?: string
     rule_to_unlock?: string
+    unlock_expression?: string
+    on_unlock_success_script?: string
+    on_unlock_success_text?: string
+    on_unlock_failure_script?: string
+    on_unlock_failure_text?: string
     on_open_exit_script?: string
     on_open_exit_text?: string
+    on_exit_used_script?: string
+    on_exit_used_text?: string
   }
   sceneReferenceOptions: any[]
   referenceOptions: any[]
@@ -37,8 +45,15 @@ const emit = defineEmits<{
     code_to_unlock?: string
     item_to_unlock?: string
     rule_to_unlock?: string
+    unlock_expression?: string
+    on_unlock_success_script?: string
+    on_unlock_success_text?: string
+    on_unlock_failure_script?: string
+    on_unlock_failure_text?: string
     on_open_exit_script?: string
     on_open_exit_text?: string
+    on_exit_used_script?: string
+    on_exit_used_text?: string
   }): void
 }>()
 
@@ -51,11 +66,19 @@ const EMPTY_FORM = {
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
+  unlock_expression: '',
+  on_unlock_success_script: '',
+  on_unlock_success_text: '',
+  on_unlock_failure_script: '',
+  on_unlock_failure_text: '',
   on_open_exit_script: '',
   on_open_exit_text: '',
+  on_exit_used_script: '',
+  on_exit_used_text: '',
 }
 
-const activeTab = ref<'simple' | 'advanced'>('simple')
+const showExitGuard = ref(false)
+const showExitUnlockTriggers = ref(false)
 
 const form = ref({ ...(props.initialForm || EMPTY_FORM) })
 
@@ -72,6 +95,8 @@ watch(
   (open) => {
     if (open) {
       form.value = { ...(props.initialForm || EMPTY_FORM) }
+      showExitGuard.value = false
+      showExitUnlockTriggers.value = false
     } else {
       form.value = { ...EMPTY_FORM }
     }
@@ -93,6 +118,7 @@ const hasGate = computed(() => {
     (form.value.code_to_unlock || '').trim()
     || (form.value.item_to_unlock || '').trim()
     || (form.value.rule_to_unlock || '').trim()
+    || (form.value.unlock_expression || '').trim()
   )
 })
 
@@ -132,25 +158,8 @@ function submit() {
             </button>
           </div>
 
-          <!-- Tabs -->
-          <div class="px-6 border-b border-white/10 flex gap-6">
-            <button
-              @click="activeTab = 'simple'"
-              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'simple' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
-            >
-              General
-            </button>
-            <button
-              @click="activeTab = 'advanced'"
-              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'advanced' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
-            >
-              Advanced
-            </button>
-          </div>
-
           <!-- Scrollable Content -->
           <div class="p-6 space-y-5 overflow-y-auto flex-1 text-slate-200">
-            <div v-show="activeTab === 'simple'" class="space-y-5">
             <div class="grid md:grid-cols-2 gap-3">
               <label class="text-xs text-slate-300 space-y-1">
                 <span>From Scene</span>
@@ -239,26 +248,123 @@ function submit() {
               </div>
               <input v-model="form.rule_to_unlock" maxlength="500" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all" placeholder="e.g. Protagonist defeats NPC_2" />
             </label>
+
+            <!-- On Open Exit Trigger (Unified in General) -->
+            <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+              <ScriptEditor
+                v-model="form.on_open_exit_script"
+                label="On Open Exit Script"
+                help-text="Executed immediately when the player unlocks/opens this exit."
+                context="on_open_exit"
+                min-height="100px"
+              />
+              <div class="space-y-1">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Open Exit Text</label>
+                <textarea v-model="form.on_open_exit_text" rows="2" placeholder="e.g. The rusty heavy iron door slowly creaks open." class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+              </div>
             </div>
 
-            <div v-show="activeTab === 'advanced'" class="space-y-5">
-              <div class="space-y-2">
-                <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Advanced Triggers</p>
-                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
-                  Define scripts or text cues to execute during interaction. (Leave blank if none).
+            <!-- On Exit Used Transition Trigger -->
+            <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+              <ScriptEditor
+                v-model="form.on_exit_used_script"
+                label="On Exit Used Script (Transition Trigger)"
+                help-text="Executed immediately when the player traverses this exit."
+                context="exit_used"
+                min-height="100px"
+              />
+              <div class="space-y-1">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Exit Used Text</label>
+                <textarea v-model="form.on_exit_used_text" rows="2" placeholder="e.g. You step through the threshold into the dark corridor." class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
+              </div>
+            </div>
+
+            <!-- Collapsible Panel 1: Deterministic Guard (Default Collapsed) -->
+            <div class="border border-white/10 rounded-xl overflow-hidden bg-black/30">
+              <button
+                type="button"
+                @click="showExitGuard = !showExitGuard"
+                class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+              >
+                <div class="flex items-center gap-2">
+                  <Lock class="w-3.5 h-3.5 text-emerald-400" />
+                  <span class="text-[11px] font-black text-slate-300 uppercase tracking-wider">
+                    Deterministic Guard Expression
+                  </span>
+                  <span v-if="form.unlock_expression" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-bold">
+                    Configured
+                  </span>
+                </div>
+                <component :is="showExitGuard ? ChevronDown : ChevronRight" class="w-4 h-4 text-slate-400" />
+              </button>
+
+              <div v-if="showExitGuard" class="p-4 border-t border-white/5 space-y-2">
+                <ScriptEditor
+                  v-model="form.unlock_expression"
+                  label="Deterministic Script Guard Expression"
+                  help-text="Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails."
+                  context="guard_expression"
+                  placeholder="e.g. tw.switches.get('DRAWBRIDGE') == 'LOWERED' or tw.vars.get('guard_bribed') == True"
+                  min-height="90px"
+                />
+                <p class="text-[10px] text-slate-400">
+                  Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails.
                 </p>
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+            </div>
+
+            <!-- Collapsible Panel 2: Unlocking Transition Rules (Default Collapsed) -->
+            <div class="border border-white/10 rounded-xl overflow-hidden bg-black/30">
+              <button
+                type="button"
+                @click="showExitUnlockTriggers = !showExitUnlockTriggers"
+                class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+              >
+                <div class="flex items-center gap-2">
+                  <Sparkles class="w-3.5 h-3.5 text-emerald-400" />
+                  <span class="text-[11px] font-black text-slate-300 uppercase tracking-wider">
+                    Unlocking Transition Rules
+                  </span>
+                  <span v-if="form.on_unlock_success_script || form.on_unlock_failure_script" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-bold">
+                    Configured
+                  </span>
+                </div>
+                <component :is="showExitUnlockTriggers ? ChevronDown : ChevronRight" class="w-4 h-4 text-slate-400" />
+              </button>
+
+              <div v-if="showExitUnlockTriggers" class="p-4 border-t border-white/5 space-y-4">
                 <ScriptEditor
-                  v-model="form.on_open_exit_script"
-                  label="On Open Exit Script"
-                  help-text="Executed immediately when the player unlocks/opens this exit."
-                  context="on_open_exit"
-                  min-height="120px"
+                  v-model="form.on_unlock_success_script"
+                  label="On Unlock Success Script"
+                  help-text="Executed immediately when this exit is successfully unlocked."
+                  context="exit_unlock_success"
+                  min-height="100px"
                 />
-                <div class="space-y-2">
-                  <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Open Exit Text</label>
-                  <textarea v-model="form.on_open_exit_text" rows="3" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-none"></textarea>
+                <div class="space-y-1">
+                  <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Unlock Success Text</label>
+                  <textarea
+                    v-model="form.on_unlock_success_text"
+                    rows="2"
+                    placeholder="e.g. The mechanism unlatches with a heavy metallic sound."
+                    class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500/50 outline-none"
+                  ></textarea>
+                </div>
+
+                <ScriptEditor
+                  v-model="form.on_unlock_failure_script"
+                  label="On Unlock Failure Script"
+                  help-text="Executed when unlocking this exit fails or is blocked by guard."
+                  context="exit_unlock_failure"
+                  min-height="100px"
+                />
+                <div class="space-y-1">
+                  <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Unlock Failure Text</label>
+                  <textarea
+                    v-model="form.on_unlock_failure_text"
+                    rows="2"
+                    placeholder="e.g. The locking bar refuses to shift. You cannot force it open."
+                    class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500/50 outline-none"
+                  ></textarea>
                 </div>
               </div>
             </div>

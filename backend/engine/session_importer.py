@@ -182,6 +182,8 @@ class SessionImporter:
                     walkthrough=session_state_data.get("walkthrough"),
                     completed_condition=session_state_data.get("completed_condition"),
                     gameover_condition=session_state_data.get("gameover_condition"),
+                    completed_guard_expression=session_state_data.get("completed_guard_expression"),
+                    gameover_guard_expression=session_state_data.get("gameover_guard_expression"),
                     tts_director_notes=session_state_data.get("tts_director_notes"),
                     selected_image_styles=session_state_data.get("selected_image_styles"),
                     selected_tone=session_state_data.get("selected_tone"),

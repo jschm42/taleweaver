@@ -14,10 +14,10 @@ import pytest
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.core.world_validator import validate_adventure
 from backend.engine.rule_engine import GameEvent
+from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity
 
 pytestmark = pytest.mark.asyncio
@@ -170,7 +170,7 @@ async def test_constructable_materializes_when_all_ingredients_combined(setup_te
         manager = GameTurnManager(db, state.session_id, user)
         await manager.initialize()
 
-        event = GameEvent()
+        event = GameEvent(combination_intent=True)
         messages = await manager._enforce_constructable_combination(event, "combine battery with torch")
 
         assert any("create" in m.lower() for m in messages)
@@ -206,7 +206,7 @@ async def test_constructable_noop_when_ingredient_missing(setup_test_db):
         manager = GameTurnManager(db, state.session_id, user)
         await manager.initialize()
 
-        event = GameEvent()
+        event = GameEvent(combination_intent=True)
         messages = await manager._enforce_constructable_combination(event, "combine battery with torch")
 
         assert messages == []
@@ -241,7 +241,7 @@ async def test_constructable_noop_when_already_revealed(setup_test_db):
         manager = GameTurnManager(db, state.session_id, user)
         await manager.initialize()
 
-        event = GameEvent()
+        event = GameEvent(combination_intent=True)
         messages = await manager._enforce_constructable_combination(event, "combine battery with torch")
 
         assert messages == []
@@ -306,7 +306,7 @@ async def test_constructable_consumes_scene_ingredient(setup_test_db):
         manager = GameTurnManager(db, state.session_id, user)
         await manager.initialize()
 
-        event = GameEvent()
+        event = GameEvent(combination_intent=True)
         messages = await manager._enforce_constructable_combination(event, "use battery on torch")
 
         assert any("create" in m.lower() for m in messages)
@@ -353,4 +353,38 @@ async def test_constructable_reverts_illegal_spawn(setup_test_db):
         assert not event.new_inventory_items
         assert not event.updated_entities
         assert any("Rule Violation" in m for m in messages)
+
+
+async def test_constructable_crafts_in_any_language_when_gm_flags_intent(setup_test_db):
+    """No keyword lists: a French adventure crafts as soon as the GM flags combination_intent."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        user, _adv, avatar, state = await _seed(db)
+        db.add(WorldEntity(id="PILE", session_id=state.session_id, entity_type="OBJECT",
+                           item_type="DEFAULT", name="Pile", description="Une pile.", current_scene_id="START",
+                           is_hidden=False, is_in_inventory=True))
+        db.add(WorldEntity(id="TORCHE", session_id=state.session_id, entity_type="OBJECT",
+                           item_type="DEFAULT", name="Torche", description="Une torche.", current_scene_id="START",
+                           is_hidden=False, is_in_inventory=True))
+        db.add(WorldEntity(id="LANTERNE", session_id=state.session_id, entity_type="OBJECT",
+                           item_type="CONSTRUCTABLE", name="Lanterne", description="Une lanterne.",
+                           current_scene_id="START", is_hidden=True, combination_ingredients=["PILE", "TORCHE"]))
+        avatar.inventory = [{"id": "PILE", "name": "Pile"}, {"id": "TORCHE", "name": "Torche"}]
+        await db.commit()
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        # Act
+        crafted = await manager._enforce_constructable_combination(
+            GameEvent(combination_intent=True), "j'assemble la pile avec la torche"
+        )
+        not_flagged = await manager._enforce_constructable_combination(
+            GameEvent(combination_intent=False), "j'assemble la pile avec la torche"
+        )
+
+        # Assert
+        assert any("Lanterne" in m for m in crafted)
+        assert not any("Lanterne" in m for m in not_flagged)
 
