@@ -13,6 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 
 from backend.api.routes.adventures.agent_actions import execute_agent_action
+from backend.api.routes.adventures.agent_combat import decide_combat_turn
 from backend.api.routes.adventures.agent_logic import AgentService
 from backend.api.routes.adventures.agent_settings import build_agent_snapshot
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
@@ -43,8 +44,13 @@ async def ensure_agent_active(game_id: str, current_user: User) -> None:
 
 
 async def _decide(db, game_id: str, current_user: User, manager: GameTurnManager):
-    """Returns (decision or None, whether the decision call failed)."""
+    """Returns (decision or None, whether the decision call failed).
+
+    Fights and loot phases are played by the deterministic combat tactician.
+    """
     try:
+        if manager._has_combat_phase():
+            return await decide_combat_turn(manager), False
         decision = await AgentService.get_decision(
             db, game_id, current_user, manager.state, manager.avatar, manager.adventure, manager
         )
