@@ -3,6 +3,7 @@ Centralized model and provider configurations for TaleWeaver.
 """
 
 LLM_PROVIDERS = [
+    {"id": "custom_openai", "name": "OpenAI-Compatible API"},
     {"id": "openai", "name": "OpenAI"},
     {"id": "google", "name": "Google Gemini"},
     {"id": "kimi", "name": "Kimi (Moonshot)"},
@@ -28,6 +29,7 @@ TTS_PROVIDERS = [
 ]
 
 PREDEFINED_LLM_MODELS = {
+    "custom_openai": [],
     "openai": ["gpt-5.4-mini", "gpt-5.3", "gpt-5.4", "gpt-5.5"],
     "google": ["gemini-3.1-pro-preview", "gemini-2.5-flash"],
     "kimi": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-k2.6", "kimi-k2.5"],
@@ -39,11 +41,32 @@ PREDEFINED_LLM_MODELS = {
 }
 
 PREDEFINED_IMAGE_MODELS = {
-    "openai": ["gpt-image-1-mini","gpt-image-1.5", "gpt-image-2"],
-    "openrouter": ["black-forest-labs/flux.2-klein-4b", "sourceful/riverflow-v2-fast",
-     "openai/gpt-5.4-image-2", "google/gemini-3.1-flash-image-preview" ,"openai/gpt-5-image-mini"],
-    "black_forest_labs": ["flux-3-image", "flux-3-image-klein", "flux-2-klein-4b", "flux-2-klein-9b", "flux-dev", "flux-pro", "flux-pro-1.1", "flux-2-flex", "flux-2-pro", "flux-2-max"],
-    "google": ["gemini-3.1-flash-image-preview", "gemini-2.5-flash-image", "imagen-4.0-fast-generate-001", "imagen-4.0-generate-001"],
+    "openai": ["gpt-image-1-mini", "gpt-image-1.5", "gpt-image-2"],
+    "openrouter": [
+        "black-forest-labs/flux.2-klein-4b",
+        "sourceful/riverflow-v2-fast",
+        "openai/gpt-5.4-image-2",
+        "google/gemini-3.1-flash-image-preview",
+        "openai/gpt-5-image-mini",
+    ],
+    "black_forest_labs": [
+        "flux-3-image",
+        "flux-3-image-klein",
+        "flux-2-klein-4b",
+        "flux-2-klein-9b",
+        "flux-dev",
+        "flux-pro",
+        "flux-pro-1.1",
+        "flux-2-flex",
+        "flux-2-pro",
+        "flux-2-max",
+    ],
+    "google": [
+        "gemini-3.1-flash-image-preview",
+        "gemini-2.5-flash-image",
+        "imagen-4.0-fast-generate-001",
+        "imagen-4.0-generate-001",
+    ],
     "ollama": ["x/flux2-klein", "stable-diffusion-v1-5"],
     "stable_diffusion": ["default"],
 }
@@ -60,5 +83,5 @@ PREDEFINED_TTS_MODELS = {
         {"id": "eleven_multilingual_v2", "name": "Multilingual v2"},
         {"id": "eleven_flash_v2_5", "name": "Flash v2.5"},
         {"id": "eleven_flash_v2", "name": "Flash v2"},
-    ]
+    ],
 }

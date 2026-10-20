@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import CustomOpenAIEndpoint from './CustomOpenAIEndpoint.vue'
 
 const props = defineProps<{
   llmForm: any
@@ -33,6 +34,9 @@ const normalizeLocalForm = (data: any) => ({
   play_agent_monkey_mode: typeof data?.play_agent_monkey_mode === 'boolean' ? data.play_agent_monkey_mode : false,
   play_agent_personality: data?.play_agent_personality || 'casual',
   play_agent_custom_personality: data?.play_agent_custom_personality || '',
+  custom_openai_url: data?.custom_openai_url || '',
+  custom_openai_timeout: typeof data?.custom_openai_timeout === 'number' ? data.custom_openai_timeout : 300,
+  custom_openai_response_format: data?.custom_openai_response_format || 'prompt',
 })
 
 const localForm = ref(normalizeLocalForm(props.llmForm))
@@ -69,7 +73,7 @@ const missingProviders = computed(() => {
   ])
   const missing: string[] = []
   for (const p of providers) {
-    if (p && p !== 'ollama' && !props.configuredKeys?.[p]) {
+    if (p && !['ollama', 'custom_openai'].includes(p) && !props.configuredKeys?.[p]) {
       missing.push(p)
     }
   }
@@ -77,10 +81,16 @@ const missingProviders = computed(() => {
 })
 
 const isModelCustom = (model: string, provider: string) => {
-  if (!model) return false
+  if (!model) return provider === 'custom_openai'
   const predefined = props.availableConstants?.predefined_llm_models?.[provider]
   if (!predefined) return true
   return !predefined.includes(model)
+}
+
+const useManualModel = (model: string, provider: string): boolean => {
+  if (provider === 'custom_openai') return isModelCustom(model, provider)
+  const predefined = props.availableConstants?.predefined_llm_models?.[provider]
+  return Boolean(model && predefined && !predefined.includes(model))
 }
 
 const customTiers = ref<Record<string, boolean>>({
@@ -127,7 +137,7 @@ const getProviderName = (id: string) => {
 }
 
 const isProviderConfigured = (providerId: string) => {
-  if (providerId === 'ollama') return true
+  if (['ollama', 'custom_openai'].includes(providerId)) return true
   return Boolean(props.configuredKeys?.[providerId])
 }
 
@@ -154,32 +164,27 @@ const resolveModelOnProviderChange = (
 
 watch(() => localForm.value.small_model_provider, (provider, oldProvider) => {
   localForm.value.small_model = resolveModelOnProviderChange(localForm.value.small_model, provider, oldProvider)
-  const predefined = props.availableConstants?.predefined_llm_models?.[provider]
-  customTiers.value.small = Boolean(localForm.value.small_model && predefined && !predefined.includes(localForm.value.small_model))
+  customTiers.value.small = useManualModel(localForm.value.small_model, provider)
 })
 
 watch(() => localForm.value.complex_model_provider, (provider, oldProvider) => {
   localForm.value.complex_model = resolveModelOnProviderChange(localForm.value.complex_model, provider, oldProvider)
-  const predefined = props.availableConstants?.predefined_llm_models?.[provider]
-  customTiers.value.complex = Boolean(localForm.value.complex_model && predefined && !predefined.includes(localForm.value.complex_model))
+  customTiers.value.complex = useManualModel(localForm.value.complex_model, provider)
 })
 
 watch(() => localForm.value.generator_model_provider, (provider, oldProvider) => {
   localForm.value.generator_model = resolveModelOnProviderChange(localForm.value.generator_model, provider, oldProvider)
-  const predefined = props.availableConstants?.predefined_llm_models?.[provider]
-  customTiers.value.generator = Boolean(localForm.value.generator_model && predefined && !predefined.includes(localForm.value.generator_model))
+  customTiers.value.generator = useManualModel(localForm.value.generator_model, provider)
 })
 
 watch(() => localForm.value.play_agent_model_provider, (provider, oldProvider) => {
   localForm.value.play_agent_model = resolveModelOnProviderChange(localForm.value.play_agent_model, provider, oldProvider)
-  const predefined = props.availableConstants?.predefined_llm_models?.[provider]
-  customTiers.value.play_agent = Boolean(localForm.value.play_agent_model && predefined && !predefined.includes(localForm.value.play_agent_model))
+  customTiers.value.play_agent = useManualModel(localForm.value.play_agent_model, provider)
 })
 
 watch(() => localForm.value.compression_model_provider, (provider, oldProvider) => {
   localForm.value.compression_model = resolveModelOnProviderChange(localForm.value.compression_model, provider, oldProvider)
-  const predefined = props.availableConstants?.predefined_llm_models?.[provider]
-  customTiers.value.compression = Boolean(localForm.value.compression_model && predefined && !predefined.includes(localForm.value.compression_model))
+  customTiers.value.compression = useManualModel(localForm.value.compression_model, provider)
 })
 
 const hasOllamaProviderSelected = computed(() => (
@@ -222,7 +227,7 @@ const refreshMinimaxModels = () => {
   emit('refreshMinimaxModels', localForm.value.minimax_url)
 }
 
-const LLM_MODEL_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'google', 'openrouter', 'deepseek', 'kimi', 'minimax']
+const LLM_MODEL_DISCOVERY_PROVIDERS = ['custom_openai', 'openai', 'anthropic', 'google', 'openrouter', 'deepseek', 'kimi', 'minimax']
 
 const isLlmDiscoveryProvider = (provider: string | undefined | null) => {
   return !!provider && LLM_MODEL_DISCOVERY_PROVIDERS.includes(provider)
@@ -238,7 +243,7 @@ const refreshLlmProviderModels = (provider: string) => {
   if (provider === 'minimax') {
     emit('refreshMinimaxModels', localForm.value.minimax_url)
   } else {
-    emit('refreshLlmModels', provider, localForm.value.minimax_url)
+    emit('refreshLlmModels', provider, provider === 'custom_openai' ? localForm.value.custom_openai_url : undefined)
   }
 }
 
@@ -1198,6 +1203,11 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
           </div>
         </div>
 
+        <label v-if="localForm.compression_model_provider === 'custom_openai' && customTiers.compression" class="block text-xs text-slate-300">
+          Custom Model Identifier
+          <input v-model="localForm.compression_model" type="text" placeholder="Exact model ID, including vendor/name" class="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-white font-mono" />
+        </label>
+
         <div v-if="testResults.compression" class="p-3 rounded-xl text-xs font-mono flex items-center gap-2 border bg-slate-950 border-slate-800">
           <i :class="testResults.compression.status === 'success' ? 'ra ra-check text-emerald-400' : 'ra ra-warning text-rose-400'"></i>
           <span>{{ testResults.compression.message }}</span>
@@ -1216,11 +1226,21 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
         </div>
         <div>
           <h3 class="text-base font-bold text-white">Local & Custom API Endpoints</h3>
-          <p class="text-xs text-slate-400 mt-0.5">Configure host addresses for self-hosted and on-premise model backends.</p>
+          <p class="text-xs text-slate-400 mt-0.5">Configure API addresses for hosted gateways and self-hosted model backends.</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CustomOpenAIEndpoint
+          v-model:url="localForm.custom_openai_url"
+          v-model:timeout="localForm.custom_openai_timeout"
+          v-model:response-format="localForm.custom_openai_response_format"
+          :loading="isLlmProviderLoading('custom_openai')"
+          :model-count="availableConstants?.predefined_llm_models?.custom_openai?.length || 0"
+          :has-key="!!configuredKeys?.custom_openai"
+          @detect="refreshLlmProviderModels('custom_openai')"
+          @vault="emit('switchSection', 'keys')"
+        />
         <!-- Ollama Endpoint -->
         <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
           <div class="flex items-center justify-between">

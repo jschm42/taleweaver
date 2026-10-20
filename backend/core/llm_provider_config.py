@@ -12,7 +12,7 @@ from backend.core.llm_request_tuning import compact_json_schema
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 # OpenAI-compatible providers whose keys may also start with "sk-or-v1" and must never be
 # auto-routed to OpenRouter.
-OPENAI_COMPATIBLE_PROVIDERS = ("kimi", "minimax", "deepseek")
+OPENAI_COMPATIBLE_PROVIDERS = ("kimi", "minimax", "deepseek", "custom_openai")
 
 # provider -> (custom_llm_provider, fixed api_base)
 _FIXED_ENDPOINTS: dict[str, tuple[str, str | None]] = {
@@ -77,6 +77,8 @@ def _normalize_default(model: str) -> str:
 
 _MODEL_NORMALIZERS = {
     "ollama": lambda model: model,
+    # LiteLLM removes one adapter prefix; always add it so raw vendor/openai slashes survive.
+    "custom_openai": lambda model: f"openai/{model}",
     "google": _normalize_gemini,
     "gemini": _normalize_gemini,
     "openrouter": _normalize_openrouter,
@@ -108,6 +110,14 @@ def apply_provider_endpoint(
     if provider == "ollama":
         kwargs["api_base"] = api_base
         kwargs["custom_llm_provider"] = "ollama"
+        return
+
+    if provider == "custom_openai":
+        if not api_base:
+            raise ValueError("Configure an OpenAI-compatible Base URL first.")
+        kwargs.update(
+            api_base=api_base, api_key=api_key or "local-no-key", custom_llm_provider="openai"
+        )
         return
 
     kwargs["api_key"] = api_key
@@ -151,7 +161,7 @@ def uses_json_mode_fallback(provider: str, normalized_model: str) -> bool:
         or "moonshot" in model
         or provider == "kimi"
         or is_minimax_model(provider, normalized_model)
-        or provider == "openrouter"
+        or provider in ("openrouter", "custom_openai")
     )
 
 

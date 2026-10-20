@@ -133,6 +133,10 @@ class GameMasterLLM:
 
     def _completion_with_openrouter_fallback(self, kwargs: dict):
         """Call LiteLLM completion and retry for OpenRouter provider-order mismatches and transient connection drops (up to 3 retries)."""
+        if self.provider == "custom_openai":
+            from backend.core.custom_openai import complete
+
+            return complete(self, kwargs)
         max_transient_retries = 4
         for attempt in range(max_transient_retries):
             try:
@@ -190,6 +194,10 @@ class GameMasterLLM:
 
     async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
         """Async variant of completion retry for OpenRouter provider-order mismatches and transient connection drops (up to 3 retries)."""
+        if self.provider == "custom_openai":
+            from backend.core.custom_openai import acomplete
+
+            return await acomplete(self, kwargs)
         max_transient_retries = 4
         for attempt in range(max_transient_retries):
             try:
@@ -741,7 +749,11 @@ class GameMasterLLM:
             self._category_setting(llm_settings, prefix, "openrouter_provider") or ""
         ).strip()
 
-        if self.provider == "ollama":
+        if self.provider == "custom_openai":
+            from backend.core.custom_openai import configure_custom_router
+
+            configure_custom_router(self, llm_settings)
+        elif self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:
             self.api_key = self._get_decrypted_key(self.provider)
@@ -786,6 +798,8 @@ class GameMasterLLM:
 
     def _apply_openrouter_provider_routing(self, kwargs: dict) -> None:
         """Inject provider routing ordering into OpenRouter requests if configured."""
+        if self.provider == "custom_openai":
+            return
         if self.provider != "openrouter" and not (
             isinstance(self.api_key, str) and self.api_key.startswith("sk-or-v1")
         ):
@@ -879,35 +893,14 @@ class GameMasterLLM:
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+        apply_provider_endpoint(
+            kwargs,
+            provider=self.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            kimi_api_base=self.kimi_api_base,
+            minimax_api_base=self.minimax_api_base,
+        )
 
         self._apply_openrouter_provider_routing(kwargs)
 
@@ -977,35 +970,14 @@ class GameMasterLLM:
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+        apply_provider_endpoint(
+            kwargs,
+            provider=self.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            kimi_api_base=self.kimi_api_base,
+            minimax_api_base=self.minimax_api_base,
+        )
 
         self._apply_openrouter_provider_routing(kwargs)
 
@@ -1080,35 +1052,14 @@ class GameMasterLLM:
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+        apply_provider_endpoint(
+            kwargs,
+            provider=self.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            kimi_api_base=self.kimi_api_base,
+            minimax_api_base=self.minimax_api_base,
+        )
 
         self._apply_openrouter_provider_routing(kwargs)
 
@@ -1166,6 +1117,10 @@ class GameMasterLLM:
         response_format = self._structured_response_format(
             json_mode, is_minimax_model(self.provider, normalized_model), response_model
         )
+        if self.provider == "custom_openai":
+            from backend.core.custom_openai import structured_response_format
+
+            response_format = structured_response_format(self, response_model)
         if response_format is not None:
             kwargs["response_format"] = response_format
         if not json_mode:

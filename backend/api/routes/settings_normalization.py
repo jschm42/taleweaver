@@ -29,8 +29,14 @@ TTS_MODEL_ALIASES = {
 
 PLAY_AGENT_PERSONALITIES = ("casual", "bureaucrat", "powerplayer", "custom")
 _LEGACY_PERSONALITIES = {"bürokrat": "bureaucrat", "buerokrat": "bureaucrat"}
+_CUSTOM_OPENAI_DEFAULTS = {
+    "custom_openai_url": "",
+    "custom_openai_timeout": 300,
+    "custom_openai_response_format": "prompt",
+}
 
 _LLM_FALLBACK: dict[str, Any] = {
+    **_CUSTOM_OPENAI_DEFAULTS,
     "small_model": "",
     "small_model_provider": "openai",
     "small_max_tokens": DEFAULT_SMALL_MAX_TOKENS,
@@ -211,7 +217,7 @@ def normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     if not llm_settings:
         return dict(_LLM_FALLBACK)
 
-    normalized = dict(llm_settings)
+    normalized = {**_CUSTOM_OPENAI_DEFAULTS, **llm_settings}
     _apply_derived_defaults(normalized, _LLM_DERIVED_DEFAULTS)
     _apply_model_fallbacks(normalized)
     _apply_play_agent_options(normalized)

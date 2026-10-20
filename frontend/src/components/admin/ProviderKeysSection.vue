@@ -24,6 +24,14 @@ interface ProviderMeta {
 
 const PROVIDERS: ProviderMeta[] = [
   {
+    id: 'custom_openai',
+    name: 'OpenAI-Compatible API',
+    icon: 'ra-network',
+    category: 'specialized',
+    capabilities: ['LLM'],
+    description: 'API key for a hosted OpenAI-compatible gateway or self-hosted endpoint. Optional for unauthenticated servers.'
+  },
+  {
     id: 'openai',
     name: 'OpenAI',
     icon: 'ra-sun',
@@ -517,7 +525,7 @@ const handleDelete = (providerId: string) => {
               </button>
             </div>
             <p class="text-[11px] text-slate-500">
-              Keys are encrypted and stored in your local TaleWeaver installation. They are never sent to external servers.
+              Keys are encrypted in your TaleWeaver installation and sent to the selected provider to authenticate requests.
             </p>
           </div>
 
