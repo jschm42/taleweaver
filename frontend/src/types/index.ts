@@ -55,6 +55,10 @@ export interface CharacterSheet {
   unlocked_actions?: string[]
   agent_active?: boolean
   agent_monkey_mode?: boolean
+  agent_allow_walkthrough?: boolean
+  agent_step_by_step?: boolean
+  agent_personality?: string
+  agent_custom_personality?: string
   max_memory_turns?: number
   enable_history_compression?: boolean
   compressed_history?: any

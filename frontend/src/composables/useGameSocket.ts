@@ -419,7 +419,7 @@ export function useGameSocket(): UseGameSocket {
    */
   async function sendMessage(content: string, isRetry: boolean = false): Promise<void> {
     const normalizedContent = normalizeUiActionInput(content)
-    const isAgentOff = normalizedContent.trim().toLowerCase() === '/agent off'
+    const isAgentOff = ['/agent off', '/playagent off', '/play-agent off'].includes(normalizedContent.trim().toLowerCase())
     const hadActiveChat = !!activeChatController
 
     turnError.value = null

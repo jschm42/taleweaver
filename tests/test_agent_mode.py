@@ -782,3 +782,194 @@ async def test_agent_prompt_walkthrough_disabled_vs_enabled(setup_test_db, monke
         prompt_enabled = captured.get("system_prompt", "")
         assert "Secret spoiler: push the blue brick" in prompt_enabled
         assert "following the current sequence walkthrough step-by-step" in prompt_enabled
+
+
+async def test_playagent_console_commands_toggle(auth_client, setup_test_db):
+    """Verifies /playagent in-game console commands: activation, direct preset, and shutdown."""
+    from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+
+        adv = AdventureTemplate(
+            id="playagent-cmd-test", owner_id=user.id, title="Playagent Command Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("playagent-cmd-test", db, user)
+        game_id = result["game_id"]
+
+        manager = GameTurnManager(db, game_id, user)
+        assert await manager.initialize()
+
+        # 1. /playagent (bare command enables agent mode)
+        chunks = []
+        async for chunk in manager.process_turn("/playagent"):
+            chunks.append(chunk)
+        full_sse = "".join(chunks)
+        assert "Autonomous Agent Gameplay Mode enabled" in full_sse
+
+        async with TestSessionLocal() as verify_db:
+            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            agent_st = AgentService.get_agent_state(st)
+            assert agent_st.get("active") is True
+
+        # 2. /playagent powerplayer (direct activation / personality switch)
+        chunks = []
+        async for chunk in manager.process_turn("/playagent powerplayer"):
+            chunks.append(chunk)
+        full_sse = "".join(chunks)
+        assert "Autonomous Agent Gameplay Mode enabled" in full_sse
+        assert "Powerplayer" in full_sse
+
+        async with TestSessionLocal() as verify_db:
+            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            agent_st = AgentService.get_agent_state(st)
+            assert agent_st.get("personality") == "powerplayer"
+
+        # 3. /playagent off
+        chunks = []
+        async for chunk in manager.process_turn("/playagent off"):
+            chunks.append(chunk)
+        full_sse = "".join(chunks)
+        assert "Autonomous Agent Gameplay Mode disabled" in full_sse
+
+        async with TestSessionLocal() as verify_db:
+            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            agent_st = AgentService.get_agent_state(st)
+            assert agent_st.get("active") is False
+
+
+async def test_playagent_console_commands_personality(auth_client, setup_test_db):
+    """Verifies /playagent personality selection and custom instructions via console."""
+    from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+
+        adv = AdventureTemplate(
+            id="playagent-personality-cmd-test", owner_id=user.id, title="Playagent Personality Cmd Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("playagent-personality-cmd-test", db, user)
+        game_id = result["game_id"]
+
+        manager = GameTurnManager(db, game_id, user)
+        assert await manager.initialize()
+
+        # 1. /playagent personality buerokrat
+        chunks = []
+        async for chunk in manager.process_turn("/playagent personality buerokrat"):
+            chunks.append(chunk)
+        full_sse = "".join(chunks)
+        assert "Play-Agent personality set to Bürokrat" in full_sse
+
+        async with TestSessionLocal() as verify_db:
+            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            agent_st = AgentService.get_agent_state(st)
+            assert agent_st.get("personality") == "buerokrat"
+
+        # 2. /playagent personality custom Always talk in rhyme
+        chunks = []
+        async for chunk in manager.process_turn("/playagent personality custom Always talk in rhyme"):
+            chunks.append(chunk)
+        full_sse = "".join(chunks)
+        assert "Play-Agent custom personality updated" in full_sse
+
+        async with TestSessionLocal() as verify_db:
+            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            agent_st = AgentService.get_agent_state(st)
+            assert agent_st.get("personality") == "custom"
+            assert agent_st.get("custom_personality") == "Always talk in rhyme"
+
+
+async def test_playagent_personalities_prompt_injection(setup_test_db, monkeypatch):
+    """Verifies that each personality (Casual, Bürokrat, Powerplayer, Custom) is correctly injected into LLM prompt."""
+    from tests.conftest import TestSessionLocal
+
+    captured: dict[str, str] = {}
+
+    class FakeLLM:
+        async def aexecute_complex_task(self, **kwargs):
+            captured["system_prompt"] = kwargs.get("system_prompt", "")
+            return AgentDecision(
+                thoughts="Testing personality.",
+                action="/lookaround",
+                is_stuck_or_bug=False,
+                issue_description="",
+            )
+
+    async def fake_build_context(self, user_msg: str, language=None):
+        return SimpleNamespace(
+            mechanics_system_prompt="Mechanics context",
+            small_model_provider="ollama",
+            small_model="llama3.2",
+            entities=[],
+            exits=[],
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.agent_logic.TurnLlmContextBuilder.build_context",
+        fake_build_context,
+    )
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.agent_logic.GameMasterLLM", lambda *args, **kwargs: FakeLLM()
+    )
+
+    async with TestSessionLocal() as db:
+        user = User(username="agent_personality_user", hashed_password="hash", role="admin")
+        db.add(user)
+        await db.flush()
+
+        adv = AdventureTemplate(
+            id="agent-personality-test", owner_id=user.id, title="Personality Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("agent-personality-test", db, user)
+        game_id = result["game_id"]
+
+        state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        avatar = await db.get(Avatar, state.avatar_id)
+        manager = SimpleNamespace()
+
+        # Case 1: Casual
+        AgentService.set_personality(state, "casual")
+        await db.commit()
+        await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
+        prompt = captured.get("system_prompt", "")
+        assert "AGENT PERSONALITY: CASUAL" in prompt
+        assert "Laid-back, curious, and easygoing" in prompt
+
+        # Case 2: Bürokrat
+        AgentService.set_personality(state, "buerokrat")
+        await db.commit()
+        await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
+        prompt = captured.get("system_prompt", "")
+        assert "AGENT PERSONALITY: BÜROKRAT" in prompt
+        assert "documentation, and proper protocol" in prompt
+
+        # Case 3: Powerplayer
+        AgentService.set_personality(state, "powerplayer")
+        await db.commit()
+        await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
+        prompt = captured.get("system_prompt", "")
+        assert "AGENT PERSONALITY: POWERPLAYER" in prompt
+        assert "Hyper-efficient min-maxer" in prompt
+
+        # Case 4: Custom
+        AgentService.set_personality(state, "custom", "Always speak like Sherlock Holmes.")
+        await db.commit()
+        await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
+        prompt = captured.get("system_prompt", "")
+        assert "AGENT PERSONALITY: CUSTOM" in prompt
+        assert "Always speak like Sherlock Holmes." in prompt

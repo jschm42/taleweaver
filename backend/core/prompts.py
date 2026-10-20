@@ -864,7 +864,55 @@ BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE = (
 User prompt for the Bable Fish translation. Variables: target_language, source_text.
 """
 
-# --- Agent (Autonomous Play / Monkey Mode) ---
+# --- Agent (Autonomous Play / Monkey Mode / Personalities) ---
+
+PLAY_AGENT_PERSONALITIES = {
+    "casual": (
+        "--- AGENT PERSONALITY: CASUAL ---\n"
+        "Playstyle: Laid-back, curious, and easygoing.\n"
+        "- Explore the environment at a leisurely pace without obsessing over optimal moves or speedrunning.\n"
+        "- Chat with NPCs informally, make humorous or whimsical choices when safe, and enjoy the atmosphere.\n"
+        "- Don't overthink minor details or hoard every scrap; play naturally for immersion and fun."
+    ),
+    "buerokrat": (
+        "--- AGENT PERSONALITY: BÜROKRAT (BUREAUCRAT) ---\n"
+        "Playstyle: Extremely formal, pedantic, protocol-obsessed, and meticulous.\n"
+        "- Insist on following regulations, standard operating procedures, documentation, and proper protocol.\n"
+        "- Carefully inspect signs, logs, ledgers, containers, and paperwork before taking decisive action.\n"
+        "- Speak with rigid formality and polite official jargon; question irregularities, missing permits, or procedural shortcuts."
+    ),
+    "powerplayer": (
+        "--- AGENT PERSONALITY: POWERPLAYER ---\n"
+        "Playstyle: Hyper-efficient min-maxer, tactical optimizer, and goal-driven.\n"
+        "- Focus strictly on optimal progression, hoarding high-value loot, and maximizing mechanical advantages.\n"
+        "- Target key puzzle solutions, quest objectives, and combat efficiency via the most direct and rewarding path.\n"
+        "- Minimize wasted actions, calculate risk-reward ruthlessly, and maintain total situational superiority."
+    ),
+}
+
+
+def get_play_agent_personality_prompt(
+    personality: str | None = None, custom_text: str | None = None
+) -> str:
+    """
+    Returns the personality directive for the autonomous play agent.
+    Supported predefined types: 'casual', 'buerokrat' ('bürokrat'/'bureaucrat'), 'powerplayer', and 'custom'.
+    """
+    p = (personality or "casual").strip().lower()
+    if p in ("bürokrat", "bureaucrat"):
+        p = "buerokrat"
+
+    if p == "custom":
+        custom_content = (custom_text or "").strip()
+        if custom_content:
+            return (
+                "--- AGENT PERSONALITY: CUSTOM ---\n"
+                f"Custom Player Directives:\n{custom_content}"
+            )
+        return PLAY_AGENT_PERSONALITIES["casual"]
+
+    return PLAY_AGENT_PERSONALITIES.get(p, PLAY_AGENT_PERSONALITIES["casual"])
+
 
 AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "You are playing an interactive text adventure game as the protagonist, staying fully in character.\n"
@@ -874,6 +922,8 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "Current Stats: HP: {hp}/{max_hp}, Stamina: {stamina}/{max_stamina}, Mana: {mana}/{max_mana}\n"
     "Inventory: {inventory}\n"
     "Equipment: {equipment}\n\n"
+    "--- AGENT PERSONALITY & ROLEPLAY STYLE ---\n"
+    "{personality_prompt}\n\n"
     "--- COMMAND GUIDELINES (CRITICAL) ---\n"
     "You can execute actions in two ways: using official slash commands or writing natural language roleplay.\n\n"
     "1. OFFICIAL SLASH COMMANDS (Use EXACTLY this syntax):\n"

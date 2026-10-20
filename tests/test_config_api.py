@@ -235,6 +235,8 @@ async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
         "play_agent_model": "gpt-5.3",
         "play_agent_model_provider": "openai",
         "play_agent_monkey_mode": True,
+        "play_agent_personality": "Bürokrat",
+        "play_agent_custom_personality": "Ensure all documents are signed.",
         "preferred_provider": "openai",
         "ollama_url": "http://localhost:11434",
     }
@@ -248,6 +250,8 @@ async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
     assert llm["play_agent_model"] == "gpt-5.3"
     assert llm["play_agent_model_provider"] == "openai"
     assert llm["play_agent_monkey_mode"] is True
+    assert llm["play_agent_personality"] == "buerokrat"
+    assert llm["play_agent_custom_personality"] == "Ensure all documents are signed."
 
 
 async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, monkeypatch):

@@ -120,6 +120,8 @@ class CommandParser:
             return CommandParser._handle_consume(avatar, args)
         elif command == "/rule-pass":
             return "[RULE_PASS]"
+        elif command in ["/agent", "/playagent", "/play-agent"]:
+            return f"[TRIGGER_AGENT] {args}"
         elif command in ["/sheet", "/inventory", "/stats"]:
             return f"Opening character sheet for {avatar.name}..."
             
@@ -156,6 +158,8 @@ class CommandParser:
             "- `/walkthrough`: Open the secret walkthrough panel.",
             "- `/walkthrough reveal`: Reveal all steps for 150 XP.",
             "- `/sheet`: Open your character sheet.",
+            "- `/playagent [on/off]`: Activate or deactivate the autonomous Play-Agent.",
+            "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bürokrat, Powerplayer, Custom).",
             "- `/agent on/off`: Turn on/off autonomous agent gameplay mode."
         ]
         

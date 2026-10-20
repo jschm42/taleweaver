@@ -459,6 +459,8 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "play_agent_allow_walkthrough": True,
         "play_agent_step_by_step": False,
         "play_agent_openrouter_provider": "",
+        "play_agent_personality": "casual",
+        "play_agent_custom_personality": "",
         "compression_model": "",
         "compression_model_provider": "openai",
         "compression_max_tokens": 4096,
@@ -578,6 +580,21 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     if "play_agent_step_by_step" not in normalized:
         normalized["play_agent_step_by_step"] = False
     normalized["play_agent_step_by_step"] = bool(normalized["play_agent_step_by_step"])
+
+    if "play_agent_personality" not in normalized or not normalized.get("play_agent_personality"):
+        normalized["play_agent_personality"] = "casual"
+    else:
+        p_val = str(normalized["play_agent_personality"]).strip().lower()
+        if p_val in ("bürokrat", "bureaucrat"):
+            p_val = "buerokrat"
+        elif p_val not in ("casual", "buerokrat", "powerplayer", "custom"):
+            p_val = "casual"
+        normalized["play_agent_personality"] = p_val
+
+    if "play_agent_custom_personality" not in normalized:
+        normalized["play_agent_custom_personality"] = ""
+    else:
+        normalized["play_agent_custom_personality"] = str(normalized["play_agent_custom_personality"])
 
     # Compression model normalization (fallback to small model if not set)
     if "compression_model_provider" not in normalized:
@@ -866,6 +883,8 @@ class SettingsPayload(BaseModel):
     play_agent_allow_walkthrough: bool = True
     play_agent_step_by_step: bool = False
     play_agent_openrouter_provider: Optional[str] = ""
+    play_agent_personality: Optional[str] = "casual"
+    play_agent_custom_personality: Optional[str] = ""
 
     compression_model: Optional[str] = ""
     compression_model_provider: Optional[str] = "openai"

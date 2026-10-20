@@ -825,21 +825,43 @@ class GameTurnManager:
             yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
             return
 
-        if user_msg.lower().startswith("/agent"):
+        msg_trimmed = user_msg.strip()
+        cmd_parts = msg_trimmed.split(None, 1)
+        lead_cmd = cmd_parts[0].lower() if cmd_parts else ""
+        if lead_cmd in ("/agent", "/playagent", "/play-agent"):
             from backend.api.routes.adventures.agent_logic import AgentService
 
-            cmd_args = user_msg[6:].strip().lower()
-            if cmd_args == "on":
+            cmd_args = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
+            cmd_args_lower = cmd_args.lower()
+
+            if cmd_args_lower in ("", "on", "start", "enable"):
                 llm_settings = self.user.llm_settings or {}
                 monkey_mode_default = bool(llm_settings.get("play_agent_monkey_mode", False))
                 walkthrough_default = bool(llm_settings.get("play_agent_allow_walkthrough", True))
                 step_default = bool(llm_settings.get("play_agent_step_by_step", False))
+                personality_default = llm_settings.get("play_agent_personality", "casual")
+                custom_personality_default = llm_settings.get("play_agent_custom_personality", "")
+
                 AgentService.set_agent_active(self.state, True)
                 AgentService.set_monkey_mode(self.state, monkey_mode_default)
                 AgentService.set_walkthrough_allowed(self.state, walkthrough_default)
                 AgentService.set_step_by_step(self.state, step_default)
+                AgentService.set_personality(
+                    self.state, personality_default, custom_personality_default
+                )
                 await self.db.commit()
-                msg = "Autonomous Agent Gameplay Mode enabled. The AI will now play the game on your behalf."
+
+                p_display = {
+                    "casual": "Casual",
+                    "buerokrat": "Bürokrat",
+                    "powerplayer": "Powerplayer",
+                    "custom": "Custom",
+                }.get(personality_default.lower(), personality_default.title())
+
+                msg = (
+                    f"Autonomous Agent Gameplay Mode enabled. The AI will now play the game on your behalf "
+                    f"(Personality: {p_display})."
+                )
                 if monkey_mode_default:
                     msg += " Monkey Mode is active by default from settings."
                 if not walkthrough_default:
@@ -847,8 +869,71 @@ class GameTurnManager:
                 if step_default:
                     msg += " Step-by-Step confirmation mode is enabled."
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args == "off":
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower in ("casual", "buerokrat", "bürokrat", "bureaucrat", "powerplayer"):
+                target_p = (
+                    "buerokrat"
+                    if cmd_args_lower in ("buerokrat", "bürokrat", "bureaucrat")
+                    else cmd_args_lower
+                )
+                llm_settings = self.user.llm_settings or {}
+                monkey_mode_default = bool(llm_settings.get("play_agent_monkey_mode", False))
+                walkthrough_default = bool(llm_settings.get("play_agent_allow_walkthrough", True))
+                step_default = bool(llm_settings.get("play_agent_step_by_step", False))
+
+                AgentService.set_agent_active(self.state, True)
+                AgentService.set_monkey_mode(self.state, monkey_mode_default)
+                AgentService.set_walkthrough_allowed(self.state, walkthrough_default)
+                AgentService.set_step_by_step(self.state, step_default)
+                AgentService.set_personality(self.state, target_p)
+                await self.db.commit()
+
+                p_display = "Bürokrat" if target_p == "buerokrat" else target_p.title()
+                msg = (
+                    f"Autonomous Agent Gameplay Mode enabled. The AI will now play the game on your behalf "
+                    f"(Personality: {p_display})."
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower.startswith("personality"):
+                sub_args = cmd_args[11:].strip()
+                if not sub_args:
+                    agent_st = AgentService.get_agent_state(self.state)
+                    cur_p = agent_st.get("personality", "casual")
+                    p_disp = "Bürokrat" if cur_p == "buerokrat" else cur_p.title()
+                    msg = (
+                        f"Current Play-Agent personality: {p_disp}. "
+                        "Usage: /playagent personality <casual | buerokrat | powerplayer | custom <instructions>>"
+                    )
+                else:
+                    p_parts = sub_args.split(None, 1)
+                    chosen_p = p_parts[0].lower()
+                    custom_text = p_parts[1].strip() if len(p_parts) > 1 else ""
+
+                    if chosen_p in ("casual", "buerokrat", "bürokrat", "bureaucrat", "powerplayer"):
+                        norm_p = (
+                            "buerokrat"
+                            if chosen_p in ("buerokrat", "bürokrat", "bureaucrat")
+                            else chosen_p
+                        )
+                        AgentService.set_personality(self.state, norm_p)
+                        await self.db.commit()
+                        p_disp = "Bürokrat" if norm_p == "buerokrat" else norm_p.title()
+                        msg = f"Play-Agent personality set to {p_disp}."
+                    elif chosen_p == "custom":
+                        if not custom_text:
+                            msg = "Please provide custom personality instructions. Usage: /playagent personality custom <your instructions>"
+                        else:
+                            AgentService.set_personality(self.state, "custom", custom_text)
+                            await self.db.commit()
+                            msg = f'Play-Agent custom personality updated: "{custom_text}"'
+                    else:
+                        AgentService.set_personality(self.state, "custom", sub_args)
+                        await self.db.commit()
+                        msg = f'Play-Agent custom personality updated: "{sub_args}"'
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower == "off":
                 AgentService.set_agent_active(self.state, False)
                 await self.db.commit()
 
@@ -878,8 +963,8 @@ class GameTurnManager:
                     f"{agents_hint}"
                 )
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args in ("walkthrough on", "guide on"):
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower in ("walkthrough on", "guide on"):
                 AgentService.set_walkthrough_allowed(self.state, True)
                 await self.db.commit()
                 msg = (
@@ -887,8 +972,8 @@ class GameTurnManager:
                     "The agent may consult the current sequence walkthrough for strategic guidance."
                 )
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args in ("walkthrough off", "guide off"):
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower in ("walkthrough off", "guide off"):
                 AgentService.set_walkthrough_allowed(self.state, False)
                 await self.db.commit()
                 msg = (
@@ -896,8 +981,8 @@ class GameTurnManager:
                     "The agent will play strictly as a regular player without walkthrough or spoiler information."
                 )
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args == "step on":
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower == "step on":
                 AgentService.set_step_by_step(self.state, True)
                 await self.db.commit()
                 msg = (
@@ -905,16 +990,16 @@ class GameTurnManager:
                     "Each action requires your confirmation (use the Next button or /agent step)."
                 )
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args == "step off":
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower == "step off":
                 AgentService.set_step_by_step(self.state, False)
                 await self.db.commit()
                 msg = (
                     "Play-Agent Step-by-Step mode disabled. The agent will run fully autonomously."
                 )
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args in ("step", "next"):
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower in ("step", "next"):
                 agent_state = AgentService.get_agent_state(self.state)
                 if not agent_state.get("active", False):
                     msg = "Agent mode is not active. Enable it first with /agent on."
@@ -956,7 +1041,7 @@ class GameTurnManager:
                         msg = f"Agent step failed: {str(e)}"
                         await self._save_chat_message("system", msg)
                         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args == "monkey on":
+            elif cmd_args_lower == "monkey on":
                 AgentService.set_monkey_mode(self.state, True)
                 await self.db.commit()
                 msg = (
@@ -964,15 +1049,19 @@ class GameTurnManager:
                     "or context-inappropriate actions to stress-test engine robustness."
                 )
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            elif cmd_args == "monkey off":
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
+            elif cmd_args_lower == "monkey off":
                 AgentService.set_monkey_mode(self.state, False)
                 await self.db.commit()
                 msg = "Play-Agent Monkey Mode disabled. The agent will return to normal behavior."
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
             else:
-                msg = "Usage: /agent on | /agent off | /agent walkthrough on/off | /agent step on/off | /agent step | /agent monkey on/off"
+                msg = (
+                    "Usage: /playagent [on/off] | /playagent [casual|buerokrat|powerplayer] | "
+                    "/playagent personality <casual|buerokrat|powerplayer|custom <text>> | "
+                    "/playagent walkthrough on/off | /playagent step [on/off] | /playagent monkey on/off"
+                )
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             final_data = jsonable_encoder(
@@ -2107,19 +2196,19 @@ class GameTurnManager:
                 verb = "gain" if game_event.hp_change > 0 else "lose"
                 msg = f"You {verb} {abs(game_event.hp_change)} HP."
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
 
             if game_event.stamina_change != 0:
                 verb = "gain" if game_event.stamina_change > 0 else "lose"
                 msg = f"You {verb} {abs(game_event.stamina_change)} Stamina."
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
 
             if game_event.mana_change != 0:
                 verb = "gain" if game_event.mana_change > 0 else "lose"
                 msg = f"You {verb} {abs(game_event.mana_change)} Mana."
                 await self._save_chat_message("system", msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg}, ensure_ascii=False)}\n\n"
 
             # 2. NPC/Entity changes
             if game_event.updated_entities:

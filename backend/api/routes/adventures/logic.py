@@ -961,6 +961,8 @@ class AdventureLogic:
             "agent_monkey_mode": bool((state.entity_states or {}).get("__agent__", {}).get("monkey_mode", False)),
             "agent_allow_walkthrough": bool((state.entity_states or {}).get("__agent__", {}).get("allow_walkthrough", True)),
             "agent_step_by_step": bool((state.entity_states or {}).get("__agent__", {}).get("step_by_step", False)),
+            "agent_personality": str((state.entity_states or {}).get("__agent__", {}).get("personality", "casual")),
+            "agent_custom_personality": str((state.entity_states or {}).get("__agent__", {}).get("custom_personality", "")),
             "is_debug_enabled": bool(state.is_debug_enabled),
             "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled)
         }

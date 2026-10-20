@@ -31,6 +31,8 @@ const normalizeLocalForm = (data: any) => ({
   compression_max_tokens: typeof data?.compression_max_tokens === 'number' ? data.compression_max_tokens : 4096,
   play_agent_allow_walkthrough: typeof data?.play_agent_allow_walkthrough === 'boolean' ? data.play_agent_allow_walkthrough : true,
   play_agent_monkey_mode: typeof data?.play_agent_monkey_mode === 'boolean' ? data.play_agent_monkey_mode : false,
+  play_agent_personality: data?.play_agent_personality || 'casual',
+  play_agent_custom_personality: data?.play_agent_custom_personality || '',
 })
 
 const localForm = ref(normalizeLocalForm(props.llmForm))
@@ -985,6 +987,45 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
             placeholder="e.g. Together, Grok"
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-purple-500/50 outline-none"
           />
+        </div>
+
+        <!-- Play Agent Personality -->
+        <div class="pt-2 border-t border-slate-800/80 space-y-3">
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Play Agent Personality
+              </label>
+              <span class="text-[11px] font-mono text-purple-400 font-semibold">
+                {{ localForm.play_agent_personality === 'buerokrat' ? 'Bürokrat' : (localForm.play_agent_personality ? localForm.play_agent_personality.charAt(0).toUpperCase() + localForm.play_agent_personality.slice(1) : 'Casual') }}
+              </span>
+            </div>
+            <select
+              v-model="localForm.play_agent_personality"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-purple-500/50"
+            >
+              <option value="casual">Casual (Relaxed, curious, informal, plays for fun)</option>
+              <option value="buerokrat">Bürokrat (Strictly formal, protocol-obsessed, demands documentation)</option>
+              <option value="powerplayer">Powerplayer (Aggressive min-maxer, optimal path & efficiency)</option>
+              <option value="custom">Custom (User-defined directives)</option>
+            </select>
+          </div>
+
+          <!-- Custom Personality Instructions Field -->
+          <div v-if="localForm.play_agent_personality === 'custom'" class="space-y-1.5">
+            <label class="block text-xs font-bold text-purple-300 uppercase tracking-wider">
+              Custom Personality Directives
+            </label>
+            <textarea
+              v-model="localForm.play_agent_custom_personality"
+              rows="3"
+              placeholder="e.g. You are a paranoid rogue who never trusts chests, checks for traps everywhere, and speaks in cryptic underworld slang."
+              class="w-full bg-slate-950 border border-purple-500/30 focus:border-purple-500 rounded-xl p-3 text-xs text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-purple-500/40 resize-y"
+            ></textarea>
+            <p class="text-[11px] text-slate-400">
+              Provide custom roleplay guidelines and gameplay habits for the autonomous Play-Agent.
+            </p>
+          </div>
         </div>
 
         <!-- Play Agent Behaviors / Defaults -->

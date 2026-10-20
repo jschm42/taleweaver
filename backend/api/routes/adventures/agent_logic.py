@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -14,7 +14,10 @@ from backend.api.routes.adventures.turn_context_helpers import (
 )
 from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
 from backend.core.llm_router import GameMasterLLM
-from backend.core.prompts import AGENT_PLAYER_TURN_SYSTEM_PROMPT
+from backend.core.prompts import (
+    AGENT_PLAYER_TURN_SYSTEM_PROMPT,
+    get_play_agent_personality_prompt,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -247,6 +250,8 @@ class AgentService:
                 "monkey_mode": False,
                 "allow_walkthrough": True,
                 "step_by_step": False,
+                "personality": "casual",
+                "custom_personality": "",
             }
         agent_state = state.entity_states["__agent__"]
         modified = False
@@ -254,6 +259,8 @@ class AgentService:
             ("monkey_mode", False),
             ("allow_walkthrough", True),
             ("step_by_step", False),
+            ("personality", "casual"),
+            ("custom_personality", ""),
         ):
             if key not in agent_state:
                 agent_state[key] = default
@@ -270,6 +277,21 @@ class AgentService:
         agent_state["active"] = active
         if active:
             agent_state["failure_count"] = 0
+        state.entity_states["__agent__"] = agent_state
+        flag_modified(state, "entity_states")
+
+    @staticmethod
+    def set_personality(
+        state: SessionState, personality: str, custom_text: Optional[str] = None
+    ) -> None:
+        """Set the play-agent personality (casual, buerokrat, powerplayer, custom)."""
+        agent_state = AgentService.get_agent_state(state)
+        normalized = (personality or "casual").strip().lower()
+        if normalized in ("bürokrat", "bureaucrat"):
+            normalized = "buerokrat"
+        agent_state["personality"] = normalized
+        if custom_text is not None:
+            agent_state["custom_personality"] = custom_text
         state.entity_states["__agent__"] = agent_state
         flag_modified(state, "entity_states")
 
@@ -387,6 +409,22 @@ class AgentService:
         inventory_names = [
             i.get("name") if isinstance(i, dict) else str(i) for i in (avatar.inventory or [])
         ]
+
+        llm_settings = getattr(user, "llm_settings", None) or {}
+        agent_personality = (
+            agent_state.get("personality")
+            or llm_settings.get("play_agent_personality")
+            or "casual"
+        )
+        agent_custom_personality = (
+            agent_state.get("custom_personality")
+            or llm_settings.get("play_agent_custom_personality")
+            or ""
+        )
+        personality_prompt = get_play_agent_personality_prompt(
+            agent_personality, agent_custom_personality
+        )
+
         system_prompt = AGENT_PLAYER_TURN_SYSTEM_PROMPT.format(
             name=avatar.name,
             role=avatar.role or "Adventurer",
@@ -400,6 +438,7 @@ class AgentService:
             max_mana=avatar.max_mana,
             inventory=", ".join(inventory_names) if inventory_names else "Empty",
             equipment=avatar.equipment or "None",
+            personality_prompt=personality_prompt,
             mechanics_system_prompt=player_world_context,
             visible_scene_items_text=visible_scene_items_text,
             walkthrough_text=walkthrough_text,

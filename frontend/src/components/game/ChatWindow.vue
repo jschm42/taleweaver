@@ -208,6 +208,11 @@ const showImage = (path?: string | null) => {
 
 const agentMonkeyMode = computed(() => Boolean(props.sheet?.agent_monkey_mode))
 const agentAllowWalkthrough = computed(() => props.sheet?.agent_allow_walkthrough ?? true)
+const agentPersonalityDisplay = computed(() => {
+  const p = props.sheet?.agent_personality || 'casual'
+  if (p === 'buerokrat') return 'Bürokrat'
+  return p.charAt(0).toUpperCase() + p.slice(1)
+})
 
 const handleMonkeyModeToggle = () => {
   emit('send', agentMonkeyMode.value ? '/agent monkey off' : '/agent monkey on')
@@ -1465,6 +1470,9 @@ onUnmounted(() => {
       <div class="flex items-center gap-2">
         <div :class="['w-2.5 h-2.5 rounded-full', agentPaused ? 'bg-amber-400' : 'bg-indigo-400 animate-ping']"></div>
         <span>{{ agentPaused ? 'Autonomous Agent Mode is paused.' : 'Autonomous Agent Mode is active. The AI is playing the game.' }}</span>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+          {{ agentPersonalityDisplay }}
+        </span>
       </div>
       <div class="flex items-center gap-2.5 select-none shrink-0">
         <!-- Walkthrough Toggle -->
