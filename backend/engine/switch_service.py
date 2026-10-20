@@ -109,10 +109,10 @@ class SwitchService:
             return True, None
         except (ScriptSecurityError, ScriptTimeoutError, ScriptExecutionError) as exc:
             logger.warning(f"[SwitchService] Script guard evaluation error for '{code}': {exc}")
-            return False, f"Guard expression failed: {exc}"
+            return False, "Guard expression failed."
         except Exception as exc:
             logger.exception(f"[SwitchService] Unexpected error evaluating guard '{code}': {exc}")
-            return False, f"Guard expression error: {exc}"
+            return False, "Guard expression error."
 
     @classmethod
     def evaluate_transition_gates(
