@@ -874,8 +874,8 @@ PLAY_AGENT_PERSONALITIES = {
         "- Chat with NPCs informally, make humorous or whimsical choices when safe, and enjoy the atmosphere.\n"
         "- Don't overthink minor details or hoard every scrap; play naturally for immersion and fun."
     ),
-    "buerokrat": (
-        "--- AGENT PERSONALITY: BÜROKRAT (BUREAUCRAT) ---\n"
+    "bureaucrat": (
+        "--- AGENT PERSONALITY: BUREAUCRAT ---\n"
         "Playstyle: Extremely formal, pedantic, protocol-obsessed, and meticulous.\n"
         "- Insist on following regulations, standard operating procedures, documentation, and proper protocol.\n"
         "- Carefully inspect signs, logs, ledgers, containers, and paperwork before taking decisive action.\n"
@@ -896,11 +896,11 @@ def get_play_agent_personality_prompt(
 ) -> str:
     """
     Returns the personality directive for the autonomous play agent.
-    Supported predefined types: 'casual', 'buerokrat' ('bürokrat'/'bureaucrat'), 'powerplayer', and 'custom'.
+    Supported predefined types: 'casual', 'bureaucrat' (legacy: 'buerokrat'/'bürokrat'), 'powerplayer', and 'custom'.
     """
     p = (personality or "casual").strip().lower()
-    if p in ("bürokrat", "bureaucrat"):
-        p = "buerokrat"
+    if p in ("bürokrat", "buerokrat"):
+        p = "bureaucrat"
 
     if p == "custom":
         custom_content = (custom_text or "").strip()

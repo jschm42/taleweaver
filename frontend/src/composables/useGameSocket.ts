@@ -23,6 +23,7 @@ export interface AgentLogEntry {
 }
 
 const AGENT_LOG_LIMIT = 50
+const AGENT_IDLE_TIMEOUT_MS = 180_000
 
 export interface AgentSettingsPatch {
   active?: boolean
@@ -763,7 +764,18 @@ export function useGameSocket(): UseGameSocket {
     let receivedFinalEvent = false
     const controller = new AbortController()
     activeAgentController = controller
-    const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
+    // Idle timeout: an agent turn (decision + full GM turn) can legitimately take long,
+    // so only abort when the stream stays silent for too long.
+    let timedOut = false
+    let timeoutId = 0
+    const resetIdleTimeout = () => {
+      clearTimeout(timeoutId)
+      timeoutId = window.setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, AGENT_IDLE_TIMEOUT_MS)
+    }
+    resetIdleTimeout()
 
     try {
       const res = await fetch(`${BASE}/adventures/${currentGameId}/agent/turn`, {
@@ -795,6 +807,7 @@ export function useGameSocket(): UseGameSocket {
       while (!controller.signal.aborted) {
         const { value, done } = await reader.read()
         if (done) break
+        resetIdleTimeout()
 
         buffer += decoder.decode(value, { stream: true })
         const parts = buffer.split('\n\n')
@@ -879,9 +892,14 @@ export function useGameSocket(): UseGameSocket {
           applySessionSnapshot(snapshot, true)
         }
       }
+      if (!receivedFinalEvent && (timedOut || !controller.signal.aborted)) {
+        _pushMessage('system', timedOut ? 'The Agent did not respond in time.' : 'The Agent turn ended unexpectedly without a result.')
+      }
       return receivedFinalEvent
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err.name === 'AbortError' && timedOut) {
+        _pushMessage('system', 'The Agent did not respond in time.')
+      } else if (err.name === 'AbortError') {
         console.log('Agent request was aborted by user.')
       } else {
         console.error('[Session] Agent turn error:', err)

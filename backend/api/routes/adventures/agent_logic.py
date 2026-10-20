@@ -247,7 +247,11 @@ def format_agent_history(history: list[dict[str, str]]) -> str:
             continue
         if len(content) > _HISTORY_MAX_CHARS:
             content = content[:_HISTORY_MAX_CHARS] + "..."
-        lines.append(f"{label}: {content}")
+        line = f"{label}: {content}"
+        # Agent actions are stored as both "player" and "user" messages; show them once.
+        if lines and lines[-1] == line:
+            continue
+        lines.append(line)
     return "\n".join(lines) if lines else "(no history yet - the adventure just started)"
 
 
@@ -279,6 +283,10 @@ class AgentService:
             if key not in agent_state:
                 agent_state[key] = default
                 modified = True
+        # Migrate the legacy German personality key.
+        if agent_state.get("personality") in ("buerokrat", "bürokrat"):
+            agent_state["personality"] = "bureaucrat"
+            modified = True
         if modified:
             state.entity_states["__agent__"] = agent_state
             flag_modified(state, "entity_states")
@@ -298,11 +306,11 @@ class AgentService:
     def set_personality(
         state: SessionState, personality: str, custom_text: Optional[str] = None
     ) -> None:
-        """Set the play-agent personality (casual, buerokrat, powerplayer, custom)."""
+        """Set the play-agent personality (casual, bureaucrat, powerplayer, custom)."""
         agent_state = AgentService.get_agent_state(state)
         normalized = (personality or "casual").strip().lower()
-        if normalized in ("bürokrat", "bureaucrat"):
-            normalized = "buerokrat"
+        if normalized in ("bürokrat", "buerokrat"):
+            normalized = "bureaucrat"
         agent_state["personality"] = normalized
         if custom_text is not None:
             agent_state["custom_personality"] = custom_text

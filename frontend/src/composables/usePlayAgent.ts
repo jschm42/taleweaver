@@ -6,12 +6,13 @@
  */
 import { computed, onUnmounted, watch } from 'vue'
 import { useGameSocket } from '@/composables/useGameSocket'
+import { useNotifications } from '@/composables/useNotifications'
 
 const AUTO_STEP_DELAY_MS = 1500
 
 export const PLAY_AGENT_PERSONALITIES = [
   { id: 'casual', label: 'Casual' },
-  { id: 'buerokrat', label: 'Bürokrat' },
+  { id: 'bureaucrat', label: 'Bureaucrat' },
   { id: 'powerplayer', label: 'Powerplayer' },
   { id: 'custom', label: 'Custom' },
 ] as const
@@ -79,6 +80,7 @@ export function usePlayAgent() {
  */
 export function usePlayAgentAutoLoop(): void {
   const socket = useGameSocket()
+  const { addNotification } = useNotifications()
   const { isActive, isStepMode, agentPaused, status } = usePlayAgent()
   let running = false
   let disposed = false
@@ -95,8 +97,10 @@ export function usePlayAgentAutoLoop(): void {
         await new Promise(resolve => setTimeout(resolve, AUTO_STEP_DELAY_MS))
         if (!shouldAutoRun()) break
         const completed = await socket.runAgentTurn()
+        if (completed || !isActive.value) continue
         // Avoid hammering the backend after a failed request; the player can resume manually.
-        if (!completed && isActive.value) agentPaused.value = true
+        agentPaused.value = true
+        addNotification('Play-Agent paused: the last turn did not finish. Press Resume to continue.', 'info')
       }
     } finally {
       running = false

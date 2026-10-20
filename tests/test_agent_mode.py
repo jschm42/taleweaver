@@ -837,12 +837,12 @@ async def test_playagent_console_commands_personality(auth_client, setup_test_db
         manager = GameTurnManager(db, game_id, user)
         assert await manager.initialize()
 
-        # 1. /playagent personality buerokrat
+        # 1. /playagent personality bureaucrat (legacy German key still accepted)
         chunks = []
         async for chunk in manager.process_turn("/playagent personality buerokrat"):
             chunks.append(chunk)
         full_sse = "".join(chunks)
-        assert "Play-Agent personality set to Bürokrat" in full_sse
+        assert "Play-Agent personality set to Bureaucrat" in full_sse
 
         async with TestSessionLocal() as verify_db:
             st = (
@@ -855,7 +855,7 @@ async def test_playagent_console_commands_personality(auth_client, setup_test_db
                 .first()
             )
             agent_st = AgentService.get_agent_state(st)
-            assert agent_st.get("personality") == "buerokrat"
+            assert agent_st.get("personality") == "bureaucrat"
 
         # 2. /playagent personality custom Always talk in rhyme
         chunks = []
@@ -882,7 +882,7 @@ async def test_playagent_console_commands_personality(auth_client, setup_test_db
 
 
 async def test_playagent_personalities_prompt_injection(setup_test_db, monkeypatch):
-    """Verifies that each personality (Casual, Bürokrat, Powerplayer, Custom) is correctly injected into LLM prompt."""
+    """Verifies that each personality (Casual, Bureaucrat, Powerplayer, Custom) is correctly injected into LLM prompt."""
     from tests.conftest import TestSessionLocal
 
     captured: dict[str, str] = {}
@@ -941,12 +941,12 @@ async def test_playagent_personalities_prompt_injection(setup_test_db, monkeypat
         assert "AGENT PERSONALITY: CASUAL" in prompt
         assert "Laid-back, curious, and easygoing" in prompt
 
-        # Case 2: Bürokrat
-        AgentService.set_personality(state, "buerokrat")
+        # Case 2: Bureaucrat
+        AgentService.set_personality(state, "bureaucrat")
         await db.commit()
         await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
         prompt = captured.get("system_prompt", "")
-        assert "AGENT PERSONALITY: BÜROKRAT" in prompt
+        assert "AGENT PERSONALITY: BUREAUCRAT" in prompt
         assert "documentation, and proper protocol" in prompt
 
         # Case 3: Powerplayer

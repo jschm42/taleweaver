@@ -236,7 +236,7 @@ class CommandParser:
             "- `/walkthrough reveal`: Reveal all steps for 150 XP.",
             "- `/sheet`: Open your character sheet.",
             "- `/playagent [on/off]`: Activate or deactivate the autonomous Play-Agent.",
-            "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bürokrat, Powerplayer, Custom).",
+            "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom).",
         ]
 
         if debug_enabled:

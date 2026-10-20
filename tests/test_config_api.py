@@ -3,10 +3,12 @@ Tests for the Settings / Config REST API (Package 4).
 
 Covers: saving encrypted API keys for different providers.
 """
+
+from typing import Optional
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from typing import Optional
 
 from backend.api.routes import config_api
 from backend.core.auth import create_access_token, get_password_hash
@@ -95,12 +97,12 @@ async def test_save_t2i_settings_with_ollama_fields(client: AsyncClient):
 async def test_get_settings_returns_extended_t2i_defaults(client: AsyncClient):
     """Default settings include Ollama-compatible fields for forward compatibility."""
     from sqlalchemy import update
+
     async with TestSessionLocal() as session:
         await session.execute(
-            update(User).where(User.username == "test_user").values(
-                llm_settings=None,
-                t2i_settings=None
-            )
+            update(User)
+            .where(User.username == "test_user")
+            .values(llm_settings=None, t2i_settings=None)
         )
         await session.commit()
 
@@ -132,16 +134,6 @@ async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
         "complex_model_provider": "ollama",
         "generator_model": "llama3-70b",
         "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
         "preferred_provider": "ollama",
         "ollama_url": "http://localhost:11434",
     }
@@ -170,16 +162,6 @@ async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClien
         "complex_model_provider": "openrouter",
         "generator_model": "anthropic/claude-3-opus",
         "generator_model_provider": "openrouter",
-        "generator_model": "anthropic/claude-3-opus",
-        "generator_model_provider": "openrouter",
-        "generator_model": "anthropic/claude-3-opus",
-        "generator_model_provider": "openrouter",
-        "generator_model": "anthropic/claude-3-opus",
-        "generator_model_provider": "openrouter",
-        "generator_model": "anthropic/claude-3-opus",
-        "generator_model_provider": "openrouter",
-        "generator_model": "anthropic/claude-3-opus",
-        "generator_model_provider": "openrouter",
         "preferred_provider": "openrouter",
         "ollama_url": "http://localhost:11434",
     }
@@ -200,12 +182,12 @@ async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClien
 async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     """Default llm settings include ollama_url for local provider use."""
     from sqlalchemy import update
+
     async with TestSessionLocal() as session:
         await session.execute(
-            update(User).where(User.username == "test_user").values(
-                llm_settings=None,
-                t2i_settings=None
-            )
+            update(User)
+            .where(User.username == "test_user")
+            .values(llm_settings=None, t2i_settings=None)
         )
         await session.commit()
 
@@ -250,7 +232,7 @@ async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
     assert llm["play_agent_model"] == "gpt-5.3"
     assert llm["play_agent_model_provider"] == "openai"
     assert llm["play_agent_monkey_mode"] is True
-    assert llm["play_agent_personality"] == "buerokrat"
+    assert llm["play_agent_personality"] == "bureaucrat"
     assert llm["play_agent_custom_personality"] == "Ensure all documents are signed."
 
 
@@ -265,8 +247,6 @@ async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, mo
         "small_max_thinking_tokens": 1024,
         "complex_model": "qwen2.5",
         "complex_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
         "complex_max_tokens": 4096,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 1024,
@@ -294,7 +274,9 @@ async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, mo
     assert models == ["llama3.2:latest", "qwen2.5:14b"]
 
 
-async def test_get_settings_does_not_fetch_ollama_models_when_not_configured(client: AsyncClient, monkeypatch):
+async def test_get_settings_does_not_fetch_ollama_models_when_not_configured(
+    client: AsyncClient, monkeypatch
+):
     """Settings constants should not query Ollama when no LLM provider uses Ollama."""
 
     llm_payload = {
@@ -421,33 +403,11 @@ async def test_settings_are_global_for_all_users(client: AsyncClient):
         "small_max_thinking_tokens": 256,
         "complex_model": "qwen2.5",
         "complex_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3-70b",
         "generator_model_provider": "ollama",
         "complex_max_tokens": 4096,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 512,
         "generator_model": "llama3.2",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3.2",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3.2",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3.2",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3.2",
-        "generator_model_provider": "ollama",
-        "generator_model": "llama3.2",
-        "generator_model_provider": "ollama",
         "preferred_provider": "ollama",
         "ollama_url": "http://localhost:11434",
     }
@@ -464,7 +424,9 @@ async def test_settings_are_global_for_all_users(client: AsyncClient):
     assert b_settings.json()["llm_settings"]["small_model"] == "llama3.2"
 
 
-async def test_test_llm_connection_handles_authentication_errors_gracefully(client: AsyncClient, monkeypatch):
+async def test_test_llm_connection_handles_authentication_errors_gracefully(
+    client: AsyncClient, monkeypatch
+):
     """/test-llm must return a user-safe error response for provider auth failures."""
 
     class _FakeLLM:
@@ -490,7 +452,9 @@ async def test_test_llm_connection_handles_authentication_errors_gracefully(clie
     assert "Authentication failed" in data["message"]
 
 
-async def test_test_llm_connection_handles_generic_errors_without_500(client: AsyncClient, monkeypatch):
+async def test_test_llm_connection_handles_generic_errors_without_500(
+    client: AsyncClient, monkeypatch
+):
     """Generic runtime errors from LLM test endpoint should not bubble up as HTTP 500."""
 
     class _FakeLLM:
@@ -514,9 +478,3 @@ async def test_test_llm_connection_handles_generic_errors_without_500(client: As
     data = resp.json()
     assert data["status"] == "error"
     assert "Connection test failed" in data["message"]
-
-
-
-
-
-

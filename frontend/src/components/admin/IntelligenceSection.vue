@@ -997,7 +997,7 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
                 Play Agent Personality
               </label>
               <span class="text-[11px] font-mono text-purple-400 font-semibold">
-                {{ localForm.play_agent_personality === 'buerokrat' ? 'Bürokrat' : (localForm.play_agent_personality ? localForm.play_agent_personality.charAt(0).toUpperCase() + localForm.play_agent_personality.slice(1) : 'Casual') }}
+                {{ localForm.play_agent_personality ? localForm.play_agent_personality.charAt(0).toUpperCase() + localForm.play_agent_personality.slice(1) : 'Casual' }}
               </span>
             </div>
             <select
@@ -1005,7 +1005,7 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-purple-500/50"
             >
               <option value="casual">Casual (Relaxed, curious, informal, plays for fun)</option>
-              <option value="buerokrat">Bürokrat (Strictly formal, protocol-obsessed, demands documentation)</option>
+              <option value="bureaucrat">Bureaucrat (Strictly formal, protocol-obsessed, demands documentation)</option>
               <option value="powerplayer">Powerplayer (Aggressive min-maxer, optimal path & efficiency)</option>
               <option value="custom">Custom (User-defined directives)</option>
             </select>

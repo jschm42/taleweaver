@@ -49,7 +49,7 @@ watch(() => agentLog.value.length, async () => {
 const statusLabel = computed(() => {
   if (isBusy.value) return statusText.value || 'Agent is thinking...'
   if (isStepMode.value) return 'Waiting for next step'
-  if (agentPaused.value) return 'Paused'
+  if (agentPaused.value) return 'Paused - press Resume to continue'
   return 'Playing autonomously'
 })
 

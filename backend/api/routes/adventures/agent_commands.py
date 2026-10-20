@@ -19,8 +19,8 @@ from backend.utils.path_security import ensure_within_data_dir, sanitize_path_co
 PLAYAGENT_COMMANDS = ("/playagent", "/play-agent")
 
 USAGE_TEXT = (
-    "Usage: /playagent [on/off] | /playagent [casual|buerokrat|powerplayer] | "
-    "/playagent personality <casual|buerokrat|powerplayer|custom <text>> | "
+    "Usage: /playagent [on/off] | /playagent [casual|bureaucrat|powerplayer] | "
+    "/playagent personality <casual|bureaucrat|powerplayer|custom <text>> | "
     "/playagent walkthrough on/off | /playagent step on/off | /playagent monkey on/off"
 )
 
@@ -66,7 +66,7 @@ def _set_personality(manager: Any, args: str) -> str:
         current = AgentService.get_agent_state(manager.state).get("personality", "casual")
         return (
             f"Current Play-Agent personality: {personality_label(current)}. "
-            "Usage: /playagent personality <casual | buerokrat | powerplayer | custom <instructions>>"
+            "Usage: /playagent personality <casual | bureaucrat | powerplayer | custom <instructions>>"
         )
 
     parts = args.split(None, 1)

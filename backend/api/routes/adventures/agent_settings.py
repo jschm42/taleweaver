@@ -11,16 +11,17 @@ from backend.models.session_state import SessionState
 
 PERSONALITY_LABELS: dict[str, str] = {
     "casual": "Casual",
-    "buerokrat": "Bürokrat",
+    "bureaucrat": "Bureaucrat",
     "powerplayer": "Powerplayer",
     "custom": "Custom",
 }
 
 PERSONALITY_ALIASES: dict[str, str] = {
     "casual": "casual",
-    "buerokrat": "buerokrat",
-    "bürokrat": "buerokrat",
-    "bureaucrat": "buerokrat",
+    "bureaucrat": "bureaucrat",
+    # Legacy German keys from earlier versions.
+    "buerokrat": "bureaucrat",
+    "bürokrat": "bureaucrat",
     "powerplayer": "powerplayer",
     "custom": "custom",
 }
