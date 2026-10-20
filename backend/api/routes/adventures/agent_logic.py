@@ -12,6 +12,7 @@ from backend.api.routes.adventures.agent_actions import (
     format_exits_for_agent,
     load_scene_exits,
 )
+from backend.api.routes.adventures.agent_persona import format_protagonist_profile
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.turn_context_helpers import (
     _find_active_sequence,
@@ -461,6 +462,7 @@ class AgentService:
             max_mana=avatar.max_mana,
             inventory=", ".join(inventory_names) if inventory_names else "Empty",
             equipment=avatar.equipment or "None",
+            protagonist_profile=format_protagonist_profile(avatar),
             personality_prompt=personality_prompt,
             mechanics_system_prompt=player_world_context,
             visible_scene_items_text=visible_scene_items_text,
