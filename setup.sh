@@ -100,9 +100,20 @@ $PYTHON_CMD -m alembic upgrade head
 
 # 6. Frontend Setup
 echo "[*] Installing frontend dependencies..."
+if ! command -v npm &> /dev/null; then
+    echo "[!] Error: 'npm' is not installed or not in PATH. Please install Node.js and npm first."
+    exit 1
+fi
+if command -v node &> /dev/null; then
+    echo "[+] Found Node.js version: $(node --version)"
+fi
 cd frontend
-npm install
+npm install --include=dev
 cd ..
+if [ ! -f "frontend/node_modules/.bin/vite" ]; then
+    echo "[!] Error: Vite executable not found in frontend/node_modules/.bin/vite after npm install."
+    exit 1
+fi
 
 # 7. Git Hooks Setup
 if [ -d ".git" ]; then

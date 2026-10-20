@@ -4,10 +4,8 @@
 $ErrorActionPreference = "Stop"
 
 # Change directory to the repository root directory
-$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-if ($scriptPath) {
-    Set-Location $scriptPath
-}
+$scriptPath = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+if ($scriptPath) { Set-Location $scriptPath } else { $scriptPath = (Get-Location).Path }
 
 Write-Host "==============================" -ForegroundColor Green
 Write-Host "      TaleWeaver Runner       " -ForegroundColor Green
@@ -30,6 +28,7 @@ $setupNeeded = $false
 if (-not (Test-Path ".env")) { $setupNeeded = $true }
 if (-not (Test-Path "venv")) { $setupNeeded = $true }
 if (-not (Test-Path "frontend/node_modules")) { $setupNeeded = $true }
+if (-not ((Test-Path "frontend/node_modules/.bin/vite.cmd") -or (Test-Path "frontend/node_modules/.bin/vite"))) { $setupNeeded = $true }
 
 if ($setupNeeded) {
     Write-Host "[!] Project setup is missing or incomplete (missing .env, venv, or node_modules)." -ForegroundColor Yellow
@@ -38,7 +37,8 @@ if ($setupNeeded) {
         Write-Host "[*] Running setup.ps1..." -ForegroundColor Cyan
         & .\setup.ps1 -SkipStart
         # Re-check after setup runs
-        if (-not (Test-Path ".env") -or -not (Test-Path "venv") -or -not (Test-Path "frontend/node_modules")) {
+        $viteExists = (Test-Path "frontend/node_modules/.bin/vite.cmd") -or (Test-Path "frontend/node_modules/.bin/vite")
+        if (-not (Test-Path ".env") -or -not (Test-Path "venv") -or -not (Test-Path "frontend/node_modules") -or -not $viteExists) {
             Write-Host "[!] Setup failed or is still incomplete. Exiting." -ForegroundColor Red
             Exit 1
         }
@@ -56,8 +56,8 @@ Write-Host "[*] Starting backend and frontend..." -ForegroundColor Green
 
 if ($IsWindows -or $env:OS -like "*Windows*") {
     # On Windows, we can start them in separate PowerShell windows
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\venv\Scripts\python.exe -m backend.main"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
+    Start-Process powershell -WorkingDirectory $scriptPath -ArgumentList "-NoExit", "-Command", ".\venv\Scripts\python.exe -m backend.main"
+    Start-Process powershell -WorkingDirectory (Join-Path $scriptPath 'frontend') -ArgumentList "-NoExit", "-Command", "npm run dev"
     Write-Host "[+] Application started in separate PowerShell windows." -ForegroundColor Green
 } else {
     # Non-Windows PowerShell fallback (macOS/Linux)

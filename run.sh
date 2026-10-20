@@ -24,6 +24,7 @@ SETUP_NEEDED=false
 if [ ! -f .env ]; then SETUP_NEEDED=true; fi
 if [ ! -d venv ]; then SETUP_NEEDED=true; fi
 if [ ! -d frontend/node_modules ]; then SETUP_NEEDED=true; fi
+if [ ! -f frontend/node_modules/.bin/vite ]; then SETUP_NEEDED=true; fi
 
 if [ "$SETUP_NEEDED" = true ]; then
     echo "[!] Project setup is missing or incomplete (missing .env, venv, or node_modules)."
@@ -32,7 +33,7 @@ if [ "$SETUP_NEEDED" = true ]; then
         echo "[*] Running setup.sh..."
         bash ./setup.sh --skip-start
         # Re-check after setup runs
-        if [ ! -f .env ] || [ ! -d venv ] || [ ! -d frontend/node_modules ]; then
+        if [ ! -f .env ] || [ ! -d venv ] || [ ! -d frontend/node_modules ] || [ ! -f frontend/node_modules/.bin/vite ]; then
             echo "[!] Setup failed or is still incomplete. Exiting."
             exit 1
         fi

@@ -6,6 +6,11 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+
+# Change directory to the repository root directory
+$scriptPath = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+if ($scriptPath) { Set-Location $scriptPath } else { $scriptPath = (Get-Location).Path }
+
 Write-Host "--- TaleWeaver Setup ---" -ForegroundColor Cyan
 
 # 1. Environment Variables (.env)
@@ -27,6 +32,10 @@ Write-Host "[*] Setting up Python dependencies with Poetry..." -ForegroundColor 
 if (Get-Command poetry -ErrorAction SilentlyContinue) {
     Write-Host "[+] Using system Poetry..." -ForegroundColor Green
     poetry install
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[!] Error: 'poetry install' failed with exit code $LASTEXITCODE." -ForegroundColor Red
+        exit 1
+    }
     $RUN_CMD = "poetry run"
 } else {
     Write-Host "[*] Poetry not found in PATH. Checking virtual environment (venv)..." -ForegroundColor Yellow
@@ -38,6 +47,10 @@ if (Get-Command poetry -ErrorAction SilentlyContinue) {
     .\venv\Scripts\python.exe -m pip install --upgrade pip
     .\venv\Scripts\pip.exe install "poetry>=2.0.0"
     .\venv\Scripts\poetry.exe install
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[!] Error: 'poetry install' in venv failed with exit code $LASTEXITCODE." -ForegroundColor Red
+        exit 1
+    }
     $RUN_CMD = ".\venv\Scripts\poetry.exe run"
 }
 
@@ -83,11 +96,33 @@ if ($envFile -notmatch "(?m)^SECRET_KEY=[a-fA-F0-9]{64}") {
 # 5. Database Setup (Migrations)
 Write-Host "[*] Running database migrations..." -ForegroundColor Yellow
 Invoke-Expression "$RUN_CMD alembic upgrade head"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[!] Error: Database migrations ('alembic upgrade head') failed with exit code $LASTEXITCODE." -ForegroundColor Red
+    exit 1
+}
 
 # 6. Frontend Setup
 Write-Host "[*] Installing frontend dependencies..." -ForegroundColor Yellow
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    Write-Host "[!] Error: 'npm' is not installed or not in PATH. Please install Node.js and npm first." -ForegroundColor Red
+    exit 1
+}
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    $nodeVersion = node --version
+    Write-Host "[+] Found Node.js version: $nodeVersion" -ForegroundColor Green
+}
 Set-Location frontend
-npm install
+npm install --include=dev
+if ($LASTEXITCODE -ne 0) {
+    Set-Location ..
+    Write-Host "[!] Error: 'npm install --include=dev' failed with exit code $LASTEXITCODE." -ForegroundColor Red
+    exit 1
+}
+if (-not ((Test-Path "node_modules/.bin/vite.cmd") -or (Test-Path "node_modules/.bin/vite"))) {
+    Set-Location ..
+    Write-Host "[!] Error: Vite executable not found in frontend/node_modules/.bin after npm install." -ForegroundColor Red
+    exit 1
+}
 Set-Location ..
 
 # 7. Git Hooks Setup
@@ -107,7 +142,7 @@ if (-not $SkipStart) {
     $start = Read-Host "Would you like to start the application now? (y/n)"
     if ($start -eq "y") {
         Write-Host "[*] Starting backend and frontend in new windows..." -ForegroundColor Cyan
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "$RUN_CMD python -m backend.main"
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
+        Start-Process powershell -WorkingDirectory $scriptPath -ArgumentList "-NoExit", "-Command", "$RUN_CMD python -m backend.main"
+        Start-Process powershell -WorkingDirectory (Join-Path $scriptPath 'frontend') -ArgumentList "-NoExit", "-Command", "npm run dev"
     }
 }
