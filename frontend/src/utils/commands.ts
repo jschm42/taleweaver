@@ -19,8 +19,6 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/read', label: '/read', description: 'Read a book, sign, or note', category: 'game' },
   { id: '/playagent', label: '/playagent [on/off]', description: 'Activate or deactivate the autonomous Play-Agent', category: 'game' },
   { id: '/playagent personality', label: '/playagent personality <type>', description: 'Set Play-Agent personality (Casual, Bürokrat, Powerplayer, Custom)', category: 'game' },
-  { id: '/agent on', label: '/agent on', description: 'Enable autonomous agent gameplay mode', category: 'game' },
-  { id: '/agent off', label: '/agent off', description: 'Disable autonomous agent gameplay mode', category: 'game' },
   // Debug Commands
   { id: '/debug on', label: '/debug on', description: 'Enable in-game debug mode & commands', category: 'debug' },
   { id: '/debug off', label: '/debug off', description: 'Disable in-game debug mode & commands', category: 'debug' },

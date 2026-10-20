@@ -36,7 +36,7 @@ const props = defineProps<{
   exp?: number
 }>()
 
-const { deleteMessage, agentPaused, agentStepByStep, runAgentTurn } = useGameSocket()
+const { deleteMessage } = useGameSocket()
 
 const emit = defineEmits<{
   send: [content: string]
@@ -204,26 +204,6 @@ const handleImageError = (path?: string | null) => {
 
 const showImage = (path?: string | null) => {
   return !!path && !brokenImages.value[path]
-}
-
-const agentMonkeyMode = computed(() => Boolean(props.sheet?.agent_monkey_mode))
-const agentAllowWalkthrough = computed(() => props.sheet?.agent_allow_walkthrough ?? true)
-const agentPersonalityDisplay = computed(() => {
-  const p = props.sheet?.agent_personality || 'casual'
-  if (p === 'buerokrat') return 'Bürokrat'
-  return p.charAt(0).toUpperCase() + p.slice(1)
-})
-
-const handleMonkeyModeToggle = () => {
-  emit('send', agentMonkeyMode.value ? '/agent monkey off' : '/agent monkey on')
-}
-
-const handleWalkthroughToggle = () => {
-  emit('send', agentAllowWalkthrough.value ? '/agent walkthrough off' : '/agent walkthrough on')
-}
-
-const handleStepByStepToggle = () => {
-  emit('send', agentStepByStep.value ? '/agent step off' : '/agent step on')
 }
 
 function appendText(text: string) {
@@ -1461,95 +1441,6 @@ onUnmounted(() => {
       </template>
     </div>
 
-    <!-- AGENT ACTIVE BANNER -->
-    <div
-      v-if="props.sheet?.agent_active"
-      class="mx-4 mb-2 px-4 py-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 text-xs font-semibold tracking-wide flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0"
-      :class="{ 'animate-pulse': !agentPaused }"
-    >
-      <div class="flex items-center gap-2">
-        <div :class="['w-2.5 h-2.5 rounded-full', agentPaused ? 'bg-amber-400' : 'bg-indigo-400 animate-ping']"></div>
-        <span>{{ agentPaused ? 'Autonomous Agent Mode is paused.' : 'Autonomous Agent Mode is active. The AI is playing the game.' }}</span>
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-          {{ agentPersonalityDisplay }}
-        </span>
-      </div>
-      <div class="flex items-center gap-2.5 select-none shrink-0">
-        <!-- Walkthrough Toggle -->
-        <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider" :class="agentAllowWalkthrough ? 'text-cyan-200 hover:text-cyan-100' : 'text-slate-400 hover:text-slate-300'">
-          <input
-            type="checkbox"
-            :checked="agentAllowWalkthrough"
-            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-cyan-600 focus:ring-cyan-500/50 focus:ring-offset-slate-950 focus:ring-1"
-            @change="handleWalkthroughToggle"
-          />
-          Walkthrough
-        </label>
-
-        <!-- Monkey Mode Toggle -->
-        <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider" :class="agentMonkeyMode ? 'text-amber-200 hover:text-amber-100' : 'text-indigo-300 hover:text-indigo-200'">
-          <input
-            type="checkbox"
-            :checked="agentMonkeyMode"
-            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-amber-600 focus:ring-amber-500/50 focus:ring-offset-slate-950 focus:ring-1"
-            @change="handleMonkeyModeToggle"
-          />
-          Monkey
-        </label>
-
-        <!-- Step by Step Toggle -->
-        <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider text-indigo-300 hover:text-indigo-200">
-          <input 
-            type="checkbox" 
-            :checked="agentStepByStep"
-            @change="agentStepByStep = !agentStepByStep; handleStepByStepToggle()"
-            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1" 
-          />
-          Step-by-Step
-        </label>
-
-        <!-- Next Step Button -->
-        <button 
-          v-if="agentStepByStep && !agentPaused"
-          :disabled="props.status !== 'connected'"
-          @click="runAgentTurn"
-          class="px-3 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/50 hover:border-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all transform active:scale-95 flex items-center gap-1.5 shadow-lg"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-          </svg>
-          Next
-        </button>
-
-        <!-- Pause / Resume Button -->
-        <button 
-          @click="agentPaused = !agentPaused"
-          class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-500/50 hover:border-indigo-400 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all transform active:scale-95 flex items-center gap-1.5 shadow-lg"
-        >
-          <svg v-if="agentPaused" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          {{ agentPaused ? 'Resume' : 'Pause' }}
-        </button>
-
-        <!-- Stop Agent Button -->
-        <button 
-          @click="emit('send', '/agent off')"
-          class="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 border border-red-500/50 hover:border-red-400 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all transform active:scale-95 flex items-center gap-1.5 shadow-lg"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-          </svg>
-          Stop
-        </button>
-      </div>
-    </div>
-
     <!-- ACTION BAR -->
     <GameActionBar 
       :active-action-id="props.activeActionId" 
@@ -1626,7 +1517,7 @@ onUnmounted(() => {
               v-model="inputText"
               type="text"
               :disabled="!canSendInput || audioService.isGenerating.value || props.sheet?.agent_active"
-              :placeholder="props.sheet?.agent_active ? (agentPaused ? 'Agent Mode Paused. Click Resume or Stop.' : 'Agent Mode Active. Click Stop to regain control.') : 'What do you do next?'"
+              :placeholder="props.sheet?.agent_active ? 'Play-Agent is active. Use the Play-Agent panel to stop it.' : 'What do you do next?'"
               class="w-full min-w-0 bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-2.5 sm:py-3.5 pl-9 sm:pl-11 pr-3 sm:pr-4 text-sm sm:text-base text-slate-200 placeholder-slate-600 placeholder:truncate placeholder:text-ellipsis outline-none transition-all disabled:opacity-50"
               @keydown="handleKeydown"
             />

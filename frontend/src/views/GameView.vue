@@ -14,6 +14,7 @@ import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
 import GameOverScreen from '@/components/game/GameOverScreen.vue'
 import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import ImmersiveGameView from '@/components/game/ImmersiveGameView.vue'
+import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
@@ -202,8 +203,6 @@ const {
   inventoryGlow,
   mapGlow,
   questGlow,
-  agentPaused,
-  agentStepByStep,
   isCheckpointSaving,
   isSceneTransitioning: socketIsSceneTransitioning,
   generatorProposal,
@@ -216,7 +215,6 @@ const {
   refreshSession,
   sendMessage,
   emitSystemMessage,
-  runAgentTurn,
   createTerminalEpilogue,
   turnError,
   retryLastAction,
@@ -1608,30 +1606,8 @@ watch(showCombatDialog, (visible) => {
   }
 })
 
-// Autonomous Agent Gameplay Loop
-let isAgentLoopRunning = false
-watch(
-  [() => sheet.value?.agent_active, status, agentPaused, agentStepByStep],
-  async ([agentActive, currentStatus, paused, stepByStep]) => {
-    if (isAgentLoopRunning) return
-    if (agentActive && currentStatus === 'connected' && !paused && !stepByStep) {
-      isAgentLoopRunning = true
-      try {
-        // Wait 1.5 seconds so the player can follow the gameplay progression
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        // Re-verify that the agent is still active, status is connected, and we are not paused or step-by-step
-        if (sheet.value?.agent_active && status.value === 'connected' && !agentPaused.value && !agentStepByStep.value) {
-          await runAgentTurn()
-        }
-      } catch (err) {
-        console.error('Agent turn failed', err)
-      } finally {
-        isAgentLoopRunning = false
-      }
-    }
-  },
-  { immediate: true }
-)
+// Autonomous Play-Agent loop (auto mode)
+usePlayAgentAutoLoop()
 </script>
 
 <template>

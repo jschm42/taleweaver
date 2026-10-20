@@ -14,7 +14,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.api.routes.adventures.agent_turn_stream import ensure_agent_active, stream_agent_turn
 from backend.api.routes.adventures.chat_snapshot import (
     apply_pending_sequence_progress,
     build_awards_for_snapshot,
@@ -89,7 +88,9 @@ class ContainerUnlockCodeRequest(BaseModel):
     code: str
 
 
-async def _require_session_state(db: AsyncSession, game_id: str, current_user: User) -> SessionState:
+async def _require_session_state(
+    db: AsyncSession, game_id: str, current_user: User
+) -> SessionState:
     state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -260,20 +261,6 @@ async def post_chat_message(
         raise HTTPException(status_code=500, detail=CLIENT_TURN_ERROR_DETAIL) from None
 
 
-@router.post("/{game_id}/agent/turn")
-async def run_agent_turn(
-    game_id: str,
-    current_user: User = Depends(get_current_user),
-):
-    """Computes an agent decision based on walkthrough & game state, then executes the turn."""
-    await ensure_agent_active(game_id, current_user)
-    return StreamingResponse(
-        stream_agent_turn(game_id, current_user),
-        media_type="text/event-stream",
-        headers={"X-Taleweaver-Turn-Id": uuid4().hex},
-    )
-
-
 @router.post("/{game_id}/terminal-epilogue", response_model=TerminalEpilogueResponse)
 async def create_terminal_epilogue(
     game_id: str,
@@ -351,9 +338,7 @@ async def translate_text(
     return TranslateTextResponse(translated_text=cleaned or source_text, language=target_language)
 
 
-_WALKTHROUGH_STEP_RE = re.compile(
-    r"^(?:(?:Schritt|Step)\s*\d+[:.]?|\d+[.)])\s*(.*)", re.IGNORECASE
-)
+_WALKTHROUGH_STEP_RE = re.compile(r"^(?:(?:Schritt|Step)\s*\d+[:.]?|\d+[.)])\s*(.*)", re.IGNORECASE)
 
 
 def _walkthrough_heading(stripped: str) -> tuple[str, bool] | None:
@@ -817,7 +802,10 @@ async def unlock_exit_with_code(
 
     await enforce_exit_guard(db, state, world_exit)
     return await open_exit(
-        db, state, world_exit, f"{world_exit.label or 'The exit'} accepts the code and the way is open."
+        db,
+        state,
+        world_exit,
+        f"{world_exit.label or 'The exit'} accepts the code and the way is open.",
     )
 
 

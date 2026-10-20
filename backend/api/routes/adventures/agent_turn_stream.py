@@ -13,6 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 
 from backend.api.routes.adventures.agent_logic import AgentService
+from backend.api.routes.adventures.agent_settings import build_agent_snapshot
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import database as core_database
@@ -131,6 +132,24 @@ async def _agent_action_events(
         logger.info("Agent turn stream cancelled during gameplay process_turn.")
         await db.rollback()
         raise
+
+    async for event in _agent_finish_events(db, manager):
+        yield event
+
+
+async def _agent_finish_events(db, manager: GameTurnManager) -> AsyncGenerator[str, None]:
+    """Deactivates the agent once the adventure has been won or lost."""
+    flags = manager._build_terminal_flags_payload()
+    if not (flags.get("game_over") or flags.get("game_completed")):
+        return
+
+    AgentService.set_agent_active(manager.state, False)
+    await db.commit()
+    outcome = "lost" if flags.get("game_over") else "won"
+    msg = f"Play-Agent finished: the adventure was {outcome}. You are back in control."
+    await manager._save_chat_message("system", msg)
+    yield _sse("system", {"role": "system", "content": msg})
+    yield _sse("agent_state", build_agent_snapshot(manager.state))
 
 
 async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[str, None]:

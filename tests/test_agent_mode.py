@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_agent_toggle_commands(auth_client, setup_test_db):
-    """Verifies /agent on and /agent off toggle the state correctly via process_turn."""
+    """Verifies /playagent on and /agent off toggle the state correctly via process_turn."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -50,7 +50,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
 
         # Turn agent ON
         chunks = []
-        async for chunk in manager.process_turn("/agent on"):
+        async for chunk in manager.process_turn("/playagent on"):
             chunks.append(chunk)
 
         # Re-fetch state using a fresh session to avoid stale transaction isolation
@@ -63,13 +63,13 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
 
         # Verify SSE output contains success message and sheet with agent_active = True
         full_sse = "".join(chunks)
-        assert "Autonomous Agent Gameplay Mode enabled" in full_sse
+        assert "Play-Agent enabled" in full_sse
         assert '"agent_active":true' in full_sse.replace(" ", "")
         assert '"agent_monkey_mode":false' in full_sse.replace(" ", "")
 
         # Turn agent OFF
         chunks = []
-        async for chunk in manager.process_turn("/agent off"):
+        async for chunk in manager.process_turn("/playagent off"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -83,7 +83,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
 
 
 async def test_agent_monkey_mode_toggle_commands(auth_client, setup_test_db):
-    """Verifies /agent monkey on and /agent monkey off toggle monkey mode."""
+    """Verifies /playagent monkey on and /agent monkey off toggle monkey mode."""
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
     from tests.conftest import TestSessionLocal
 
@@ -108,7 +108,7 @@ async def test_agent_monkey_mode_toggle_commands(auth_client, setup_test_db):
 
         # Toggle monkey mode ON/OFF via slash command
         chunks = []
-        async for chunk in manager.process_turn("/agent monkey on"):
+        async for chunk in manager.process_turn("/playagent monkey on"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -122,7 +122,7 @@ async def test_agent_monkey_mode_toggle_commands(auth_client, setup_test_db):
         assert "Monkey Mode enabled" in "".join(chunks)
 
         chunks = []
-        async for chunk in manager.process_turn("/agent monkey off"):
+        async for chunk in manager.process_turn("/playagent monkey off"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -137,7 +137,7 @@ async def test_agent_monkey_mode_toggle_commands(auth_client, setup_test_db):
 
 
 async def test_agent_on_uses_monkey_mode_default_from_settings(auth_client, setup_test_db):
-    """/agent on should initialize monkey mode from persisted llm settings."""
+    """/playagent on should initialize monkey mode from persisted llm settings."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -176,7 +176,7 @@ async def test_agent_on_uses_monkey_mode_default_from_settings(auth_client, setu
         assert await manager.initialize()
 
         chunks = []
-        async for chunk in manager.process_turn("/agent on"):
+        async for chunk in manager.process_turn("/playagent on"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -526,7 +526,7 @@ def test_log_issue_does_not_create_unknown_session_folder(tmp_path, monkeypatch)
 
 
 async def test_agent_walkthrough_and_step_toggle_commands(auth_client, setup_test_db):
-    """Verifies /agent walkthrough on/off and /agent step on/off commands update state."""
+    """Verifies /playagent walkthrough on/off and /agent step on/off commands update state."""
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
     from tests.conftest import TestSessionLocal
 
@@ -548,7 +548,7 @@ async def test_agent_walkthrough_and_step_toggle_commands(auth_client, setup_tes
 
         # Turn walkthrough OFF
         chunks = []
-        async for chunk in manager.process_turn("/agent walkthrough off"):
+        async for chunk in manager.process_turn("/playagent walkthrough off"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -562,7 +562,7 @@ async def test_agent_walkthrough_and_step_toggle_commands(auth_client, setup_tes
 
         # Turn walkthrough ON
         chunks = []
-        async for chunk in manager.process_turn("/agent walkthrough on"):
+        async for chunk in manager.process_turn("/playagent walkthrough on"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -576,7 +576,7 @@ async def test_agent_walkthrough_and_step_toggle_commands(auth_client, setup_tes
 
         # Turn step-by-step ON
         chunks = []
-        async for chunk in manager.process_turn("/agent step on"):
+        async for chunk in manager.process_turn("/playagent step on"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -586,11 +586,11 @@ async def test_agent_walkthrough_and_step_toggle_commands(auth_client, setup_tes
             state = state_res.scalars().first()
             assert AgentService.get_agent_state(state).get("step_by_step") is True
 
-        assert "Step-by-Step mode enabled" in "".join(chunks)
+        assert "Step mode enabled" in "".join(chunks)
 
         # Turn step-by-step OFF
         chunks = []
-        async for chunk in manager.process_turn("/agent step off"):
+        async for chunk in manager.process_turn("/playagent step off"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -600,13 +600,13 @@ async def test_agent_walkthrough_and_step_toggle_commands(auth_client, setup_tes
             state = state_res.scalars().first()
             assert AgentService.get_agent_state(state).get("step_by_step") is False
 
-        assert "Step-by-Step mode disabled" in "".join(chunks)
+        assert "Auto mode enabled" in "".join(chunks)
 
 
 async def test_agent_on_uses_walkthrough_and_step_defaults_from_settings(
     auth_client, setup_test_db
 ):
-    """/agent on should initialize walkthrough and step_by_step from persisted settings."""
+    """/playagent on should initialize walkthrough and step_by_step from persisted settings."""
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
     from tests.conftest import TestSessionLocal
 
@@ -631,7 +631,7 @@ async def test_agent_on_uses_walkthrough_and_step_defaults_from_settings(
         assert await manager.initialize()
 
         chunks = []
-        async for chunk in manager.process_turn("/agent on"):
+        async for chunk in manager.process_turn("/playagent on"):
             chunks.append(chunk)
 
         async with TestSessionLocal() as verify_db:
@@ -646,61 +646,7 @@ async def test_agent_on_uses_walkthrough_and_step_defaults_from_settings(
 
         full_output = "".join(chunks)
         assert "Sequence Walkthrough guidance is disabled (normal player mode)" in full_output
-        assert "Step-by-Step confirmation mode is enabled" in full_output
-
-
-@patch("backend.api.routes.adventures.agent_logic.AgentService.get_decision")
-async def test_agent_step_command_executes_single_decision(
-    mock_get_decision, auth_client, setup_test_db
-):
-    """Verifies /agent step triggers a single turn decision when agent is active."""
-    from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-    from tests.conftest import TestSessionLocal
-
-    mock_get_decision.return_value = AgentDecision(
-        thoughts="Step-by-step: looking around first.",
-        action="/lookaround",
-        is_stuck_or_bug=False,
-        issue_description="",
-    )
-
-    async with TestSessionLocal() as db:
-        user_res = await db.execute(select(User).limit(1))
-        user = user_res.scalars().first()
-
-        adv = AdventureTemplate(
-            id="agent-step-exec-test", owner_id=user.id, title="Agent Step Exec Test", is_ready=True
-        )
-        db.add(adv)
-        await db.commit()
-
-        result = await start_session_for_template("agent-step-exec-test", db, user)
-        game_id = result["game_id"]
-
-        manager = GameTurnManager(db, game_id, user)
-        assert await manager.initialize()
-
-        # Without agent active, /agent step should reject
-        inactive_chunks = []
-        async for chunk in manager.process_turn("/agent step"):
-            inactive_chunks.append(chunk)
-        assert "Agent mode is not active" in "".join(inactive_chunks)
-
-        # Enable agent
-        AgentService.set_agent_active(manager.state, True)
-        AgentService.set_step_by_step(manager.state, True)
-        await db.commit()
-
-        # Now /agent step should execute the decision
-        with patch.object(manager, "process_turn", wraps=manager.process_turn):
-            step_chunks = []
-            async for chunk in manager.process_turn("/agent step"):
-                step_chunks.append(chunk)
-
-            full_step_output = "".join(step_chunks)
-            assert "event: thought" in full_step_output
-            assert "Step-by-step: looking around first" in full_step_output
-            assert "event: player_action" in full_step_output
+        assert "Step mode is enabled" in full_output
 
 
 async def test_agent_prompt_walkthrough_disabled_vs_enabled(setup_test_db, monkeypatch):
@@ -810,10 +756,18 @@ async def test_playagent_console_commands_toggle(auth_client, setup_test_db):
         async for chunk in manager.process_turn("/playagent"):
             chunks.append(chunk)
         full_sse = "".join(chunks)
-        assert "Autonomous Agent Gameplay Mode enabled" in full_sse
+        assert "Play-Agent enabled" in full_sse
 
         async with TestSessionLocal() as verify_db:
-            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            st = (
+                (
+                    await verify_db.execute(
+                        select(SessionState).where(SessionState.session_id == game_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             agent_st = AgentService.get_agent_state(st)
             assert agent_st.get("active") is True
 
@@ -822,11 +776,19 @@ async def test_playagent_console_commands_toggle(auth_client, setup_test_db):
         async for chunk in manager.process_turn("/playagent powerplayer"):
             chunks.append(chunk)
         full_sse = "".join(chunks)
-        assert "Autonomous Agent Gameplay Mode enabled" in full_sse
+        assert "Play-Agent enabled" in full_sse
         assert "Powerplayer" in full_sse
 
         async with TestSessionLocal() as verify_db:
-            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            st = (
+                (
+                    await verify_db.execute(
+                        select(SessionState).where(SessionState.session_id == game_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             agent_st = AgentService.get_agent_state(st)
             assert agent_st.get("personality") == "powerplayer"
 
@@ -835,10 +797,18 @@ async def test_playagent_console_commands_toggle(auth_client, setup_test_db):
         async for chunk in manager.process_turn("/playagent off"):
             chunks.append(chunk)
         full_sse = "".join(chunks)
-        assert "Autonomous Agent Gameplay Mode disabled" in full_sse
+        assert "Play-Agent disabled" in full_sse
 
         async with TestSessionLocal() as verify_db:
-            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            st = (
+                (
+                    await verify_db.execute(
+                        select(SessionState).where(SessionState.session_id == game_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             agent_st = AgentService.get_agent_state(st)
             assert agent_st.get("active") is False
 
@@ -853,7 +823,10 @@ async def test_playagent_console_commands_personality(auth_client, setup_test_db
         user = user_res.scalars().first()
 
         adv = AdventureTemplate(
-            id="playagent-personality-cmd-test", owner_id=user.id, title="Playagent Personality Cmd Test", is_ready=True
+            id="playagent-personality-cmd-test",
+            owner_id=user.id,
+            title="Playagent Personality Cmd Test",
+            is_ready=True,
         )
         db.add(adv)
         await db.commit()
@@ -872,19 +845,37 @@ async def test_playagent_console_commands_personality(auth_client, setup_test_db
         assert "Play-Agent personality set to Bürokrat" in full_sse
 
         async with TestSessionLocal() as verify_db:
-            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            st = (
+                (
+                    await verify_db.execute(
+                        select(SessionState).where(SessionState.session_id == game_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             agent_st = AgentService.get_agent_state(st)
             assert agent_st.get("personality") == "buerokrat"
 
         # 2. /playagent personality custom Always talk in rhyme
         chunks = []
-        async for chunk in manager.process_turn("/playagent personality custom Always talk in rhyme"):
+        async for chunk in manager.process_turn(
+            "/playagent personality custom Always talk in rhyme"
+        ):
             chunks.append(chunk)
         full_sse = "".join(chunks)
         assert "Play-Agent custom personality updated" in full_sse
 
         async with TestSessionLocal() as verify_db:
-            st = (await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))).scalars().first()
+            st = (
+                (
+                    await verify_db.execute(
+                        select(SessionState).where(SessionState.session_id == game_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             agent_st = AgentService.get_agent_state(st)
             assert agent_st.get("personality") == "custom"
             assert agent_st.get("custom_personality") == "Always talk in rhyme"
@@ -973,3 +964,111 @@ async def test_playagent_personalities_prompt_injection(setup_test_db, monkeypat
         prompt = captured.get("system_prompt", "")
         assert "AGENT PERSONALITY: CUSTOM" in prompt
         assert "Always speak like Sherlock Holmes." in prompt
+
+
+def test_legacy_agent_command_is_not_registered():
+    """The old /agent console command was replaced by /playagent."""
+    from backend.api.routes.adventures.agent_commands import PLAYAGENT_COMMANDS
+
+    assert "/agent" not in PLAYAGENT_COMMANDS
+    assert "/playagent" in PLAYAGENT_COMMANDS
+
+
+async def test_agent_settings_endpoint_updates_mode_and_personality(auth_client, setup_test_db):
+    """PATCH /agent/settings activates the agent and updates mode and personality."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+
+        adv = AdventureTemplate(
+            id="agent-settings-test", owner_id=user.id, title="Agent Settings Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("agent-settings-test", db, user)
+        game_id = result["game_id"]
+
+    url = f"/api/adventures/{game_id}/agent/settings"
+    resp = await auth_client.patch(url, json={"active": True})
+    assert resp.status_code == 200
+    assert resp.json()["agent_active"] is True
+
+    resp = await auth_client.patch(url, json={"step_by_step": True, "personality": "Powerplayer"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["agent_step_by_step"] is True
+    assert body["agent_personality"] == "powerplayer"
+
+    resp = await auth_client.patch(
+        url, json={"personality": "custom", "custom_personality": "Always talk in rhyme"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["agent_custom_personality"] == "Always talk in rhyme"
+
+    resp = await auth_client.patch(url, json={"personality": "pirate"})
+    assert resp.status_code == 400
+
+    async with TestSessionLocal() as verify_db:
+        state_res = await verify_db.execute(
+            select(SessionState).where(SessionState.session_id == game_id)
+        )
+        agent_st = AgentService.get_agent_state(state_res.scalars().first())
+        assert agent_st.get("active") is True
+        assert agent_st.get("step_by_step") is True
+        assert agent_st.get("personality") == "custom"
+
+
+@patch("backend.api.routes.adventures.agent_logic.AgentService.get_decision")
+async def test_agent_turn_deactivates_agent_when_adventure_is_won(
+    mock_get_decision, auth_client, setup_test_db
+):
+    """The agent stops playing on its own once the adventure is completed."""
+    from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+    from tests.conftest import TestSessionLocal
+
+    mock_get_decision.return_value = AgentDecision(
+        thoughts="Time to open the final door.",
+        action="open door",
+        is_stuck_or_bug=False,
+        issue_description="",
+    )
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+
+        adv = AdventureTemplate(
+            id="agent-win-test", owner_id=user.id, title="Agent Win Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("agent-win-test", db, user)
+        game_id = result["game_id"]
+
+        state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
+        AgentService.set_agent_active(state_res.scalars().first(), True)
+        await db.commit()
+
+    async def mock_generator(action):
+        yield "event: final\ndata: {}\n\n"
+
+    terminal_flags = {"game_over": False, "game_completed": True}
+    with (
+        patch.object(GameTurnManager, "process_turn", side_effect=mock_generator),
+        patch.object(GameTurnManager, "_build_terminal_flags_payload", return_value=terminal_flags),
+    ):
+        response = await auth_client.post(f"/api/adventures/{game_id}/agent/turn")
+
+    assert response.status_code == 200
+    assert "the adventure was won" in response.text
+    assert "event: agent_state" in response.text
+
+    async with TestSessionLocal() as verify_db:
+        state_res = await verify_db.execute(
+            select(SessionState).where(SessionState.session_id == game_id)
+        )
+        assert AgentService.get_agent_state(state_res.scalars().first()).get("active") is False

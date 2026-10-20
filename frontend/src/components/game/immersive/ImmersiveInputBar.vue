@@ -282,7 +282,7 @@ defineExpose({
           v-model="inputText"
           type="text"
           :disabled="!props.canSendInput"
-          :placeholder="props.isEvaluating ? (props.statusText || 'GM is deciding...') : (props.agentActive ? 'AI Agent Mode is active.' : 'What do you do next? (TAB for /say, / for commands)')"
+          :placeholder="props.isEvaluating ? (props.statusText || 'GM is deciding...') : (props.agentActive ? 'Play-Agent is active. Use the Play-Agent panel to stop it.' : 'What do you do next? (TAB for /say, / for commands)')"
           class="w-full bg-slate-900/90 border-2 border-slate-700/70 focus:border-amber-400/80 focus:ring-2 focus:ring-amber-400/20 rounded-xl py-2.5 pl-4 pr-10 text-sm sm:text-base text-slate-100 placeholder-slate-500 outline-none transition-all disabled:opacity-50 font-medium"
           @keydown.tab.prevent.stop="insertSayCommand"
           @keydown="handleKeydown"

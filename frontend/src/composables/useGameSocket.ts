@@ -16,6 +16,23 @@ export interface TurnErrorState {
   action: string
 }
 
+export interface AgentLogEntry {
+  timestamp: string
+  thought: string
+  action: string
+}
+
+const AGENT_LOG_LIMIT = 50
+
+export interface AgentSettingsPatch {
+  active?: boolean
+  step_by_step?: boolean
+  personality?: string
+  custom_personality?: string
+  allow_walkthrough?: boolean
+  monkey_mode?: boolean
+}
+
 export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
   sheet: Ref<CharacterSheet | null>
@@ -46,7 +63,7 @@ export interface UseGameSocket {
   mapGlow: Ref<boolean>
   questGlow: Ref<boolean>
   agentPaused: Ref<boolean>
-  agentStepByStep: Ref<boolean>
+  agentLog: Ref<AgentLogEntry[]>
   isCheckpointSaving: Ref<boolean>
   isSceneTransitioning: Ref<boolean>
   generatorProposal: Ref<any | null>
@@ -61,7 +78,8 @@ export interface UseGameSocket {
   retryLastAction: () => Promise<void>
   cancelTurnError: () => void
   emitSystemMessage: (content: string) => void
-  runAgentTurn: () => Promise<void>
+  runAgentTurn: () => Promise<boolean>
+  updateAgentSettings: (patch: AgentSettingsPatch) => Promise<boolean>
   createTerminalEpilogue: () => Promise<void>
   revealIllustration: (name: string, url: string) => void
   deleteMessage: (messageId: string) => Promise<void>
@@ -110,7 +128,7 @@ export function useGameSocket(): UseGameSocket {
   let activeAgentController: AbortController | null = null
   let activeChatController: AbortController | null = null
   const agentPaused = ref(false)
-  const agentStepByStep = ref(localStorage.getItem('tw_agent_step_by_step') === 'true')
+  const agentLog = ref<AgentLogEntry[]>([])
   const isCheckpointSaving = ref(false)
   const isSceneTransitioning = ref(false)
   let checkpointPulseTimer: number | null = null
@@ -139,13 +157,10 @@ export function useGameSocket(): UseGameSocket {
     }, 1400)
   }
 
-  watch(agentStepByStep, (val) => {
-    localStorage.setItem('tw_agent_step_by_step', String(val))
-  })
-
-  watch(() => sheet.value?.agent_active, (active) => {
-    if (!active) {
-      agentPaused.value = false
+  watch(() => sheet.value?.agent_active, (active, wasActive) => {
+    agentPaused.value = false
+    if (active && !wasActive) {
+      agentLog.value = []
     }
   })
 
@@ -243,12 +258,7 @@ export function useGameSocket(): UseGameSocket {
 
     if (data.scene_id !== undefined) currentSceneId = data.scene_id || null
     if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
-    if (data.sheet) {
-      sheet.value = data.sheet
-      if (typeof data.sheet.agent_step_by_step === 'boolean') {
-        agentStepByStep.value = data.sheet.agent_step_by_step
-      }
-    }
+    if (data.sheet) sheet.value = data.sheet
     if (data.map_data) mapData.value = data.map_data
     if (data.nodes) nodes.value = data.nodes
     if (data.npc_metadata) npcMetadata.value = data.npc_metadata
@@ -419,7 +429,7 @@ export function useGameSocket(): UseGameSocket {
    */
   async function sendMessage(content: string, isRetry: boolean = false): Promise<void> {
     const normalizedContent = normalizeUiActionInput(content)
-    const isAgentOff = ['/agent off', '/playagent off', '/play-agent off'].includes(normalizedContent.trim().toLowerCase())
+    const isAgentOff = ['/playagent off', '/play-agent off'].includes(normalizedContent.trim().toLowerCase())
     const hadActiveChat = !!activeChatController
 
     turnError.value = null
@@ -714,10 +724,39 @@ export function useGameSocket(): UseGameSocket {
     }
   }
 
-  async function runAgentTurn(): Promise<void> {
+  /**
+   * Updates play-agent settings for the current session and merges the result into the sheet.
+   */
+  async function updateAgentSettings(patch: AgentSettingsPatch): Promise<boolean> {
+    if (!currentGameId) return false
+    try {
+      const res = await fetch(`${BASE}/adventures/${currentGameId}/agent/settings`, {
+        method: 'PATCH',
+        headers: authHeaders(true),
+        body: JSON.stringify(patch)
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        addNotification(errData.detail || 'Failed to update Play-Agent settings.', 'error')
+        return false
+      }
+      const agentState = await res.json()
+      if (sheet.value) sheet.value = { ...sheet.value, ...agentState }
+      return true
+    } catch (err) {
+      console.error('[Session] Agent settings error:', err)
+      addNotification('Failed to update Play-Agent settings.', 'error')
+      return false
+    }
+  }
+
+  /**
+   * Runs one play-agent turn. Resolves true when the turn completed normally.
+   */
+  async function runAgentTurn(): Promise<boolean> {
     const isBusy = status.value === 'connecting' || status.value === 'loading'
-    if (!currentGameId) return
-    if (isBusy) return
+    if (!currentGameId) return false
+    if (isBusy) return false
 
     status.value = 'connecting' 
     statusText.value = 'Agent is thinking...'
@@ -737,13 +776,14 @@ export function useGameSocket(): UseGameSocket {
         window.dispatchEvent(new CustomEvent('auth-unauthorized'))
         status.value = 'error'
         statusText.value = ''
-        return
+        return false
       }
 
       if (!res.ok) {
         _pushMessage('system', 'The Agent encountered a connection error. Try once more.')
         status.value = 'connected'
-        return
+        statusText.value = ''
+        return false
       }
 
       const reader = res.body?.getReader()
@@ -790,8 +830,13 @@ export function useGameSocket(): UseGameSocket {
             applySessionSnapshot(data, false)
           } else if (event === 'thought') {
             _pushMessage('thought' as any, data.content)
+            agentLog.value = [...agentLog.value, { timestamp: new Date().toLocaleTimeString(), thought: data.content, action: '' }].slice(-AGENT_LOG_LIMIT)
           } else if (event === 'player_action') {
             _pushMessage('user', data.content)
+            const lastEntry = agentLog.value[agentLog.value.length - 1]
+            if (lastEntry && !lastEntry.action) lastEntry.action = data.content
+          } else if (event === 'agent_state') {
+            if (sheet.value) sheet.value = { ...sheet.value, ...data }
           } else if (event === 'system' || event === 'assistant') {
             const role = data.role || (event === 'assistant' ? 'assistant' : 'system')
             _pushMessage(role, data.content, undefined, data.is_debug)
@@ -834,6 +879,7 @@ export function useGameSocket(): UseGameSocket {
           applySessionSnapshot(snapshot, true)
         }
       }
+      return receivedFinalEvent
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log('Agent request was aborted by user.')
@@ -843,6 +889,7 @@ export function useGameSocket(): UseGameSocket {
         status.value = 'connected'
         statusText.value = ''
       }
+      return false
     } finally {
       clearTimeout(timeoutId)
       activeAgentController = null
@@ -929,7 +976,7 @@ export function useGameSocket(): UseGameSocket {
     mapGlow,
     questGlow,
     agentPaused,
-    agentStepByStep,
+    agentLog,
     isCheckpointSaving,
     isSceneTransitioning,
     generatorProposal,
@@ -946,6 +993,7 @@ export function useGameSocket(): UseGameSocket {
     cancelTurnError,
     emitSystemMessage,
     runAgentTurn,
+    updateAgentSettings,
     createTerminalEpilogue,
     deleteMessage,
     revealIllustration: (name: string, url: string) => {

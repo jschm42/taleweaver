@@ -23,6 +23,7 @@ import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
 import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
+import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -315,6 +316,9 @@ defineExpose({
           :adventure-title="props.adventureTitle"
         />
       </main>
+
+      <!-- 3C. RIGHT / PLAY-AGENT CONTROL PANEL -->
+      <PlayAgentPanel v-if="props.sheet?.agent_active" />
     </div>
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->

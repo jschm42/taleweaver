@@ -1,6 +1,5 @@
 from backend.models.avatar import Avatar
 
-
 # Canonical stat names for display
 _STAT_DISPLAY_NAMES = {
     "strength": "Strength",
@@ -55,12 +54,118 @@ def _format_stat_change_message(gained: dict[str, int], lost: dict[str, int]) ->
         parts.append(f"You gain: {items}.")
 
     if lost:
-        items = ", ".join(
-            f"{v} {_STAT_DISPLAY_NAMES.get(k, k.title())}" for k, v in lost.items()
-        )
+        items = ", ".join(f"{v} {_STAT_DISPLAY_NAMES.get(k, k.title())}" for k, v in lost.items())
         parts.append(f"You lose: {items}.")
 
     return " ".join(parts)
+
+
+# Commands that forward their arguments to the turn engine as "<TAG> <args>".
+_ARG_TRIGGERS = {
+    "/drop": "[TRIGGER_DROP]",
+    "/combine": "[TRIGGER_COMBINE]",
+    "/use": "[TRIGGER_COMBINE]",
+    "/take": "[TRIGGER_TAKE_DIRECT]",
+    "/take_direct": "[TRIGGER_TAKE_DIRECT]",
+    "/open": "[TRIGGER_OPEN]",
+    "/container_take_all": "[TRIGGER_CONTAINER_TAKE_ALL]",
+    "/container_take_item": "[TRIGGER_CONTAINER_TAKE_ITEM]",
+    "/container_drop_scene": "[TRIGGER_CONTAINER_DROP_SCENE]",
+    "/say": "[TRIGGER_SAY]",
+    "/speak": "[TRIGGER_SAY]",
+    "/inspect": "[TRIGGER_INSPECT]",
+    "/read": "[TRIGGER_READ]",
+    "/push": "[TRIGGER_PUSH]",
+    "/pull": "[TRIGGER_PULL]",
+    "/switch": "[TRIGGER_SWITCH]",
+    "/search": "[TRIGGER_SEARCH]",
+    "/playagent": "[TRIGGER_AGENT]",
+    "/play-agent": "[TRIGGER_AGENT]",
+}
+
+# Commands that map to a fixed tag regardless of arguments.
+_FIXED_TRIGGERS = {
+    "/lookaround": "[TRIGGER_LOOKAROUND]",
+    "/look": "[TRIGGER_LOOKAROUND]",
+    "/rest": "[TRIGGER_REST]",
+    "/rule-pass": "[RULE_PASS]",
+}
+
+_SHEET_COMMANDS = {"/sheet", "/inventory", "/stats"}
+
+# Standard equipment slots created on demand for older avatars.
+_DEFAULT_SLOTS = (
+    "Head",
+    "Chest",
+    "Arms",
+    "Legs",
+    "Hands",
+    "Feet",
+    "Ring_1",
+    "Ring_2",
+    "Neck",
+    "MainHand",
+    "OffHand",
+)
+
+_SLOT_ALIASES = {"Hand": "Hands", "Ring": "Ring_1"}
+_OFFHAND_KEYWORDS = ("shield", "buckler", "torch")
+
+
+def _find_inventory_index(avatar: Avatar, item_name: str) -> int:
+    for idx, item in enumerate(avatar.inventory):
+        if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
+            return idx
+    return -1
+
+
+def _resolve_equip_slot(item: dict) -> str | None:
+    """Determines the target slot for an item, guessing for weapons and generic hand items."""
+    from backend.engine.item_logic import get_item_slot
+
+    slot = item.get("slot", "Hands")  # Fallback to hands if missing
+    slot = _SLOT_ALIASES.get(slot, slot)
+    if not slot or slot == "None":
+        slot = item.get("slot")
+    if slot and slot != "Hands":
+        return slot
+
+    item_type = item.get("item_type")
+    name = item.get("name", "").lower()
+    if item_type == "WEAPON":
+        return "MainHand"
+    if item_type == "TOOL" and any(kw in name for kw in _OFFHAND_KEYWORDS):
+        return "OffHand"
+    # Last resort: try guessing
+    return get_item_slot(item.get("name", ""), item.get("item_type", "PICKABLE"))
+
+
+def _ensure_equipment_slot(avatar: Avatar, slot: str) -> bool:
+    """Self-heals missing standard slots; returns False when the slot is unknown."""
+    if slot in avatar.equipment:
+        return True
+    if slot not in _DEFAULT_SLOTS:
+        return False
+    new_equipment = dict(avatar.equipment)
+    for s in _DEFAULT_SLOTS:
+        new_equipment.setdefault(s, None)
+    avatar.equipment = new_equipment
+    return True
+
+
+def _split_stat_delta(
+    new_mods: dict[str, int], old_mods: dict[str, int]
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Returns (gained, lost) stats for swapping the old item for the new one."""
+    gained: dict[str, int] = {}
+    lost: dict[str, int] = {}
+    for stat in set(new_mods) | set(old_mods):
+        delta = new_mods.get(stat, 0) - old_mods.get(stat, 0)
+        if delta > 0:
+            gained[stat] = delta
+        elif delta < 0:
+            lost[stat] = delta
+    return gained, lost
 
 
 class CommandParser:
@@ -74,58 +179,30 @@ class CommandParser:
         command = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
 
-        if command == "/equip":
-            return CommandParser._handle_equip(avatar, args)
-        elif command == "/drop":
-            return f"[TRIGGER_DROP] {args}"
-        elif command == "/help":
-            return CommandParser._handle_help(debug_enabled=debug_enabled)
-        elif command == "/walkthrough":
-            return "[TRIGGER_WALKTHROUGH_REVEAL]" if args.strip().lower() == "reveal" else "[TRIGGER_WALKTHROUGH]"
-        elif command == "/combine" or command == "/use":
-            return f"[TRIGGER_COMBINE] {args}"
-        elif command == "/take":
-            return f"[TRIGGER_TAKE_DIRECT] {args}"
-        elif command == "/take_direct":
-            return f"[TRIGGER_TAKE_DIRECT] {args}"
-        elif command == "/open":
-            return f"[TRIGGER_OPEN] {args}"
-        elif command == "/container_take_all":
-            return f"[TRIGGER_CONTAINER_TAKE_ALL] {args}"
-        elif command == "/container_take_item":
-            return f"[TRIGGER_CONTAINER_TAKE_ITEM] {args}"
-        elif command == "/container_drop_scene":
-            return f"[TRIGGER_CONTAINER_DROP_SCENE] {args}"
-        elif command == "/say" or command == "/speak":
-            return f"[TRIGGER_SAY] {args}"
-        elif command == "/inspect":
-            return f"[TRIGGER_INSPECT] {args}"
-        elif command == "/read":
-            return f"[TRIGGER_READ] {args}"
-        elif command == "/push":
-            return f"[TRIGGER_PUSH] {args}"
-        elif command == "/pull":
-            return f"[TRIGGER_PULL] {args}"
-        elif command == "/switch":
-            return f"[TRIGGER_SWITCH] {args}"
-        elif command == "/search":
-            return f"[TRIGGER_SEARCH] {args}"
-        elif command == "/lookaround" or command == "/look":
-            return "[TRIGGER_LOOKAROUND]"
-        elif command == "/rest":
-            return "[TRIGGER_REST]"
-        elif command == "/unequip":
-            return CommandParser._handle_unequip(avatar, args)
-        elif command == "/consume":
-            return CommandParser._handle_consume(avatar, args)
-        elif command == "/rule-pass":
-            return "[RULE_PASS]"
-        elif command in ["/agent", "/playagent", "/play-agent"]:
-            return f"[TRIGGER_AGENT] {args}"
-        elif command in ["/sheet", "/inventory", "/stats"]:
+        if command in _ARG_TRIGGERS:
+            return f"{_ARG_TRIGGERS[command]} {args}"
+        if command in _FIXED_TRIGGERS:
+            return _FIXED_TRIGGERS[command]
+        if command in _SHEET_COMMANDS:
             return f"Opening character sheet for {avatar.name}..."
-            
+
+        handlers = {
+            "/equip": lambda: CommandParser._handle_equip(avatar, args),
+            "/unequip": lambda: CommandParser._handle_unequip(avatar, args),
+            "/consume": lambda: CommandParser._handle_consume(avatar, args),
+            "/help": lambda: CommandParser._handle_help(debug_enabled=debug_enabled),
+            "/walkthrough": lambda: CommandParser._handle_walkthrough(args),
+        }
+        handler = handlers.get(command)
+        if handler:
+            return handler()
         return f"Unknown command: {command}. Type /help for a list of commands."
+
+    @staticmethod
+    def _handle_walkthrough(args: str) -> str:
+        if args.strip().lower() == "reveal":
+            return "[TRIGGER_WALKTHROUGH_REVEAL]"
+        return "[TRIGGER_WALKTHROUGH]"
 
     @staticmethod
     def _handle_help(debug_enabled: bool = False) -> str:
@@ -160,16 +237,15 @@ class CommandParser:
             "- `/sheet`: Open your character sheet.",
             "- `/playagent [on/off]`: Activate or deactivate the autonomous Play-Agent.",
             "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bürokrat, Powerplayer, Custom).",
-            "- `/agent on/off`: Turn on/off autonomous agent gameplay mode."
         ]
-        
+
         if debug_enabled:
             lines.append("- `/debug on/off`: Toggle in-game debug mode.")
             lines.append("- `/debug npc drop_items`: Force NPCs in scene to drop all items.")
             lines.append("- `/debug item dynamic on/off`: Toggle dynamic item creation by GM.")
             lines.append("- `/debug walkthrough`: Reveal walkthrough without XP cost (debug).")
             lines.append("- `/debug <cmd>`: Engine debug commands.")
-            
+
         lines.append("\n*Alternatively, just type your actions naturally!*")
         return "\n".join(lines)
 
@@ -178,63 +254,20 @@ class CommandParser:
         if not item_name:
             return "Usage: /equip <item name>"
 
-        # Find item in inventory
-        item_idx = -1
-        for idx, item in enumerate(avatar.inventory):
-            if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
-                item_idx = idx
-                break
-
+        item_idx = _find_inventory_index(avatar, item_name)
         if item_idx == -1:
             return f"You don't have '{item_name}' in your inventory."
 
         item_to_equip = avatar.inventory[item_idx]
-        slot = item_to_equip.get("slot", "Hands") # Fallback to hands if missing
-        
-        from backend.engine.item_logic import get_item_slot
-        
-        # Normalize slot names
-        if slot == "Hand": slot = "Hands"
-        if slot == "Ring": slot = "Ring_1"
-
-        # Determine target slot if not provided
-        if not slot or slot == "None":
-            slot = item_to_equip.get("slot")
-
-        # Smart Redirection / Guessing
-        if not slot or slot == "Hands":
-            # If it's a weapon or tool, move to Hand slots
-            if item_to_equip.get("item_type") == "WEAPON":
-                slot = "MainHand"
-            elif item_to_equip.get("item_type") == "TOOL" and any(kw in item_to_equip.get("name", "").lower() for kw in ["shield", "buckler", "torch"]):
-                slot = "OffHand"
-            else:
-                # Last resort: try guessing
-                slot = get_item_slot(item_to_equip.get("name", ""), item_to_equip.get("item_type", "PICKABLE"))
-
+        slot = _resolve_equip_slot(item_to_equip)
         if not slot:
             return f"'{item_to_equip.get('name')}' cannot be equipped."
-
-        # Self-healing: Ensure standard slots exist
-        DEFAULT_SLOTS = {
-            "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Neck": None,
-            "MainHand": None, "OffHand": None
-        }
-        
-        if slot not in avatar.equipment:
-            if slot in DEFAULT_SLOTS:
-                new_equipment = dict(avatar.equipment)
-                for s, val in DEFAULT_SLOTS.items():
-                    if s not in new_equipment:
-                        new_equipment[s] = val
-                avatar.equipment = new_equipment
-            else:
-                return f"The protagonist does not have an equipment slot for '{slot}'."
+        if not _ensure_equipment_slot(avatar, slot):
+            return f"The protagonist does not have an equipment slot for '{slot}'."
 
         currently_equipped = avatar.equipment.get(slot)
         response_msg = ""
-        
+
         # SQLAlchemy mutability safely handled by re-assigning lists/dicts
         new_equipment = dict(avatar.equipment)
         new_inventory = list(avatar.inventory)
@@ -253,21 +286,13 @@ class CommandParser:
         # Compute net stat change (new item minus old item)
         new_mods = _extract_item_stat_modifiers(item_to_equip)
         old_mods = _extract_item_stat_modifiers(currently_equipped) if currently_equipped else {}
-        all_stats = set(new_mods.keys()) | set(old_mods.keys())
-        gained: dict[str, int] = {}
-        lost: dict[str, int] = {}
-        for stat in all_stats:
-            delta = new_mods.get(stat, 0) - old_mods.get(stat, 0)
-            if delta > 0:
-                gained[stat] = delta
-            elif delta < 0:
-                lost[stat] = delta
+        gained, lost = _split_stat_delta(new_mods, old_mods)
         stat_msg = _format_stat_change_message(gained, lost)
 
         result = response_msg + f"Equipped {item_to_equip.get('name')} in slot {slot}."
         if stat_msg:
             result += f" {stat_msg}"
-        item_id_str = item_to_equip.get('id') or 'None'
+        item_id_str = item_to_equip.get("id") or "None"
         return f"[TRIGGER_EQUIP] {item_id_str} | {result}"
 
     @staticmethod
@@ -288,23 +313,23 @@ class CommandParser:
         # Move to inventory
         new_equipment = dict(avatar.equipment)
         new_inventory = list(avatar.inventory)
-        
+
         new_equipment[match] = None
         new_inventory.append(currently_equipped)
-        
+
         avatar.equipment = new_equipment
         avatar.inventory = new_inventory
-        
+
         # Compute stat losses from the removed item
         removed_mods = _extract_item_stat_modifiers(currently_equipped)
         lost = {k: -v for k, v in removed_mods.items() if v > 0}
         gained = {k: -v for k, v in removed_mods.items() if v < 0}
         stat_msg = _format_stat_change_message(gained, lost)
-        
+
         result = f"Unequipped {currently_equipped.get('name')} from {match}."
         if stat_msg:
             result += f" {stat_msg}"
-        item_id_str = currently_equipped.get('id') or 'None'
+        item_id_str = currently_equipped.get("id") or "None"
         return f"[TRIGGER_UNEQUIP] {item_id_str} | {result}"
 
     @staticmethod
@@ -312,4 +337,3 @@ class CommandParser:
         if not item_name:
             return "Usage: /consume <item name>"
         return f"[TRIGGER_CONSUME] {item_name}"
-
