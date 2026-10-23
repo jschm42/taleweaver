@@ -199,11 +199,6 @@ class Settings(BaseSettings):
     MAX_AI_VALIDATION_SCENES: int = 50
 
     # Validation panel limits.
-    # Hard upper bound on number of scenes before AI validation is skipped.
-    # Larger adventures overflow typical LLM context windows and incur
-    # disproportionate cost. Structural validation always runs regardless.
-    MAX_AI_VALIDATION_SCENES: int = 50
-
     # Per-user rate limit on POST /editor/validate (covers both modes).
     VALIDATION_RATE_LIMIT_MAX: int = 5
     VALIDATION_RATE_LIMIT_WINDOW_SECONDS: int = 60
