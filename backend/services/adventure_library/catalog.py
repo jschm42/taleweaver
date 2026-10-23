@@ -54,17 +54,42 @@ def _entry_rejection_reason(entry: CatalogEntry) -> str | None:
     URLs are checked here, at parse time, so the UI never offers an entry that the
     downloader would refuse anyway. ``size_bytes`` is checked against the download cap
     because the cap is the disk-fill guard; an entry announcing more is never fetched.
+
+    Covers are deliberately NOT validated here. Per spec D9 a cover is cosmetic, so a
+    broken cover degrades the card and must never make a downloadable adventure vanish
+    from the catalog; see :func:`_without_unusable_cover`.
     """
     reason = url_rejection_reason(entry.download_url)
     if reason:
         return f"download_url rejected: {reason}"
-    if entry.cover_url:
-        cover_reason = url_rejection_reason(entry.cover_url)
-        if cover_reason:
-            return f"cover_url rejected: {cover_reason}"
     if entry.size_bytes > settings.ADVENTURE_DOWNLOAD_MAX_BYTES:
         return f"size_bytes {entry.size_bytes} exceeds ADVENTURE_DOWNLOAD_MAX_BYTES"
     return None
+
+
+def _without_unusable_cover(entry: CatalogEntry) -> CatalogEntry:
+    """Strip a cover the client could not legitimately load, keeping the entry (D9).
+
+    ``cover_url`` and ``cover_sha256`` are an optional pair: both present or neither.
+    A half-specified pair, a non-https URL or a host outside the allowlist would make the
+    dialog request something the outbound policy forbids, so the cover is dropped and the
+    UI falls back to its typographic placeholder. The bundle stays downloadable.
+    """
+    cover_url, cover_sha256 = entry.cover_url, entry.cover_sha256
+    if not cover_url and not cover_sha256:
+        return entry
+    if not cover_url or not cover_sha256:
+        logger.warning("Dropping incomplete cover pair for catalog entry %r", entry.slug)
+        return entry.model_copy(update={"cover_url": None, "cover_sha256": None})
+    reason = url_rejection_reason(cover_url)
+    if reason:
+        logger.warning(
+            "Dropping cover of catalog entry %r (%s); the adventure stays available",
+            entry.slug,
+            reason,
+        )
+        return entry.model_copy(update={"cover_url": None, "cover_sha256": None})
+    return entry
 
 
 def _summarize(exc: ValidationError) -> str:
@@ -86,7 +111,7 @@ def _parse_entry(raw: Any) -> CatalogEntry | None:
     if reason:
         logger.warning("Rejected catalog entry %r: %s", label, reason)
         return None
-    return entry
+    return _without_unusable_cover(entry)
 
 
 def _dedupe(entries: list[CatalogEntry]) -> list[CatalogEntry]:

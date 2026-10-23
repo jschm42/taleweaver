@@ -192,3 +192,57 @@ async def test_not_modified_keeps_previously_cached_catalog():
     assert seen_etags == ['"v1"']
     assert [entry.slug for entry in catalog.adventures] == ["cached"]
     assert service.is_stale() is False
+
+
+def test_entry_without_cover_is_kept():
+    # Arrange: a cover is optional (D9), the adventure must stay downloadable.
+    payload = _catalog(_entry("no-art"))
+
+    # Act
+    catalog = parse_catalog(payload)
+
+    # Assert
+    assert [entry.slug for entry in catalog.adventures] == ["no-art"]
+    assert catalog.adventures[0].cover_url is None
+    assert catalog.adventures[0].cover_sha256 is None
+
+
+def test_insecure_cover_url_drops_the_cover_but_keeps_the_entry():
+    # Arrange: D9 forbids hard-failing distribution for a cosmetic field.
+    payload = _catalog(
+        _entry(
+            "ugly-card",
+            cover_url="http://evil.example/cover.png",
+            cover_sha256="b" * 64,
+        ),
+        _entry("intact-art", cover_url=f"{RELEASES}/intact-art/cover.png", cover_sha256="c" * 64),
+    )
+
+    # Act
+    catalog = parse_catalog(payload)
+
+    # Assert: the entry survives, only its cover is gone.
+    assert [entry.slug for entry in catalog.adventures] == ["ugly-card", "intact-art"]
+    assert catalog.adventures[0].cover_url is None
+    assert catalog.adventures[0].cover_sha256 is None
+    assert catalog.adventures[1].cover_url is not None
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"cover_url": f"{RELEASES}/half/cover.png"},
+        {"cover_sha256": "d" * 64},
+    ],
+)
+def test_half_specified_cover_pair_is_dropped(overrides):
+    # Arrange: cover_url and cover_sha256 are one optional pair, never half of it.
+    payload = _catalog(_entry("half-cover", **overrides))
+
+    # Act
+    catalog = parse_catalog(payload)
+
+    # Assert
+    assert [entry.slug for entry in catalog.adventures] == ["half-cover"]
+    assert catalog.adventures[0].cover_url is None
+    assert catalog.adventures[0].cover_sha256 is None

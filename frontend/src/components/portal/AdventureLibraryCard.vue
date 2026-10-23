@@ -60,6 +60,14 @@ const placeholderGradient = computed(() => {
   return PLACEHOLDER_GRADIENTS[hash % PLACEHOLDER_GRADIENTS.length]
 })
 
+// Spec D10: tags/author/language are metadata on the card, never a filter control.
+const MAX_VISIBLE_TAGS = 3
+const visibleTags = computed(() => entry.value.tags.slice(0, MAX_VISIBLE_TAGS))
+const extraTagCount = computed(() => Math.max(0, entry.value.tags.length - MAX_VISIBLE_TAGS))
+const hasMetadata = computed(
+  () => Boolean(entry.value.author || entry.value.language || entry.value.license),
+)
+
 function progressLabel(job: AdventureDownloadJob): string {
   if (job.state === 'queued') {
     return 'Queued'
@@ -149,6 +157,26 @@ function onCardClick() {
     <div class="p-4 flex flex-col gap-2 flex-1">
       <h4 class="text-sm font-black text-white leading-tight">{{ entry.title }}</h4>
       <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ entry.teaser }}</p>
+
+      <div v-if="hasMetadata" class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] text-slate-500">
+        <span v-if="entry.author" class="truncate max-w-[9rem]" :title="entry.author">{{ entry.author }}</span>
+        <span v-if="entry.author && entry.language" class="text-slate-700" aria-hidden="true">·</span>
+        <span v-if="entry.language" class="font-mono uppercase">{{ entry.language }}</span>
+        <span
+          v-if="entry.license"
+          class="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 font-mono"
+        >{{ entry.license }}</span>
+      </div>
+
+      <div v-if="visibleTags.length" class="flex flex-wrap items-center gap-1">
+        <span
+          v-for="tag in visibleTags"
+          :key="tag"
+          class="px-1.5 py-0.5 rounded-full border border-white/10 bg-white/5 text-[10px] text-slate-400"
+        >{{ tag }}</span>
+        <span v-if="extraTagCount > 0" class="text-[10px] text-slate-500">+{{ extraTagCount }}</span>
+      </div>
+
       <div class="mt-auto pt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500 font-mono">
         <span>v{{ entry.version }}</span>
         <span>{{ formatBytes(entry.size_bytes) }}</span>
