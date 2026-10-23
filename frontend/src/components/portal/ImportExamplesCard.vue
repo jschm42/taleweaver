@@ -33,7 +33,7 @@ const emit = defineEmits<{
       <div
         class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 bg-blue-500/10 text-blue-400 border-blue-500/20 group-hover:bg-blue-500/20"
       >
-        <i class="ra ra-download text-xs sm:text-sm"></i>
+        <i class="ra ra-scroll-unfurled text-xs sm:text-sm"></i>
         Browse
       </div>
     </div>

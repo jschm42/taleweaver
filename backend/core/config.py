@@ -126,6 +126,8 @@ class Settings(BaseSettings):
     ADVENTURE_DOWNLOAD_JOB_TIMEOUT: int = 900
     # Docker/CI opt-in: pre-download the adventure library on first boot.
     TALEWEAVER_PREFETCH_ADVENTURES: bool = False
+    ADVENTURE_LEGACY_EXAMPLES_ENABLED: bool = False
+    """Temporarily re-enables the retired example import endpoints for one release cycle."""
 
     @property
     def adventure_download_dir(self) -> str:

@@ -118,6 +118,7 @@ fi
 echo "--------------------------------"
 echo "[+] TaleWeaver is now running with HTTPS!"
 echo "[+] Access the UI at: https://localhost:$FRONTEND_PORT"
-echo "[+] (Example adventures are being imported automatically)"
+echo "[+] Example adventures are available in the adventure library (portal)"
+echo "[+] (Set TALEWEAVER_PREFETCH_ADVENTURES=1 to pre-download them on first boot)"
 echo "[+] Logs: docker compose logs -f"
 echo "--------------------------------"

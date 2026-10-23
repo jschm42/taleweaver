@@ -5,7 +5,7 @@ import os
 import zipfile
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,25 @@ from backend.models.user import User
 
 router = APIRouter(tags=["Adventure Imports"])
 logger = logging.getLogger(__name__)
+
+LEGACY_EXAMPLES_GONE_DETAIL = "Example adventures are now provided by the adventure library."
+_LEGACY_EXAMPLES_RESPONSES: dict[int | str, dict[str, Any]] = {
+    status.HTTP_410_GONE: {
+        "description": "Retired; use the adventure library endpoints instead.",
+        "content": {"application/json": {"example": {"detail": LEGACY_EXAMPLES_GONE_DETAIL}}},
+    }
+}
+
+
+def require_legacy_examples() -> None:
+    """Answer 410 Gone for the retired example endpoints unless the transition flag is set.
+
+    Read per request so ``ADVENTURE_LEGACY_EXAMPLES_ENABLED`` can be toggled without
+    re-registering routes; older frontends get a readable error instead of a silent no-op.
+    """
+    if settings.ADVENTURE_LEGACY_EXAMPLES_ENABLED:
+        return
+    raise HTTPException(status.HTTP_410_GONE, LEGACY_EXAMPLES_GONE_DETAIL)
 
 
 def _read_import_identity(file_path: str) -> tuple[Any, Any]:
@@ -84,24 +103,43 @@ async def check_defaults(
     return ImportCheckResponse(available_imports=items)
 
 
-@router.get("/check-examples", response_model=ImportCheckResponse)
+@router.get(
+    "/check-examples",
+    response_model=ImportCheckResponse,
+    responses=_LEGACY_EXAMPLES_RESPONSES,
+    dependencies=[Depends(require_legacy_examples)],
+    deprecated=True,
+)
 async def check_examples(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Returns a list of example/sample adventures and their existence status."""
+    """Returns a list of example/sample adventures and their existence status.
+
+    Deprecated in favour of ``/adventures/library/*``: answers 410 Gone unless
+    ``ADVENTURE_LEGACY_EXAMPLES_ENABLED`` is set.
+    """
     samples_dir = os.path.join("adventures", "samples")
     presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
     items = await _get_import_check_items(db, current_user.id, [samples_dir, presets_dir])
     return ImportCheckResponse(available_imports=items)
 
 
-@router.post("/import-examples")
+@router.post(
+    "/import-examples",
+    responses=_LEGACY_EXAMPLES_RESPONSES,
+    dependencies=[Depends(require_legacy_examples)],
+    deprecated=True,
+)
 async def import_examples(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manually triggers import of example adventures."""
+    """Manually triggers import of example adventures.
+
+    Deprecated in favour of ``/adventures/library/*``: answers 410 Gone unless
+    ``ADVENTURE_LEGACY_EXAMPLES_ENABLED`` is set.
+    """
     user_id = current_user.id
     samples_dir = os.path.join("adventures", "samples")
     await AdventureTemplateImporter.import_from_directory(
