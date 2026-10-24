@@ -2,6 +2,19 @@ import { computed, ref, type ComputedRef, type Ref } from 'vue'
 import { adventureLibraryService } from '@/services/adventureLibrary'
 import type { AdventureCatalogResponse, AdventureLibraryItem } from '@/types/adventureLibrary'
 
+/** What the locked dialog is busy with; `null` while it is idle. */
+export interface AdventureInstallStatus {
+  phase: 'installing' | 'refreshing'
+  title: string
+  current: number
+  total: number
+}
+
+export interface UseAdventureLibraryOptions {
+  /** Runs after the last install, while the dialog is still locked (e.g. reload the portal). */
+  onInstalled?: () => Promise<void>
+}
+
 export interface UseAdventureLibraryResult {
   isOpen: Ref<boolean>
   items: Ref<AdventureLibraryItem[]>
@@ -15,6 +28,7 @@ export interface UseAdventureLibraryResult {
   allSelectableSelected: ComputedRef<boolean>
   installErrors: Ref<string[]>
   installingId: Ref<string | null>
+  installStatus: Ref<AdventureInstallStatus | null>
   isSubmitting: Ref<boolean>
   openDialog: () => Promise<void>
   closeDialog: () => void
@@ -33,7 +47,7 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 /** Owns the adventure library dialog: catalog, selection and sequential installs. */
-export function useAdventureLibrary(): UseAdventureLibraryResult {
+export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): UseAdventureLibraryResult {
   const isOpen = ref(false)
   const items = ref<AdventureLibraryItem[]>([])
   const loading = ref(false)
@@ -43,6 +57,7 @@ export function useAdventureLibrary(): UseAdventureLibraryResult {
   const isSubmitting = ref(false)
   const installingId = ref<string | null>(null)
   const installErrors = ref<string[]>([])
+  const installStatus = ref<AdventureInstallStatus | null>(null)
 
   const selectedItems = computed(() => items.value.filter((item) => selectedIds.value.has(item.entry.id)))
   const selectedCount = computed(() => selectedItems.value.length)
@@ -109,7 +124,35 @@ export function useAdventureLibrary(): UseAdventureLibraryResult {
     return fetchInto(adventureLibraryService.refreshCatalog, 'Failed to refresh the adventure catalog.')
   }
 
-  /** Installs the selection one adventure at a time; a failure does not stop the rest. */
+  /** Installs one adventure; returns false and records the message when it fails. */
+  async function installOne(item: AdventureLibraryItem): Promise<boolean> {
+    try {
+      await adventureLibraryService.install(item.entry.id)
+      return true
+    } catch (err) {
+      installErrors.value = [...installErrors.value, `${item.entry.title}: ${errorMessage(err, 'Install failed.')}`]
+      return false
+    }
+  }
+
+  /** Lets the caller catch up (e.g. reload the portal) before the dialog unlocks. */
+  async function notifyInstalled() {
+    if (!options.onInstalled) {
+      return
+    }
+    installStatus.value = { phase: 'refreshing', title: '', current: 0, total: 0 }
+    try {
+      await options.onInstalled()
+    } catch (err) {
+      console.error('[AdventureLibrary] Refresh after install failed', err)
+    }
+  }
+
+  /**
+   * Installs the selection one adventure at a time; a failure does not stop the rest.
+   * The dialog stays locked until the imports are visible: in the catalog view and,
+   * through `onInstalled`, wherever the caller lists adventures.
+   */
   async function downloadSelected() {
     const queue = selectedItems.value.filter(isSelectable)
     if (queue.length === 0 || isSubmitting.value) {
@@ -119,21 +162,24 @@ export function useAdventureLibrary(): UseAdventureLibraryResult {
     installErrors.value = []
     isSubmitting.value = true
     try {
-      for (const item of queue) {
+      let installed = 0
+      for (const [index, item] of queue.entries()) {
         installingId.value = item.entry.id
-        try {
-          await adventureLibraryService.install(item.entry.id)
-        } catch (err) {
-          installErrors.value = [...installErrors.value, `${item.entry.title}: ${errorMessage(err, 'Install failed.')}`]
-        }
+        installStatus.value = { phase: 'installing', title: item.entry.title, current: index + 1, total: queue.length }
+        installed += (await installOne(item)) ? 1 : 0
       }
+      installingId.value = null
+      clearSelection()
+      if (installed > 0) {
+        await notifyInstalled()
+      }
+      // Reload so `installed_version` reflects the imports.
+      await load()
     } finally {
       installingId.value = null
+      installStatus.value = null
       isSubmitting.value = false
     }
-    clearSelection()
-    // Reload so `installed_version` reflects the imports.
-    await load()
   }
 
   async function openDialog() {
@@ -142,8 +188,11 @@ export function useAdventureLibrary(): UseAdventureLibraryResult {
     await load()
   }
 
-  /** Closes the dialog; an install already sent keeps running on the server. */
+  /** Closes the dialog; ignored while an install is running (the dialog is locked). */
   function closeDialog() {
+    if (isSubmitting.value) {
+      return
+    }
     isOpen.value = false
   }
 
@@ -160,6 +209,7 @@ export function useAdventureLibrary(): UseAdventureLibraryResult {
     allSelectableSelected,
     installErrors,
     installingId,
+    installStatus,
     isSubmitting,
     openDialog,
     closeDialog,

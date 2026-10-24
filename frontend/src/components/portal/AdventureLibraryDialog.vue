@@ -24,6 +24,7 @@ const {
   allSelectableSelected,
   installErrors,
   installingId,
+  installStatus,
   isSubmitting,
 } = lib
 
@@ -37,6 +38,30 @@ const subtitle = computed(() => {
   return `${count} ${noun} · ${formatBytes(catalogTotalBytes.value)} total`
 })
 
+const statusTitle = computed(() => {
+  const status = installStatus.value
+  if (!status || status.phase === 'refreshing') {
+    return 'Updating your library...'
+  }
+  return status.total > 1 ? `Installing ${status.current} of ${status.total}` : 'Installing adventure'
+})
+
+const statusDetail = computed(() => {
+  const status = installStatus.value
+  if (!status || status.phase === 'refreshing') {
+    return 'Almost done - the new adventures will appear in your library.'
+  }
+  return `${status.title}: downloading and importing...`
+})
+
+/** The dialog is locked while installing; closing would hide progress and errors. */
+function requestClose() {
+  if (isSubmitting.value) {
+    return
+  }
+  emit('close')
+}
+
 function toggleAll() {
   if (allSelectableSelected.value) {
     lib.clearSelection()
@@ -48,14 +73,27 @@ function toggleAll() {
 
 <template>
   <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-    <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md animate-fade-in" @click="emit('close')"></div>
+    <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md animate-fade-in" @click="requestClose"></div>
 
     <div
       class="relative w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden animate-scale-in"
       role="dialog"
       aria-modal="true"
       aria-labelledby="adventure-library-title"
+      :aria-busy="isSubmitting"
     >
+      <div
+        v-if="installStatus"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-slate-950/75 backdrop-blur-sm px-6 text-center"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="w-12 h-12 border-4 border-blue-500/15 border-t-blue-500 rounded-full animate-spin"></div>
+        <p class="text-sm font-black text-white uppercase tracking-widest">{{ statusTitle }}</p>
+        <p class="text-xs text-slate-300 max-w-sm">{{ statusDetail }}</p>
+        <p class="text-[11px] text-slate-500">Please keep this window open.</p>
+      </div>
+
       <div class="px-6 py-5 border-b border-white/10 flex items-start gap-4">
         <div class="flex-1 min-w-0">
           <h3 id="adventure-library-title" class="text-lg font-black text-white font-display">Adventure Library</h3>
@@ -68,7 +106,7 @@ function toggleAll() {
         <button
           type="button"
           class="w-9 h-9 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="loading"
+          :disabled="loading || isSubmitting"
           title="Refresh catalog"
           aria-label="Refresh catalog"
           @click="lib.refresh()"
@@ -135,8 +173,9 @@ function toggleAll() {
           </span>
           <button
             type="button"
-            class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors"
-            @click="emit('close')"
+            class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="isSubmitting"
+            @click="requestClose"
           >
             Close
           </button>

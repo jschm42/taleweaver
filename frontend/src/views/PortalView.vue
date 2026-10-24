@@ -130,16 +130,16 @@ const {
   toneCatalog,
 } = usePortalData()
 
-const adventureLibrary = useAdventureLibrary()
+// The dialog stays locked until fetchPortalData() has run, so installed adventures are
+// already listed in the portal when it unlocks.
+const adventureLibrary = useAdventureLibrary({ onInstalled: fetchPortalData })
 
 function openAdventureLibrary() {
   void adventureLibrary.openDialog()
 }
 
-/** Closes the library dialog and refreshes the portal so newly imported adventures appear. */
 function closeAdventureLibrary() {
   adventureLibrary.closeDialog()
-  void fetchPortalData()
 }
 
 const templateFilters = usePortalFilters(visibleTemplates, 'templates', 18)
