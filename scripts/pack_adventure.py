@@ -158,6 +158,17 @@ def collect_entries(
     return entries
 
 
+def _read_manifest_version(manifest_path: Path) -> str | None:
+    """Return ``adventure.version`` from the manifest, or ``None`` if absent."""
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PackError(f"manifest is not valid JSON: {manifest_path}: {exc}") from exc
+    adventure = payload.get("adventure")
+    version = adventure.get("version") if isinstance(adventure, dict) else None
+    return version if isinstance(version, str) and version.strip() else None
+
+
 def pack_adventure(
     source_dir: Path,
     output_path: Path,
@@ -166,6 +177,8 @@ def pack_adventure(
     exclude: tuple[str, ...] = (),
     allow_missing: tuple[str, ...] = (),
     strict_assets: bool = False,
+    expect_version: str | None = None,
+    slug: str | None = None,
 ) -> dict[str, object]:
     """Pack ``source_dir`` into ``output_path`` and return build metadata."""
     source_dir = source_dir.resolve()
@@ -190,6 +203,13 @@ def pack_adventure(
     entries = collect_entries(source_dir, exclude)
     if not entries:
         raise PackError(f"no packable files found in {source_dir}")
+
+    manifest_version = _read_manifest_version(manifest_path)
+    if expect_version is not None and manifest_version != expect_version:
+        raise PackError(
+            f"manifest version mismatch: adventure.adv declares "
+            f"{manifest_version!r}, expected {expect_version!r}"
+        )
 
     assets = check_asset_references(
         manifest_path,
@@ -221,13 +241,14 @@ def pack_adventure(
         raise
 
     return {
-        "slug": source_dir.name,
+        "slug": slug or source_dir.name,
         "archive": str(output_path.resolve()),
         "file_count": len(entries),
         "entries": [rel_posix for rel_posix, _ in entries],
         "size_bytes": output_path.stat().st_size,
         "sha256": compute_sha256(output_path),
         "manifest_sha256": compute_sha256(manifest_path),
+        "manifest_version": manifest_version,
         "asset_references": assets,
     }
 
@@ -265,6 +286,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="treat manifest asset references matching this glob as externally resolved",
     )
     parser.add_argument(
+        "--expect-version",
+        metavar="VERSION",
+        default=None,
+        help="fail unless adventure.adv declares exactly this adventure.version (e.g. from the release tag)",
+    )
+    parser.add_argument(
+        "--slug",
+        metavar="SLUG",
+        default=None,
+        help="report this slug instead of the source directory name (must match the release tag slug)",
+    )
+    parser.add_argument(
         "--strict-assets",
         action="store_true",
         help="also require assets/catalog/* references to exist inside the bundle",
@@ -286,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
             exclude=tuple(args.exclude),
             allow_missing=tuple(args.allow_missing),
             strict_assets=args.strict_assets,
+            expect_version=args.expect_version,
+            slug=args.slug,
         )
     except PackError as exc:
         print(f"error: {exc}", file=sys.stderr)
