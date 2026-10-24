@@ -1,13 +1,11 @@
 import { apiFetch, type ApiFetchInit } from '@/services/http'
-import type {
-  AdventureCatalogResponse,
-  AdventureDownloadJob,
-  AdventureJobsResponse,
-} from '@/types/adventureLibrary'
+import type { AdventureCatalogResponse, AdventureInstallResponse } from '@/types/adventureLibrary'
 
 const LIBRARY_PATH = '/adventures/library'
-// Catalog calls may hit the remote catalog host, so allow more than the default timeout.
+// Catalog calls may hit the remote repository, so allow more than the default timeout.
 const CATALOG_TIMEOUT_MS = 30000
+// An install downloads every file of one adventure (5-25 MB) and imports it in one request.
+const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 
 /** Error raised by the adventure library service; carries the HTTP status (0 = network). */
 export class AdventureLibraryError extends Error {
@@ -67,7 +65,7 @@ async function request<T>(path: string, fallbackMessage: string, init: ApiFetchI
 }
 
 /**
- * Service for the adventure library: remote catalog browsing and download jobs.
+ * Service for the adventure library: remote catalog browsing and installs.
  */
 export const adventureLibraryService = {
   fetchCatalog(): Promise<AdventureCatalogResponse> {
@@ -81,22 +79,13 @@ export const adventureLibraryService = {
     })
   },
 
-  startDownloads(ids: string[]): Promise<AdventureJobsResponse> {
-    return request('/download', 'Failed to start the download.', {
+  /** Downloads and imports one adventure; resolves when it is installed. */
+  install(id: string): Promise<AdventureInstallResponse> {
+    return request('/install', 'Failed to install the adventure.', {
       method: 'POST',
       includeJson: true,
-      body: JSON.stringify({ ids }),
-      timeoutMs: CATALOG_TIMEOUT_MS,
-    })
-  },
-
-  fetchJobs(): Promise<AdventureJobsResponse> {
-    return request('/jobs', 'Failed to load download progress.')
-  },
-
-  cancelJob(jobId: string): Promise<AdventureDownloadJob> {
-    return request(`/jobs/${encodeURIComponent(jobId)}/cancel`, 'Failed to cancel the download.', {
-      method: 'POST',
+      body: JSON.stringify({ id }),
+      timeoutMs: INSTALL_TIMEOUT_MS,
     })
   },
 }

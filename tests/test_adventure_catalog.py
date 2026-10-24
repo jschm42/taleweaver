@@ -1,10 +1,9 @@
-"""Tests for catalog parsing, validation and the cache/fallback layers (spec section 9).
+"""Tests for library.json parsing, path validation and the cache/fallback layers.
 
 All HTTP traffic goes through ``httpx.MockTransport``; no test touches the network.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -12,237 +11,230 @@ import pytest
 
 from backend.core.config import settings
 from backend.services.adventure_library import catalog as catalog_module
-from backend.services.adventure_library.catalog import CatalogError, CatalogService, parse_catalog
-from backend.services.adventure_library.models import AdventureCatalog
+from backend.services.adventure_library.catalog import (
+    LibraryError,
+    LibraryService,
+    library_url,
+    parse_library,
+)
+from backend.services.adventure_library.models import is_safe_member_path
 
-RELEASES = "https://github.com/jschm42/taleweaver-adventures/releases/download"
+BASE = "https://raw.githubusercontent.com/jschm42/taleweaver-adventures/main"
 
 
 def _entry(slug: str = "dark-forest", **overrides: Any) -> dict[str, Any]:
-    """A schema-1 catalog entry that passes every validation rule."""
+    """A library.json entry that passes every validation rule."""
     entry = {
         "id": f"origin-{slug}",
         "slug": slug,
         "title": slug.replace("-", " ").title(),
         "version": "1.0.0",
-        "size_bytes": 1024,
-        "sha256": "a" * 64,
-        "download_url": f"{RELEASES}/{slug}-1.0.0/{slug}-1.0.0.adz",
+        "cover": "assets/cover.jpg",
+        "size_bytes": 2048,
+        "files": ["adventure.adv", "assets/cover.jpg"],
     }
     entry.update(overrides)
     return entry
 
 
-def _catalog(*entries: dict[str, Any], schema: int = 1) -> dict[str, Any]:
-    return {"schema": schema, "generator": "test", "adventures": list(entries)}
+def _index(*entries: dict[str, Any], schema: int = 1) -> dict[str, Any]:
+    return {"schema": schema, "adventures": list(entries)}
+
+
+def _client(handler) -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
 @pytest.fixture(autouse=True)
-def isolated_catalog_cache(monkeypatch, tmp_path):
-    """Point the disk cache at tmp_path and start every test with an empty memory cache."""
+def isolated_library_cache(monkeypatch, tmp_path):
+    """Point the disk copy at tmp_path and start every test with an empty memory cache."""
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
-    monkeypatch.setitem(catalog_module._MEMORY_CACHE, "catalog", None)
-    monkeypatch.setitem(catalog_module._MEMORY_CACHE, "timestamp", 0.0)
-    monkeypatch.setitem(catalog_module._MEMORY_CACHE, "ttl", 0.0)
-    monkeypatch.setitem(catalog_module._MEMORY_CACHE, "stale", False)
+    monkeypatch.setattr(settings, "ADVENTURE_LIBRARY_URL", BASE)
+    LibraryService().invalidate()
+    yield
+    LibraryService().invalidate()
 
 
-def _write_cache(payload: dict[str, Any], etag: str | None, age: timedelta) -> None:
-    path = catalog_module.catalog_cache_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fetched_at = datetime.now(timezone.utc) - age
-    record = {"etag": etag, "fetched_at": fetched_at.isoformat(), "payload": payload}
-    path.write_text(json.dumps(record), encoding="utf-8")
-
-
-def test_valid_catalog_parses_into_model():
+def test_valid_index_parses_into_model():
     # Arrange
-    payload = _catalog(_entry("dark-forest"), _entry("sunken-city"))
+    payload = _index(_entry("dark-forest"), _entry("sunken-city"))
 
     # Act
-    catalog = parse_catalog(payload)
+    library = parse_library(payload)
 
     # Assert
-    assert isinstance(catalog, AdventureCatalog)
-    assert catalog.schema_ == 1
-    assert [entry.slug for entry in catalog.adventures] == ["dark-forest", "sunken-city"]
+    assert library.schema_ == 1
+    assert [entry.slug for entry in library.adventures] == ["dark-forest", "sunken-city"]
 
 
-def test_unknown_entry_fields_are_ignored():
+def test_unknown_fields_are_ignored():
     # Arrange
-    payload = _catalog(_entry(rating=5, future_field={"nested": True}))
+    payload = _index(_entry(rating=5, future_field={"nested": True}))
 
     # Act
-    catalog = parse_catalog(payload)
+    library = parse_library(payload)
 
     # Assert
-    assert len(catalog.adventures) == 1
-    assert not hasattr(catalog.adventures[0], "future_field")
+    assert len(library.adventures) == 1
+    assert not hasattr(library.adventures[0], "future_field")
 
 
 def test_unsupported_schema_is_rejected():
     # Arrange
-    payload = _catalog(_entry(), schema=2)
+    payload = _index(_entry(), schema=2)
 
     # Act / Assert
-    with pytest.raises(CatalogError, match="unsupported catalog schema"):
-        parse_catalog(payload)
+    with pytest.raises(LibraryError, match="unsupported library schema"):
+        parse_library(payload)
 
 
-async def test_unsupported_remote_schema_falls_back_to_snapshot(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "files",
+    [
+        ["adventure.adv", "../secrets.txt"],
+        ["adventure.adv", "assets/../../etc/passwd"],
+        ["adventure.adv", "/etc/passwd"],
+        ["adventure.adv", "assets\\cover.jpg"],
+        ["adventure.adv", "notes.txt"],
+        ["adventure.adv", "assets/cover.jpg?raw=1"],
+        ["assets/cover.jpg"],
+    ],
+)
+def test_entry_with_unsafe_or_incomplete_file_list_is_dropped(files):
     # Arrange
-    snapshot = tmp_path / "snapshot.json"
-    snapshot.write_text(json.dumps(_catalog(_entry("bundled"))), encoding="utf-8")
-    monkeypatch.setattr(catalog_module, "SNAPSHOT_PATH", snapshot)
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=_catalog(schema=2)))
+    payload = _index(_entry("broken", files=files), _entry("intact"))
 
     # Act
-    async with httpx.AsyncClient(transport=transport) as client:
-        service = CatalogService(http_client=client)
-        catalog = await service.get_catalog()
+    library = parse_library(payload)
 
     # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["bundled"]
-    assert service.is_stale() is True
+    assert [entry.slug for entry in library.adventures] == ["intact"]
 
 
-def test_entry_missing_mandatory_field_is_rejected():
+def test_unsafe_cover_is_cleared_but_entry_is_kept():
     # Arrange
-    broken = _entry("broken")
-    del broken["sha256"]
-    payload = _catalog(broken, _entry("intact"))
+    payload = _index(_entry("ugly-card", cover="../cover.jpg"))
 
     # Act
-    catalog = parse_catalog(payload)
+    library = parse_library(payload)
 
     # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["intact"]
+    assert library.adventures[0].slug == "ugly-card"
+    assert library.adventures[0].cover is None
 
 
-def test_http_download_url_entry_is_dropped_rest_survives():
+def test_duplicate_ids_keep_the_first_entry():
     # Arrange
-    insecure = _entry("insecure", download_url="http://github.com/x/insecure.adz")
-    payload = _catalog(insecure, _entry("secure"))
+    payload = _index(_entry("first", id="same"), _entry("second", id="same"))
 
     # Act
-    catalog = parse_catalog(payload)
+    library = parse_library(payload)
 
     # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["secure"]
+    assert [entry.slug for entry in library.adventures] == ["first"]
 
 
-def test_non_allowlisted_host_entry_is_dropped():
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("adventure.adv", True),
+        ("assets/npc_hero.jpg", True),
+        ("assets/sub/dir/scene.png", True),
+        ("assets", False),
+        ("assets/", False),
+        ("./adventure.adv", False),
+        ("assets/./x.jpg", False),
+        ("C:/x.jpg", False),
+        ("", False),
+    ],
+)
+def test_member_path_policy(path, expected):
+    # Act / Assert
+    assert is_safe_member_path(path) is expected
+
+
+def test_library_url_encodes_segments():
+    # Act
+    url = library_url("dark-forest", "assets/a b.jpg")
+
+    # Assert
+    assert url == f"{BASE}/dark-forest/assets/a%20b.jpg"
+
+
+def test_library_url_refuses_plain_http(monkeypatch):
     # Arrange
-    foreign = _entry("foreign", download_url="https://evil.example/foreign.adz")
-    payload = _catalog(foreign, _entry("trusted"))
+    monkeypatch.setattr(settings, "ADVENTURE_LIBRARY_URL", "http://example.com/repo")
+
+    # Act / Assert
+    with pytest.raises(LibraryError, match="https"):
+        library_url("library.json")
+
+
+async def test_fetch_reads_index_and_keeps_a_disk_copy():
+    # Arrange
+    requested: list[str] = []
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        return httpx.Response(200, json=_index(_entry("online")))
 
     # Act
-    catalog = parse_catalog(payload)
+    async with _client(serve) as client:
+        service = LibraryService(http_client=client)
+        library = await service.get_library()
 
     # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["trusted"]
+    assert requested == [f"{BASE}/library.json"]
+    assert [entry.slug for entry in library.adventures] == ["online"]
+    assert service.is_stale() is False
+    assert catalog_module.cache_path().is_file()
 
 
-def test_size_above_download_cap_is_dropped(monkeypatch):
+async def test_memory_cache_avoids_a_second_request():
     # Arrange
-    monkeypatch.setattr(settings, "ADVENTURE_DOWNLOAD_MAX_BYTES", 2048)
-    payload = _catalog(_entry("huge", size_bytes=2049), _entry("small", size_bytes=2048))
+    calls = 0
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_index(_entry()))
 
     # Act
-    catalog = parse_catalog(payload)
+    async with _client(serve) as client:
+        service = LibraryService(http_client=client)
+        await service.get_library()
+        await service.get_library()
+        await service.get_library(force_refresh=True)
 
     # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["small"]
+    assert calls == 2
 
 
-async def test_snapshot_fallback_when_fetch_raises(monkeypatch, tmp_path):
+async def test_offline_falls_back_to_the_disk_copy():
     # Arrange
-    snapshot = tmp_path / "snapshot.json"
-    snapshot.write_text(json.dumps(_catalog(_entry("offline"))), encoding="utf-8")
-    monkeypatch.setattr(catalog_module, "SNAPSHOT_PATH", snapshot)
+    path = catalog_module.cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_index(_entry("cached"))), encoding="utf-8")
 
     def offline(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("network unreachable", request=request)
 
     # Act
-    async with httpx.AsyncClient(transport=httpx.MockTransport(offline)) as client:
-        service = CatalogService(http_client=client)
-        catalog = await service.get_catalog()
+    async with _client(offline) as client:
+        service = LibraryService(http_client=client)
+        library = await service.get_library()
 
     # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["offline"]
+    assert [entry.slug for entry in library.adventures] == ["cached"]
     assert service.is_stale() is True
 
 
-async def test_not_modified_keeps_previously_cached_catalog():
+async def test_offline_without_a_disk_copy_raises():
     # Arrange
-    _write_cache(_catalog(_entry("cached")), etag='"v1"', age=timedelta(days=1))
-    seen_etags: list[str | None] = []
+    def not_found(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
 
-    def not_modified(request: httpx.Request) -> httpx.Response:
-        seen_etags.append(request.headers.get("if-none-match"))
-        return httpx.Response(304)
-
-    # Act
-    async with httpx.AsyncClient(transport=httpx.MockTransport(not_modified)) as client:
-        service = CatalogService(http_client=client)
-        catalog = await service.get_catalog()
-
-    # Assert
-    assert seen_etags == ['"v1"']
-    assert [entry.slug for entry in catalog.adventures] == ["cached"]
-    assert service.is_stale() is False
-
-
-def test_entry_without_cover_is_kept():
-    # Arrange: a cover is optional (D9), the adventure must stay downloadable.
-    payload = _catalog(_entry("no-art"))
-
-    # Act
-    catalog = parse_catalog(payload)
-
-    # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["no-art"]
-    assert catalog.adventures[0].cover_url is None
-    assert catalog.adventures[0].cover_sha256 is None
-
-
-def test_insecure_cover_url_drops_the_cover_but_keeps_the_entry():
-    # Arrange: D9 forbids hard-failing distribution for a cosmetic field.
-    payload = _catalog(
-        _entry(
-            "ugly-card",
-            cover_url="http://evil.example/cover.png",
-            cover_sha256="b" * 64,
-        ),
-        _entry("intact-art", cover_url=f"{RELEASES}/intact-art/cover.png", cover_sha256="c" * 64),
-    )
-
-    # Act
-    catalog = parse_catalog(payload)
-
-    # Assert: the entry survives, only its cover is gone.
-    assert [entry.slug for entry in catalog.adventures] == ["ugly-card", "intact-art"]
-    assert catalog.adventures[0].cover_url is None
-    assert catalog.adventures[0].cover_sha256 is None
-    assert catalog.adventures[1].cover_url is not None
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        {"cover_url": f"{RELEASES}/half/cover.png"},
-        {"cover_sha256": "d" * 64},
-    ],
-)
-def test_half_specified_cover_pair_is_dropped(overrides):
-    # Arrange: cover_url and cover_sha256 are one optional pair, never half of it.
-    payload = _catalog(_entry("half-cover", **overrides))
-
-    # Act
-    catalog = parse_catalog(payload)
-
-    # Assert
-    assert [entry.slug for entry in catalog.adventures] == ["half-cover"]
-    assert catalog.adventures[0].cover_url is None
-    assert catalog.adventures[0].cover_sha256 is None
+    # Act / Assert
+    async with _client(not_found) as client:
+        with pytest.raises(LibraryError, match="HTTP status 404"):
+            await LibraryService(http_client=client).get_library()

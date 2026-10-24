@@ -22,7 +22,8 @@ const {
   selectedTotalBytes,
   catalogTotalBytes,
   allSelectableSelected,
-  jobErrors,
+  installErrors,
+  installingId,
   isSubmitting,
 } = lib
 
@@ -114,17 +115,16 @@ function toggleAll() {
               :item="item"
               :selected="lib.isSelected(item.entry.id)"
               :selectable="lib.isSelectable(item)"
-              :job="lib.jobFor(item.entry.id)"
+              :installing="installingId === item.entry.id"
               @toggle="lib.toggle"
-              @cancel="lib.cancel"
             />
           </div>
         </template>
       </div>
 
       <div class="sticky bottom-0 px-6 py-4 border-t border-white/10 bg-slate-900 space-y-3">
-        <ul v-if="jobErrors.length > 0" class="max-h-24 overflow-y-auto space-y-1 text-xs text-red-300">
-          <li v-for="message in jobErrors" :key="message">
+        <ul v-if="installErrors.length > 0" class="max-h-24 overflow-y-auto space-y-1 text-xs text-red-300">
+          <li v-for="message in installErrors" :key="message">
             <i class="ra ra-warning mr-1"></i>
             {{ message }}
           </li>
@@ -150,7 +150,7 @@ function toggleAll() {
               v-if="isSubmitting"
               class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
             ></span>
-            Download selected ({{ selectedCount }})
+            {{ isSubmitting ? 'Installing...' : `Download selected (${selectedCount})` }}
           </button>
         </div>
       </div>

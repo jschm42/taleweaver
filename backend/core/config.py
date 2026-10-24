@@ -3,7 +3,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
@@ -91,6 +90,10 @@ class Settings(BaseSettings):
     APP_VERSION: str = Field(default_factory=get_app_version)
     DATABASE_URL: str = ""
     BACKEND_PORT: int = 8000
+    # Interface `taleweaver` / `python -m backend.main` listens on. Local only by default;
+    # set BACKEND_HOST=0.0.0.0 to reach the dev server from other devices. Docker binds
+    # through entrypoint.sh (gunicorn) and is not affected.
+    BACKEND_HOST: str = "127.0.0.1"
     FRONTEND_PORT: int = 5173
     LOG_LEVEL: str = "INFO"
 
@@ -108,24 +111,18 @@ class Settings(BaseSettings):
 
     DATA_DIR: str = "data"
 
-    # Adventure library: remote catalog of downloadable .adz bundles.
-    # The catalog URL is configuration only; the API never accepts a URL from clients.
-    # Points at the separate distribution repository (spec D5); override to use a mirror.
-    ADVENTURE_CATALOG_URL: str = (
-        "https://raw.githubusercontent.com/jschm42/taleweaver-adventures/main/catalog.json"
+    # Adventure library: adventures stored unpacked in the taleweaver-adventures repository.
+    # Base URL of that repository's raw content; library.json and every adventure file are
+    # fetched below it. Configuration only - the API never accepts a URL from clients.
+    ADVENTURE_LIBRARY_URL: str = (
+        "https://raw.githubusercontent.com/jschm42/taleweaver-adventures/main"
     )
-    # Seconds a fetched catalog is reused before it is fetched again.
-    ADVENTURE_CATALOG_TTL: int = 3600
-    # Target directory for downloaded bundles; empty means DATA_DIR/adventures.
+    # Seconds a fetched library.json is reused before it is fetched again.
+    ADVENTURE_LIBRARY_TTL: int = 3600
+    # Directory installed bundles are stored in; empty means DATA_DIR/adventures.
     ADVENTURE_DOWNLOAD_DIR: str = ""
-    # Hard cap per downloaded bundle (100 MiB = GitHub release asset limit).
+    # Hard cap on the bytes downloaded for one adventure.
     ADVENTURE_DOWNLOAD_MAX_BYTES: int = 104857600
-    # Maximum number of bundle downloads running at the same time.
-    ADVENTURE_DOWNLOAD_CONCURRENCY: int = 2
-    # Wall-clock deadline in seconds for one download job (download + verify + import).
-    ADVENTURE_DOWNLOAD_JOB_TIMEOUT: int = 900
-    # Docker/CI opt-in: pre-download the adventure library on first boot.
-    TALEWEAVER_PREFETCH_ADVENTURES: bool = False
     ADVENTURE_LEGACY_EXAMPLES_ENABLED: bool = False
     """Temporarily re-enables the retired example import endpoints for one release cycle."""
 
@@ -140,18 +137,6 @@ class Settings(BaseSettings):
         if self.ADVENTURE_DOWNLOAD_DIR:
             return self.ADVENTURE_DOWNLOAD_DIR
         return os.path.join(self.DATA_DIR, "adventures")
-
-    @property
-    def adventure_catalog_allowed_hosts(self) -> list[str]:
-        """Return the hosts the adventure library may fetch from (SSRF allowlist).
-
-        Contains the catalog host plus github.com and objects.githubusercontent.com,
-        because GitHub release downloads answer with a redirect to
-        objects.githubusercontent.com, so both hops have to pass the allowlist.
-        """
-        catalog_host = (urlsplit(self.ADVENTURE_CATALOG_URL).hostname or "").lower()
-        hosts = [catalog_host, "github.com", "objects.githubusercontent.com"]
-        return list(dict.fromkeys(h for h in hosts if h))
 
     # When set, LLM debug logs are written here (recommended: outside DATA_DIR).
     # When unset (default), logs are written to DATA_DIR/logs — in that case

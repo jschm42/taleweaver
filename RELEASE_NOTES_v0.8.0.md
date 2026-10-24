@@ -9,14 +9,14 @@
 ### 📚 1. Adventure Library
 
 * **Browse & Download from the Portal**:
-  * A new library dialog lists every adventure published to the distribution repository [`jschm42/taleweaver-adventures`](https://github.com/jschm42/taleweaver-adventures), with cover, teaser, version and size.
-  * Select one or more adventures and download them; progress is shown per adventure and downloads can be cancelled.
+  * A new library dialog lists every adventure in the adventures repository [`jschm42/taleweaver-adventures`](https://github.com/jschm42/taleweaver-adventures), with cover, teaser, version and size.
+  * Select one or more adventures and install them; they are installed one after another and the card being installed is marked.
   * Installed adventures are recognised by their identity (`origin_id`), so the dialog shows what is already installed and when a newer version is available.
-* **Verified Downloads**:
-  * Every bundle is checked against the size and SHA-256 hash published in the catalog before it is imported; nothing is installed unless it matches.
-  * Downloads only ever come from allowlisted HTTPS hosts, and the server never fetches a URL supplied by the browser.
+* **Straight from the Repository**:
+  * Adventures are stored unpacked in the adventures repository and listed in its `library.json`. The server fetches the listed files over HTTPS from that repository, assembles the bundle and runs the regular importer with its size and manifest checks.
+  * The server never fetches a URL supplied by the browser; every file path from the index is validated before it is requested.
 * **Works Offline**:
-  * The catalog is cached locally; without network access the dialog falls back to the last known catalog instead of failing.
+  * The index is cached locally; without network access the dialog falls back to the last known index instead of failing.
   * The default adventure (*The Architect*) is still bundled, so a first run works without network access.
 
 ---
@@ -38,16 +38,14 @@ Example adventures you imported in an earlier version **keep working unchanged**
 
 ### `adventures/samples/` is scheduled for removal
 
-The `adventures/samples/` folder is **still part of this release**. It is scheduled for removal once every sample has been published to the adventure library and is listed in its catalog.
+The `adventures/samples/` folder is **still part of this release**. It is scheduled for removal once every sample has been published to the adventure library and is listed in its index.
 
 ---
 
 ## 🐳 Docker & CI
 
-* Set `TALEWEAVER_PREFETCH_ADVENTURES=1` to pre-download all compatible library adventures on first boot (off by default).
-  * Runs only on a first boot (no adventures installed yet) and in the background, so startup is never delayed.
-  * Adventures are installed into the first admin account's library; if no admin exists yet, the prefetch is skipped with a warning in the log.
 * `scripts/docker-setup.sh` no longer claims that example adventures are imported automatically and points to the library instead.
+* `ADVENTURE_LIBRARY_URL` points at the adventures repository's raw content (default: `https://raw.githubusercontent.com/jschm42/taleweaver-adventures/main`); override it to use a fork or mirror.
 
 ---
 

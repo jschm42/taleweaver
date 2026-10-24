@@ -1,12 +1,10 @@
-"""API tests for ``/adventures/library/*`` and the retired example endpoints (spec 8.3, 9).
+"""API tests for ``/adventures/library/*`` and the retired example endpoints.
 
-The catalog service and the job manager are replaced by in-process stubs on the router
-module, so no test reaches the network or writes a real bundle.
+The library service and the installer are replaced by in-process stubs on the router
+module, so no test reaches the network or imports a real bundle.
 """
 
-import asyncio
-from collections.abc import AsyncIterator, Callable
-from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -17,118 +15,83 @@ from backend.api.routes.adventures import library as library_routes
 from backend.core.config import settings
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.services.adventure_library.catalog import CatalogService
-from backend.services.adventure_library.jobs import JobManager
-from backend.services.adventure_library.models import (
-    AdventureCatalog,
-    CatalogEntry,
-    DownloadJob,
-    JobState,
-)
+from backend.services.adventure_library.catalog import LibraryError, LibraryService
+from backend.services.adventure_library.installer import AdventureInstallError
+from backend.services.adventure_library.models import AdventureLibrary, LibraryEntry
 
 LIBRARY = "/api/adventures/library"
-RELEASES = "https://github.com/jschm42/taleweaver-adventures/releases/download"
+BASE = "https://raw.githubusercontent.com/jschm42/taleweaver-adventures/main"
 
 
-def _entry(slug: str, title: str, version: str = "1.0.0", **overrides: Any) -> CatalogEntry:
+def _entry(slug: str, title: str, version: str = "1.0.0", **overrides: Any) -> LibraryEntry:
     fields = {
         "id": f"origin-{slug}",
         "slug": slug,
         "title": title,
         "version": version,
-        "size_bytes": 1024,
-        "sha256": "a" * 64,
-        "download_url": f"{RELEASES}/{slug}-{version}/{slug}-{version}.adz",
+        "cover": "assets/cover.jpg",
+        "files": ["adventure.adv", "assets/cover.jpg"],
     }
     fields.update(overrides)
-    return CatalogEntry(**fields)
+    return LibraryEntry(**fields)
 
 
-class StubCatalogService(CatalogService):
-    """Serves a fixed catalog and counts refreshes."""
+class StubLibraryService(LibraryService):
+    """Serves a fixed index (or raises) and counts forced refreshes."""
 
-    def __init__(self, entries: list[CatalogEntry]) -> None:
+    def __init__(self, entries: list[LibraryEntry], error: LibraryError | None = None) -> None:
         super().__init__()
-        self.catalog = AdventureCatalog(schema=1, generator="test", adventures=entries)
+        self.library = AdventureLibrary(schema=1, adventures=entries)
+        self.error = error
         self.refresh_calls = 0
 
-    async def get_catalog(self, *, force_refresh: bool = False) -> AdventureCatalog:
-        return self.catalog
-
-    async def refresh(self) -> AdventureCatalog:
-        self.refresh_calls += 1
-        return self.catalog
+    async def get_library(self, *, force_refresh: bool = False) -> AdventureLibrary:
+        if self.error is not None:
+            raise self.error
+        self.refresh_calls += int(force_refresh)
+        return self.library
 
     def is_stale(self) -> bool:
         return False
 
 
-class GatedDownloader:
-    """Fake downloader that pauses at each stage until the test opens the gate."""
-
-    def __init__(self, tmp_path: Path) -> None:
-        self.start_gate = asyncio.Event()
-        self.finish_gate = asyncio.Event()
-        self._tmp_path = tmp_path
-
-    async def download(self, entry: CatalogEntry, *, job: DownloadJob, cancel_event) -> Path:
-        await self.start_gate.wait()
-        job.state = JobState.DOWNLOADING
-        job.bytes_downloaded = entry.size_bytes // 2
-        await self.finish_gate.wait()
-        job.bytes_downloaded = entry.size_bytes
-        return self._tmp_path / f"{entry.slug}-{entry.version}.adz"
-
-    async def cleanup_partial(self, target: Path) -> None:
-        return None
-
-
-class StubInstaller:
-    async def install(self, db, file_path: Path, *, owner_id: str) -> str:
-        return "installed-template-id"
+@pytest.fixture(autouse=True)
+def library_base(monkeypatch):
+    monkeypatch.setattr(settings, "ADVENTURE_LIBRARY_URL", BASE)
 
 
 @pytest.fixture
-def library_catalog(monkeypatch) -> Callable[..., StubCatalogService]:
-    """Install a stub catalog on the router module; call it with the entries to serve."""
+def library(monkeypatch) -> Callable[..., StubLibraryService]:
+    """Install a stub library service on the router module."""
 
-    def install(*entries: CatalogEntry) -> StubCatalogService:
-        service = StubCatalogService(list(entries))
-        monkeypatch.setattr(library_routes, "_catalog_service", service)
+    def install(*entries: LibraryEntry, error: LibraryError | None = None) -> StubLibraryService:
+        service = StubLibraryService(list(entries), error)
+        monkeypatch.setattr(library_routes, "_library_service", service)
         return service
 
     return install
 
 
 @pytest.fixture
-async def downloader(monkeypatch, tmp_path) -> AsyncIterator[GatedDownloader]:
-    """Replace the router's job manager with one driven by a gated fake downloader."""
-    monkeypatch.setattr(settings, "ADVENTURE_DOWNLOAD_DIR", str(tmp_path))
-    fake = GatedDownloader(tmp_path)
-    manager = JobManager(downloader=fake, installer=StubInstaller())
-    monkeypatch.setattr(library_routes, "job_manager", manager)
-    yield fake
-    # Unwind jobs still waiting at a gate so no task outlives the test loop.
-    await manager.shutdown()
+def installs(monkeypatch) -> list[tuple[str, str]]:
+    """Replace the installer; records ``(slug, owner_id)`` per call."""
+    calls: list[tuple[str, str]] = []
+
+    async def fake_install(db, entry, *, owner_id):
+        calls.append((entry.slug, owner_id))
+        return f"template-{entry.slug}"
+
+    monkeypatch.setattr(library_routes, "install_entry", fake_install)
+    return calls
 
 
 async def _current_user_id(db_session) -> str:
     return await db_session.scalar(select(User.id).where(User.username == "test_user"))
 
 
-async def _wait_for_state(auth_client, state: str) -> dict[str, Any]:
-    """Poll the jobs endpoint until the first job reaches ``state`` (bounded)."""
-    for _ in range(200):
-        jobs = (await auth_client.get(f"{LIBRARY}/jobs")).json()["jobs"]
-        if jobs and jobs[0]["state"] == state:
-            return jobs[0]
-        await asyncio.sleep(0.01)
-    raise AssertionError(f"job never reached state {state!r}")
-
-
-async def test_catalog_merges_local_install_state(auth_client, db_session, library_catalog):
+async def test_catalog_merges_local_install_state(auth_client, db_session, library):
     # Arrange
-    library_catalog(
+    library(
         _entry("dark-forest", "Dark Forest", version="1.2.0"),
         _entry("sunken-city", "Sunken City"),
     )
@@ -154,101 +117,111 @@ async def test_catalog_merges_local_install_state(auth_client, db_session, libra
     assert items["sunken-city"]["update_available"] is False
 
 
-async def test_catalog_route_is_not_swallowed_by_template_route(auth_client, library_catalog):
+async def test_catalog_builds_cover_urls_and_sorts_by_title(auth_client, library):
     # Arrange
-    library_catalog(_entry("dark-forest", "Dark Forest"))
-
-    # Act
-    response = await auth_client.get(f"{LIBRARY}/catalog")
-
-    # Assert
-    assert response.status_code == 200
-    assert set(response.json()) == {"items", "catalog_generated_at", "stale"}
-
-
-async def test_catalog_items_are_sorted_by_title(auth_client, library_catalog):
-    # Arrange
-    library_catalog(
-        _entry("zeta", "zeta Station"),
-        _entry("alpha", "Alpha Ruins"),
-        _entry("middle", "middle Earthworks"),
+    library(
+        _entry("zebra", "Zebra Run"),
+        _entry("apple", "Apple Hunt", cover=None),
     )
 
     # Act
     response = await auth_client.get(f"{LIBRARY}/catalog")
 
     # Assert
-    titles = [item["entry"]["title"] for item in response.json()["items"]]
-    assert titles == ["Alpha Ruins", "middle Earthworks", "zeta Station"]
+    items = response.json()["items"]
+    assert [item["entry"]["title"] for item in items] == ["Apple Hunt", "Zebra Run"]
+    assert items[0]["cover_url"] is None
+    assert items[1]["cover_url"] == f"{BASE}/zebra/assets/cover.jpg"
+    assert response.json()["stale"] is False
 
 
-async def test_download_unknown_id_returns_404(auth_client, library_catalog, downloader):
+async def test_catalog_unavailable_returns_502(auth_client, library):
     # Arrange
-    library_catalog(_entry("dark-forest", "Dark Forest"))
+    library(error=LibraryError("unexpected HTTP status 404"))
 
     # Act
-    response = await auth_client.post(f"{LIBRARY}/download", json={"ids": ["no-such-id"]})
+    response = await auth_client.get(f"{LIBRARY}/catalog")
 
     # Assert
-    assert response.status_code == 404
-    assert "no-such-id" in response.json()["detail"]
+    assert response.status_code == 502
 
 
-async def test_download_incompatible_entry_returns_409(
-    auth_client, monkeypatch, library_catalog, downloader
-):
+async def test_refresh_forces_a_fetch(auth_client, library):
     # Arrange
-    monkeypatch.setattr(settings, "APP_VERSION", "0.8.0")
-    library_catalog(_entry("future", "Future Saga", min_app_version="99.0.0"))
-
-    # Act
-    response = await auth_client.post(f"{LIBRARY}/download", json={"ids": ["origin-future"]})
-
-    # Assert
-    assert response.status_code == 409
-    assert "99.0.0" in response.json()["detail"]
-
-
-async def test_jobs_report_state_machine_and_progress(auth_client, library_catalog, downloader):
-    # Arrange
-    library_catalog(_entry("dark-forest", "Dark Forest", size_bytes=2048))
-    started = await auth_client.post(f"{LIBRARY}/download", json={"ids": ["origin-dark-forest"]})
-
-    # Act
-    queued = await _wait_for_state(auth_client, "queued")
-    downloader.start_gate.set()
-    downloading = await _wait_for_state(auth_client, "downloading")
-    downloader.finish_gate.set()
-    done = await _wait_for_state(auth_client, "done")
-
-    # Assert
-    assert started.status_code == 200
-    assert queued["bytes_downloaded"] == 0
-    assert downloading["bytes_downloaded"] == 1024
-    assert done["bytes_downloaded"] == 2048
-    assert done["template_id"] == "installed-template-id"
-
-
-async def test_cancel_unknown_job_returns_404(auth_client, downloader):
-    # Act
-    response = await auth_client.post(f"{LIBRARY}/jobs/unknown-job/cancel")
-
-    # Assert
-    assert response.status_code == 404
-
-
-async def test_refresh_returns_catalog_shape(auth_client, library_catalog):
-    # Arrange
-    service = library_catalog(_entry("dark-forest", "Dark Forest"))
-    catalog_body = (await auth_client.get(f"{LIBRARY}/catalog")).json()
+    service = library(_entry("dark-forest", "Dark Forest"))
 
     # Act
     response = await auth_client.post(f"{LIBRARY}/refresh")
 
     # Assert
     assert response.status_code == 200
-    assert response.json() == catalog_body
     assert service.refresh_calls == 1
+
+
+async def test_install_runs_the_installer_for_the_caller(
+    auth_client, db_session, library, installs
+):
+    # Arrange
+    library(_entry("dark-forest", "Dark Forest", version="1.2.0"))
+
+    # Act
+    response = await auth_client.post(f"{LIBRARY}/install", json={"id": "origin-dark-forest"})
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == {"template_id": "template-dark-forest", "version": "1.2.0"}
+    assert installs == [("dark-forest", await _current_user_id(db_session))]
+
+
+async def test_install_unknown_id_returns_404(auth_client, library, installs):
+    # Arrange
+    library(_entry("dark-forest", "Dark Forest"))
+
+    # Act
+    response = await auth_client.post(f"{LIBRARY}/install", json={"id": "no-such-id"})
+
+    # Assert
+    assert response.status_code == 404
+    assert installs == []
+
+
+async def test_install_while_running_returns_409(auth_client, monkeypatch, library, installs):
+    # Arrange
+    library(_entry("dark-forest", "Dark Forest"))
+    monkeypatch.setattr(library_routes, "_installing", {"origin-dark-forest"})
+
+    # Act
+    response = await auth_client.post(f"{LIBRARY}/install", json={"id": "origin-dark-forest"})
+
+    # Assert
+    assert response.status_code == 409
+    assert installs == []
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (LibraryError("dark-forest/assets/cover.jpg: HTTP 404"), 502),
+        (AdventureInstallError("the importer rejected dark-forest 1.0.0"), 422),
+    ],
+)
+async def test_install_failures_map_to_http_errors(
+    auth_client, monkeypatch, library, error, expected_status
+):
+    # Arrange
+    library(_entry("dark-forest", "Dark Forest"))
+
+    async def failing_install(db, entry, *, owner_id):
+        raise error
+
+    monkeypatch.setattr(library_routes, "install_entry", failing_install)
+
+    # Act
+    response = await auth_client.post(f"{LIBRARY}/install", json={"id": "origin-dark-forest"})
+
+    # Assert
+    assert response.status_code == expected_status
+    assert library_routes._installing == set()
 
 
 @pytest.mark.parametrize(

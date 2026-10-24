@@ -4,71 +4,37 @@
  * backend/api/routes/adventures/library.py.
  */
 
-/** One downloadable adventure as described by the remote catalog (`CatalogEntry`). */
+/** One adventure as listed in the repository's `library.json` (`LibraryEntry`). */
 export interface AdventureCatalogEntry {
   id: string
   slug: string
   title: string
   teaser: string
-  description: string
   version: string
-  format_version: string
-  released_at: string | null
-  min_app_version: string
-  size_bytes: number
-  sha256: string
-  download_url: string
-  cover_url: string | null
-  cover_sha256: string | null
-  tags: string[]
   author: string
-  license: string
   language: string
+  license: string
+  cover: string | null
+  size_bytes: number
+  files: string[]
 }
 
-/** A catalog entry merged with the caller's install and download state (`CatalogItemView`). */
+/** A library entry merged with the caller's install state (`LibraryItemView`). */
 export interface AdventureLibraryItem {
   entry: AdventureCatalogEntry
+  cover_url: string | null
   installed_version: string | null
   update_available: boolean
-  downloading: boolean
-  compatible: boolean
-  requires_app_version: string | null
-}
-
-export type AdventureJobState =
-  | 'queued'
-  | 'downloading'
-  | 'verifying'
-  | 'importing'
-  | 'done'
-  | 'error'
-  | 'cancelled'
-
-/** Progress record of one download (`DownloadJob`). */
-export interface AdventureDownloadJob {
-  job_id: string
-  adventure_id: string
-  slug: string
-  title: string
-  version: string
-  state: AdventureJobState
-  bytes_downloaded: number
-  total_bytes: number
-  error: string | null
-  template_id: string | null
-  created_at: string
-  updated_at: string
 }
 
 /** Response of `GET /library/catalog` and `POST /library/refresh`. */
 export interface AdventureCatalogResponse {
   items: AdventureLibraryItem[]
-  catalog_generated_at: string | null
   stale: boolean
 }
 
-/** Response of `POST /library/download` and `GET /library/jobs`. */
-export interface AdventureJobsResponse {
-  jobs: AdventureDownloadJob[]
+/** Response of `POST /library/install`. */
+export interface AdventureInstallResponse {
+  template_id: string | null
+  version: string
 }

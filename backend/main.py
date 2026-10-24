@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import re
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -38,7 +38,6 @@ from backend.api.routes import (
 )
 from backend.core.config import settings
 from backend.core.database import run_db_migrations
-from backend.services.adventure_library.prefetch import schedule_prefetch
 
 # Configure logging based on .env settings
 logging.basicConfig(
@@ -105,15 +104,7 @@ async def lifespan(_app: FastAPI):
         if removed_dirs:
             logger.info("Startup cleanup removed %s stale empty session directories.", removed_dirs)
 
-    # Opt-in first-boot library download; runs in the background, never blocks startup.
-    prefetch_task = schedule_prefetch()
-
     yield
-
-    if prefetch_task is not None and not prefetch_task.done():
-        prefetch_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await prefetch_task
 
 
 app = FastAPI(
@@ -352,7 +343,7 @@ def start() -> None:
     reload_enabled = os.getenv("TALEWEAVER_RELOAD", "0").lower() in {"1", "true", "yes", "on"}
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
+        host=settings.BACKEND_HOST,
         port=settings.BACKEND_PORT,
         reload=reload_enabled,
     )
