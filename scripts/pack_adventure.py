@@ -10,8 +10,15 @@ Determinism guarantees:
 * entries are written in strict lexicographical order of their POSIX paths
 * every entry carries the fixed DOS timestamp ``1980-01-01 00:00:00``
 * every entry carries the fixed mode ``0o644`` (regular file, no exec bit)
-* Deflate with a pinned compression level (``9``)
+* Deflate with a pinned compression level (``9``) for text, STORED for
+  already-compressed media (PNG/JPEG/WebP/OGG/MP3/...), so the packer never
+  re-encodes or re-compresses payload bytes
 * no extra fields, no comments, no directory entries
+
+Before packing, every ``assets/...`` path referenced by the manifest is
+resolved case-sensitively against the files actually present. A missing or
+case-mismatched reference aborts the build instead of shipping a bundle that
+fails silently on the player's machine.
 
 Byte-identity still depends on the underlying zlib build, so CI must pin the
 runner image rather than float on ``ubuntu-latest``.
@@ -27,6 +34,7 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import re
 import shutil
 import sys
 import zipfile
@@ -44,6 +52,23 @@ IGNORED_NAMES: frozenset[str] = frozenset({".DS_Store", "Thumbs.db", "desktop.in
 IGNORED_SUFFIXES: frozenset[str] = frozenset({".pyc", ".pyo", ".tmp", ".part", ".swp"})
 IGNORED_DIR_NAMES: frozenset[str] = frozenset({".git", "__pycache__", ".idea", ".vscode"})
 
+# Media formats are already entropy-coded; running them through Deflate changes
+# no bytes worth changing and only burns CPU. They are stored verbatim.
+STORE_SUFFIXES: frozenset[str] = frozenset(
+    {
+        ".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif",
+        ".ogg", ".opus", ".mp3", ".m4a", ".aac", ".flac",
+        ".mp4", ".webm", ".zip", ".gz", ".bz2", ".xz", ".zst",
+    }
+)
+
+# ``assets/`` paths that the runtime resolves from the app's frozen catalogs
+# (see scripts/freeze_catalogs.py) instead of from the bundle. Pass
+# ``strict_assets=True`` to demand them inside the bundle as well.
+EXTERNAL_ASSET_PATTERNS: tuple[str, ...] = ("assets/catalog/*",)
+
+ASSET_REF_PATTERN = re.compile(r"assets/[A-Za-z0-9_.\-/]+")
+
 
 class PackError(Exception):
     """Raised when the source layout cannot be packed."""
@@ -56,6 +81,56 @@ def compute_sha256(file_path: Path, chunk_size: int = COPY_CHUNK_SIZE) -> str:
         while chunk := handle.read(chunk_size):
             hasher.update(chunk)
     return hasher.hexdigest()
+
+
+def check_asset_references(
+    manifest_path: Path,
+    packed_paths: set[str],
+    *,
+    allow_missing: tuple[str, ...] = (),
+    strict_assets: bool = False,
+) -> dict[str, object]:
+    """Resolve every asset path referenced by the manifest against ``packed_paths``.
+
+    Comparison is exact and case-sensitive: ``assets/Foo.jpg`` does not satisfy
+    ``assets/foo.jpg``. Returns a report; raises :class:`PackError` listing every
+    problem at once when a reference cannot be resolved.
+    """
+    text = manifest_path.read_text(encoding="utf-8", errors="replace")
+    referenced = sorted(set(ASSET_REF_PATTERN.findall(text)))
+    allowlist = () if strict_assets else EXTERNAL_ASSET_PATTERNS
+    allowlist = tuple(allowlist) + tuple(allow_missing)
+
+    by_lower = {packed.lower(): packed for packed in packed_paths}
+    missing: list[str] = []
+    mismatched: list[str] = []
+    external: list[str] = []
+    for reference in referenced:
+        if reference in packed_paths:
+            continue
+        if any(fnmatch.fnmatchcase(reference, pattern) for pattern in allowlist):
+            external.append(reference)
+            continue
+        twin = by_lower.get(reference.lower())
+        if twin is not None:
+            mismatched.append(f"{reference} (bundle has {twin!r} - case mismatch)")
+        else:
+            missing.append(reference)
+
+    if missing or mismatched:
+        problems = [f"missing asset: {item}" for item in missing]
+        problems += [f"case-mismatched asset: {item}" for item in mismatched]
+        raise PackError(
+            f"unresolved asset references in {manifest_path.name} "
+            f"({len(missing)} missing, {len(mismatched)} case-mismatched): "
+            + "; ".join(problems)
+        )
+
+    return {
+        "referenced": len(referenced),
+        "bundled": len(referenced) - len(external),
+        "external": len(external),
+    }
 
 
 def collect_entries(
@@ -89,6 +164,8 @@ def pack_adventure(
     *,
     force: bool = False,
     exclude: tuple[str, ...] = (),
+    allow_missing: tuple[str, ...] = (),
+    strict_assets: bool = False,
 ) -> dict[str, object]:
     """Pack ``source_dir`` into ``output_path`` and return build metadata."""
     source_dir = source_dir.resolve()
@@ -114,6 +191,13 @@ def pack_adventure(
     if not entries:
         raise PackError(f"no packable files found in {source_dir}")
 
+    assets = check_asset_references(
+        manifest_path,
+        {rel_posix for rel_posix, _ in entries},
+        allow_missing=allow_missing,
+        strict_assets=strict_assets,
+    )
+
     try:
         with zipfile.ZipFile(
             output_path,
@@ -123,7 +207,11 @@ def pack_adventure(
         ) as archive:
             for rel_posix, abs_path in entries:
                 info = zipfile.ZipInfo(filename=rel_posix, date_time=FIXED_DATETIME)
-                info.compress_type = zipfile.ZIP_DEFLATED
+                info.compress_type = (
+                    zipfile.ZIP_STORED
+                    if abs_path.suffix.lower() in STORE_SUFFIXES
+                    else zipfile.ZIP_DEFLATED
+                )
                 info.external_attr = REGULAR_FILE_ATTR
                 info.create_system = 3  # POSIX, so external_attr is meaningful
                 with archive.open(info, mode="w") as destination, abs_path.open("rb") as source:
@@ -140,6 +228,7 @@ def pack_adventure(
         "size_bytes": output_path.stat().st_size,
         "sha256": compute_sha256(output_path),
         "manifest_sha256": compute_sha256(manifest_path),
+        "asset_references": assets,
     }
 
 
@@ -165,8 +254,20 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="GLOB",
         help=(
             "skip files whose POSIX relative path matches this shell-style glob; "
-            "repeatable (e.g. --exclude '*.md' keeps release notes out of the bundle)"
+            "repeatable (e.g. --exclude '$SLUG.md' keeps release notes out of the bundle)"
         ),
+    )
+    parser.add_argument(
+        "--allow-missing",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="treat manifest asset references matching this glob as externally resolved",
+    )
+    parser.add_argument(
+        "--strict-assets",
+        action="store_true",
+        help="also require assets/catalog/* references to exist inside the bundle",
     )
     return parser
 
@@ -179,7 +280,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         metadata = pack_adventure(
-            args.source_dir, output, force=args.force, exclude=tuple(args.exclude)
+            args.source_dir,
+            output,
+            force=args.force,
+            exclude=tuple(args.exclude),
+            allow_missing=tuple(args.allow_missing),
+            strict_assets=args.strict_assets,
         )
     except PackError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -196,6 +302,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  size:     {metadata['size_bytes']:,} bytes")
         print(f"  sha256:   {metadata['sha256']}")
         print(f"  manifest: {metadata['manifest_sha256']}")
+        assets = metadata["asset_references"]
+        print(
+            f"  assets:   {assets['referenced']} referenced "
+            f"({assets['bundled']} bundled, {assets['external']} external)"
+        )
     return 0
 
 
