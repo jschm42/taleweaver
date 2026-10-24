@@ -46,6 +46,32 @@ def get_staged_python_files() -> list[str]:
         return []
 
 
+def get_changed_python_files(base_ref: str = "origin/main") -> list[str]:
+    """Retrieve changed Python files against a base git reference."""
+    diff_targets = [
+        ["git", "diff", "--name-only", "--diff-filter=ACM", f"{base_ref}...HEAD"],
+        ["git", "diff", "--name-only", "--diff-filter=ACM", f"{base_ref}..HEAD"],
+        ["git", "diff", "--name-only", "--diff-filter=ACM", base_ref],
+    ]
+    for cmd in diff_targets:
+        result = subprocess.run(
+            cmd,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            files = [
+                f.strip()
+                for f in result.stdout.splitlines()
+                if f.strip().endswith(".py") and os.path.exists(PROJECT_ROOT / f.strip())
+            ]
+            if files:
+                return files
+    return []
+
+
 def check_oversized_files(files: list[str]) -> list[tuple[str, int]]:
     """Identify files exceeding the recommended line threshold."""
     oversized: list[tuple[str, int]] = []
@@ -64,13 +90,18 @@ def check_oversized_files(files: list[str]) -> list[tuple[str, int]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="TaleWeaver Code Quality & Security Linter"
-    )
+    parser = argparse.ArgumentParser(description="TaleWeaver Code Quality & Security Linter")
     parser.add_argument(
         "--staged",
         action="store_true",
         help="Only check files staged for git commit (pre-commit mode)",
+    )
+    parser.add_argument(
+        "--changed",
+        nargs="?",
+        const="origin/main",
+        metavar="BASE_REF",
+        help="Only check Python files changed against base git ref (e.g. origin/main)",
     )
     parser.add_argument(
         "--fix",
@@ -108,6 +139,12 @@ def main() -> int:
             print("[INFO] No staged Python files to lint.")
             return 0
         print(f"[LINT] Checking {len(targets)} staged Python file(s)...")
+    elif args.changed:
+        targets = get_changed_python_files(args.changed)
+        if not targets:
+            print(f"[INFO] No changed Python files found against '{args.changed}'.")
+            return 0
+        print(f"[LINT] Checking {len(targets)} changed Python file(s) against '{args.changed}'...")
     elif args.paths:
         targets = args.paths
     else:
@@ -115,11 +152,19 @@ def main() -> int:
 
     ruff_cmd = [sys.executable, "-m", "ruff"]
 
-    # 1. Format if requested
+    # 1. Format if requested, otherwise verify formatting
     if args.fix or args.format_only:
         print("[FORMAT] Formatting code with Ruff...")
         format_code = run_command([*ruff_cmd, "format", *targets])
         if args.format_only:
+            return format_code
+    else:
+        print("[FORMAT] Checking code formatting with Ruff...")
+        format_code = run_command([*ruff_cmd, "format", "--check", *targets])
+        if format_code != 0:
+            print(
+                "[ERROR] Formatting check failed. Run 'poetry run python scripts/lint.py --fix' to format."
+            )
             return format_code
 
     # 2. Run Ruff Linter
@@ -132,15 +177,13 @@ def main() -> int:
     exit_code = run_command(lint_args)
 
     # 3. Check for oversized modules
-    if args.check_size or args.staged:
+    if args.check_size or args.staged or args.changed:
         oversized = check_oversized_files(targets)
         if oversized:
             print("\n[WARN] [Clean Code Notice] Oversized modules detected (> 600 lines):")
             for path, count in oversized:
                 print(f"   * {path}: {count} lines")
-            print(
-                "   Consider decomposing large modules into dedicated service/handler classes.\n"
-            )
+            print("   Consider decomposing large modules into dedicated service/handler classes.\n")
 
     if exit_code == 0:
         print("[OK] Clean Code & Security checks passed!")

@@ -19,6 +19,8 @@ jobs:
     steps:
     - name: Check out repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
@@ -36,8 +38,13 @@ jobs:
 
     - name: Code Quality & Security Linting (Ruff)
       run: |
-        poetry run ruff check backend scripts
-        poetry run ruff format --check backend scripts
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          poetry run python scripts/lint.py --changed "origin/${{ github.base_ref }}"
+        elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+          poetry run python scripts/lint.py --changed "${{ github.event.before }}"
+        else
+          poetry run python scripts/lint.py --changed "HEAD~1"
+        fi
 
     - name: Type checking with mypy
       run: |
