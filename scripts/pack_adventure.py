@@ -24,6 +24,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import shutil
@@ -57,8 +58,14 @@ def compute_sha256(file_path: Path, chunk_size: int = COPY_CHUNK_SIZE) -> str:
     return hasher.hexdigest()
 
 
-def collect_entries(source_dir: Path) -> list[tuple[str, Path]]:
-    """Collect packable files as sorted ``(posix_relpath, absolute_path)`` pairs."""
+def collect_entries(
+    source_dir: Path, exclude_patterns: tuple[str, ...] = ()
+) -> list[tuple[str, Path]]:
+    """Collect packable files as sorted ``(posix_relpath, absolute_path)`` pairs.
+
+    ``exclude_patterns`` are shell-style globs matched against the POSIX relative
+    path (``fnmatch`` semantics), e.g. ``"*.md"`` or ``"meta/*"``.
+    """
     entries: list[tuple[str, Path]] = []
     for path in source_dir.rglob("*"):
         relative = path.relative_to(source_dir)
@@ -68,7 +75,10 @@ def collect_entries(source_dir: Path) -> list[tuple[str, Path]]:
             continue
         if path.name in IGNORED_NAMES or path.suffix.lower() in IGNORED_SUFFIXES:
             continue
-        entries.append((relative.as_posix(), path))
+        rel_posix = relative.as_posix()
+        if any(fnmatch.fnmatchcase(rel_posix, pattern) for pattern in exclude_patterns):
+            continue
+        entries.append((rel_posix, path))
     entries.sort(key=lambda entry: entry[0])
     return entries
 
@@ -78,6 +88,7 @@ def pack_adventure(
     output_path: Path,
     *,
     force: bool = False,
+    exclude: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Pack ``source_dir`` into ``output_path`` and return build metadata."""
     source_dir = source_dir.resolve()
@@ -99,7 +110,7 @@ def pack_adventure(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    entries = collect_entries(source_dir)
+    entries = collect_entries(source_dir, exclude)
     if not entries:
         raise PackError(f"no packable files found in {source_dir}")
 
@@ -125,6 +136,7 @@ def pack_adventure(
         "slug": source_dir.name,
         "archive": str(output_path.resolve()),
         "file_count": len(entries),
+        "entries": [rel_posix for rel_posix, _ in entries],
         "size_bytes": output_path.stat().st_size,
         "sha256": compute_sha256(output_path),
         "manifest_sha256": compute_sha256(manifest_path),
@@ -146,6 +158,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-f", "--force", action="store_true", help="overwrite an existing output file")
     parser.add_argument("--json", action="store_true", help="emit build metadata as JSON for CI")
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help=(
+            "skip files whose POSIX relative path matches this shell-style glob; "
+            "repeatable (e.g. --exclude '*.md' keeps release notes out of the bundle)"
+        ),
+    )
     return parser
 
 
@@ -156,7 +178,9 @@ def main(argv: list[str] | None = None) -> int:
         output = Path.cwd() / f"{args.source_dir.resolve().name}.adz"
 
     try:
-        metadata = pack_adventure(args.source_dir, output, force=args.force)
+        metadata = pack_adventure(
+            args.source_dir, output, force=args.force, exclude=tuple(args.exclude)
+        )
     except PackError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
