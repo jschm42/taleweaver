@@ -16,6 +16,8 @@ export interface AdventureCatalogEntry {
   license: string
   cover: string | null
   size_bytes: number
+  /** No longer up to the current standard; still installable, hidden unless the user opts in. */
+  deprecated: boolean
   files: string[]
 }
 

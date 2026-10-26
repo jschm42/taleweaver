@@ -15,6 +15,9 @@ const emit = defineEmits<{
 const lib = props.library
 const {
   items,
+  visibleItems,
+  showDeprecated,
+  deprecatedCount,
   loading,
   error,
   staleCatalog,
@@ -28,12 +31,14 @@ const {
   isSubmitting,
 } = lib
 
-const hasSelectable = computed(() => items.value.some(lib.isSelectable))
+const hasSelectable = computed(() => visibleItems.value.some(lib.isSelectable))
 const showInitialLoading = computed(() => loading.value && items.value.length === 0)
 const showEmpty = computed(() => !loading.value && items.value.length === 0)
+// Everything in the catalog is deprecated and the filter hides it.
+const allHidden = computed(() => items.value.length > 0 && visibleItems.value.length === 0)
 
 const subtitle = computed(() => {
-  const count = items.value.length
+  const count = visibleItems.value.length
   const noun = count === 1 ? 'adventure' : 'adventures'
   return `${count} ${noun} · ${formatBytes(catalogTotalBytes.value)} total`
 })
@@ -132,23 +137,43 @@ function toggleAll() {
         </div>
 
         <template v-else>
-          <label
-            class="mb-4 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest"
-            :class="hasSelectable ? 'text-slate-300 cursor-pointer' : 'text-slate-600 cursor-not-allowed'"
-          >
-            <input
-              type="checkbox"
-              class="w-4 h-4 accent-blue-500"
-              :checked="allSelectableSelected"
-              :disabled="!hasSelectable"
-              @change="toggleAll"
-            />
-            Select all
-          </label>
+          <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <label
+              class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest"
+              :class="hasSelectable ? 'text-slate-300 cursor-pointer' : 'text-slate-600 cursor-not-allowed'"
+            >
+              <input
+                type="checkbox"
+                class="w-4 h-4 accent-blue-500"
+                :checked="allSelectableSelected"
+                :disabled="!hasSelectable"
+                @change="toggleAll"
+              />
+              Select all
+            </label>
+            <label
+              v-if="deprecatedCount > 0"
+              class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400 cursor-pointer"
+              title="Older adventures that no longer meet the current standard. They can still be installed and played."
+            >
+              <input
+                type="checkbox"
+                class="w-4 h-4 accent-amber-500"
+                :checked="showDeprecated"
+                :disabled="isSubmitting"
+                @change="lib.setShowDeprecated(($event.target as HTMLInputElement).checked)"
+              />
+              Show deprecated ({{ deprecatedCount }})
+            </label>
+          </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <p v-if="allHidden" class="py-12 text-center text-sm text-slate-400">
+            All adventures in the catalog are deprecated. Enable "Show deprecated" to list them.
+          </p>
+
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <AdventureLibraryCard
-              v-for="item in items"
+              v-for="item in visibleItems"
               :key="item.entry.id"
               :item="item"
               :selected="lib.isSelected(item.entry.id)"

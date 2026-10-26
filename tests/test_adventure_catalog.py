@@ -79,6 +79,17 @@ def test_unknown_fields_are_ignored():
     assert not hasattr(library.adventures[0], "future_field")
 
 
+def test_deprecated_flag_defaults_to_false():
+    # Arrange
+    payload = _index(_entry("dark-forest"), _entry("sunken-city", deprecated=True))
+
+    # Act
+    library = parse_library(payload)
+
+    # Assert
+    assert [entry.deprecated for entry in library.adventures] == [False, True]
+
+
 def test_unsupported_schema_is_rejected():
     # Arrange
     payload = _index(_entry(), schema=2)

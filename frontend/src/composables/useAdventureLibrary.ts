@@ -18,6 +18,10 @@ export interface UseAdventureLibraryOptions {
 export interface UseAdventureLibraryResult {
   isOpen: Ref<boolean>
   items: Ref<AdventureLibraryItem[]>
+  /** `items` minus deprecated entries unless `showDeprecated` is on; what the dialog lists. */
+  visibleItems: ComputedRef<AdventureLibraryItem[]>
+  showDeprecated: Ref<boolean>
+  deprecatedCount: ComputedRef<number>
   loading: Ref<boolean>
   error: Ref<string | null>
   staleCatalog: Ref<boolean>
@@ -39,6 +43,7 @@ export interface UseAdventureLibraryResult {
   toggle: (id: string) => void
   selectAll: () => void
   clearSelection: () => void
+  setShowDeprecated: (show: boolean) => void
   downloadSelected: () => Promise<void>
 }
 
@@ -58,12 +63,19 @@ export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): U
   const installingId = ref<string | null>(null)
   const installErrors = ref<string[]>([])
   const installStatus = ref<AdventureInstallStatus | null>(null)
+  // Deprecated adventures stay installable but are hidden by default.
+  const showDeprecated = ref(false)
 
-  const selectedItems = computed(() => items.value.filter((item) => selectedIds.value.has(item.entry.id)))
+  const visibleItems = computed(() =>
+    showDeprecated.value ? items.value : items.value.filter((item) => !item.entry.deprecated),
+  )
+  const deprecatedCount = computed(() => items.value.filter((item) => item.entry.deprecated).length)
+  // Hidden entries never count as selected, so they are never installed unseen.
+  const selectedItems = computed(() => visibleItems.value.filter((item) => selectedIds.value.has(item.entry.id)))
   const selectedCount = computed(() => selectedItems.value.length)
   const selectedTotalBytes = computed(() => selectedItems.value.reduce((sum, item) => sum + item.entry.size_bytes, 0))
-  const catalogTotalBytes = computed(() => items.value.reduce((sum, item) => sum + item.entry.size_bytes, 0))
-  const selectableItems = computed(() => items.value.filter(isSelectable))
+  const catalogTotalBytes = computed(() => visibleItems.value.reduce((sum, item) => sum + item.entry.size_bytes, 0))
+  const selectableItems = computed(() => visibleItems.value.filter(isSelectable))
   const allSelectableSelected = computed(
     () => selectableItems.value.length > 0 && selectableItems.value.every((item) => selectedIds.value.has(item.entry.id)),
   )
@@ -96,12 +108,22 @@ export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): U
     selectedIds.value = new Set()
   }
 
+  /** Toggles the deprecated filter; hiding entries also drops them from the selection. */
+  function setShowDeprecated(show: boolean) {
+    showDeprecated.value = show
+    pruneSelection()
+  }
+
+  /** Drop selections that are no longer selectable (installed meanwhile, removed, hidden). */
+  function pruneSelection() {
+    const selectable = new Set(selectableItems.value.map((item) => item.entry.id))
+    selectedIds.value = new Set([...selectedIds.value].filter((id) => selectable.has(id)))
+  }
+
   function applyCatalog(response: AdventureCatalogResponse) {
     items.value = response.items
     staleCatalog.value = response.stale
-    // Drop selections that are no longer selectable (installed meanwhile, removed).
-    const selectable = new Set(selectableItems.value.map((item) => item.entry.id))
-    selectedIds.value = new Set([...selectedIds.value].filter((id) => selectable.has(id)))
+    pruneSelection()
   }
 
   async function fetchInto(fetcher: () => Promise<AdventureCatalogResponse>, fallback: string) {
@@ -199,6 +221,9 @@ export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): U
   return {
     isOpen,
     items,
+    visibleItems,
+    showDeprecated,
+    deprecatedCount,
     loading,
     error,
     staleCatalog,
@@ -220,6 +245,7 @@ export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): U
     toggle,
     selectAll,
     clearSelection,
+    setShowDeprecated,
     downloadSelected,
   }
 }

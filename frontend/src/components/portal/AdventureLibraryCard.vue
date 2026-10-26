@@ -124,6 +124,14 @@ function onCardClick() {
           @change="emit('toggle', entry.id)"
         />
       </label>
+
+      <span
+        v-if="entry.deprecated"
+        class="absolute top-2 right-2 px-2 py-1 rounded-md border border-amber-500/40 bg-slate-950/80 text-amber-300 text-[10px] font-black uppercase tracking-widest"
+        title="This adventure no longer meets the current standard. It can still be installed and played."
+      >
+        Deprecated
+      </span>
     </div>
 
     <div class="p-4 flex flex-col gap-2 flex-1">

@@ -47,6 +47,8 @@ class LibraryEntry(BaseModel):
     license: str = ""
     cover: str | None = None
     size_bytes: int = Field(default=0, ge=0)
+    # No longer up to the current standard; still installable, hidden by default in the UI.
+    deprecated: bool = False
     files: list[str] = Field(min_length=1)
 
     @field_validator("files")
