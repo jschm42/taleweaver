@@ -11,7 +11,7 @@
  * - Dialog skin (data-skin) resolved from player preference, adventure theme and tone
  * - Bottom action bar and user input with speech-to-text voice recording
  */
-import { ref, computed, toRef, watch } from 'vue'
+import { ref, computed, toRef, watch, nextTick } from 'vue'
 import type { ChatMessage } from '@/types'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getImageUrl } from '@/utils/game_icons'
@@ -32,8 +32,9 @@ import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
 import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
 import type { SettingsTabId } from './settings/types'
 import { useStoryTabs } from './immersive/tabs/useStoryTabs'
+import { useGameShortcuts } from './immersive/useGameShortcuts'
 import { useTextDensity } from '@/skins/useTextDensity'
-import { resolveAccent, resolveSkin, skinPreferenceOf } from '@/skins/skinRegistry'
+import { useSheetSkin } from '@/skins/useSheetSkin'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -176,15 +177,8 @@ const {
 })
 
 // --- Dialog skin ---
-const skinPreference = computed(() => skinPreferenceOf(props.sheet?.ui_skin))
 const { textDensity } = useTextDensity()
-const activeSkin = computed(() =>
-  resolveSkin(skinPreference.value, props.sheet?.ui_theme, props.sheet?.adventure_tone)
-)
-const skinStyle = computed(() => {
-  const accent = resolveAccent(skinPreference.value, props.sheet?.ui_theme)
-  return accent ? { '--tw-accent': accent, '--tw-accent-soft': accent } : {}
-})
+const { activeSkin, skinStyle } = useSheetSkin(() => props.sheet)
 
 // --- Story tabs ---
 const {
@@ -218,6 +212,18 @@ function handleTraverseExit(exit: any) {
 
 // Input Bar Template Ref
 const inputBarRef = ref<InstanceType<typeof ImmersiveInputBar> | null>(null)
+
+const storyFeedRef = ref<InstanceType<typeof ImmersiveStoryFeed> | null>(null)
+
+useGameShortcuts({
+  scrollToLatestMessage: () => {
+    showStory()
+    goToLatestTurn()
+    // Wait for a page switch to render (and reset its scroll) before jumping.
+    void nextTick(() => requestAnimationFrame(() => storyFeedRef.value?.scrollToLatestExchange()))
+  },
+  focusInput: () => inputBarRef.value?.focus(),
+})
 
 function handleSend(content: string) {
   showStory()
@@ -367,6 +373,7 @@ defineExpose({
         />
 
         <ImmersiveStoryFeed
+          ref="storyFeedRef"
           v-show="activeStoryTab === 'story'"
           :game-turns="gameTurns"
           :active-turn="activeTurn"

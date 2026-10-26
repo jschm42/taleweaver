@@ -91,7 +91,7 @@ watch(
       return
     }
     const known = new Set(previousIds ?? [])
-    const arrivals = ids.filter((id) => id !== 'PLAYER' && !known.has(id))
+    const arrivals = ids.filter((id) => !known.has(id))
     if (!arrivals.length) {
       return
     }
@@ -119,7 +119,7 @@ function isNpcSpeaking(npc: any): boolean {
 <template>
   <aside
     ref="stageContainerRef"
-    class="flex flex-col gap-2 shrink-0 overflow-y-auto w-20 sm:w-28 md:w-36 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full"
+    class="flex flex-col gap-2 shrink-0 overflow-y-auto w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem] custom-scrollbar pr-1 py-1 max-h-full"
   >
     <TransitionGroup :name="stageReady ? 'tw-npc' : 'tw-npc-initial'" tag="div" class="flex flex-col gap-2 w-full">
       <div
@@ -130,9 +130,7 @@ function isNpcSpeaking(npc: any): boolean {
           { 'tw-npc-arrived': hasJustArrived(npc) },
           isNpcSpeaking(npc)
             ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)] ring-2 ring-amber-400/60'
-            : npc.id === 'PLAYER'
-              ? 'border-emerald-500/70 hover:border-emerald-400'
-              : 'border-slate-700/70 hover:border-cyan-400/80'
+            : 'border-slate-700/70 hover:border-cyan-400/80'
         ]"
         @click="emit('npcClick', npc)"
         @mouseenter="emit('npcHover', npc, $event)"
@@ -150,7 +148,7 @@ function isNpcSpeaking(npc: any): boolean {
           @error="onImageLoadError($event, npc.image_url)"
         />
         <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
-          <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
+          <i class="ra ra-helmet text-4xl mb-1 text-cyan-400"></i>
         </div>
 
         <!-- Entrance: one-off light sweep and a short "Enters" tag -->
@@ -160,11 +158,6 @@ function isNpcSpeaking(npc: any): boolean {
         <!-- Active Speaker Badge -->
         <div v-if="isNpcSpeaking(npc)" class="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[8px] font-black uppercase tracking-wider shadow-md animate-bounce">
           Speaking
-        </div>
-
-        <!-- Hero Tag for Player -->
-        <div v-else-if="npc.id === 'PLAYER'" class="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded-full bg-emerald-500/80 text-white backdrop-blur-md border border-emerald-300/40 text-[8px] font-black uppercase tracking-wider shadow-md">
-          You
         </div>
 
         <!-- Defeated Ribbon -->

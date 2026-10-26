@@ -36,6 +36,8 @@ import SessionSettingsModal from '@/components/game/SessionSettingsModal.vue'
 import type { SessionSettingsPayload, SettingsTabId } from '@/components/game/settings/types'
 import { useTextDensity } from '@/skins/useTextDensity'
 import { describeAutoSkin, resolveSkin, skinPreferenceOf } from '@/skins/skinRegistry'
+import { useSheetSkin } from '@/skins/useSheetSkin'
+import { provideDialogSkin } from '@/skins/dialogSkin'
 import WorldMemoriesModal from '@/components/game/WorldMemoriesModal.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
 import { api } from '@/composables/useApi'
@@ -156,6 +158,7 @@ const skinPreference = computed(() => skinPreferenceOf(sheet.value?.ui_skin))
 const { textDensity } = useTextDensity()
 const autoSkin = computed(() => resolveSkin('auto', sheet.value?.ui_theme, sheet.value?.adventure_tone))
 const autoSkinReason = computed(() => describeAutoSkin(sheet.value?.ui_theme, sheet.value?.adventure_tone))
+provideDialogSkin(useSheetSkin(() => sheet.value))
 
 const openSettingsModal = (tab: SettingsTabId = 'memory') => {
   settingsInitialTab.value = tab

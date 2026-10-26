@@ -1,0 +1,208 @@
+/*
+ * Skinned game dialogs (character sheet, quests, map, chronicles, walkthrough, memories).
+ * Dialogs are teleported out of the immersive root, so each carries its own .tw-skin +
+ * data-skin (see skins/dialogSkin.ts) and only uses the shared tokens; skins rarely need
+ * anything dialog-specific beyond the --tw-dialog-* tokens below.
+ */
+
+.tw-dialog-backdrop {
+  background: color-mix(in srgb, var(--tw-overlay-bg) 80%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+/* Primary action: accent fill. */
+.tw-dialog-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--tw-accent);
+  border-radius: var(--tw-tab-radius);
+  background: var(--tw-accent);
+  color: #ffffff;
+  font-family: var(--tw-tab-font);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.tw-dialog-button:hover {
+  filter: brightness(1.12);
+}
+
+.tw-dialog-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary action: outline in the current ink. */
+.tw-dialog-button--ghost {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+  background: transparent;
+  color: inherit;
+}
+
+.tw-dialog-button--ghost:hover {
+  filter: none;
+  border-color: var(--tw-accent-soft);
+  background: color-mix(in srgb, var(--tw-accent) 12%, transparent);
+}
+
+.tw-dialog-link {
+  color: var(--tw-accent-soft);
+  font-weight: 600;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  cursor: help;
+}
+
+.tw-card .tw-dialog-link {
+  color: var(--tw-accent);
+}
+
+.tw-dialog-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tw-dialog-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tw-panel-ink) 25%, transparent);
+  border-radius: 3px;
+}
+
+.tw-skin {
+  --tw-dialog-bg: var(--tw-panel-bg);
+  --tw-dialog-header-bg: color-mix(in srgb, var(--tw-panel-ink) 4%, transparent);
+  --tw-dialog-divider: color-mix(in srgb, var(--tw-panel-border) 80%, transparent);
+  --tw-dialog-shadow: 0 0 80px rgba(0, 0, 0, 0.85);
+  --tw-dialog-silhouette-filter: brightness(300%) contrast(0.75);
+  --tw-dialog-silhouette-opacity: 0.45;
+}
+
+[data-skin='toon'] {
+  --tw-dialog-shadow: 8px 8px 0 #111111;
+  --tw-dialog-silhouette-filter: none;
+  --tw-dialog-silhouette-opacity: 0.25;
+}
+
+.tw-dialog {
+  background: var(--tw-dialog-bg);
+  color: var(--tw-panel-ink);
+  border: 1px solid var(--tw-panel-border);
+  border-radius: calc(var(--tw-panel-radius) * 1.5);
+  box-shadow: var(--tw-dialog-shadow);
+  backdrop-filter: blur(24px);
+}
+
+.tw-dialog-header {
+  background: var(--tw-dialog-header-bg);
+  border-bottom: 1px solid var(--tw-dialog-divider);
+}
+
+.tw-dialog-divider {
+  border-color: var(--tw-dialog-divider);
+}
+
+.tw-dialog-title {
+  font-family: var(--tw-font-overlay-title);
+  text-transform: var(--tw-overlay-title-transform);
+  color: var(--tw-panel-ink);
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.tw-dialog-eyebrow {
+  font-family: var(--tw-font-label);
+  color: var(--tw-accent-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+}
+
+/* Takes the ink of whatever it sits on (dark panel or light card). */
+.tw-dialog-chip {
+  padding: 0.125rem 0.375rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  opacity: 0.85;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tw-dialog-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tw-panel-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tw-panel-ink) 8%, transparent);
+  color: var(--tw-panel-muted);
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.tw-dialog-icon-button:hover {
+  border-color: var(--tw-accent-soft);
+  background: var(--tw-accent);
+  color: #ffffff;
+}
+
+.tw-dialog .tw-tab {
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* Empty inventory / equipment slot. */
+.tw-dialog-slot {
+  border: 2px dashed var(--tw-dialog-divider);
+  border-radius: var(--tw-card-radius);
+  color: var(--tw-panel-muted);
+}
+
+.tw-dialog-slot-filled {
+  border-width: 2px;
+}
+
+.tw-dialog-slot-filled:hover {
+  border-color: var(--tw-accent-soft);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--tw-accent) 30%, transparent);
+}
+
+.tw-dialog-silhouette {
+  filter: var(--tw-dialog-silhouette-filter);
+  opacity: var(--tw-dialog-silhouette-opacity);
+}
+
+/* ---------- Hero tab ---------- */
+.tw-dialog-portrait {
+  position: relative;
+  overflow: hidden;
+  background: var(--tw-card-bg);
+  border: 2px solid var(--tw-card-border);
+  border-radius: var(--tw-card-radius);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tw-accent) 25%, transparent), 0 18px 45px rgba(0, 0, 0, 0.55);
+}
+
+.tw-dialog-bio {
+  white-space: pre-line;
+}
+
+/* ---------- Vitals (StatBar hooks; doubled class beats StatBar's scoped text shadow) ---------- */
+.tw-skin.tw-dialog .tw-stat-label {
+  color: var(--tw-panel-ink);
+  text-shadow: none;
+}
+
+.tw-skin.tw-dialog .tw-stat-max {
+  color: var(--tw-panel-muted);
+}
+
+.tw-skin.tw-dialog .tw-stat-track {
+  background: color-mix(in srgb, var(--tw-panel-ink) 15%, transparent);
+}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useDialogSkin } from '@/skins/dialogSkin'
 
 type WorldEntity = {
   id?: string
@@ -25,6 +26,8 @@ const emit = defineEmits<{
   itemHover: [item: WorldEntity, event: MouseEvent]
   itemLeave: []
 }>()
+
+const { activeSkin, skinStyle } = useDialogSkin()
 
 const itemTokenRegex = /\[\[ITEM:([A-Z0-9_]+)\|([^\]]+)\]\]/g
 
@@ -113,54 +116,55 @@ function fixNewlines(text: string | null | undefined): string {
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <div v-if="open" class="fixed inset-0 z-[220] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" @click.self="emit('close')">
-        <div class="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col">
-          <header class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+      <div
+        v-if="open"
+        class="tw-skin tw-dialog-backdrop fixed inset-0 z-[220] flex items-center justify-center p-4"
+        :data-skin="activeSkin"
+        :style="skinStyle"
+        @click.self="emit('close')"
+      >
+        <div class="tw-dialog w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Walkthrough">
+          <header class="tw-dialog-header px-5 py-4 flex items-center justify-between">
             <div>
-              <p class="text-xs uppercase tracking-[0.2em] text-fuchsia-400/70 font-black">Secret Utility</p>
-              <h2 class="text-xl text-slate-100 font-bold">Walkthrough</h2>
+              <p class="tw-dialog-eyebrow text-xs">Secret Utility</p>
+              <h2 class="tw-dialog-title text-2xl mt-0.5">Walkthrough</h2>
             </div>
-            <button class="text-slate-400 hover:text-white" @click="emit('close')">Close</button>
+            <button type="button" class="tw-dialog-button tw-dialog-button--ghost" @click="emit('close')">Close</button>
           </header>
 
-          <div class="p-5 overflow-y-auto custom-scrollbar space-y-4">
-            <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+          <div class="tw-dialog-scroll p-5 overflow-y-auto space-y-4">
+            <div class="tw-card p-4">
               <div class="flex items-center justify-between gap-3 flex-wrap">
-                <p class="text-xs uppercase tracking-widest text-slate-400 font-black">XP</p>
-                <p class="text-lg font-black text-amber-300 tabular-nums">{{ data?.current_xp ?? 0 }}</p>
+                <p class="tw-panel-title tw-muted">XP</p>
+                <p class="text-lg font-black tabular-nums">{{ data?.current_xp ?? 0 }}</p>
               </div>
-              <p class="mt-3 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(data?.preview || data?.message || 'No walkthrough available.') }}</p>
+              <p class="mt-3 text-sm leading-relaxed whitespace-pre-wrap">{{ fixNewlines(data?.preview || data?.message || 'No walkthrough available.') }}</p>
             </div>
 
-            <div v-if="!data?.available" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-slate-400 text-sm">
+            <div v-if="!data?.available" class="tw-dialog-slot p-4 text-sm">
               No walkthrough available for this adventure yet.
             </div>
 
-            <div v-else-if="!data?.revealed" class="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-4">
-              <p class="text-sm text-fuchsia-200 mb-3">The full strategy is sealed. Reveal it to permanently view the walkthrough for this session (-150 XP).</p>
-              <button
-                class="px-4 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-sm font-bold transition-colors"
-                @click="emit('reveal')"
-              >
+            <div v-else-if="!data?.revealed" class="tw-card p-4 border-l-4 !border-l-[var(--tw-accent)]">
+              <p class="text-sm mb-3">The full strategy is sealed. Reveal it to permanently view the walkthrough for this session (-150 XP).</p>
+              <button type="button" class="tw-dialog-button" @click="emit('reveal')">
                 Reveal Walkthrough ({{ data?.reveal_cost ?? 150 }} XP)
               </button>
             </div>
 
             <div v-else class="space-y-3">
-              <div class="flex items-center justify-between gap-3 flex-wrap">
-                <p class="text-sm font-bold text-emerald-300">Walkthrough Unlocked</p>
-              </div>
+              <p class="tw-dialog-eyebrow text-sm">Walkthrough Unlocked</p>
 
               <ol v-if="data?.steps && data.steps.length > 0" class="space-y-2">
-                <li v-for="(step, index) in data.steps" :key="index" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                  <p class="text-xxs uppercase tracking-widest text-slate-500 font-black">Chapter {{ index + 1 }}</p>
-                  <p v-if="step.title" class="text-sm text-slate-100 font-bold mt-1">{{ step.title }}</p>
-                  <p class="text-sm text-slate-300 mt-1 leading-relaxed whitespace-pre-wrap">
+                <li v-for="(step, index) in data.steps" :key="index" class="tw-card p-3">
+                  <p class="tw-muted text-xxs uppercase tracking-widest font-black">Chapter {{ index + 1 }}</p>
+                  <p v-if="step.title" class="text-sm font-bold mt-1">{{ step.title }}</p>
+                  <p class="text-sm mt-1 leading-relaxed whitespace-pre-wrap">
                     <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">
                       <span v-if="part.type === 'text'">{{ fixNewlines(part.text) }}</span>
                       <span
                         v-else
-                        class="font-semibold text-amber-300/90 underline decoration-dotted underline-offset-4 cursor-help hover:text-amber-200"
+                        class="tw-dialog-link"
                         @mouseenter="emit('itemHover', part.item, $event)"
                         @mousemove="emit('itemHover', part.item, $event)"
                         @mouseleave="emit('itemLeave')"
@@ -172,12 +176,12 @@ function fixNewlines(text: string | null | undefined): string {
                 </li>
               </ol>
 
-              <div v-else-if="data?.walkthrough" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+              <div v-else-if="data?.walkthrough" class="tw-card p-4 text-sm leading-relaxed whitespace-pre-wrap">
                 <template v-for="(part, partIndex) in parseWalkthroughContent(data.walkthrough)" :key="`raw-${partIndex}`">
                   <span v-if="part.type === 'text'">{{ fixNewlines(part.text) }}</span>
                   <span
                     v-else
-                    class="font-semibold text-amber-300/90 underline decoration-dotted underline-offset-4 cursor-help hover:text-amber-200"
+                    class="tw-dialog-link"
                     @mouseenter="emit('itemHover', part.item, $event)"
                     @mousemove="emit('itemHover', part.item, $event)"
                     @mouseleave="emit('itemLeave')"
@@ -197,7 +201,4 @@ function fixNewlines(text: string | null | undefined): string {
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
 </style>
-

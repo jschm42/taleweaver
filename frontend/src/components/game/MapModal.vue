@@ -14,6 +14,9 @@ import dagre from 'dagre'
 import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
 import type { WorldMapData } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
+import { useDialogSkin } from '@/skins/dialogSkin'
+
+const { activeSkin, skinStyle } = useDialogSkin()
 
 const props = defineProps<{
   open: boolean
@@ -499,27 +502,32 @@ onMounted(() => {
   <!-- Backdrop -->
   <Teleport to="body">
     <Transition name="fade">
-      <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        v-if="open"
+        class="tw-skin fixed inset-0 z-50 flex items-center justify-center p-4"
+        :data-skin="activeSkin"
+        :style="skinStyle"
+      >
         <!-- Overlay -->
         <div
-          class="absolute inset-0 bg-black/75 backdrop-blur-sm"
+          class="tw-dialog-backdrop absolute inset-0"
           @click="emit('close')"
         />
 
         <!-- Modal panel -->
-        <div class="relative z-10 w-full max-w-5xl h-[90vh] sm:h-[80vh] bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
+        <div class="tw-dialog relative z-10 w-full max-w-5xl h-[90vh] sm:h-[80vh] flex flex-col overflow-hidden animate-modal-in" role="dialog" aria-modal="true" aria-label="World Map">
           <!-- Header -->
-          <div class="flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-slate-800 shrink-0">
+          <div class="tw-dialog-header flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 shrink-0">
             <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-              <i class="ra ra-map text-xl sm:text-2xl text-emerald-500 shrink-0"></i>
+              <i class="ra ra-map tw-dialog-eyebrow text-xl sm:text-2xl shrink-0"></i>
               <div class="min-w-0">
-                <h2 class="text-base sm:text-xl font-bold text-white leading-tight">World Map</h2>
-                <p class="hidden sm:block text-xs text-slate-400 mt-0.5">Tactical Sketch of your journey</p>
+                <h2 class="tw-dialog-title text-base sm:text-2xl">World Map</h2>
+                <p class="tw-muted hidden sm:block text-xs mt-0.5">Tactical Sketch of your journey</p>
               </div>
             </div>
             <div class="flex items-center gap-2 sm:gap-4 shrink-0">
               <!-- Legend -->
-              <div class="hidden sm:flex items-center gap-4 text-xxs text-slate-400">
+              <div class="tw-muted hidden sm:flex items-center gap-4 text-xxs">
                 <span class="flex items-center gap-1.5">
                   <span class="inline-block w-3 h-3 rounded-md bg-emerald-950 border border-emerald-500 shadow-sm shadow-emerald-500/50"></span> Current Location
                 </span>
@@ -546,30 +554,30 @@ onMounted(() => {
               </div>
 
               <!-- Map Controls -->
-              <div class="flex items-center bg-slate-800/50 rounded-full px-1.5 py-1 border border-slate-700/50 gap-0.5 sm:gap-1">
+              <div class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !px-1.5 !py-1 gap-0.5 sm:gap-1">
                 <button
                   @click="zoom = Math.max(0.2, zoom - 0.1)"
-                  class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                  class="tw-map-tool p-1.5 rounded-full transition-colors"
                   title="Zoom Out"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
                   </svg>
                 </button>
-                <span class="text-xxs font-mono text-slate-500 min-w-[2.5rem] sm:min-w-[3rem] text-center">{{ Math.round(zoom * 100) }}%</span>
+                <span class="text-xxs font-mono min-w-[2.5rem] sm:min-w-[3rem] text-center">{{ Math.round(zoom * 100) }}%</span>
                 <button
                   @click="zoom = Math.min(3, zoom + 0.1)"
-                  class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                  class="tw-map-tool p-1.5 rounded-full transition-colors"
                   title="Zoom In"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                   </svg>
                 </button>
-                <div class="w-px h-4 bg-slate-700 mx-0.5 sm:mx-1"></div>
+                <div class="w-px h-4 bg-current opacity-30 mx-0.5 sm:mx-1"></div>
                 <button
                   @click="resetView"
-                  class="p-1.5 rounded-full text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
+                  class="tw-map-tool p-1.5 rounded-full transition-colors"
                   title="Reset View"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -580,8 +588,9 @@ onMounted(() => {
 
               <button
                 @click="emit('close')"
-                class="p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                class="tw-dialog-icon-button p-1.5 sm:p-2"
                 title="Close"
+                aria-label="Close"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -591,7 +600,7 @@ onMounted(() => {
           </div>
 
           <!-- Map Container -->
-          <div class="flex-grow overflow-auto p-2 sm:p-6 relative bg-slate-950 bg-radial-gradient" ref="mapContainer">
+          <div class="flex-grow overflow-auto p-2 sm:p-6 relative bg-radial-gradient" ref="mapContainer">
             <!-- Empty state -->
             <div
               v-if="!mapData"
@@ -886,7 +895,7 @@ onMounted(() => {
           </div>
 
           <!-- Footer hint -->
-          <div class="px-4 sm:px-8 py-2 sm:py-3 border-t border-slate-800 text-[11px] sm:text-xs text-slate-600 flex justify-between items-center gap-2 shrink-0">
+          <div class="tw-dialog-divider tw-muted px-4 sm:px-8 py-2 sm:py-3 border-t text-[11px] sm:text-xs flex justify-between items-center gap-2 shrink-0">
             <div class="flex gap-3 sm:gap-4 min-w-0">
               <span class="whitespace-nowrap"><i class="ra ra-plain-dagger mr-1"></i> Drag to pan</span>
               <span class="hidden sm:inline whitespace-nowrap"><i class="ra ra-scroll-unfurled mr-1"></i> Scroll to zoom</span>
@@ -901,8 +910,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* The map table stays dark in every skin (the overlay color), so edges and room cards read well. */
 .bg-radial-gradient {
-  background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--tw-overlay-bg) 80%, #ffffff 6%) 0%,
+    var(--tw-overlay-bg) 100%
+  );
+}
+
+.tw-map-tool:hover {
+  background: color-mix(in srgb, var(--tw-accent) 20%, transparent);
+  color: var(--tw-accent-soft);
 }
 
 .will-change-transform {

@@ -1,44 +1,60 @@
 <template>
-  <div v-if="isOpen" class="quests-modal-overlay" @click.self="close">
-    <div class="quests-modal-content glassmorphism">
-      <header class="modal-header">
+  <div
+    v-if="isOpen"
+    class="quests-modal-overlay tw-skin tw-dialog-backdrop"
+    :data-skin="activeSkin"
+    :style="skinStyle"
+    @click.self="close"
+  >
+    <div class="quests-modal-content tw-dialog" role="dialog" aria-modal="true" aria-label="Quest Log">
+      <header class="modal-header tw-dialog-header">
         <div class="header-title">
-          <img src="@/assets/svg/fantasy-spellbook.svg" alt="Quests" class="header-icon" />
-          <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">Quest Log</h3>
+          <img src="@/assets/svg/fantasy-spellbook.svg" alt="" class="header-icon" />
+          <h3 class="tw-dialog-title text-xl md:text-3xl">Quest Log</h3>
         </div>
-        <button class="close-btn" @click="close">&times;</button>
+        <button type="button" class="tw-dialog-icon-button p-2" aria-label="Close" @click="close">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
       </header>
 
-      <div class="modal-tabs">
-        <button 
-          :class="['tab-btn', { active: activeTab === 'quests' }]" 
+      <div class="modal-tabs tw-dialog-divider" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'quests'"
+          :class="['tw-tab', { 'tw-tab--active': activeTab === 'quests' }]"
           @click="activeTab = 'quests'"
         >
           Quests
         </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'awards' }]" 
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'awards'"
+          :class="['tw-tab', { 'tw-tab--active': activeTab === 'awards' }]"
           @click="activeTab = 'awards'"
         >
           Awards
         </button>
 
-        <label class="ml-auto flex items-center gap-2 cursor-pointer text-xxs md:text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 select-none transition-colors pr-2">
-          <input 
-            type="checkbox" 
-            :checked="!trackerHidden" 
+        <label class="tw-muted ml-auto flex items-center gap-2 cursor-pointer text-xxs md:text-xs font-bold uppercase tracking-wider select-none pr-2">
+          <input
+            type="checkbox"
+            :checked="!trackerHidden"
             @change="$emit('toggle-tracker', !$event.target.checked)"
-            class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1 w-3.5 h-3.5 cursor-pointer"
+            class="tracker-checkbox w-3.5 h-3.5 cursor-pointer"
           />
           Tracker on Screen
         </label>
       </div>
 
-      <div class="quests-body">
+      <div class="quests-body tw-dialog-scroll">
         <template v-if="activeTab === 'quests'">
           <div class="quests-section" v-if="activeSequence">
             <h3><span class="section-icon">📜</span> Current Chapter</h3>
-            <div class="quest-card open">
+            <div class="quest-card tw-card open">
               <div class="quest-info">
                 <div class="quest-header">
                   <div class="title-group">
@@ -58,8 +74,8 @@
 
           <div class="quests-section">
             <h3><span class="section-icon">⚔️</span> Quests</h3>
-            <div v-if="quests.length === 0" class="empty-state">No quests available.</div>
-            <div v-for="quest in quests" :key="quest.id" :class="['quest-card', quest.status]">
+            <div v-if="quests.length === 0" class="empty-state tw-dialog-slot">No quests available.</div>
+            <div v-for="quest in quests" :key="quest.id" :class="['quest-card', 'tw-card', quest.status]">
               <div class="quest-info">
                 <div class="quest-header">
                   <div class="title-group">
@@ -76,8 +92,8 @@
                   </div>
                   <button 
                     v-if="!quest.status || quest.status === 'open'" 
-                    class="track-btn" 
-                    :class="{ active: trackedQuestId === quest.id }"
+                    class="tw-dialog-button"
+                    :class="{ 'tw-dialog-button--ghost': trackedQuestId !== quest.id }"
                     @click="toggleTrack(quest.id)"
                   >
                     {{ trackedQuestId === quest.id ? 'Tracking' : 'Track' }}
@@ -90,8 +106,8 @@
 
         <template v-else-if="activeTab === 'awards'">
           <div class="awards-grid">
-            <div v-if="awards.length === 0" class="empty-state">No awards defined for this adventure.</div>
-            <div v-for="award in awards" :key="award.key" :class="['award-tile', award.tier, { earned: award.is_earned, locked: !award.is_earned }]">
+            <div v-if="awards.length === 0" class="empty-state tw-dialog-slot">No awards defined for this adventure.</div>
+            <div v-for="award in awards" :key="award.key" :class="['award-tile', 'tw-card', award.tier, { earned: award.is_earned, locked: !award.is_earned }]">
               <div class="award-icon-wrapper">
                 <i class="ra ra-trophy award-icon"></i>
                 <div v-if="award.is_earned" class="earned-check">
@@ -116,6 +132,7 @@
 
 <script>
 import { formatObjectIds } from '@/utils/editor_utils'
+import { useDialogSkin } from '@/skins/dialogSkin'
 
 export default {
   name: "QuestsModal",
@@ -137,6 +154,9 @@ export default {
     trackerHidden: Boolean
   },
   emits: ["close", "track-quest", "toggle-tracker"],
+  setup() {
+    return useDialogSkin();
+  },
   data() {
     return {
       activeTab: 'quests'
@@ -161,28 +181,19 @@ export default {
 <style scoped>
 .quests-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
+  inset: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  backdrop-filter: blur(8px);
 }
 
 .quests-modal-content {
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
-  background: linear-gradient(135deg, rgba(30, 30, 45, 0.95), rgba(15, 15, 25, 0.98));
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   animation: modal-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -194,11 +205,9 @@ export default {
 
 .modal-header {
   padding: 20px 25px;
-  background: rgba(255, 255, 255, 0.03);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .header-title {
@@ -210,28 +219,19 @@ export default {
 .header-icon {
   width: 64px;
   height: 64px;
-  filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.5));
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--tw-accent) 50%, transparent));
 }
 
-.modal-header h2 {
-  margin: 0;
-  font-family: 'Outfit', sans-serif;
-  color: #fff;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+.modal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 25px;
+  border-bottom-width: 1px;
 }
 
-.close-btn {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 28px;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.close-btn:hover {
-  color: #fff;
+.tracker-checkbox {
+  accent-color: var(--tw-accent);
 }
 
 .quests-body {
@@ -245,10 +245,11 @@ export default {
 .quests-section h3 {
   margin-top: 0;
   margin-bottom: 15px;
+  font-family: var(--tw-tab-font);
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--tw-panel-muted);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -262,29 +263,20 @@ export default {
 .empty-state {
   padding: 20px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.2);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
   font-style: italic;
 }
 
 .quest-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 15px;
   padding: 18px;
   margin-bottom: 15px;
-  transition: all 0.2s;
 }
 
-.quest-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+.quest-card.open {
+  border-left: 4px solid var(--tw-accent);
 }
 
 .quest-card.completed {
   opacity: 0.6;
-  background: rgba(0, 0, 0, 0.2);
 }
 
 .title-group {
@@ -301,12 +293,15 @@ export default {
   letter-spacing: 1px;
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--tw-card-muted);
+}
+
+.status-badge.open {
+  color: var(--tw-accent);
 }
 
 .status-badge.completed {
-  background: rgba(16, 185, 129, 0.1);
   color: #10b981;
 }
 
@@ -322,86 +317,39 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
 .quest-title {
+  font-family: var(--tw-font-overlay-title);
   font-weight: 600;
-  color: #e2e8f0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
 }
 
 .quest-reward {
+  flex-shrink: 0;
   font-size: 0.85rem;
-  background: rgba(124, 58, 237, 0.2);
-  color: #a78bfa;
+  background: color-mix(in srgb, var(--tw-accent) 18%, transparent);
+  color: var(--tw-accent);
   padding: 4px 10px;
   border-radius: 20px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .quest-desc {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--tw-card-ink);
+  font-family: var(--tw-font-body);
   font-size: 1.05rem;
   line-height: 1.6;
   margin: 0 0 15px 0;
+  opacity: 0.9;
 }
 
 .quest-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.track-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.track-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.track-btn.active {
-  background: #7c3aed;
-  border-color: #7c3aed;
-  box-shadow: 0 0 15px rgba(124, 58, 237, 0.4);
-}
-
-.modal-tabs {
-  display: flex;
-  padding: 0 25px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.tab-btn {
-  padding: 12px 20px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 1.4rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
-
-.tab-btn:hover {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.tab-btn.active {
-  color: #7c3aed;
-  border-bottom-color: #7c3aed;
 }
 
 .awards-grid {
@@ -414,32 +362,19 @@ export default {
   display: flex;
   gap: 20px;
   padding: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 15px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .award-tile:hover {
-  background: rgba(255, 255, 255, 0.05);
   transform: translateY(-2px);
 }
 
 .award-tile.earned {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(16, 185, 129, 0.02));
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .award-tile.locked {
   opacity: 0.6;
   filter: grayscale(0.45);
-}
-
-.award-tile.locked .award-title,
-.award-tile.locked .award-desc,
-.award-tile.locked .award-tier,
-.award-tile.locked .req-text {
-  color: rgba(255, 255, 255, 0.55);
 }
 
 .award-icon-wrapper {
@@ -450,7 +385,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--tw-card-ink) 8%, transparent);
   border-radius: 12px;
 }
 
@@ -459,8 +394,8 @@ export default {
 }
 
 .bronze .award-icon { color: #cd7f32; filter: drop-shadow(0 0 10px rgba(205, 127, 50, 0.4)); }
-.silver .award-icon { color: #c0c0c0; filter: drop-shadow(0 0 10px rgba(192, 192, 192, 0.4)); }
-.gold .award-icon { color: #ffd700; filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4)); }
+.silver .award-icon { color: #a8a8a8; filter: drop-shadow(0 0 10px rgba(192, 192, 192, 0.4)); }
+.gold .award-icon { color: #e6b800; filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4)); }
 .negative .award-icon { color: #ef4444; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.5)); }
 
 .earned-check {
@@ -481,18 +416,20 @@ export default {
 
 .award-content {
   flex-grow: 1;
+  min-width: 0;
 }
 
 .award-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
 .award-title {
+  font-family: var(--tw-font-overlay-title);
   font-weight: 600;
-  color: #fff;
   font-size: 1.1rem;
 }
 
@@ -501,37 +438,19 @@ export default {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  opacity: 0.5;
+  color: var(--tw-card-muted);
 }
 
 .award-desc {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--tw-card-muted);
   font-size: 0.9rem;
   margin-bottom: 12px;
-}
-
-.award-requirement {
-  font-size: 0.8rem;
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.req-label {
-  color: rgba(255, 255, 255, 0.3);
-  margin-right: 8px;
-  font-weight: 600;
-}
-
-.req-text {
-  color: rgba(255, 255, 255, 0.7);
 }
 
 .earned-label {
   display: inline-block;
   padding: 4px 12px;
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.15);
   color: #10b981;
   border-radius: 20px;
   font-size: 0.7rem;
@@ -539,23 +458,4 @@ export default {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-
-/* Custom Scrollbar */
-.quests-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.quests-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.quests-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.quests-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
 </style>
-

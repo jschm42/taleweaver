@@ -18,7 +18,8 @@ import ImmersiveSystemMessage from '@/components/game/immersive/ImmersiveSystemM
 import ImmersiveSystemNote from './ImmersiveSystemNote.vue'
 import { isDebugMessage, isTurnErrorMessage } from './systemMessages'
 import type { ChatMessage } from '@/types'
-import { Volume2, VolumeX, Brain } from 'lucide-vue-next'
+import { Volume2, VolumeX } from 'lucide-vue-next'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 
 const props = defineProps<{
   exchange: ComicExchange
@@ -180,35 +181,20 @@ function getEntityForHover(nameOrEntity: any) {
         </div>
       </div>
 
-      <!-- Animated Brain Thinking Indicator right next to the bubble -->
-      <div
+      <!-- Thinking indicator right next to the bubble -->
+      <ThinkingIndicator
         v-if="props.isLatest && props.isEvaluating"
-        class="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-amber-950/80 border border-amber-400/70 text-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.3)] backdrop-blur-xl animate-fade-in shrink-0 self-center select-none"
-        :title="props.statusText || 'Thinking & Validating rules...'"
-      >
-        <div class="relative flex items-center justify-center w-5 h-5">
-          <div class="absolute inset-0 rounded-full bg-amber-400/20 animate-ping"></div>
-          <Brain class="w-4 h-4 text-amber-400 animate-pulse" />
-        </div>
-        <span class="text-xs font-black uppercase tracking-wider text-amber-300">
-          {{ props.statusText || 'Thinking...' }}
-        </span>
-      </div>
+        class="self-center"
+        :status-text="props.statusText"
+      />
     </div>
 
-    <!-- Fallback Brain Thinking Indicator if evaluating without a user message -->
-    <div
+    <!-- Fallback thinking indicator if evaluating without a user message -->
+    <ThinkingIndicator
       v-else-if="props.isLatest && props.isEvaluating"
-      class="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-amber-950/80 border border-amber-400/70 text-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.3)] backdrop-blur-xl animate-fade-in shrink-0 self-start my-1 select-none"
-    >
-      <div class="relative flex items-center justify-center w-5 h-5">
-        <div class="absolute inset-0 rounded-full bg-amber-400/20 animate-ping"></div>
-        <Brain class="w-4 h-4 text-amber-400 animate-pulse" />
-      </div>
-      <span class="text-xs font-black uppercase tracking-wider text-amber-300">
-        {{ props.statusText || 'Thinking...' }}
-      </span>
-    </div>
+      class="self-start my-1"
+      :status-text="props.statusText"
+    />
 
     <!-- 2) ENGINE EVENTS BEFORE THE NARRATION (compact notes; failed turns keep Retry/Cancel) -->
     <template v-for="(event, sysIdx) in leadingEvents" :key="event.msg.id || `leading-${sysIdx}`">

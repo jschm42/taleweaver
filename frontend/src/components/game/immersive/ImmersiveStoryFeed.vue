@@ -53,18 +53,22 @@ watch(() => props.activeTurnIndex, () => {
   })
 })
 
+function scrollToLatestExchange() {
+  const exchanges = storyContainerRef.value?.querySelectorAll('[data-story-exchange]')
+  const latest = exchanges?.[exchanges.length - 1] as HTMLElement | undefined
+  latest?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+}
+
 // New exchange on the page being followed: scroll to its beginning.
 watch(
   () => props.activeTurn?.exchanges.length ?? 0,
   (count, previousCount) => {
     if (props.viewingTurnIndex !== null || count <= previousCount) return
-    nextTick(() => {
-      const exchanges = storyContainerRef.value?.querySelectorAll('[data-story-exchange]')
-      const latest = exchanges?.[exchanges.length - 1] as HTMLElement | undefined
-      latest?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    })
+    nextTick(scrollToLatestExchange)
   }
 )
+
+defineExpose({ scrollToLatestExchange })
 
 const hasPager = computed(() => props.gameTurns.length > 1)
 

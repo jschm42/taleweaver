@@ -42,28 +42,28 @@ function unlockConditions(raw: SpecialAttack): string[] {
 
 <template>
   <div class="flex flex-col gap-5">
-    <div v-if="!specials.length" class="flex-grow flex flex-col items-center justify-center p-8 text-center bg-slate-950/40 rounded-3xl border border-slate-800/60">
-      <i class="ra ra-crystal-wand text-4xl text-slate-500 mb-3"></i>
-      <h4 class="text-lg font-black text-white uppercase tracking-tight font-display">No Special Attacks</h4>
-      <p class="text-xs sm:text-sm text-slate-400 max-w-md">Your character relies on plain weapon attacks for now.</p>
+    <div v-if="!specials.length" class="tw-dialog-slot !border-solid flex-grow flex flex-col items-center justify-center p-8 text-center">
+      <i class="ra ra-crystal-wand text-4xl tw-muted mb-3"></i>
+      <h4 class="tw-dialog-title text-lg">No Special Attacks</h4>
+      <p class="tw-muted text-xs sm:text-sm max-w-md">Your character relies on plain weapon attacks for now.</p>
     </div>
 
     <section v-if="available.length" class="space-y-3">
-      <h4 class="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest">Ready to use</h4>
+      <h4 class="tw-panel-title tw-muted">Ready to use</h4>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <article v-for="s in available" :key="s.id" class="p-4 rounded-2xl border border-violet-500/30 bg-violet-950/20 flex gap-3">
-          <div class="w-10 h-10 rounded-xl border border-violet-500/40 bg-slate-950 flex items-center justify-center shrink-0">
-            <i :class="['ra text-lg text-violet-300', CATEGORY_META[s.category].icon]"></i>
+        <article v-for="s in available" :key="s.id" class="tw-card p-4 border-l-4 !border-l-violet-500 flex gap-3">
+          <div class="w-10 h-10 rounded-xl border border-violet-500/40 bg-violet-500/15 flex items-center justify-center shrink-0">
+            <i :class="['ra text-lg text-violet-500', CATEGORY_META[s.category].icon]"></i>
           </div>
           <div class="min-w-0 space-y-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-bold text-white">{{ s.name }}</span>
-              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-400/30 text-violet-200">{{ costLabel(s) }}</span>
-              <span class="text-[10px] font-mono text-slate-400">{{ checkLabel(s) }}</span>
+              <span class="font-bold">{{ s.name }}</span>
+              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/40 text-violet-500">{{ costLabel(s) }}</span>
+              <span class="tw-muted text-[10px] font-mono">{{ checkLabel(s) }}</span>
             </div>
-            <p v-if="s.description" class="text-xs text-slate-300">{{ s.description }}</p>
+            <p v-if="s.description" class="text-xs">{{ s.description }}</p>
             <ul class="flex flex-wrap gap-1.5">
-              <li v-for="line in effectLines(s)" :key="line" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900/80 border border-white/5 text-slate-300">{{ line }}</li>
+              <li v-for="line in effectLines(s)" :key="line" class="tw-dialog-chip">{{ line }}</li>
             </ul>
           </div>
         </article>
@@ -71,15 +71,15 @@ function unlockConditions(raw: SpecialAttack): string[] {
     </section>
 
     <section v-if="locked.length" class="space-y-3">
-      <h4 class="text-xs sm:text-sm font-black text-slate-500 uppercase tracking-widest">Locked</h4>
+      <h4 class="tw-panel-title tw-muted">Locked</h4>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <article v-for="s in locked" :key="s.id" class="p-4 rounded-2xl border border-slate-800 bg-slate-950/50 flex gap-3 opacity-80">
-          <div class="w-10 h-10 rounded-xl border border-slate-700 bg-slate-950 flex items-center justify-center shrink-0">
-            <Lock class="w-4 h-4 text-slate-500" />
+        <article v-for="s in locked" :key="s.id" class="tw-card p-4 flex gap-3 opacity-70">
+          <div class="tw-dialog-slot w-10 h-10 flex items-center justify-center shrink-0">
+            <Lock class="w-4 h-4 tw-muted" />
           </div>
           <div class="min-w-0 space-y-1">
-            <span class="font-bold text-slate-300">{{ s.name }}</span>
-            <p class="text-xs text-slate-500">Unlocks through your progress in the story.</p>
+            <span class="font-bold">{{ s.name }}</span>
+            <p class="tw-muted text-xs">Unlocks through your progress in the story.</p>
             <p v-if="isDebug && unlockConditions(s.raw).length" class="text-[10px] font-mono text-amber-400/80 break-words">
               DEBUG: {{ unlockConditions(s.raw).join(' · ') }}
             </p>

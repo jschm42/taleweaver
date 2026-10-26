@@ -196,6 +196,9 @@ defineExpose({
     })
   },
   insertSayCommand,
+  focus: () => {
+    inputEl.value?.focus()
+  },
 })
 </script>
 
