@@ -23,6 +23,7 @@ import StoryTabPanel from './immersive/tabs/StoryTabPanel.vue'
 import SceneImageViewer from './immersive/SceneImageViewer.vue'
 import { Image as ImageIcon } from 'lucide-vue-next'
 import HoverRevealHeader from './immersive/HoverRevealHeader.vue'
+import SpeechControls from './immersive/SpeechControls.vue'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
@@ -414,6 +415,12 @@ defineExpose({
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->
     <footer class="tw-footer relative z-20 flex flex-col bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
+      <!-- Speech playback controls float centered above the footer while something is read aloud
+           (the right corner belongs to the story feed's "scroll to latest" button). -->
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-30 max-w-[calc(100%-1.5rem)]">
+        <SpeechControls />
+      </div>
+
       <!-- Action buttons slide in when the pointer is over the footer (always shown on touch). -->
       <div class="tw-action-reveal" :class="{ 'is-pinned': actionBarPinned }">
         <ImmersiveActionBar

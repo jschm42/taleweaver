@@ -88,3 +88,20 @@ def narration_style_reminder(style: object) -> str:
     """Per-turn one-line length reminder; unknown values fall back to the default style."""
     key = style if is_narration_style(style) else DEFAULT_NARRATION_STYLE
     return _STYLE_REMINDERS[str(key)]
+
+
+# Hard cap on narration tokens per style: a safety net for models that ignore the length rules
+# and run on. Generous enough that a model following the rules never reaches it.
+_STYLE_MAX_TOKENS: Final[dict[str, int]] = {
+    "terse": 300,
+    "dialogue": 600,
+    "balanced": 800,
+    "rich": 1200,
+    "epic": 2000,
+}
+
+
+def narration_max_tokens(style: object) -> int:
+    """Token cap for one narration answer; unknown values fall back to the default style."""
+    key = style if is_narration_style(style) else DEFAULT_NARRATION_STYLE
+    return _STYLE_MAX_TOKENS[str(key)]

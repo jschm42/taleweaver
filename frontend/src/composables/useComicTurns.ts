@@ -71,6 +71,9 @@ const NON_SPEAKER_LABELS = new Set([
 // Labels the model sometimes puts in front of plain narration ("Narrator:", "**GM:**").
 // A leading voice tag is captured so it survives the replacement.
 const NARRATOR_LABEL = /^(\[[^\]\n]+\]\s*)?\**(?:narrator|narration|game master|gm)\**\s*:\**\s*/i
+// Leftovers of weaker models the narration prompt forbids: braces and a closing "What will you do?".
+const STRAY_BRACES = /[{}]+/g
+const PLAYER_PROMPT_LINE = /^(?:\[[^\]\n]+\]\s*)*what (?:will|do|would) you do(?: next| now)?\s*\?*$/i
 
 export function parseUserMessage(
   msg: ChatMessage | null | undefined,
@@ -240,8 +243,8 @@ export function parseAssistantContent(
 
   for (const rawLine of lines) {
     // "Narrator: ..." is a format leak, not a character; keep only the prose.
-    const line = rawLine.trim().replace(NARRATOR_LABEL, '$1').trim()
-    if (!line) continue
+    const line = rawLine.trim().replace(NARRATOR_LABEL, '$1').replace(STRAY_BRACES, '').trim()
+    if (!line || PLAYER_PROMPT_LINE.test(line)) continue
 
     const match = line.match(speechRegex)
     if (match) {
@@ -365,6 +368,9 @@ export function renderFormattedHtml(text: string): string {
   })
   const withBolds = withVoiceTags.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-bold">$1</strong>')
   const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="comic-object-tag">$1</span>')
+    // Merged narration paragraphs keep their breaks instead of running together into one block.
+    .replace(/\n{2,}/g, '<br><br>')
+    .replace(/\n/g, '<br>')
 
   return DOMPurify.sanitize(withObjectIds, {
     ALLOWED_TAGS: ['span', 'strong', 'em', 'br', 'div'],

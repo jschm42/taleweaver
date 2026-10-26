@@ -20,7 +20,11 @@ from backend.api.routes.adventures.agent_commands import (
 )
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.narration_budget import log_narration_budget
-from backend.core.narration_styles import narration_style_reminder, narration_style_rules
+from backend.core.narration_styles import (
+    narration_max_tokens,
+    narration_style_reminder,
+    narration_style_rules,
+)
 from backend.core.voice_tags import vocal_tag_reminder
 from backend.engine.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.turn_helpers import (
@@ -1827,6 +1831,7 @@ class GameTurnManager:
                 user_msg,
                 complex_model,
                 messages=narration_messages,
+                max_tokens=narration_max_tokens(getattr(self.state, "narration_style", None)),
             )
 
             async for chunk in stream:

@@ -7,6 +7,7 @@ from backend.core import prompts
 from backend.core.narration_styles import (
     DEFAULT_NARRATION_STYLE,
     is_narration_style,
+    narration_max_tokens,
     narration_style_reminder,
     narration_style_rules,
 )
@@ -119,3 +120,21 @@ def test_every_style_has_a_turn_length_reminder(style):
 
     # Assert
     assert reminder.startswith("LENGTH:")
+
+
+@pytest.mark.parametrize("style", ["terse", "dialogue", "balanced", "rich", "epic", None])
+def test_every_style_caps_narration_tokens(style):
+    # Arrange / Act
+    cap = narration_max_tokens(style)
+
+    # Assert
+    assert 200 <= cap <= 2000
+
+
+def test_longer_styles_get_more_room():
+    # Arrange / Act / Assert
+    assert (
+        narration_max_tokens("terse")
+        < narration_max_tokens("dialogue")
+        < narration_max_tokens("epic")
+    )

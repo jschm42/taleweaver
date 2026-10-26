@@ -1055,9 +1055,11 @@ class GameMasterLLM:
         operation: Optional[str] = None,
         phase: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
+        max_tokens: Optional[int] = None,
     ):
         """
-        Streams a free narrative task.
+        Streams a free narrative task. ``max_tokens`` caps the visible answer (e.g. per
+        narration style); thinking tokens come on top when thinking is enabled.
         """
         if messages is None:
             messages = [
@@ -1066,12 +1068,12 @@ class GameMasterLLM:
             ]
 
         normalized_model = self._normalize_model(model)
+        answer_tokens = min(max_tokens, self.max_tokens) if max_tokens else self.max_tokens
 
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": self.max_tokens
-            + (self.max_thinking_tokens if self.enable_thinking else 0),
+            "max_tokens": answer_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
             "stream": True,
             # Report token usage (incl. cached prompt tokens) in the final stream chunk.
             "stream_options": {"include_usage": True},

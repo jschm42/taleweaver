@@ -35,10 +35,16 @@ function getMessageSignature(message: { id?: string; content: string }, index: n
   return `idx:${index}|${hash}`
 }
 
+/**
+ * The newest GM message that answers the player's latest action. Older messages never count:
+ * otherwise the previous turn would be read again while the new narration is still on its way
+ * (e.g. when history loaded after auto-speech was switched on and was never marked as spoken).
+ */
 function findLatestSpeakableAssistantMessage(messages: any[]): { index: number; message: { id?: string; timestamp?: Date; content: string } } | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const candidate = messages[index]
     if (!candidate) continue
+    if (candidate.role === 'user') return null
     if (candidate.role !== 'assistant') continue
     if (candidate.is_debug) continue
     if (!String(candidate.content || '').trim()) continue
@@ -113,6 +119,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
   // Pre-seed any existing messages on initial mount so old log history isn't auto-spoken.
   seedExistingMessagesAsSpoken()
+  // History usually arrives after mount (the list is replaced as a whole): it is old, not new.
+  watch(() => messages.value, () => seedExistingMessagesAsSpoken())
 
   function speakLatestAssistantMessage(params: { force?: boolean } = {}): void {
     const { force = false } = params

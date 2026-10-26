@@ -137,6 +137,8 @@ class AudioService {
 
   public isUnlocked = ref(false)
   public isPlaying = ref(false)
+  public isPaused = ref(false)
+  private pauseWaiters: Array<() => void> = []
   public isGenerating = ref(false)
   public currentlyGeneratingContent = ref<string | null>(null)
   public lastError = ref<string | null>(null)
@@ -285,8 +287,11 @@ class AudioService {
     }
 
     await new Promise<void>((resolve, reject) => {
-      // stop() pauses the element, which never fires 'ended'; let it settle the promise instead.
-      this.resolveCurrentPlayback = resolve
+      // stop()/skip() pause the element, which never fires 'ended'; let them settle the promise instead.
+      this.resolveCurrentPlayback = () => {
+        releaseObjectUrl()
+        resolve()
+      }
       audio.onended = () => {
         releaseObjectUrl()
         resolve()
@@ -442,6 +447,9 @@ class AudioService {
           this.isGenerating.value = false
           this.currentlyGeneratingContent.value = null
         }
+        // Paused between lines: hold the next one until the player continues.
+        await this.waitWhilePaused()
+        if (token !== this.playbackToken) return
         if (playable) {
           await this.playPrepared(playable, segment, token).catch((err) => {
             this.logDebug('TTS segment playback failed; continuing', { error: String(err) })
@@ -542,6 +550,59 @@ class AudioService {
     }
   }
 
+  /** Pauses speech mid-line; the queue waits until resume(). */
+  pause() {
+    if (this.isPaused.value) return
+    this.isPaused.value = true
+    this.currentAudio?.pause()
+    if (this.audioContext?.state === 'running') {
+      this.audioContext.suspend().catch(() => {})
+    }
+  }
+
+  resume() {
+    if (!this.isPaused.value) return
+    this.isPaused.value = false
+    if (this.audioContext?.state === 'suspended') {
+      this.audioContext.resume().catch(() => {})
+    }
+    this.currentAudio?.play().catch((err) => this.logDebug('TTS resume failed', { error: String(err) }))
+    this.releasePauseWaiters()
+  }
+
+  togglePause() {
+    if (this.isPaused.value) {
+      this.resume()
+      return
+    }
+    this.pause()
+  }
+
+  /** Ends the current line and continues with the next one. */
+  skip() {
+    this.resume()
+    if (this.currentBufferSource) {
+      try { this.currentBufferSource.stop() } catch { /* already stopped */ }
+    }
+    if (this.currentAudio) {
+      this.currentAudio.pause()
+      const settle = this.resolveCurrentPlayback
+      this.resolveCurrentPlayback = null
+      settle?.()
+    }
+  }
+
+  private waitWhilePaused(): Promise<void> {
+    if (!this.isPaused.value) return Promise.resolve()
+    return new Promise<void>((resolve) => this.pauseWaiters.push(resolve))
+  }
+
+  private releasePauseWaiters() {
+    const waiters = this.pauseWaiters
+    this.pauseWaiters = []
+    for (const release of waiters) release()
+  }
+
   /** Forget whether the provider streams (call after the speech settings change). */
   public resetProviderCapabilities(): void {
     this.streamingAvailable = null
@@ -550,6 +611,12 @@ class AudioService {
   stop() {
     this.playbackToken += 1
     this.segmentQueue = []
+    // A paused queue is dropped too; release it and leave the audio context usable.
+    if (this.isPaused.value) {
+      this.isPaused.value = false
+      if (this.audioContext?.state === 'suspended') this.audioContext.resume().catch(() => {})
+      this.releasePauseWaiters()
+    }
     // Prepared streams keep downloading (and costing credits) unless released.
     for (const element of this.streamElements) releaseStreamElement(element)
     this.streamElements.clear()
