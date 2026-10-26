@@ -21,8 +21,8 @@ import ImmersiveCharacterStage from './immersive/ImmersiveCharacterStage.vue'
 import ImmersiveStoryTabs from './immersive/ImmersiveStoryTabs.vue'
 import StoryTabPanel from './immersive/tabs/StoryTabPanel.vue'
 import SceneImageViewer from './immersive/SceneImageViewer.vue'
-import { ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-vue-next'
-import { isGameHeaderCollapsed, toggleGameHeader } from '@/store/layout'
+import { Image as ImageIcon } from 'lucide-vue-next'
+import HoverRevealHeader from './immersive/HoverRevealHeader.vue'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
@@ -280,10 +280,9 @@ defineExpose({
       <div class="tw-scene-tint"></div>
     </div>
 
-    <!-- 2. TOP ATMOSPHERIC HEADER BAR (collapsible focus mode) -->
-    <div class="relative z-30 shrink-0">
+    <!-- 2. TOP ATMOSPHERIC HEADER BAR (shown on hover unless pinned) -->
+    <HoverRevealHeader>
       <ImmersiveHeader
-        v-if="!isGameHeaderCollapsed"
         :scene-name="props.currentSceneName || props.sheet?.current_scene"
         :active-sequence="props.activeSequence"
         :adventure-title="props.sheet?.adventure_title"
@@ -302,18 +301,7 @@ defineExpose({
         @open-debug="emit('openDebug')"
         @exit-session="emit('exitSession')"
       />
-      <button
-        type="button"
-        class="absolute left-1/2 top-full -translate-x-1/2 flex items-center gap-1 rounded-b-lg border border-t-0 border-slate-700/60 bg-slate-950/70 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 backdrop-blur-md hover:text-slate-100 transition-colors"
-        :title="isGameHeaderCollapsed ? 'Show header' : 'Hide header for more room'"
-        :aria-expanded="!isGameHeaderCollapsed"
-        @click="toggleGameHeader"
-      >
-        <ChevronDown v-if="isGameHeaderCollapsed" class="w-3.5 h-3.5" />
-        <ChevronUp v-else class="w-3.5 h-3.5" />
-        <span v-if="isGameHeaderCollapsed" class="hidden sm:inline">Menu</span>
-      </button>
-    </div>
+    </HoverRevealHeader>
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->
     <div class="relative z-10 flex-grow min-h-0 flex flex-row gap-2 sm:gap-4 p-2 sm:p-4 lg:p-6 overflow-hidden">
@@ -332,8 +320,8 @@ defineExpose({
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
         <!-- Full scene artwork (top-right corner of the story area) -->
         <!-- Wrapper owns the positioning: .tw-tab sets position: relative on the button itself. -->
-        <!-- z-30 matches the story tabs; travel (z-40) and sequence (z-[70]) overlays must cover it. -->
-        <div v-if="activeSceneImageUrl" class="absolute right-0 top-0 z-30">
+        <!-- z-[35]: above the story tabs (z-30, full width, rendered later), below travel (z-40) and sequence (z-[70]) overlays. -->
+        <div v-if="activeSceneImageUrl" class="absolute right-0 top-0 z-[35]">
           <button
             type="button"
             class="tw-tab tw-scene-image-button"

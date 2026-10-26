@@ -10,24 +10,23 @@ export function closeMobileSidebar() {
   isMobileSidebarOpen.value = false
 }
 
-const GAME_HEADER_COLLAPSED_KEY = 'tw_game_header_collapsed'
+const GAME_HEADER_PINNED_KEY = 'tw_game_header_pinned'
 
-function readHeaderCollapsed(): boolean {
+function readHeaderPinned(): boolean {
   try {
-    // Collapsed unless the player expanded it before: more room for the story.
-    return localStorage.getItem(GAME_HEADER_COLLAPSED_KEY) !== 'false'
+    return localStorage.getItem(GAME_HEADER_PINNED_KEY) === 'true'
   } catch {
-    return true
+    return false
   }
 }
 
-/** In-game focus mode: hides the app header and the game header bar until expanded. */
-export const isGameHeaderCollapsed = ref(readHeaderCollapsed())
+/** In-game header: hidden and shown on hover by default; pinned keeps it (and the app header) visible. */
+export const isGameHeaderPinned = ref(readHeaderPinned())
 
-export function toggleGameHeader() {
-  isGameHeaderCollapsed.value = !isGameHeaderCollapsed.value
+export function toggleGameHeaderPin() {
+  isGameHeaderPinned.value = !isGameHeaderPinned.value
   try {
-    localStorage.setItem(GAME_HEADER_COLLAPSED_KEY, String(isGameHeaderCollapsed.value))
+    localStorage.setItem(GAME_HEADER_PINNED_KEY, String(isGameHeaderPinned.value))
   } catch {
     /* storage unavailable (private mode) */
   }

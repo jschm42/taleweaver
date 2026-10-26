@@ -5,14 +5,14 @@ import { authState, clearAuth } from '@/store/auth'
 import { configState } from '@/store/config'
 import ChangeCredentialsModal from '@/components/portal/ChangeCredentialsModal.vue'
 import SetupWizardNavButton from '@/components/setup-wizard/SetupWizardNavButton.vue'
-import { isGameHeaderCollapsed, isMobileSidebarOpen, openMobileSidebar } from '@/store/layout'
+import { isGameHeaderPinned, isMobileSidebarOpen, openMobileSidebar } from '@/store/layout'
 
 const router = useRouter()
 const route = useRoute()
 const isMenuOpen = ref(false)
 const isChangeCredentialsOpen = ref(false)
-// In-game focus mode hides the app header together with the game header bar.
-const isHiddenForFocus = computed(() => route.name === 'game' && isGameHeaderCollapsed.value)
+// In game, the app header only shows while the game header is pinned.
+const isHiddenForFocus = computed(() => route.name === 'game' && !isGameHeaderPinned.value)
 
 function normalizeProfileImageUrl(url: string): string {
   let normalized = (url || '').replace(/\\\\/g, '/')
