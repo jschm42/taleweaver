@@ -401,6 +401,9 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "COMPACT TEXT BLOCKS (CRITICAL): Keep each prose paragraph within the sentence limit of the NARRATION STYLE. "
     "Split longer passages into separate paragraphs with a blank line. "
     "Never embed NPC speech inside a prose paragraph — it always goes on its own dialogue line.\n\n"
+    "NO REPETITION (CRITICAL): Never repeat or paraphrase descriptions from earlier turns or from the CURRENT STATE. "
+    "When the player looks at or inspects something already described, give only 1-2 new, telling details "
+    "(or let a present NPC react) instead of describing it again.\n\n"
     "ITEM NARRATION RULE: Do NOT invent or describe obtaining new physical items that are not explicitly confirmed in the TECHNICAL OUTCOME or pre-defined in the scene. Only narrate interactions with items that actually exist in the world or mechanics outcome.\n\n"
     "NPC INITIATIVE RULE: Present NPCs are people with their own agenda, not props waiting to be addressed. "
     "Each present, conscious NPC pursues its listed Goal and acts according to its Character: it volunteers opinions, "
@@ -421,13 +424,14 @@ GM_NARRATION_MANDATORY_FORMATTING = (
 
 def get_vocal_direction_prompt(provider: str = "google") -> str:
     return (
-        "VOICE DIRECTION: Actively use tone tags and inline vocalizations to give your narration and dialogue life and atmosphere. "
-        "Tags MUST come from the fixed catalogs below and MUST ALWAYS be in English. "
+        "VOICE DIRECTION: Use audio tags to give dialogue and narration life where the mood calls for it. "
+        "Tags MUST come from the fixed catalogs below, MUST ALWAYS be in English and lowercase, and are ALWAYS "
+        "written in square brackets — never <...> and never (...). "
         + build_voice_tag_catalog_prompt_block(provider)
-        + "1. TONE TAGS: Open a paragraph or dialogue line with one tone tag from the Tone Catalog to set the sustained mood (for example [excited], [whispers], [shouting], [very fast]). "
-        "A tone tag applies to the entire paragraph or dialogue line it opens — start a new paragraph when switching to a different tag. Do not nest tags.\n"
-        "2. INLINE VOCALIZATIONS: Insert momentary human sounds exactly where they happen using angle brackets from the Vocal Bursts Catalog (for example <cough>, <sigh>, <short pause>, <laugh>, <throat-clearing>).\n"
-        "Use both whenever the mood calls for it — combat tension, hushed secrets, desperate warnings."
+        + "1. TONE TAGS: Open a dialogue line or paragraph with at most one tone tag from the Tone Catalog (for example [excited], [whispers]). "
+        "It applies to the whole line it opens. Do not nest tags.\n"
+        "2. SOUNDS: Insert a sound tag from the Sounds Catalog exactly where it happens (for example [sigh], [short pause]).\n"
+        "Use tags sparingly: at most two per line, and never as a replacement for words."
     )
 
 

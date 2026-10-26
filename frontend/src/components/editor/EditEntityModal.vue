@@ -8,6 +8,7 @@ import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
+import type { TtsVoiceList } from '@/types'
 import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, ChevronDown, ChevronRight, Edit3 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -77,7 +78,7 @@ const props = defineProps<{
   adventureId?: string
   isCreateEntityMode?: boolean
   npcData?: any
-  availableVoices?: Array<{ name: string; gender?: string; description?: string }>
+  voiceList?: TtsVoiceList | null
 }>()
 
 const emit = defineEmits<{
@@ -915,7 +916,7 @@ const textLogPreviewClass = computed(() => {
               <NpcVoicePicker
                 v-if="context.type === 'npc'"
                 v-model="localForm.voice"
-                :voices="props.availableVoices || []"
+                :voice-list="props.voiceList ?? null"
                 :npc-name="localForm.name"
                 :adventure-id="props.adventureId"
               />

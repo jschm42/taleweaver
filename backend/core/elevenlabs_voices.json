@@ -1,0 +1,25 @@
+{
+  "_comment": "Voices for per-character speech (ElevenLabs). The editor voice picker, automatic casting and the world builder use only these. Add or remove entries freely; NPCs whose voice is removed fall back to the narrator voice. id = ElevenLabs voice id (20 characters). gender: female | male | null. good_for: hints for automatic casting and the world builder. Override without code changes: DATA_DIR/voices/elevenlabs_voices.json. Refresh from your account: poetry run python scripts/sync_elevenlabs_voices.py",
+  "voices": [
+    { "id": "9BWtsMINqrJLrRacOk9x", "name": "Aria", "gender": "female", "age": "middle-aged", "accent": "american", "description": "expressive, husky", "good_for": ["adventurer", "rogue", "innkeeper"] },
+    { "id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "gender": "female", "age": "young", "accent": "american", "description": "soft, reassuring", "good_for": ["healer", "villager", "companion"] },
+    { "id": "FGY2WhTYpPnrIDTdsKH5", "name": "Laura", "gender": "female", "age": "young", "accent": "american", "description": "upbeat, quirky", "good_for": ["merchant", "student", "sidekick"] },
+    { "id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "gender": "female", "age": "young", "accent": "swedish", "description": "seductive, mysterious", "good_for": ["spy", "sorceress", "noble"] },
+    { "id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "gender": "female", "age": "middle-aged", "accent": "british", "description": "clear, confident", "good_for": ["officer", "scholar", "leader"] },
+    { "id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "gender": "female", "age": "middle-aged", "accent": "american", "description": "warm, friendly", "good_for": ["mother", "cook", "shopkeeper"] },
+    { "id": "cgSgspJ2msm6clMCkdW9", "name": "Jessica", "gender": "female", "age": "young", "accent": "american", "description": "expressive, playful", "good_for": ["thief", "bard", "child"] },
+    { "id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily", "gender": "female", "age": "middle-aged", "accent": "british", "description": "warm, raspy", "good_for": ["witch", "elder", "tavern owner"] },
+    { "id": "CwhRBWXzGAHq8TQ4Fs17", "name": "Roger", "gender": "male", "age": "middle-aged", "accent": "american", "description": "confident, laid-back", "good_for": ["captain", "smuggler", "detective"] },
+    { "id": "IKne3meq5aSn9XLyUdCD", "name": "Charlie", "gender": "male", "age": "middle-aged", "accent": "australian", "description": "natural, casual", "good_for": ["mercenary", "ranger", "sailor"] },
+    { "id": "JBFqnCBsd6RMkjVDRZzb", "name": "George", "gender": "male", "age": "middle-aged", "accent": "british", "description": "warm, storyteller", "good_for": ["narrator", "mentor", "wizard"] },
+    { "id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum", "gender": "male", "age": "middle-aged", "accent": "transatlantic", "description": "intense, gravelly", "good_for": ["villain", "warrior", "cultist"] },
+    { "id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam", "gender": "male", "age": "young", "accent": "american", "description": "articulate, energetic", "good_for": ["squire", "student", "hero"] },
+    { "id": "bIHbv24MWmeRgasZH58o", "name": "Will", "gender": "male", "age": "young", "accent": "american", "description": "friendly, chill", "good_for": ["farmer", "guard", "companion"] },
+    { "id": "cjVigY5qzO86Huf0OWal", "name": "Eric", "gender": "male", "age": "middle-aged", "accent": "american", "description": "smooth, trustworthy", "good_for": ["merchant", "diplomat", "clerk"] },
+    { "id": "iP95p4xoKVk53GoZ742B", "name": "Chris", "gender": "male", "age": "middle-aged", "accent": "american", "description": "casual, natural", "good_for": ["worker", "bartender", "guard"] },
+    { "id": "nPczCjzI2devNBz1zQrb", "name": "Brian", "gender": "male", "age": "middle-aged", "accent": "american", "description": "deep, resonant", "good_for": ["king", "commander", "giant"] },
+    { "id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "gender": "male", "age": "middle-aged", "accent": "british", "description": "authoritative, formal", "good_for": ["judge", "butler", "official"] },
+    { "id": "pqHfZKP75CvOlQylNhV4", "name": "Bill", "gender": "male", "age": "old", "accent": "american", "description": "wise, weathered", "good_for": ["old man", "hermit", "sage"] },
+    { "id": "SAz9YHcvj6GT2YYXdXww", "name": "River", "gender": null, "age": "middle-aged", "accent": "american", "description": "calm, neutral", "good_for": ["spirit", "ai", "creature"] }
+  ]
+}

@@ -13,7 +13,7 @@ import SettingsTranslationTab from './settings/SettingsTranslationTab.vue'
 import SettingsDisplayTab from './settings/SettingsDisplayTab.vue'
 import type { SkinId, SkinPreference } from '@/skins/skinRegistry'
 import type { TextDensity } from '@/skins/useTextDensity'
-import { isNarrationStyle, type NarrationStyle } from './settings/narrationStyles'
+import { DEFAULT_NARRATION_STYLE, isNarrationStyle, type NarrationStyle } from './settings/narrationStyles'
 import type { SessionSettingsPayload, SettingsTabId } from './settings/types'
 
 const props = defineProps<{
@@ -48,7 +48,7 @@ const TABS: { id: SettingsTabId; label: string }[] = [
 const activeTab = ref<SettingsTabId>(props.initialTab ?? 'memory')
 const turns = ref(10)
 const narrationStyle = ref<NarrationStyle>(
-  isNarrationStyle(props.initialNarrationStyle) ? props.initialNarrationStyle : 'balanced'
+  isNarrationStyle(props.initialNarrationStyle) ? props.initialNarrationStyle : DEFAULT_NARRATION_STYLE
 )
 const enableCompression = ref(props.initialCompression ?? true)
 const autoSpeech = ref(props.initialAutoSpeech ?? false)
@@ -64,7 +64,7 @@ if (typeof props.initialTurns === 'number' && props.initialTurns >= 1) {
 
 function isTabActive(id: SettingsTabId): boolean {
   if (id === 'memory') {
-    return narrationStyle.value !== 'balanced'
+    return narrationStyle.value !== DEFAULT_NARRATION_STYLE
   }
   if (id === 'voice') {
     return !!props.ttsAvailable && autoSpeech.value

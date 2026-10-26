@@ -3,6 +3,8 @@ export const NARRATION_STYLES = ['terse', 'dialogue', 'balanced', 'rich', 'epic'
 
 export type NarrationStyle = (typeof NARRATION_STYLES)[number]
 
+export const DEFAULT_NARRATION_STYLE: NarrationStyle = 'dialogue'
+
 export type NarrationStyleOption = {
   id: NarrationStyle
   label: string
@@ -24,14 +26,14 @@ export const NARRATION_STYLE_OPTIONS: NarrationStyleOption[] = [
     id: 'dialogue',
     label: 'Dialogue',
     length: 'Short beats, lots of talk',
-    description: 'Plays like a radio drama. Characters talk; the narrator only bridges.',
+    description: 'Plays like a radio drama. Characters talk; the narrator only bridges. The default.',
     previewLines: 2,
   },
   {
     id: 'balanced',
     label: 'Balanced',
     length: '1-2 short paragraphs',
-    description: 'Atmosphere and pace in balance. The default.',
+    description: 'Atmosphere and pace in balance.',
     previewLines: 3,
   },
   {

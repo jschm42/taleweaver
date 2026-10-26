@@ -9,10 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import get_current_user
-from backend.core.config import settings
 from backend.core.database import get_db
-from backend.core.security import encryption_util
-from backend.core.tts_voices import GOOGLE_TTS_VOICE_NAMES
+from backend.engine.elevenlabs_voices import load_voice_catalog, looks_like_voice_id
 from backend.engine.tts_engine import (
     TTSEngine,
     TTSModelSwitchSuggestionError,
@@ -20,12 +18,14 @@ from backend.engine.tts_engine import (
     TTSRateLimitError,
     TTSTimeoutError,
 )
+from backend.engine.voice_casting import NPC_VOICE_PROVIDER, load_tts_owner, provider_api_key
 from backend.models.game_session import GameSession
 from backend.models.user import User
 
 router = APIRouter(prefix="/tts", tags=["TTS"])
 logger = logging.getLogger(__name__)
 DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
+DEFAULT_ELEVENLABS_MODEL = "eleven_v4"
 SUPPORTED_TTS_MODELS = {
     "gemini-3.8-flash-tts",
     "gemini-3.8-flash-lite-tts",
@@ -63,7 +63,8 @@ def _coerce_bool(value: Any, default: bool) -> bool:
 
 
 def _resolve_model(provider: str, raw_model: Any) -> str:
-    model = str(raw_model or DEFAULT_TTS_MODEL).strip()
+    default = DEFAULT_ELEVENLABS_MODEL if provider == "elevenlabs" else DEFAULT_TTS_MODEL
+    model = str(raw_model or default).strip()
     model = TTS_MODEL_ALIASES.get(model, model)
     if provider == "google" and model not in SUPPORTED_TTS_MODELS:
         logger.warning(
@@ -76,12 +77,7 @@ def _resolve_model(provider: str, raw_model: Any) -> str:
 
 
 def _resolve_api_key(provider: str, settings_user: User) -> str:
-    api_key = settings.get_env_api_key(provider)
-    if api_key:
-        return api_key
-    enc_key = (settings_user.encrypted_api_keys or {}).get(provider)
-    if enc_key:
-        api_key = encryption_util.decrypt_key(enc_key)
+    api_key = provider_api_key(provider, settings_user)
     if not api_key:
         raise HTTPException(
             status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS."
@@ -91,9 +87,7 @@ def _resolve_api_key(provider: str, settings_user: User) -> str:
 
 async def _resolve_tts_settings_source_user(db: AsyncSession, current_user: User) -> User:
     """Use global/admin settings owner for TTS, falling back to current user."""
-    admin_res = await db.execute(select(User).where(User.role == "admin").limit(1))
-    admin_user = admin_res.scalars().first()
-    return admin_user or current_user
+    return await load_tts_owner(db) or current_user
 
 
 async def _resolve_tts_config(
@@ -116,14 +110,15 @@ async def _resolve_tts_config(
     )
 
 
-def _resolve_voice(config: ResolvedTTSConfig, voice_override: Optional[str]) -> str:
-    """Apply a per-segment NPC voice when it is a known voice of the active provider."""
-    if not voice_override:
-        return config.voice
-    if config.provider == "google" and voice_override in GOOGLE_TTS_VOICE_NAMES:
-        return voice_override
-    logger.debug("Ignoring voice override '%s' for provider %s.", voice_override, config.provider)
-    return config.voice
+def _resolve_elevenlabs_voice(config: ResolvedTTSConfig, voice_override: Optional[str]) -> str:
+    """Per-character voices are an ElevenLabs feature; Gemini always uses the narrator voice."""
+    if config.provider == NPC_VOICE_PROVIDER and looks_like_voice_id(voice_override):
+        return str(voice_override)
+    if voice_override:
+        logger.debug(
+            "Ignoring voice override '%s' for provider %s.", voice_override, config.provider
+        )
+    return config.elevenlabs_voice_id
 
 
 async def _normalize_session_ids(
@@ -261,8 +256,8 @@ async def generate_tts(
         audio_url = await TTSEngine.generate_speech(
             text=payload.text,
             provider=config.provider,
-            voice=_resolve_voice(config, payload.voice_override),
-            elevenlabs_voice_id=config.elevenlabs_voice_id,
+            voice=config.voice,
+            elevenlabs_voice_id=_resolve_elevenlabs_voice(config, payload.voice_override),
             use_vocal_tags=config.use_vocal_tags,
             api_key=config.api_key,
             adventure_id=adventure_id,
@@ -324,3 +319,21 @@ async def test_tts_connection_v2(
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}
     return {"status": "success", "audio_url": audio_url}
+
+
+@router.get("/voices")
+async def list_tts_voices(
+    provider: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Voices from the voice list for per-character speech. Only ElevenLabs supports them.
+
+    ``provider`` lets the settings form list ElevenLabs voices before the provider is saved.
+    """
+    owner = await _resolve_tts_settings_source_user(db, current_user)
+    active = str((owner.tts_settings or {}).get("provider") or "google").lower()
+    requested = (provider or active).lower()
+    if requested != NPC_VOICE_PROVIDER:
+        return {"provider": requested, "supports_npc_voices": False, "voices": []}
+    return {"provider": requested, "supports_npc_voices": True, "voices": load_voice_catalog()}

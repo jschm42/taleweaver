@@ -15,8 +15,8 @@ from tests.conftest import TestSessionLocal
 pytestmark = pytest.mark.asyncio
 
 
-async def _enable_tts_for_test_user(api_key: str = "test-api-key") -> None:
-    """Enable TTS for the seeded test user with valid settings."""
+async def _enable_tts_for_test_user(api_key: str = "test-api-key", **overrides: object) -> None:
+    """Enable TTS for the seeded test user with valid settings (Gemini unless overridden)."""
     async with TestSessionLocal() as session:
         user = (
             (await session.execute(select(User).where(User.username == "test_user")))
@@ -32,8 +32,10 @@ async def _enable_tts_for_test_user(api_key: str = "test-api-key") -> None:
             "use_vocal_tags": True,
             "speech_rate": 1.0,
             "elevenlabs_voice_id": "",
+            **overrides,
         }
-        user.encrypted_api_keys = {"google": encryption_util.encrypt_key(api_key)}
+        provider = str(user.tts_settings["provider"])
+        user.encrypted_api_keys = {provider: encryption_util.encrypt_key(api_key)}
         await session.commit()
 
 
@@ -289,14 +291,11 @@ async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(tmp_path
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("voice_override", "expected_voice"),
-    [("Kore", "Kore"), ("Unknown Speaker", "Puck"), (None, "Puck")],
-)
-async def test_generate_tts_applies_only_known_voice_overrides(
-    auth_client: AsyncClient, monkeypatch, voice_override, expected_voice
+@pytest.mark.parametrize("voice_override", ["Kore", "Unknown Speaker", None])
+async def test_gemini_always_uses_the_narrator_voice(
+    auth_client: AsyncClient, monkeypatch, voice_override
 ):
-    """NPC voice overrides must reach the engine when they name a known Google voice."""
+    """Per-character voices are an ElevenLabs feature; Gemini ignores NPC voice overrides."""
     # Arrange
     await _enable_tts_for_test_user()
     captured: dict = {}
@@ -316,7 +315,55 @@ async def test_generate_tts_applies_only_known_voice_overrides(
 
     # Assert
     assert resp.status_code == 200
-    assert captured["voice"] == expected_voice
+    assert captured["voice"] == "Puck"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("voice_override", "expected_voice_id"),
+    [("M" * 20, "M" * 20), ("Unknown Speaker", "N" * 20), (None, "N" * 20)],
+)
+async def test_elevenlabs_applies_npc_voice_ids(
+    auth_client: AsyncClient, monkeypatch, voice_override, expected_voice_id
+):
+    """ElevenLabs gets the NPC voice id; speaker names fall back to the narrator voice."""
+    # Arrange
+    await _enable_tts_for_test_user(
+        provider="elevenlabs", elevenlabs_voice_id="N" * 20, selected_model="eleven_v4"
+    )
+    captured: dict = {}
+
+    async def fake_generate_speech(**kwargs):
+        captured.update(kwargs)
+        return "/data/audio/test.mp3"
+
+    monkeypatch.setattr(
+        "backend.api.routes.tts_api.TTSEngine.generate_speech", fake_generate_speech
+    )
+
+    # Act
+    resp = await auth_client.post(
+        "/api/tts/generate", json={"text": "Halt!", "voice_override": voice_override}
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert captured["elevenlabs_voice_id"] == expected_voice_id
+
+
+@pytest.mark.asyncio
+async def test_voices_endpoint_lists_voice_list_only_for_elevenlabs(auth_client: AsyncClient):
+    # Arrange
+    await _enable_tts_for_test_user()
+
+    # Act
+    gemini = await auth_client.get("/api/tts/voices")
+    eleven = await auth_client.get("/api/tts/voices", params={"provider": "elevenlabs"})
+
+    # Assert
+    assert gemini.json() == {"provider": "google", "supports_npc_voices": False, "voices": []}
+    assert eleven.json()["supports_npc_voices"] is True
+    assert eleven.json()["voices"]
 
 
 @pytest.mark.asyncio

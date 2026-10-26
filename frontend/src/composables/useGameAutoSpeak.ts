@@ -148,7 +148,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       if (dlg.isNarration && !speakNarration) continue
       if (!dlg.isNarration && !speakDialogues) continue
 
-      const textToSpeak = dlg.voiceTag ? `<${dlg.voiceTag}> ${dlg.text}` : dlg.text
+      // One tag format ([tag]); the backend converts it for the active TTS provider.
+      const textToSpeak = dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text
       const isNpcLine = Boolean(dlg.speaker) && dlg.speaker !== 'Game Master'
 
       // The speaker is passed as a voice hint (resolved via npcMetadata), never

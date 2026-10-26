@@ -92,6 +92,6 @@ def test_log_narration_budget_emits_telemetry_event():
     event_type = log_event.call_args.args[0]
     fields = log_event.call_args.kwargs
     assert event_type == "gm.turn.narration_budget"
-    assert fields["narration_style"] == "balanced"
+    assert fields["narration_style"] == "dialogue"
     assert fields["dialogue_lines"] == 3
     assert fields["game_id"] == "g1"

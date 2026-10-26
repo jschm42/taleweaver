@@ -4,6 +4,7 @@ Tests for Voice-Tag support in GM narration.
 Voice-tags like [shouting] or [very fast] are runtime markup produced by the GM.
 They are stored unchanged in ChatMessage.content and passed through to TTS.
 """
+
 import base64
 import os
 import re
@@ -15,6 +16,7 @@ import pytest
 # Prompt guidance
 # ---------------------------------------------------------------------------
 
+
 def test_gm_narration_formatting_contains_voice_tag_guidance():
     """get_vocal_direction_prompt must document voice-tag usage."""
     from backend.core.prompts import get_vocal_direction_prompt
@@ -24,13 +26,26 @@ def test_gm_narration_formatting_contains_voice_tag_guidance():
     assert "[whispers]" in prompt
     assert "[shouting]" in prompt
     assert "ENGLISH" in prompt
-    assert "new paragraph" in prompt.lower()
     assert "Do not nest tags" in prompt
+    # One tag format for every provider: square brackets, never angle brackets or parentheses.
+    assert "[sigh]" in prompt
+    assert "<sigh>" not in prompt
+    assert "never <...> and never (...)" in prompt
+
+
+@pytest.mark.parametrize("provider", ["google", "elevenlabs"])
+def test_every_provider_prompt_uses_square_bracket_tags_only(provider):
+    from backend.core.prompts import get_vocal_direction_prompt
+
+    prompt = get_vocal_direction_prompt(provider)
+    assert "<sigh>" not in prompt and "<laugh>" not in prompt
+    assert "lowercase" in prompt
 
 
 # ---------------------------------------------------------------------------
 # TTS engine: voice-tag acting cues in prompt
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tts_engine_includes_voice_direction_cue_in_prompt():
@@ -243,7 +258,7 @@ async def test_tts_engine_skips_empty_inline_data_and_uses_non_empty_chunk(tmp_p
                                         "mimeType": "audio/L16;rate=24000",
                                         "data": encoded_non_empty,
                                     }
-                                }
+                                },
                             ]
                         }
                     }

@@ -17,7 +17,7 @@ from backend.api.routes.adventures.session_start_settings import (
 )
 from backend.api.routes.adventures.sheet_snapshot import build_sheet_snapshot
 from backend.engine.map_engine import MapEngine
-from backend.engine.voice_casting import CastingCandidate, cast_voices, resolve_narrator_voice
+from backend.engine.voice_casting import CastingCandidate, cast_npc_voices, resolve_voice_setup
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -536,15 +536,15 @@ class AdventureLogic:
         else:
             return {}
         npcs = (await db.execute(npc_query)).scalars().all()
-        # NPCs without a stored voice get a deterministic, distinct one (older adventures).
-        voices = cast_voices(
+        # ElevenLabs: NPCs without a stored voice get a deterministic, distinct one.
+        voices = cast_npc_voices(
+            await resolve_voice_setup(db),
             [
                 CastingCandidate(
                     npc.id, f"{npc.name} {npc.description} {npc.character or ''}", npc.voice
                 )
                 for npc in npcs
             ],
-            reserved=[await resolve_narrator_voice(db)],
         )
         return {
             npc.id: {

@@ -7,6 +7,8 @@ import type { VisualKind } from '@/services/visualService'
 import { entityService } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
 import { useEntityTransfer } from '@/composables/useEntityTransfer'
+import { api } from '@/composables/useApi'
+import type { TtsVoiceList } from '@/types'
 
 // Icons & Assets
 
@@ -481,7 +483,17 @@ if (typeof window !== 'undefined') {
 
 const imageStylesCatalog = ref<any[]>([])
 const toneCatalog = ref<any[]>([])
-const availableVoices = ref<Array<{ name: string; gender?: string; description?: string }>>([])
+// Voice list for NPC voices (ElevenLabs only; Gemini speaks everything in the narrator voice).
+const voiceList = ref<TtsVoiceList | null>(null)
+
+async function fetchVoiceList() {
+  try {
+    voiceList.value = await api.getTtsVoices()
+  } catch (error) {
+    console.warn('Could not load the voice list', error)
+    voiceList.value = null
+  }
+}
 
 const editorTabs = [
   { key: 'world', label: 'World' },
@@ -758,15 +770,6 @@ async function fetchCatalogs() {
     const data = await adventureService.fetchCatalogs()
     imageStylesCatalog.value = data.image_styles_catalog || []
     toneCatalog.value = data.tone_catalog || []
-    const voiceCatalog = Array.isArray(data.tts_settings?.voice_catalog)
-      ? data.tts_settings.voice_catalog
-      : []
-    const voiceList = Array.isArray(data.tts_settings?.voice_list)
-      ? data.tts_settings.voice_list
-      : []
-    availableVoices.value = voiceCatalog.length > 0
-      ? voiceCatalog
-      : voiceList.map((name: string) => ({ name }))
   } catch (error) {
     console.error('Failed to fetch catalogs:', error)
   }
@@ -1824,7 +1827,7 @@ watch(
       debugData.value = null
       return
     }
-    await Promise.all([fetchAdventure(), fetchDebugInfo(), fetchCatalogs()])
+    await Promise.all([fetchAdventure(), fetchDebugInfo(), fetchCatalogs(), fetchVoiceList()])
   },
   { immediate: true }
 )
@@ -3010,7 +3013,7 @@ watch(
       :adventure-id="adventureId"
       :is-create-entity-mode="isCreateEntityMode"
       :npc-data="editEntityContext?.type === 'npc' ? editorNpcs.find((n: any) => n.id === editEntityContext?.id) : null"
-      :available-voices="availableVoices"
+      :voice-list="voiceList"
       @close="closeEditEntityModal"
       @save="saveEntityText"
       @combat-saved="onSpecialAttacksSaved"

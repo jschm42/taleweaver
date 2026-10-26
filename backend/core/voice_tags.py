@@ -49,89 +49,129 @@ VOICE_TAG_CATALOG: Final[tuple[str, ...]] = (
     "nervous",
 )
 
+# ElevenLabs v3/v4 audio tags: lowercase, in square brackets, directly before (or right after)
+# the words they color. See https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices
 ELEVENLABS_VOICE_TAG_CATALOG: Final[tuple[str, ...]] = (
     "excited",
     "nervous",
     "frustrated",
     "sorrowful",
     "calm",
-    "sigh",
-    "gulps",
-    "gasps",
     "whispers",
-    "pauses",
     "hesitates",
     "stammers",
-    "resigned tone",
+    "resigned",
     "cheerfully",
     "flatly",
     "deadpan",
     "playfully",
-    "pause",
-    "continues softly",
-    "resigned",
-    "dramatic tone",
-    "lighthearted",
-    "reflective",
-    "serious tone",
-    "awe",
-    "sarcastic tone",
-    "wistful",
-    "matter-of-fact",
-    "slows down",
-    "rushed",
-    "emphasized",
+    "sarcastic",
     "sarcastically",
-    "whiny",
-    "panicking",
-    "rapid-fire",
-    "drawn out",
+    "mischievously",
+    "curious",
     "amused",
     "angry",
-    "cheerful",
+    "annoyed",
+    "appalled",
     "thoughtful",
     "sad",
-    "curious",
     "surprised",
     "confused",
     "gentle",
     "stern",
     "warmly",
     "coldly",
-    "playful",
     "relieved",
-    "fantasy narrator",
-    "sci-fi AI voice",
-    "classic film noir",
-    "robotic tone",
+    "wistful",
+    "awe",
+    "matter-of-fact",
+    "panicking",
+    "crying",
+    "rushed",
+    "slows down",
+    "drawn out",
+    "dramatic tone",
+    "low, gravelly voice",
     "deep voice",
-    "pirate voice",
-    "evil scientist voice",
     "childlike tone",
-    "British accent",
-    "Australian accent",
-    "Southern US accent",
-    "Indian English",
-    "French accent",
-    "German accent",
-    "Scottish accent",
-    "Russian accent",
-    "Chinese accent",
-    "Japanese accent",
-    "Spanish accent",
-    "Italian accent",
+    "robotic tone",
+    "strong british accent",
+    "strong scottish accent",
+    "strong irish accent",
+    "strong southern us accent",
+    "strong french accent",
+    "strong german accent",
+    "strong russian accent",
+    "strong italian accent",
+    "strong spanish accent",
 )
 
-VOICE_TAG_SET: Final[set[str]] = set(VOICE_TAG_CATALOG) | set(ELEVENLABS_VOICE_TAG_CATALOG)
+# Non-verbal sounds and pauses for ElevenLabs, placed exactly where they happen.
+ELEVENLABS_SOUND_TAG_CATALOG: Final[tuple[str, ...]] = (
+    "sighs",
+    "laughs",
+    "chuckles",
+    "starts laughing",
+    "clears throat",
+    "coughs",
+    "gasps",
+    "gulps",
+    "exhales",
+    "exhales sharply",
+    "inhales deeply",
+    "snorts",
+    "short pause",
+    "long pause",
+)
+
+# Gemini-style vocal bursts and their ElevenLabs equivalents (used when converting old text).
+GEMINI_TO_ELEVENLABS_SOUNDS: Final[dict[str, str]] = {
+    "sigh": "sighs",
+    "laugh": "laughs",
+    "chuckle": "chuckles",
+    "cough": "coughs",
+    "gasp": "gasps",
+    "groan": "sighs",
+    "breath": "exhales",
+    "heavy breath": "exhales sharply",
+    "throat-clearing": "clears throat",
+}
+
+VOICE_TAG_SET: Final[set[str]] = (
+    set(VOICE_TAG_CATALOG) | set(ELEVENLABS_VOICE_TAG_CATALOG) | set(ELEVENLABS_SOUND_TAG_CATALOG)
+)
+
+
+def _elevenlabs_catalog_prompt_block() -> str:
+    tones = ", ".join(f"[{tag}]" for tag in ELEVENLABS_VOICE_TAG_CATALOG)
+    sounds = ", ".join(f"[{tag}]" for tag in ELEVENLABS_SOUND_TAG_CATALOG)
+    return (
+        "TONE CATALOG (ENGLISH ONLY): Use ONLY these tags, lowercase, exactly as written in square brackets.\n"
+        f"{tones}\n\n"
+        "SOUNDS CATALOG: Use ONLY these tags, lowercase, in square brackets, exactly where the sound happens.\n"
+        f"{sounds}\n"
+        "NEVER use angle brackets, SSML (<break>) or parentheses for tags. "
+        "For pauses use [short pause], [long pause] or an ellipsis (...).\n"
+    )
 
 
 def build_voice_tag_catalog_prompt_block(provider: str = "google") -> str:
     """Return a formatted prompt block listing allowed English voice tags."""
-    catalog = ELEVENLABS_VOICE_TAG_CATALOG if provider == "elevenlabs" else VOICE_TAG_CATALOG
-    tags = ", ".join(f"[{tag}]" for tag in catalog)
+    if provider == "elevenlabs":
+        return _elevenlabs_catalog_prompt_block()
+    tags = ", ".join(f"[{tag}]" for tag in VOICE_TAG_CATALOG)
     return (
         "TONE CATALOG (ENGLISH ONLY): Use ONLY these tags exactly as written in square brackets.\n"
         f"{tags}\n\n"
-        "VOCAL BURSTS CATALOG: Use ONLY these tags exactly as written in angle brackets.\n"
-        "<cough>, <sigh>, <breath>, <heavy breath>, <laugh>, <chuckle>, <throat-clearing>, <short pause>, <long pause>, <gasp>, <groan>\n"
+        "SOUNDS CATALOG: Use ONLY these tags, lowercase, in square brackets, exactly where the sound happens.\n"
+        "[cough], [sigh], [breath], [heavy breath], [laugh], [chuckle], [throat-clearing], [short pause], [long pause], [gasp], [groan]\n"
+        "NEVER use angle brackets or parentheses for tags.\n"
+    )
+
+
+def vocal_tag_reminder() -> str:
+    """Short per-turn reminder of the one tag syntax (the TTS engine converts it per provider)."""
+    return (
+        "Audio tags are lowercase and in square brackets only, never <...> or (...): a tone tag like "
+        "[excited] at the start of a line, a sound like [sighs] exactly where it happens. Use them sparingly."
     )

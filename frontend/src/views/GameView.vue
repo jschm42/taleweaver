@@ -416,6 +416,8 @@ const handleEntityClick = async (entity: any) => {
       await handleTakeDirect(entity)
       return
     }
+    // A plain NPC click only prefills "/say to <name>:" in the input (ImmersiveGameView).
+    if (String(entity?.entity_type || '').toUpperCase() === 'NPC') return
     const target = entity?.name || entity?.id
     if (target) {
       await handlePlayerInput(`/inspect ${target}`)

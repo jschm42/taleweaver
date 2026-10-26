@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
 import { api } from '@/composables/useApi'
+import ElevenLabsVoiceField from '@/components/common/ElevenLabsVoiceField.vue'
 
 const props = defineProps<{
   ttsForm: any
@@ -172,8 +173,12 @@ const handleSave = () => {
           <!-- ELEVENLABS SETTINGS -->
           <template v-if="localForm.provider === 'elevenlabs'">
             <div class="space-y-2">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">ElevenLabs Voice ID</label>
-              <input v-model="localForm.elevenlabs_voice_id" type="text" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 font-mono" />
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Narrator Voice</label>
+              <ElevenLabsVoiceField
+                v-model="localForm.elevenlabs_voice_id"
+                input-class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+              <p class="text-[11px] text-slate-500">Characters get their own voices from the voice list automatically.</p>
             </div>
           </template>
         </div>

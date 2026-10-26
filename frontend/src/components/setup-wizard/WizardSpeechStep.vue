@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { settingsService } from '@/services/settingsService'
 import { testService } from '@/services/testService'
 import WizardTestResult from './WizardTestResult.vue'
+import ElevenLabsVoiceField from '@/components/common/ElevenLabsVoiceField.vue'
 import { TTS_MODELS, needsKey, wizardStyles } from './wizardPresets'
 
 const ttsForm = settingsService.ttsForm
@@ -33,7 +34,7 @@ watch(provider, () => {
 async function save(): Promise<boolean> {
   errorMessage.value = ''
   if (enabled.value && provider.value === 'elevenlabs' && !elevenLabsVoiceId.value.trim()) {
-    errorMessage.value = 'Enter an ElevenLabs voice ID, or turn narration off.'
+    errorMessage.value = 'Choose a narrator voice, or turn narration off.'
     return false
   }
   await settingsService.saveTTSSettings({
@@ -107,8 +108,8 @@ defineExpose({ save })
         </select>
       </div>
       <div v-else>
-        <label :class="wizardStyles.label" for="wizard-tts-eleven">ElevenLabs voice ID</label>
-        <input id="wizard-tts-eleven" v-model="elevenLabsVoiceId" :class="wizardStyles.input" />
+        <label :class="wizardStyles.label" for="wizard-tts-eleven">Narrator voice</label>
+        <ElevenLabsVoiceField v-model="elevenLabsVoiceId" input-id="wizard-tts-eleven" :input-class="wizardStyles.input" />
       </div>
 
       <div class="flex flex-wrap items-center gap-4">

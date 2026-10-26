@@ -9,6 +9,7 @@ cover-source guidance, etc.).
 from typing import Any, Optional
 
 from backend.core import prompts
+from backend.engine.elevenlabs_voices import VoiceOption, load_voice_catalog
 from backend.engine.world_scripting_prompt import build_scripts_requirement
 
 _CONTAINER_LOCK_HINTS = (
@@ -25,12 +26,29 @@ _CONTAINER_LOCK_HINTS = (
 )
 
 
-def _build_voice_assignment_requirement(
-    enabled: bool,
-    available_voice_list: Optional[list[str]] = None,
-) -> str:
-    """Return voice assignment instructions for the LLM prompt (currently a no-op placeholder)."""
-    return ""
+def _voice_line(voice: VoiceOption) -> str:
+    traits = ", ".join(
+        part
+        for part in (voice["gender"], voice["age"], voice["accent"], voice["description"])
+        if part
+    )
+    good_for = f"; good for {', '.join(voice['good_for'])}" if voice["good_for"] else ""
+    return f"- {voice['id']}: {voice['name']} ({traits}{good_for})"
+
+
+def _build_voice_assignment_requirement(enabled: bool) -> str:
+    """Asks the world builder to give each NPC a fitting voice id from the voice list."""
+    voices = load_voice_catalog()
+    if not enabled or not voices:
+        return ""
+    voice_lines = "\n".join(_voice_line(voice) for voice in voices)
+    return (
+        "NPC VOICES:\n"
+        "- Give every NPC a `voice` field with the id of the best-fitting voice from this list "
+        "(match gender, age and personality). Use each voice for at most one NPC while unused voices remain.\n"
+        "- Use ONLY ids from this list, exactly as written:\n"
+        f"{voice_lines}\n\n"
+    )
 
 
 def _build_scene_requirement(min_scenes: Optional[int], max_scenes: Optional[int]) -> str:
@@ -413,7 +431,6 @@ def build_world_generation_prompts(
     language: Optional[str],
     selected_tone: Optional[str],
     automatic_npc_voice_assignment: bool,
-    available_voice_list: Optional[list[str]],
     can_damage_npcs: bool,
     npcs_can_damage_protagonist: bool,
     quest_generation_enabled: bool,
@@ -478,8 +495,7 @@ def build_world_generation_prompts(
         can_damage_npcs="true" if can_damage_npcs else "false",
         npcs_can_damage_protagonist="true" if npcs_can_damage_protagonist else "false",
         voice_assignment_requirement=_build_voice_assignment_requirement(
-            automatic_npc_voice_assignment,
-            available_voice_list,
+            automatic_npc_voice_assignment
         ),
         cover_guidance=cover_guidance,
         quest_requirement=quest_requirement,

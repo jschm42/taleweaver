@@ -67,13 +67,6 @@ def is_image_moderation_error(error: Exception | str | None) -> bool:
     return any(marker in message for marker in IMAGE_MODERATION_MARKERS)
 
 
-def _build_voice_assignment_requirement(
-    enabled: bool,
-    available_voice_list: Optional[list[str]] = None,
-) -> str:
-    return ""
-
-
 def _image_generation_timeout_seconds() -> float:
     raw_timeout = getattr(settings, "IMAGE_GENERATION_TIMEOUT_SECONDS", 600)
     try:
@@ -803,11 +796,6 @@ class WorldGenerator:
 
         provider, model = _resolve_generator_provider_and_model(user, provider, model)
 
-        tts_settings = user.tts_settings or {}
-        available_voice_list = (
-            tts_settings.get("voice_list") if isinstance(tts_settings, dict) else None
-        )
-
         llm = GameMasterLLM(user, provider=provider, model_category="generator")
 
         log_structured_event(
@@ -841,7 +829,6 @@ class WorldGenerator:
             language=language,
             selected_tone=selected_tone,
             automatic_npc_voice_assignment=automatic_npc_voice_assignment,
-            available_voice_list=available_voice_list,
             can_damage_npcs=can_damage_npcs,
             npcs_can_damage_protagonist=npcs_can_damage_protagonist,
             quest_generation_enabled=quest_generation_enabled,

@@ -1,8 +1,10 @@
-"""Deterministic voice casting: gives every NPC a fitting TTS voice that differs from its neighbours.
+"""Deterministic voice casting: gives every NPC a fitting ElevenLabs voice that differs from its neighbours.
 
-Voices are picked from the Google TTS catalog by the gender implied in the NPC's description,
-avoiding the narrator voice and voices already used by other NPCs. The choice depends only on the
-NPC id and the order of the NPCs, so the same adventure always sounds the same.
+Per-character voices are an ElevenLabs feature; with Gemini TTS everything is spoken in the
+narrator voice. Voices come from the curated voice list (see ``elevenlabs_voices``) and are picked by
+the gender implied in the NPC's description, avoiding the narrator voice and voices already used by
+other NPCs. The choice depends only on the NPC id and the order of the NPCs, so the same adventure
+always sounds the same. An NPC whose stored voice was removed from the list uses the narrator voice.
 """
 
 from __future__ import annotations
@@ -15,10 +17,12 @@ from typing import Final, NamedTuple, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_NAMES
+from backend.core.config import settings
+from backend.core.security import encryption_util
+from backend.engine.elevenlabs_voices import VoiceOption, load_voice_catalog
 from backend.models.user import User
 
-DEFAULT_NARRATOR_VOICE: Final = "Puck"
+NPC_VOICE_PROVIDER: Final = "elevenlabs"
 
 _FEMALE_WORDS: Final = re.compile(
     r"\b(?:she|her|hers|herself|woman|women|girl|lady|queen|mother|sister|daughter|wife|"
@@ -38,8 +42,14 @@ class CastingCandidate(NamedTuple):
     voice: Optional[str] = None
 
 
-def is_known_voice(voice: object) -> bool:
-    return isinstance(voice, str) and voice in GOOGLE_TTS_VOICE_NAMES
+class VoiceSetup(NamedTuple):
+    provider: str
+    narrator_voice: str
+    voices: list[VoiceOption]
+
+    @property
+    def supports_npc_voices(self) -> bool:
+        return self.provider == NPC_VOICE_PROVIDER
 
 
 def infer_voice_gender(text: str) -> Optional[str]:
@@ -51,37 +61,73 @@ def infer_voice_gender(text: str) -> Optional[str]:
     return "female" if female > male else "male"
 
 
-def _pick_voice(candidate: CastingCandidate, blocked: set[str]) -> str:
+def _pick_voice(
+    candidate: CastingCandidate, voices: Sequence[VoiceOption], blocked: set[str]
+) -> str:
     gender = infer_voice_gender(candidate.description)
-    matching = [
-        entry["name"]
-        for entry in GOOGLE_TTS_VOICE_CATALOG
-        if gender is None or entry.get("gender") == gender
-    ]
-    free = [name for name in matching if name not in blocked] or matching
+    matching = [v["id"] for v in voices if gender is None or v["gender"] in (gender, None)]
+    matching = matching or [v["id"] for v in voices]
+    free = [voice_id for voice_id in matching if voice_id not in blocked] or matching
     return free[zlib.crc32(candidate.npc_id.encode("utf-8")) % len(free)]
 
 
 def cast_voices(
-    candidates: Sequence[CastingCandidate], reserved: Iterable[str] = ()
-) -> dict[str, str]:
-    """Maps every NPC id to a voice. Valid voices already set are kept; the rest are cast."""
+    candidates: Sequence[CastingCandidate],
+    voices: Sequence[VoiceOption],
+    reserved: Iterable[str] = (),
+) -> dict[str, Optional[str]]:
+    """Maps every NPC id to a voice id from ``voices``; ``None`` means the narrator voice.
+
+    A voice from the list is kept, a voice no longer in the list falls back to the narrator voice,
+    and NPCs without any voice get one cast.
+    """
+    known = {v["id"] for v in voices}
     blocked = {voice for voice in reserved if voice}
-    blocked.update(c.voice for c in candidates if is_known_voice(c.voice))
-    voices: dict[str, str] = {}
+    blocked.update(str(c.voice) for c in candidates if c.voice in known)
+    cast: dict[str, Optional[str]] = {}
     for candidate in candidates:
-        if is_known_voice(candidate.voice):
-            voices[candidate.npc_id] = str(candidate.voice)
+        if candidate.voice:
+            cast[candidate.npc_id] = candidate.voice if candidate.voice in known else None
             continue
-        voice = _pick_voice(candidate, blocked)
-        blocked.add(voice)
-        voices[candidate.npc_id] = voice
-    return voices
+        if not known:
+            cast[candidate.npc_id] = None
+            continue
+        voice_id = _pick_voice(candidate, voices, blocked)
+        blocked.add(voice_id)
+        cast[candidate.npc_id] = voice_id
+    return cast
 
 
-async def resolve_narrator_voice(db: AsyncSession) -> str:
-    """The narrator voice from the global (admin-owned) TTS settings."""
-    admin = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalars().first()
-    tts_settings = (admin.tts_settings if admin else None) or {}
-    voice = tts_settings.get("selected_voice") if isinstance(tts_settings, dict) else None
-    return voice if is_known_voice(voice) else DEFAULT_NARRATOR_VOICE
+def cast_npc_voices(
+    setup: VoiceSetup, candidates: Sequence[CastingCandidate]
+) -> dict[str, Optional[str]]:
+    """Per-NPC voices for the active provider; ``None`` everywhere when it has no NPC voices."""
+    if not setup.supports_npc_voices:
+        return {c.npc_id: None for c in candidates}
+    return cast_voices(candidates, setup.voices, reserved=[setup.narrator_voice])
+
+
+async def load_tts_owner(db: AsyncSession) -> Optional[User]:
+    """TTS settings are global and owned by the (first) admin."""
+    return (await db.execute(select(User).where(User.role == "admin").limit(1))).scalars().first()
+
+
+def provider_api_key(provider: str, owner: Optional[User]) -> Optional[str]:
+    """The provider key from the environment, else the owner's stored (encrypted) key."""
+    api_key = settings.get_env_api_key(provider)
+    if api_key:
+        return api_key
+    encrypted = ((owner.encrypted_api_keys if owner else None) or {}).get(provider)
+    return encryption_util.decrypt_key(encrypted) if encrypted else None
+
+
+async def resolve_voice_setup(db: AsyncSession) -> VoiceSetup:
+    """Active TTS provider, narrator voice and (for ElevenLabs) the voice list."""
+    owner = await load_tts_owner(db)
+    tts_settings = (owner.tts_settings if owner else None) or {}
+    provider = str(tts_settings.get("provider") or "google").lower()
+    if provider != NPC_VOICE_PROVIDER:
+        return VoiceSetup(provider, str(tts_settings.get("selected_voice") or ""), [])
+    return VoiceSetup(
+        provider, str(tts_settings.get("elevenlabs_voice_id") or ""), load_voice_catalog()
+    )

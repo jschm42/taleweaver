@@ -384,7 +384,7 @@ defineExpose({
           @retry-turn="emit('retryTurn')"
           @cancel-turn-error="emit('cancelTurnError')"
           @open-sheet="emit('openSheet')"
-          @npc-click="(name) => emit('npcClick', name)"
+          @npc-click="(name) => handleNpcClick({ name })"
           @item-click="(item) => emit('itemClick', item)"
           @take-direct="(item) => emit('takeDirect', item)"
           @npc-hover="(entity, event) => emit('npcHover', entity, event)"

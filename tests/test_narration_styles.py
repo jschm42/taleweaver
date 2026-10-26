@@ -7,6 +7,7 @@ from backend.core import prompts
 from backend.core.narration_styles import (
     DEFAULT_NARRATION_STYLE,
     is_narration_style,
+    narration_style_reminder,
     narration_style_rules,
 )
 from backend.models.session_state import SessionState
@@ -33,7 +34,7 @@ def test_each_style_has_its_own_length_rules(style, marker):
 
 
 @pytest.mark.parametrize("value", [None, "", "verbose", 3])
-def test_unknown_style_falls_back_to_balanced(value):
+def test_unknown_style_falls_back_to_default(value):
     # Arrange / Act
     rules = narration_style_rules(value)
 
@@ -88,7 +89,7 @@ async def test_session_update_rejects_unknown_narration_style(auth_client):
     assert resp.status_code == 422
 
 
-async def test_new_sessions_default_to_balanced(auth_client):
+async def test_new_sessions_default_to_dialogue(auth_client):
     # Arrange / Act
     ids = await _create_adventure(auth_client, "Default Style Quest")
 
@@ -104,3 +105,17 @@ async def test_new_sessions_default_to_balanced(auth_client):
             .first()
         )
     assert state.narration_style == DEFAULT_NARRATION_STYLE
+
+
+def test_default_style_is_dialogue():
+    # Arrange / Act / Assert
+    assert DEFAULT_NARRATION_STYLE == "dialogue"
+
+
+@pytest.mark.parametrize("style", ["terse", "dialogue", "balanced", "rich", "epic", None])
+def test_every_style_has_a_turn_length_reminder(style):
+    # Arrange / Act
+    reminder = narration_style_reminder(style)
+
+    # Assert
+    assert reminder.startswith("LENGTH:")

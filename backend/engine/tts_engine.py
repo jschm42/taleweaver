@@ -17,6 +17,7 @@ from backend.engine.tts_helpers import (
     _wait_for_tts_request_slot,
     _write_audio_file,
 )
+from backend.engine.tts_tag_format import canonicalize_tags, prepare_elevenlabs_text
 from backend.utils.path_security import sanitize_path_component
 
 logger = logging.getLogger(__name__)
@@ -127,25 +128,25 @@ class TTSEngine:
                 "Invalid session_id for TTS output path; using adventure-level fallback."
             )
 
-        if not use_vocal_tags:
-            text = _strip_vocal_tags(text or "")
-        elif text and ("gemini" in (model_name or "").lower() or provider == "google"):
-            # Gemini TTS expects angle-bracket vocal tags.
-            text = _convert_brackets_to_angles(text)
-
         if provider == "elevenlabs":
             # ElevenLabs model ids use underscores, but some might be sent with dots
             sanitized_model = (
                 model_name.replace(".", "_") if model_name else "eleven_multilingual_v2"
             )
             return await TTSEngine._synthesize_elevenlabs(
-                text=text,
+                text=prepare_elevenlabs_text(text or "", sanitized_model, use_vocal_tags),
                 voice_id=elevenlabs_voice_id,
                 api_key=api_key,
                 adventure_id=adventure_id,
                 session_id=safe_session_id,
                 model_id=sanitized_model,
             )
+
+        if not use_vocal_tags:
+            text = _strip_vocal_tags(text or "")
+        elif text:
+            # Gemini TTS expects angle-bracket vocal tags.
+            text = _convert_brackets_to_angles(canonicalize_tags(text))
 
         return await TTSEngine._synthesize_google(
             text=text,

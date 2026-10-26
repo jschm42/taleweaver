@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.core.config import settings
+from backend.engine.elevenlabs_voices import VoiceOption, resolve_voice_reference
 from backend.engine.image_prompt_context import build_npc_image_prompt, clean_appearance
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
@@ -15,7 +16,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
     uses_advanced_model,
 )
-from backend.engine.voice_casting import CastingCandidate, cast_voices, resolve_narrator_voice
+from backend.engine.voice_casting import CastingCandidate, cast_npc_voices, resolve_voice_setup
 from backend.models.world_entity import WorldEntity
 
 # NPC settings that may appear at the top level (generated manifests) or inside
@@ -134,9 +135,10 @@ async def _npc_image(
     return await placeholder_image(ctx, npc["id"], category="NPC", subdir="entities")
 
 
-def _casting_candidate(npc: dict[str, Any]) -> CastingCandidate:
+def _casting_candidate(npc: dict[str, Any], voices: list[VoiceOption]) -> CastingCandidate:
+    """Voices outside the voice list (or names the world builder wrote) are mapped or recast."""
     text = " ".join(str(npc.get(key) or "") for key in ("name", "description", "character"))
-    return CastingCandidate(str(npc["id"]), text, npc.get("voice"))
+    return CastingCandidate(str(npc["id"]), text, resolve_voice_reference(npc.get("voice"), voices))
 
 
 def _npc_entity(
@@ -191,9 +193,8 @@ async def persist_npcs(
     processed: list[dict] = []
     image_cache: dict[str, str] = {}
     total = len(npcs)
-    voices = cast_voices(
-        [_casting_candidate(npc) for npc in npcs], reserved=[await resolve_narrator_voice(ctx.db)]
-    )
+    setup = await resolve_voice_setup(ctx.db)
+    voices = cast_npc_voices(setup, [_casting_candidate(npc, setup.voices) for npc in npcs])
     for idx, npc in enumerate(npcs, start=1):
         if npc["id"] in ctx.seen_entity_ids:
             continue
@@ -202,6 +203,7 @@ async def persist_npcs(
         if image_url:
             image_cache[npc["id"]] = image_url
         processed.append(npc)
-        ctx.db.add(_npc_entity(ctx, npc, image_url, default_scene_id, voices.get(npc["id"])))
+        voice = voices.get(npc["id"]) or npc.get("voice")  # keep imported voices under Gemini
+        ctx.db.add(_npc_entity(ctx, npc, image_url, default_scene_id, voice))
         await ctx.commit_and_refresh()
     return {npc["id"]: npc_inventory_ids(npc) for npc in npcs}

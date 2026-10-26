@@ -16,6 +16,7 @@ import type {
   StoryIdeaSuggestionResponse,
   GeneratorSurprisePresetPayload,
   GeneratorSurprisePresetResponse,
+  TtsVoiceList,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -743,6 +744,12 @@ export const api = {
 
   testTTS(): Promise<{ status: string; audio_url?: string; message?: string }> {
     return request('/tts/test-connection', { method: 'POST', timeoutMs: 60000 })
+  },
+
+  /** Voices from the voice list; `provider` lists ElevenLabs voices before it is saved. */
+  getTtsVoices(provider?: string): Promise<TtsVoiceList> {
+    const query = provider ? `?provider=${encodeURIComponent(provider)}` : ''
+    return request(`/tts/voices${query}`, { method: 'GET' })
   },
 
   getElevenLabsModels(): Promise<Array<{ model_id: string, name: string }>> {

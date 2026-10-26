@@ -537,3 +537,21 @@ export interface EarnedAward extends Award {
   earned_at: string
 }
 
+
+/** A voice from the curated ElevenLabs voice list (backend/core/elevenlabs_voices.json). */
+export interface TtsVoice {
+  id: string
+  name: string
+  gender: string | null
+  age: string
+  accent: string
+  description: string
+  good_for: string[]
+}
+
+export interface TtsVoiceList {
+  provider: string
+  /** Only ElevenLabs gives characters their own voices; Gemini uses the narrator voice. */
+  supports_npc_voices: boolean
+  voices: TtsVoice[]
+}

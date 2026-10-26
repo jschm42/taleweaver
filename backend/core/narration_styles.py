@@ -11,7 +11,20 @@ from typing import Final, Literal
 
 NarrationStyle = Literal["terse", "dialogue", "balanced", "rich", "epic"]
 
-DEFAULT_NARRATION_STYLE: Final[NarrationStyle] = "balanced"
+DEFAULT_NARRATION_STYLE: Final[NarrationStyle] = "dialogue"
+
+# One-line length reminders, repeated at the end of every turn message where the model weighs
+# them most (the full rules in the system prompt alone were too easy to ignore).
+_STYLE_REMINDERS: Final[dict[str, str]] = {
+    "terse": "LENGTH: 1-2 short sentences of narration in total; NPC lines are one short sentence.",
+    "dialogue": (
+        "LENGTH: narration only as single short sentences between dialogue lines (at most 3); "
+        "let the characters do the talking."
+    ),
+    "balanced": "LENGTH: at most 2 short paragraphs of at most 3 sentences each; NPC lines 1-3 sentences.",
+    "rich": "LENGTH: at most 3 paragraphs of at most 4 sentences each.",
+    "epic": "LENGTH: at most 5 paragraphs of at most 5 sentences each.",
+}
 
 _STYLE_RULES: Final[dict[str, str]] = {
     "terse": (
@@ -69,3 +82,9 @@ def narration_style_rules(style: object) -> str:
     """Length and pacing rules for the narration prompt; unknown values fall back to balanced."""
     key = style if is_narration_style(style) else DEFAULT_NARRATION_STYLE
     return _STYLE_RULES[str(key)]
+
+
+def narration_style_reminder(style: object) -> str:
+    """Per-turn one-line length reminder; unknown values fall back to the default style."""
+    key = style if is_narration_style(style) else DEFAULT_NARRATION_STYLE
+    return _STYLE_REMINDERS[str(key)]

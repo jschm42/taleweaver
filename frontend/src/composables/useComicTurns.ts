@@ -156,6 +156,20 @@ export function parseUserMessage(
   return { isDialogue: false, speechText: raw }
 }
 
+// One tag format everywhere: [lowercase tag]. Mirrors backend/engine/tts_tag_format.py.
+const ANGLE_TAG = /<\s*([A-Za-z][A-Za-z '-]{0,40}?)\s*>/g
+// Parentheses become tags only for known sounds, never for prose asides.
+const PAREN_SOUND =
+  /\(\s*(sighs?|laughs?|chuckles?|coughs?|gasps?|groans?|gulps|snorts|breath|heavy breath|exhales(?: sharply)?|inhales deeply|throat-clearing|clears throat|(?:short |long )?pause)\s*\)/gi
+
+/** Rewrites <sigh> and (sigh) to [sigh] so tags look and sound the same everywhere. */
+export function normalizeTagSyntax(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(ANGLE_TAG, (_m, tag: string) => `[${tag.trim().toLowerCase()}]`)
+    .replace(PAREN_SOUND, (_m, tag: string) => `[${tag.trim().toLowerCase()}]`)
+}
+
 /** Voice tags are always English; only normalize casing and whitespace. */
 export function normalizeVoiceTag(tag: string): string {
   return tag.trim().toLowerCase()
@@ -201,7 +215,7 @@ export function parseAssistantContent(
   if (!content) return { narration: '', dialogues: [] }
 
   const dialogues: DialogueSegment[] = []
-  let cleanContent = content.replace(/\\n/g, '\n').trim()
+  let cleanContent = normalizeTagSyntax(content.replace(/\\n/g, '\n')).trim()
 
   // 1) Pre-split embedded/inline dialogues onto separate lines:
   // Detects: (Sentence end, voice tag, or line boundary) -> Speaker: "Dialogue"
@@ -303,7 +317,9 @@ export function parseAssistantContent(
     } else {
       let narrationText = line
       let voiceTag: string | undefined = undefined
-      const tagMatch = narrationText.match(/^\[([^\]\n]+)\]\s*(.*)$/)
+      // The first leading tag becomes the voice tag; further leading tags are dropped so the
+      // prose (and its drop cap) always starts with a letter.
+      const tagMatch = narrationText.match(/^\[([^\]\n]+)\](?:\s*\[[^\]\n]+\])*\s*(.*)$/)
       if (tagMatch) {
         voiceTag = normalizeVoiceTag(tagMatch[1])
         narrationText = tagMatch[2].trim()
@@ -332,22 +348,16 @@ export function parseAssistantContent(
   }
 }
 
-// Vocal bursts from the TTS catalog (backend/core/voice_tags.py), written in angle brackets.
-const PAUSE_BURST = /\s*<\s*(?:short |medium |long )?pause\s*>\s*/gi
-const VOCAL_BURST =
-  /&lt;\s*(cough|sigh|breath|heavy breath|laugh|chuckle|throat-clearing|gasp|groan)\s*&gt;/gi
+const PAUSE_TAG = /\s*\[(?:short |medium |long )?pause\]\s*/gi
 const QUOTE_CHARS = /["„“”«»]/
 
-/** Escapes the text and renders voice tags, vocal bursts, bold text and object ids as markup. */
+/** Escapes the text and renders voice tags, bold text and object ids as markup. */
 export function renderFormattedHtml(text: string): string {
   if (!text) return ''
-  // Pauses only shape the speech output; other bursts are shown as a subtle stage direction.
-  const displayText = text.replace(PAUSE_BURST, ' ').trim()
+  // Pauses only shape the speech output and are not shown.
+  const displayText = normalizeTagSyntax(text).replace(PAUSE_TAG, ' ').trim()
   const escaped = displayText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  const withBursts = escaped.replace(VOCAL_BURST, (_match, burst: string) => {
-    return `<span class="comic-vocal-tag">${burst.toLowerCase()}</span>`
-  })
-  const withVoiceTags = withBursts.replace(/(\[[^\]\n]+\])/g, (match, tag) => {
+  const withVoiceTags = escaped.replace(/(\[[^\]\n]+\])/g, (match, tag) => {
     const raw = tag.slice(1, -1).trim()
     if (/^DEBUG/i.test(raw)) return match
     const en = normalizeVoiceTag(raw)
