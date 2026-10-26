@@ -5,12 +5,14 @@ import { authState, clearAuth } from '@/store/auth'
 import { configState } from '@/store/config'
 import ChangeCredentialsModal from '@/components/portal/ChangeCredentialsModal.vue'
 import SetupWizardNavButton from '@/components/setup-wizard/SetupWizardNavButton.vue'
-import { isMobileSidebarOpen, openMobileSidebar } from '@/store/layout'
+import { isGameHeaderCollapsed, isMobileSidebarOpen, openMobileSidebar } from '@/store/layout'
 
 const router = useRouter()
 const route = useRoute()
 const isMenuOpen = ref(false)
 const isChangeCredentialsOpen = ref(false)
+// In-game focus mode hides the app header together with the game header bar.
+const isHiddenForFocus = computed(() => route.name === 'game' && isGameHeaderCollapsed.value)
 
 function normalizeProfileImageUrl(url: string): string {
   let normalized = (url || '').replace(/\\\\/g, '/')
@@ -42,7 +44,7 @@ function handleLogout() {
 </script>
 
 <template>
-  <header v-if="authState.isAuthenticated" class="h-12 bg-[#050b14] border-b border-white/5 px-6 my-1 flex items-center justify-between z-[100] relative">
+  <header v-if="authState.isAuthenticated && !isHiddenForFocus" class="h-12 bg-[#050b14] border-b border-white/5 px-6 my-1 flex items-center justify-between z-[100] relative">
     <!-- Left: Branding -->
     <div class="flex items-center gap-3">
       <!-- Mobile Sidebar Toggle -->

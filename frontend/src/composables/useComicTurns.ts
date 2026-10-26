@@ -68,6 +68,10 @@ const NON_SPEAKER_LABELS = new Set([
   'note', 'warning', 'caution', 'info', 'location', 'status', 'time', 'goal', 'quest', 'tip'
 ])
 
+// Labels the model sometimes puts in front of plain narration ("Narrator:", "**GM:**").
+// A leading voice tag is captured so it survives the replacement.
+const NARRATOR_LABEL = /^(\[[^\]\n]+\]\s*)?\**(?:narrator|narration|game master|gm)\**\s*:\**\s*/i
+
 export function parseUserMessage(
   msg: ChatMessage | null | undefined,
   entities: any[] = [],
@@ -221,7 +225,8 @@ export function parseAssistantContent(
   const speechRegex = /^(?:\[([^\]\n]+)\]\s*)?(?:(\*\*([^*:\n]+?):\*\*)|(\*\*([^*:\n]+?)\*\*:)|([\p{L}\p{N}_\s'’\-,.()]{2,60}):)\s*(.*)$/u
 
   for (const rawLine of lines) {
-    const line = rawLine.trim()
+    // "Narrator: ..." is a format leak, not a character; keep only the prose.
+    const line = rawLine.trim().replace(NARRATOR_LABEL, '$1').trim()
     if (!line) continue
 
     const match = line.match(speechRegex)

@@ -90,6 +90,7 @@ def _build_npc_info(
         "description": getattr(ent, "description", "") or "",
         "role": _npc_role(ent),
         "image_url": getattr(ent, "image_url", None),
+        "voice": getattr(ent, "voice", None),
         "current_scene_id": loc_id,
         "current_scene_name": scene_names.get(loc_id, loc_id),
         "start_scene_id": getattr(ent, "start_scene_id", None)
@@ -102,16 +103,27 @@ def _build_npc_info(
         "inventory": override.get("inventory", getattr(ent, "inventory", None) or []),
         "notes": override.get("notes") or getattr(ent, "notes", None) or "",
         "moveable": _npc_is_moveable(ent, override),
-        "allowed_scenes": override.get("allowed_scenes") or getattr(ent, "allowed_scenes", None) or [],
+        "allowed_scenes": override.get("allowed_scenes")
+        or getattr(ent, "allowed_scenes", None)
+        or [],
         "is_in_current_scene": loc_id == current_scene_id,
-        "stats": {
-            stat: getattr(ent, f"stat_modifier_{stat}", 0) or 10 for stat in _STAT_FIELDS
-        },
+        "stats": {stat: getattr(ent, f"stat_modifier_{stat}", 0) or 10 for stat in _STAT_FIELDS},
     }
 
 
 def _scene_npc_summary(npc: dict[str, Any]) -> dict[str, Any]:
-    keys = ("id", "name", "image_url", "hp", "max_hp", "is_alive", "is_hidden", "notes", "moveable", "allowed_scenes")
+    keys = (
+        "id",
+        "name",
+        "image_url",
+        "hp",
+        "max_hp",
+        "is_alive",
+        "is_hidden",
+        "notes",
+        "moveable",
+        "allowed_scenes",
+    )
     return {key: npc[key] for key in keys}
 
 
@@ -202,7 +214,9 @@ def _build_items_matrix(
     return items
 
 
-def _build_exits_data(exit_lookup: dict[str, WorldExit], exit_overrides: dict[str, Any]) -> list[dict[str, Any]]:
+def _build_exits_data(
+    exit_lookup: dict[str, WorldExit], exit_overrides: dict[str, Any]
+) -> list[dict[str, Any]]:
     exits = []
     for ex in exit_lookup.values():
         override = exit_overrides.get(ex.id, {})
@@ -312,22 +326,38 @@ async def _load_blueprint(db: AsyncSession, template_id: str) -> dict[str, Any] 
 
 async def _load_world(db: AsyncSession, state: SessionState):
     scenes = (
-        await db.execute(
-            select(WorldScene).where(_session_or_template(WorldScene, state)).order_by(WorldScene.id)
+        (
+            await db.execute(
+                select(WorldScene)
+                .where(_session_or_template(WorldScene, state))
+                .order_by(WorldScene.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     exits = (
-        await db.execute(select(WorldExit).where(_session_or_template(WorldExit, state)))
-    ).scalars().all()
+        (await db.execute(select(WorldExit).where(_session_or_template(WorldExit, state))))
+        .scalars()
+        .all()
+    )
     entities = (
-        await db.execute(
-            select(WorldEntity).where(_session_or_template(WorldEntity, state)).order_by(WorldEntity.id)
+        (
+            await db.execute(
+                select(WorldEntity)
+                .where(_session_or_template(WorldEntity, state))
+                .order_by(WorldEntity.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     session_id = state.session_id
     return (
         _prefer_session_rows(list(scenes), lambda s: s.id, session_id),
-        _prefer_session_rows(list(exits), lambda ex: f"{ex.from_scene_id}->{ex.to_scene_id}", session_id),
+        _prefer_session_rows(
+            list(exits), lambda ex: f"{ex.from_scene_id}->{ex.to_scene_id}", session_id
+        ),
         _prefer_session_rows(list(entities), lambda ent: ent.id, session_id),
     )
 

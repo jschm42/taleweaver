@@ -1,7 +1,8 @@
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, field_validator
 
+from backend.core.narration_styles import NarrationStyle
 from backend.core.ui_theme import UI_SKIN_AUTO, UI_SKINS
 
 
@@ -57,7 +58,7 @@ class GameSessionUpdate(BaseModel):
     status_note: Optional[str] = None
     max_memory_turns: Optional[int] = None
     enable_history_compression: Optional[bool] = None
-    narration_style: Optional[Literal["terse", "balanced", "rich", "epic"]] = None
+    narration_style: Optional[NarrationStyle] = None
     # "auto" clears the choice so the adventure's own skin applies again
     ui_skin: Optional[str] = None
 

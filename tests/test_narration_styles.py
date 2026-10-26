@@ -18,6 +18,7 @@ from tests.test_adventures_api import _create_adventure
     ("style", "marker"),
     [
         ("terse", "TERSE"),
+        ("dialogue", "DIALOGUE-FIRST SCRIPT"),
         ("balanced", "BALANCED"),
         ("rich", "RICH"),
         ("epic", "EPIC"),

@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
-import { parseAssistantContent } from '@/composables/useComicTurns'
+import { parseAssistantContent, type DialogueSegment } from '@/composables/useComicTurns'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
 const MAX_TRACKED_SIGNATURES = 200
@@ -60,6 +60,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   } = options
 
   const spokenSignatures = new Set<string>()
+  // Per streamed message: how many parsed segments were already queued for speech.
+  const streamedSegmentCounts = new WeakMap<object, number>()
   const lastSpokenSignature = ref<string | null>(null)
   const lastSpokenContent = ref<string | null>(null)
   const lastAutoSpeakAt = ref(0)
@@ -131,15 +133,21 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     lastAutoSpeakAt.value = now
     markMessageAsSpoken(lastMsg, index)
 
+    // Lines already spoken while the turn was streaming are skipped.
+    const alreadyStreamed = streamedSegmentCounts.get(lastMsg) ?? 0
     const parsed = parseAssistantContent(lastMsg.content, sheet.value, [], npcMetadata.value)
+    enqueueDialogues(parsed.dialogues.slice(alreadyStreamed))
+  }
+
+  function enqueueDialogues(dialogues: DialogueSegment[]): void {
     const speakNarration = options.autoSpeakNarration?.value ?? true
     const speakDialogues = options.autoSpeakDialogues?.value ?? true
-    
-    for (const dlg of parsed.dialogues) {
+
+    for (const dlg of dialogues) {
       if (!dlg.text.trim()) continue
       if (dlg.isNarration && !speakNarration) continue
       if (!dlg.isNarration && !speakDialogues) continue
-      
+
       const textToSpeak = dlg.voiceTag ? `<${dlg.voiceTag}> ${dlg.text}` : dlg.text
       const isNpcLine = Boolean(dlg.speaker) && dlg.speaker !== 'Game Master'
 
@@ -158,6 +166,37 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       })
     }
   }
+
+  /**
+   * Speaks finished lines of the narration while it is still streaming, so the first voice
+   * starts long before the turn is complete. Only complete lines are parsed, and the last
+   * parsed segment is held back because the next chunk may still extend it.
+   */
+  function speakStreamingProgress(): void {
+    if (status.value !== 'connecting' && status.value !== 'loading') return
+    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
+    if (isCombatActive.value) return
+
+    const latest = findLatestSpeakableAssistantMessage(messages.value)
+    if (!latest || isMessageAlreadySpoken(latest.message, latest.index)) return
+
+    const content = String(latest.message.content || '')
+    const completeText = content.slice(0, content.lastIndexOf('\n') + 1)
+    if (!completeText.trim()) return
+
+    const { dialogues } = parseAssistantContent(completeText, sheet.value, [], npcMetadata.value)
+    const stableCount = dialogues.length - 1
+    const spokenCount = streamedSegmentCounts.get(latest.message) ?? 0
+    if (stableCount <= spokenCount) return
+
+    streamedSegmentCounts.set(latest.message, stableCount)
+    enqueueDialogues(dialogues.slice(spokenCount, stableCount))
+  }
+
+  watch(
+    () => findLatestSpeakableAssistantMessage(messages.value)?.message.content,
+    () => speakStreamingProgress(),
+  )
 
   watch(() => sessionId.value, (newSessionId, oldSessionId) => {
     if (newSessionId !== oldSessionId) {

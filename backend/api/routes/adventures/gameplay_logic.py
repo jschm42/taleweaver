@@ -19,6 +19,7 @@ from backend.api.routes.adventures.agent_commands import (
     handle_playagent_command,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.core.narration_budget import log_narration_budget
 from backend.core.narration_styles import narration_style_rules
 from backend.engine.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.turn_helpers import (
@@ -1869,6 +1870,13 @@ class GameTurnManager:
             memory_turns=memory_turns,
             history_messages_count=len(narration_messages),
             **token_usage,
+        )
+
+        log_narration_budget(
+            response_text,
+            getattr(self.state, "narration_style", None),
+            adventure_id=self.adventure.id,
+            game_id=self.game_id,
         )
 
         pass2_duration = time.perf_counter() - pass2_start

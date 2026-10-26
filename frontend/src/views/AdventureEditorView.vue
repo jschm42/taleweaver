@@ -119,6 +119,7 @@ const editForm = ref({
   mana: 0,
   goal: '',
   character: '',
+  voice: '',
   appearance: '',
   is_killable: true,
   item_type: 'DEFAULT',
@@ -1034,6 +1035,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     mana: mana ?? 0,
     goal: goal || '',
     character: character || '',
+    voice: type === 'npc' ? String(selectedNpc?.voice || '') : '',
     is_killable: isKillable ?? true,
     moveable: selectedNpc?.moveable != null ? Boolean(selectedNpc.moveable) : (String(selectedNpc?.movement_type || '').toUpperCase() === 'MOVABLE'),
     allowed_scenes_input: Array.isArray(selectedNpc?.allowed_scenes) ? [...selectedNpc.allowed_scenes] : [],
@@ -1338,6 +1340,7 @@ async function saveEntityText(data: any) {
       mana: data.mana || undefined,
       goal: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.goal : undefined,
       character: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.character : undefined,
+      voice: editEntityContext.value.type === 'npc' ? String(data.voice || '') : undefined,
       appearance: ['cover', 'npc', 'object', 'protagonist'].includes(editEntityContext.value.type) ? (data.appearance ?? '') : undefined,
       is_killable: editEntityContext.value.type === 'npc' ? data.is_killable : undefined,
       moveable: editEntityContext.value.type === 'npc' ? data.moveable : undefined,
@@ -3005,6 +3008,7 @@ watch(
       :adventure-id="adventureId"
       :is-create-entity-mode="isCreateEntityMode"
       :npc-data="editEntityContext?.type === 'npc' ? editorNpcs.find((n: any) => n.id === editEntityContext?.id) : null"
+      :available-voices="availableVoices"
       @close="closeEditEntityModal"
       @save="saveEntityText"
       @combat-saved="onSpecialAttacksSaved"

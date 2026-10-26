@@ -15,6 +15,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
     uses_advanced_model,
 )
+from backend.engine.voice_casting import CastingCandidate, cast_voices, resolve_narrator_voice
 from backend.models.world_entity import WorldEntity
 
 # NPC settings that may appear at the top level (generated manifests) or inside
@@ -133,8 +134,17 @@ async def _npc_image(
     return await placeholder_image(ctx, npc["id"], category="NPC", subdir="entities")
 
 
+def _casting_candidate(npc: dict[str, Any]) -> CastingCandidate:
+    text = " ".join(str(npc.get(key) or "") for key in ("name", "description", "character"))
+    return CastingCandidate(str(npc["id"]), text, npc.get("voice"))
+
+
 def _npc_entity(
-    ctx: ApplyContext, npc: dict[str, Any], image_url: Optional[str], default_scene_id: str
+    ctx: ApplyContext,
+    npc: dict[str, Any],
+    image_url: Optional[str],
+    default_scene_id: str,
+    voice: Optional[str] = None,
 ) -> WorldEntity:
     moveable = _is_moveable(npc)
     declared_movable = str(npc.get("movement_type") or "").upper() == "MOVABLE"
@@ -152,6 +162,7 @@ def _npc_entity(
         or default_scene_id,
         spatial_position=npc.get("spatial_position"),
         image_url=image_url,
+        voice=voice,
         npc_type=npc.get("npc_type"),
         movement_type="MOVABLE"
         if (npc.get("moveable") is True or declared_movable)
@@ -180,6 +191,9 @@ async def persist_npcs(
     processed: list[dict] = []
     image_cache: dict[str, str] = {}
     total = len(npcs)
+    voices = cast_voices(
+        [_casting_candidate(npc) for npc in npcs], reserved=[await resolve_narrator_voice(ctx.db)]
+    )
     for idx, npc in enumerate(npcs, start=1):
         if npc["id"] in ctx.seen_entity_ids:
             continue
@@ -188,6 +202,6 @@ async def persist_npcs(
         if image_url:
             image_cache[npc["id"]] = image_url
         processed.append(npc)
-        ctx.db.add(_npc_entity(ctx, npc, image_url, default_scene_id))
+        ctx.db.add(_npc_entity(ctx, npc, image_url, default_scene_id, voices.get(npc["id"])))
         await ctx.commit_and_refresh()
     return {npc["id"]: npc_inventory_ids(npc) for npc in npcs}

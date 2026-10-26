@@ -1,5 +1,5 @@
 /** Narration styles; ids mirror backend/core/narration_styles.py. */
-export const NARRATION_STYLES = ['terse', 'balanced', 'rich', 'epic'] as const
+export const NARRATION_STYLES = ['terse', 'dialogue', 'balanced', 'rich', 'epic'] as const
 
 export type NarrationStyle = (typeof NARRATION_STYLES)[number]
 
@@ -19,6 +19,13 @@ export const NARRATION_STYLE_OPTIONS: NarrationStyleOption[] = [
     length: '1-2 sentences',
     description: 'Quick story snippets. Only what changed and who reacts.',
     previewLines: 1,
+  },
+  {
+    id: 'dialogue',
+    label: 'Dialogue',
+    length: 'Short beats, lots of talk',
+    description: 'Plays like a radio drama. Characters talk; the narrator only bridges.',
+    previewLines: 2,
   },
   {
     id: 'balanced',

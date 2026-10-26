@@ -7,6 +7,7 @@ import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue
 import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
+import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
 import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, ChevronDown, ChevronRight, Edit3 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -21,6 +22,7 @@ const props = defineProps<{
     mana: number
     goal: string
     character: string
+    voice?: string
     appearance: string
     is_killable: boolean
     item_type: string
@@ -75,6 +77,7 @@ const props = defineProps<{
   adventureId?: string
   isCreateEntityMode?: boolean
   npcData?: any
+  availableVoices?: Array<{ name: string; gender?: string; description?: string }>
 }>()
 
 const emit = defineEmits<{
@@ -909,6 +912,14 @@ const textLogPreviewClass = computed(() => {
                 </div>
               </div>
               
+              <NpcVoicePicker
+                v-if="context.type === 'npc'"
+                v-model="localForm.voice"
+                :voices="props.availableVoices || []"
+                :npc-name="localForm.name"
+                :adventure-id="props.adventureId"
+              />
+
               <div v-if="context.type === 'npc'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="space-y-3">
                   <div class="flex justify-between items-center">

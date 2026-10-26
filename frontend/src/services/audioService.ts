@@ -109,6 +109,8 @@ function buildRequestContext(options: SpeakOptions): RequestContext {
 class AudioService {
   private static readonly TTS_DEBUG_STORAGE_KEY = 'tts_debug_logs'
   private static readonly TTS_REQUEST_MIN_INTERVAL_MS = 450
+  /** Segments generated ahead of playback, so short NPC lines follow each other without gaps. */
+  private static readonly TTS_LOOKAHEAD = 3
   private currentAudio: HTMLAudioElement | null = null
   private currentObjectUrl: string | null = null
   private currentBufferSource: AudioBufferSourceNode | null = null
@@ -178,12 +180,14 @@ class AudioService {
     console.info(message, payload)
   }
 
+  /** Reserves the next request slot synchronously so parallel lookahead fetches stay spaced out. */
   private async waitForTtsRequestSlot(): Promise<void> {
-    const waitMs = AudioService.TTS_REQUEST_MIN_INTERVAL_MS - (Date.now() - this.lastTtsRequestAt)
-    if (waitMs > 0) {
-      await new Promise<void>((resolve) => setTimeout(resolve, waitMs))
+    const now = Date.now()
+    const slot = Math.max(now, this.lastTtsRequestAt + AudioService.TTS_REQUEST_MIN_INTERVAL_MS)
+    this.lastTtsRequestAt = slot
+    if (slot > now) {
+      await new Promise<void>((resolve) => setTimeout(resolve, slot - now))
     }
-    this.lastTtsRequestAt = Date.now()
   }
 
   private async fetchAudioBlob(audioUrl: string): Promise<Blob> {
@@ -350,19 +354,30 @@ class AudioService {
     return { segment, audio: this.fetchSegmentAudio(segment, token) }
   }
 
-  /** Plays queued segments in order while generating the next one in the background,
+  /** Starts generating queued segments until the lookahead window is full. */
+  private fillLookahead(pending: PreparedSegment[], token: number): void {
+    while (pending.length < AudioService.TTS_LOOKAHEAD) {
+      const next = this.prepareNext(token)
+      if (!next) return
+      pending.push(next)
+    }
+  }
+
+  /** Plays queued segments in order while generating the next few in the background,
    *  including across separate speak()/enqueueSpeak() calls. */
   private async runPipeline(token: number): Promise<void> {
     this.isPlaying.value = true
+    const pending: PreparedSegment[] = []
     try {
-      let pending = this.prepareNext(token)
-      while (pending) {
-        const { segment, audio } = pending
+      this.fillLookahead(pending, token)
+      let current = pending.shift()
+      while (current) {
+        const { segment, audio } = current
         const blob = await audio
         if (token !== this.playbackToken) return
 
-        pending = this.prepareNext(token)
-        if (!pending) {
+        this.fillLookahead(pending, token)
+        if (pending.length === 0) {
           this.isGenerating.value = false
           this.currentlyGeneratingContent.value = null
         }
@@ -374,7 +389,8 @@ class AudioService {
         }
         if (token !== this.playbackToken) return
         // Items enqueued while the last segment was playing.
-        pending ??= this.prepareNext(token)
+        this.fillLookahead(pending, token)
+        current = pending.shift()
       }
     } catch (err) {
       console.error('TTS Playback failed', err)

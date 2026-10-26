@@ -21,7 +21,8 @@ import ImmersiveCharacterStage from './immersive/ImmersiveCharacterStage.vue'
 import ImmersiveStoryTabs from './immersive/ImmersiveStoryTabs.vue'
 import StoryTabPanel from './immersive/tabs/StoryTabPanel.vue'
 import SceneImageViewer from './immersive/SceneImageViewer.vue'
-import { Image as ImageIcon } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-vue-next'
+import { isGameHeaderCollapsed, toggleGameHeader } from '@/store/layout'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
@@ -142,6 +143,9 @@ const transitionSceneImageUrl = computed(() => {
 const isEvaluating = computed(() => {
   return props.status === 'connecting' || props.status === 'loading' || !!props.inputLocked
 })
+
+// Keep the action buttons visible while one of them glows for new content.
+const actionBarPinned = computed(() => Boolean(props.inventoryGlow || props.mapGlow || props.questGlow))
 
 const canSendInput = computed(() => {
   return (
@@ -276,26 +280,40 @@ defineExpose({
       <div class="tw-scene-tint"></div>
     </div>
 
-    <!-- 2. TOP ATMOSPHERIC HEADER BAR -->
-    <ImmersiveHeader
-      :scene-name="props.currentSceneName || props.sheet?.current_scene"
-      :active-sequence="props.activeSequence"
-      :adventure-title="props.sheet?.adventure_title"
-      :creator="props.sheet?.creator"
-      :copyright="props.sheet?.copyright"
-      :tracked-quest="props.trackedQuest"
-      :game-time="props.gameTime"
-      :clock-tick="props.clockTick"
-      :exp="props.exp"
-      :mode="props.mode"
-      :debug-mode="!!props.sheet?.debug_mode"
-      @open-chronicles="emit('openChronicles')"
-      @open-quests="emit('openQuests')"
-      @open-memories="emit('openMemories')"
-      @open-settings="(tab?: SettingsTabId) => emit('openSettings', tab)"
-      @open-debug="emit('openDebug')"
-      @exit-session="emit('exitSession')"
-    />
+    <!-- 2. TOP ATMOSPHERIC HEADER BAR (collapsible focus mode) -->
+    <div class="relative z-30 shrink-0">
+      <ImmersiveHeader
+        v-if="!isGameHeaderCollapsed"
+        :scene-name="props.currentSceneName || props.sheet?.current_scene"
+        :active-sequence="props.activeSequence"
+        :adventure-title="props.sheet?.adventure_title"
+        :creator="props.sheet?.creator"
+        :copyright="props.sheet?.copyright"
+        :tracked-quest="props.trackedQuest"
+        :game-time="props.gameTime"
+        :clock-tick="props.clockTick"
+        :exp="props.exp"
+        :mode="props.mode"
+        :debug-mode="!!props.sheet?.debug_mode"
+        @open-chronicles="emit('openChronicles')"
+        @open-quests="emit('openQuests')"
+        @open-memories="emit('openMemories')"
+        @open-settings="(tab?: SettingsTabId) => emit('openSettings', tab)"
+        @open-debug="emit('openDebug')"
+        @exit-session="emit('exitSession')"
+      />
+      <button
+        type="button"
+        class="absolute left-1/2 top-full -translate-x-1/2 flex items-center gap-1 rounded-b-lg border border-t-0 border-slate-700/60 bg-slate-950/70 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 backdrop-blur-md hover:text-slate-100 transition-colors"
+        :title="isGameHeaderCollapsed ? 'Show header' : 'Hide header for more room'"
+        :aria-expanded="!isGameHeaderCollapsed"
+        @click="toggleGameHeader"
+      >
+        <ChevronDown v-if="isGameHeaderCollapsed" class="w-3.5 h-3.5" />
+        <ChevronUp v-else class="w-3.5 h-3.5" />
+        <span v-if="isGameHeaderCollapsed" class="hidden sm:inline">Menu</span>
+      </button>
+    </div>
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->
     <div class="relative z-10 flex-grow min-h-0 flex flex-row gap-2 sm:gap-4 p-2 sm:p-4 lg:p-6 overflow-hidden">
@@ -407,27 +425,30 @@ defineExpose({
     </div>
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->
-    <footer class="relative z-20 flex flex-col bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
-      <ImmersiveActionBar
-        :inventory="props.inventory"
-        :tracked-quest="props.trackedQuest"
-        :inventory-glow="props.inventoryGlow"
-        :map-glow="props.mapGlow"
-        :quest-glow="props.questGlow"
-        :prompt-suggestions="props.promptSuggestions"
-        :world-memories="props.worldMemories"
-        :can-send-input="canSendInput"
-        :debug-mode="!!props.sheet?.debug_mode"
-        @open-quests="emit('openQuests')"
-        @open-map="emit('openMap')"
-        @open-sheet="emit('openSheet')"
-        @open-chronicles="emit('openChronicles')"
-        @open-walkthrough="emit('openWalkthrough')"
-        @open-memories="emit('openMemories')"
-        @open-debug="emit('openDebug')"
-        @select-suggestion="handleSuggestionSelect"
-        @shuffle-suggestions="handleSuggestionShuffle"
-      />
+    <footer class="tw-footer relative z-20 flex flex-col bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
+      <!-- Action buttons slide in when the pointer is over the footer (always shown on touch). -->
+      <div class="tw-action-reveal" :class="{ 'is-pinned': actionBarPinned }">
+        <ImmersiveActionBar
+          :inventory="props.inventory"
+          :tracked-quest="props.trackedQuest"
+          :inventory-glow="props.inventoryGlow"
+          :map-glow="props.mapGlow"
+          :quest-glow="props.questGlow"
+          :prompt-suggestions="props.promptSuggestions"
+          :world-memories="props.worldMemories"
+          :can-send-input="canSendInput"
+          :debug-mode="!!props.sheet?.debug_mode"
+          @open-quests="emit('openQuests')"
+          @open-map="emit('openMap')"
+          @open-sheet="emit('openSheet')"
+          @open-chronicles="emit('openChronicles')"
+          @open-walkthrough="emit('openWalkthrough')"
+          @open-memories="emit('openMemories')"
+          @open-debug="emit('openDebug')"
+          @select-suggestion="handleSuggestionSelect"
+          @shuffle-suggestions="handleSuggestionShuffle"
+        />
+      </div>
 
       <ImmersiveInputBar
         ref="inputBarRef"
@@ -451,3 +472,43 @@ defineExpose({
     />
   </div>
 </template>
+
+<style scoped>
+.tw-action-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.2s ease, opacity 0.2s ease;
+}
+
+.tw-action-reveal > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tw-footer:hover .tw-action-reveal,
+.tw-action-reveal:focus-within,
+.tw-action-reveal.is-pinned {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* Revealed: let upward popovers (ideas) overflow the bar. */
+.tw-footer:hover .tw-action-reveal > *,
+.tw-action-reveal:focus-within > *,
+.tw-action-reveal.is-pinned > * {
+  overflow: visible;
+}
+
+/* Touch devices cannot hover: keep the buttons visible. */
+@media (hover: none) {
+  .tw-action-reveal {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  .tw-action-reveal > * {
+    overflow: visible;
+  }
+}
+</style>

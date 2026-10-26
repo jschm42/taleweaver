@@ -17,6 +17,7 @@ from backend.api.routes.adventures.session_start_settings import (
 )
 from backend.api.routes.adventures.sheet_snapshot import build_sheet_snapshot
 from backend.engine.map_engine import MapEngine
+from backend.engine.voice_casting import CastingCandidate, cast_voices, resolve_narrator_voice
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -534,18 +535,27 @@ class AdventureLogic:
             )
         else:
             return {}
-        npc_res = await db.execute(npc_query)
-        metadata = {}
-        for npc in npc_res.scalars().all():
-            data = {
+        npcs = (await db.execute(npc_query)).scalars().all()
+        # NPCs without a stored voice get a deterministic, distinct one (older adventures).
+        voices = cast_voices(
+            [
+                CastingCandidate(
+                    npc.id, f"{npc.name} {npc.description} {npc.character or ''}", npc.voice
+                )
+                for npc in npcs
+            ],
+            reserved=[await resolve_narrator_voice(db)],
+        )
+        return {
+            npc.id: {
                 "name": npc.name,
                 "description": npc.description,
                 "image_url": npc.image_url,
-                "voice": npc.voice,
+                "voice": voices.get(npc.id),
                 "entity_type": "NPC",
             }
-            metadata[npc.id] = data
-        return metadata
+            for npc in npcs
+        }
 
     @staticmethod
     async def delete_adventure(db: AsyncSession, template_id: str):

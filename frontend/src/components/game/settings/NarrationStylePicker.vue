@@ -13,7 +13,7 @@ const style = defineModel<NarrationStyle>({ required: true })
       </p>
     </div>
 
-    <div role="radiogroup" aria-label="Narration style" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div role="radiogroup" aria-label="Narration style" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       <button
         v-for="option in NARRATION_STYLE_OPTIONS"
         :key="option.id"

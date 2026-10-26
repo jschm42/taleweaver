@@ -20,6 +20,8 @@ class EntityUpdateRequest(BaseModel):
     stamina: Optional[int] = None
     goal: Optional[str] = None
     character: Optional[str] = None
+    # NPC TTS voice; an empty string clears it so the voice is cast automatically.
+    voice: Optional[str] = None
     # Visual keywords for image prompts; maps to ``cover_appearance`` for the cover.
     appearance: Optional[str] = Field(default=None, max_length=100)
     is_killable: Optional[bool] = None

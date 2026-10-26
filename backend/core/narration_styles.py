@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-NarrationStyle = Literal["terse", "balanced", "rich", "epic"]
+NarrationStyle = Literal["terse", "dialogue", "balanced", "rich", "epic"]
 
 DEFAULT_NARRATION_STYLE: Final[NarrationStyle] = "balanced"
 
@@ -20,6 +20,18 @@ _STYLE_RULES: Final[dict[str, str]] = {
         "3 short sentences. Name only the single most striking detail; never describe a room in full. "
         "NPC dialogue is one short sentence per character per turn. Skip transitions, inner thoughts and "
         "atmosphere padding; move straight to what changed and who reacts."
+    ),
+    "dialogue": (
+        "NARRATION STYLE — DIALOGUE-FIRST SCRIPT (CRITICAL): Write the turn like a radio play. The "
+        "characters carry the scene; the narrator only bridges between their lines. Alternate narrator "
+        "beats and dialogue lines, each on its own line with a blank line in between. A narrator beat is "
+        "exactly ONE short sentence (at most about 20 words) naming an action, a reaction or one sensory "
+        "detail. Never write two narrator beats in a row and use at most 3 per turn; a new location may "
+        "open with one extra beat of up to 2 sentences. Narration stays below a third of the words of the "
+        "turn. Present NPCs speak in short lines of 1-2 sentences, and a turn usually holds 3-6 dialogue "
+        "lines: several quick exchanges, interruptions and replies instead of one long speech. When no NPC "
+        "is present, write 1-3 narrator beats and never invent speakers. Never label narration with "
+        "'Narrator:' or any other speaker name."
     ),
     "balanced": (
         "NARRATION STYLE — BALANCED (CRITICAL): 1-2 short paragraphs for standard actions. Up to 3 "

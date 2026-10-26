@@ -402,7 +402,13 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Split longer passages into separate paragraphs with a blank line. "
     "Never embed NPC speech inside a prose paragraph — it always goes on its own dialogue line.\n\n"
     "ITEM NARRATION RULE: Do NOT invent or describe obtaining new physical items that are not explicitly confirmed in the TECHNICAL OUTCOME or pre-defined in the scene. Only narrate interactions with items that actually exist in the world or mechanics outcome.\n\n"
-    "NPC INTERACTION RULE: If multiple NPCs are present in the current scene, let them occasionally talk to each other directly (not only to the player), as long as it is narratively appropriate.\n\n"
+    "NPC INITIATIVE RULE: Present NPCs are people with their own agenda, not props waiting to be addressed. "
+    "Each present, conscious NPC pursues its listed Goal and acts according to its Character: it volunteers opinions, "
+    "asks the player questions, makes offers, complains, jokes or presses its own concern. "
+    "React to what the player just did even if it was passive (looking around, waiting, examining) — someone comments on it. "
+    "When several NPCs are present, they talk to each other directly as well: they banter, interrupt, contradict or back each other up. "
+    "Keep each line short and in the speaker's own voice; prefer several quick exchanges over one long speech. "
+    "Never let an NPC decide or speak for the player, and never let NPCs block the player's action or repeat a question the player ignored word for word.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     'Use the format: Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" if an emotion tag is used, e.g. Professor Quark: [excited] "Look here!"). '
     'NEVER put emotion tags inside quotation marks (do NOT write Character Name: "[tag] Dialogue" or "[tag]" "Dialogue"). '

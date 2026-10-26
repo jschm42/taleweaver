@@ -13,6 +13,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_scene_ref,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.engine.voice_casting import is_known_voice
 from backend.models.world_entity import WorldEntity
 
 _NPC_SCRIPT_FIELDS = (
@@ -40,6 +41,14 @@ async def _update_inventory(
         item.current_scene_id = INVENTORY_LOCATION
 
 
+def _update_voice(npc: WorldEntity, payload: EntityUpdateRequest) -> None:
+    """Unknown or empty voices fall back to automatic casting."""
+    if not given(payload, "voice"):
+        return
+    voice = (payload.voice or "").strip()
+    npc.voice = voice if is_known_voice(voice) else None
+
+
 def _update_movement(npc: WorldEntity, payload: EntityUpdateRequest) -> None:
     if given(payload, "moveable"):
         npc.moveable = bool(payload.moveable)
@@ -57,6 +66,7 @@ async def update_npc(
     if given(payload, "inventory"):
         await _update_inventory(db, template_id, npc, payload)
     _update_movement(npc, payload)
+    _update_voice(npc, payload)
 
     metadata_json = dict(npc.metadata_json or {})
     put_metadata(metadata_json, payload, _NPC_SCRIPT_FIELDS, empty_as_none=False)
