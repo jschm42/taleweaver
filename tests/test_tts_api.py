@@ -352,7 +352,8 @@ async def test_elevenlabs_applies_npc_voice_ids(
 
 
 @pytest.mark.asyncio
-async def test_voices_endpoint_lists_voice_list_only_for_elevenlabs(auth_client: AsyncClient):
+async def test_voices_endpoint_always_lists_voices_but_flags_elevenlabs(auth_client: AsyncClient):
+    """Voices can be assigned under Gemini too; only ElevenLabs speaks them."""
     # Arrange
     await _enable_tts_for_test_user()
 
@@ -361,7 +362,9 @@ async def test_voices_endpoint_lists_voice_list_only_for_elevenlabs(auth_client:
     eleven = await auth_client.get("/api/tts/voices", params={"provider": "elevenlabs"})
 
     # Assert
-    assert gemini.json() == {"provider": "google", "supports_npc_voices": False, "voices": []}
+    assert gemini.json()["provider"] == "google"
+    assert gemini.json()["supports_npc_voices"] is False
+    assert gemini.json()["voices"] == eleven.json()["voices"]
     assert eleven.json()["supports_npc_voices"] is True
     assert eleven.json()["voices"]
 
@@ -404,28 +407,28 @@ async def test_elevenlabs_rate_limit_raises_rate_limit_error(monkeypatch):
     # Arrange
     import httpx
 
+    from backend.engine import elevenlabs_stream
     from backend.engine.tts_engine import TTSEngine, TTSRateLimitError
 
     monkeypatch.setattr(
         "backend.engine.tts_engine._wait_for_tts_request_slot", AsyncMock(return_value=None)
     )
-    rate_limited = httpx.Response(429, headers={"Retry-After": "3"})
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda _r: httpx.Response(429, headers={"Retry-After": "3"}))
+    monkeypatch.setattr(
+        elevenlabs_stream.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
 
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        instance = MagicMock()
-        instance.__aenter__ = AsyncMock(return_value=instance)
-        instance.__aexit__ = AsyncMock(return_value=False)
-        instance.post = AsyncMock(return_value=rate_limited)
-        mock_client_cls.return_value = instance
-
-        # Act / Assert
-        with pytest.raises(TTSRateLimitError):
-            await TTSEngine.generate_speech(
-                text="Hello",
-                provider="elevenlabs",
-                elevenlabs_voice_id="voice-1",
-                api_key="el-key",
-            )
+    # Act / Assert
+    with pytest.raises(TTSRateLimitError):
+        await TTSEngine.generate_speech(
+            text="Hello",
+            provider="elevenlabs",
+            elevenlabs_voice_id="voice-1",
+            api_key="el-key",
+        )
 
 
 @pytest.mark.asyncio

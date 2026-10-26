@@ -136,7 +136,6 @@ const handleSpeakTextLog = () => {
   audioService.unlock()
   void audioService.speak(activeContent.value, {
     title: props.title,
-    useTextChunking: false,
   })
 }
 

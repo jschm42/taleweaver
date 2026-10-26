@@ -746,6 +746,11 @@ export const api = {
     return request('/tts/test-connection', { method: 'POST', timeoutMs: 60000 })
   },
 
+  /** Single-use token for streaming speech (ElevenLabs only; 409 otherwise). */
+  prepareTtsStream(payload: { text: string; voice_override?: string }): Promise<{ token: string }> {
+    return request('/tts/stream', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 20000 })
+  },
+
   /** Voices from the voice list; `provider` lists ElevenLabs voices before it is saved. */
   getTtsVoices(provider?: string): Promise<TtsVoiceList> {
     const query = provider ? `?provider=${encodeURIComponent(provider)}` : ''

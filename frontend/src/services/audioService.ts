@@ -4,11 +4,18 @@ import {
   buildSafeRetryText,
   buildSegmentRequests,
   buildSpeechSegments,
+  buildWholeTextSegment,
   isSpeakableSegment,
   normalizeDialoguePrefixes,
   resolveNpcVoice,
   type SegmentRequest,
 } from '@/services/ttsText'
+import {
+  StreamingUnavailableError,
+  playStreamElement,
+  prepareStreamElement,
+  releaseStreamElement,
+} from '@/services/ttsStream'
 
 type SpeakOptions = {
   sceneDescription?: string
@@ -19,7 +26,6 @@ type SpeakOptions = {
   tone?: string
   npcMetadata?: Record<string, any>
   interruptCurrent?: boolean
-  useTextChunking?: boolean
   style?: string
   /** Fallback voice (or NPC name resolvable via npcMetadata) for segments without a speaker voice. */
   voiceOverride?: string
@@ -44,7 +50,9 @@ type QueuedSegment = {
   ttsText: string
 }
 
-type PreparedSegment = { segment: QueuedSegment, audio: Promise<Blob | null> }
+/** A streaming <audio> element (ElevenLabs) or a whole clip (Gemini, fallback). */
+type PlayableAudio = HTMLAudioElement | Blob
+type PreparedSegment = { segment: QueuedSegment, audio: Promise<PlayableAudio | null> }
 
 // Retrying with simplified text cannot help when the provider is overloaded or rate-limited.
 const NON_RETRYABLE_STATUSES = new Set([429, 503, 504])
@@ -111,6 +119,12 @@ class AudioService {
   private static readonly TTS_REQUEST_MIN_INTERVAL_MS = 450
   /** Segments generated ahead of playback, so short NPC lines follow each other without gaps. */
   private static readonly TTS_LOOKAHEAD = 3
+  private static readonly TTS_STREAM_LOOKAHEAD = 1
+  /** null = unknown until the first request; false = provider does not stream (Gemini). */
+  private streamingAvailable: boolean | null = null
+  private streamElements = new Set<HTMLAudioElement>()
+  private autoSpeechChosenByPlayer = false
+  private unlockListenerInstalled = false
   private currentAudio: HTMLAudioElement | null = null
   private currentObjectUrl: string | null = null
   private currentBufferSource: AudioBufferSourceNode | null = null
@@ -128,14 +142,12 @@ class AudioService {
   public lastError = ref<string | null>(null)
   public currentText = ref<string | null>(null)
   public autoSpeechEnabled = ref(false)
-  public useTextChunking = ref(readStorage('tts_use_chunking') !== 'false')
   public speechRate = ref<number>(parseFloat(readStorage('tts_speech_rate') ?? '1'))
   public ttsDebugEnabled = ref(readStorage(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
 
   constructor() {
     watch(this.speechRate, (val) => writeStorage('tts_speech_rate', String(val)))
     watch(this.ttsDebugEnabled, (val) => writeStorage(AudioService.TTS_DEBUG_STORAGE_KEY, val ? 'true' : 'false'))
-    watch(this.useTextChunking, (val) => writeStorage('tts_use_chunking', val ? 'true' : 'false'))
   }
 
   /** Call this once from any direct user-gesture handler (e.g. send button).
@@ -332,11 +344,10 @@ class AudioService {
 
   private planSegments(normalizedText: string, options: SpeakOptions): QueuedSegment[] {
     const ttsText = normalizeDialoguePrefixes(normalizedText)
-    const useChunking = typeof options.useTextChunking === 'boolean' ? options.useTextChunking : this.useTextChunking.value
-    const requests = buildSegmentRequests(buildSpeechSegments(ttsText, useChunking), options.npcMetadata)
+    const requests = buildSegmentRequests(buildSpeechSegments(ttsText), options.npcMetadata)
     const fallbackVoice = resolveNpcVoice(options.voiceOverride, options.npcMetadata) ?? options.voiceOverride
     const context = buildRequestContext(options)
-    this.logDebug('TTS plan', { totalLength: ttsText.length, requests: requests.length, useChunking })
+    this.logDebug('TTS plan', { totalLength: ttsText.length, requests: requests.length })
 
     return requests.map(request => ({
       request: { ...request, voiceOverride: request.voiceOverride ?? fallbackVoice },
@@ -351,12 +362,62 @@ class AudioService {
     if (!segment) return null
     this.isGenerating.value = true
     this.currentlyGeneratingContent.value = segment.displayText
-    return { segment, audio: this.fetchSegmentAudio(segment, token) }
+    return { segment, audio: this.prepareSegmentAudio(segment, token) }
   }
 
-  /** Starts generating queued segments until the lookahead window is full. */
+  /** A streaming <audio> element (ElevenLabs), else the whole clip as a blob (Gemini, fallback). */
+  private async prepareSegmentAudio(segment: QueuedSegment, token: number): Promise<PlayableAudio | null> {
+    if (this.streamingAvailable === false) return this.fetchSegmentAudio(segment, token)
+    try {
+      await this.waitForTtsRequestSlot()
+      if (token !== this.playbackToken) return null
+      const element = await prepareStreamElement(segment.request.requestText, segment.request.voiceOverride)
+      this.streamingAvailable = true
+      this.streamElements.add(element)
+      return element
+    } catch (err) {
+      if (err instanceof StreamingUnavailableError) {
+        this.streamingAvailable = false
+      } else {
+        this.logDebug('TTS stream could not start; using whole-clip request', { error: String(err) })
+      }
+      return this.fetchSegmentAudio(segment, token)
+    }
+  }
+
+  private async playStream(element: HTMLAudioElement, segment: QueuedSegment, token: number): Promise<void> {
+    this.currentAudio = element
+    try {
+      await playStreamElement(element, this.getSafeSpeechRate(), (settle) => {
+        this.resolveCurrentPlayback = settle
+      })
+    } catch (err) {
+      // A failed stream (e.g. rate limit) is retried once as a whole clip.
+      this.logDebug('TTS stream playback failed; retrying as whole clip', { error: String(err) })
+      const blob = token === this.playbackToken ? await this.fetchSegmentAudio(segment, token) : null
+      if (blob && token === this.playbackToken) await this.playAudioBlob(blob)
+    } finally {
+      this.streamElements.delete(element)
+      releaseStreamElement(element)
+      if (this.currentAudio === element) this.currentAudio = null
+      this.resolveCurrentPlayback = null
+    }
+  }
+
+  private async playPrepared(playable: PlayableAudio, segment: QueuedSegment, token: number): Promise<void> {
+    this.currentText.value = segment.ttsText
+    if (playable instanceof HTMLAudioElement) {
+      await this.playStream(playable, segment, token)
+      return
+    }
+    await this.playAudioBlob(playable)
+  }
+
+  /** Starts generating queued segments until the lookahead window is full. Streams start
+   *  playing almost at once, so one segment ahead is enough and keeps upstream concurrency low. */
   private fillLookahead(pending: PreparedSegment[], token: number): void {
-    while (pending.length < AudioService.TTS_LOOKAHEAD) {
+    const lookahead = this.streamingAvailable === false ? AudioService.TTS_LOOKAHEAD : AudioService.TTS_STREAM_LOOKAHEAD
+    while (pending.length < lookahead) {
       const next = this.prepareNext(token)
       if (!next) return
       pending.push(next)
@@ -373,7 +434,7 @@ class AudioService {
       let current = pending.shift()
       while (current) {
         const { segment, audio } = current
-        const blob = await audio
+        const playable = await audio
         if (token !== this.playbackToken) return
 
         this.fillLookahead(pending, token)
@@ -381,9 +442,8 @@ class AudioService {
           this.isGenerating.value = false
           this.currentlyGeneratingContent.value = null
         }
-        if (blob) {
-          this.currentText.value = segment.ttsText
-          await this.playAudioBlob(blob).catch((err) => {
+        if (playable) {
+          await this.playPrepared(playable, segment, token).catch((err) => {
             this.logDebug('TTS segment playback failed; continuing', { error: String(err) })
           })
         }
@@ -450,7 +510,7 @@ class AudioService {
     const normalizedText = normalizeText(text)
     if (!normalizedText) return
 
-    const [request] = buildSegmentRequests(buildSpeechSegments(normalizeDialoguePrefixes(normalizedText), false), options.npcMetadata)
+    const [request] = buildSegmentRequests(buildWholeTextSegment(normalizeDialoguePrefixes(normalizedText)), options.npcMetadata)
     if (!request) return
 
     this.isGenerating.value = true
@@ -482,9 +542,17 @@ class AudioService {
     }
   }
 
+  /** Forget whether the provider streams (call after the speech settings change). */
+  public resetProviderCapabilities(): void {
+    this.streamingAvailable = null
+  }
+
   stop() {
     this.playbackToken += 1
     this.segmentQueue = []
+    // Prepared streams keep downloading (and costing credits) unless released.
+    for (const element of this.streamElements) releaseStreamElement(element)
+    this.streamElements.clear()
     if (this.currentBufferSource) {
       try { this.currentBufferSource.stop() } catch { /* already stopped */ }
       this.currentBufferSource = null
@@ -507,7 +575,31 @@ class AudioService {
   toggleAutoSpeech() {
     // This is always called from a direct click — use it as an unlock opportunity.
     this.unlock()
+    this.autoSpeechChosenByPlayer = true
     this.autoSpeechEnabled.value = !this.autoSpeechEnabled.value
+  }
+
+  /**
+   * Admin default for auto-speech (on when TTS is configured and "start automatically" is set).
+   * A player's own toggle wins for the rest of the page session.
+   */
+  applyAutoSpeechDefault(enabled: boolean) {
+    if (this.autoSpeechChosenByPlayer) return
+    this.autoSpeechEnabled.value = enabled
+    if (enabled) this.unlockOnFirstInteraction()
+  }
+
+  /** Browsers only allow audio after a user gesture: unlock on the first click or key press. */
+  private unlockOnFirstInteraction() {
+    if (this.isUnlocked.value || this.unlockListenerInstalled || typeof document === 'undefined') return
+    this.unlockListenerInstalled = true
+    const unlockOnce = () => {
+      document.removeEventListener('pointerdown', unlockOnce, true)
+      document.removeEventListener('keydown', unlockOnce, true)
+      this.unlock()
+    }
+    document.addEventListener('pointerdown', unlockOnce, true)
+    document.addEventListener('keydown', unlockOnce, true)
   }
 }
 

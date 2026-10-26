@@ -561,8 +561,8 @@ class TTSSettingsPayload(BaseModel):
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
-    use_text_chunking: bool = True
     use_streaming: bool = False
+    auto_speak: bool = True
     voice_list: list[str] = Field(default_factory=list)
     voice_catalog: list[dict[str, Optional[str]]] = None
     speech_rate: float = 1.0

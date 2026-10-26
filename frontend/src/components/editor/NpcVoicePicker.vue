@@ -25,6 +25,11 @@ const selected = computed({
 })
 
 const selectedVoice = computed(() => voices.value.find((voice) => voice.id === selected.value))
+const previewTitle = computed(() => {
+  if (isPreviewing.value) return 'Stop preview'
+  if (!supportsNpcVoices.value) return 'Previews need ElevenLabs as speech provider'
+  return selectedVoice.value ? 'Preview this voice' : 'Pick a voice to preview it'
+})
 // A stored voice that was removed from the voice list: the game uses the narrator voice.
 const isMissingVoice = computed(() => Boolean(selected.value) && !selectedVoice.value)
 
@@ -44,7 +49,6 @@ async function playSample(voice: TtsVoice | undefined): Promise<void> {
   await audioService.speak(`Well met, traveler. They call me ${name}. What brings you here?`, {
     voiceOverride: voice?.id,
     adventureId: props.adventureId,
-    useTextChunking: false,
   })
   if (audioService.lastError.value) throw new Error(audioService.lastError.value)
 }
@@ -72,9 +76,8 @@ onBeforeUnmount(stopPreview)
   <div class="space-y-3">
     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Voice</label>
 
-    <p v-if="!supportsNpcVoices" class="text-[11px] leading-snug text-slate-500">
-      Characters get their own voices with ElevenLabs speech output. With the current provider, all lines use the
-      narrator voice.
+    <p v-if="!voices.length" class="text-[11px] leading-snug text-slate-500">
+      The voice list is empty or could not be loaded.
     </p>
 
     <template v-else>
@@ -90,8 +93,8 @@ onBeforeUnmount(stopPreview)
         <button
           type="button"
           class="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/10 transition-all disabled:opacity-40"
-          :disabled="!selectedVoice && !isPreviewing"
-          :title="isPreviewing ? 'Stop preview' : 'Preview this voice'"
+          :disabled="(!selectedVoice || !supportsNpcVoices) && !isPreviewing"
+          :title="previewTitle"
           @click="togglePreview"
         >
           <Square v-if="isPreviewing" class="w-3.5 h-3.5" />
@@ -103,6 +106,10 @@ onBeforeUnmount(stopPreview)
         <template v-if="isMissingVoice">This voice is no longer in the voice list, so the narrator voice is used. Pick a new one.</template>
         <template v-else-if="selectedVoice?.good_for.length">Good for: {{ selectedVoice.good_for.join(', ') }}.</template>
         <template v-else-if="!selectedVoice">The game picks a fitting voice from the voice list that differs from the narrator and other characters.</template>
+      </p>
+      <p v-if="!supportsNpcVoices" class="text-[11px] leading-snug text-amber-400/80">
+        Character voices are spoken with ElevenLabs. With the current speech provider, all lines use the narrator
+        voice; the choice made here takes effect once ElevenLabs is selected.
       </p>
       <p v-if="previewError" class="text-[11px] text-red-400">{{ previewError }}</p>
     </template>

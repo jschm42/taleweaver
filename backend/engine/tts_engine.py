@@ -6,11 +6,17 @@ from typing import Optional
 import httpx
 
 from backend.core.config import settings
+from backend.engine.elevenlabs_stream import synthesize_elevenlabs_bytes
 from backend.engine.tts_helpers import (
+    TTSModelSwitchSuggestionError,
+    TTSProviderError,
+    TTSRateLimitError,
+    TTSTimeoutError,
     _backoff_delay_seconds,
     _build_audio_output_path,
     _compute_429_retry_delay_seconds,
     _convert_brackets_to_angles,
+    _extract_error_detail,
     _extract_gemini_audio,
     _strip_vocal_tags,
     _tts_timeout_seconds,
@@ -36,26 +42,6 @@ __all__ = [
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-class TTSProviderError(RuntimeError):
-    """Raised when upstream TTS provider returns an error (4xx/5xx)."""
-
-
-class TTSTimeoutError(RuntimeError):
-    """Raised when the upstream TTS request times out."""
-
-
-class TTSRateLimitError(RuntimeError):
-    """Raised when upstream TTS provider rate-limits requests (HTTP 429)."""
-
-    def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
-        super().__init__(message)
-        self.retry_after_seconds = retry_after_seconds
-
-
-class TTSModelSwitchSuggestionError(RuntimeError):
-    """Raised when a specific TTS model repeatedly fails and user action is recommended."""
-
-
 def _parse_sse_audio_response(response: httpx.Response) -> dict:
     """Merge the parts of all SSE chunks into a single generateContent-shaped payload."""
     parts: list = []
@@ -71,23 +57,6 @@ def _parse_sse_audio_response(response: httpx.Response) -> dict:
         if candidates:
             parts.extend((candidates[0].get("content") or {}).get("parts", []))
     return {"candidates": [{"content": {"parts": parts}}]}
-
-
-def _extract_error_detail(response: httpx.Response, default: str) -> str:
-    """Extract a human-readable error message from a provider's JSON response."""
-    try:
-        data = response.json()
-        if isinstance(data, dict):
-            detail = data.get("detail") or (
-                data.get("error") if isinstance(data.get("error"), dict) else None
-            )
-            if isinstance(detail, dict):
-                return detail.get("message") or default
-            if isinstance(detail, str):
-                return detail
-    except Exception as exc:
-        logger.debug("Could not parse error JSON from response: %s", exc)
-    return default
 
 
 class TTSEngine:
@@ -166,60 +135,22 @@ class TTSEngine:
         api_key: str,
         adventure_id: Optional[str] = None,
         session_id: Optional[str] = None,
-        model_id: str = "eleven_multilingual_v2",
+        model_id: str = "eleven_v4",
     ) -> Optional[str]:
-        """
-        Generates speech using ElevenLabs Streaming API.
-        """
+        """A whole ElevenLabs clip as a file (downloads, fallback playback); see elevenlabs_stream."""
         if not voice_id:
             logger.error("No ElevenLabs Voice ID provided.")
             return None
-
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
         logger.debug("[TTS] ElevenLabs input (model=%s, voice_id=%s): %s", model_id, voice_id, text)
 
-        headers = {
-            "Accept": "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": api_key,
-        }
-        data = {
-            "text": text,
-            "model_id": model_id or "eleven_multilingual_v2",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-            },
-        }
-
-        try:
-            timeout = httpx.Timeout(60.0, connect=10.0)
-            async with httpx.AsyncClient() as client:
-                await _wait_for_tts_request_slot()
-                response = await client.post(url, json=data, headers=headers, timeout=timeout)
-        except httpx.ReadTimeout as exc:
-            raise TTSTimeoutError("Timed out while generating speech.") from exc
-        except httpx.HTTPError:
-            logger.exception("Failed to generate speech with ElevenLabs")
-            return None
-
-        if response.status_code == 429:
-            raise TTSRateLimitError(
-                "ElevenLabs TTS rate limit reached.",
-                retry_after_seconds=_compute_429_retry_delay_seconds(response, 1),
-            )
-        if response.status_code != 200:
-            logger.error("ElevenLabs TTS Error %s: %s", response.status_code, response.text)
-            err_msg = _extract_error_detail(
-                response, f"ElevenLabs TTS request failed with status {response.status_code}"
-            )
-            raise TTSProviderError(err_msg)
-        if not response.content:
+        await _wait_for_tts_request_slot()
+        audio = await synthesize_elevenlabs_bytes(text, voice_id, api_key, model_id)
+        if not audio:
             logger.error("ElevenLabs TTS returned zero audio bytes.")
             return None
 
         try:
-            return _write_audio_file(response.content, adventure_id, session_id, "mp3")
+            return _write_audio_file(audio, adventure_id, session_id, "mp3")
         except (OSError, ValueError):
             logger.exception("Failed to store ElevenLabs audio")
             return None

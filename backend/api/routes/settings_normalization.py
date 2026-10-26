@@ -231,8 +231,9 @@ def _tts_fallback() -> dict[str, Any]:
         "selected_voice": "Puck",
         "elevenlabs_voice_id": "",
         "use_vocal_tags": True,
-        "use_text_chunking": True,
         "use_streaming": False,
+        # Speech starts on its own for players when TTS is configured (they can switch it off).
+        "auto_speak": True,
         "speech_rate": 1.0,
     }
 
@@ -262,7 +263,8 @@ def normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     normalized["elevenlabs_voice_id"] = normalized.get("elevenlabs_voice_id", "")
 
     # Only fill flags that are missing entirely; explicit False values must survive.
-    for key in ("use_vocal_tags", "use_text_chunking", "use_streaming", "enabled"):
+    normalized.pop("use_text_chunking", None)  # retired: speech is split per speaker line
+    for key in ("use_vocal_tags", "use_streaming", "auto_speak", "enabled"):
         normalized.setdefault(key, fallback[key])
 
     unsupported_google_model = (

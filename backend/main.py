@@ -36,6 +36,7 @@ from backend.api.routes import (
     setup_wizard_api,
     stt_api,
     tts_api,
+    tts_stream_api,
     users_api,
 )
 from backend.core.config import settings
@@ -200,6 +201,7 @@ app.include_router(map_api.router, prefix="/api")
 app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
+app.include_router(tts_stream_api.router, prefix="/api")
 app.include_router(stt_api.router, prefix="/api")
 
 

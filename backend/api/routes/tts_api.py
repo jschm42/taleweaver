@@ -327,13 +327,17 @@ async def list_tts_voices(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Voices from the voice list for per-character speech. Only ElevenLabs supports them.
+    """The voice list for per-character speech.
 
-    ``provider`` lets the settings form list ElevenLabs voices before the provider is saved.
+    The list is always returned so voices can be assigned in the editor at any time; they are
+    only spoken with ElevenLabs (``supports_npc_voices``). ``provider`` lets the settings form
+    ask about ElevenLabs before the provider is saved.
     """
     owner = await _resolve_tts_settings_source_user(db, current_user)
     active = str((owner.tts_settings or {}).get("provider") or "google").lower()
     requested = (provider or active).lower()
-    if requested != NPC_VOICE_PROVIDER:
-        return {"provider": requested, "supports_npc_voices": False, "voices": []}
-    return {"provider": requested, "supports_npc_voices": True, "voices": load_voice_catalog()}
+    return {
+        "provider": requested,
+        "supports_npc_voices": requested == NPC_VOICE_PROVIDER,
+        "voices": load_voice_catalog(),
+    }

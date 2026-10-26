@@ -110,8 +110,8 @@ class SettingsService {
     selected_model: 'gemini-3.8-flash-tts',
     elevenlabs_voice_id: '',
     use_vocal_tags: true,
-    use_text_chunking: true,
     use_streaming: false,
+    auto_speak: true,
     voice_catalog: [] as Array<{ name: string; gender?: string; description?: string }>,
     selected_voice: 'Puck',
     speech_rate: 1.0,
@@ -163,15 +163,12 @@ class SettingsService {
           ...this.ttsForm.value,
           ...ttsSettings,
           use_vocal_tags: ttsSettings.use_vocal_tags !== false,
-          use_text_chunking:
-            String(ttsSettings.use_text_chunking).toLowerCase() !== 'false' && ttsSettings.use_text_chunking !== null,
+          auto_speak: ttsSettings.auto_speak !== false,
         }
 
         // Sync with audio service
         audioService.speechRate.value = this.ttsForm.value.speech_rate ?? 1.0
-        audioService.useTextChunking.value = this.ttsForm.value.use_text_chunking
         console.info('[SettingsService] TTS settings hydrated.', {
-          use_text_chunking: this.ttsForm.value.use_text_chunking,
           speech_rate: this.ttsForm.value.speech_rate,
         })
       }
@@ -433,7 +430,7 @@ class SettingsService {
 
       // Sync with audio service
       audioService.speechRate.value = this.ttsForm.value.speech_rate
-      audioService.useTextChunking.value = this.ttsForm.value.use_text_chunking
+      audioService.resetProviderCapabilities()
 
       this.statusMessage.value = { type: 'success', text: 'TTS settings updated.' }
       await refreshConfig()

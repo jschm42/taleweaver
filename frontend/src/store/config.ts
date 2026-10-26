@@ -32,15 +32,15 @@ export async function refreshConfig() {
     // Synchronize audio service state with the latest user preferences from DB
     const { audioService } = await import('@/services/audioService')
     if (tts) {
-      if (typeof tts.use_text_chunking === 'boolean') {
-        console.info('[Config] Synchronizing useTextChunking from backend:', tts.use_text_chunking)
-        audioService.useTextChunking.value = tts.use_text_chunking
-      } else {
-        console.warn('[Config] use_text_chunking is missing or not a boolean in backend response:', tts.use_text_chunking)
-      }
+      // The provider may have changed: find out again whether it streams.
+      audioService.resetProviderCapabilities()
       if (typeof tts.speech_rate === 'number') {
         audioService.speechRate.value = tts.speech_rate
       }
+      // Speech starts on its own when TTS is usable (enabled + provider key) and the admin
+      // has "start automatically" on; players can still switch it off.
+      const ttsConfigured = !!tts.enabled && !!data.keys?.[String(tts.provider || 'google')]
+      audioService.applyAutoSpeechDefault(ttsConfigured && tts.auto_speak !== false)
     }
     
     configState.isLoaded = true

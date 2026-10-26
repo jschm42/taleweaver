@@ -137,6 +137,43 @@ def _tts_timeout_seconds(text: str) -> float:
     return max(30.0, min(timeout, max_timeout))
 
 
+class TTSProviderError(RuntimeError):
+    """Raised when upstream TTS provider returns an error (4xx/5xx)."""
+
+
+class TTSTimeoutError(RuntimeError):
+    """Raised when the upstream TTS request times out."""
+
+
+class TTSRateLimitError(RuntimeError):
+    """Raised when upstream TTS provider rate-limits requests (HTTP 429)."""
+
+    def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+class TTSModelSwitchSuggestionError(RuntimeError):
+    """Raised when a specific TTS model repeatedly fails and user action is recommended."""
+
+
+def _extract_error_detail(response: httpx.Response, default: str) -> str:
+    """Extract a human-readable error message from a provider's JSON response."""
+    try:
+        data = response.json()
+        if isinstance(data, dict):
+            detail = data.get("detail") or (
+                data.get("error") if isinstance(data.get("error"), dict) else None
+            )
+            if isinstance(detail, dict):
+                return detail.get("message") or default
+            if isinstance(detail, str):
+                return detail
+    except Exception as exc:
+        logger.debug("Could not parse error JSON from response: %s", exc)
+    return default
+
+
 _TAG_DEPTH_KEYS = {
     "[": "square",
     "]": "square",

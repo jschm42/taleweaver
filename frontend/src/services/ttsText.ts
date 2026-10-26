@@ -7,7 +7,8 @@ export type SegmentRequest = { requestText: string, voiceOverride?: string, spea
 
 const SPEAKER_PATTERN = /^(?:\*\*([^*:\n]+)\*\*|([^:\n]+)):\s*([\s\S]*)$/
 const NON_SPEAKER_LABELS = new Set(['note', 'warning', 'caution', 'info', 'location', 'status', 'time', 'goal', 'quest', 'tip', 'hinweis'])
-const DEFAULT_MAX_CHUNK_CHARS = 1200
+// Hard cap per request: ElevenLabs v3 accepts 5,000 characters; normal lines are far shorter.
+const MAX_REQUEST_CHARS = 2500
 
 export function normalizeDialoguePrefixes(text: string): string {
   // Convert markdown-style speaker labels to plain labels for more reliable
@@ -40,10 +41,9 @@ function parseParagraph(paragraph: string): SpeechSegment {
   return { speaker: rawSpeaker, text: spokenText }
 }
 
-function splitIntoSpeechSegments(text: string, useChunking: boolean): SpeechSegment[] {
+function splitIntoSpeechSegments(text: string): SpeechSegment[] {
   const normalized = text.replace(/\r\n?/g, '\n').trim()
   if (!normalized) return []
-  if (!useChunking) return [{ text: normalized }]
 
   return normalized
     .split(/\n\s*\n/)
@@ -52,7 +52,7 @@ function splitIntoSpeechSegments(text: string, useChunking: boolean): SpeechSegm
     .map(parseParagraph)
 }
 
-function chunkSegmentText(text: string, maxChars = DEFAULT_MAX_CHUNK_CHARS): string[] {
+function capSegmentText(text: string, maxChars = MAX_REQUEST_CHARS): string[] {
   const normalized = text.trim()
   if (!normalized) return []
   if (normalized.length <= maxChars) return [normalized]
@@ -84,11 +84,19 @@ function chunkSegmentText(text: string, maxChars = DEFAULT_MAX_CHUNK_CHARS): str
   return chunks
 }
 
-/** Split text into speaker-aware paragraphs, then cap each chunk at ~1200 chars. */
-export function buildSpeechSegments(text: string, useChunking = true): SpeechSegment[] {
-  const baseSegments = splitIntoSpeechSegments(text, useChunking)
-  if (!useChunking) return baseSegments
-  return baseSegments.flatMap(seg => chunkSegmentText(seg.text).map(chunk => ({ speaker: seg.speaker, text: chunk })))
+/**
+ * One segment per paragraph, each with its speaker (needed for per-character voices). Only
+ * paragraphs over the provider limit are split further, at sentence ends.
+ */
+export function buildSpeechSegments(text: string): SpeechSegment[] {
+  return splitIntoSpeechSegments(text)
+    .flatMap(seg => capSegmentText(seg.text).map(part => ({ speaker: seg.speaker, text: part })))
+}
+
+/** The whole text as one segment (downloads produce a single file). */
+export function buildWholeTextSegment(text: string): SpeechSegment[] {
+  const normalized = text.replace(/\r\n?/g, '\n').trim()
+  return normalized ? [{ text: normalized }] : []
 }
 
 function sanitizeSegmentForTts(text: string): string {
