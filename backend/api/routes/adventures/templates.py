@@ -53,6 +53,7 @@ from backend.schemas.adventure import (
     GeneratorSurprisePresetRequest,
     GeneratorSurprisePresetResponse,
 )
+from backend.utils.download_headers import attachment_disposition
 
 # WorldGenerator is re-exported so tests can patch ``templates.WorldGenerator.generate_world``.
 __all__ = ["WorldGenerator", "router"]
@@ -1147,7 +1148,7 @@ async def export_adventure_adz(
         return StreamingResponse(
             io.BytesIO(zip_data),
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename=adventure_{template_id}.adz"},
+            headers={"Content-Disposition": attachment_disposition(f"adventure_{template_id}.adz")},
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

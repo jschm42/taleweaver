@@ -39,6 +39,7 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
 from backend.schemas.checkpoint import RestoreCheckpointResponse, SessionCheckpointResponse
 from backend.schemas.session import GameSessionUpdate
+from backend.utils.download_headers import attachment_disposition
 from backend.utils.path_security import ensure_within_data_dir, sanitize_path_component
 
 router = APIRouter(tags=["Sessions"])
@@ -793,7 +794,7 @@ async def export_session_ads(
         return StreamingResponse(
             io.BytesIO(zip_data),
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename=session_{game_id}.ads"},
+            headers={"Content-Disposition": attachment_disposition(f"session_{game_id}.ads")},
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

@@ -611,9 +611,9 @@ async def upload_visual(
     current_user: User = Depends(get_current_user),
 ):
     """Manually upload a visual asset."""
-    if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", template_id):
+    if not template_id or sanitize_path_component(template_id) != template_id:
         raise HTTPException(status_code=400, detail="Invalid template ID format.")
-    if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", target_id):
+    if not target_id or sanitize_path_component(target_id) != target_id:
         raise HTTPException(status_code=400, detail="Invalid target ID format.")
 
     adv = await db.get(AdventureTemplate, template_id)
