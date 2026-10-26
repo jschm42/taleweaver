@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
-import { parseAssistantContent, type DialogueSegment } from '@/composables/useComicTurns'
+import { parseAssistantContent, parseUserMessage, type DialogueSegment } from '@/composables/useComicTurns'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
 const MAX_TRACKED_SIGNATURES = 200
@@ -181,6 +181,24 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       })
     }
   }
+
+  /** The player's own spoken line (/say or quoted speech), read in the protagonist's voice. */
+  function speakPlayerLine(message: any): void {
+    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
+    if (isCombatActive.value) return
+    const { isDialogue, speechText } = parseUserMessage(message, [], npcMetadata.value)
+    if (!isDialogue || !speechText.trim()) return
+    // The player's name resolves to the protagonist's voice via npcMetadata.
+    enqueueDialogues([{ speaker: sheet.value?.name || 'You', text: speechText, isPlayer: true }])
+  }
+
+  // A single message the player just sent (not a history load) is spoken right away, so it is
+  // heard before the GM's answer; plain actions ("look around") are not dialogue and stay silent.
+  watch(() => messages.value.length, (length, previous) => {
+    if (!historySeeded || length !== previous + 1) return
+    const last = messages.value[length - 1]
+    if (last?.role === 'user') speakPlayerLine(last)
+  })
 
   /**
    * Speaks finished lines of the narration while it is still streaming, so the first voice
