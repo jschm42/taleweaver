@@ -41,6 +41,24 @@ def looks_like_voice_id(value: object) -> bool:
     return isinstance(value, str) and bool(_VOICE_ID_PATTERN.match(value))
 
 
+# A voice id chosen by hand (any voice of the account) is stored as "custom:<id>", so it is not
+# mistaken for a list voice that was removed (those fall back to the narrator voice).
+CUSTOM_VOICE_PREFIX: Final = "custom:"
+
+
+def custom_voice_id(value: object) -> Optional[str]:
+    """The voice id of a stored custom voice ("custom:<id>"), else ``None``."""
+    if not isinstance(value, str) or not value.startswith(CUSTOM_VOICE_PREFIX):
+        return None
+    voice_id = value[len(CUSTOM_VOICE_PREFIX) :]
+    return voice_id if looks_like_voice_id(voice_id) else None
+
+
+def is_storable_voice(value: object) -> bool:
+    """A list voice id or a custom voice ("custom:<id>")."""
+    return looks_like_voice_id(value) or custom_voice_id(value) is not None
+
+
 def voice_list_path() -> Path:
     override = Path(settings.DATA_DIR) / "voices" / "elevenlabs_voices.json"
     return override if override.is_file() else BUNDLED_VOICE_LIST
@@ -102,3 +120,9 @@ def resolve_voice_reference(value: object, voices: list[VoiceOption]) -> Optiona
         if wanted == voice["id"] or wanted.lower() == voice["name"].lower():
             return voice["id"]
     return None
+
+
+def storable_voice_or_none(value: object) -> Optional[str]:
+    """An editor's voice choice as stored: a list id or "custom:<id>"; anything else = automatic."""
+    voice = str(value or "").strip()
+    return voice if is_storable_voice(voice) else None

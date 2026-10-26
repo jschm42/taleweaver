@@ -7,6 +7,8 @@ import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
 import EditorImageLightbox from '@/components/editor/EditorImageLightbox.vue'
+import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
+import type { TtsVoiceList } from '@/types'
 
 const props = defineProps<{
   debugData: any
@@ -17,6 +19,7 @@ const props = defineProps<{
   isSavingText: boolean
   referenceOptions: any[]
   adventureId?: string
+  voiceList?: TtsVoiceList | null
 }>()
 
 const emit = defineEmits<{
@@ -578,6 +581,15 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 </InlineEditableField>
               </div>
             </div>
+
+            <!-- Voice of the player's own lines (ElevenLabs); saved as soon as it changes. -->
+            <NpcVoicePicker
+              :model-value="debugData.protagonist.voice || ''"
+              :voice-list="voiceList ?? null"
+              :npc-name="debugData.protagonist.name"
+              :adventure-id="adventureId"
+              @update:model-value="emit('save-field', 'voice', $event)"
+            />
 
             <div class="space-y-1">
               <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Appearance Keywords</span>

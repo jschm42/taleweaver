@@ -914,7 +914,7 @@ const textLogPreviewClass = computed(() => {
               </div>
               
               <NpcVoicePicker
-                v-if="context.type === 'npc'"
+                v-if="context.type === 'npc' || context.type === 'protagonist'"
                 v-model="localForm.voice"
                 :voice-list="props.voiceList ?? null"
                 :npc-name="localForm.name"

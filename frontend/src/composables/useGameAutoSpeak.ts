@@ -119,8 +119,14 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
   // Pre-seed any existing messages on initial mount so old log history isn't auto-spoken.
   seedExistingMessagesAsSpoken()
-  // History usually arrives after mount (the list is replaced as a whole): it is old, not new.
-  watch(() => messages.value, () => seedExistingMessagesAsSpoken())
+  // History usually arrives after mount: its first arrival is old, not new. Later reloads (e.g.
+  // after a turn or scene change) may carry fresh GM text and must not be marked as spoken.
+  let historySeeded = messages.value.length > 0
+  watch(() => messages.value.length, (length) => {
+    if (historySeeded || length === 0) return
+    historySeeded = true
+    seedExistingMessagesAsSpoken()
+  })
 
   function speakLatestAssistantMessage(params: { force?: boolean } = {}): void {
     const { force = false } = params
@@ -214,6 +220,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       lastSpokenContent.value = null
       lastAutoSpeakAt.value = 0
       seedExistingMessagesAsSpoken()
+      // The new session's history may still be loading; its first arrival is old again.
+      historySeeded = messages.value.length > 0
     }
   })
 

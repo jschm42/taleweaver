@@ -249,6 +249,7 @@ async def _clone_avatars(db: AsyncSession, old_id: str, new_id: str, user_id: st
             description=orig.description,
             character=orig.character,
             appearance=orig.appearance,
+            voice=orig.voice,
             goal=orig.goal,
             profile_image=rewrite_asset_url(orig.profile_image, old_id, new_id),
             hp=orig.hp,

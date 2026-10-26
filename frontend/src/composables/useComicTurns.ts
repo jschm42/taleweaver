@@ -364,7 +364,7 @@ export function renderFormattedHtml(text: string): string {
     const raw = tag.slice(1, -1).trim()
     if (/^DEBUG/i.test(raw)) return match
     const en = normalizeVoiceTag(raw)
-    return `<span class="comic-voice-tag">[${en}]</span>`
+    return `<span class="comic-voice-tag">${en}</span>`
   })
   const withBolds = withVoiceTags.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-bold">$1</strong>')
   const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="comic-object-tag">$1</span>')

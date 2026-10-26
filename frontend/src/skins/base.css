@@ -225,8 +225,10 @@
 .tw-skin .comic-voice-tag,
 .tw-voice-tag {
   display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
+  align-items: baseline;
+  /* Sit on the text baseline: skins use larger or handwritten tag fonts (noir: 1.3rem Caveat),
+     and centring them pushed the tag above the line of speech. */
+  vertical-align: baseline;
   padding: 0.125rem 0.4rem;
   margin: 0 0.3rem 0 0;
   border-radius: 0.375rem;
@@ -474,11 +476,17 @@
 }
 
 /* ---------- Scene image button (top-right of the story area) ---------- */
-.tw-scene-image-button {
+/* Specific enough to beat skin tab padding ([data-skin] .tw-tab), which would squeeze the
+   icon of this square button down to a dot. */
+.tw-skin .tw-tab.tw-scene-image-button {
   justify-content: center;
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
   /* Floats above the story; travel and sequence overlays still cover it. */
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
+}
+
+.tw-skin .tw-tab.tw-scene-image-button svg {
+  flex-shrink: 0;
 }

@@ -214,7 +214,7 @@ async function save() {
           </svg>
           <p class="tw-bubble-text italic">
             <span class="tw-speaker tw-speaker--primary mr-1.5 font-black text-xs uppercase tracking-wider">Innkeeper</span>
-            <span class="comic-voice-tag mr-1.5">[wary]</span>
+            <span class="comic-voice-tag mr-1.5">wary</span>
             "We don't get many travellers this late."
           </p>
         </div>

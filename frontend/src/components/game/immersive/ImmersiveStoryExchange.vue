@@ -299,7 +299,7 @@ function getEntityForHover(nameOrEntity: any) {
 
             <!-- Emotion / Voice Tag Badge -->
             <span v-if="dlg.voiceTag" class="comic-voice-tag select-none align-baseline mr-1.5">
-              [{{ dlg.voiceTag }}]
+              {{ dlg.voiceTag }}
             </span>
 
             <template v-if="dlg.target">

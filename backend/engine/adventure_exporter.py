@@ -481,6 +481,7 @@ def _build_protagonist_section(
         "goal": avatar.goal if avatar else "",
         "character": avatar.character if avatar else "",
         "appearance": avatar.appearance if avatar else None,
+        "voice": avatar.voice if avatar else None,
         "profile_image": avatar.profile_image if avatar else None,
         "hp": avatar.hp if avatar else 200,
         "max_hp": avatar.max_hp if avatar else 200,

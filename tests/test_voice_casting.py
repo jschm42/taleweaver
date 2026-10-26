@@ -3,7 +3,11 @@
 import json
 
 from backend.engine import elevenlabs_voices
-from backend.engine.elevenlabs_voices import load_voice_catalog, resolve_voice_reference
+from backend.engine.elevenlabs_voices import (
+    load_voice_catalog,
+    resolve_voice_reference,
+    storable_voice_or_none,
+)
 from backend.engine.voice_casting import (
     CastingCandidate,
     VoiceSetup,
@@ -141,3 +145,47 @@ def test_data_dir_voice_list_overrides_bundled_list(tmp_path, monkeypatch):
 
     # Assert
     assert [v["name"] for v in voices] == ["Only"]
+
+
+def test_custom_voice_is_always_used_and_not_given_to_others():
+    # Arrange
+    custom = "C" * 20
+    candidates = [
+        CastingCandidate("HERO", "He waits.", f"custom:{custom}"),
+        CastingCandidate("SMITH", "He hammers."),
+    ]
+
+    # Act
+    cast = cast_voices(candidates, VOICES)
+
+    # Assert
+    assert cast["HERO"] == custom
+    assert cast["SMITH"] != custom
+
+
+def test_storable_voice_accepts_list_and_custom_ids_only():
+    # Arrange / Act / Assert
+    assert storable_voice_or_none("M" * 20) == "M" * 20
+    assert storable_voice_or_none(f"custom:{'C' * 20}") == f"custom:{'C' * 20}"
+    assert storable_voice_or_none("custom:short") is None
+    assert storable_voice_or_none("Waitress Betty") is None
+    assert storable_voice_or_none("") is None
+
+
+async def test_voice_metadata_includes_protagonist(auth_client):
+    # Arrange
+    from backend.api.routes.adventures.logic import AdventureLogic
+    from backend.engine.voice_casting import PROTAGONIST_VOICE_KEY
+    from tests.conftest import TestSessionLocal
+    from tests.test_adventures_api import _create_adventure
+
+    ids = await _create_adventure(auth_client, "Voice Quest")
+
+    # Act
+    async with TestSessionLocal() as db:
+        metadata = await AdventureLogic.get_npc_metadata(db, None, ids["game_id"])
+
+    # Assert
+    protagonist = metadata[PROTAGONIST_VOICE_KEY]
+    assert protagonist["entity_type"] == "PROTAGONIST"
+    assert protagonist["name"]

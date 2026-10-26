@@ -44,8 +44,9 @@ def _build_voice_assignment_requirement(enabled: bool) -> str:
     voice_lines = "\n".join(_voice_line(voice) for voice in voices)
     return (
         "NPC VOICES:\n"
-        "- Give every NPC a `voice` field with the id of the best-fitting voice from this list "
-        "(match gender, age and personality). Use each voice for at most one NPC while unused voices remain.\n"
+        "- Give every NPC and the protagonist a `voice` field with the id of the best-fitting voice "
+        "from this list (match gender, age and personality). Use each voice for at most one character "
+        "while unused voices remain.\n"
         "- Use ONLY ids from this list, exactly as written:\n"
         f"{voice_lines}\n\n"
     )

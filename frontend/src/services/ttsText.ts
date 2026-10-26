@@ -139,11 +139,13 @@ export function resolveNpcVoice(speaker: string | undefined, npcMetadata: Record
   const exact = npcMetadata[speaker]
   if (exact?.voice) return String(exact.voice)
 
-  const loweredSpeaker = speaker.toLowerCase()
+  // Keys are NPC ids, but dialogue lines name the speaker ("Waitress Betty"): match both. The
+  // protagonist is in the map too, so the player's own lines get their voice.
+  const loweredSpeaker = speaker.trim().toLowerCase()
   for (const [key, value] of Object.entries(npcMetadata)) {
-    if (key.toLowerCase() === loweredSpeaker && value && typeof value === 'object' && value.voice) {
-      return String(value.voice)
-    }
+    if (!value || typeof value !== 'object' || !value.voice) continue
+    const name = String(value.name || '').trim().toLowerCase()
+    if (key.toLowerCase() === loweredSpeaker || name === loweredSpeaker) return String(value.voice)
   }
 
   return undefined

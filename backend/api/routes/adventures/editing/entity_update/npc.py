@@ -13,7 +13,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_scene_ref,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
-from backend.engine.elevenlabs_voices import looks_like_voice_id
+from backend.engine.elevenlabs_voices import storable_voice_or_none
 from backend.models.world_entity import WorldEntity
 
 _NPC_SCRIPT_FIELDS = (
@@ -42,11 +42,9 @@ async def _update_inventory(
 
 
 def _update_voice(npc: WorldEntity, payload: EntityUpdateRequest) -> None:
-    """Stores an ElevenLabs voice id; anything else falls back to automatic casting."""
-    if not given(payload, "voice"):
-        return
-    voice = (payload.voice or "").strip()
-    npc.voice = voice if looks_like_voice_id(voice) else None
+    """Stores a list voice id or "custom:<id>"; anything else falls back to automatic casting."""
+    if given(payload, "voice"):
+        npc.voice = storable_voice_or_none(payload.voice)
 
 
 def _update_movement(npc: WorldEntity, payload: EntityUpdateRequest) -> None:

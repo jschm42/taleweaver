@@ -8,6 +8,11 @@ from typing import Any, Optional
 from sqlalchemy import select
 
 from backend.core.config import settings
+from backend.engine.elevenlabs_voices import (
+    custom_voice_id,
+    load_voice_catalog,
+    resolve_voice_reference,
+)
 from backend.engine.image_prompt_context import build_protagonist_image_prompt, clean_appearance
 from backend.engine.manifest_apply.assets import needs_image
 from backend.engine.manifest_apply.context import ApplyContext
@@ -31,6 +36,7 @@ AVATAR_FIELDS: tuple[tuple[str, str, Any], ...] = (
     ("goal", "goal", ""),
     ("character", "character", ""),
     ("appearance", "appearance", None),
+    ("voice", "voice", None),
     ("hp", "hp", 200),
     ("max_hp", "hp", 200),
     ("stamina", "stamina", 200),
@@ -185,5 +191,13 @@ async def persist_avatar(ctx: ApplyContext, prot: dict[str, Any]) -> tuple[Any, 
     else:
         avatar = _new_avatar(ctx, prot, stats)
     avatar.appearance = clean_appearance(avatar.appearance)
+    avatar.voice = _stored_voice(avatar.voice)
     avatar.profile_image = await _portrait(ctx, avatar, prot)
     return avatar, items
+
+
+def _stored_voice(voice: Optional[str]) -> Optional[str]:
+    """Custom voices stay; a voice name the world builder wrote becomes its list id."""
+    if not voice or custom_voice_id(voice):
+        return voice
+    return resolve_voice_reference(voice, load_voice_catalog()) or voice

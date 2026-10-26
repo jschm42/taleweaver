@@ -226,6 +226,7 @@ class SessionImporter:
                     goal=avatar_data.get("goal"),
                     character=avatar_data.get("character"),
                     appearance=clean_appearance(avatar_data.get("appearance")),
+                    voice=avatar_data.get("voice"),
                     profile_image=avatar_data.get("profile_image"),
                     hp=avatar_data.get("hp", 200),
                     max_hp=avatar_data.get("max_hp", 200),

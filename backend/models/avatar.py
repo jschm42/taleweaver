@@ -30,6 +30,8 @@ class Avatar(Base, TimestampMixin):
         String(100), nullable=True
     )  # Visual keywords for image prompts
     profile_image: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # ElevenLabs voice id ("custom:<id>" for a hand-picked id); None = cast automatically.
+    voice: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Character Sheet values
     hp: Mapped[int] = mapped_column(Integer, default=200, nullable=False)

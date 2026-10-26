@@ -69,6 +69,7 @@ def _avatar_from_manifest(adventure: AdventureTemplate, user_id: str) -> Avatar:
         name=prot.get("name", "You"),
         role=prot.get("role"),
         description=prot.get("description"),
+        voice=prot.get("voice"),
         profile_image=prot.get("profile_image"),
         **pool,
         max_hp=pool["hp"],

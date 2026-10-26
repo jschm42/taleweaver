@@ -19,6 +19,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.engine.elevenlabs_voices import storable_voice_or_none
 from backend.engine.image_prompt_context import clean_appearance
 from backend.engine.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
@@ -156,6 +157,8 @@ async def update_protagonist(
     copy_given(avatar, payload, _PROFILE_FIELDS)
     if given(payload, "appearance"):
         avatar.appearance = clean_appearance(payload.appearance)
+    if given(payload, "voice"):
+        avatar.voice = storable_voice_or_none(payload.voice)
     apply_vitals(avatar, payload)
     if given(payload, "inventory") or given(payload, "equipment"):
         await _update_items(db, template_id, adv, avatar, payload)

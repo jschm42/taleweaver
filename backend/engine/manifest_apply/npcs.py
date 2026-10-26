@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.core.config import settings
-from backend.engine.elevenlabs_voices import VoiceOption, resolve_voice_reference
+from backend.engine.elevenlabs_voices import VoiceOption, custom_voice_id, resolve_voice_reference
 from backend.engine.image_prompt_context import build_npc_image_prompt, clean_appearance
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
@@ -136,9 +136,20 @@ async def _npc_image(
 
 
 def _casting_candidate(npc: dict[str, Any], voices: list[VoiceOption]) -> CastingCandidate:
-    """Voices outside the voice list (or names the world builder wrote) are mapped or recast."""
+    """Custom voices are kept; others outside the list (or names the world builder wrote) are
+    mapped to a list id or recast."""
     text = " ".join(str(npc.get(key) or "") for key in ("name", "description", "character"))
-    return CastingCandidate(str(npc["id"]), text, resolve_voice_reference(npc.get("voice"), voices))
+    voice = npc.get("voice")
+    if custom_voice_id(voice) is None:
+        voice = resolve_voice_reference(voice, voices)
+    return CastingCandidate(str(npc["id"]), text, voice)
+
+
+def _stored_voice(npc: dict[str, Any], cast: dict[str, Optional[str]]) -> Optional[str]:
+    """What to store: a custom voice as written, else the cast voice (imports keep theirs under Gemini)."""
+    if custom_voice_id(npc.get("voice")):
+        return npc["voice"]
+    return cast.get(npc["id"]) or npc.get("voice")
 
 
 def _npc_entity(
@@ -203,7 +214,7 @@ async def persist_npcs(
         if image_url:
             image_cache[npc["id"]] = image_url
         processed.append(npc)
-        voice = voices.get(npc["id"]) or npc.get("voice")  # keep imported voices under Gemini
+        voice = _stored_voice(npc, voices)
         ctx.db.add(_npc_entity(ctx, npc, image_url, default_scene_id, voice))
         await ctx.commit_and_refresh()
     return {npc["id"]: npc_inventory_ids(npc) for npc in npcs}

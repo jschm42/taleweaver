@@ -14,6 +14,7 @@ _AVATAR_FIELDS = (
     "role",
     "description",
     "profile_image",
+    "voice",
     "hp",
     "max_hp",
     "stamina",

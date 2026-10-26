@@ -17,7 +17,7 @@ from backend.api.routes.adventures.session_start_settings import (
 )
 from backend.api.routes.adventures.sheet_snapshot import build_sheet_snapshot
 from backend.engine.map_engine import MapEngine
-from backend.engine.voice_casting import CastingCandidate, cast_npc_voices, resolve_voice_setup
+from backend.engine.voice_casting import PROTAGONIST_VOICE_KEY, cast_adventure_voices
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -536,17 +536,9 @@ class AdventureLogic:
         else:
             return {}
         npcs = (await db.execute(npc_query)).scalars().all()
-        # ElevenLabs: NPCs without a stored voice get a deterministic, distinct one.
-        voices = cast_npc_voices(
-            await resolve_voice_setup(db),
-            [
-                CastingCandidate(
-                    npc.id, f"{npc.name} {npc.description} {npc.character or ''}", npc.voice
-                )
-                for npc in npcs
-            ],
-        )
-        return {
+        # ElevenLabs: NPCs and the protagonist get distinct voices (cast when none is stored).
+        voices, protagonist = await cast_adventure_voices(db, npcs, template_id, session_id)
+        metadata: dict[str, Any] = {
             npc.id: {
                 "name": npc.name,
                 "description": npc.description,
@@ -556,6 +548,9 @@ class AdventureLogic:
             }
             for npc in npcs
         }
+        if protagonist:
+            metadata[PROTAGONIST_VOICE_KEY] = protagonist
+        return metadata
 
     @staticmethod
     async def delete_adventure(db: AsyncSession, template_id: str):

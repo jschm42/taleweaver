@@ -34,6 +34,7 @@ _AVATAR_COPY_FIELDS = (
     "character",
     "appearance",
     "profile_image",
+    "voice",
     "hp",
     "max_hp",
     "stamina",

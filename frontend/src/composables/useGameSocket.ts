@@ -622,7 +622,10 @@ export function useGameSocket(): UseGameSocket {
             }
           } else if (event === 'chunk') {
             let lastMsg = messages.value[messages.value.length - 1]
-            if (!lastMsg || lastMsg.role !== 'assistant' || (lastMsg as any).is_debug) {
+            // Silent commands (e.g. /traverse_exit) add no player message: never append this
+            // turn's narration to the previous turn's GM message.
+            const startedThisTurn = messages.value.length > preTurnMessageCount
+            if (!lastMsg || lastMsg.role !== 'assistant' || (lastMsg as any).is_debug || !startedThisTurn) {
               _pushMessage('assistant', '')
               lastMsg = messages.value[messages.value.length - 1]
             }

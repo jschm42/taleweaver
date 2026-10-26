@@ -765,6 +765,7 @@ class AdventureTemplateImporter:
                 goal=old_avatar.get("goal", ""),
                 character=old_avatar.get("character", ""),
                 appearance=clean_appearance(old_avatar.get("appearance")),
+                voice=old_avatar.get("voice"),
                 stats=old_avatar["stats"],
                 inventory=old_avatar["inventory"],
                 equipment=normalize_equipment_keys(old_avatar.get("equipment")),
