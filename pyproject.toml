@@ -6,7 +6,7 @@ authors = [
     {name = "Jean Schmitz"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
@@ -19,7 +19,7 @@ dependencies = [
     "cryptography>=42.0.0",
     "litellm>=1.88.6",
     "alembic>=1.13.0",
-    "pillow>=10.0.0",
+    "pillow>=13.0.0",
     "python-multipart>=0.0.9",
     "passlib[bcrypt]>=1.7.4",
     "pyjwt>=2.8.0",
@@ -51,7 +51,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 # Target Python version
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 exclude = [
     ".git",
@@ -72,7 +72,7 @@ exclude = [
 # B: flake8-bugbear (common design pitfalls and subtle bugs)
 # I: isort (clean organized imports)
 # N: pep8-naming (standard naming conventions)
-# UP: pyupgrade (modern Python 3.10+ idioms)
+# UP: pyupgrade (modern Python 3.11+ idioms)
 # PL: Pylint (refactoring, complexity, clean patterns)
 # C90: mccabe (cyclomatic complexity)
 # S: flake8-bandit (security checks: injections, shell executions, unsafe deserialization)
@@ -128,7 +128,7 @@ max-returns = 6
 max-statements = 50
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 exclude = [
     "venv",
     "alembic",
