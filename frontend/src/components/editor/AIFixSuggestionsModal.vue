@@ -1,16 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  Loader2,
-  RefreshCw,
-  ShieldAlert,
-  Wand2,
-  X,
-} from 'lucide-vue-next'
+import { AlertTriangle, Loader2, RefreshCw, ShieldAlert, Wand2, X } from 'lucide-vue-next'
 import type { FixProposal } from '@/services/adventureService'
+import FixProposalList from '@/components/editor/FixProposalList.vue'
+import ProposalApplyFooter from '@/components/editor/ProposalApplyFooter.vue'
 
 const props = defineProps<{
   open: boolean
@@ -46,12 +39,6 @@ const canApply = computed(() => {
     props.hasBackupConfirmed
   )
 })
-
-function describeTarget(targetType: string, targetId?: string | null): string {
-  const id = (targetId ?? '').trim()
-  if (!id) return targetType
-  return `${targetType} \u201c${id}\u201d`
-}
 </script>
 
 <template>
@@ -144,107 +131,24 @@ function describeTarget(targetType: string, targetId?: string | null): string {
           The AI declined to suggest a fix for this finding. Try fixing it manually or rerun the AI validation.
         </div>
 
-        <div v-else class="space-y-3">
-          <div
-            v-for="(proposal, idx) in props.proposals"
-            :key="`${proposal.title}-${idx}`"
-            class="rounded-2xl border transition-all p-4 space-y-3"
-            :class="
-              props.selectedIndex === idx
-                ? 'border-violet-400/60 bg-violet-500/10 shadow-lg shadow-violet-900/30'
-                : 'border-white/10 bg-white/5 hover:border-white/20'
-            "
-          >
-            <label class="flex items-start gap-3 cursor-pointer">
-              <input
-                type="radio"
-                name="ai-fix-option"
-                class="mt-1 accent-violet-500 cursor-pointer"
-                :checked="props.selectedIndex === idx"
-                @change="emit('select', idx)"
-              />
-              <div class="flex-1 min-w-0 space-y-2">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest bg-violet-500/15 border border-violet-500/30 text-violet-200">
-                    Option {{ idx + 1 }}
-                  </span>
-                  <h4 class="text-sm font-black text-white">{{ proposal.title }}</h4>
-                </div>
-                <p class="text-xs text-slate-300 leading-relaxed">{{ proposal.summary }}</p>
-                <p
-                  v-if="proposal.rationale"
-                  class="text-[11px] text-slate-400 italic leading-relaxed"
-                >
-                  Rationale: {{ proposal.rationale }}
-                </p>
-                <div class="rounded-lg border border-white/10 bg-slate-950/60 p-3 space-y-2">
-                  <p class="text-[10px] uppercase tracking-widest text-slate-500 font-black">
-                    What will change
-                  </p>
-                  <ul class="space-y-1.5">
-                    <li
-                      v-for="(patch, pIdx) in proposal.patches"
-                      :key="`${patch.target_type}-${patch.target_id || ''}-${pIdx}`"
-                      class="flex items-start gap-2 text-[11px] text-slate-300"
-                    >
-                      <ArrowRight class="w-3 h-3 text-violet-300 mt-0.5 shrink-0" />
-                      <span class="leading-relaxed">
-                        <span class="font-bold text-violet-200">{{ describeTarget(patch.target_type, patch.target_id) }}</span>
-                        <span v-if="patch.description"> &mdash; {{ patch.description }}</span>
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </label>
-          </div>
-        </div>
+        <FixProposalList
+          v-else
+          :proposals="props.proposals"
+          :selected-index="props.selectedIndex"
+          radio-name="ai-fix-option"
+          @select="emit('select', $event)"
+        />
       </div>
 
-      <div class="px-6 py-4 border-t border-white/10 space-y-3 shrink-0 bg-slate-950/50">
-        <label class="flex items-start gap-3 text-xs text-slate-200 leading-relaxed cursor-pointer select-none">
-          <input
-            type="checkbox"
-            class="mt-0.5 accent-rose-500 cursor-pointer"
-            :checked="props.hasBackupConfirmed"
-            @change="emit('toggle-backup', ($event.target as HTMLInputElement).checked)"
-          />
-          <span>
-            <span class="font-black text-rose-200">Important &mdash;</span>
-            I have made a copy of this adventure (or accept the risk that AI edits will overwrite
-            my current data). The engine does not auto-rollback these changes.
-          </span>
-        </label>
-
-        <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-2 text-[11px] text-amber-100">
-          <AlertTriangle class="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
-          <p class="leading-relaxed">
-            AI-generated fixes can be subtly wrong. We strongly recommend exporting the
-            adventure (<code class="font-mono">.adv</code>) before applying any of these patches.
-          </p>
-        </div>
-
-        <div class="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors disabled:opacity-50"
-            :disabled="props.applying"
-            @click="emit('close')"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            class="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-black uppercase tracking-wider transition-colors disabled:bg-slate-700 disabled:cursor-not-allowed flex items-center gap-2"
-            :disabled="!canApply"
-            @click="emit('apply')"
-          >
-            <Loader2 v-if="props.applying" class="w-4 h-4 animate-spin" />
-            <CheckCircle2 v-else class="w-4 h-4" />
-            <span>{{ props.applying ? 'Applying\u2026' : 'Apply selected fix' }}</span>
-          </button>
-        </div>
-      </div>
+      <ProposalApplyFooter
+        :has-backup-confirmed="props.hasBackupConfirmed"
+        :applying="props.applying"
+        :can-apply="canApply"
+        apply-label="Apply selected fix"
+        @toggle-backup="emit('toggle-backup', $event)"
+        @cancel="emit('close')"
+        @apply="emit('apply')"
+      />
     </div>
   </div>
 </template>

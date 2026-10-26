@@ -14,6 +14,7 @@ from backend.api.routes.adventures.editing import (
     payload,
     story_crud,
     validation,
+    world_builder_instruct,
     world_crud,
 )
 from backend.api.routes.adventures.editing.ai_fix_context import _format_focused_world_block
@@ -38,6 +39,7 @@ for _module in (
     validation,
     ai_fix_suggest,
     ai_fix_apply,
+    world_builder_instruct,
     world_crud,
     story_crud,
     entity_update,

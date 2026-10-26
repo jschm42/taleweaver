@@ -32,6 +32,7 @@ import TriggerTreeTab from '@/components/editor/TriggerTreeTab.vue'
 import type { TriggerTreeNode } from '@/services/triggerTree'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
 import ValidationTab from '@/components/editor/ValidationTab.vue'
+import WorldBuilderPrompt from '@/components/editor/WorldBuilderPrompt.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import NotificationToast from '@/components/editor/NotificationToast.vue'
 import EditEntityModal from '@/components/editor/EditEntityModal.vue'
@@ -2596,6 +2597,12 @@ watch(
       </div>
       
       <div v-else class="space-y-6">
+        <WorldBuilderPrompt
+          :template-id="adventureId"
+          @notify="addNotification"
+          @applied="refreshData"
+        />
+
         <nav class="lg:hidden flex gap-2 overflow-x-auto pb-2">
           <button
             v-for="tab in editorTabs"

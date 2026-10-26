@@ -123,17 +123,10 @@ Identify any of the issues listed in your system instructions. Return ONLY the J
 """
 
 
-AI_FIX_SUGGESTIONS_SYSTEM_PROMPT = """You are an assistant for TaleWeaver's adventure editor.
-
-You are given:
-1. The full context of an adventure (scenes, exits, NPCs, objects, quests, sequences, etc.).
-2. A single validation finding produced by an earlier AI pass.
-
-Your job: propose up to 3 DIFFERENT ways to fix the finding. Each option must be a
-fully formed, immediately applicable patch — do not propose open-ended suggestions
-or "consider changing X". The user will pick one option and the engine will apply it.
-
-PATCH MODEL
+# Shared by every prompt that asks the LLM for applicable patch proposals
+# (AI fix suggestions and World-Builder instructions), so the patch schema and
+# the field allowlist cannot drift apart.
+FIX_PATCH_SCHEMA_BLOCK = """PATCH MODEL
 For each option, emit a JSON object matching this exact schema:
 
 {
@@ -157,20 +150,9 @@ For each option, emit a JSON object matching this exact schema:
   ]
 }
 
-RULES
-- Provide between 1 and 3 proposals. If you genuinely cannot fix the finding safely,
-  return {"proposals": []} and nothing else.
-- Each proposal must be self-contained: applying it alone should produce a consistent
-  state. Do not chain dependencies between proposals.
-- Prefer minimally invasive edits: change the fewest fields / shortest texts that solve
-  the finding. Do not rewrite entire scenes or rewrites whole quests.
-- For narrative fields (description, plot, rules, intro_text, goal,
-  character, teaser, dialog hints): keep their existing language and tone; only adjust
-  the offending portions.
-- For structural fixes that touch more than one entity (e.g. move an orphaned code
-  hint into a text log): emit MULTIPLE patches inside ONE proposal, all sharing the
-  same fix idea. The engine applies them in order.
-- Allowed `target_type` values: scene, object, npc, exit, protagonist, adventure, sequence.
+"""
+
+FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, exit, protagonist, adventure, sequence.
 - Allowed `field_updates` keys MUST match the editor's patch payload exactly:
     - scene: label, description, decorative_objects
     - object (CONTAINER): description, code_to_unlock, item_to_unlock, rule_to_unlock, locked,
@@ -198,13 +180,44 @@ RULES
   guards; use an empty string to remove a guard.
 - Do NOT add fields outside this allowlist. If the fix requires something else,
   pick the closest narrative field and put a short, in-fiction note inside it.
-- Do NOT emit fields unrelated to the finding.
 - NEVER invent new ids. `target_id` must reference an existing entity you can see in
   the provided world context.
 - Each value in `field_updates` must be a primitive (string, number, boolean) or a
   plain list of strings (for decorative_objects). No nested objects.
 - Reply with ONLY the JSON object (no markdown fence, no commentary, no preamble).
 """
+
+
+AI_FIX_SUGGESTIONS_SYSTEM_PROMPT = (
+    """You are an assistant for TaleWeaver's adventure editor.
+
+You are given:
+1. The full context of an adventure (scenes, exits, NPCs, objects, quests, sequences, etc.).
+2. A single validation finding produced by an earlier AI pass.
+
+Your job: propose up to 3 DIFFERENT ways to fix the finding. Each option must be a
+fully formed, immediately applicable patch — do not propose open-ended suggestions
+or "consider changing X". The user will pick one option and the engine will apply it.
+
+"""
+    + FIX_PATCH_SCHEMA_BLOCK
+    + """RULES
+- Provide between 1 and 3 proposals. If you genuinely cannot fix the finding safely,
+  return {"proposals": []} and nothing else.
+- Each proposal must be self-contained: applying it alone should produce a consistent
+  state. Do not chain dependencies between proposals.
+- Prefer minimally invasive edits: change the fewest fields / shortest texts that solve
+  the finding. Do not rewrite entire scenes or rewrites whole quests.
+- For narrative fields (description, plot, rules, intro_text, goal,
+  character, teaser, dialog hints): keep their existing language and tone; only adjust
+  the offending portions.
+- For structural fixes that touch more than one entity (e.g. move an orphaned code
+  hint into a text log): emit MULTIPLE patches inside ONE proposal, all sharing the
+  same fix idea. The engine applies them in order.
+- Do NOT emit fields unrelated to the finding.
+"""
+    + FIX_PATCH_FIELD_RULES
+)
 
 
 AI_FIX_SUGGESTIONS_USER_PROMPT_TEMPLATE = """Adventure Title: {title}
