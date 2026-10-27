@@ -26,10 +26,19 @@ _CONTAINER_LOCK_HINTS = (
 )
 
 
+def _voice_register(voice: VoiceOption) -> str:
+    raw = voice.get("gender")
+    if raw == "female":
+        return "female"
+    if raw == "male":
+        return "male"
+    return ""
+
+
 def _voice_line(voice: VoiceOption) -> str:
     traits = ", ".join(
         part
-        for part in (voice["gender"], voice["age"], voice["accent"], voice["description"])
+        for part in (_voice_register(voice), voice["age"], voice["accent"], voice["description"])
         if part
     )
     good_for = f"; good for {', '.join(voice['good_for'])}" if voice["good_for"] else ""

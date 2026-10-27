@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from backend.api.routes.adventures.assets import _build_uploaded_visual_path
 from backend.api.routes.adventures.agent_logic import _resolve_session_issue_log_path
+from backend.api.routes.adventures.assets import _build_uploaded_visual_path
 from backend.api.routes.adventures.editor import _clone_entity_image
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.config_api import _build_catalog_upload_path, _route_error_response
@@ -56,7 +56,9 @@ def test_build_uploaded_visual_path_sanitizes_target_and_extension(tmp_path, mon
 
 
 def test_route_error_response_hides_exception_details():
-    response = _route_error_response("Catalog upload", "Upload failed.", RuntimeError("secret token leaked"))
+    response = _route_error_response(
+        "Catalog upload", "Upload failed.", RuntimeError("secret token leaked")
+    )
 
     assert response == {"status": "error", "message": "Upload failed."}
 
@@ -133,7 +135,9 @@ def test_diagnose_provider_error_does_not_expose_raw_exception_text():
     from backend.core.error_diagnostics import diagnose_provider_error
 
     # Test unknown exception containing sensitive internal database path or stack trace
-    sensitive_exc = RuntimeError("Secret DB connection failed at /var/run/secrets/key.pem with token abc123xyz")
+    sensitive_exc = RuntimeError(
+        "Secret DB connection failed at /var/run/secrets/key.pem with token abc123xyz"
+    )
     diag = diagnose_provider_error(sensitive_exc, provider="custom_provider")
 
     assert "/var/run/secrets" not in diag
@@ -156,11 +160,24 @@ def test_diagnose_provider_error_does_not_expose_raw_exception_text():
 def test_friendly_llm_error_message_does_not_expose_raw_exception_text():
     from backend.api.routes.adventures.gameplay_logic import _friendly_llm_error_message
 
-    sensitive_exc = Exception("Connection refused to internal proxy https://internal-vault.svc.cluster.local:8200/v1/token")
+    sensitive_exc = Exception(
+        "Connection refused to internal proxy https://internal-vault.svc.cluster.local:8200/v1/token"
+    )
     msg = _friendly_llm_error_message(sensitive_exc)
     assert msg is not None
     assert "internal-vault.svc" not in msg
     assert "Connection failed" in msg
 
 
+def test_is_svg_image_file_rejects_paths_outside_data_dir(tmp_path, monkeypatch):
+    from backend.engine.media_engine import _is_svg_image_file
 
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+
+    outside_svg = tmp_path / "outside.png"
+    outside_svg.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+
+    # Arrange / Act / Assert
+    assert _is_svg_image_file(str(outside_svg), ".png") is False

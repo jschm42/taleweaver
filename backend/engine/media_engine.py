@@ -2,6 +2,7 @@
 MediaEngine handles AI image generation for scenes and entities.
 Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
+
 import asyncio
 import base64
 import io
@@ -158,13 +159,29 @@ def _select_static_placeholder_asset(category: str) -> Optional[str]:
     return os.path.join(_FRONTEND_SVG_ROOT, "items", filename)
 
 
+def _resolved_inside_data(candidate: str) -> str:
+    """Resolve *candidate* with realpath and enforce containment inside DATA_DIR."""
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    real = os.path.abspath(os.path.realpath(_ensure_within_data_dir(candidate)))
+    if (
+        not real.startswith(data_root + os.sep)
+        or os.path.commonpath([real, data_root]) != data_root
+    ):
+        raise ValueError("Resolved path escapes DATA_DIR.")
+    return real
+
+
 def _is_svg_image_file(file_path: str, ext: str) -> bool:
     if ext.lower() == ".svg":
         return True
-    if not os.path.isfile(file_path):
+    try:
+        safe_path = _resolved_inside_data(file_path)
+    except ValueError:
+        return False
+    if not os.path.isfile(safe_path):
         return False
     try:
-        with open(file_path, "rb") as f:
+        with open(safe_path, "rb") as f:
             return b"<svg" in f.read(512).lower()
     except OSError:
         return False
@@ -224,7 +241,9 @@ def _write_binary_file(filepath: str, payload: bytes) -> None:
     safe_filename = sanitize_relative_segment(os.path.basename(safe_filepath))
     if not safe_filename:
         raise ValueError("Invalid filepath: invalid filename.")
-    safe_filepath = ensure_within_base_dir(os.path.join(safe_parent_dir, safe_filename), safe_parent_dir)
+    safe_filepath = ensure_within_base_dir(
+        os.path.join(safe_parent_dir, safe_filename), safe_parent_dir
+    )
     # Re-verify containment at the sink so the taint analysis trusts the path.
     data_root = os.path.realpath(settings.DATA_DIR)
     if os.path.commonpath([os.path.realpath(safe_filepath), data_root]) != data_root:
@@ -274,12 +293,12 @@ class MediaEngine:
         edge = min_long_edge or 1024
         if edge <= 0:
             edge = 1024
-            
+
         t_type = (target_type or "").upper()
-        
+
         def round_to_8(val: float) -> int:
             return int(round(val / 8.0) * 8)
-            
+
         if t_type == "COVER":
             return round_to_8(edge), round_to_8(edge / 2.0)
         elif t_type == "SCENE":
@@ -322,7 +341,7 @@ class MediaEngine:
         target_dir = _safe_data_path("adventures", "library", adventure_id)
         if os.path.exists(target_dir):
             try:
-                # Use a thread pool executor for blocking I/O if needed, 
+                # Use a thread pool executor for blocking I/O if needed,
                 # but for simplicity we'll just use shutil in this async context.
                 shutil.rmtree(target_dir)
                 logger.info("Cleaned up assets for adventure %s", adventure_id)
@@ -335,19 +354,21 @@ class MediaEngine:
         try:
             if ".." in filepath:
                 raise ValueError("Path traversal detected")
-            safe_filepath = _ensure_within_data_dir(filepath)
+            data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+            safe_filepath = _resolved_inside_data(filepath)
             source_stem, ext = os.path.splitext(os.path.basename(safe_filepath))
             safe_thumb_name = sanitize_relative_segment(f"{source_stem}_thumb{ext}")
             if not safe_thumb_name:
                 raise ValueError("Invalid thumbnail filename.")
             if not re.match(r"^[A-Za-z0-9._-]+$", safe_thumb_name):
                 raise ValueError("Invalid thumbnail filename pattern")
-            thumb_path = _ensure_within_data_dir(
+            thumb_path = _resolved_inside_data(
                 os.path.join(os.path.dirname(safe_filepath), safe_thumb_name)
             )
-            # Re-verify containment at the sink so the taint analysis trusts the path.
-            data_root = os.path.realpath(settings.DATA_DIR)
-            if os.path.commonpath([os.path.realpath(thumb_path), data_root]) != data_root:
+            # Re-verify containment at the sink so the taint analysis trusts both paths.
+            if not safe_filepath.startswith(data_root + os.sep) or not thumb_path.startswith(
+                data_root + os.sep
+            ):
                 raise ValueError("Invalid thumbnail path: escapes DATA_DIR.")
             # Avoid re-generating if it already exists
             if os.path.exists(thumb_path):
@@ -385,9 +406,11 @@ class MediaEngine:
                 if ext.lower() in image_extensions and not base.endswith("_thumb"):
                     filepath = os.path.join(root, file)
                     tasks.append(MediaEngine._generate_thumbnail(filepath))
-        
+
         if tasks:
-            logger.info("Generating %d missing thumbnails for adventure %s", len(tasks), adventure_id)
+            logger.info(
+                "Generating %d missing thumbnails for adventure %s", len(tasks), adventure_id
+            )
             await asyncio.gather(*tasks)
 
     @classmethod
@@ -400,7 +423,7 @@ class MediaEngine:
         # Case-insensitive replacement of 'raping' with 'rapping', but only if preceded by 'rap', 'battle', etc.
         # or as a standalone word that is clearly a typo in this context.
         # Actually, in a TTRPG/Creative context, 'raping' is almost always a typo for 'rapping'.
-        return re.sub(r'(\b)raping(\b)', r'\1rapping\2', prompt, flags=re.IGNORECASE)
+        return re.sub(r"(\b)raping(\b)", r"\1rapping\2", prompt, flags=re.IGNORECASE)
 
     @staticmethod
     def _apply_no_text_instruction(prompt: str) -> str:
@@ -505,7 +528,9 @@ class MediaEngine:
             # If OpenRouter explicitly informs that it's a chat model or cannot be used with /images, try chat fallback
             if not is_chat_only_model_error(error_msg):
                 raise RuntimeError(f"OpenRouter image generation failed: {error_msg}")
-            logger.info("Falling back to chat/completions with modalities=['image'] for %s", clean_model)
+            logger.info(
+                "Falling back to chat/completions with modalities=['image'] for %s", clean_model
+            )
             return await MediaEngine._generate_image_openrouter_chat_fallback(
                 prompt=prompt,
                 model=model,
@@ -517,8 +542,12 @@ class MediaEngine:
 
         image_url, b64_data = extract_openrouter_image(response.json())
         if image_url:
-            return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
-        return await MediaEngine._save_b64_image(b64_data, target_dir, filename, image_format, image_quality)
+            return await MediaEngine._save_remote_image(
+                image_url, target_dir, filename, image_format, image_quality
+            )
+        return await MediaEngine._save_b64_image(
+            b64_data, target_dir, filename, image_format, image_quality
+        )
 
     @staticmethod
     async def _generate_image_openrouter_chat_fallback(
@@ -542,9 +571,13 @@ class MediaEngine:
         image_quality = provider_options.get("image_quality", 85)
 
         if image_url:
-            return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
+            return await MediaEngine._save_remote_image(
+                image_url, target_dir, filename, image_format, image_quality
+            )
         if b64_data:
-            return await MediaEngine._save_b64_image(b64_data, target_dir, filename, image_format, image_quality)
+            return await MediaEngine._save_b64_image(
+                b64_data, target_dir, filename, image_format, image_quality
+            )
 
         raise RuntimeError("OpenRouter generation failed to return an image.")
 
@@ -552,12 +585,12 @@ class MediaEngine:
     def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
         """Resolves API key by checking environment variables first, then the provided dictionary."""
         provider_key = (provider or "").lower()
-        
+
         # 1. Check environment variables first
         env_key = settings.get_env_api_key(provider_key)
         if env_key:
             return env_key
-            
+
         # 2. Fallback to database-stored (and encrypted) keys
         if api_keys_dict and provider_key in api_keys_dict:
             try:
@@ -565,7 +598,7 @@ class MediaEngine:
             except (ValueError, TypeError, KeyError):
                 logger.error("Failed to decrypt API key for provider '%s'", provider_key)
                 return None
-            
+
         return None
 
     @staticmethod
@@ -636,8 +669,7 @@ class MediaEngine:
                 if direct_result:
                     return direct_result
                 raise RuntimeError(
-                    f"Ollama image generation failed for model '{model}'. "
-                    f"Original error: {e}"
+                    f"Ollama image generation failed for model '{model}'. Original error: {e}"
                 ) from e
             if is_moderation_error(str(e)):
                 logger.warning("Image generation was moderated (Safety Filter).")
@@ -680,7 +712,7 @@ class MediaEngine:
         response = await asyncio.to_thread(
             MediaEngine._get_litellm().image_generation,
             **kwargs,
-            request_timeout=settings.VISUAL_TIMEOUT
+            request_timeout=settings.VISUAL_TIMEOUT,
         )
         image_url, b64_json = MediaEngine._extract_image_payload(response)
 
@@ -688,14 +720,20 @@ class MediaEngine:
         image_quality = provider_options.get("image_quality", 85)
 
         if image_url:
-            return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
+            return await MediaEngine._save_remote_image(
+                image_url, target_dir, filename, image_format, image_quality
+            )
         if b64_json:
-            return await MediaEngine._save_b64_image(b64_json, target_dir, filename, image_format, image_quality)
+            return await MediaEngine._save_b64_image(
+                b64_json, target_dir, filename, image_format, image_quality
+            )
         if provider_key != "ollama":
             logger.error("No image data in provider response")
             return None
 
-        logger.warning("LiteLLM returned no image payload for ollama; trying direct Ollama API fallback.")
+        logger.warning(
+            "LiteLLM returned no image payload for ollama; trying direct Ollama API fallback."
+        )
         direct_result = await MediaEngine._generate_image_ollama_from_options(
             prompt, model, target_dir, filename, provider_options
         )
@@ -737,13 +775,17 @@ class MediaEngine:
         return await MediaEngine._generate_image_stable_diffusion_direct(
             prompt=prompt,
             model=model,
-            stable_diffusion_url=(provider_options.get("stable_diffusion_url") or "http://127.0.0.1:7860"),
+            stable_diffusion_url=(
+                provider_options.get("stable_diffusion_url") or "http://127.0.0.1:7860"
+            ),
             target_dir=target_dir,
             filename=filename,
             width=provider_options.get("width"),
             height=provider_options.get("height"),
             steps=provider_options.get("steps") if provider_options.get("steps") is not None else 4,
-            cfg_scale=provider_options.get("cfg_scale") if provider_options.get("cfg_scale") is not None else 1.0,
+            cfg_scale=provider_options.get("cfg_scale")
+            if provider_options.get("cfg_scale") is not None
+            else 1.0,
             seed=provider_options.get("seed"),
             negative_prompt=provider_options.get("negative_prompt"),
             image_format=provider_options.get("image_format", "jpeg"),
@@ -793,14 +835,18 @@ class MediaEngine:
 
             body = response.json()
             image_url, b64_json = MediaEngine._extract_image_payload(body)
-            
+
             image_format = "jpeg"
             image_quality = 85
-            
+
             if image_url:
-                return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
+                return await MediaEngine._save_remote_image(
+                    image_url, target_dir, filename, image_format, image_quality
+                )
             if b64_json:
-                return await MediaEngine._save_b64_image(b64_json, target_dir, filename, image_format, image_quality)
+                return await MediaEngine._save_b64_image(
+                    b64_json, target_dir, filename, image_format, image_quality
+                )
 
             logger.error("Ollama response did not include image payload")
             return None
@@ -845,10 +891,7 @@ class MediaEngine:
             )
 
             response = await asyncio.to_thread(
-                requests.post,
-                endpoint,
-                json=payload,
-                timeout=settings.VISUAL_TIMEOUT
+                requests.post, endpoint, json=payload, timeout=settings.VISUAL_TIMEOUT
             )
             if response.status_code != 200:
                 logger.error(
@@ -865,39 +908,41 @@ class MediaEngine:
 
             b64_json = images[0]
             return await MediaEngine._save_b64_image(
-                b64_json,
-                target_dir,
-                filename,
-                image_format=image_format,
-                quality=image_quality
+                b64_json, target_dir, filename, image_format=image_format, quality=image_quality
             )
         except Exception:
             logger.exception("Error during direct Stable Diffusion image generation")
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
+    async def _save_b64_image(
+        b64_data: str,
+        target_dir: str,
+        filename: Optional[str] = None,
+        image_format: str = "jpeg",
+        quality: int = 85,
+    ) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         try:
             safe_target_dir = _resolve_output_dir(target_dir)
             ext = "jpg" if image_format.lower() == "jpeg" else "png"
             filepath = _build_output_filepath(safe_target_dir, filename, ext)
-            
+
             if b64_data.startswith("data:image/"):
                 if ";base64," in b64_data:
                     b64_data = b64_data.split(";base64,", 1)[1]
                 elif "," in b64_data:
                     b64_data = b64_data.split(",", 1)[1]
 
-            b64_data = re.sub(r'[^A-Za-z0-9+/=]', '', b64_data)
-            
+            b64_data = re.sub(r"[^A-Za-z0-9+/=]", "", b64_data)
+
             padding_needed = len(b64_data) % 4
             if padding_needed:
-                b64_data += '=' * (4 - padding_needed)
+                b64_data += "=" * (4 - padding_needed)
 
             logger.info("Decoding base64 image payload (length=%d)", len(b64_data))
             image_bytes = base64.b64decode(b64_data)
-            
+
             if image_format.lower() == "jpeg":
                 img = Image.open(io.BytesIO(image_bytes))
                 if img.mode in ("RGBA", "P"):
@@ -906,7 +951,7 @@ class MediaEngine:
                 await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
             else:
                 _write_binary_file(filepath, image_bytes)
-            
+
             # Generate thumbnail
             await MediaEngine._generate_thumbnail(filepath)
 
@@ -916,7 +961,13 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
+    async def _save_remote_image(
+        url: str,
+        target_dir: str,
+        filename: Optional[str] = None,
+        image_format: str = "jpeg",
+        quality: int = 85,
+    ) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
@@ -924,16 +975,18 @@ class MediaEngine:
                 safe_target_dir = _resolve_output_dir(target_dir)
                 ext = "jpg" if image_format.lower() == "jpeg" else "png"
                 filepath = _build_output_filepath(safe_target_dir, filename, ext)
-                
+
                 if image_format.lower() == "jpeg":
                     img = Image.open(io.BytesIO(response.content))
                     if img.mode in ("RGBA", "P"):
                         img = img.convert("RGB")
                     # Image.save is CPU bound, wrap in to_thread
-                    await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
+                    await asyncio.to_thread(
+                        img.save, filepath, "JPEG", quality=quality, optimize=True
+                    )
                 else:
                     _write_binary_file(filepath, response.content)
-                
+
                 # Generate thumbnail
                 await MediaEngine._generate_thumbnail(filepath)
 
@@ -950,37 +1003,48 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = True) -> Optional[str]:
+    async def generate_scene_image(
+        prompt: str,
+        adventure_id: str,
+        user_config: dict,
+        api_keys: dict,
+        style_instruction: Optional[str] = None,
+        use_advanced_model: bool = True,
+    ) -> Optional[str]:
         """High-level wrapper for gameplay scene generation (uses Advanced Model by default)."""
         t2i = user_config.get("t2i_settings")
-        if not t2i: 
+        if not t2i:
             logger.warning("No T2I settings found in user_config")
             return None
-        
+
         if use_advanced_model:
             provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
             model = t2i.get("advanced_model")
         else:
             provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
             model = t2i.get("simple_model")
-        
+
         logger.info("Resolving scene generation: provider=%s, model=%s", provider, model)
-        
+
         if not model:
             raise ValueError("Missing image model configuration for scenes.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider not in ("ollama", "stable_diffusion") and not api_key:
-            logger.error("API key resolution failed for provider: %s (Advanced Model/Scenes)", provider)
-            raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model). Please check your Visual Preferences in Admin settings.")
-        
+            logger.error(
+                "API key resolution failed for provider: %s (Advanced Model/Scenes)", provider
+            )
+            raise ValueError(
+                f"Missing image configuration or API key for {provider} (Advanced Model). Please check your Visual Preferences in Admin settings."
+            )
+
         target_dir = _safe_data_path("adventures", "library", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        
+
         # Use adventure_id as prefix for clarity
         safe_id = slugify(adventure_id)
         filename = f"{safe_id}_scene_{uuid.uuid4().hex[:8]}.{ext}"
-        
+
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
         if use_advanced_model:
@@ -1002,50 +1066,63 @@ class MediaEngine:
             options["height"] = height
 
         return await MediaEngine.generate_image(
-            prompt=prompt, 
-            model=model, 
-            api_key=api_key, 
-            provider=provider, 
+            prompt=prompt,
+            model=model,
+            api_key=api_key,
+            provider=provider,
             adventure_id=adventure_id,
-            target_dir=target_dir, 
+            target_dir=target_dir,
             filename=filename,
             provider_options=options,
             style_instruction=style_instruction,
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
+    async def generate_entity_image(
+        prompt: str,
+        adventure_id: str,
+        entity_id: str,
+        entity_type: str,
+        user_config: dict,
+        api_keys: dict,
+        style_instruction: Optional[str] = None,
+        use_advanced_model: bool = False,
+    ) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
         t2i = user_config.get("t2i_settings")
-        if not t2i: 
+        if not t2i:
             logger.warning("No T2I settings found in user_config")
             return None
-        
+
         if use_advanced_model:
             provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
             model = t2i.get("advanced_model")
         else:
             provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
             model = t2i.get("simple_model")
-        
+
         logger.info("Resolving entity generation: provider=%s, model=%s", provider, model)
-        
+
         if not model:
             raise ValueError("Missing image model configuration for entities.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider not in ("ollama", "stable_diffusion") and not api_key:
-            logger.error("API key resolution failed for provider: %s (Simple Model/Entities)", provider)
-            raise ValueError(f"Missing image configuration or API key for {provider} (Simple Model). Please check your Visual Preferences in Admin settings.")
-        
+            logger.error(
+                "API key resolution failed for provider: %s (Simple Model/Entities)", provider
+            )
+            raise ValueError(
+                f"Missing image configuration or API key for {provider} (Simple Model). Please check your Visual Preferences in Admin settings."
+            )
+
         target_dir = _safe_data_path("adventures", "library", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        
+
         # Use adventure_id and entity_id as prefix for clarity
         safe_adv_id = slugify(adventure_id)
         safe_ent_id = slugify(entity_id)
         filename = f"{safe_adv_id}_{safe_ent_id}_{uuid.uuid4().hex[:8]}.{ext}"
-        
+
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
         if use_advanced_model:
@@ -1067,55 +1144,69 @@ class MediaEngine:
             options["height"] = height
 
         return await MediaEngine.generate_image(
-            prompt=prompt, 
-            model=model, 
-            api_key=api_key, 
-            provider=provider, 
+            prompt=prompt,
+            model=model,
+            api_key=api_key,
+            provider=provider,
             adventure_id=adventure_id,
-            target_dir=target_dir, 
+            target_dir=target_dir,
             filename=filename,
             provider_options=options,
             style_instruction=style_instruction,
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, appearance: Optional[str] = None) -> Optional[str]:
+    async def generate_adventure_cover(
+        title: str,
+        original_prompt: str,
+        adventure_id: str,
+        user_config: dict,
+        api_keys: dict,
+        style_instruction: Optional[str] = None,
+        appearance: Optional[str] = None,
+    ) -> Optional[str]:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
-        if not t2i: 
+        if not t2i:
             logger.warning("No T2I settings found in user_config")
             return None
-        
+
         provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("advanced_model")
-        
+
         logger.info("Resolving adventure cover generation: provider=%s, model=%s", provider, model)
-        
+
         if not model:
             raise ValueError("Missing image model configuration for adventure cover.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider not in ("ollama", "stable_diffusion") and not api_key:
-            logger.error("API key resolution failed for provider: %s (Advanced Model/Cover)", provider)
-            raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings.")
-        
+            logger.error(
+                "API key resolution failed for provider: %s (Advanced Model/Cover)", provider
+            )
+            raise ValueError(
+                f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings."
+            )
+
         safe_adventure_id = _sanitize_path_component(adventure_id)
         if not safe_adventure_id:
             raise ValueError("Invalid adventure identifier.")
 
         target_dir = _safe_data_path("adventures", "library", safe_adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        
+
         # Use sanitized adventure_id as prefix for clarity
         safe_id = safe_adventure_id
         filename = f"{safe_id}_cover_{uuid.uuid4().hex[:8]}.{ext}"
-        
+
         # Clean original_prompt for cover generation:
         # Strip out structured [Sequence: ...], [Scene: ...], [NPC: ...] blocks to prevent multi-panel storyboarding
         clean_prompt = str(original_prompt or "").strip()
-        tag_match = re.search(r'\[(?:Sequence|Scene|NPC|Item|Quest)\b', clean_prompt, flags=re.IGNORECASE)
+        tag_match = re.search(
+            r"\[(?:Sequence|Scene|NPC|Item|Quest)\b", clean_prompt, flags=re.IGNORECASE
+        )
         if tag_match:
-            clean_prompt = clean_prompt[:tag_match.start()].strip()
+            clean_prompt = clean_prompt[: tag_match.start()].strip()
         if not clean_prompt:
             clean_prompt = str(original_prompt or "").strip()
         if len(clean_prompt) > 400 and "." in clean_prompt[:400]:
@@ -1128,13 +1219,15 @@ class MediaEngine:
             original_prompt=clean_prompt,
             context=with_context(appearance_context(appearance)),
         )
-        
+
         # Resolve steps and cfg_scale for advanced model
         options = dict(t2i)
         options.setdefault("aspect_ratio", "3:2")
         existing_neg = options.get("negative_prompt") or ""
         anti_split_neg = "split screen, multi-panel, panels, comic strip, collage, triptych, diptych, multiple views, storyboard, frames, borders, dividers"
-        options["negative_prompt"] = f"{existing_neg}, {anti_split_neg}".strip(", ") if existing_neg else anti_split_neg
+        options["negative_prompt"] = (
+            f"{existing_neg}, {anti_split_neg}".strip(", ") if existing_neg else anti_split_neg
+        )
         options["steps"] = t2i.get("advanced_steps")
         options["cfg_scale"] = t2i.get("advanced_cfg_scale")
         options["sampler_name"] = t2i.get("advanced_sampler_name")
@@ -1147,12 +1240,12 @@ class MediaEngine:
             options["height"] = height
 
         return await MediaEngine.generate_image(
-            prompt=prompt, 
-            model=model, 
-            api_key=api_key, 
-            provider=provider, 
+            prompt=prompt,
+            model=model,
+            api_key=api_key,
+            provider=provider,
             adventure_id=adventure_id,
-            target_dir=target_dir, 
+            target_dir=target_dir,
             filename=filename,
             provider_options=options,
             style_instruction=style_instruction,
@@ -1165,7 +1258,7 @@ class MediaEngine:
         target_dir: str,
         filename: Optional[str] = None,
         category: str = "",
-        theme: Optional[str] = None
+        theme: Optional[str] = None,
     ) -> str:
         """Generate placeholders using static SVG assets for NPC/items and PIL for other categories."""
         safe_target_dir = target_dir
@@ -1182,18 +1275,18 @@ class MediaEngine:
             )
             if static_svg_url:
                 return static_svg_url
-            
+
             # Determine format and extension
-            # Default to PNG for placeholders to preserve transparency if needed, 
+            # Default to PNG for placeholders to preserve transparency if needed,
             # though we currently convert to RGB in the strategy.
             ext = placeholder_extension(filename)
 
             if not filename:
                 filename = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}.{ext}"
             filename = _normalize_output_filename(filename, ext)
-            
+
             filepath = _ensure_within_data_dir(os.path.join(safe_target_dir, filename))
-            
+
             # Select strategy and theme based on category
             # Map theme string to ColorTheme enum
             color_theme = resolve_color_theme(theme)
@@ -1204,22 +1297,19 @@ class MediaEngine:
                 width, height = 1200, 800
             elif cat in ["CHARACTER", "AVATAR"]:
                 # Avatars/characters still use the legacy SVG fallback.
-                return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, safe_target_dir, filename, category)
+                return await MediaEngine.generate_svg_placeholder(
+                    adventure_id, entity_id, safe_target_dir, filename, category
+                )
             else:
                 strategy = OrganicGradientStrategy(theme=color_theme)
                 width, height = 800, 600
 
             generator = PlaceholderImageGenerator(strategy=strategy)
-            
+
             # Run in thread pool as PIL operations are blocking
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None, 
-                generator.create_and_save, 
-                filepath, 
-                (width, height)
-            )
-            
+            await loop.run_in_executor(None, generator.create_and_save, filepath, (width, height))
+
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
         except (OSError, ValueError, TypeError) as e:
@@ -1229,7 +1319,9 @@ class MediaEngine:
             if is_static_only_placeholder_category(cat):
                 return ""
             # Fallback to SVG for non-item/non-npc categories.
-            return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, safe_target_dir, filename, category)
+            return await MediaEngine.generate_svg_placeholder(
+                adventure_id, entity_id, safe_target_dir, filename, category
+            )
 
     @staticmethod
     async def generate_svg_placeholder(
@@ -1237,7 +1329,7 @@ class MediaEngine:
         entity_id: str,
         target_dir: str,
         filename: Optional[str] = "placeholder.svg",
-        category: str = ""
+        category: str = "",
     ) -> str:
         """
         Generates a procedural SVG placeholder as a fallback.
@@ -1253,10 +1345,9 @@ class MediaEngine:
             filepath = _ensure_within_data_dir(os.path.join(safe_target_dir, safe_filename))
             generator = SVGPlaceholderGenerator(width=1200, height=800, num_shapes=15)
             generator.save(filepath, title=entity_id, category=category)
-            
+
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
         except (OSError, ValueError, TypeError) as e:
             logger.error("Failed to generate SVG placeholder: %s", e)
             return ""
-

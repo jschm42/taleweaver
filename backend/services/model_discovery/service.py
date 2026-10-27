@@ -4,7 +4,6 @@ The UI always gets a usable list: live models when the provider answers, otherwi
 built-in defaults together with the reason the live list is missing.
 """
 
-import hashlib
 import time
 from dataclasses import dataclass
 from typing import Literal, Optional
@@ -89,7 +88,7 @@ STATIC_MODEL_LABELS: dict[str, dict[str, str]] = {
     },
 }
 
-_cache: dict[tuple[str, str, str], tuple[float, list[DiscoveredModel]]] = {}
+_cache: dict[tuple[str, str], tuple[float, list[DiscoveredModel]]] = {}
 
 
 @dataclass(frozen=True)
@@ -121,9 +120,8 @@ def _static_models(provider: str, kind: ModelKind) -> list[DiscoveredModel]:
     ]
 
 
-def _cache_key(provider: str, base_url: str, api_key: Optional[str]) -> tuple[str, str, str]:
-    key_hash = hashlib.sha256((api_key or "").encode()).hexdigest()[:16]
-    return provider, base_url, key_hash
+def _cache_key(provider: str, base_url: str) -> tuple[str, str]:
+    return provider, base_url
 
 
 async def _fetch(
@@ -143,7 +141,7 @@ async def _cached_fetch(
     refresh: bool,
     client: Optional[httpx.AsyncClient],
 ) -> list[DiscoveredModel]:
-    key = _cache_key(provider, base_url, api_key)
+    key = _cache_key(provider, base_url)
     cached = _cache.get(key)
     if cached and not refresh and time.monotonic() - cached[0] < CACHE_TTL_SECONDS:
         return cached[1]

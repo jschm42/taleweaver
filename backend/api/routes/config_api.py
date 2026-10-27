@@ -45,6 +45,7 @@ from backend.core.security import encryption_util
 from backend.engine.media_engine import MediaEngine
 from backend.engine.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.models.user import User
+from backend.services.model_discovery import clear_cache as clear_model_discovery_cache
 from backend.utils.path_security import (
     ensure_within_base_dir,
     ensure_within_data_dir,
@@ -148,12 +149,21 @@ def _route_error_response(operation: str, message: str, exc: Exception) -> dict[
     return {"status": "error", "message": message}
 
 
+def _canonical_catalog_type(value: str) -> Optional[str]:
+    """Return a canonical catalog type literal, or None when invalid."""
+    cleaned = _sanitize_path_component(value)
+    for allowed in ("styles", "tones"):
+        if cleaned == allowed:
+            return allowed
+    return None
+
+
 def _build_catalog_upload_path(
     catalog_type: str, target_id: str, original_filename: Optional[str]
 ) -> str:
     """Create a validated file path for uploaded catalog images."""
-    safe_catalog_type = _sanitize_path_component(catalog_type)
-    if safe_catalog_type not in _ALLOWED_CATALOG_TYPES:
+    safe_catalog_type = _canonical_catalog_type(catalog_type)
+    if not safe_catalog_type:
         raise ValueError("Invalid catalog type.")
 
     catalog_dir = _safe_data_path("catalog", safe_catalog_type)
@@ -830,6 +840,7 @@ async def update_api_key(
 
     await _broadcast_global_settings(db, user)
     await db.commit()
+    clear_model_discovery_cache()
     return {"status": "success", "message": f"{payload.provider} key saved securely."}
 
 
@@ -867,6 +878,7 @@ async def delete_api_key(
 
     await _broadcast_global_settings(db, user)
     await db.commit()
+    clear_model_discovery_cache()
     logger.info("[Admin] Successfully removed key for %s", provider_lower)
     return {"status": "success", "message": f"{provider} key removed."}
 
@@ -1200,22 +1212,21 @@ async def generate_catalog_image(
         return {"status": "error", "message": f"No API key for {provider}"}
 
     try:
-        catalog_type = _sanitize_path_component(payload.catalog_type)
-        if catalog_type not in _ALLOWED_CATALOG_TYPES:
+        catalog_type = _canonical_catalog_type(payload.catalog_type)
+        if not catalog_type:
             return {"status": "error", "message": "Invalid catalog type."}
 
+        safe_target_id = _sanitize_filename_component(payload.target_id) or "tile"
         catalog_dir = _safe_data_path("catalog", catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
 
         base_prompt = payload.prompt
         if not base_prompt:
-            item_name = payload.name or payload.target_id.replace("-", " ")
+            item_name = payload.name or safe_target_id.replace("-", " ")
             base_prompt = f"A visual representation of the visual style '{item_name}'."
             if payload.description:
                 base_prompt += f" Context: {payload.description}"
             base_prompt += " High quality, professional digital art, no text."
-
-        safe_target_id = _slugify(payload.target_id)
 
         img_url = await MediaEngine.generate_image(
             prompt=base_prompt,

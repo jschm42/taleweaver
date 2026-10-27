@@ -30,6 +30,8 @@ from backend.engine.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.utils.path_security import (
+    assert_within_base_dir,
+    assert_within_data_dir,
     ensure_within_base_dir,
     ensure_within_data_dir,
     safe_data_path,
@@ -125,6 +127,14 @@ def _sanitize_filename_token(value: Optional[str]) -> Optional[str]:
     return token[:96] or None
 
 
+def _canonical_target_type(target_type: Optional[str]) -> str:
+    cleaned = sanitize_path_component(target_type or "").lower()
+    for allowed in ("cover", "scene", "npc", "object", "protagonist"):
+        if cleaned == allowed:
+            return allowed
+    raise ValueError("Invalid visual target type.")
+
+
 def _build_uploaded_visual_path(
     template_id: str,
     target_type: str,
@@ -135,10 +145,7 @@ def _build_uploaded_visual_path(
     if not safe_template_id:
         raise ValueError("Invalid adventure template identifier.")
 
-    safe_target_type = sanitize_path_component(target_type)
-    if safe_target_type not in _ALLOWED_VISUAL_TARGET_TYPES:
-        raise ValueError("Invalid visual target type.")
-
+    safe_target_type = _canonical_target_type(target_type)
     safe_file_ext = _sanitize_image_extension(file_ext)
     base_storage_path = safe_data_path("adventures", "library", safe_template_id, "visuals")
 
@@ -582,22 +589,27 @@ def _store_uploaded_visual(
     content: bytes,
 ) -> str:
     """Write the uploaded bytes below DATA_DIR and return their public /data URL."""
+    safe_target_type = _canonical_target_type(target_type)
     full_path = _build_uploaded_visual_path(
         adv_id,
-        target_type,
+        safe_target_type,
         _extension_from_content_type(content_type),
         trusted_target_token=trusted_target_token,
     )
-    safe_parent_dir = ensure_within_data_dir(os.path.dirname(full_path))
-    full_path = ensure_within_base_dir(full_path, safe_parent_dir)
-    # Re-verify containment at the sink so the taint analysis trusts the path.
-    data_root = os.path.realpath(settings.DATA_DIR)
-    if os.path.commonpath([os.path.realpath(full_path), data_root]) != data_root:
+    safe_parent_dir = assert_within_data_dir(os.path.dirname(full_path))
+    full_path = assert_within_base_dir(full_path, safe_parent_dir)
+    # Re-verify containment at the sink using realpath + startswith so CodeQL trusts the path.
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    resolved_full_path = os.path.abspath(os.path.realpath(assert_within_data_dir(full_path)))
+    if (
+        not resolved_full_path.startswith(data_root + os.sep)
+        or os.path.commonpath([resolved_full_path, data_root]) != data_root
+    ):
         raise HTTPException(status_code=400, detail="Invalid upload path.")
-    with open(full_path, "wb") as f:
+    with open(resolved_full_path, "wb") as f:
         f.write(content)
 
-    rel_path = os.path.relpath(full_path, settings.DATA_DIR).replace("\\", "/")
+    rel_path = os.path.relpath(resolved_full_path, data_root).replace("\\", "/")
     return f"/data/{rel_path}"
 
 

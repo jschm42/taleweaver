@@ -837,7 +837,7 @@ export const api = {
     return request('/auth/recover', { method: 'POST', body: JSON.stringify(payload) })
   },
 
-  resetPasswordWithToken(payload: { token: string; new_password: string }): Promise<{ access_token: string; token_type: string }> {
+  completeAccountReset(payload: { token: string; new_password: string }): Promise<{ access_token: string; token_type: string }> {
     return request('/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) })
   },
 

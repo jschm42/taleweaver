@@ -26,17 +26,25 @@ def is_roll_command(user_msg: str) -> bool:
     return bool(parts) and parts[0].lower() == ROLL_COMMAND
 
 
-def parse_roll_sides(user_msg: str) -> int:
-    """Number of die sides requested by ``/roll [sides]`` (``d`` prefix allowed, e.g. ``d20``)."""
+def _validate_roll_sides(user_msg: str) -> tuple[int | None, str | None]:
+    """Validates ``/roll [sides]`` and returns ``(sides, error_message)``."""
     parts = user_msg.strip().split(None, 1)
     if len(parts) < 2:
-        return DEFAULT_SIDES
+        return DEFAULT_SIDES, None
     raw = parts[1].strip().lower().removeprefix("d")
     if not raw.isdigit():
-        raise RollCommandError(f"Usage: /roll {MIN_SIDES}-{MAX_SIDES} (sides), e.g. /roll 20.")
+        return None, f"Usage: /roll {MIN_SIDES}-{MAX_SIDES} (sides), e.g. /roll 20."
     sides = int(raw)
     if not MIN_SIDES <= sides <= MAX_SIDES:
-        raise RollCommandError(f"A die needs between {MIN_SIDES} and {MAX_SIDES} sides.")
+        return None, f"A die needs between {MIN_SIDES} and {MAX_SIDES} sides."
+    return sides, None
+
+
+def parse_roll_sides(user_msg: str) -> int:
+    """Number of die sides requested by ``/roll [sides]`` (``d`` prefix allowed, e.g. ``d20``)."""
+    sides, error = _validate_roll_sides(user_msg)
+    if error is not None or sides is None:
+        raise RollCommandError(error or "Invalid roll command.")
     return sides
 
 
@@ -57,10 +65,9 @@ def format_roll_message(sides: int, value: int) -> str:
 
 async def handle_roll_command(manager: Any, user_msg: str) -> AsyncGenerator[str, None]:
     """Rolls the die, persists the result as a system message and streams it."""
-    try:
-        sides = parse_roll_sides(user_msg)
-    except RollCommandError as exc:
-        payload = {"role": "system", "content": str(exc)}
+    sides, error = _validate_roll_sides(user_msg)
+    if error is not None or sides is None:
+        payload = {"role": "system", "content": error or "Invalid roll command."}
         yield f"event: system\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
         return
 

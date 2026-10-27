@@ -315,7 +315,16 @@ async def test_tts_connection_v2(
     except TTSTimeoutError:
         return {"status": "error", "message": "TTS request timed out. Please retry."}
     except TTSProviderError as exc:
-        return {"status": "error", "message": f"TTS provider error: {exc}"}
+        logger.warning(
+            "TTS connection test failed (provider=%s, model=%s): %s",
+            config.provider,
+            config.model,
+            exc,
+        )
+        return {
+            "status": "error",
+            "message": "TTS provider error. Please verify your TTS settings and API key.",
+        }
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}
     return {"status": "success", "audio_url": audio_url}

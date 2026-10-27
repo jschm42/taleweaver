@@ -30,7 +30,7 @@ async function handleSubmit() {
   isSubmitting.value = true
   error.value = ''
   try {
-    const res = await api.resetPasswordWithToken({ token: token.value, new_password: newPassword.value })
+    const res = await api.completeAccountReset({ token: token.value, new_password: newPassword.value })
     setToken(res.access_token)
     authState.user = await api.getMe()
     authState.isAuthenticated = true
