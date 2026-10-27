@@ -495,14 +495,16 @@ async def mark_text_log_read(
     entity_states = dict(state.entity_states or {})
     current_entry = entity_states.get(entity.id)
     override_entry = dict(current_entry) if isinstance(current_entry, dict) else {}
+    already_read = bool(override_entry.get("is_read"))
     override_entry["is_read"] = True
     entity_states[entity.id] = override_entry
 
     state.entity_states = entity_states
     flag_modified(state, "entity_states")
 
+    # Read hooks fire on the first read only; reopening the text must not repeat them.
     meta = dict(entity.metadata_json or {})
-    if meta.get("on_read_script") or meta.get("on_read_text"):
+    if not already_read and (meta.get("on_read_script") or meta.get("on_read_text")):
         await TriggerService.execute_trigger(
             db,
             state,

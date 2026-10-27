@@ -21,14 +21,32 @@ def _is_readable(item: dict[str, Any], meta: dict[str, Any]) -> bool:
 class ReadingMixin:
     """Runs read hooks and unlocks special actions tied to reading or finding items."""
 
+    def _mark_read(self, item_id: str) -> bool:
+        """Records the item as read; returns whether it had been read before."""
+        if not item_id:
+            return False
+        states = dict(self.state.entity_states or {})
+        entry = dict(states.get(item_id) or {})
+        already_read = bool(entry.get("is_read"))
+        entry["is_read"] = True
+        states[item_id] = entry
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
+        return already_read
+
     async def _execute_read_payload(
         self, item_id: str, script: str | None, text: str | None
     ) -> None:
+        # Read hooks fire on the first read only (shared with the text viewer's read endpoint).
+        if not self._mark_read(item_id):
+            await self._run_read_hooks(item_id, script, text)
+        await self._check_special_action_unlocks("READ_ITEM", item_id)
+
+    async def _run_read_hooks(self, item_id: str, script: str | None, text: str | None) -> None:
         if script:
             await self.manager._execute_inline_script(script, "on_read", item_id)
         if text:
             await self._save_chat_message("system", text)
-        await self._check_special_action_unlocks("READ_ITEM", item_id)
 
     async def _read_from_inventory(self, target_lower: str) -> bool:
         for item in self.avatar.inventory or []:

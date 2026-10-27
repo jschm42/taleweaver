@@ -80,67 +80,36 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
 
 <template>
   <Transition name="dlg-slide">
-    <section
-      v-if="open && dialog"
-      ref="panelRef"
-      class="w-full max-w-2xl mx-auto my-4 bg-slate-900/90 backdrop-blur-sm border border-amber-500/30 rounded-2xl shadow-xl overflow-hidden"
-      aria-live="polite"
-    >
-      <!-- Header -->
-      <div class="px-5 py-3 border-b border-slate-800/80 flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg border border-amber-500/40 bg-amber-500/10 flex items-center justify-center shrink-0">
-          <i class="ra ra-speech-bubbles text-base text-amber-400"></i>
-        </div>
-        <div class="min-w-0">
-          <p class="text-[10px] font-black text-amber-400/80 uppercase tracking-widest">
-            {{ dialog.speaker ? 'Conversation' : 'Your choice' }}
-          </p>
-          <h3 class="text-sm font-black text-white leading-tight truncate">
-            {{ dialog.speaker || 'What do you do?' }}
-          </h3>
-        </div>
-      </div>
+    <div v-if="open && dialog" ref="panelRef" class="tw-choice relative w-full max-w-2xl shrink-0" aria-live="polite">
+      <section class="tw-narration space-y-3">
+        <span class="tw-narration-label">{{ dialog.speaker || 'Your choice' }}</span>
 
-      <!-- Body -->
-      <div class="p-5 space-y-4">
-        <p v-if="dialog.prompt" class="text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-          {{ dialog.prompt }}
-        </p>
+        <p class="tw-choice-prompt">{{ dialog.prompt || 'What do you do?' }}</p>
 
         <div class="space-y-2">
           <button
             v-for="(option, idx) in dialog.options"
             :key="option.index"
+            type="button"
             :disabled="busy"
-            :class="[
-              'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border text-left text-sm font-semibold transition-all duration-200 cursor-pointer disabled:cursor-wait',
-              focusedIndex === idx
-                ? 'bg-amber-500/15 border-amber-400/70 text-white ring-2 ring-amber-300/40 ring-offset-2 ring-offset-slate-900'
-                : 'bg-slate-800/40 border-slate-700/60 text-slate-300 hover:bg-slate-800/70 hover:border-slate-500 hover:text-white'
-            ]"
+            class="tw-choice-option"
+            :class="{ 'is-focused': focusedIndex === idx }"
             @click="choose(option.index)"
             @mouseenter="focusedIndex = idx"
           >
-            <span class="w-6 h-6 rounded-full border border-slate-600/70 bg-slate-800 flex items-center justify-center shrink-0 font-mono text-[11px] text-amber-300">
-              {{ idx + 1 }}
-            </span>
+            <span class="tw-choice-number">{{ idx + 1 }}</span>
             <span class="flex-1">{{ option.label }}</span>
             <i v-if="busy && focusedIndex === idx" class="ra ra-hourglass text-xs animate-spin opacity-60"></i>
           </button>
         </div>
 
-        <p v-if="errorMessage" class="text-xs text-rose-400 text-center">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="tw-choice-error">{{ errorMessage }}</p>
 
-        <p class="text-[10px] text-slate-500 text-center">
-          Press
-          <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono text-[9px]">1</kbd>–<kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono text-[9px]">{{ dialog.options.length }}</kbd>
-          or use
-          <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono text-[9px]">↑ ↓</kbd>
-          and
-          <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono text-[9px]">Enter</kbd>
+        <p class="tw-choice-hint">
+          Press <kbd>1</kbd>–<kbd>{{ dialog.options.length }}</kbd> or use <kbd>↑ ↓</kbd> and <kbd>Enter</kbd>
         </p>
-      </div>
-    </section>
+      </section>
+    </div>
   </Transition>
 </template>
 
