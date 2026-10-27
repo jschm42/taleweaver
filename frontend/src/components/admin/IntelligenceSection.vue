@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import ModelCombobox from '@/components/common/ModelCombobox.vue'
+import CustomOpenAIEndpoint from './CustomOpenAIEndpoint.vue'
+import { getProviderModelsEntry, loadProviderModels, providerModelsKey } from '@/store/providerModels'
 
 const props = defineProps<{
   llmForm: any
@@ -32,6 +34,9 @@ const normalizeLocalForm = (data: any) => ({
   play_agent_monkey_mode: typeof data?.play_agent_monkey_mode === 'boolean' ? data.play_agent_monkey_mode : false,
   play_agent_personality: data?.play_agent_personality || 'casual',
   play_agent_custom_personality: data?.play_agent_custom_personality || '',
+  custom_openai_url: data?.custom_openai_url || '',
+  custom_openai_timeout: typeof data?.custom_openai_timeout === 'number' ? data.custom_openai_timeout : 300,
+  custom_openai_response_format: data?.custom_openai_response_format || 'prompt',
 })
 
 const localForm = ref(normalizeLocalForm(props.llmForm))
@@ -68,7 +73,7 @@ const missingProviders = computed(() => {
   ])
   const missing: string[] = []
   for (const p of providers) {
-    if (p && p !== 'ollama' && !props.configuredKeys?.[p]) {
+    if (p && !['ollama', 'custom_openai'].includes(p) && !props.configuredKeys?.[p]) {
       missing.push(p)
     }
   }
@@ -79,6 +84,7 @@ const missingProviders = computed(() => {
 const modelBaseUrl = (provider: string): string => {
   if (provider === 'ollama') return localForm.value.ollama_url || ''
   if (provider === 'minimax') return localForm.value.minimax_url || ''
+  if (provider === 'custom_openai') return localForm.value.custom_openai_url || ''
   return ''
 }
 
@@ -87,7 +93,7 @@ const getProviderName = (id: string) => {
 }
 
 const isProviderConfigured = (providerId: string) => {
-  if (providerId === 'ollama') return true
+  if (['ollama', 'custom_openai'].includes(providerId)) return true
   return Boolean(props.configuredKeys?.[providerId])
 }
 
@@ -156,6 +162,27 @@ const refreshOllamaModels = () => {
 
 const refreshMinimaxModels = () => {
   emit('refreshMinimaxModels', localForm.value.minimax_url)
+}
+
+const customOpenAiDiscoveryKey = computed(() =>
+  providerModelsKey('custom_openai', 'llm', localForm.value.custom_openai_url || '')
+)
+
+const isCustomOpenAiLoading = computed(() =>
+  getProviderModelsEntry(customOpenAiDiscoveryKey.value)?.status === 'loading'
+)
+
+const customOpenAiModelCount = computed(() =>
+  getProviderModelsEntry(customOpenAiDiscoveryKey.value)?.list?.models.length
+  || props.availableConstants?.predefined_llm_models?.custom_openai?.length
+  || 0
+)
+
+const refreshCustomOpenAiModels = () => {
+  loadProviderModels('custom_openai', 'llm', {
+    baseUrl: localForm.value.custom_openai_url || '',
+    refresh: true,
+  })
 }
 
 const isCompressionModelMissingWarning = computed(() => {
@@ -1009,11 +1036,21 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
         </div>
         <div>
           <h3 class="text-base font-bold text-white">Local & Custom API Endpoints</h3>
-          <p class="text-xs text-slate-400 mt-0.5">Configure host addresses for self-hosted and on-premise model backends.</p>
+          <p class="text-xs text-slate-400 mt-0.5">Configure API addresses for hosted gateways and self-hosted model backends.</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CustomOpenAIEndpoint
+          v-model:url="localForm.custom_openai_url"
+          v-model:timeout="localForm.custom_openai_timeout"
+          v-model:response-format="localForm.custom_openai_response_format"
+          :loading="isCustomOpenAiLoading"
+          :model-count="customOpenAiModelCount"
+          :has-key="!!configuredKeys?.custom_openai"
+          @detect="refreshCustomOpenAiModels"
+          @vault="emit('switchSection', 'keys')"
+        />
         <!-- Ollama Endpoint -->
         <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
           <div class="flex items-center justify-between">

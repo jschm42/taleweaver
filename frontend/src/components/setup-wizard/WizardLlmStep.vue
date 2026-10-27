@@ -53,6 +53,9 @@ function baseUrlFor(provider: string): string {
   if (provider === 'ollama') {
     return ollamaUrl.value
   }
+  if (provider === 'custom_openai') {
+    return llmForm.value.custom_openai_url
+  }
   return provider === 'minimax' ? llmForm.value.minimax_url : ''
 }
 

@@ -38,6 +38,9 @@ class ProviderSpec:
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
+    "custom_openai": ProviderSpec(
+        fetchers.fetch_openai_compatible, "", needs_key=False, custom_base=True
+    ),
     "openai": ProviderSpec(fetchers.fetch_openai, "https://api.openai.com/v1"),
     "anthropic": ProviderSpec(fetchers.fetch_anthropic, "https://api.anthropic.com/v1"),
     "google": ProviderSpec(
@@ -165,6 +168,10 @@ async def discover_models(
         return DiscoveryResult(_static_models(provider, kind), "fallback", "No API key configured.")
 
     target = (base_url if spec.custom_base and base_url else spec.default_base).rstrip("/")
+    if not target:
+        return DiscoveryResult(
+            _static_models(provider, kind), "fallback", "Configure a Base URL first."
+        )
     try:
         models = await _cached_fetch(provider, spec, api_key, target, refresh, client)
     except DiscoveryError as exc:

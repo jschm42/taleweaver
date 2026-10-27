@@ -13,7 +13,7 @@ export interface ModelPreset {
 }
 
 /** Providers that run locally and need no API key. */
-export const KEYLESS_PROVIDERS = new Set(['ollama', 'stable_diffusion'])
+export const KEYLESS_PROVIDERS = new Set(['ollama', 'stable_diffusion', 'custom_openai'])
 
 export interface KeyProvider {
   id: string
@@ -22,6 +22,7 @@ export interface KeyProvider {
 }
 
 export const KEY_PROVIDERS: KeyProvider[] = [
+  { id: 'custom_openai', name: 'OpenAI-Compatible API', uses: 'Text (Optional)' },
   { id: 'openai', name: 'OpenAI', uses: 'Text · Images' },
   { id: 'anthropic', name: 'Anthropic', uses: 'Text' },
   { id: 'google', name: 'Google Gemini', uses: 'Text · Images · Voice' },

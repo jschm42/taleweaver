@@ -201,12 +201,14 @@ TaleWeaver uses an adapter layer ([LiteLLM](https://github.com/BerriAI/litellm))
 
 | Capability | Recommended Models | Supported Providers | Notes |
 |---|---|---|---|
-| **World Generation** | Anthropic Opus 5.x, OpenAI 5.x, DeepSeek v4 Pro | OpenRouter, Anthropic, OpenAI, DeepSeek, Kimi | Requires deep reasoning to generate complex, valid JSON schemas |
-| **Mechanics (Pass 1)** | DeepSeek Flash, GPT-6 Luna, Claude 4.5 Haiku | OpenAI, OpenRouter, Anthropic, DeepSeek | High-speed, deterministic state and inventory rule validation |
-| **Narrative (Pass 2)** | DeepSeek v4 Pro, GPT-6 Luna Pro, Claude 4.5 Sonnet | OpenAI, Anthropic, OpenRouter, DeepSeek | Rich, atmospheric prose adapting to player choices and mood |
+| **World Generation** | Anthropic Opus 5.x, OpenAI 5.x, DeepSeek v4 Pro | OpenRouter, Anthropic, OpenAI, DeepSeek, Kimi, OpenAI-compatible APIs | Requires deep reasoning to generate complex, valid JSON schemas |
+| **Mechanics (Pass 1)** | DeepSeek Flash, GPT-6 Luna, Claude 4.5 Haiku | OpenAI, OpenRouter, Anthropic, DeepSeek, OpenAI-compatible APIs | High-speed, deterministic state and inventory rule validation |
+| **Narrative (Pass 2)** | DeepSeek v4 Pro, GPT-6 Luna Pro, Claude 4.5 Sonnet | OpenAI, Anthropic, OpenRouter, DeepSeek, OpenAI-compatible APIs | Rich, atmospheric prose adapting to player choices and mood |
 | **Text-to-Speech (TTS)** | Gemini 3.5 Flash TTS, ElevenLabs | Google Gemini, ElevenLabs | High-fidelity voice narration; feels like a live audiobook |
 | **Speech-to-Text (STT)**| OpenAI Whisper (Base / Small / Medium) | Local Whisper (background thread) | Hands-free microphone input with Push-to-Talk hotkeys |
 | **Visual Scene Art** | FLUX, Stable Diffusion (A1111 / Forge), Ollama | Local SD WebUI, Ollama, Cloud APIs | Contextual illustrations for scenes, items, and NPCs |
+
+**OpenAI-Compatible API** connects hosted gateways and self-hosted servers through a configurable Chat Completions base URL, optional encrypted key and exact model ID. It is available for all five LLM roles, including the play agent and history compression. See the [configuration guide](docs/custom-openai-compatible.md) for model discovery, structured-output modes and local networking requirements. Endpoint and model compatibility must be checked with your configuration.
 
 > [!TIP]
 > **Cost-Effective Gaming**: Running **DeepSeek Flash** for mechanics alongside **DeepSeek v4 Pro** or **GPT-6 Luna** for narrative delivers cinematic roleplaying at pennies per hour. Pre-configured test adventures are included in `/adventures`, and community creations are available in the **[Community Adventure Repository](https://github.com/jschm42/taleweaver-adventures)**.

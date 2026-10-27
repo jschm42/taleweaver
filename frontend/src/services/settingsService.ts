@@ -64,6 +64,9 @@ class SettingsService {
     preferred_provider: 'openai',
     ollama_url: 'http://localhost:11434',
     minimax_url: 'https://api.minimax.chat/v1',
+    custom_openai_url: '',
+    custom_openai_timeout: 300,
+    custom_openai_response_format: 'prompt',
   })
 
   t2iForm = ref({
@@ -252,7 +255,7 @@ class SettingsService {
     try {
       const data = await api.getLlmModels(provider, apiBase)
       const models = Array.isArray(data.models) ? data.models : []
-      if (models.length > 0) {
+      if (models.length > 0 || provider === 'custom_openai') {
         this.availableConstants.value = {
           ...this.availableConstants.value,
           predefined_llm_models: {
@@ -264,7 +267,7 @@ class SettingsService {
       }
       return this.availableConstants.value.predefined_llm_models?.[provider] || []
     } catch (error) {
-      console.error(`[SettingsService] Failed to fetch ${provider} models:`, error)
+      this.statusMessage.value = { type: 'error', text: error instanceof Error ? error.message : 'Model detection failed. Enter a Model ID manually.' }
       return this.availableConstants.value.predefined_llm_models?.[provider] || []
     } finally {
       this.isLoadingLlmModels.value = { ...this.isLoadingLlmModels.value, [provider]: false }

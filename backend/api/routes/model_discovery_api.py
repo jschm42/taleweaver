@@ -56,6 +56,10 @@ def _validated_base_url(provider: str, base_url: Optional[str]) -> Optional[str]
     """Custom endpoints are honoured for self-hosted providers only, and SSRF-checked."""
     if not base_url or not supports_custom_base(provider):
         return None
+    if provider == "custom_openai":
+        from backend.core.custom_openai import validate_custom_url
+
+        return validate_custom_url(base_url)
     try:
         return validate_provider_url(base_url)
     except ValueError as exc:
@@ -80,11 +84,14 @@ async def list_provider_models(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, f"Provider '{provider}' does not offer {kind} models."
         )
+    target_base = base_url
+    if provider_id == "custom_openai" and not target_base:
+        target_base = (current_user.llm_settings or {}).get("custom_openai_url") or None
     result = await discover_models(
         provider_id,
         kind,
         api_key=_resolve_api_key(current_user, provider_id),
-        base_url=_validated_base_url(provider_id, base_url),
+        base_url=_validated_base_url(provider_id, target_base),
         refresh=refresh,
     )
     return ModelListResponse(
