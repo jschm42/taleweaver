@@ -8,8 +8,9 @@ from urllib.parse import urlparse
 
 from backend.core.config import settings
 
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-_SAFE_RELATIVE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
+# Preserve legacy Unicode IDs without allowing separators or traversal.
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[\w-]{1,128}$")
+_SAFE_RELATIVE_SEGMENT_RE = re.compile(r"^[\w.-]{1,255}$")
 
 
 def sanitize_path_component(value: Optional[str]) -> Optional[str]:
@@ -85,7 +86,7 @@ def data_url_to_local_path(url: Optional[str]) -> Optional[str]:
     if not raw.startswith("/data/"):
         return None
 
-    relative = raw[len("/data/"):].lstrip("/")
+    relative = raw[len("/data/") :].lstrip("/")
     if not relative:
         return None
 
@@ -211,11 +212,10 @@ def validate_provider_url(
         # When it is unresolvable, treat as suspicious and reject.
         if not ips:
             raise ValueError("Could not resolve hostname.")
-        for ip in ips:
-            if _ip_is_disallowed(ip):
-                raise ValueError(
-                    "URL points to a private/loopback address. Set "
-                    "ALLOW_PRIVATE_NETWORK_MODELS=true to allow local providers."
-                )
+        if any(_ip_is_disallowed(ip) for ip in ips):
+            raise ValueError(
+                "URL points to a private/loopback address. Set "
+                "ALLOW_PRIVATE_NETWORK_MODELS=true to allow local providers."
+            )
 
     return normalized

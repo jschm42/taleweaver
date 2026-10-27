@@ -23,7 +23,6 @@ from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
 
-_SAFE_BASENAME_RX = re.compile(r"^[A-Za-z0-9._-]+$")
 _SAFE_PREFIX_RX = re.compile(r"^[A-Za-z0-9_-]+$")
 _ASSET_BUCKETS = {"scene": "scenes", "npc": "npcs", "object": "objects"}
 
@@ -78,7 +77,7 @@ def _reuse_target_file(target_root: str, entity_type: str, source_file: str) -> 
     """Builds a validated destination path inside the adventure's reused-visuals folder."""
     safe_prefix = f"{slugify(str(entity_type)) or 'source'}_{uuid.uuid4().hex[:8]}"
     safe_basename = sanitize_relative_segment(os.path.basename(source_file))
-    if not safe_basename or not _SAFE_BASENAME_RX.match(safe_basename):
+    if not safe_basename:
         return None
     if not _SAFE_PREFIX_RX.match(safe_prefix):
         return None

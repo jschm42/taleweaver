@@ -27,12 +27,11 @@ from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
 from backend.utils.path_security import ensure_within_data_dir
-from backend.utils.text_utils import generate_short_id, slugify
+from backend.utils.text_utils import generate_adventure_id
 
 logger = logging.getLogger(__name__)
 
 MAX_TITLE_LENGTH = 50
-MAX_SLUG_PREFIX_LENGTH = 25
 
 
 def generate_cloned_title(original_title: str, existing_titles: set[str] | None = None) -> str:
@@ -57,12 +56,8 @@ def generate_cloned_title(original_title: str, existing_titles: set[str] | None 
 
 
 def generate_cloned_adventure_id(title: str) -> str:
-    """Generate a unique ID that is guaranteed to fit within 36 chars."""
-    slug = slugify(title)[:MAX_SLUG_PREFIX_LENGTH].rstrip("-")
-    if not slug:
-        slug = "adv"
-    short_id = generate_short_id(8)
-    return f"{slug}-{short_id}"
+    """Keep copy IDs independent of the display title, like new adventures."""
+    return generate_adventure_id(title)
 
 
 def rewrite_asset_url(

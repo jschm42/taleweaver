@@ -39,6 +39,7 @@ from backend.engine.world_schemas import (  # noqa: F401
 )
 from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
 from backend.models.user import User
+from backend.utils.path_security import sanitize_path_component
 from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
@@ -147,7 +148,7 @@ async def _publish_generation_status(
     logs = list(adventure.generation_logs or [])
     logs.append(
         {
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
             "type": "status",
             "content": status,
         }
@@ -169,7 +170,7 @@ async def _log_image_generation(
     logs = list(adventure.generation_logs or [])
     logs.append(
         {
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
             "type": "image_generation",
             "content": prompt,
             "image_url": image_url,
@@ -192,7 +193,7 @@ async def _log_reused_asset(
     logs = list(adventure.generation_logs or [])
     logs.append(
         {
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
             "type": "image_generation",
             "content": f"Reused source asset: {entity_name}",
             "image_url": image_url,
@@ -787,10 +788,11 @@ class WorldGenerator:
             build_world_generation_prompts,
         )
 
-        if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", template_id):
+        if not template_id or sanitize_path_component(template_id) != template_id:
             raise ValueError("Invalid template_id")
-        if cover_source_adventure_id and not re.match(
-            r"^[a-zA-Z0-9_-]{1,128}$", cover_source_adventure_id
+        if (
+            cover_source_adventure_id
+            and sanitize_path_component(cover_source_adventure_id) != cover_source_adventure_id
         ):
             raise ValueError("Invalid cover_source_adventure_id")
 
