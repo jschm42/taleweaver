@@ -16,6 +16,8 @@ type AutoSpeakOptions = {
   sessionId: Ref<string>
   autoSpeakNarration?: Ref<boolean>
   autoSpeakDialogues?: Ref<boolean>
+  /** While true (e.g. a choice dialog waits for the player), nothing is spoken and running speech stops. */
+  speechSuppressed?: Ref<boolean>
 }
 
 function computeContentHash(content: string): string {
@@ -146,6 +148,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
     lastAutoSpeakAt.value = now
     markMessageAsSpoken(lastMsg, index)
+    // Text that arrives while speech is suppressed is skipped, not replayed later.
+    if (options.speechSuppressed?.value) return
 
     // Lines already spoken while the turn was streaming are skipped.
     const alreadyStreamed = streamedSegmentCounts.get(lastMsg) ?? 0
@@ -154,6 +158,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   }
 
   function enqueueDialogues(dialogues: DialogueSegment[]): void {
+    if (options.speechSuppressed?.value) return
     const speakNarration = options.autoSpeakNarration?.value ?? true
     const speakDialogues = options.autoSpeakDialogues?.value ?? true
 
@@ -270,6 +275,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       speakLatestAssistantMessage()
     }
   )
+
+  watch(() => options.speechSuppressed?.value, (suppressed) => {
+    if (suppressed) audioService.stop()
+  })
 
   watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
     if (enabled) {

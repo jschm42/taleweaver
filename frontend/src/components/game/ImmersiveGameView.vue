@@ -10,6 +10,7 @@
  *   the Story tab holds the comic feed (dialogue bubbles, narration boxes, turn history)
  * - Dialog skin (data-skin) resolved from player preference, adventure theme and tone
  * - Bottom action bar and user input with speech-to-text voice recording
+ * - "story-end" slot rendered after the latest exchange (e.g. an inline choice dialog)
  */
 import { ref, computed, toRef, watch, nextTick } from 'vue'
 import type { ChatMessage } from '@/types'
@@ -79,6 +80,8 @@ const props = defineProps<{
   worldMemories?: any[]
   activeSequence?: any | null
   adventureTitle?: string | null
+  /** A script-opened choice dialog waits for the player at the end of the story feed. */
+  hasPendingChoice?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -201,6 +204,13 @@ const {
 // A turn in flight is status 'connecting' ('loading' is only the initial session load).
 watch(() => props.status, (status, previous) => {
   if (status !== 'connecting' || previous === 'connecting') return
+  showStory()
+  goToLatestTurn()
+})
+
+// The choice is answered inline in the story feed, so bring the latest story page into view.
+watch(() => props.hasPendingChoice, (pending) => {
+  if (!pending) return
   showStory()
   goToLatestTurn()
 })
@@ -398,7 +408,11 @@ defineExpose({
           @npc-hover="(entity, event) => emit('npcHover', entity, event)"
           @npc-leave="emit('npcLeave')"
           @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
-        />
+        >
+          <template #after-exchanges>
+            <slot name="story-end" />
+          </template>
+        </ImmersiveStoryFeed>
 
         <!-- Cinematic Scene Transition Curtain -->
         <SceneTransitionOverlay

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
+from backend.engine.start_scene import resolve_initial_scene_id
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -405,6 +406,11 @@ def _record_to_dict(obj: Any) -> dict[str, Any] | None:
     return data
 
 
+def _start_scene_first(scenes: list[WorldScene], start_scene_id: str) -> list[WorldScene]:
+    """Start scene first, the rest by id: importers without start_scene_id use the first scene."""
+    return sorted(scenes, key=lambda scene: (scene.id != start_scene_id, scene.id))
+
+
 def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
     return {
         "origin_id": adv.origin_id,
@@ -569,7 +575,8 @@ class AdventureExporter:
         scene_res = await db.execute(
             select(WorldScene).where(WorldScene.template_id == template_id)
         )
-        scenes = scene_res.scalars().all()
+        start_scene_id = await resolve_initial_scene_id(db, template_id)
+        scenes = _start_scene_first(list(scene_res.scalars().all()), start_scene_id)
 
         exit_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
         exits = exit_res.scalars().all()
@@ -593,8 +600,10 @@ class AdventureExporter:
         manifest = {
             "format": "TaleWeaver",
             "version": CURRENT_VERSION,
-            "adventure": _build_adventure_section(adv),
+            # Top level for session start, inside "adventure" for the editor and world validation.
+            "adventure": {**_build_adventure_section(adv), "start_scene_id": start_scene_id},
             "protagonist": _build_protagonist_section(avatar, inventory, equipment),
+            "start_scene_id": start_scene_id,
             "scenes": [_record_to_dict(s) for s in scenes],
             "exits": [_record_to_dict(e) for e in exits],
             "npcs": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "NPC"],

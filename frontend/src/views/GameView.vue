@@ -20,7 +20,7 @@ import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
 import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
 import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
-import DialogChoiceModal from '@/components/game/DialogChoiceModal.vue'
+import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
 import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import AdventureGeneratorModal from '@/components/game/AdventureGeneratorModal.vue'
@@ -356,6 +356,7 @@ onBeforeUnmount(() => {
 const activeActionId = ref<string | null>(null)
 const isPassRunning = computed(() => status.value === 'loading')
 const isDialogOpen = computed(() => !!pendingDialog.value && status.value !== 'game_over')
+const isChoicePanelOpen = computed(() => isDialogOpen.value && !isPassRunning.value && !sheet.value?.agent_active)
 
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
@@ -1482,6 +1483,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   sessionId: computed(() => props.id),
   autoSpeakNarration,
   autoSpeakDialogues,
+  // Speech stays silent while the player answers a choice dialog.
+  speechSuppressed: isDialogOpen,
 })
 
 const handleTrackQuest = (questId: string | null) => {
@@ -1752,6 +1755,7 @@ usePlayAgentAutoLoop()
       :turn-error="turnError"
       :active-sequence="activeSequence"
       :adventure-title="displayAdventureTitle"
+      :has-pending-choice="isChoicePanelOpen"
       @send="handlePlayerInput"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"
@@ -1775,7 +1779,17 @@ usePlayAgentAutoLoop()
       @traverse-exit="handleExitClick"
       @switch-flip="openSwitchStateModal"
       @exit-session="showExitModal = true"
-    />
+    >
+      <template #story-end>
+        <DialogChoicePanel
+          :open="isChoicePanelOpen"
+          :dialog="pendingDialog"
+          :busy="dialogChoiceBusy"
+          :error-message="dialogChoiceError"
+          @choose="handleDialogChoice"
+        />
+      </template>
+    </ImmersiveGameView>
 
     <!-- Modals -->
     <CharacterSheetModal 
@@ -1966,14 +1980,6 @@ usePlayAgentAutoLoop()
       @submit-code="handleExitUnlockCodeSubmit"
       @use-key-item="handleExitUnlockItemSubmit"
       @unlock-direct="handleExitUnlockDirectSubmit"
-    />
-
-    <DialogChoiceModal
-      :open="isDialogOpen && !isPassRunning && !sheet?.agent_active"
-      :dialog="pendingDialog"
-      :busy="dialogChoiceBusy"
-      :error-message="dialogChoiceError"
-      @choose="handleDialogChoice"
     />
 
     <SwitchStateModal

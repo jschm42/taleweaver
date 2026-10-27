@@ -134,6 +134,9 @@ function isLatestExchange(exIdx: number): boolean {
           @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
         />
       </template>
+
+      <!-- Inline content after the latest exchange (e.g. a pending choice dialog); hidden while browsing history. -->
+      <slot v-if="props.viewingTurnIndex === null" name="after-exchanges" />
     </div>
 
     <!-- COMIC PAGE NAVIGATION & PAGING CONTROLS (revealed on hover; pinned while browsing history) -->

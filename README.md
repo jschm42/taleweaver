@@ -275,6 +275,26 @@ poetry run taleweaver
 
 Open `http://127.0.0.1:8000` in your browser. Complete the initial setup, add your API keys under **Administration**, and jump into an adventure!
 
+#### ⚡ Development: Uvicorn with Auto-Reload
+
+`poetry run taleweaver` does not reload on code changes. For backend development, start Uvicorn directly from the **project root** (running it inside `backend/` fails with `ModuleNotFoundError: No module named 'backend'`):
+
+```bash
+poetry run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Alternatively, keep the regular entry point and enable reloading via the environment:
+
+```bash
+TALEWEAVER_RELOAD=1 poetry run taleweaver          # Linux / macOS
+$env:TALEWEAVER_RELOAD = "1"; poetry run taleweaver  # Windows (PowerShell)
+```
+
+For frontend hot reloading, run the Vite dev server in a second terminal (`cd frontend && npm run dev`, default `http://localhost:5173`).
+
+> [!NOTE]
+> Always start the backend through Poetry (`poetry run ...`). Starting `uvicorn` with a global Python interpreter fails with errors such as `ModuleNotFoundError: No module named 'numpy'`.
+
 ---
 
 ## 🐳 Running with Docker
