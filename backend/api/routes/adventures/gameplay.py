@@ -35,6 +35,7 @@ from backend.api.routes.adventures.schemas import (
     TranslateTextRequest,
     TranslateTextResponse,
 )
+from backend.api.routes.adventures.session_adventure import load_session_adventure
 from backend.api.routes.adventures.session_debug_payload import build_session_debug_payload
 from backend.api.routes.adventures.unlock_service import (
     SwitchFlipRunner,
@@ -68,7 +69,6 @@ from backend.engine.sequence_walkthrough import (
     sequence_walkthrough_steps,
 )
 from backend.engine.trigger_service import TriggerService
-from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
@@ -138,10 +138,7 @@ async def get_session_debug(
             detail="Debug mode is not enabled for this session. Type /debug on to activate.",
         )
 
-    adv_res = await db.execute(
-        select(AdventureTemplate).where(AdventureTemplate.id == state.template_id)
-    )
-    adventure = adv_res.scalars().first()
+    adventure = await load_session_adventure(db, state)
 
     cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = cv_res.scalars().first()
@@ -161,10 +158,7 @@ async def get_chat_history(
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    adv_res = await db.execute(
-        select(AdventureTemplate).where(AdventureTemplate.id == state.template_id)
-    )
-    adventure = adv_res.scalars().first()
+    adventure = await load_session_adventure(db, state)
 
     cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = cv_res.scalars().first()
@@ -369,9 +363,7 @@ async def get_walkthrough(
     row = res.first()
     session, avatar = row if row else (None, None)
 
-    adventure = None
-    if state.template_id:
-        adventure = await db.get(AdventureTemplate, state.template_id)
+    adventure = await load_session_adventure(db, state)
     all_steps = sequence_walkthrough_steps(
         getattr(adventure, "sequences", None), state.active_sequence_id
     )
@@ -471,7 +463,8 @@ async def mark_text_log_read(
 
     clean_id = (entity_id or "").strip()
     ent_res = await db.execute(
-        select(WorldEntity).where(
+        select(WorldEntity)
+        .where(
             or_(
                 WorldEntity.session_id == state.session_id,
                 and_(
@@ -484,6 +477,7 @@ async def mark_text_log_read(
                 func.lower(WorldEntity.id) == clean_id.lower(),
             ),
         )
+        .order_by(WorldEntity.session_id.is_(None))
     )
     entity = ent_res.scalars().first()
     if not entity:
@@ -703,7 +697,8 @@ async def _resolve_session_exit(
     """Returns the exit used for the current session, preferring the session-scoped row."""
     clean_id = (exit_id or "").strip()
     res = await db.execute(
-        select(WorldExit).where(
+        select(WorldExit)
+        .where(
             or_(
                 WorldExit.session_id == state.session_id,
                 and_(
@@ -716,6 +711,7 @@ async def _resolve_session_exit(
                 func.lower(WorldExit.id) == clean_id.lower(),
             ),
         )
+        .order_by(WorldExit.session_id.is_(None))
     )
     resolved = res.scalars().first()
     if not resolved:
@@ -838,13 +834,15 @@ async def _fire_gameplay_exit_triggers(
 ) -> None:
     """Executes on_leave_scene, on_open_exit, and on_exit_used triggers."""
     old_sc_res = await db.execute(
-        select(WorldScene).where(
+        select(WorldScene)
+        .where(
             or_(
                 WorldScene.session_id == state.session_id,
                 and_(WorldScene.template_id == state.template_id, WorldScene.session_id.is_(None)),
             ),
             WorldScene.id == current_scene_id,
         )
+        .order_by(WorldScene.session_id.is_(None))
     )
     old_scene = old_sc_res.scalars().first()
     if old_scene and (old_scene.on_leave_scene_script or old_scene.on_leave_scene_text):
@@ -915,7 +913,8 @@ async def traverse_exit(
         )
 
     scene_res = await db.execute(
-        select(WorldScene).where(
+        select(WorldScene)
+        .where(
             or_(
                 WorldScene.session_id == state.session_id,
                 and_(
@@ -925,6 +924,7 @@ async def traverse_exit(
             ),
             WorldScene.id == target_scene_id,
         )
+        .order_by(WorldScene.session_id.is_(None))
     )
     scene = scene_res.scalars().first()
     if not scene:

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -14,8 +13,8 @@ from backend.engine.map_engine import MapEngine
 from backend.models.world_entity import WorldExit, WorldScene
 
 
-def _record_user_award(ctx: DebugContext, award: dict[str, Any], earned_at: str) -> None:
-    """Adds the award to the user's profile unless it is already recorded."""
+def _record_user_award(ctx: DebugContext, award: dict[str, Any], earned_at: str) -> bool:
+    """Adds the award to the user's profile; False when it is already recorded."""
     user, adventure = ctx.user, ctx.adventure
     a_key = award.get("key", "")
     title = award.get("title") or a_key or "Unknown Award"
@@ -26,7 +25,7 @@ def _record_user_award(ctx: DebugContext, award: dict[str, Any], earned_at: str)
         for ea in user_awards
     )
     if already_recorded:
-        return
+        return False
     user_awards.append(
         {
             "key": dedupe_key,
@@ -41,6 +40,7 @@ def _record_user_award(ctx: DebugContext, award: dict[str, Any], earned_at: str)
     )
     user.earned_awards = user_awards
     flag_modified(user, "earned_awards")
+    return True
 
 
 async def grant_awards(ctx: DebugContext) -> str:
@@ -51,21 +51,17 @@ async def grant_awards(ctx: DebugContext) -> str:
     if not adventure.awards:
         return "DEBUG: This adventure has no awards defined."
 
-    updated_awards = deepcopy(adventure.awards)
+    # Earned awards live on the user profile; the adventure (a session copy) stays untouched.
     granted: list[str] = []
-    now = datetime.now(timezone.utc).isoformat()
-    for award in updated_awards:
-        if award.get("is_earned"):
+    now = datetime.now(UTC).isoformat()
+    for award in adventure.awards:
+        if not _record_user_award(ctx, award, now):
             continue
-        award["is_earned"] = True
         title = award.get("title", award.get("key", ""))
         granted.append(f"  [{award.get('tier', '?').upper()}] {title}")
-        _record_user_award(ctx, award, now)
 
     if not granted:
         return "DEBUG: All awards are already earned."
-    adventure.awards = updated_awards
-    flag_modified(adventure, "awards")
     return "\n".join(["[DEBUG] All adventure awards granted:", *granted])
 
 
@@ -101,7 +97,9 @@ async def reveal_map(ctx: DebugContext) -> str:
 
     scenes, exits = await _map_scenes_and_exits(ctx)
     # The template-level map is what the frontend always reads.
-    world_map = await AdventureLogic.get_or_create_map(ctx.db, ctx.state.template_id)
+    world_map = await AdventureLogic.get_or_create_map(
+        ctx.db, ctx.state.template_id, session_id=ctx.state.session_id
+    )
     for scene in scenes:
         MapEngine.register_visit(
             world_map,

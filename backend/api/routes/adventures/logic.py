@@ -1,8 +1,7 @@
 import logging
-from copy import deepcopy
 from typing import Any, Optional
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +10,11 @@ from backend.api.routes.adventures.asset_url_healing import (
     resolve_existing_data_asset_url,
 )
 from backend.api.routes.adventures.sequence_progress import evaluate_sequence_progress
+from backend.api.routes.adventures.session_adventure import (
+    SESSION_MANIFEST_SNAPSHOT_KEY,
+    build_session_snapshot,
+    extract_snapshot,
+)
 from backend.api.routes.adventures.session_start_settings import (
     resolve_initial_scene_id,
     resolve_start_datetime,
@@ -26,7 +30,6 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
 
 logger = logging.getLogger(__name__)
-SESSION_MANIFEST_SNAPSHOT_KEY = "__manifest_snapshot__"
 
 
 def _entity_override(overrides: dict[str, Any], normalized: dict[str, Any], eid: Any) -> dict:
@@ -99,60 +102,12 @@ class AdventureLogic:
 
     @staticmethod
     def build_session_manifest_snapshot(adventure: Optional[AdventureTemplate]) -> dict[str, Any]:
-        """Capture adventure metadata required to keep sessions playable after template deletion."""
-        if not adventure:
-            return {}
-        adventure_payload = {
-            "id": adventure.id,
-            "title": adventure.title,
-            "teaser": adventure.teaser,
-            "version": adventure.version,
-            "language": adventure.language,
-            "cover_source_adventure_id": adventure.cover_source_adventure_id,
-            "cover_source_adventure_name": adventure.cover_source_adventure_name,
-            "cover_similarity_percent": adventure.cover_similarity_percent,
-            "allow_reuse_source_assets": adventure.allow_reuse_source_assets,
-            "image_url": adventure.image_url,
-            "strict_rules": adventure.strict_rules,
-            "rule_enforcement_mode": adventure.rule_enforcement_mode,
-            "time_per_turn": adventure.time_per_turn,
-            "pacing_minutes": adventure.pacing_minutes,
-            "clock_enabled": adventure.clock_enabled,
-            "time_system": adventure.time_system,
-            "time_config": deepcopy(adventure.time_config or {}),
-            "selected_image_styles": deepcopy(adventure.selected_image_styles or []),
-            "selected_tone": deepcopy(adventure.selected_tone or {}),
-            "ui_theme": deepcopy(adventure.ui_theme),
-            "quests": deepcopy(adventure.quests or []),
-            "awards": deepcopy(adventure.awards or []),
-            "plot": adventure.plot,
-            "rules": adventure.rules,
-            "intro_text": adventure.intro_text,
-            "completed_condition": adventure.completed_condition,
-            "gameover_condition": adventure.gameover_condition,
-            "tts_director_notes": adventure.tts_director_notes,
-            "original_prompt": adventure.original_prompt,
-            "allow_dynamic_items": adventure.allow_dynamic_items,
-            "can_damage_npcs": adventure.can_damage_npcs,
-            "npcs_can_damage_protagonist": adventure.npcs_can_damage_protagonist,
-            "is_adventure_generator": adventure.is_adventure_generator,
-            "is_ready": True,
-            "creation_status": "Ready",
-        }
-        return {
-            "adventure": adventure_payload,
-            "original_manifest": deepcopy(adventure.original_manifest or {}),
-        }
+        """Full adventure copy that keeps a session independent of its template."""
+        return build_session_snapshot(adventure)
 
     @staticmethod
     def extract_manifest_snapshot(state: Optional[SessionState]) -> dict[str, Any]:
-        if not state:
-            return {}
-        raw = state.entity_states or {}
-        if not isinstance(raw, dict):
-            return {}
-        snapshot = raw.get(SESSION_MANIFEST_SNAPSHOT_KEY)
-        return snapshot if isinstance(snapshot, dict) else {}
+        return extract_snapshot(state)
 
     @staticmethod
     def resolve_manifest_for_state(state: SessionState) -> dict[str, Any]:
@@ -224,7 +179,7 @@ class AdventureLogic:
     async def resolve_scene_image(
         db: AsyncSession, state: SessionState, scene_id: str
     ) -> Optional[str]:
-        """Resolves the image for a scene, prioritizing session overrides then template defaults."""
+        """Resolves the image for a scene: session override, then the session's scene copy."""
         # 1. Try session override (e.g. generated image)
         img = AdventureLogic.resolve_existing_data_asset_url(
             AdventureLogic.resolve_session_asset(state, scene_id)
@@ -232,15 +187,20 @@ class AdventureLogic:
         if img:
             return img
 
-        # 2. Try WorldScene table (template default)
+        # 2. The session's own scene copy; the template row only for sessions without copies.
         res = await db.execute(
-            select(WorldScene.image_url).where(
+            select(WorldScene.image_url)
+            .where(
                 WorldScene.id == scene_id,
                 or_(
                     WorldScene.session_id == state.session_id,
-                    WorldScene.template_id == state.template_id,
+                    and_(
+                        WorldScene.template_id == state.template_id,
+                        WorldScene.session_id.is_(None),
+                    ),
                 ),
             )
+            .order_by(WorldScene.session_id.is_(None))
         )
         return AdventureLogic.resolve_existing_data_asset_url(res.scalars().first())
 

@@ -5,7 +5,6 @@ import logging
 import random
 import re
 import time
-from types import SimpleNamespace
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import datetime, UTC
 from typing import Any
@@ -19,6 +18,7 @@ from backend.api.routes.adventures.agent_commands import (
     handle_playagent_command,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.session_adventure import SessionAdventure, load_session_adventure
 from backend.core.narration_budget import log_narration_budget
 from backend.core.narration_styles import (
     narration_max_tokens,
@@ -274,14 +274,14 @@ class GameTurnManager:
         game_id: str,
         user: User,
         state: SessionState | None = None,
-        adventure: AdventureTemplate | None = None,
+        adventure: AdventureTemplate | SessionAdventure | None = None,
         avatar: Avatar | None = None,
     ):
         self.db = db
         self.game_id = game_id
         self.user = user
         self.state: SessionState | None = state
-        self.adventure: AdventureTemplate | None = adventure
+        self.adventure: AdventureTemplate | SessionAdventure | None = adventure
         self.avatar: Avatar | None = avatar
         self.stop_requested = False
         self.turn_language: str | None = None
@@ -686,74 +686,21 @@ class GameTurnManager:
             logger.warning(f"[Turn {self.game_id}] Initialization failed: Session state not found.")
             return False
 
-        if not self.adventure and self.state.template_id:
-            adv_res = await self.db.execute(
-                select(AdventureTemplate).where(AdventureTemplate.id == self.state.template_id)
-            )
-            self.adventure = adv_res.scalars().first()
+        # The session plays from its own adventure copy, never from the live template.
+        if not self.adventure:
+            self.adventure = await load_session_adventure(self.db, self.state)
         if not self.avatar and self.state.avatar_id:
             av_res = await self.db.execute(select(Avatar).where(Avatar.id == self.state.avatar_id))
             self.avatar = av_res.scalars().first()
-
-        if not self.adventure:
-            snapshot = AdventureLogic.extract_manifest_snapshot(self.state)
-            snapshot_adventure = (
-                snapshot.get("adventure") if isinstance(snapshot.get("adventure"), dict) else {}
-            )
-            snapshot_manifest = (
-                snapshot.get("original_manifest")
-                if isinstance(snapshot.get("original_manifest"), dict)
-                else {}
-            )
-            if snapshot_adventure or snapshot_manifest:
-                self.adventure = SimpleNamespace(
-                    id=snapshot_adventure.get("id") or self.state.template_id or "deleted-template",
-                    title=snapshot_adventure.get("title")
-                    or (self.state.session.adventure_title if self.state.session else None)
-                    or "Deleted Adventure",
-                    teaser=snapshot_adventure.get("teaser"),
-                    version=snapshot_adventure.get("version"),
-                    language=snapshot_adventure.get("language"),
-                    image_url=snapshot_adventure.get("image_url")
-                    or (self.state.session.adventure_image_url if self.state.session else None),
-                    strict_rules=bool(snapshot_adventure.get("strict_rules", True)),
-                    rule_enforcement_mode=snapshot_adventure.get("rule_enforcement_mode") or "rpg",
-                    time_per_turn=int(snapshot_adventure.get("time_per_turn", 5) or 5),
-                    pacing_minutes=int(snapshot_adventure.get("pacing_minutes", 5) or 5),
-                    clock_enabled=bool(snapshot_adventure.get("clock_enabled", False)),
-                    time_system=snapshot_adventure.get("time_system") or "calendar",
-                    time_config=snapshot_adventure.get("time_config") or {},
-                    selected_tone=snapshot_adventure.get("selected_tone"),
-                    selected_image_styles=snapshot_adventure.get("selected_image_styles") or [],
-                    quests=snapshot_adventure.get("quests") or self.state.quests or [],
-                    awards=snapshot_adventure.get("awards") or [],
-                    plot=snapshot_adventure.get("plot") or self.state.plot,
-                    rules=snapshot_adventure.get("rules") or self.state.rules,
-                    intro_text=snapshot_adventure.get("intro_text"),
-                    completed_condition=snapshot_adventure.get("completed_condition")
-                    or self.state.completed_condition,
-                    gameover_condition=snapshot_adventure.get("gameover_condition")
-                    or self.state.gameover_condition,
-                    tts_director_notes=snapshot_adventure.get("tts_director_notes")
-                    or self.state.tts_director_notes,
-                    original_prompt=snapshot_adventure.get("original_prompt") or "",
-                    allow_dynamic_items=False,
-                    can_damage_npcs=bool(snapshot_adventure.get("can_damage_npcs", True)),
-                    npcs_can_damage_protagonist=bool(
-                        snapshot_adventure.get("npcs_can_damage_protagonist", True)
-                    ),
-                    is_adventure_generator=bool(
-                        snapshot_adventure.get("is_adventure_generator", False)
-                    ),
-                    original_manifest=snapshot_manifest,
-                )
 
         if not (self.adventure and self.avatar):
             return False
 
         # Lazy-register initial map visit
         try:
-            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+            world_map = await AdventureLogic.get_or_create_map(
+                self.db, self.state.template_id, session_id=self.state.session_id
+            )
             # Use session_id to find the scene (snapshot)
             scene_res = await self.db.execute(
                 select(WorldScene).where(
@@ -2179,11 +2126,7 @@ class GameTurnManager:
 
         map_payload = await self._build_map_payload()
 
-        # Fetch adventure for cover image fallback
-        adv_res = await self.db.execute(
-            select(AdventureTemplate).where(AdventureTemplate.id == self.state.template_id)
-        )
-        adventure = adv_res.scalars().first()
+        adventure = self.adventure
 
         final_data = jsonable_encoder(
             {

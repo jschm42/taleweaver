@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, func, or_, select
@@ -113,7 +113,9 @@ class TurnStateApplier:
 
     async def _build_map_payload(self) -> dict:
         """Helper to build the augmented map payload for the frontend."""
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+        world_map = await AdventureLogic.get_or_create_map(
+            self.db, self.state.template_id, session_id=self.state.session_id
+        )
         if not world_map:
             return {"nodes": {}, "edges": [], "current_scene_id": None}
 
@@ -173,7 +175,7 @@ class TurnStateApplier:
 
         messages: list[str] = []
         user_awards = list(self.user.earned_awards or [])
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         modified = False
 
         for aw in self.adventure.awards:
@@ -496,7 +498,7 @@ class TurnStateApplier:
                 # Map Update
                 try:
                     world_map = await AdventureLogic.get_or_create_map(
-                        self.db, self.state.template_id
+                        self.db, self.state.template_id, session_id=self.state.session_id
                     )
                     # 1. Register exit between scenes
                     MapEngine.register_exit(
@@ -824,27 +826,6 @@ class TurnStateApplier:
                     ent_obj = ent_res.scalars().first()
                     if ent_obj:
                         meta = dict(ent_obj.metadata_json or {})
-                        if (
-                            not meta.get("on_pickup_script")
-                            and not meta.get("on_pickup_text")
-                            and hasattr(self, "adventure")
-                            and self.adventure
-                        ):
-                            tpl_res = await self.db.execute(
-                                select(WorldEntity).where(
-                                    or_(
-                                        func.upper(WorldEntity.id) == ent_obj.id.upper(),
-                                        func.upper(WorldEntity.name) == ent_obj.name.upper(),
-                                    ),
-                                    WorldEntity.template_id == self.adventure.id,
-                                    WorldEntity.session_id.is_(None),
-                                )
-                            )
-                            tpl_ent = tpl_res.scalars().first()
-                            if tpl_ent and tpl_ent.metadata_json:
-                                for k, v in tpl_ent.metadata_json.items():
-                                    if k not in meta:
-                                        meta[k] = v
                         if meta.get("on_pickup_script"):
                             msgs = await self.manager._execute_inline_script(
                                 meta["on_pickup_script"], "on_pickup", ent_obj.id
@@ -878,24 +859,6 @@ class TurnStateApplier:
                     ent_obj = ent_res.scalars().first()
                     if ent_obj:
                         meta = dict(ent_obj.metadata_json or {})
-                        if (
-                            not meta.get("on_drop_script")
-                            and not meta.get("on_drop_text")
-                            and hasattr(self, "adventure")
-                            and self.adventure
-                        ):
-                            tpl_res = await self.db.execute(
-                                select(WorldEntity).where(
-                                    func.upper(WorldEntity.id) == item_id.strip().upper(),
-                                    WorldEntity.template_id == self.adventure.id,
-                                    WorldEntity.session_id.is_(None),
-                                )
-                            )
-                            tpl_ent = tpl_res.scalars().first()
-                            if tpl_ent and tpl_ent.metadata_json:
-                                for k, v in tpl_ent.metadata_json.items():
-                                    if k not in meta:
-                                        meta[k] = v
                         if meta.get("on_drop_script"):
                             msgs = await self.manager._execute_inline_script(
                                 meta["on_drop_script"], "on_drop", item_id
@@ -932,7 +895,7 @@ class TurnStateApplier:
                 state_dirty = True
 
         if event.earned_award_keys:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             award_defs = {
                 (aw.get("key") or ""): aw for aw in (self.adventure.awards or []) if aw.get("key")
             }
@@ -1093,7 +1056,9 @@ class TurnStateApplier:
         # Process Explicit Map Updates (Exits)
         if event.updated_exits:
             try:
-                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+                world_map = await AdventureLogic.get_or_create_map(
+                    self.db, self.state.template_id, session_id=self.state.session_id
+                )
                 for up_exit in event.updated_exits:
                     # Update DB row and get exit_type
                     exit_res = await self.db.execute(
@@ -1230,7 +1195,7 @@ class TurnStateApplier:
 
                 new_mem = {
                     "id": str(uuid.uuid4()),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "description": mem.description,
                     "npc_id": mem.npc_id,
                     "emotion": mem.emotion,

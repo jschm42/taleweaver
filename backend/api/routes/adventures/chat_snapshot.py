@@ -21,7 +21,7 @@ from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldExit
+from backend.models.world_entity import WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +35,32 @@ async def load_chat_history(db: AsyncSession, session_id: str) -> list[dict[str,
     return [m.to_client_dict() for m in chat_res.scalars().all()]
 
 
+async def _session_scene_images(db: AsyncSession, state: SessionState) -> dict[str, str]:
+    """Scene id -> image URL of this session's own scene copies."""
+    res = await db.execute(
+        select(WorldScene.id, WorldScene.image_url).where(WorldScene.session_id == state.session_id)
+    )
+    return {scene_id: url for scene_id, url in res.all() if url}
+
+
 async def build_session_map(db: AsyncSession, state: SessionState) -> dict[str, Any] | None:
-    """Canonical template map (shared by all sessions) augmented with adjacent unvisited scenes."""
-    world_map = await AdventureLogic.get_or_create_map(db, state.template_id)
+    """The session's own map, augmented with adjacent unvisited scenes."""
+    world_map = await AdventureLogic.get_or_create_map(
+        db, state.template_id, session_id=state.session_id
+    )
     if not world_map:
         return None
     map_dict = MapEngine.to_dict(world_map)
     map_dict["current_scene_id"] = MapEngine._safe_id(state.current_scene_id)
-    # Heal stale image_url values (e.g. from deleted sessions) in the map nodes
+    # A node keeps the image it had when the scene was first visited, so prefer the session
+    # scene's current image (e.g. regenerated since); heal the rest.
+    scene_images = await _session_scene_images(db, state)
     for node in map_dict.get("nodes", {}).values():
-        if isinstance(node, dict) and node.get("image_url"):
-            node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(node["image_url"])
+        if not isinstance(node, dict):
+            continue
+        image_url = scene_images.get(str(node.get("id") or "")) or node.get("image_url")
+        if image_url:
+            node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(image_url)
 
     exits_res = await db.execute(
         select(WorldExit).where(

@@ -12,6 +12,10 @@ from backend.api.routes.adventures.asset_url_healing import (
     heal_template_avatar_profile_image,
     resolve_existing_data_asset_url,
 )
+from backend.api.routes.adventures.session_adventure import (
+    SessionAdventure,
+    load_session_adventure,
+)
 from backend.api.routes.adventures.session_start_settings import resolve_start_datetime
 from backend.core.config import settings
 from backend.core.narration_styles import DEFAULT_NARRATION_STYLE
@@ -83,11 +87,11 @@ def entity_to_item_dict(entity: WorldEntity) -> dict:
 
 
 class _SheetContext:
-    """Template data with a fallback to the session's manifest snapshot (deleted templates)."""
+    """The session's own adventure copy with a fallback to the raw manifest snapshot."""
 
     def __init__(
         self,
-        adventure: Optional[AdventureTemplate],
+        adventure: Optional[SessionAdventure],
         snapshot_adventure: dict[str, Any],
         manifest: dict[str, Any],
     ) -> None:
@@ -101,7 +105,7 @@ class _SheetContext:
         return self.snapshot_adventure.get(key, default)
 
     def template_value(self, key: str, default: Any = None) -> Any:
-        """Only the live template's value (no snapshot fallback)."""
+        """Only the session adventure's value (no raw snapshot fallback)."""
         return getattr(self.adventure, key) if self.adventure else default
 
 
@@ -299,11 +303,10 @@ async def build_sheet_snapshot(
     """Builds a serialisable character-sheet snapshot."""
     from backend.engine.stat_aggregator import calculate_total_stats
 
-    adv_res = await db.execute(
-        select(AdventureTemplate).where(AdventureTemplate.id == state.template_id)
-    )
     ctx = _SheetContext(
-        adv_res.scalars().first(), manifest_snapshot.get("adventure") or {}, session_manifest
+        await load_session_adventure(db, state),
+        manifest_snapshot.get("adventure") or {},
+        session_manifest,
     )
     image_map = await _entity_image_map(db, state, asset_snapshot)
     entity_lookup = await _item_entities(db, avatar, state.session_id)

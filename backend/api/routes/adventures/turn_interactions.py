@@ -145,7 +145,8 @@ class TurnInteractionsManager:
             parts = exit_ref.split("::", 1)
             from_id, to_id = parts[0].strip(), parts[1].strip()
             exit_res = await self.db.execute(
-                select(WorldExit).where(
+                select(WorldExit)
+                .where(
                     or_(
                         WorldExit.session_id == self.state.session_id,
                         and_(
@@ -165,12 +166,14 @@ class TurnInteractionsManager:
                         ),
                     ),
                 )
+                .order_by(WorldExit.session_id.is_(None))
             )
             return exit_res.scalars().first()
 
         clean_ref = exit_ref.strip()
         exit_res = await self.db.execute(
-            select(WorldExit).where(
+            select(WorldExit)
+            .where(
                 or_(
                     WorldExit.session_id == self.state.session_id,
                     and_(
@@ -183,6 +186,7 @@ class TurnInteractionsManager:
                     func.lower(WorldExit.id) == clean_ref.lower(),
                 ),
             )
+            .order_by(WorldExit.session_id.is_(None))
         )
         return exit_res.scalars().first()
 
@@ -196,7 +200,8 @@ class TurnInteractionsManager:
 
         messages: list[str] = []
         old_sc_res = await self.db.execute(
-            select(WorldScene).where(
+            select(WorldScene)
+            .where(
                 or_(
                     WorldScene.session_id == self.state.session_id,
                     and_(
@@ -206,6 +211,7 @@ class TurnInteractionsManager:
                 ),
                 WorldScene.id == current_scene_id,
             )
+            .order_by(WorldScene.session_id.is_(None))
         )
         old_scene = old_sc_res.scalars().first()
         if old_scene and (old_scene.on_leave_scene_script or old_scene.on_leave_scene_text):
@@ -279,7 +285,8 @@ class TurnInteractionsManager:
             return
 
         scene_res = await self.db.execute(
-            select(WorldScene).where(
+            select(WorldScene)
+            .where(
                 or_(
                     WorldScene.session_id == self.state.session_id,
                     and_(
@@ -292,6 +299,7 @@ class TurnInteractionsManager:
                     func.lower(WorldScene.id) == str(target_scene_id).lower(),
                 ),
             )
+            .order_by(WorldScene.session_id.is_(None))
         )
         scene = scene_res.scalars().first()
         if not scene:
@@ -875,28 +883,8 @@ class TurnInteractionsManager:
                     WorldEntity.is_in_inventory.is_(False),
                 )
             )
+            # Session copies only: template objects never leak into a running session.
             candidates = ent_res.scalars().all()
-            if not candidates:
-                adv_id = (
-                    getattr(self.manager.adventure, "id", None)
-                    if hasattr(self.manager, "adventure") and self.manager.adventure
-                    else (
-                        getattr(self.avatar, "template_id", None)
-                        or getattr(self.state, "template_id", None)
-                    )
-                )
-                if adv_id:
-                    tpl_res = await self.db.execute(
-                        select(WorldEntity).where(
-                            WorldEntity.template_id == adv_id,
-                            WorldEntity.session_id.is_(None),
-                            WorldEntity.current_scene_id == self.state.current_scene_id,
-                            WorldEntity.entity_type == "OBJECT",
-                            WorldEntity.is_hidden.is_(False),
-                            WorldEntity.is_in_inventory.is_(False),
-                        )
-                    )
-                    candidates = tpl_res.scalars().all()
             hint_lower = entity_id_or_name.lower()
             ent = None
             overrides = self.state.entity_states or {}
@@ -958,31 +946,6 @@ class TurnInteractionsManager:
                 pickup_meta = (
                     dict(ent.metadata_json or {}) if isinstance(ent.metadata_json, dict) else {}
                 )
-                adv_id = (
-                    getattr(self.manager.adventure, "id", None)
-                    if hasattr(self.manager, "adventure") and self.manager.adventure
-                    else (
-                        getattr(self.avatar, "template_id", None)
-                        or getattr(self.state, "template_id", None)
-                    )
-                )
-                if adv_id and (
-                    not pickup_meta.get("on_pickup_script")
-                    and not pickup_meta.get("on_pickup_text")
-                ):
-                    tpl_res = await self.db.execute(
-                        select(WorldEntity).where(
-                            func.upper(WorldEntity.id) == ent.id.upper(),
-                            WorldEntity.template_id == adv_id,
-                            WorldEntity.session_id.is_(None),
-                        )
-                    )
-                    tpl_ent = tpl_res.scalars().first()
-                    if tpl_ent and tpl_ent.metadata_json:
-                        for k, v in tpl_ent.metadata_json.items():
-                            if k not in pickup_meta:
-                                pickup_meta[k] = v
-
                 if pickup_meta.get("on_pickup_script"):
                     script_msgs = await self.manager._execute_inline_script(
                         pickup_meta["on_pickup_script"], "on_pickup", ent.id

@@ -630,7 +630,8 @@ async def test_debug_award_grants_all_adventure_awards():
         await session.refresh(user)
 
     assert "All adventure awards granted" in message
-    assert all(award["is_earned"] is True for award in adventure.awards)
+    # Earned awards live on the user; the adventure definition is never modified.
+    assert all(award["is_earned"] is False for award in adventure.awards)
     assert len(user.earned_awards or []) == 3
     this_adv_awards = [
         a for a in (user.earned_awards or []) if a.get("adventure_id") == adventure.id
@@ -639,29 +640,41 @@ async def test_debug_award_grants_all_adventure_awards():
 
 
 async def test_get_chat_history_includes_awards(client: AsyncClient):
-    """Session snapshot must include the full award list for Quest Log rendering."""
+    """The session's adventure copy supplies the award list; later template edits do not leak."""
     ids = await _create_adventure(client, "Awards Snapshot Quest")
+    award = {
+        "key": "a-snapshot",
+        "title": "Visible in Log",
+        "description": "Should be present in GET /chat response",
+        "tier": "bronze",
+        "requirement": "Any",
+        "is_earned": False,
+    }
 
     async with TestSessionLocal() as session:
+        state = (
+            (
+                await session.execute(
+                    select(SessionState).where(SessionState.session_id == ids["game_id"])
+                )
+            )
+            .scalars()
+            .first()
+        )
+        entity_states = dict(state.entity_states or {})
+        snapshot = dict(entity_states["__manifest_snapshot__"])
+        snapshot["adventure"] = {**snapshot["adventure"], "awards": [award]}
+        entity_states["__manifest_snapshot__"] = snapshot
+        state.entity_states = entity_states
         adventure = await session.get(Adventure, ids["adventure_id"])
-        assert adventure is not None
-        adventure.awards = [
-            {
-                "key": "a-snapshot",
-                "title": "Visible in Log",
-                "description": "Should be present in GET /chat response",
-                "tier": "bronze",
-                "requirement": "Any",
-                "is_earned": False,
-            }
-        ]
+        adventure.awards = [{**award, "key": "added-later"}]
         await session.commit()
 
     chat_resp = await client.get(f"/api/adventures/{ids['game_id']}/chat")
     assert chat_resp.status_code == 200
-    data = chat_resp.json()
-    assert "awards" in data
-    assert any(a["key"] == "a-snapshot" for a in data["awards"])
+    keys = {a["key"] for a in chat_resp.json()["awards"]}
+    assert "a-snapshot" in keys
+    assert "added-later" not in keys
 
 
 async def test_get_chat_history_marks_award_earned_with_adventure_id(client: AsyncClient):
