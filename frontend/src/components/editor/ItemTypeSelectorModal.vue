@@ -37,7 +37,6 @@ interface ItemTypeOption {
   icon: string
   color: string
   borderColor: string
-  deprecated?: boolean
 }
 
 const normalizedMode = computed(() => props.mode || 'create')
@@ -93,15 +92,6 @@ const itemTypes: ItemTypeOption[] = [
     icon: 'ra-sword',
     color: 'text-red-300',
     borderColor: 'border-red-500/20',
-  },
-  {
-    type: 'COMBINABLE',
-    label: 'Combinable',
-    description: 'Deprecated — use Constructable. Legacy combine marker without deterministic engine behavior.',
-    icon: 'ra-cycle',
-    color: 'text-violet-300',
-    borderColor: 'border-violet-500/20',
-    deprecated: true,
   },
   {
     type: 'CONSTRUCTABLE',
@@ -258,13 +248,6 @@ function handleConfirmChange() {
                   class="absolute top-2 right-2 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-500/80 text-slate-950 shadow-md"
                 >
                   Current
-                </span>
-                <span
-                  v-if="itemType.deprecated && !isStagedType(itemType.type)"
-                  class="absolute top-2 right-2 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-red-500/80 text-slate-950 shadow-md"
-                  :class="{ '!bg-amber-500/80': isCurrentType(itemType.type) }"
-                >
-                  Deprecated
                 </span>
                 <div
                   class="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-900 border border-white/10 shrink-0 transition-colors group-hover:border-emerald-500/30"

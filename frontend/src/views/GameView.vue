@@ -403,9 +403,10 @@ watch(status, (current, previous) => {
   showTextLogModal.value = keepTextLog
   showCombinePanel.value = keepCombine
 })
-// Same for inline prompts: opening one switches to the story tab under the cursor.
-watch(isInlinePromptOpen, (isOpen) => {
-  if (isOpen) hoveredEntity.value = null
+// Same for inline prompts: opening one switches to the story tab under the cursor, and closing
+// one removes the tiles that may still be hovered.
+watch(isInlinePromptOpen, () => {
+  hoveredEntity.value = null
 })
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || isDialogOpen.value)
 const dialogChoiceBusy = ref(false)

@@ -74,6 +74,10 @@ class CraftingGuardMixin:
             accessible_ids=set(inventory_ids) | scene_ids,
         )
 
+    def _scene_of(self, ent: WorldEntity) -> str | None:
+        override = (self.state.entity_states or {}).get(ent.id, {})
+        return override.get("current_scene_id") or ent.current_scene_id
+
     def _is_hidden_now(self, ent: WorldEntity) -> bool:
         override = (self.state.entity_states or {}).get(ent.id, {})
         if override.get("is_hidden") is not None:
@@ -100,7 +104,11 @@ class CraftingGuardMixin:
         return needed.issubset(cs.accessible_ids)
 
     async def _craft_guard_blocks(self, ent: WorldEntity) -> list[str] | None:
-        """Runs the craft guard expression; returns failure messages or None when allowed."""
+        """Runs the craft guard expression; returns failure messages or None when allowed.
+
+        The adventure's ``on_craft_failure_text`` replaces the default failure message. The
+        messages are returned unsaved; the caller persists them.
+        """
         meta = dict(ent.metadata_json or {})
         expression = str(meta.get("craft_guard_expression") or "").strip()
         if not expression:
@@ -120,8 +128,7 @@ class CraftingGuardMixin:
             or detail
             or f"You cannot construct {ent.name} right now."
         )
-        await self._save_chat_message("system", fail_text)
-        return [*messages, fail_text]
+        return [fail_text, *messages]
 
     def _consume_ingredients(self, event: GameEvent, needed: set[str], cs: CraftingState) -> bool:
         """Removes inventory ingredients / hides scene ingredients. True if all came from the inventory."""
@@ -143,7 +150,9 @@ class CraftingGuardMixin:
     ) -> None:
         all_in_inventory = self._consume_ingredients(event, needed, cs)
         self._upsert_entity_update(event, ent.id, is_hidden=False)
-        self._upsert_entity_movement(event, ent.id, self.state.current_scene_id)
+        # The result lands in the inventory, or in the scene when any ingredient lay there.
+        if not all_in_inventory and self._scene_of(ent) != self.state.current_scene_id:
+            self._upsert_entity_movement(event, ent.id, self.state.current_scene_id)
         if all_in_inventory:
             event.new_inventory_items = event.new_inventory_items or []
             if not any(i.id == ent.id for i in event.new_inventory_items):
@@ -162,15 +171,14 @@ class CraftingGuardMixin:
             cs.entities_by_id[i].name if i in cs.entities_by_id and cs.entities_by_id[i].name else i
             for i in needed
         ]
-        cs.messages.append(f"You combine {', '.join(names)} to create {ent.name}!")
         meta = dict(ent.metadata_json or {})
+        # The adventure's own success text replaces the default message.
+        success_text = str(meta.get("on_craft_success_text") or "").strip()
+        cs.messages.append(success_text or f"You combine {', '.join(names)} to create {ent.name}!")
         if meta.get("on_craft_success_script"):
             cs.messages += await self.manager._execute_inline_script(
                 meta["on_craft_success_script"], "on_craft_success", ent.id
             )
-        if meta.get("on_craft_success_text"):
-            await self._save_chat_message("system", meta["on_craft_success_text"])
-            cs.messages.append(meta["on_craft_success_text"])
         logger.info(
             "[Turn %s] CONSTRUCTABLE '%s' materialized from ingredients %s",
             self.game_id,
@@ -202,20 +210,20 @@ class CraftingGuardMixin:
         refs = {part.strip().upper() for part in raw_args.split("|") if part.strip()}
         return {ref if ref in cs.entities_by_id else by_name.get(ref, ref) for ref in refs}
 
-    async def _craft_selected(self, raw_args: str) -> tuple[str, list[str]]:
+    async def _craft_selected(self, raw_args: str) -> tuple[list[str], list[str]]:
         """Deterministic crafting from the combine panel (``/craft A | B``), without the GM.
 
         The chosen items must be reachable and exactly the ingredients of a hidden constructable.
-        Nothing is consumed on a miss. Returns the response text (persisted by the caller) and
-        further messages that are already stored (scripts, success or failure texts).
+        Nothing is consumed on a miss. Returns the crafting messages (unsaved; the caller
+        persists them) and the messages of the applied state changes (already stored).
         """
         entities = await self._session_entities()
         cs = self._crafting_state(entities, "")
         selected = self._resolve_craft_refs(raw_args, cs)
         if len(selected) < MIN_INGREDIENTS:
-            return CRAFT_TOO_FEW_MESSAGE, []
+            return [CRAFT_TOO_FEW_MESSAGE], []
         if not selected.issubset(cs.accessible_ids):
-            return CRAFT_UNREACHABLE_MESSAGE, []
+            return [CRAFT_UNREACHABLE_MESSAGE], []
 
         match = next(
             (
@@ -229,17 +237,16 @@ class CraftingGuardMixin:
             None,
         )
         if match is None:
-            return CRAFT_NO_MATCH_MESSAGE, []
+            return [CRAFT_NO_MATCH_MESSAGE], []
 
         blocked = await self._craft_guard_blocks(match)
         if blocked is not None:
-            return "", blocked
+            return blocked, []
 
         event = GameEvent()
         await self._craft(event, match, selected, cs)
         applied = await self.manager._apply_game_event(event)
-        response, *extra = cs.messages
-        return response, [*extra, *applied]
+        return cs.messages, applied
 
     @staticmethod
     def _violation(kind: str, ent: WorldEntity | None, cid: str, fallback_name: str) -> str:

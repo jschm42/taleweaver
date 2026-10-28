@@ -514,7 +514,7 @@ class WorldObjectSchema(WorldBaseSchema):
 
     item_type: str = Field(
         ...,
-        description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE (deprecated), CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH",
+        description="One of: CONSUMABLE, WEARABLE, STATIC, CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH",
     )
     wearable_slots: list[str] = Field(
         default_factory=list,
@@ -691,7 +691,7 @@ class WorldObjectSchema(WorldBaseSchema):
     )
     on_craft_success_text: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional text output when crafting succeeds. Use empty string for none.",
+        description="Only for CONSTRUCTABLE objects: optional text shown instead of the default message when crafting succeeds. Use empty string for none.",
     )
     on_craft_failure_script: Optional[str] = Field(
         default="",
@@ -699,7 +699,7 @@ class WorldObjectSchema(WorldBaseSchema):
     )
     on_craft_failure_text: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional text output when crafting fails. Use empty string for none.",
+        description="Only for CONSTRUCTABLE objects: optional text shown instead of the default message when the craft guard blocks. Use empty string for none.",
     )
 
     model_config = {"extra": "forbid"}

@@ -1295,9 +1295,12 @@ class TurnInteractionsManager:
 
         if response.startswith("[TRIGGER_CRAFT]"):
             craft_args = response.replace("[TRIGGER_CRAFT]", "").strip()
-            response, craft_msgs = await self.manager.guardrails._craft_selected(craft_args)
+            craft_msgs, applied_msgs = await self.manager.guardrails._craft_selected(craft_args)
             for craft_msg in craft_msgs:
+                await self._save_chat_message("system", craft_msg)
+            for craft_msg in [*craft_msgs, *applied_msgs]:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': craft_msg})}\n\n"
+            response = ""
 
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()

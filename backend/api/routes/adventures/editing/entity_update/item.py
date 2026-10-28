@@ -26,7 +26,6 @@ ITEM_TYPES = (
     "CONSUMABLE",
     "WEARABLE",
     "WEAPON",
-    "COMBINABLE",
     "CONSTRUCTABLE",
     "READABLE",
     "CONTAINER",
@@ -109,7 +108,7 @@ def _apply_type_change(item: WorldEntity, payload: EntityUpdateRequest) -> Optio
             status_code=400,
             detail=(
                 "item_type must be one of DEFAULT, CONSUMABLE, WEARABLE, "
-                "WEAPON, COMBINABLE, CONSTRUCTABLE, READABLE, CONTAINER, SWITCH."
+                "WEAPON, CONSTRUCTABLE, READABLE, CONTAINER, SWITCH."
             ),
         )
     item.item_type = new_type

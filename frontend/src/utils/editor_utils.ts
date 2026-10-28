@@ -69,7 +69,6 @@ export function itemTypePrefix(itemType: string): string {
     CONSUMABLE: 'ITEM_',
     WEARABLE: 'ITEM_',
     WEAPON: 'ITEM_',
-    COMBINABLE: 'ITEM_',
     CONSTRUCTABLE: 'ITEM_',
     READABLE: 'ITEM_',
     CONTAINER: 'CON_',

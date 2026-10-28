@@ -132,7 +132,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
 | **Constructable Items** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
-| | `on_craft_success_script`, `..._text` | Executes when this constructable item is successfully crafted. |
+| | `on_craft_success_script`, `..._text` | Executes when this constructable item is successfully crafted. The text replaces the default craft message. |
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |

@@ -277,7 +277,7 @@ Players can craft in two ways:
 - **Combine workbench (deterministic):** the *Combine* entry in the context menu of any inventory or scene item opens a workbench in the story feed. The player puts items on it and presses *Combine* (the `/craft A | B` command). It succeeds only when the chosen items are **exactly** the ingredients of a hidden constructable and all of them are carried or in the current scene. A wrong or extra item fails without using anything up. No GM call is involved.
 - **Chat (GM-judged):** the player describes the attempt (*"I mix the root with the salt"*) or uses `/combine`. The GM decides whether it is a combine attempt; the engine still enforces the ingredient rules.
 
-Both ways run the `craft_guard` and the craft success and failure texts and scripts. The workbench offers every item, so it never gives away which items are ingredients.
+Both ways run the `craft_guard` and the craft success and failure scripts. An `on_craft_success_text` replaces the default *"You combine … to create …!"* message, and an `on_craft_fail_text` replaces the default message when the `craft_guard` blocks. A crafted item goes into the inventory when all ingredients were carried, otherwise it appears in the current scene. The workbench offers every item, so it never gives away which items are ingredients.
 
 ### A doom clock with a loss condition
 

@@ -63,20 +63,32 @@ const toggle = (item: any) => {
     : [...selectedIds.value, id]
 }
 
+/** Set while a Combine attempt is out; a miss leaves the ingredients in place. */
+const combinePending = ref(false)
+
 const combine = () => {
   if (!canCombine.value) return
   emit('itemLeave')
+  combinePending.value = true
   emit('combine', [...selectedIds.value])
 }
 
 const onRevealed = () => {
+  combinePending.value = false
   const seed = itemId(props.seedItem)
   selectedIds.value = seed ? [seed] : []
 }
 
-// Used-up ingredients vanish from inventory and scene: drop them from the workbench too.
+// Used-up ingredients vanish from inventory and scene: after a Combine that means it worked,
+// so the workbench closes. Otherwise they just drop off the workbench.
 watch(candidatesById, (candidates) => {
-  selectedIds.value = selectedIds.value.filter(id => candidates.has(id))
+  const remaining = selectedIds.value.filter(id => candidates.has(id))
+  const consumed = remaining.length < selectedIds.value.length
+  selectedIds.value = remaining
+  if (!consumed || !combinePending.value) return
+  combinePending.value = false
+  emit('itemLeave')
+  emit('close')
 })
 </script>
 

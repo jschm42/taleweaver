@@ -31,7 +31,7 @@ def _object(entity_id: str, name: str, **fields) -> WorldEntity:
     return WorldEntity(id=entity_id, name=name, **{**defaults, **fields})
 
 
-async def _seed(db, *, battery_in_inventory: bool = True):
+async def _seed(db, *, battery_in_inventory: bool = True, lantern_meta: dict | None = None):
     user = User(username="player1", hashed_password="pw", role="user")
     adv = AdventureTemplate(id="adv-1", title="Test", owner_id="admin", time_per_turn=5)
     db.add_all([user, adv])
@@ -69,6 +69,7 @@ async def _seed(db, *, battery_in_inventory: bool = True):
                 is_hidden=True,
                 image_url="/data/lantern.png",
                 combination_ingredients=["BATTERY", "TORCH"],
+                metadata_json=lantern_meta or {},
             ),
         ]
     )
@@ -107,10 +108,12 @@ async def test_craft_exact_ingredients_creates_item(setup_test_db):
         manager = await _manager(db, user)
 
         # Act
-        response, _messages = await manager.guardrails._craft_selected("battery | Torch")
+        messages, _applied = await manager.guardrails._craft_selected("battery | Torch")
 
-        # Assert
-        assert "Lantern" in response
+        # Assert: crafted into the inventory, so it is not moved into the scene.
+        assert len(messages) == 1
+        assert "Lantern" in messages[0]
+        assert "current_scene_id" not in manager.state.entity_states["LANTERN"]
         assert _inventory_ids(manager.avatar) == {"ROPE", "LANTERN"}
         lantern = next(i for i in manager.avatar.inventory if i["id"] == "LANTERN")
         assert lantern["image_url"] == "/data/lantern.png"
@@ -126,10 +129,10 @@ async def test_craft_uses_scene_ingredient(setup_test_db):
         manager = await _manager(db, user)
 
         # Act
-        response, _messages = await manager.guardrails._craft_selected("BATTERY | TORCH")
+        messages, _applied = await manager.guardrails._craft_selected("BATTERY | TORCH")
 
         # Assert: the result appears in the scene; the scene ingredient is hidden.
-        assert "Lantern" in response
+        assert "Lantern" in messages[0]
         assert "LANTERN" not in _inventory_ids(manager.avatar)
         assert manager.state.entity_states["BATTERY"]["is_hidden"] is True
         assert manager.state.entity_states["LANTERN"]["is_hidden"] is False
@@ -153,10 +156,50 @@ async def test_craft_rejects_without_consuming(setup_test_db, args, expected):
         manager = await _manager(db, user)
 
         # Act
-        response, messages = await manager.guardrails._craft_selected(args)
+        messages, applied = await manager.guardrails._craft_selected(args)
 
         # Assert: wrong or extra items fail and nothing is used up.
-        assert response == expected
-        assert messages == []
+        assert messages == [expected]
+        assert applied == []
         assert _inventory_ids(manager.avatar) == {"BATTERY", "TORCH", "ROPE"}
         assert "LANTERN" not in (manager.state.entity_states or {})
+
+
+async def test_craft_success_text_replaces_default_message(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        user, _avatar, _state = await _seed(
+            db, lantern_meta={"on_craft_success_text": "The lantern flickers to life."}
+        )
+        manager = await _manager(db, user)
+
+        # Act
+        messages, _applied = await manager.guardrails._craft_selected("BATTERY | TORCH")
+
+        # Assert
+        assert messages == ["The lantern flickers to life."]
+
+
+async def test_craft_failure_text_replaces_default_guard_message(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange: a craft guard that never passes.
+        user, _avatar, _state = await _seed(
+            db,
+            lantern_meta={
+                "craft_guard_expression": "False",
+                "on_craft_failure_text": "Your hands are too cold.",
+            },
+        )
+        manager = await _manager(db, user)
+
+        # Act
+        messages, applied = await manager.guardrails._craft_selected("BATTERY | TORCH")
+
+        # Assert: nothing is consumed and only the custom text is shown.
+        assert messages == ["Your hands are too cold."]
+        assert applied == []
+        assert _inventory_ids(manager.avatar) == {"BATTERY", "TORCH", "ROPE"}

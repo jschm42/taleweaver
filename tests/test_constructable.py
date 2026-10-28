@@ -230,13 +230,11 @@ async def test_constructable_materializes_when_all_ingredients_combined(setup_te
         assert any("create" in m.lower() for m in messages)
         # Ingredients scheduled for removal from inventory.
         assert set(event.removed_inventory_item_ids or []) == {"BATTERY", "TORCH"}
-        # Constructable revealed in current scene.
+        # Constructable revealed and added to the inventory (not moved into the scene).
         reveal = next(u for u in event.updated_entities if u.entity_id == "LANTERN")
         assert reveal.is_hidden is False
-        assert any(
-            m.entity_id == "LANTERN" and m.to_scene_id == "START"
-            for m in (event.moved_entities or [])
-        )
+        assert any(i.id == "LANTERN" for i in event.new_inventory_items or [])
+        assert not any(m.entity_id == "LANTERN" for m in (event.moved_entities or []))
 
 
 async def test_constructable_noop_when_ingredient_missing(setup_test_db):
