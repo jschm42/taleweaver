@@ -14,6 +14,7 @@ import type {
   AdventureTemplateSummary,
   StoryIdeaSuggestionPayload,
   StoryIdeaSuggestionResponse,
+  BlueprintValidationResult,
   GeneratorSurprisePresetPayload,
   GeneratorSurprisePresetResponse,
   TtsVoiceList,
@@ -552,6 +553,11 @@ export const api = {
   /** Creates a new adventure and returns the generated IDs. */
   createAdventure(payload: CreateAdventurePayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
     return request('/adventures/', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  /** Checks the Story Idea blueprint tags (syntax, scripts, references) before generation. */
+  validateStoryBlueprint(text: string): Promise<BlueprintValidationResult> {
+    return request('/adventures/blueprint/validate', { method: 'POST', body: JSON.stringify({ text }) })
   },
 
   /** Generates or improves title and story idea from user input. */

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from backend.api.routes.adventures.agent_routes import router as agent_router
 from backend.api.routes.adventures.assets import router as assets_router
+from backend.api.routes.adventures.blueprint_routes import router as blueprint_router
 from backend.api.routes.adventures.cloning import router as cloning_router
 from backend.api.routes.adventures.dialog_routes import router as dialog_router
 from backend.api.routes.adventures.dice_routes import router as dice_router
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/adventures")
 #    (/library/...). Must precede the templates router, whose /{template_id}
 #    would otherwise swallow /library/... requests.
 router.include_router(imports_router)
+router.include_router(blueprint_router)
 router.include_router(library_router)
 
 # 2. Assets (specific paths like /{template_id}/visuals/...)

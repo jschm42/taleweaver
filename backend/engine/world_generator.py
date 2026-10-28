@@ -24,6 +24,7 @@ from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
+from backend.engine.blueprint import Blueprint, apply_blueprint, prepare_blueprint
 
 # --- Re-exports so existing imports stay valid ---
 from backend.engine.world_schemas import (  # noqa: F401
@@ -590,6 +591,19 @@ def _clean_sequence_item(seq: Any, object_ids: list[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _apply_blueprint_to_manifest(
+    template_id: str, manifest_dict: dict[str, Any], blueprint: Blueprint
+) -> None:
+    """Write the blueprint's fixed values back over the LLM output."""
+    violations = apply_blueprint(manifest_dict, blueprint)
+    log_structured_event(
+        "adventure.generation.blueprint_applied",
+        template_id=template_id,
+        block_count=len(blueprint.blocks),
+        violations=violations,
+    )
+
+
 class WorldGenerator:
     @staticmethod
     def preprocess_manifest_object_ids(manifest_dict: dict) -> None:
@@ -815,17 +829,15 @@ class WorldGenerator:
             allow_reuse_source_assets=bool(allow_reuse_source_assets),
         )
 
-        if not sequences and original_prompt:
-            cleaned_prompt, extracted_seqs = WorldGenerator._extract_sequences_from_prompt(
-                original_prompt
-            )
-            if extracted_seqs:
-                sequences = extracted_seqs
-                original_prompt = cleaned_prompt
+        blueprint = prepare_blueprint(original_prompt or "")
+        llm_prompt = original_prompt
+        if blueprint:
+            llm_prompt = blueprint.premise or title
+            sequences = sequences or blueprint.sequences or None
 
         system_prompt, user_prompt = build_world_generation_prompts(
             title=title,
-            original_prompt=original_prompt,
+            original_prompt=llm_prompt,
             sequences=sequences,
             generation_strictness=generation_strictness,
             language=language,
@@ -857,6 +869,8 @@ class WorldGenerator:
             cover_similarity_percent=cover_similarity_percent,
             allow_reuse_source_assets=allow_reuse_source_assets,
         )
+        if blueprint:
+            user_prompt += blueprint.prompt_section(generation_strictness)
 
         adventure = await db.get(AdventureTemplate, template_id)
         if adventure:
@@ -905,6 +919,8 @@ class WorldGenerator:
 
         manifest_dict = manifesto.model_dump()
         WorldGenerator.preprocess_manifest_object_ids(manifest_dict)
+        if blueprint:
+            _apply_blueprint_to_manifest(template_id, manifest_dict, blueprint.blueprint)
 
         log_structured_event(
             "adventure.generation.manifest_received",

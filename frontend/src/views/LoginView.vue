@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState, setToken } from '@/store/auth'
-import { configState, refreshConfig } from '@/store/config'
+import { configState, isAppVersionKnown, loadPublicAppVersion, refreshConfig } from '@/store/config'
 import BackgroundSlideshow from '@/components/common/BackgroundSlideshow.vue'
 import RecoveryCodeForm from '@/components/auth/RecoveryCodeForm.vue'
 
@@ -21,6 +21,7 @@ const showPassword = ref(false)
 const isRecovering = ref(false)
 
 onMounted(() => {
+  loadPublicAppVersion()
   const savedUsername = localStorage.getItem('remembered_username')
   if (savedUsername) {
     username.value = savedUsername
@@ -96,7 +97,7 @@ async function handleRecovered(token: string, recoveredUsername: string) {
           <img src="@/assets/svg/app-logo.svg" class="w-40 h-40 drop-shadow-[0_0_20px_rgba(78,222,163,0.4)]" alt="Logo" />
         </div>
         <h1 class="text-5xl font-black text-white font-display tracking-tighter mb-2">TaleWeaver</h1>
-        <p class="text-aether-primary/40 text-xxs font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v{{ configState.appVersion }}</p>
+        <p class="text-aether-primary/40 text-xxs font-bold uppercase tracking-[0.4em]">Chronicle Intelligence<span v-if="isAppVersionKnown()"> v{{ configState.appVersion }}</span></p>
       </div>
 
       <RecoveryCodeForm
@@ -115,7 +116,7 @@ async function handleRecovered(token: string, recoveredUsername: string) {
               v-model="username"
               type="text" 
               required
-              class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-aether-primary/50 focus:ring-1 focus:ring-aether-primary/20 transition-all"
+              class="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-aether-primary/50 focus:ring-1 focus:ring-aether-primary/20 transition-all"
               placeholder="Your chronicles name..."
             />
           </div>
@@ -129,7 +130,7 @@ async function handleRecovered(token: string, recoveredUsername: string) {
               v-model="password"
               :type="showPassword ? 'text' : 'password'" 
               required
-              class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-aether-primary/50 focus:ring-1 focus:ring-aether-primary/20 transition-all"
+              class="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-aether-primary/50 focus:ring-1 focus:ring-aether-primary/20 transition-all"
               placeholder="Your password..."
             />
           </div>

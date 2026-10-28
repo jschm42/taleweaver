@@ -15,6 +15,7 @@ import {
   Info,
 } from 'lucide-vue-next'
 import { api, GENERATION_SAYINGS } from '@/composables/useApi'
+import { findStoryBlueprintError } from '@/composables/storyBlueprint'
 import { configState } from '@/store/config'
 import type { CatalogTile } from '@/types'
 
@@ -489,6 +490,13 @@ async function startGeneration() {
     }
   }
 
+  const blueprintError = await findStoryBlueprintError(form.value.storyIdea.trim())
+  if (blueprintError) {
+    viewState.value = 'form'
+    errorMessage.value = blueprintError
+    return
+  }
+
   viewState.value = 'progress'
   currentStatusText.value = 'The Architect is preparing the Construct...'
   errorMessage.value = ''
@@ -528,46 +536,14 @@ async function startGeneration() {
 
   const pacingVal = form.value.time_system === 'units' ? form.value.units_per_turn : form.value.pacing_minutes
 
-  let promptStr = form.value.storyIdea.trim()
-  let parsedSequences = undefined
-  
-  // Parse [Sequence] tags
-  const seqRegex = /\[Sequence[\s:]*\d*\]/i
-  if (seqRegex.test(promptStr)) {
-    const blocks = promptStr.split(new RegExp('\\[Sequence[\\s:]*\\d*\\]', 'ig'))
-    const sequences = []
-    // The first block is whatever text comes before the first sequence tag
-    // We can keep it in the prompt as the general premise
-    promptStr = blocks[0].trim()
-    
-    for (let i = 1; i < blocks.length; i++) {
-      if (sequences.length >= 30) break // Hard limit
-      const block = blocks[i].trim()
-      const lines = block.split('\n')
-      const title = lines[0].trim() || `Sequence ${i}`
-      const description = lines.slice(1).join('\n').trim() || 'Follow the sequence blueprint.'
-      
-      sequences.push({
-        id: crypto.randomUUID(),
-        order: i,
-        title: title,
-        description: description.slice(0, 500),
-        walkthrough: description,
-        end_condition: 'Complete the sequence objectives.',
-        exp_reward: 500
-      })
-    }
-    if (sequences.length > 0) {
-      parsedSequences = sequences
-    }
-  }
+  // Blueprint tags ([Sequence], [Scene], ...) are parsed and enforced by the backend.
+  const promptStr = form.value.storyIdea.trim()
 
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: (form.value.title.trim() || 'A New Reality').slice(0, 50),
     original_prompt: promptStr,
-    sequences: parsedSequences,
     selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
     selected_tone: form.value.selected_tone_id ? fullToneObj : null,
     // Time & Pacing

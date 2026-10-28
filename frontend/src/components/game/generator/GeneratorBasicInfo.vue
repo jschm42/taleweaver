@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
 import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
 
 const props = defineProps<{
   title: string
@@ -47,17 +48,7 @@ const emit = defineEmits<{
             <span>Story Blueprint & World Vision</span>
           </label>
           <InfoPopoverButton title="Structured Syntax">
-            <p class="mb-2">Use structured tags to guide the AI linearly (Limit: 15 sequences) or force specific entities.</p>
-            <div class="space-y-1 mb-2 font-mono text-cyan-400">
-              <div>[Sequence: 1] Sequence descriptions</div>
-              <div>[Scene: 1] Scene descriptions</div>
-              <div>[NPC: 1] NPC description</div>
-              <div>[Scene: 2] Scene descriptions</div>
-              <div>[NPC: 2] NPC description</div>
-              <div>[Sequence: 2] ...</div>
-            </div>
-            <p class="mb-2">Enable <b>Strict Adherence</b> Builder Mode to enforce the structure.</p>
-            <p class="text-[10px] text-slate-400 italic">See /docs/world-builder-syntax.md for the full guide.</p>
+            <BlueprintSyntaxHelp />
           </InfoPopoverButton>
         </div>
       </div>

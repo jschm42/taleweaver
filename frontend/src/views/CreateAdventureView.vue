@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
+import { findStoryBlueprintError } from '@/composables/storyBlueprint'
 import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
@@ -227,6 +228,13 @@ async function handleCreate() {
 
   isGenerating.value = true
   errorMsg.value = ''
+
+  const blueprintError = await findStoryBlueprintError(form.value.storyIdea.trim())
+  if (blueprintError) {
+    errorMsg.value = blueprintError
+    isGenerating.value = false
+    return
+  }
   
   const fullStyleObj = imageStyles.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
   const fullToneObj = tones.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
@@ -266,44 +274,14 @@ async function handleCreate() {
     }
   }
 
-  let promptStr = form.value.storyIdea.trim()
-  let parsedSequences = undefined
-
-  // Parse [Sequence] tags
-  const seqRegex = /\[Sequence[\s:]*\d*\]/i
-  if (seqRegex.test(promptStr)) {
-    const blocks = promptStr.split(new RegExp('\\[Sequence[\\s:]*\\d*\\]', 'ig'))
-    const sequences = []
-    promptStr = blocks[0].trim()
-
-    for (let i = 1; i < blocks.length; i++) {
-      if (sequences.length >= 15) break
-      const block = blocks[i].trim()
-      const lines = block.split('\n')
-      const title = lines[0].trim() || `Sequence ${i}`
-      const description = lines.slice(1).join('\n').trim() || 'Follow the sequence blueprint.'
-
-      sequences.push({
-        id: crypto.randomUUID(),
-        order: i,
-        title: title,
-        description: description.slice(0, 500),
-        walkthrough: description,
-        end_condition: 'Complete the sequence objectives.',
-        exp_reward: 100,
-      })
-    }
-    if (sequences.length > 0) {
-      parsedSequences = sequences
-    }
-  }
+  // Blueprint tags ([Sequence], [Scene], ...) are parsed and enforced by the backend.
+  const promptStr = form.value.storyIdea.trim()
 
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: (form.value.title.trim() || 'Untitled Odyssey').slice(0, 50),
     original_prompt: promptStr,
-    sequences: parsedSequences,
     generation_strictness: form.value.generation_strictness,
     clock_enabled: form.value.clock_enabled,
     time_system: timeSystemVal,

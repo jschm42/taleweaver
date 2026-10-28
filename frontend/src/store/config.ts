@@ -3,7 +3,7 @@ import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
 
 export const configState = reactive({
-  appVersion: '0.0.0-loading',
+  appVersion: '0.0.0-loading' as string,
   isLoaded: false,
   hasLlmConfig: false,
   hasT2iConfig: false,
@@ -11,6 +11,27 @@ export const configState = reactive({
   isTtsEnabled: false,
   lastErrorMessage: '' as string
 })
+
+const VERSION_PLACEHOLDER = '0.0.0-loading'
+
+export function isAppVersionKnown(): boolean {
+  return configState.appVersion !== VERSION_PLACEHOLDER
+}
+
+/** Loads the version from the public bootstrap endpoint (works without a token). */
+export async function loadPublicAppVersion() {
+  if (isAppVersionKnown()) {
+    return
+  }
+  try {
+    const bootstrap = await api.getBootstrapStatus()
+    if (bootstrap.app_version) {
+      configState.appVersion = bootstrap.app_version
+    }
+  } catch (error) {
+    console.error('Failed to load app version:', error)
+  }
+}
 
 export async function refreshConfig() {
   // Settings endpoint is protected; skip until a token exists.

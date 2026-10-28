@@ -447,6 +447,19 @@ export interface StoryIdeaSuggestionResponse {
   story_idea: string
 }
 
+export interface BlueprintIssue {
+  line: number
+  message: string
+  severity: 'error' | 'warning'
+}
+
+export interface BlueprintValidationResult {
+  has_tags: boolean
+  errors: BlueprintIssue[]
+  warnings: BlueprintIssue[]
+  counts: Record<string, number>
+}
+
 export interface GeneratorSurprisePresetPayload {
   available_tones?: string[]
   available_styles?: string[]
