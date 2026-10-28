@@ -425,12 +425,6 @@ defineExpose({
             <slot name="story-end" />
           </template>
         </ImmersiveStoryFeed>
-
-        <!-- Cinematic Movie-Style Sequence Title Overlay -->
-        <CinematicSequenceOverlay
-          :active-sequence="props.activeSequence"
-          :adventure-title="props.adventureTitle"
-        />
       </main>
 
       <!-- 3C. RIGHT / SCENE SIDEBAR (wide screens) -->
@@ -507,6 +501,12 @@ defineExpose({
       :exit-label="props.sceneTransitionTarget?.label"
       :status-text="props.statusText"
       :background-image-url="transitionSceneImageUrl"
+    />
+
+    <!-- 6. CINEMATIC SEQUENCE TITLE OVERLAY (full window, above the travel curtain) -->
+    <CinematicSequenceOverlay
+      :active-sequence="props.activeSequence"
+      :adventure-title="props.adventureTitle"
     />
 
     <SceneImageViewer
