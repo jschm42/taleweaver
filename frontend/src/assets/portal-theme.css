@@ -62,6 +62,21 @@
   background: linear-gradient(to right, rgb(251 191 36 / 0.35), transparent);
 }
 
+/* ---------- Shelf grid ---------- */
+
+/* Two columns on small screens; from lg on, columns auto-fill so cards keep a
+   bounded width on wide/ultrawide displays instead of stretching. */
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .shelf-grid {
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  }
+}
+
 /* ---------- Tome card ---------- */
 
 .tale-card {

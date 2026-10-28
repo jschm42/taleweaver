@@ -105,7 +105,7 @@ onUnmounted(() => {
     <!-- Shelf: adventures with a running session -->
     <section v-if="inProgressTemplates.length > 0" class="space-y-3" aria-label="In progress">
       <h2 class="shelf-heading text-xs sm:text-sm uppercase">In Progress</h2>
-      <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 xl:gap-5 pt-2">
+      <div class="shelf-grid gap-3 sm:gap-4 xl:gap-5 pt-2">
         <div
           v-for="(entry, index) in inProgressTemplates"
           :key="`active-${entry.template_id}`"
@@ -137,7 +137,7 @@ onUnmounted(() => {
     <!-- Shelf: every adventure, including those in progress -->
     <section class="space-y-3" aria-label="The archive">
       <h2 class="shelf-heading text-xs sm:text-sm uppercase">The Archive</h2>
-      <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 xl:gap-5 pt-2">
+      <div class="shelf-grid gap-3 sm:gap-4 xl:gap-5 pt-2">
         <div v-if="isSeeding" class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-amber-300/20 bg-white/5 gap-3 aspect-[3/4]">
           <div class="w-8 h-8 border-2 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
           <span class="text-xxs text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
