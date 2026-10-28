@@ -229,6 +229,21 @@ async def generate_scene_description(
     return SceneDescriptionGenerationResponse(description=_clean_generated_text(text))
 
 
+def _decorative_items_array(text: str) -> Any:
+    """The ``items`` list of the answer. Models sometimes add stray characters after the JSON
+    (e.g. ``{"items": [...]} "}"``) or return a bare array, so on invalid JSON only the
+    array itself is decoded and anything around it is ignored."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        key_at = text.find('"items"')
+        start = text.find("[", max(key_at, 0))
+        if start == -1:
+            raise
+        data, _end = json.JSONDecoder().raw_decode(text, start)
+    return data.get("items") if isinstance(data, dict) else data
+
+
 def _parse_decorative_items(
     generated_text: str, existing_lower: set[str], max_new: int
 ) -> list[str]:
@@ -238,8 +253,7 @@ def _parse_decorative_items(
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-    data = json.loads(cleaned)
-    raw_items = data.get("items") if isinstance(data, dict) else None
+    raw_items = _decorative_items_array(cleaned)
     if not isinstance(raw_items, list):
         raise ValueError("LLM response did not contain an 'items' array.")
 

@@ -2282,6 +2282,8 @@ async function confirmChangeItemType(newItemType: string) {
     })
     await Promise.all([fetchAdventure(), fetchDebugInfo()])
     addNotification(`Item "${target.name}" is now ${normalized}.`, 'success')
+    // closeChangeItemTypeModal() refuses to close while the change is still running.
+    isChangingItemType.value = false
     closeChangeItemTypeModal()
   } catch (error: any) {
     addNotification(error?.message || 'Failed to change item type.', 'error')
@@ -2337,6 +2339,8 @@ async function confirmMoveEntityToScene(targetSceneId: string) {
     await fetchDebugInfo()
     const label = target.type === 'npc' ? 'NPC' : 'Item'
     addNotification(`${label} "${target.name}" moved to ${normalizedSceneId}.`, 'success')
+    // closeMoveItemModal() refuses to close while a move is still running.
+    isMovingItem.value = false
     closeMoveItemModal()
   } catch (error: any) {
     addNotification(error?.message || `Failed to move ${target.type === 'npc' ? 'NPC' : 'item'}.`, 'error')
