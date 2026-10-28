@@ -118,6 +118,12 @@
   text-shadow: var(--tw-dropcap-shadow);
 }
 
+/* Paragraph break inside rendered text (renderFormattedHtml): less than a full empty line. */
+.tw-para-break {
+  display: block;
+  height: 0.6em;
+}
+
 .tw-narration-label {
   display: flex;
   align-items: center;

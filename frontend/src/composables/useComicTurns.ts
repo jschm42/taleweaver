@@ -369,7 +369,8 @@ export function renderFormattedHtml(text: string): string {
   const withBolds = withVoiceTags.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-bold">$1</strong>')
   const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="comic-object-tag">$1</span>')
     // Merged narration paragraphs keep their breaks instead of running together into one block.
-    .replace(/\n{2,}/g, '<br><br>')
+    // A short gap (not a full empty line) lets the next paragraph still flow beside a drop cap.
+    .replace(/\n{2,}/g, '<span class="tw-para-break"></span>')
     .replace(/\n/g, '<br>')
 
   return DOMPurify.sanitize(withObjectIds, {

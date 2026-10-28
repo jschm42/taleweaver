@@ -17,12 +17,12 @@ import ImmersiveGameView from '@/components/game/ImmersiveGameView.vue'
 import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
-import ContainerModal from '@/components/game/ContainerModal.vue'
-import LockUnlockPanel from '@/components/game/LockUnlockPanel.vue'
-import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
+import ContainerPanel from '@/components/game/prompts/ContainerPanel.vue'
+import LockUnlockPanel from '@/components/game/prompts/LockUnlockPanel.vue'
+import SwitchStatePanel from '@/components/game/prompts/SwitchStatePanel.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
-import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
-import TextLogModal from '@/components/game/TextLogModal.vue'
+import SwitchUnlockPanel from '@/components/game/prompts/SwitchUnlockPanel.vue'
+import TextLogPanel from '@/components/game/prompts/TextLogPanel.vue'
 import AdventureGeneratorModal from '@/components/game/AdventureGeneratorModal.vue'
 import ExitSessionModal from '@/components/game/ExitSessionModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
@@ -109,6 +109,7 @@ const activeContainer = ref<{
   id: string
   name: string
   items: any[]
+  imageUrl?: string | null
 } | null>(null)
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
 const awaitingContainerCodeInput = ref(false)
@@ -362,18 +363,41 @@ const isPassRunning = computed(() => status.value === 'loading')
 const isDialogOpen = computed(() => !!pendingDialog.value && status.value !== 'game_over')
 const isChoicePanelOpen = computed(() => isDialogOpen.value && !isPassRunning.value && !sheet.value?.agent_active)
 
+// Inline prompts (containers, locks, switches, readables) at the end of the story feed: one at a time.
+const isInlinePromptOpen = computed(() => showUnlockModal.value || showExitUnlockModal.value
+  || showSwitchStateModal.value || showSwitchUnlockModal.value || showTextLogModal.value
+  || showContainerModal.value)
+const closeInlinePrompts = (): void => {
+  showContainerModal.value = false
+  showUnlockModal.value = false
+  showExitUnlockModal.value = false
+  showSwitchStateModal.value = false
+  showSwitchUnlockModal.value = false
+  showTextLogModal.value = false
+}
+/** Opening a prompt from the character sheet: the sheet would cover the story feed. */
+const closeSheetForInlinePrompt = (): void => {
+  if (!showSheet.value) return
+  showSheet.value = false
+  if (sheetDirty.value) handleSheetChanged()
+}
+/** Set by the readable's Take button, whose turn should leave the text open. */
+const textLogTakePending = ref(false)
+
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
 // Unlock attempts never start a turn, so a new turn means the player moved on: drop the open
-// unlock prompts instead of keeping them pinned below the new story entries.
+// inline prompts instead of keeping them pinned below the new story entries.
 watch(status, (current, previous) => {
   if (current !== 'connecting' || previous === 'connecting') return
   hoveredEntity.value = null
-  showUnlockModal.value = false
-  showExitUnlockModal.value = false
+  const keepTextLog = textLogTakePending.value && showTextLogModal.value
+  textLogTakePending.value = false
+  closeInlinePrompts()
+  showTextLogModal.value = keepTextLog
 })
-// Same for the inline unlock prompt: opening it switches to the story tab under the cursor.
-watch(() => showUnlockModal.value || showExitUnlockModal.value, (isOpen) => {
+// Same for inline prompts: opening one switches to the story tab under the cursor.
+watch(isInlinePromptOpen, (isOpen) => {
   if (isOpen) hoveredEntity.value = null
 })
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || isDialogOpen.value)
@@ -513,14 +537,15 @@ const getSwitchTransitionGates = (entity: any, targetState: string): { code: str
 
 /** Opens the primary state-picker modal for a switch entity. */
 const openSwitchStateModal = (entity: any): void => {
+  closeInlinePrompts()
   switchUnlockModalEntity.value = entity
   switchUnlockError.value = ''
   showSwitchStateModal.value = true
 }
 
 /**
- * Called when the player selects a target state in SwitchStateModal.
- * If a gate (code/item/rule) exists, opens SwitchUnlockModal.
+ * Called when the player selects a target state in SwitchStatePanel.
+ * If a gate (code/item/rule) exists, opens SwitchUnlockPanel.
  * Otherwise sends the /switch command directly.
  */
 const handleSwitchStateSelect = (targetState: string): void => {
@@ -676,6 +701,8 @@ const extractTextLogPayload = (entity: any) => {
 
 const openTextLogFromEntity = async (entity: any) => {
   const payload = extractTextLogPayload(entity)
+  closeInlinePrompts()
+  closeSheetForInlinePrompt()
   activeTextLog.value = payload
   showTextLogModal.value = true
 
@@ -728,16 +755,19 @@ const openContainerFromEntity = (entity: any): boolean => {
       name: String(entity.name || entity.id || 'Container'),
       source: 'scene',
     }
+    closeInlinePrompts()
     unlockModalContainer.value = entity
     unlockModalError.value = ''
     showUnlockModal.value = true
     return false
   }
 
+  closeInlinePrompts()
   activeContainer.value = {
     id: String(entity.id || entity.name || '').trim(),
     name: String(entity.name || entity.id || 'Container'),
     items: normalizeContainerItems(entity.inventory || []),
+    imageUrl: entity.image_url || null,
   }
   showContainerModal.value = true
   return true
@@ -751,21 +781,21 @@ const openContainerFromInventoryItem = (item: any): boolean => {
       name: String(item.name || item.id || 'Container'),
       source: 'inventory',
     }
-    // The unlock prompt lives in the story feed, which the character sheet would cover.
-    if (showSheet.value) {
-      showSheet.value = false
-      if (sheetDirty.value) handleSheetChanged()
-    }
+    closeInlinePrompts()
+    closeSheetForInlinePrompt()
     unlockModalContainer.value = item
     unlockModalError.value = ''
     showUnlockModal.value = true
     return false
   }
 
+  closeInlinePrompts()
+  closeSheetForInlinePrompt()
   activeContainer.value = {
     id: String(item.id || item.name || '').trim(),
     name: String(item.name || item.id || 'Container'),
     items: normalizeContainerItems(item.inventory || []),
+    imageUrl: item.image_url || null,
   }
   showContainerModal.value = true
   return true
@@ -881,6 +911,7 @@ const handleExitClick = async (exit: any) => {
   if (!exitRef) return
 
   if (isExitLocked(exit)) {
+    closeInlinePrompts()
     exitUnlockModalTarget.value = { ...exit, id: exitRef, name: exit.label || 'Exit' }
     exitUnlockError.value = ''
     showExitUnlockModal.value = true
@@ -1459,6 +1490,7 @@ const canTakeTextLog = computed(() => {
 const handleTextLogTake = async () => {
   if (!activeTextLog.value?.rawEntity || isTakingTextLog.value) return
   isTakingTextLog.value = true
+  textLogTakePending.value = true
   try {
     await handleTakeDirect(activeTextLog.value.rawEntity)
   } finally {
@@ -1775,7 +1807,7 @@ usePlayAgentAutoLoop()
       :turn-error="turnError"
       :active-sequence="activeSequence"
       :adventure-title="displayAdventureTitle"
-      :has-inline-prompt="isChoicePanelOpen || showUnlockModal || showExitUnlockModal"
+      :has-inline-prompt="isChoicePanelOpen || isInlinePromptOpen"
       @send="handlePlayerInput"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"
@@ -1831,6 +1863,48 @@ usePlayAgentAutoLoop()
           @submit-code="handleExitUnlockCodeSubmit"
           @use-key-item="handleExitUnlockItemSubmit"
           @unlock-direct="handleExitUnlockDirectSubmit"
+        />
+        <ContainerPanel
+          :open="showContainerModal"
+          :title="activeContainer?.name || 'Container'"
+          :items="activeContainer?.items || []"
+          :image-url="activeContainer?.imageUrl || null"
+          :busy="containerBusy"
+          @close="closeContainerModal"
+          @take-all="handleContainerTakeAll"
+          @take-item="handleContainerTakeItem"
+          @drop-to-scene="handleContainerDropToScene"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
+        />
+        <SwitchStatePanel
+          :open="showSwitchStateModal"
+          :switch-entity="switchUnlockModalEntity"
+          @close="showSwitchStateModal = false"
+          @select-state="handleSwitchStateSelect"
+        />
+        <SwitchUnlockPanel
+          :open="showSwitchUnlockModal"
+          :switch-entity="switchUnlockModalEntity"
+          :target-state="switchUnlockTargetState"
+          :inventory-items="inventoryItems"
+          :busy="switchUnlockBusy"
+          :error-message="switchUnlockError"
+          @close="showSwitchUnlockModal = false"
+          @submit-code="handleSwitchFlipCodeSubmit"
+          @use-key-item="handleSwitchFlipItemSubmit"
+        />
+        <TextLogPanel
+          :open="showTextLogModal"
+          :game-id="props.id"
+          :title="activeTextLog?.title || 'Text Log'"
+          :format="activeTextLog?.format || 'DOCUMENT'"
+          :content="activeTextLog?.content || ''"
+          :image-url="activeTextLog?.imageUrl || null"
+          :can-take="canTakeTextLog"
+          :is-taking="isTakingTextLog"
+          @take="handleTextLogTake"
+          @close="closeTextLogModal"
         />
       </template>
     </ImmersiveGameView>
@@ -1985,53 +2059,6 @@ usePlayAgentAutoLoop()
       @confirm="handleLootDone"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
       @item-leave="hoveredEntity = null"
-    />
-
-    <ContainerModal
-      :open="showContainerModal"
-      :title="activeContainer?.name || 'Container'"
-      :items="activeContainer?.items || []"
-      :busy="containerBusy"
-      @close="closeContainerModal"
-      @take-all="handleContainerTakeAll"
-      @take-item="handleContainerTakeItem"
-      @drop-to-scene="handleContainerDropToScene"
-      @item-hover="(item, event) => handleHover(item, event)"
-      @item-leave="hoveredEntity = null"
-    />
-
-    <SwitchStateModal
-      :open="showSwitchStateModal"
-      :switch-entity="switchUnlockModalEntity"
-      :inventory-items="inventoryItems"
-      @close="showSwitchStateModal = false"
-      @select-state="handleSwitchStateSelect"
-    />
-
-    <SwitchUnlockModal
-      :open="showSwitchUnlockModal"
-      :switch-entity="switchUnlockModalEntity"
-      :target-state="switchUnlockTargetState"
-      :inventory-items="inventoryItems"
-      :busy="switchUnlockBusy"
-      :error-message="switchUnlockError"
-      @close="showSwitchUnlockModal = false"
-      @submit-code="handleSwitchFlipCodeSubmit"
-      @use-key-item="handleSwitchFlipItemSubmit"
-    />
-
-
-    <TextLogModal
-      :open="showTextLogModal"
-      :game-id="props.id"
-      :title="activeTextLog?.title || 'Text Log'"
-      :format="activeTextLog?.format || 'DOCUMENT'"
-      :content="activeTextLog?.content || ''"
-      :image-url="activeTextLog?.imageUrl || null"
-      :can-take="canTakeTextLog"
-      :is-taking="isTakingTextLog"
-      @take="handleTextLogTake"
-      @close="closeTextLogModal"
     />
 
     <AdventureGeneratorModal

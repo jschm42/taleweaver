@@ -1,0 +1,267 @@
+/*
+ * Inline prompts in the story feed: locks, switches and readables (components/game/prompts).
+ * Like the choice dialog, the box is a .tw-narration and the controls are drawn from the
+ * narration ink and the accent only, so every skin's paper (light or dark) stays readable.
+ */
+
+.tw-prompt {
+  margin-top: var(--tw-feed-gap);
+}
+
+.tw-prompt-title {
+  font-family: var(--tw-font-body);
+  font-size: 1.15em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.tw-prompt-description {
+  font-family: var(--tw-font-body);
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--tw-narration-ink) 80%, transparent);
+  white-space: pre-line;
+}
+
+.tw-prompt-hint {
+  font-family: var(--tw-font-body);
+  font-size: 0.9em;
+  color: color-mix(in srgb, var(--tw-narration-ink) 70%, transparent);
+}
+
+.tw-prompt-chip {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--tw-accent);
+  border-radius: 0.25rem;
+  color: var(--tw-narration-ink);
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.tw-prompt-close {
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  color: color-mix(in srgb, var(--tw-narration-ink) 55%, transparent);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.tw-prompt-close:hover:not(:disabled) {
+  color: var(--tw-narration-ink);
+  background: color-mix(in srgb, var(--tw-narration-ink) 10%, transparent);
+}
+
+.tw-prompt-portrait {
+  width: 5.5rem;
+  height: 5.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tw-narration-ink) 22%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  background: color-mix(in srgb, var(--tw-narration-ink) 8%, transparent);
+}
+
+/* ---------- Inputs and buttons ---------- */
+.tw-prompt-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--tw-narration-ink) 22%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  background: color-mix(in srgb, var(--tw-narration-ink) 4%, transparent);
+  color: var(--tw-narration-ink);
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tw-prompt-input::placeholder {
+  color: color-mix(in srgb, var(--tw-narration-ink) 40%, transparent);
+  letter-spacing: 0.05em;
+}
+
+.tw-prompt-input:focus {
+  border-color: var(--tw-accent);
+  box-shadow: 0 0 0 1px var(--tw-accent);
+}
+
+.tw-prompt-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--tw-label-bg);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  background: var(--tw-label-bg);
+  color: var(--tw-label-ink);
+  font-family: var(--tw-font-label);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: filter 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.tw-prompt-action:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.tw-prompt-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Secondary actions (readables: take, translate, read aloud). */
+.tw-prompt-action--ghost {
+  padding: 0.3rem 0.65rem;
+  border-color: color-mix(in srgb, var(--tw-narration-ink) 30%, transparent);
+  background: transparent;
+  color: var(--tw-narration-ink);
+  font-size: 0.65rem;
+}
+
+.tw-prompt-action--ghost:hover:not(:disabled) {
+  filter: none;
+  border-color: var(--tw-accent);
+  background: color-mix(in srgb, var(--tw-accent) 12%, transparent);
+}
+
+/* The switch's active state: shown, but not selectable. */
+.tw-choice-option.is-current,
+.tw-choice-option.is-current:disabled {
+  border-color: var(--tw-accent);
+  background: color-mix(in srgb, var(--tw-accent) 22%, transparent);
+  cursor: default;
+  opacity: 1;
+}
+
+/* ---------- Inventory items ---------- */
+.tw-prompt-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--tw-narration-ink) 22%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  background: color-mix(in srgb, var(--tw-narration-ink) 4%, transparent);
+}
+
+.tw-prompt-item-thumb {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: calc(var(--tw-narration-radius) * 0.4);
+  background: color-mix(in srgb, var(--tw-narration-ink) 8%, transparent);
+}
+
+.tw-prompt-item-name {
+  font-family: var(--tw-font-label);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tw-narration-ink);
+}
+
+.tw-prompt-tile {
+  position: relative;
+  display: flex;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tw-narration-ink) 22%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  background: color-mix(in srgb, var(--tw-narration-ink) 6%, transparent);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tw-prompt-tile:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tw-narration-ink) 50%, transparent);
+}
+
+.tw-prompt-tile.is-selected {
+  border-color: var(--tw-accent);
+  box-shadow: 0 0 0 2px var(--tw-accent);
+}
+
+/* Captions and the check mark sit on top of item images, so they keep their own contrast. */
+.tw-prompt-tile-caption {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 0.15rem 0.25rem;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-family: var(--tw-font-label);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tw-prompt-tile-check {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--tw-label-bg);
+  color: var(--tw-label-ink);
+}
+
+/* ---------- Readables ---------- */
+.tw-readable {
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--tw-narration-ink) 18%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  background: color-mix(in srgb, var(--tw-narration-ink) 4%, transparent);
+  font-family: var(--tw-font-body);
+  letter-spacing: 0.015em;
+  white-space: pre-wrap;
+}
+
+.tw-readable-note {
+  margin-bottom: 0.5rem;
+  color: var(--tw-accent);
+  font-family: var(--tw-font-label);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  white-space: normal;
+}
+
+.tw-readable--book {
+  font-family: 'Newsreader', Georgia, serif;
+  letter-spacing: 0.01em;
+}
+
+.tw-readable--scroll {
+  font-family: 'Caveat', cursive;
+  font-size: 1.2em;
+  letter-spacing: 0.02em;
+}
+
+.tw-readable--sign {
+  font-family: ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
