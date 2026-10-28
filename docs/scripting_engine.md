@@ -131,8 +131,8 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **Container Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
-| **Constructable Items** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
-| | `on_craft_success_script`, `..._text` | Executes when this constructable item is successfully crafted. The text replaces the default craft message. |
+| **Constructable Recipes** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
+| | `on_craft_success_script`, `..._text` | Executes when this recipe is successfully crafted (its `result_item_ids` are revealed). The script runs with the recipe as its entity. The text replaces the default craft message. |
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
@@ -196,7 +196,7 @@ Use them for chapter-specific behaviour instead of top-level scripts that check 
 
 ### Deterministic Guard Expressions
 
-Deterministic guards (`unlock_expression` on containers and exits, `craft_guard_expression` on constructables, `gates.expression` on switches, `completed_guard_expression` / `gameover_guard_expression` on the adventure, and `guard_expression` on sequences, sidequests, and awards) evaluate safe Python expressions against the `tw` context:
+Deterministic guards (`unlock_expression` on containers and exits, `craft_guard_expression` on constructable recipes, `gates.expression` on switches, `completed_guard_expression` / `gameover_guard_expression` on the adventure, and `guard_expression` on sequences, sidequests, and awards) evaluate safe Python expressions against the `tw` context:
 - `tw.switches.get('POWER') == 'ON'`
 - `tw.vars.get('has_badge', False) == True and tw.player.hp > 20`
 - `tw.player.has_item('KEYCARD_RED') or tw.switches.is_state('OVERRIDE', 'ACTIVE')`

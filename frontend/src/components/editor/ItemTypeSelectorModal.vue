@@ -95,8 +95,8 @@ const itemTypes: ItemTypeOption[] = [
   },
   {
     type: 'CONSTRUCTABLE',
-    label: 'Constructable',
-    description: 'A hidden item that materializes when all its ingredients (min. 2) are combined. Ingredients are consumed automatically.',
+    label: 'Constructable (Recipe)',
+    description: 'A recipe, never shown in the game: combining all its ingredients (min. 2) reveals one or more hidden result items of any type. Ingredients are consumed unless marked as kept.',
     icon: 'ra-hammer',
     color: 'text-orange-300',
     borderColor: 'border-orange-500/20',

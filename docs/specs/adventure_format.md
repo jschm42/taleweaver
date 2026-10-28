@@ -20,7 +20,7 @@ The manifest represents the complete blueprint of a generated or exported world.
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.3",
+  "version": "1.3.1",
   "adventure": { ... },
   "protagonist": { ... },
   "scenes": [ ... ],
@@ -162,7 +162,10 @@ Interactive elements, items, containers, and state machines.
 | `switch_state` | `string \| null` | Current active state for `SWITCH` objects (e.g., `"OFF"`). |
 | `switch_states` | `array \| null` | List of valid states for `SWITCH` objects (e.g., `["OFF", "ON"]`). |
 | `switch_actions` | `array \| null` | Action definitions triggered upon state transitions. |
-| `combination_ingredients`| `array` | Item IDs required to craft/assemble `CONSTRUCTABLE` objects. |
+| `combination_ingredients`| `array` | `CONSTRUCTABLE` recipes: all item IDs that must be combined (at least 2). |
+| `result_item_ids` | `array` | `CONSTRUCTABLE` recipes: IDs of the regular items that crafting reveals (at least 1, any item type except `CONSTRUCTABLE`). Results always start hidden. *(since 1.3.1)* |
+| `kept_ingredients` | `array` | `CONSTRUCTABLE` recipes: ingredient IDs that are not consumed by crafting. *(since 1.3.1)* |
+| `craft_guard_expression` | `string` | `CONSTRUCTABLE` recipes: optional guard expression that must hold for crafting. |
 | `reveals_item_id` | `string` | Item spawned or revealed upon interaction/use. |
 
 ---

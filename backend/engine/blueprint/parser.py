@@ -40,6 +40,7 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "switch": ("item", "SWITCH"),
     "mechanism": ("item", "SWITCH"),
     "weapon": ("item", "WEAPON"),
+    "recipe": ("item", "CONSTRUCTABLE"),
     "sequence": ("sequence", ""),
     "chapter": ("sequence", ""),
     "rule": ("rule", ""),
@@ -300,6 +301,7 @@ _IMPLIED_ITEM_TYPES = (
     ("switch_states", "SWITCH"),
     ("text_log_content", "READABLE"),
     ("combination_ingredients", "CONSTRUCTABLE"),
+    ("result_item_ids", "CONSTRUCTABLE"),
 )
 
 

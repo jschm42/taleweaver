@@ -16,6 +16,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_new_id,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD
 from backend.engine.image_prompt_context import clean_appearance
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -36,12 +37,27 @@ def _renamed_list(items: list[Any], old_id: str, new_id: str) -> list[Any] | Non
     return [_renamed_ref(i, old_id, new_id) for i in items]
 
 
+def _rename_recipe_refs(other: WorldEntity, old_id: str, new_id: str) -> None:
+    """Recipe results and kept ingredients live in ``metadata_json`` (upper-cased ids)."""
+    metadata = dict(other.metadata_json or {})
+    old_key, new_key = old_id.upper(), new_id.upper()
+    changed = False
+    for field in (RESULT_FIELD, KEPT_FIELD):
+        refs = metadata.get(field)
+        if isinstance(refs, list) and old_key in refs:
+            metadata[field] = [new_key if r == old_key else r for r in refs]
+            changed = True
+    if changed:
+        other.metadata_json = metadata
+
+
 def _rename_entity_refs(other: WorldEntity, old_id: str, new_id: str) -> None:
     ingredients = list(other.combination_ingredients or [])
     if old_id in ingredients:
         other.combination_ingredients = [new_id if x == old_id else x for x in ingredients]
     if other.reveals_item_id == old_id:
         other.reveals_item_id = new_id
+    _rename_recipe_refs(other, old_id, new_id)
     renamed_inventory = _renamed_list(list(other.inventory or []), old_id, new_id)
     if renamed_inventory is not None:
         other.inventory = renamed_inventory

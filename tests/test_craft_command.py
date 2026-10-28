@@ -62,14 +62,14 @@ async def _seed(db, *, battery_in_inventory: bool = True, lantern_meta: dict | N
             _object("TORCH", "Torch", is_in_inventory=True),
             _object("ROPE", "Rope", is_in_inventory=True),
             _object("FAR_AWAY", "Far Away Gear", current_scene_id="ELSEWHERE"),
+            _object("LANTERN", "Lantern", is_hidden=True, image_url="/data/lantern.png"),
             _object(
-                "LANTERN",
-                "Lantern",
+                "LANTERN_RECIPE",
+                "Lantern recipe",
                 item_type="CONSTRUCTABLE",
                 is_hidden=True,
-                image_url="/data/lantern.png",
                 combination_ingredients=["BATTERY", "TORCH"],
-                metadata_json=lantern_meta or {},
+                metadata_json={"result_item_ids": ["LANTERN"], **(lantern_meta or {})},
             ),
         ]
     )

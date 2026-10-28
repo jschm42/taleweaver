@@ -51,10 +51,10 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
             "on_unlock_failure",
             "container unlock fails or is blocked by guard (only CONTAINER items)",
         ),
-        ("on_craft_success", "constructable item is crafted (only CONSTRUCTABLE items)"),
+        ("on_craft_success", "the recipe is crafted (only CONSTRUCTABLE recipes)"),
         (
             "on_craft_failure",
-            "constructable item crafting fails or is blocked by guard (only CONSTRUCTABLE items)",
+            "recipe crafting fails or is blocked by guard (only CONSTRUCTABLE recipes)",
         ),
     ),
     "SCENES": (

@@ -57,6 +57,7 @@ _CONTAINER_SCRIPT_FIELDS = (
     "on_unlock_success_script", "on_unlock_success_text", "on_unlock_failure_script", "on_unlock_failure_text",
 )  # fmt: skip
 _CONSTRUCTABLE_FIELDS = (
+    "result_item_ids", "kept_ingredients",
     "craft_guard_expression", "on_craft_success_script", "on_craft_success_text",
     "on_craft_failure_script", "on_craft_failure_text",
 )  # fmt: skip
@@ -147,6 +148,13 @@ def _container_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
 
 def _constructable_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
     _merge_fields(obj, metadata, _CONSTRUCTABLE_FIELDS)
+
+
+def recipe_metadata(obj: dict[str, Any]) -> dict[str, Any]:
+    """Results, kept ingredients, guard and hooks of a CONSTRUCTABLE recipe definition."""
+    metadata = dict(_dict_at(obj, "metadata_json"))
+    _constructable_metadata(obj, metadata)
+    return metadata
 
 
 def normalize_switch_states(raw_states: Any) -> list[str]:
@@ -276,13 +284,37 @@ async def _object_image(
     )
     if not needs_image(image_url):
         return image_url
-    if ctx.user and ctx.gen_items:
+    # Recipes never appear in the world, so they get the placeholder instead of an image.
+    if ctx.user and ctx.gen_items and not _is_recipe_def(obj):
         image_url = await _generate_item_image(ctx, obj, *position)
     if not needs_image(image_url):
         return image_url
     item_type = str(obj.get("item_type") or "PICKABLE").upper()
     safe_id = slugify(str(obj.get("id") or "")) or "entity"
     return await placeholder_image(ctx, safe_id, category=f"ITEM_{item_type}", subdir="entities")
+
+
+def _is_recipe_def(obj: dict[str, Any]) -> bool:
+    return str(obj.get("item_type") or "").upper() == "CONSTRUCTABLE"
+
+
+def recipe_result_ids(objects: list[dict[str, Any]]) -> set[str]:
+    """Ids of all items produced by a CONSTRUCTABLE recipe; they start hidden."""
+    results: set[str] = set()
+    for obj in objects:
+        if not _is_recipe_def(obj):
+            continue
+        metadata = _dict_at(obj, "metadata_json")
+        raw = obj.get("result_item_ids") or metadata.get("result_item_ids") or []
+        results.update(str(r).strip() for r in raw if str(r or "").strip())
+    return results
+
+
+def starts_hidden(obj: dict[str, Any], result_ids: set[str]) -> bool:
+    """Recipes and recipe results are always hidden; everything else follows ``is_hidden``."""
+    if _is_recipe_def(obj) or str(obj.get("id") or "") in result_ids:
+        return True
+    return bool(obj.get("is_hidden", False))
 
 
 def _give_to_avatar(placement: ObjectPlacement, item_id: str) -> None:
@@ -303,6 +335,7 @@ def _object_entity(
     numbers: dict[str, Optional[int]],
     held: bool,
     default_scene_id: str,
+    hidden: bool,
 ) -> WorldEntity:
     return WorldEntity(
         id=obj["id"],
@@ -318,7 +351,7 @@ def _object_entity(
         image_url=image_url,
         item_type=obj.get("item_type", "PICKABLE"),
         wearable_slots=obj.get("wearable_slots"),
-        is_hidden=obj.get("is_hidden", False),
+        is_hidden=hidden,
         reveal_rule=obj.get("reveal_rule") or None,
         unlock_rule=None,
         is_in_inventory=held,
@@ -343,6 +376,7 @@ async def persist_objects(
     image_cache: dict[str, str] = {}
     resolved: dict[str, dict[str, Any]] = {}
     total = len(objects)
+    result_ids = recipe_result_ids(objects)
     for idx, obj in enumerate(objects, start=1):
         if obj["id"] in ctx.seen_entity_ids:
             continue
@@ -361,6 +395,7 @@ async def persist_objects(
             image_cache[obj["id"]] = image_url
         processed.append(obj)
         held = in_avatar or obj["id"] in placement.npc_item_ids
-        ctx.db.add(_object_entity(ctx, obj, image_url, numbers, held, default_scene_id))
+        hidden = starts_hidden(obj, result_ids)
+        ctx.db.add(_object_entity(ctx, obj, image_url, numbers, held, default_scene_id, hidden))
         await ctx.commit_and_refresh()
     return resolved

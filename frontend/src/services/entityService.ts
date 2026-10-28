@@ -30,6 +30,8 @@ export interface EntityEditData {
   text_log_format?: string
   wearable_slots?: string[]
   combination_ingredients?: string[]
+  result_item_ids?: string[]
+  kept_ingredients?: string[]
   reveal_rule?: string | null
   is_hidden?: boolean | null
   spatial_position?: string | null
@@ -115,6 +117,8 @@ export interface EntityCreateData {
   metadata_json?: Record<string, any>
   wearable_slots?: string[]
   combination_ingredients?: string[]
+  result_item_ids?: string[]
+  kept_ingredients?: string[]
   stat_modifier_strength?: number
   inventory?: any[]
   on_pickup_script?: string

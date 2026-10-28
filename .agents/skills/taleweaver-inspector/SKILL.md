@@ -131,7 +131,7 @@ poetry run python scripts/inspect_state.py show-session <session_id> --json
 2. Run `poetry run python scripts/inspect_state.py show-session <session_id> --entities` to check if `is_in_inventory: True` or `is_hidden: False` is recorded in `entity_states` overrides.
 
 ### Scenario B: *"Item was combined or revealed but is not visible in-game"*
-1. Run `poetry run python scripts/inspect_state.py show-adventure <template_id> --entities` to inspect its defined `item_type` (`CONSTRUCTABLE`, `PICKABLE`), `combination_ingredients`, and `reveal_rule`.
+1. Run `poetry run python scripts/inspect_state.py show-adventure <template_id> --entities` to inspect its defined `item_type` and `reveal_rule`. Crafted items are produced by a separate `CONSTRUCTABLE` recipe: check the recipe's `combination_ingredients` and its `metadata_json.result_item_ids` / `kept_ingredients`.
 2. Run `poetry run python scripts/inspect_state.py show-session <session_id> --entities` to verify whether the session has overridden `is_hidden` to `False` and what `current_scene_id` it was relocated to.
 
 ### Scenario C: *"Exit won't unlock / lock state mismatch"*

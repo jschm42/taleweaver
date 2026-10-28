@@ -285,6 +285,10 @@ def _drop_missing_references(
     missing = [i for i in values.get("combination_ingredients") or [] if i not in objects]
     if missing:
         warnings.append(f"Crafting ingredients missing in this adventure: {', '.join(missing)}.")
+    metadata = values.get("metadata_json") if isinstance(values.get("metadata_json"), dict) else {}
+    missing = [r for r in metadata.get("result_item_ids") or [] if r not in objects]
+    if missing:
+        warnings.append(f"Crafting results missing in this adventure: {', '.join(missing)}.")
 
 
 def _inventory_item_id(item: Any) -> Optional[str]:

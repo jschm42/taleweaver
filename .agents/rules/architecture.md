@@ -83,7 +83,7 @@ graph TD
   * **Containers & Exits (Deterministic Unlock Guard)**: Validate if `item_to_unlock` is in inventory, `unlock_code` matches, or if deterministic guard `unlock_expression` evaluates to truthy. Execute `on_unlock_success` or `on_unlock_failure` scripts accordingly.
   * **Exits & Movement**: Validate exit locks, destination scene graph connectivity, and fire transition hooks (`on_leave_scene`, `on_open_exit`, `on_exit_used`, `on_enter_scene`) while preventing accidental teleports from hypothetical chat.
   * **Switches**: Verify state transitions match allowed `switch_states`.
-  * **Constructables**: Validate that all `combination_ingredients` are present in player inventory and verify `craft_guard_expression`.
+  * **Constructables**: A `CONSTRUCTABLE` is a recipe (meta item, never visible). Validate that all `combination_ingredients` are reachable and verify `craft_guard_expression`; then consume the ingredients (except `kept_ingredients`) and reveal the hidden `result_item_ids`. Hidden craft-only results (no `reveal_rule`, not another item's `reveals_item_id`) may not be spawned or revealed by the GM.
   * **Quests & Awards (Deterministic Hard Rules & Scripting Guards)**: Validate LLM-proposed quest completions and award grants against defined hard rules (`required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`). If any configured hard rule is unmet, the completion/grant is reverted and recorded as a rule violation, forcing Pass 2 to narrate the unmet condition.
   * **Hidden Entities**: Require explicit search/inspection actions before revealing hidden NPCs or items.
 * **Reversion Mechanism**: Any invalid state change is immediately **reverted** back to its pre-turn database state.

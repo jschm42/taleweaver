@@ -22,8 +22,8 @@ from backend.models.user import User
 
 
 def test_adventure_format_current_version():
-    """Adventure format current version must be 1.3."""
-    assert CURRENT_VERSION == "1.3"
+    """Adventure format current version must be 1.3.1 (CONSTRUCTABLE recipes)."""
+    assert CURRENT_VERSION == "1.3.1"
 
 
 def test_is_version_newer_logic():
@@ -68,12 +68,22 @@ def test_legacy_format_detection():
     assert status["is_legacy_format"] is True
     assert status["can_start"] is False
 
-    # 2. Modern 1.3 template with sequences
+    # 2. 1.3 predates CONSTRUCTABLE recipes (clean break in 1.3.1)
+    pre_recipe_tpl = AdventureTemplate(
+        id="pre-recipe-1",
+        title="Pre-recipe Quest",
+        version="1.3.0",
+        original_manifest={"version": "1.3", "sequences": [{"id": "seq1", "name": "Act 1"}]},
+        sequences=[{"id": "seq1", "name": "Act 1"}],
+    )
+    assert is_legacy_template(pre_recipe_tpl) is True
+
+    # 3. Modern 1.3.1 template with sequences
     modern_tpl = AdventureTemplate(
         id="modern-1",
         title="New Quest",
-        version="1.3.0",
-        original_manifest={"version": "1.3", "sequences": [{"id": "seq1", "name": "Act 1"}]},
+        version="1.3.1",
+        original_manifest={"version": "1.3.1", "sequences": [{"id": "seq1", "name": "Act 1"}]},
         sequences=[{"id": "seq1", "name": "Act 1"}],
     )
     assert is_legacy_template(modern_tpl) is False
@@ -159,8 +169,8 @@ def test_is_legacy_session_logic():
     modern_tpl = AdventureTemplate(
         id="tpl-modern-sess",
         title="Modern Quest",
-        version="1.3.0",
-        original_manifest={"version": "1.3", "sequences": [{"id": "s1"}]},
+        version="1.3.1",
+        original_manifest={"version": "1.3.1", "sequences": [{"id": "s1"}]},
         sequences=[{"id": "s1"}],
     )
     assert is_legacy_session(template=modern_tpl) is False
@@ -183,7 +193,7 @@ def test_is_legacy_session_logic():
         session_id="sess-mod",
         entity_states={
             AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: {
-                "original_manifest": {"version": "1.3", "sequences": [{"id": "s1"}]},
+                "original_manifest": {"version": "1.3.1", "sequences": [{"id": "s1"}]},
             }
         },
     )

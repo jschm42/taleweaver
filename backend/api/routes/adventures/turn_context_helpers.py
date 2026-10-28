@@ -55,7 +55,8 @@ def apply_entity_overrides(entities: list[WorldEntity], overrides: dict[str, Any
                 setattr(ent, attribute, override[key])
         if "is_hidden" in override:
             ent.is_hidden = override["is_hidden"]
-        elif str(ent.item_type or "").upper() == "CONSTRUCTABLE":
+        # CONSTRUCTABLE recipes are meta items and never appear in the world.
+        if str(ent.item_type or "").upper() == "CONSTRUCTABLE":
             ent.is_hidden = True
         ent.is_defeated = bool(override.get("is_defeated", False))
 

@@ -265,19 +265,34 @@ defeat: INES
 
 ### A crafted item
 
+Crafting needs two parts: the item that gets made, and a **recipe** (item type `CONSTRUCTABLE`) that says what to combine. The recipe itself never appears in the game. The crafted item is a regular item of any type: a weapon, a readable, a switch, and so on.
+
 ```text
 [Item: ANTIDOTE] Antidote
-combine: NIGHTSHADE_ROOT + SILVER_SALT
+in: LAB
+type: CONSUMABLE
+heal: 30
+
+[Recipe: ANTIDOTE_RECIPE] Antidote recipe
+combine: NIGHTSHADE_ROOT + SILVER_SALT + MORTAR
+keep: MORTAR
+results: ANTIDOTE
 craft_guard: tw.player.has_item('ALCHEMIST_NOTES')
 on_craft_fail_text: You don't know the proportions yet.
 ```
 
+- `[Recipe: ID]` is short for `[Item: ID]` with `type: CONSTRUCTABLE`. `combine:` and `results:` also imply that type.
+- `combine:` lists **all** ingredients (at least 2).
+- `results:` lists the item(s) the recipe produces (at least 1). Results start **hidden** automatically, so you don't need `hidden: yes`.
+- `keep:` lists ingredients that are not used up, such as tools. Every other ingredient is consumed.
+- Results usually have no `reveal:`, so crafting is the only way to get them. If a result also has a `reveal:` (or another item `reveals:` it), it can turn up that way too. A recipe can't be crafted again once all of its results are visible.
+
 Players can craft in two ways:
 
-- **Combine workbench (deterministic):** the *Combine* entry in the context menu of any inventory or scene item opens a workbench in the story feed. The player puts items on it and presses *Combine* (the `/craft A | B` command). It succeeds only when the chosen items are **exactly** the ingredients of a hidden constructable and all of them are carried or in the current scene. A wrong or extra item fails without using anything up. No GM call is involved.
+- **Combine workbench (deterministic):** the *Combine* entry in the context menu of any inventory or scene item opens a workbench in the story feed. The player puts items on it and presses *Combine* (the `/craft A | B` command). It succeeds only when the chosen items are **exactly** the ingredients of a recipe that still has hidden results, and all of them are carried or in the current scene. A wrong or extra item fails without using anything up. No GM call is involved.
 - **Chat (GM-judged):** the player describes the attempt (*"I mix the root with the salt"*) or uses `/combine`. The GM decides whether it is a combine attempt; the engine still enforces the ingredient rules.
 
-Both ways run the `craft_guard` and the craft success and failure scripts. An `on_craft_success_text` replaces the default *"You combine … to create …!"* message, and an `on_craft_fail_text` replaces the default message when the `craft_guard` blocks. A crafted item goes into the inventory when all ingredients were carried, otherwise it appears in the current scene. The workbench offers every item, so it never gives away which items are ingredients.
+Both ways run the `craft_guard` and the craft success and failure scripts. An `on_craft_success_text` replaces the default *"You combine … to create …!"* message, and an `on_craft_fail_text` replaces the default message when the `craft_guard` blocks. The result items go into the inventory when all ingredients were carried, otherwise they appear in the current scene. The workbench offers every item, so it never gives away which items are ingredients.
 
 ### A doom clock with a loss condition
 

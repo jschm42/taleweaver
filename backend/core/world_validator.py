@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 from backend.core.script_validator import check_scripts_and_guards
-from backend.core.world_validation import entities, progression, story, topology
+from backend.core.world_validation import entities, progression, recipes, story, topology
 from backend.core.world_validation.context import ValidationContext
 from backend.schemas.validation import ValidationFinding
 
@@ -30,7 +30,7 @@ CHECKS: tuple[Check, ...] = (
     progression.check_key_progression,
     entities.check_item_references,
     entities.check_container_inventory,
-    entities.check_constructable_ingredients,
+    recipes.check_constructable_recipes,
     entities.check_switch_state_consistency,
     entities.check_npc_stats,
     entities.check_npc_references,

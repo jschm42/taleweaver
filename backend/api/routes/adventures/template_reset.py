@@ -6,6 +6,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.engine.image_prompt_context import clean_appearance
+from backend.engine.manifest_apply.objects import recipe_metadata, recipe_result_ids, starts_hidden
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldScene
@@ -32,6 +33,8 @@ def _container_unlock(obj_def: dict[str, Any]) -> dict[str, str]:
 
 
 def _object_metadata(obj_def: dict[str, Any], item_type: str) -> dict[str, Any]:
+    if item_type == "CONSTRUCTABLE":
+        return recipe_metadata(obj_def)
     if item_type != "CONTAINER":
         return {}
     lock = _container_unlock(obj_def)
@@ -67,7 +70,10 @@ def _npc_from_def(
 
 
 def _object_from_def(
-    obj_def: dict[str, Any], template_id: str, images: dict[str, Optional[str]]
+    obj_def: dict[str, Any],
+    template_id: str,
+    images: dict[str, Optional[str]],
+    result_ids: set[str],
 ) -> WorldEntity:
     item_type = str(obj_def.get("item_type") or "PICKABLE").upper()
     return WorldEntity(
@@ -82,7 +88,7 @@ def _object_from_def(
         spatial_position=obj_def.get("spatial_position"),
         item_type=item_type,
         wearable_slots=obj_def.get("wearable_slots") or [],
-        is_hidden=bool(obj_def.get("is_hidden", False)),
+        is_hidden=starts_hidden(obj_def, result_ids),
         reveal_rule=obj_def.get("reveal_rule") or None,
         unlock_rule=None,
         is_portable=bool(obj_def.get("is_portable", True)),
@@ -137,7 +143,9 @@ async def rebuild_template_world(db: AsyncSession, adv: AdventureTemplate) -> No
         db.add(_scene_from_def(scene_def, template_id, scene_images))
     for npc_def in _with_ids(manifest.get("npcs", [])):
         db.add(_npc_from_def(npc_def, template_id, entity_images))
-    for obj_def in _with_ids(manifest.get("objects", [])):
-        db.add(_object_from_def(obj_def, template_id, entity_images))
+    objects = _with_ids(manifest.get("objects", []))
+    result_ids = recipe_result_ids(objects)
+    for obj_def in objects:
+        db.add(_object_from_def(obj_def, template_id, entity_images, result_ids))
 
     await _restore_protagonist(db, template_id, manifest.get("protagonist", {}))

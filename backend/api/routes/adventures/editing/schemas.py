@@ -90,6 +90,8 @@ class EntityUpdateRequest(BaseModel):
     on_unlock_failure_text: Optional[str] = None
     on_read_script: Optional[str] = None
     on_read_text: Optional[str] = None
+    result_item_ids: Optional[list[str]] = None
+    kept_ingredients: Optional[list[str]] = None
     craft_guard_expression: Optional[str] = None
     on_craft_success_script: Optional[str] = None
     on_craft_success_text: Optional[str] = None
@@ -149,6 +151,8 @@ class EntityCreateRequest(BaseModel):
     metadata_json: Optional[dict[str, Any]] = None
     wearable_slots: Optional[list[str]] = None
     combination_ingredients: Optional[list[str]] = None
+    result_item_ids: Optional[list[str]] = None
+    kept_ingredients: Optional[list[str]] = None
     stat_modifier_strength: Optional[int] = None
     inventory: Optional[list] = None
     is_hidden: Optional[bool] = None

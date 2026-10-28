@@ -45,7 +45,8 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Scene: ID] Name` | `decor`, `on_enter`, `on_enter_text`, `on_leave` |
 | `[Exit: A -> B] label` | `code`, `key_item`, `rule`, `guard`, `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |
 | `[NPC: ID] Name` | `in`, `type`, `hp`, `hidden`, `reveal`, `inventory`, `attack` (`passive`/`on_sight`), `attack_when_holding`, `attack_guard`, `killable`, `on_defeat`, `on_meet`, `on_interact` |
-| `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_guard`, `contains`, `combine` (`A + B`), `reveals`, `bonus` (`str+2`), `damage`, `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read` |
+| `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_guard`, `contains`, `reveals`, `bonus` (`str+2`), `damage`, `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read` |
+| `[Recipe: ID] Name` | `combine` (`A + B`), `results` (crafted item IDs), `keep` (ingredients not consumed), `craft_guard`, `on_craft`, `on_craft_fail_text` |
 | `[Switch: ID] Name` | `states`, `initial`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: …`, `outcome: B -> flag: KEY; unlock_container: ID` |
 | `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `on_start`, `on_end` |
 | `[Rule: ID] condition` | `guard`, `script`, `text`, `max` |
@@ -106,7 +107,7 @@ Leave descriptions, scene details, minor NPCs and stats as **hints or open**, so
 | **CONTAINER** objects | Same locks as exits (`code`, `unlock_item`, `unlock_guard`); `contains` lists the items inside. |
 | **READABLE** objects | Notes, books, scrolls, signs. `text:` holds at most **500 characters**. This is where clues live. |
 | **SWITCH** objects | Levers, dials, lenses, valves: 2+ named states. Transitions can need a code, item or guard. Outcomes set story flags or unlock containers. To open an exit, guard it on the flag or call `tw.exits.unlock('A', 'B')` in the transition's script. |
-| **CONSTRUCTABLE** items | `combine: A + B`; hidden until crafted; optional `craft_guard`. Players craft deterministically on the in-game Combine workbench (exact ingredient set) or via chat (GM-judged). |
+| **CONSTRUCTABLE** recipes | A recipe is a meta item that never appears in the game: `[Recipe: ID]` with `combine: A + B`, `results: X` (one or more regular items of any type, hidden automatically) and optional `keep: A` (tools that are not consumed) and `craft_guard`. Players craft deterministically on the in-game Combine workbench (exact ingredient set) or via chat (GM-judged). |
 | **Hidden** NPCs and objects | `hidden: yes` + `reveal:` (searching, an event, a script). Good for secret rooms and late reveals. |
 | **Combat** | d20 turn-based fights, NPC abilities, `attack: on_sight`, NPCs that attack once a condition holds (`attack_when_holding`, `attack_after_scene`, `attack_guard`). |
 | **Scripts** (Event Scripts setting ON) | Hooks on enter/leave scene, pickup, read, equip, unlock, defeat, sequence start/end, every turn, and **interaction** with any object or NPC (also fixed objects). They can set variables, move NPCs, lock or unlock exits, hand over items, damage, win or lose. |
@@ -145,7 +146,7 @@ Put a line in the premise like **"Design rule: no counting puzzles, no plain-tex
 2. **Reading people**: an NPC only helps when the player uses information found elsewhere (their secret, their debt, their dead brother). Implement it as a `[Rule]` with a `guard:` on the evidence (`tw.player.has_item('BROTHERS_LETTER')`) so lucky guesses do not count.
 3. **Interrogation / confession dialog**: a choice dialog where the correct accusation needs the right evidence. Answer options that require evidence stay hidden until the player has it, wrong accusations cost trust or HP, and lies are remembered in a variable.
 4. **Mechanism with meaning**: a `[Switch]` whose correct state follows from the lore, not from trial and error (the lighthouse lens must be WHITE because ships steer by white; the log shows it was RED on every wreck night). Gate the critical transition with a `guard` so brute-forcing a lever does not solve the chapter.
-5. **Crafting from insight**: a CONSTRUCTABLE item whose recipe has to be deduced (an antidote from the alchemist's notes + an ingredient only the villain uses).
+5. **Crafting from insight**: a CONSTRUCTABLE recipe whose ingredients have to be deduced (an antidote from the alchemist's notes + an ingredient only the villain uses).
 6. **Moral dilemma with consequence**: a choice dialog whose answers set variables that change later chapters (who survives, who helps, which ending text you get), while every branch stays winnable.
 7. **Reversal puzzle**: what the player was told is the solution is the trap; the twist reveals the real solution (see below).
 

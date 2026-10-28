@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from backend.api.routes.adventures.guardrails.base import item_id_upper
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.prompts import HIDDEN_ENTITY_DISCOVERY_SYSTEM_PROMPT
+from backend.engine.crafting_recipes import craft_only_result_ids, is_recipe
 from backend.engine.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
@@ -59,9 +60,11 @@ class RevealGuardMixin:
         return bool(ent.is_hidden)
 
     def _hidden_scene_entities(self, entities: list[WorldEntity]) -> list[WorldEntity]:
+        """Hidden scene entities that may be discovered; recipes and craft-only results never."""
         contained = AdventureLogic.collect_container_item_ids(
             [{"item_type": e.item_type, "inventory": e.inventory} for e in entities]
         )
+        craft_only = craft_only_result_ids(entities)
         return [
             e
             for e in entities
@@ -69,7 +72,8 @@ class RevealGuardMixin:
             and e.current_scene_id == self.state.current_scene_id
             and not getattr(e, "is_in_inventory", False)
             and str(e.id) not in contained
-            and str(e.item_type or "").upper() != "CONSTRUCTABLE"
+            and not is_recipe(e)
+            and e.id.upper() not in craft_only
             and self._is_entity_hidden_now(e)
         ]
 

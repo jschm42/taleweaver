@@ -136,6 +136,8 @@ const editForm = ref({
   entity_id: '',
   wearable_slots_input: [] as string[],
   combination_ingredients_input: [] as string[],
+  result_item_ids_input: [] as string[],
+  kept_ingredients_input: [] as string[],
   reveal_rule: '',
   is_hidden: false,
   spatial_position: '',
@@ -306,6 +308,8 @@ function openCreateNpc(targetSceneId?: string) {
     entity_id: candidateId,
     wearable_slots_input: [],
     combination_ingredients_input: [],
+    result_item_ids_input: [],
+    kept_ingredients_input: [],
     reveal_rule: '',
     is_hidden: false,
     spatial_position: '',
@@ -381,6 +385,8 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
     entity_id: defaultId,
     wearable_slots_input: preselectedSlots,
     combination_ingredients_input: [],
+    result_item_ids_input: [],
+    kept_ingredients_input: [],
     reveal_rule: '',
     is_hidden: false,
     spatial_position: '',
@@ -1070,6 +1076,12 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     combination_ingredients_input: Array.isArray(selectedObject?.combination_ingredients)
       ? [...selectedObject.combination_ingredients]
       : (metadata?.combination_ingredients ? [...metadata.combination_ingredients] : []),
+    result_item_ids_input: Array.isArray(selectedObject?.result_item_ids ?? metadata?.result_item_ids)
+      ? [...(selectedObject?.result_item_ids ?? metadata.result_item_ids)]
+      : [],
+    kept_ingredients_input: Array.isArray(selectedObject?.kept_ingredients ?? metadata?.kept_ingredients)
+      ? [...(selectedObject?.kept_ingredients ?? metadata.kept_ingredients)]
+      : [],
     reveal_rule: type === 'npc' ? String(selectedNpc?.reveal_rule || '') : String(selectedObject?.reveal_rule || metadata?.reveal_rule || ''),
     is_hidden: type === 'npc' ? !!(selectedNpc?.is_hidden ?? false) : !!(selectedObject?.is_hidden ?? metadata?.is_hidden ?? false),
     spatial_position: type === 'npc' ? String(selectedNpc?.spatial_position || '') : String(selectedObject?.spatial_position || metadata?.spatial_position || ''),
@@ -1221,6 +1233,8 @@ async function saveEntityText(data: any) {
           inventory: data.inventory || [],
           wearable_slots: data.wearable_slots || undefined,
           combination_ingredients: data.combination_ingredients || undefined,
+          result_item_ids: itemType === 'CONSTRUCTABLE' ? data.result_item_ids : undefined,
+          kept_ingredients: itemType === 'CONSTRUCTABLE' ? data.kept_ingredients : undefined,
           stat_modifier_strength: data.stat_modifier_strength || undefined,
           is_hidden: data.is_hidden,
           reveal_rule: data.reveal_rule || undefined,
@@ -1370,6 +1384,8 @@ async function saveEntityText(data: any) {
         : undefined,
       wearable_slots: editEntityContext.value.type === 'object' ? data.wearable_slots : undefined,
       combination_ingredients: editEntityContext.value.type === 'object' ? data.combination_ingredients : undefined,
+      result_item_ids: editEntityContext.value.type === 'object' ? data.result_item_ids : undefined,
+      kept_ingredients: editEntityContext.value.type === 'object' ? data.kept_ingredients : undefined,
       spatial_position: ['npc', 'object'].includes(editEntityContext.value.type) ? data.spatial_position : undefined,
       reveals_item_id: editEntityContext.value.type === 'object' ? data.reveals_item_id : undefined,
       pickup_trigger_mode: editEntityContext.value.type === 'object' ? (data.pickup_trigger_mode || 'silent') : undefined,

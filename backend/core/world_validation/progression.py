@@ -7,6 +7,8 @@ A locked exit or container whose key item never becomes obtainable is a softlock
 Assumptions (deliberately optimistic, so only provable dead ends are reported):
 - code/rule/expression locks are solvable; only item locks are modelled,
 - hidden items can be revealed, NPCs hand over or drop what they carry,
+- recipe results appear once all ingredients are obtainable; results without a reveal
+  path of their own (reveal rule, another item's reveals_item_id) appear only that way,
 - scripts are not executed (findings mention that a script could still grant the key).
 """
 
@@ -32,8 +34,16 @@ from backend.schemas.validation import ValidationFinding
 class _World:
     ctx: ValidationContext
     holders: dict[str, str]  # item id -> entity id whose inventory lists it
+    recipes: dict[str, list[list[str]]] = field(default_factory=dict)  # result -> ingredients
+    craft_only: set[str] = field(default_factory=set)  # results without another reveal path
     scenes: set[str] = field(default_factory=set)
     items: set[str] = field(default_factory=set)
+
+    def craftable(self, eid: str) -> bool:
+        return any(
+            len(ingredients) >= 2 and all(i in self.items for i in ingredients)
+            for ingredients in self.recipes.get(eid, [])
+        )
 
     def exit_passable(self, exit_: dict[str, Any]) -> bool:
         key = str(exit_.get("item_to_unlock") or "").strip()
@@ -49,9 +59,13 @@ class _World:
         if entity is None or eid in visiting:
             return False
         visiting = visiting | {eid}
+        # Recipes are meta items; their results appear once all ingredients are obtainable.
         if item_type(entity) == "CONSTRUCTABLE":
-            ingredients = ref_ids(entity.get("combination_ingredients"))
-            return len(ingredients) >= 2 and all(i in self.items for i in ingredients)
+            return False
+        if self.craftable(eid):
+            return True
+        if eid in self.craft_only:
+            return False
 
         location = str(entity.get("current_scene_id") or "").strip()
         if location in self.scenes:
@@ -72,6 +86,32 @@ def _holders(ctx: ValidationContext) -> dict[str, str]:
     return holders
 
 
+def _recipes(ctx: ValidationContext) -> dict[str, list[list[str]]]:
+    recipes: dict[str, list[list[str]]] = {}
+    for entity in ctx.entities:
+        if item_type(entity) != "CONSTRUCTABLE":
+            continue
+        ingredients = ref_ids(entity.get("combination_ingredients"))
+        for result in ref_ids(entity_field(entity, "result_item_ids")):
+            recipes.setdefault(result, []).append(ingredients)
+    return recipes
+
+
+def _craft_only(ctx: ValidationContext, results: set[str]) -> set[str]:
+    """Results that have no reveal rule and are not revealed by another item."""
+    revealed = {
+        str(e.get("reveals_item_id") or "").strip()
+        for e in ctx.entities
+        if item_type(e) != "CONSTRUCTABLE"
+    }
+    with_rule = {
+        rid
+        for rid in results
+        if str((ctx.entities_by_id.get(rid) or {}).get("reveal_rule") or "").strip()
+    }
+    return results - revealed - with_rule
+
+
 def _starting_items(ctx: ValidationContext) -> set[str]:
     equipment = ctx.protagonist.get("equipment")
     entries = list(ctx.protagonist.get("inventory") or [])
@@ -80,7 +120,14 @@ def _starting_items(ctx: ValidationContext) -> set[str]:
 
 
 def _explore(ctx: ValidationContext) -> _World:
-    world = _World(ctx=ctx, holders=_holders(ctx), items=_starting_items(ctx))
+    recipes = _recipes(ctx)
+    world = _World(
+        ctx=ctx,
+        holders=_holders(ctx),
+        recipes=recipes,
+        craft_only=_craft_only(ctx, set(recipes)),
+        items=_starting_items(ctx),
+    )
     while True:
         scenes = reachable_scenes(
             ctx.start_scene_id, build_adjacency(ctx.exits, passable=world.exit_passable)

@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any, Optional
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -17,6 +18,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_scene_ref,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.engine.crafting_recipes import is_recipe, recipe_results
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity
 
@@ -143,8 +145,24 @@ def _update_columns(item: WorldEntity, payload: EntityUpdateRequest) -> None:
         item.reveals_item_id = str(payload.reveals_item_id or "").strip().upper() or None
 
 
+async def hide_recipe_results(db: AsyncSession, template_id: str, recipe: WorldEntity) -> None:
+    """Items produced by a recipe start hidden; crafting (or their own reveal path) reveals them."""
+    result_ids = recipe_results(recipe) if is_recipe(recipe) else []
+    if not result_ids:
+        return
+    rows = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            func.upper(WorldEntity.id).in_(result_ids),
+        )
+    )
+    for result in rows.scalars().all():
+        result.is_hidden = True
+
+
 def _update_visibility(item: WorldEntity, payload: EntityUpdateRequest, type_changed: bool) -> None:
-    """CONSTRUCTABLEs always start hidden and reveal on construction, not by rule."""
+    """CONSTRUCTABLE recipes are meta items: always hidden, never revealed by a rule."""
     if item.item_type == "CONSTRUCTABLE":
         item.is_hidden = True
         item.reveal_rule = None
@@ -176,3 +194,4 @@ async def update_item(
     _update_metadata(item, payload, item_type)
     _update_columns(item, payload)
     _update_visibility(item, payload, new_type is not None)
+    await hide_recipe_results(db, template_id, item)

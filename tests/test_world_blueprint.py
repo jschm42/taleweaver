@@ -284,3 +284,26 @@ async def test_validate_endpoint_reports_issues(auth_client: AsyncClient):
     assert body["has_tags"] is True
     assert body["counts"] == {"npc": 1}
     assert "expected a whole number" in body["errors"][0]["message"]
+
+
+def test_recipe_tag_maps_ingredients_results_and_kept_items():
+    # Arrange
+    text = (
+        "A plague village.\n\n"
+        "[Item: ANTIDOTE] Antidote\ntype: CONSUMABLE\n\n"
+        "[Recipe: ANTIDOTE_RECIPE] Antidote recipe\n"
+        "combine: ROOT + SALT + MORTAR\nkeep: mortar\nresults: ANTIDOTE\n\n"
+        "[Item: CURE] Cure\nresult: ANTIDOTE\n"
+    )
+
+    # Act
+    blueprint, _missing = analyze_blueprint(text)
+
+    # Assert: `[Recipe]` and `results:` both imply CONSTRUCTABLE.
+    assert blueprint.errors == []
+    recipe, cure = blueprint.of_kind("item")[1:]
+    assert recipe.fixed()["item_type"] == "CONSTRUCTABLE"
+    assert recipe.fixed()["combination_ingredients"] == ["ROOT", "SALT", "MORTAR"]
+    assert recipe.fixed()["kept_ingredients"] == ["MORTAR"]
+    assert recipe.fixed()["result_item_ids"] == ["ANTIDOTE"]
+    assert cure.fixed()["item_type"] == "CONSTRUCTABLE"

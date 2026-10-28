@@ -19,6 +19,7 @@ from backend.api.routes.adventures.turn_context_helpers import (
     resolve_sequence_guidance,
 )
 from backend.core.llm_logger import log_structured_event
+from backend.engine.crafting_recipes import is_recipe
 from backend.engine.memory_manager import MemoryManager
 from backend.engine.soft_rules import (
     build_soft_rules_prompt_block,
@@ -221,7 +222,10 @@ class TurnLlmContextBuilder:
     def _partition_scene_entities(
         self, all_entities: list[WorldEntity]
     ) -> tuple[list[WorldEntity], list[WorldEntity]]:
-        """Returns (visible, hidden) entities lying openly in the current scene."""
+        """Returns (visible, hidden) entities lying openly in the current scene.
+
+        CONSTRUCTABLE recipes are meta items; the GM only sees their (hidden) results.
+        """
         contained_item_ids = AdventureLogic.collect_container_item_ids(
             [{"item_type": e.item_type, "inventory": e.inventory} for e in all_entities]
         )
@@ -231,6 +235,7 @@ class TurnLlmContextBuilder:
             if e.current_scene_id == self.manager.state.current_scene_id
             and not getattr(e, "is_in_inventory", False)
             and str(e.id or "") not in contained_item_ids
+            and not is_recipe(e)
         ]
         visible = [e for e in scene_entities if not getattr(e, "is_hidden", False)]
         hidden = [e for e in scene_entities if getattr(e, "is_hidden", False)]

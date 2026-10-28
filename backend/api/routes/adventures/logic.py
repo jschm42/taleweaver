@@ -53,8 +53,8 @@ def _merge_session_entity(
 ) -> dict[str, Any]:
     override = _entity_override(overrides, normalized, ent.get("id"))
     ent.update(override)
-    # Constructables stay hidden until a session override reveals them.
-    if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE" and "is_hidden" not in override:
+    # CONSTRUCTABLE recipes are meta items and never appear in the world.
+    if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE":
         ent["is_hidden"] = True
     ent["listed_in_discoveries"] = _listed_in_discoveries(ent)
     ent["image_url"] = resolve_existing_data_asset_url(ent.get("image_url"))

@@ -126,67 +126,6 @@ def check_container_inventory(ctx: ValidationContext) -> list[ValidationFinding]
     return findings
 
 
-def _check_constructable(ctx: ValidationContext, entity: dict[str, Any]) -> list[ValidationFinding]:
-    eid = entity_id(entity) or "?"
-    raw = entity.get("combination_ingredients")
-    ingredients = [i.strip() for i in (raw or []) if isinstance(i, str) and i.strip()]
-    findings: list[ValidationFinding] = []
-    if len(ingredients) < 2:
-        findings.append(
-            finding(
-                "error",
-                "constructable_needs_ingredients",
-                f"CONSTRUCTABLE '{eid}' requires at least 2 combination_ingredients "
-                f"(found {len(ingredients)}).",
-                location=f"entity:{eid}",
-                entity_id=eid,
-                count=len(ingredients),
-            )
-        )
-    elif len(set(ingredients)) != len(ingredients):
-        findings.append(
-            finding(
-                "warn",
-                "constructable_duplicate_ingredients",
-                f"CONSTRUCTABLE '{eid}' has duplicate ingredient ids.",
-                location=f"entity:{eid}",
-                entity_id=eid,
-                ingredients=ingredients,
-            )
-        )
-    findings.extend(
-        _missing_ref(
-            "constructable_ingredient_missing",
-            eid,
-            f"CONSTRUCTABLE '{eid}' references unknown ingredient '{ref}'.",
-            ref,
-        )
-        for ref in ingredients
-        if ref not in ctx.object_ids
-    )
-    if not entity.get("is_hidden"):
-        findings.append(
-            finding(
-                "warn",
-                "constructable_not_hidden",
-                f"CONSTRUCTABLE '{eid}' should start is_hidden=true "
-                "(it auto-reveals on construction).",
-                location=f"entity:{eid}",
-                entity_id=eid,
-            )
-        )
-    return findings
-
-
-def check_constructable_ingredients(ctx: ValidationContext) -> list[ValidationFinding]:
-    """CONSTRUCTABLEs materialize once all (>= 2 distinct, existing) ingredients are combined."""
-    findings: list[ValidationFinding] = []
-    for entity in ctx.entities_of("OBJECT"):
-        if item_type(entity) == "CONSTRUCTABLE":
-            findings.extend(_check_constructable(ctx, entity))
-    return findings
-
-
 def check_switch_state_consistency(ctx: ValidationContext) -> list[ValidationFinding]:
     findings: list[ValidationFinding] = []
     for entity in ctx.entities:

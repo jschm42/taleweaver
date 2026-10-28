@@ -7,7 +7,7 @@ import InlinePromptPanel from './InlinePromptPanel.vue'
 /**
  * Combine workbench, shown inline at the end of the story feed. The player puts items from the
  * inventory or the scene on it and presses Combine; the engine then checks deterministically
- * whether they are exactly the ingredients of a hidden constructable (`/craft A | B`).
+ * whether they are exactly the ingredients of a CONSTRUCTABLE recipe (`/craft A | B`).
  */
 const props = defineProps<{
   open: boolean

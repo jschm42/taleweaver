@@ -2240,7 +2240,7 @@ async def test_import_adv_preserves_consumable_effects_in_avatar_inventory(clien
     """ADV import should keep consumable hp/mana/stamina effects inside protagonist inventory items."""
     adv_payload = {
         "format": "taleweaver.adz",
-        "version": "1.3",
+        "version": "1.3.1",
         "type": "ADVENTURE_BLUEPRINT",
         "sequences": [
             {
@@ -2345,7 +2345,7 @@ async def test_chat_snapshot_inventory_readable_uses_text_log_content(client: As
     """Session chat payload should include READABLE inventory text from metadata_json."""
     adv_payload = {
         "format": "taleweaver.adz",
-        "version": "1.3",
+        "version": "1.3.1",
         "type": "ADVENTURE_BLUEPRINT",
         "sequences": [
             {
@@ -3226,7 +3226,7 @@ async def test_start_session_honors_manifest_start_scene_id_when_graph_has_no_en
 
         manifest = dict(adventure.original_manifest or {})
         manifest["start_scene_id"] = "LOBBY"
-        manifest["version"] = "1.3"
+        manifest["version"] = "1.3.1"
         adventure.original_manifest = manifest
         adventure.sequences = [
             {"id": "seq1", "order": 1, "title": "Sequence 1", "walkthrough": "Start in Lobby"}

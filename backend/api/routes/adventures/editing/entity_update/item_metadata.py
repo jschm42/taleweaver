@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from backend.api.routes.adventures.editing.common import _normalize_lock_fields
 from backend.api.routes.adventures.editing.entity_update.fields import given, put_metadata
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.models.world_entity import WorldEntity
 
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
@@ -105,8 +106,15 @@ def update_readable(
 def update_constructable(
     metadata_json: dict[str, Any], payload: EntityUpdateRequest, active: bool
 ) -> None:
-    if active:
-        put_metadata(metadata_json, payload, _CRAFT_FIELDS, empty_as_none=True)
+    """Recipe results, kept ingredients, craft guard and hooks of a CONSTRUCTABLE."""
+    if not active:
+        metadata_json.pop(RESULT_FIELD, None)
+        metadata_json.pop(KEPT_FIELD, None)
+        return
+    put_metadata(metadata_json, payload, _CRAFT_FIELDS, empty_as_none=True)
+    for field in (RESULT_FIELD, KEPT_FIELD):
+        if given(payload, field):
+            metadata_json[field] = normalize_ids(getattr(payload, field))
 
 
 def update_item_events(metadata_json: dict[str, Any], payload: EntityUpdateRequest) -> None:

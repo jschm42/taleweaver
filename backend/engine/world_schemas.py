@@ -548,11 +548,19 @@ class WorldObjectSchema(WorldBaseSchema):
     )
     combination_ingredients: list[str] = Field(
         default_factory=list,
-        description="Item IDs required to trigger a combination. For CONSTRUCTABLE, list ALL ingredient ids (minimum 2) that must be combined to materialize this item; the item must start is_hidden=True and is auto-revealed once every ingredient is combined. Use [] if none.",
+        description="Item IDs required to trigger a combination. For a CONSTRUCTABLE recipe, list ALL ingredient ids (minimum 2) that must be combined. Use [] if none.",
+    )
+    result_item_ids: list[str] = Field(
+        default_factory=list,
+        description="Only for CONSTRUCTABLE recipes: ids of the separate, regular items (any item type, is_hidden=True) that crafting reveals. Minimum 1 for a recipe; never a CONSTRUCTABLE or one of the recipe's ingredients. Use [] otherwise.",
+    )
+    kept_ingredients: list[str] = Field(
+        default_factory=list,
+        description="Only for CONSTRUCTABLE recipes: ingredient ids that are NOT consumed by crafting (e.g. a tool). Must be a subset of combination_ingredients. Use [] if all ingredients are consumed.",
     )
     reveals_item_id: Optional[str] = Field(
         default="",
-        description="Item slug revealed when combination occurs. Ignored for CONSTRUCTABLE (reveal is automatic). Use empty string if none.",
+        description="Item slug revealed when combination occurs. Not used by CONSTRUCTABLE recipes (use result_item_ids). Use empty string if none.",
     )
 
     # Stat Modifiers
@@ -683,23 +691,23 @@ class WorldObjectSchema(WorldBaseSchema):
     )
     craft_guard_expression: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional script guard expression evaluated during crafting. Keep empty if none.",
+        description="Only for CONSTRUCTABLE recipes: optional script guard expression evaluated during crafting. Keep empty if none.",
     )
     on_craft_success_script: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional script executed when crafting succeeds. Use empty string for none.",
+        description="Only for CONSTRUCTABLE recipes: optional script executed when crafting succeeds. Use empty string for none.",
     )
     on_craft_success_text: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional text shown instead of the default message when crafting succeeds. Use empty string for none.",
+        description="Only for CONSTRUCTABLE recipes: optional text shown instead of the default message when crafting succeeds. Use empty string for none.",
     )
     on_craft_failure_script: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional script executed when crafting fails. Use empty string for none.",
+        description="Only for CONSTRUCTABLE recipes: optional script executed when crafting fails. Use empty string for none.",
     )
     on_craft_failure_text: Optional[str] = Field(
         default="",
-        description="Only for CONSTRUCTABLE objects: optional text shown instead of the default message when the craft guard blocks. Use empty string for none.",
+        description="Only for CONSTRUCTABLE recipes: optional text shown instead of the default message when the craft guard blocks. Use empty string for none.",
     )
 
     model_config = {"extra": "forbid"}

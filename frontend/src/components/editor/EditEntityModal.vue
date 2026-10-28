@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import RecipeEditorPanel from '@/components/editor/RecipeEditorPanel.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue'
@@ -37,6 +38,8 @@ const props = defineProps<{
     entity_id: string
     wearable_slots_input: string[]
     combination_ingredients_input: string[]
+    result_item_ids_input?: string[]
+    kept_ingredients_input?: string[]
     reveal_rule: string
     is_hidden: boolean
     spatial_position: string
@@ -322,6 +325,23 @@ const containedItemReferenceOptions = computed(() => {
   })
 })
 
+const recipeIngredientOptions = computed(() => {
+  return itemReferenceOptions.value.filter((option) => {
+    if (String(option.id || '').toUpperCase() === currentEntityId.value) return false
+    return String((option as any).itemType || '').toUpperCase() !== 'CONSTRUCTABLE'
+  })
+})
+
+const recipeResultOptions = computed(() => {
+  return (props.referenceOptions || [])
+    .filter((option) => {
+      if (String(option.type || '').toUpperCase() !== 'OBJECT') return false
+      if (String(option.id || '').toUpperCase() === currentEntityId.value) return false
+      return String((option as any).itemType || '').toUpperCase() !== 'CONSTRUCTABLE'
+    })
+    .map((option) => ({ ...option, name: option.name || option.id || '' }))
+})
+
 const entityImageUrl = computed(() => {
   if (props.isCreateEntityMode || !props.context) return null
   const targetId = String(props.context.id || '').toUpperCase()
@@ -373,11 +393,12 @@ const isFormInvalid = computed(() => {
   const idInvalid = hasEditableId
     ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > maxIdLen || !!entityIdError.value)
     : false
-  // A constructable needs at least two ingredients.
+  // A recipe needs at least two ingredients and one result.
   const ingredientsCount = Array.isArray(localForm.value.combination_ingredients_input)
     ? localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length
     : 0
-  const combinationInvalid = currentItemType.value === 'CONSTRUCTABLE' && ingredientsCount < 2
+  const resultsCount = (localForm.value.result_item_ids_input || []).filter(Boolean).length
+  const combinationInvalid = currentItemType.value === 'CONSTRUCTABLE' && (ingredientsCount < 2 || resultsCount < 1)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
   const switchInvalid = currentItemType.value === 'SWITCH' && (
     switchStates.value.length < 2 ||
@@ -508,10 +529,13 @@ watch(() => localForm.value.item_type, (newType) => {
     localForm.value.is_portable = true
   }
   if (type === 'CONSTRUCTABLE') {
-    // Constructables materialize only once all ingredients are combined.
+    // A recipe starts with two ingredient slots and one result slot.
     if (!Array.isArray(localForm.value.combination_ingredients_input) ||
         localForm.value.combination_ingredients_input.length === 0) {
       localForm.value.combination_ingredients_input = ['', '']
+    }
+    if (!localForm.value.result_item_ids_input?.length) {
+      localForm.value.result_item_ids_input = ['']
     }
   }
 })
@@ -613,6 +637,10 @@ function handleSave() {
     on_failure_script: String(localForm.value.on_failure_script || '').trim(),
     effects: parsedEffects,
     combination_ingredients: parsedIngredients,
+    result_item_ids: (localForm.value.result_item_ids_input || []).map((s: string) => String(s).trim().toUpperCase()).filter(Boolean),
+    kept_ingredients: (localForm.value.kept_ingredients_input || [])
+      .map((s: string) => String(s).trim().toUpperCase())
+      .filter((id: string) => parsedIngredients.some((ing: string) => ing.toUpperCase() === id)),
     reveal_rule: revealRule,
     is_hidden: Boolean(localForm.value.is_hidden),
     spatial_position: spatialPosition,
@@ -1263,7 +1291,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
                 <div v-else class="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
                   <p class="text-xs text-violet-300 font-bold leading-relaxed">
-                    CONSTRUCTABLE items always start hidden and automatically materialize when all required combination ingredients are combined.
+                    CONSTRUCTABLE recipes are meta items: they never appear in the game and need no position, hidden flag or reveal rule.
                   </p>
                 </div>
 
@@ -1344,49 +1372,15 @@ const textLogPreviewClass = computed(() => {
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">Positive values restore stats, negative values drain them.</p>
                 </div>
 
-                <!-- CONSTRUCTABLE: Ingredients -->
-                <div v-if="currentItemType === 'CONSTRUCTABLE'" class="space-y-3">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
-                    {{ currentItemType === 'CONSTRUCTABLE' ? 'Construction Ingredients' : 'Combination Ingredients' }}
-                  </label>
-                  <div v-if="currentItemType === 'CONSTRUCTABLE'" class="px-3 py-2 rounded-lg border border-orange-500/30 bg-orange-500/5 text-[11px] text-orange-200/90 leading-relaxed flex items-start gap-2">
-                    <i class="ra ra-hammer text-orange-400 mt-0.5 shrink-0"></i>
-                    <span>Constructables stay hidden until the player combines ALL ingredients (min. 2). The engine then consumes the ingredients and reveals this item automatically — no reveal rule needed.</span>
-                  </div>
-                  <div class="space-y-2">
-                    <div
-                      v-for="(ing, idx) in localForm.combination_ingredients_input"
-                      :key="idx"
-                      class="flex items-center gap-2"
-                    >
-                      <EntityReferenceCombobox
-                        v-model="localForm.combination_ingredients_input[idx]"
-                        :options="itemReferenceOptions"
-                        placeholder="Select ingredient item"
-                        :enable-search="true"
-                      />
-                      <button
-                        type="button"
-                        @click="localForm.combination_ingredients_input = localForm.combination_ingredients_input.filter((_: string, i: number) => i !== idx)"
-                        class="shrink-0 px-2 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-[10px] font-bold uppercase tracking-widest transition-all"
-                      >
-                        <i class="ra ra-cancel"></i>
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      @click="localForm.combination_ingredients_input = [...(localForm.combination_ingredients_input || []), '']"
-                      class="w-full py-2 bg-violet-500/5 border border-violet-500/10 hover:bg-violet-500/10 hover:border-violet-500/30 rounded-xl text-[10px] font-black text-violet-400 uppercase tracking-widest transition-all"
-                    >
-                      + Add Ingredient
-                    </button>
-                  </div>
-                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">
-                    {{ currentItemType === 'CONSTRUCTABLE'
-                      ? 'Select ALL item references required to construct this item (min. 2). They are consumed on construction.'
-                      : 'Pick at least one item to combine. Saving with zero ingredients is allowed — leaves the combinable in a placeholder state.' }}
-                  </p>
-                </div>
+                <!-- CONSTRUCTABLE: Recipe (ingredients, kept ingredients, results) -->
+                <RecipeEditorPanel
+                  v-if="currentItemType === 'CONSTRUCTABLE'"
+                  v-model:ingredients="localForm.combination_ingredients_input"
+                  v-model:results="localForm.result_item_ids_input"
+                  v-model:kept="localForm.kept_ingredients_input"
+                  :ingredient-options="recipeIngredientOptions"
+                  :result-options="recipeResultOptions"
+                />
 
                 <!-- CONSTRUCTABLE Panels: Deterministic Guard & Transition Rules -->
                 <div v-if="currentItemType === 'CONSTRUCTABLE'" class="space-y-4 pt-2">

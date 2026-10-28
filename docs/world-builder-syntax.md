@@ -52,8 +52,8 @@ Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 `in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor`, `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact` (+ `_text` variants).
 
 ### `[Item: ID] Name`
-Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switch: ...]`/`[Mechanism: ...]`, `[Weapon: ...]`.
-`in` (scene ID), `position`, `type` (CONSUMABLE, WEARABLE, STATIC, CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH), `appearance`, `slots`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_rule`, `unlock_guard`, `contains` (item IDs), `combine` (ingredient IDs, `A + B`), `craft_guard`, `reveals` (item ID), `bonus` (`str+2, ac+1`), `heal`, `stamina`, `mana`, `damage` (dice, e.g. `1d8+2`), `cost` (`stamina 3` / `mana 5`), `text` (readable content, max 500 characters), `format` (DOCUMENT, SCROLL, BOOK, SIGN).
+Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switch: ...]`/`[Mechanism: ...]`, `[Weapon: ...]`, `[Recipe: ...]` (CONSTRUCTABLE).
+`in` (scene ID), `position`, `type` (CONSUMABLE, WEARABLE, STATIC, CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH), `appearance`, `slots`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_rule`, `unlock_guard`, `contains` (item IDs), `combine` (recipe ingredient IDs, `A + B`), `results`/`result` (item IDs the recipe produces), `keep` (ingredient IDs that are not consumed), `craft_guard`, `reveals` (item ID), `bonus` (`str+2, ac+1`), `heal`, `stamina`, `mana`, `damage` (dice, e.g. `1d8+2`), `cost` (`stamina 3` / `mana 5`), `text` (readable content, max 500 characters), `format` (DOCUMENT, SCROLL, BOOK, SIGN).
 Hooks: `on_pickup`, `on_drop`, `on_equip`, `on_unequip`, `on_interact`/`on_use`, `on_unlock`, `on_unlock_fail`, `on_read`, `on_craft`, `on_craft_fail` (+ `_text` variants).
 
 Switch keys:
@@ -61,7 +61,9 @@ Switch keys:
 - `transition: OFF -> ON | item: FUSE | code: 12 | guard: <expr> | rule: <text> | fail: <msg> | success: <msg>` (repeatable; use `*` as the source state for "any")
 - `outcome: ON -> flag: POWER_ON; unlock_container: FUSE_BOX` (repeatable). To unlock an exit, set a flag and give the exit `guard: tw.flags.get('POWER_ON')`, or call `tw.exits.unlock('FROM', 'TO')` in a script.
 
-`text:` implies READABLE, `states:` implies SWITCH, and `combine:` implies CONSTRUCTABLE.
+`text:` implies READABLE, `states:` implies SWITCH, and `combine:` or `results:` implies CONSTRUCTABLE.
+
+A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game. It needs at least 2 `combine` ingredients and at least 1 `results` item. Results are regular items of any type; they are hidden automatically and revealed when the recipe is crafted. All ingredients are consumed except those listed in `keep`. The `craft_guard` and the `on_craft` / `on_craft_fail` hooks belong to the recipe.
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.

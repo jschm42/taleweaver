@@ -14,6 +14,7 @@ from backend.api.routes.adventures.editing.common import (
     _normalize_lock_fields,
     _sanitize_object_id,
 )
+from backend.api.routes.adventures.editing.entity_update.item import hide_recipe_results
 from backend.api.routes.adventures.editing.image_clone import _clone_entity_image
 from backend.api.routes.adventures.editing.payload import _serialize_model
 from backend.api.routes.adventures.editing.schemas import (
@@ -24,6 +25,7 @@ from backend.api.routes.adventures.editing.schemas import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.engine.image_prompt_context import clean_appearance
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -305,6 +307,9 @@ async def create_editor_entity(
         str(payload.item_type or "").strip().upper() if payload.entity_type == "OBJECT" else None
     )
     metadata_json = dict(payload.metadata_json or {})
+    if item_type == "CONSTRUCTABLE":
+        metadata_json[RESULT_FIELD] = normalize_ids(payload.result_item_ids)
+        metadata_json[KEPT_FIELD] = normalize_ids(payload.kept_ingredients)
     if item_type == "SWITCH":
         switch_config = metadata_json.get("switch") or {}
         states = switch_config.get("states") or []
@@ -361,6 +366,7 @@ async def create_editor_entity(
         stat_modifier_strength=payload.stat_modifier_strength,
     )
     db.add(entity)
+    await hide_recipe_results(db, template_id, entity)
     await db.commit()
     return {"status": "success", "entity": _serialize_model(entity)}
 

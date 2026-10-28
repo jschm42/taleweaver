@@ -265,7 +265,12 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         metadata.pop("on_unlock_failure_text", None)
     metadata.pop("locked", None)
 
-    if item_type != "CONSTRUCTABLE":
+    if item_type == "CONSTRUCTABLE":
+        for recipe_key in ("result_item_ids", "kept_ingredients"):
+            filtered[recipe_key] = list(metadata.pop(recipe_key, None) or [])
+    else:
+        metadata.pop("result_item_ids", None)
+        metadata.pop("kept_ingredients", None)
         metadata.pop("craft_guard_expression", None)
         metadata.pop("on_craft_success_script", None)
         metadata.pop("on_craft_success_text", None)
