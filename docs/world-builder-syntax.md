@@ -1,5 +1,7 @@
 # World-Builder Blueprint Syntax
 
+> New to blueprints? Start with the [Blueprint Manual](world-builder-blueprint-manual.md). This page is the complete reference.
+
 TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context** field. With them you can pin down anything from the chapter outline to single NPC stats, triggers and scripts. **Every part is optional.** Whatever you leave out, the World-Builder fills in itself, so a blueprint can be one `[Sequence]` line or a nearly complete adventure.
 
 ## How it works
