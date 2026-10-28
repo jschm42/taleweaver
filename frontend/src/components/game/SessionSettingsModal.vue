@@ -13,6 +13,7 @@ import SettingsTranslationTab from './settings/SettingsTranslationTab.vue'
 import SettingsDisplayTab from './settings/SettingsDisplayTab.vue'
 import type { SkinId, SkinPreference } from '@/skins/skinRegistry'
 import type { TextDensity } from '@/skins/useTextDensity'
+import { DEFAULT_TEXT_SCALE } from '@/skins/useTextScale'
 import { DEFAULT_NARRATION_STYLE, isNarrationStyle, type NarrationStyle } from './settings/narrationStyles'
 import type { SessionSettingsPayload, SettingsTabId } from './settings/types'
 
@@ -27,6 +28,7 @@ const props = defineProps<{
   initialTab?: SettingsTabId
   initialSkin?: SkinPreference
   initialDensity?: TextDensity
+  initialTextScale?: number
   autoSkin?: SkinId
   autoSkinReason?: string
   ttsAvailable?: boolean
@@ -57,6 +59,7 @@ const autoSpeakDialogues = ref(props.initialAutoSpeakDialogues ?? true)
 const language = ref(props.initialLanguage ?? '')
 const skin = ref<SkinPreference>(props.initialSkin ?? 'auto')
 const density = ref<TextDensity>(props.initialDensity ?? 'comfortable')
+const textScale = ref(props.initialTextScale ?? DEFAULT_TEXT_SCALE)
 
 if (typeof props.initialTurns === 'number' && props.initialTurns >= 1) {
   turns.value = Math.min(100, Math.max(1, props.initialTurns))
@@ -73,7 +76,7 @@ function isTabActive(id: SettingsTabId): boolean {
     return !!language.value
   }
   if (id === 'display') {
-    return skin.value !== 'auto' || density.value !== 'comfortable'
+    return skin.value !== 'auto' || density.value !== 'comfortable' || textScale.value !== DEFAULT_TEXT_SCALE
   }
   return false
 }
@@ -89,6 +92,7 @@ function save() {
     language: language.value,
     skin: skin.value,
     density: density.value,
+    textScale: textScale.value,
   })
 }
 
@@ -194,6 +198,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
           v-else
           v-model:skin="skin"
           v-model:density="density"
+          v-model:text-scale="textScale"
           :auto-skin="props.autoSkin ?? 'classic'"
           :auto-reason="props.autoSkinReason ?? 'no tone set, using the default look'"
         />

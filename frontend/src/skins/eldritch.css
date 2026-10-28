@@ -114,7 +114,7 @@
 }
 
 /* The drop cap flickers like a dying lamp. */
-[data-skin='eldritch'] .tw-narration-text::first-letter {
+[data-skin='eldritch'] .tw-narration-text:not(.tw-narration-text--no-dropcap)::first-letter {
   animation: tw-eldritch-flicker 6s steps(1, end) infinite;
 }
 

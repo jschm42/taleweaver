@@ -56,7 +56,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `clock_enabled` | `boolean` | Whether to track and display in-game time / calendar. |
 | `ingame_timestamp` | `string` | Formatted starting in-game timestamp (e.g. `"Day 1, 08:00"`). |
 | `selected_tone` | `string` | Narrative tone identifier or description (e.g. `"Dark Fantasy"`, `"Cyberpunk"`). |
-| `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. |
+| `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. |
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
 | `min_scenes` / `max_scenes` | `number` | Constraints defining world generation scope. |
 | `container_generation_enabled` | `boolean` | Enables generation of containers with nested loot. |

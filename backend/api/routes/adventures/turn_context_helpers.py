@@ -155,6 +155,8 @@ def bable_fish_instruction(language: str) -> str:
         "Do NOT respond in English or the original world language if it differs. "
         "Note: The chat history may contain messages in various languages due to previous Bable Fish settings. "
         f"IGNORE those languages and strictly use {language} for the current turn. "
-        f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
+        f"The player has activated their Bable Fish, so everything they hear/see must be in {language}. "
+        "NEVER translate proper names: names of characters, NPCs, places, items and factions "
+        "(e.g. 'Ash-on-Brow') stay exactly as written in the world, also as dialogue speaker names."
         "\n----------------------------------------\n"
     )

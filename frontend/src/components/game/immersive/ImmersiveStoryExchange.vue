@@ -20,6 +20,7 @@ import { isDebugMessage, isTurnErrorMessage } from './systemMessages'
 import type { ChatMessage } from '@/types'
 import { Volume2, VolumeX } from 'lucide-vue-next'
 import ThinkingIndicator from './ThinkingIndicator.vue'
+import { vDropCap } from '@/skins/vDropCap'
 
 const props = defineProps<{
   exchange: ComicExchange
@@ -236,7 +237,7 @@ function getEntityForHover(nameOrEntity: any) {
 
           <div>
             <span class="tw-narration-label">Game Master</span>
-            <span class="tw-narration-text" v-html="renderFormattedHtml(dlg.text)"></span>
+            <span v-drop-cap class="tw-narration-text" v-html="renderFormattedHtml(dlg.text)"></span>
           </div>
         </div>
       </div>

@@ -104,8 +104,9 @@
   letter-spacing: 0.02em;
 }
 
-/* Drop cap: the first letter spans about three lines and the text flows around it. */
-.tw-narration-text::first-letter {
+/* Drop cap: the first letter spans about three lines and the text flows around it.
+   Texts shorter than two lines get the --no-dropcap modifier (v-drop-cap). */
+.tw-narration-text:not(.tw-narration-text--no-dropcap)::first-letter {
   float: left;
   margin: 0.3rem 0.55rem 0 0;
   font-family: var(--tw-font-dropcap);

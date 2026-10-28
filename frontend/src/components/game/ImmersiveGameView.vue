@@ -35,6 +35,7 @@ import type { SettingsTabId } from './settings/types'
 import { useStoryTabs } from './immersive/tabs/useStoryTabs'
 import { useGameShortcuts } from './immersive/useGameShortcuts'
 import { useTextDensity } from '@/skins/useTextDensity'
+import { useTextScale } from '@/skins/useTextScale'
 import { useSheetSkin } from '@/skins/useSheetSkin'
 
 const props = defineProps<{
@@ -181,6 +182,7 @@ const {
 
 // --- Dialog skin ---
 const { textDensity } = useTextDensity()
+const { textScale } = useTextScale()
 const { activeSkin, skinStyle } = useSheetSkin(() => props.sheet)
 
 // --- Story tabs ---
@@ -277,7 +279,7 @@ defineExpose({
     class="tw-skin relative w-full h-full flex flex-col justify-between overflow-hidden select-none bg-slate-950 font-sans"
     :data-skin="activeSkin"
     :data-density="textDensity"
-    :style="skinStyle"
+    :style="[skinStyle, { '--tw-text-scale': textScale }]"
   >
     <!-- 1. FULL VIEW SCENE BACKGROUND -->
     <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">

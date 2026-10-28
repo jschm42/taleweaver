@@ -2,12 +2,14 @@
 /**
  * ImmersiveCharacterStage — Left-side 2:3 vertical character cards
  *
- * Displays portraits of the protagonist and scene NPCs with active speaker auras,
- * health status, defeat tags, and quick click/hover interactions. Characters joining the scene
+ * Displays portraits of the protagonist and scene NPCs with health status, defeat tags, and quick
+ * click/hover interactions. With auto-speak on, the NPC whose line is being read aloud gets an
+ * animated ring in the skin's accent color. Characters joining the scene
  * get a skin-specific entrance (see src/skins/entrances.css).
  */
 import { ref, watch, nextTick, computed } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
+import { audioService } from '@/services/audioService'
 
 const props = defineProps<{
   npcs: any[]
@@ -40,7 +42,7 @@ const activeSpeakersSignature = computed(() => {
 
 const hasSpeakingNpc = computed(() => {
   if (!props.activeSpeakers || props.activeSpeakers.size === 0) return false
-  return (props.npcs || []).some((npc) => isNpcSpeaking(npc))
+  return (props.npcs || []).some((npc) => isInLatestExchange(npc))
 })
 
 watch(
@@ -108,11 +110,27 @@ function hasJustArrived(npc: any): boolean {
   return recentArrivals.value.has(String(npc.id))
 }
 
-function isNpcSpeaking(npc: any): boolean {
+function isInLatestExchange(npc: any): boolean {
   if (!npc || !props.activeSpeakers) return false
   const nameMatch = npc.name && props.activeSpeakers.has(npc.name.toLowerCase())
   const idMatch = npc.id && props.activeSpeakers.has(String(npc.id).toLowerCase())
   return Boolean(nameMatch || idMatch)
+}
+
+/** Lowercased speaker of the line auto-speak is reading right now, or '' if none. */
+const voicedSpeaker = computed(() => {
+  if (!audioService.autoSpeechEnabled.value || !audioService.isPlaying.value) {
+    return ''
+  }
+  return (audioService.currentSpeaker.value || '').trim().toLowerCase()
+})
+
+function isNpcVoiced(npc: any): boolean {
+  const speaker = voicedSpeaker.value
+  if (!speaker || !npc) {
+    return false
+  }
+  return String(npc.name || '').toLowerCase() === speaker || String(npc.id || '').toLowerCase() === speaker
 }
 </script>
 
@@ -128,9 +146,7 @@ function isNpcSpeaking(npc: any): boolean {
         class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
         :class="[
           { 'tw-npc-arrived': hasJustArrived(npc) },
-          isNpcSpeaking(npc)
-            ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)] ring-2 ring-amber-400/60'
-            : 'border-slate-700/70 hover:border-cyan-400/80'
+          isNpcVoiced(npc) ? 'tw-npc-voiced border-transparent' : 'border-slate-700/70 hover:border-cyan-400/80'
         ]"
         @click="emit('npcClick', npc)"
         @mouseenter="emit('npcHover', npc, $event)"
@@ -155,10 +171,8 @@ function isNpcSpeaking(npc: any): boolean {
         <div v-if="hasJustArrived(npc)" class="tw-npc-sweep" aria-hidden="true"></div>
         <div v-if="hasJustArrived(npc)" class="tw-npc-arrival-tag">Enters</div>
 
-        <!-- Active Speaker Badge -->
-        <div v-if="isNpcSpeaking(npc)" class="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[8px] font-black uppercase tracking-wider shadow-md animate-bounce">
-          Speaking
-        </div>
+        <!-- Voiced by auto-speak: rotating accent ring -->
+        <div v-if="isNpcVoiced(npc)" class="tw-npc-voice-ring" aria-hidden="true"></div>
 
         <!-- Defeated Ribbon -->
         <div v-if="npc.is_defeated || npc.hp === 0" class="absolute -right-6 top-3 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20">
@@ -184,6 +198,62 @@ function isNpcSpeaking(npc: any): boolean {
 .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.1); }
+
+@property --tw-voice-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.tw-npc-voiced {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 55%, transparent),
+    0 0 22px color-mix(in srgb, var(--tw-accent, #f59e0b) 55%, transparent);
+  animation: tw-voice-glow 1.6s ease-in-out infinite;
+}
+
+/* A bright arc runs around the card edge; the mask cuts out everything but a 3px frame. */
+.tw-npc-voice-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  padding: 3px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--tw-voice-angle),
+    var(--tw-accent, #f59e0b),
+    color-mix(in srgb, var(--tw-accent, #f59e0b) 15%, transparent) 30%,
+    #fff8e1 50%,
+    color-mix(in srgb, var(--tw-accent, #f59e0b) 15%, transparent) 70%,
+    var(--tw-accent, #f59e0b)
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  animation: tw-voice-spin 2.4s linear infinite;
+}
+
+@keyframes tw-voice-spin {
+  to {
+    --tw-voice-angle: 360deg;
+  }
+}
+
+@keyframes tw-voice-glow {
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 80%, transparent),
+      0 0 34px color-mix(in srgb, var(--tw-accent, #f59e0b) 75%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-npc-voiced,
+  .tw-npc-voice-ring {
+    animation: none;
+  }
+}
 
 .ra {
   font-family: 'rpgawesome' !important;

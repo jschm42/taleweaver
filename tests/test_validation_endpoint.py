@@ -413,3 +413,29 @@ def test_summarize_for_ai_handles_pydantic_payload_with_datetime():
 
     assert reparsed["created_at"].startswith("2026-06-01T08:00:00")
     assert reparsed["title"] == "Adventure"
+
+
+def test_ai_validation_prompt_includes_full_init_script():
+    """Regression: dialog handlers live in the global init_script; the AI pass
+    must see the whole script, or it reports them as missing.
+    """
+    from backend.api.routes.adventures.editing.validation import _build_ai_validation_prompt
+
+    # Arrange
+    init_script = (
+        "x = 1\n" * 400 + "def choose_burial(choice):\n    tw.set_var('burial_choice', choice)\n"
+    )
+    payload = {
+        "adventure": {"title": "Tusk", "init_script": init_script, "scripts": []},
+        "scenes": [],
+        "exits": [],
+        "npcs": [],
+        "objects": [],
+    }
+
+    # Act
+    prompt = _build_ai_validation_prompt(payload)
+
+    # Assert
+    assert "=== GLOBAL INIT SCRIPT (init_script) ===" in prompt
+    assert "def choose_burial(choice):" in prompt

@@ -28,7 +28,7 @@
   color: var(--tw-sysnote-ink);
   box-shadow: var(--tw-sysnote-shadow);
   font-family: var(--tw-sysnote-font);
-  font-size: calc(var(--tw-text-size) * 0.8);
+  font-size: calc(var(--tw-text-size) * 0.85);
   font-style: var(--tw-sysnote-style);
   line-height: 1.4;
   letter-spacing: var(--tw-sysnote-tracking);
@@ -47,6 +47,22 @@
 .tw-sysnote-text strong {
   color: inherit;
   font-weight: 800;
+}
+
+/* Long notes (e.g. the opening scene text): a readable card instead of a pill. */
+.tw-sysnote--block {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: min(var(--tw-sysnote-radius), 0.875rem);
+  font-size: calc(var(--tw-text-size) * 0.95);
+  line-height: var(--tw-text-leading);
+}
+
+.tw-sysnote--block .tw-sysnote-icon {
+  align-self: flex-start;
+  margin-top: 0.3em;
 }
 
 /* Kind accents (icon color only, so the skin look stays intact). */

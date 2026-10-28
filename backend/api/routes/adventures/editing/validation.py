@@ -34,6 +34,11 @@ from backend.schemas.validation import (
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Editor"])
 
+# The init_script defines the global helper / dialog handler functions, so it is
+# sent with a much larger budget than ordinary text fields: a truncated script
+# makes the LLM report handlers defined past the cut as missing.
+_MAX_INIT_SCRIPT_LEN = 20000
+
 
 def _coerce_for_json(value: Any, max_field_len: int) -> Any:
     # SQLAlchemy TimestampMixin exposes created_at / updated_at as
@@ -69,9 +74,19 @@ def _summarize_for_ai(payload: dict, *, max_field_len: int = 1500) -> dict:
     return _walk(payload)
 
 
+def _raw_init_script(debug_payload: Any) -> str:
+    raw = debug_payload.model_dump() if hasattr(debug_payload, "model_dump") else debug_payload
+    adventure = (raw or {}).get("adventure") or {}
+    init_script = adventure.get("init_script")
+    if not isinstance(init_script, str):
+        return ""
+    return _coerce_for_json(init_script, _MAX_INIT_SCRIPT_LEN)
+
+
 def _build_ai_validation_prompt(debug_payload: Any) -> str:
     summary = _summarize_for_ai(debug_payload)
     adventure = summary.get("adventure") or {}
+    adventure.pop("init_script", None)
     sequences_list = adventure.get("sequences") or []
     scripts_list = adventure.get("scripts") or []
 
@@ -100,6 +115,7 @@ def _build_ai_validation_prompt(debug_payload: Any) -> str:
         quests_json=_dump(adventure.get("quests") or []),
         script_count=len(scripts_list),
         scripts_json=_dump(scripts_list),
+        init_script=_raw_init_script(debug_payload) or "(none)",
     )
 
 
@@ -158,7 +174,7 @@ async def execute_validation_run(
     db: AsyncSession, template_id: str, user: User, include_ai: bool
 ) -> ValidationRunResponse:
     """Run structural (and optionally AI) validation and persist it as the latest run."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     user_id = user.id
     debug_payload = await _build_adventure_editor_assets(template_id, db)
@@ -169,7 +185,7 @@ async def execute_validation_run(
     if include_ai:
         ai_findings, ai_skipped_reason = await _run_ai_validation(debug_payload, user, template_id)
 
-    run_at_dt = datetime.now(timezone.utc)
+    run_at_dt = datetime.now(_dt.UTC)
     structural_dicts = [f.model_dump() for f in structural]
     ai_dicts = [f.model_dump() for f in ai_findings]
 

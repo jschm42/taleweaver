@@ -1,0 +1,92 @@
+/*
+ * Passage tiles (Passages tab): target scene image or a "?" for unexplored places.
+ * Built from the skin tokens, so every skin styles them without extra rules.
+ */
+
+.tw-passage {
+  position: relative;
+}
+
+.tw-passage:hover .tw-passage-image {
+  transform: scale(1.05);
+  filter: var(--tw-scene-filter, none) brightness(1.05);
+}
+
+.tw-passage-media {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-bottom: 1px solid var(--tw-card-border);
+  background: color-mix(in srgb, var(--tw-card-bg) 70%, #000000);
+}
+
+.tw-passage-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--tw-scene-filter, none);
+  transition: transform 0.4s ease, filter 0.4s ease;
+}
+
+.tw-passage-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--tw-scene-tint, none);
+}
+
+/* Unexplored: a large glyph on a faint wash of the accent color. */
+.tw-passage-unknown {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--tw-accent) 18%, transparent), transparent 70%);
+  color: var(--tw-accent-soft);
+  font-family: var(--tw-font-dropcap);
+  font-size: 3rem;
+  font-weight: var(--tw-dropcap-weight);
+  line-height: 1;
+  text-shadow: var(--tw-dropcap-shadow);
+}
+
+.tw-passage-badge {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--tw-card-radius);
+  background: color-mix(in srgb, var(--tw-panel-bg) 85%, transparent);
+  font-family: var(--tw-tab-font);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+}
+
+.tw-passage-badge.is-open {
+  border: 1px solid color-mix(in srgb, var(--tw-accent-soft) 55%, transparent);
+  color: var(--tw-accent-soft);
+}
+
+.tw-passage-badge.is-locked {
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #f87171;
+}
+
+.tw-passage-label {
+  font-family: var(--tw-tab-font);
+}
+
+.tw-passage.is-locked .tw-passage-image {
+  filter: var(--tw-scene-filter, none) grayscale(0.6) brightness(0.7);
+}

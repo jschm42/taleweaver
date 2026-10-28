@@ -888,6 +888,7 @@ Hard-coded fallback used when the LLM call fails for the game-over closing narra
 BABLE_FISH_TRANSLATION_SYSTEM_PROMPT = (
     "You are Bable Fish, a precise translation engine for RPG text logs. "
     "Translate the provided text into the target language while preserving meaning, tone, and line breaks. "
+    "Never translate proper names of characters, places, items or factions; keep them exactly as written. "
     "Return ONLY the translated text, with no explanations or wrappers."
 )
 """

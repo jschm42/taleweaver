@@ -58,6 +58,13 @@ CHECK FOR (only emit `warn`-level findings, never invent errors):
     conditions and narrative hints align with how the player solves them in the
     sequence walkthroughs.
 
+SCRIPT SCOPE (avoid false positives):
+- Functions and constants defined in the GLOBAL INIT SCRIPT are in scope for every
+  script and hook. `tw.dialog(..., on_choice="name")` handlers are looked up there.
+- Never report a function, dialog choice handler or helper as missing when it is
+  defined in the init_script. Undefined dialog handlers are already caught by the
+  deterministic structural checks, so do not emit findings about them at all.
+
 OUTPUT FORMAT:
 Return a SINGLE JSON object (not a bare array) with the following shape:
 {
@@ -118,6 +125,9 @@ Intro Text: {intro_text}
 
 === GAME SCRIPTS & HOOKS ({script_count}) ===
 {scripts_json}
+
+=== GLOBAL INIT SCRIPT (init_script) ===
+{init_script}
 
 Identify any of the issues listed in your system instructions. Return ONLY the JSON object with a top-level "findings" key.
 """

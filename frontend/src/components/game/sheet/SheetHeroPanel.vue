@@ -6,6 +6,7 @@
 import type { CharacterSheet } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import { useBrokenImages } from './sheetItems'
+import { vDropCap } from '@/skins/vDropCap'
 
 const props = defineProps<{
   sheet: CharacterSheet
@@ -46,7 +47,7 @@ const { showImage, handleImageError } = useBrokenImages()
 
       <section class="tw-narration">
         <div class="tw-narration-label">Backstory</div>
-        <p class="tw-narration-text tw-dialog-bio">
+        <p v-drop-cap class="tw-narration-text tw-dialog-bio">
           {{ props.sheet.description || 'No detailed biography or historical records found for this adventurer.' }}
         </p>
       </section>

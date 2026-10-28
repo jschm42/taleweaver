@@ -19,9 +19,11 @@
 @import './entrances.css';
 @import './dialog.css';
 @import './choice.css';
+@import './passages.css';
 @import './chronicle.css';
 @import './noir.css';
 @import './terminal.css';
 @import './grimoire.css';
 @import './eldritch.css';
 @import './toon.css';
+@import './ancient.css';

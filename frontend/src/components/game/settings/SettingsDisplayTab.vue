@@ -2,9 +2,11 @@
 import { computed } from 'vue'
 import { SKINS, findSkin, type SkinId, type SkinPreference } from '@/skins/skinRegistry'
 import { TEXT_DENSITY_OPTIONS, type TextDensity } from '@/skins/useTextDensity'
+import { TEXT_SCALES } from '@/skins/useTextScale'
 
 const skin = defineModel<SkinPreference>('skin', { required: true })
 const density = defineModel<TextDensity>('density', { required: true })
+const textScale = defineModel<number>('textScale', { required: true })
 
 /** Preview line heights / gaps (px) to illustrate each density in the picker. */
 const DENSITY_PREVIEW: Record<TextDensity, { bar: number; gap: number }> = {
@@ -112,6 +114,29 @@ const autoDefinition = computed(() => findSkin(props.autoSkin))
           </span>
           <span class="block text-xs font-black uppercase tracking-widest text-slate-100">{{ option.label }}</span>
           <span class="hidden text-[11px] leading-snug text-slate-400 sm:block">{{ option.description }}</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="flex flex-col gap-2 border-t border-white/5 pt-4">
+      <h4 class="text-xs font-black uppercase tracking-widest text-slate-100">Font Size</h4>
+      <p class="text-xs leading-relaxed text-slate-400">
+        Scales the text of narration, dialogue and system notes in the story feed. Works on top of the text density.
+      </p>
+      <div role="radiogroup" aria-label="Font size" class="grid grid-cols-5 gap-2">
+        <button
+          v-for="scale in TEXT_SCALES"
+          :key="scale"
+          type="button"
+          role="radio"
+          :aria-checked="textScale === scale"
+          :title="`${Math.round(scale * 100)} %`"
+          class="flex flex-col items-center gap-1 rounded-2xl border p-2 transition-all cursor-pointer"
+          :class="textScale === scale ? 'border-amber-400/70 bg-amber-500/10' : 'border-white/10 bg-white/[0.03] hover:border-white/20'"
+          @click="textScale = scale"
+        >
+          <span class="font-serif font-bold leading-none text-slate-100" :style="{ fontSize: `${scale}rem` }" aria-hidden="true">Aa</span>
+          <span class="text-[11px] font-bold tabular-nums text-slate-400">{{ Math.round(scale * 100) }}%</span>
         </button>
       </div>
     </section>

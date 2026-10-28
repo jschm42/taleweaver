@@ -1,0 +1,186 @@
+/* Ancient — ochre on tanned hide and firelight for prehistoric, antique and realistic medieval adventures. */
+
+[data-skin='ancient'] {
+  --tw-accent: #b5532b;
+  --tw-accent-soft: #d9a441;
+  --tw-player: #d8c48f;
+  --tw-target: #9fb08a;
+
+  --tw-font-body: 'Newsreader', Georgia, serif;
+  --tw-font-dialogue: 'Newsreader', Georgia, serif;
+  --tw-font-label: 'Cinzel', Georgia, serif;
+
+  --tw-narration-bg:
+    repeating-linear-gradient(97deg, rgba(255, 236, 200, 0.025) 0 2px, transparent 2px 7px),
+    radial-gradient(ellipse at 50% 130%, rgba(217, 120, 40, 0.2), transparent 60%),
+    radial-gradient(ellipse at 25% 0%, #3a2819 0%, #1f150d 75%);
+  --tw-narration-ink: #ecdfc6;
+  --tw-narration-border: 1px solid rgba(181, 83, 43, 0.4);
+  --tw-narration-radius: 5px;
+  --tw-narration-shadow: inset 0 0 50px rgba(0, 0, 0, 0.55), 0 14px 40px rgba(0, 0, 0, 0.7);
+  --tw-font-dropcap: 'Cinzel', Georgia, serif;
+  --tw-dropcap-size: 3.4em;
+  --tw-dropcap-weight: 700;
+  --tw-dropcap-ink: var(--tw-accent);
+  --tw-dropcap-shadow: 0 0 10px rgba(217, 120, 40, 0.3);
+  --tw-narration-tag-ink: #e8b86a;
+
+  --tw-bubble-bg: linear-gradient(170deg, #2e2822 0%, #221d18 100%);
+  --tw-bubble-tail-fill: #241f1a;
+  --tw-bubble-ink: #efe6d6;
+  --tw-bubble-color: rgba(181, 83, 43, 0.6);
+  --tw-bubble-border-width: 1px;
+  --tw-bubble-radius: 4px;
+  --tw-bubble-shadow: inset 0 0 30px rgba(0, 0, 0, 0.45), 0 12px 34px rgba(0, 0, 0, 0.7);
+
+  --tw-strong-ink: #e8b86a;
+
+  --tw-panel-bg: rgba(24, 17, 11, 0.94);
+  --tw-panel-border: rgba(181, 83, 43, 0.35);
+  --tw-panel-ink: #ecdfc6;
+  --tw-panel-muted: #a8957a;
+  --tw-panel-radius: 4px;
+  --tw-card-bg: #2a2016;
+  --tw-card-border: rgba(160, 110, 60, 0.35);
+  --tw-card-radius: 3px;
+
+  --tw-tab-bg: rgba(31, 21, 13, 0.9);
+  --tw-tab-ink: #d9c9ab;
+  --tw-tab-border: rgba(160, 110, 60, 0.35);
+  --tw-tab-active-bg: color-mix(in srgb, var(--tw-accent) 30%, #1f150d);
+  --tw-tab-active-ink: #f5ead4;
+  --tw-tab-active-border: var(--tw-accent);
+  --tw-tab-radius: 3px;
+  --tw-tab-font: 'Cinzel', Georgia, serif;
+
+  --tw-scene-tint:
+    radial-gradient(ellipse at 50% 115%, rgba(217, 120, 40, 0.28), transparent 60%),
+    radial-gradient(ellipse at center, transparent 40%, rgba(10, 6, 3, 0.7) 100%);
+  --tw-scene-filter: sepia(0.25) saturate(0.85) brightness(0.8) contrast(1.05);
+
+  /* Overlays (scene transition, chapter intro) */
+  --tw-overlay-bg: #0f0a06;
+  --tw-overlay-ink: #f1e6cf;
+  --tw-overlay-muted: #a8957a;
+  --tw-overlay-accent: var(--tw-accent-soft);
+  --tw-overlay-highlight: #e8b86a;
+  --tw-font-overlay-title: 'Cinzel', Georgia, serif;
+  --tw-font-overlay-eyebrow: 'Cinzel', Georgia, serif;
+  --tw-overlay-wash:
+    radial-gradient(ellipse at 50% 90%, rgba(217, 120, 40, 0.45), transparent 60%),
+    radial-gradient(ellipse at 15% 15%, rgba(181, 83, 43, 0.3), transparent 55%);
+  --tw-overlay-texture: repeating-linear-gradient(97deg, rgba(255, 236, 200, 0.03) 0 2px, transparent 2px 9px);
+  --tw-overlay-image-filter: sepia(0.35) saturate(0.8) brightness(0.6);
+
+  /* System notes and dice */
+  --tw-sysnote-bg: rgba(36, 25, 16, 0.92);
+  --tw-sysnote-ink: #ecdfc6;
+  --tw-sysnote-border: 1px solid rgba(181, 83, 43, 0.4);
+  --tw-sysnote-radius: 3px;
+  --tw-sysnote-icon: var(--tw-accent-soft);
+  --tw-sysnote-font: 'Newsreader', Georgia, serif;
+  --tw-sysnote-style: italic;
+  --tw-sysnote-tracking: 0;
+  --tw-sysnote-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+  --tw-die-face: #e6d8b8;
+  --tw-die-edge: #7a4a24;
+  --tw-die-ink: #5a2e16;
+  --tw-die-shine: rgba(255, 250, 235, 0.35);
+  --tw-die-crit: #d9a441;
+  --tw-die-fumble: #b91c1c;
+  --tw-die-number-font: 'Cinzel', Georgia, serif;
+
+  /* NPC entrances */
+  --tw-arrival-sweep: rgba(232, 184, 106, 0.4);
+  --tw-arrival-glow: rgba(217, 120, 40, 0.7);
+  --tw-arrival-tag-bg: #b5532b;
+  --tw-arrival-tag-ink: #f5ead4;
+  --tw-arrival-tag-font: 'Cinzel', Georgia, serif;
+  --tw-arrival-animation: tw-npc-arrive-firelight;
+  --tw-arrival-duration: 1.4s;
+}
+
+[data-skin='ancient'] .tw-narration-label {
+  display: block;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  background: none;
+  color: var(--tw-accent-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+}
+
+[data-skin='ancient'] .tw-narration-text {
+  display: flow-root;
+  font-size: 1.05em;
+  letter-spacing: 0;
+}
+
+[data-skin='ancient'] .tw-bubble-text {
+  font-size: 1.05em;
+  letter-spacing: 0;
+}
+
+/* Speaker: a rough daub of ochre, as if painted with a finger. */
+[data-skin='ancient'] .tw-speaker {
+  border: 0;
+  border-radius: 0;
+  background: var(--tw-speaker-color);
+  color: #f5ead4;
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  clip-path: polygon(2% 8%, 30% 0, 70% 6%, 99% 0, 100% 55%, 97% 100%, 60% 94%, 25% 100%, 0 92%, 1% 45%);
+}
+
+[data-skin='ancient'] .tw-speaker:hover {
+  background: color-mix(in srgb, var(--tw-speaker-color) 85%, #000000);
+}
+
+[data-skin='ancient'] .comic-voice-tag {
+  border: 0;
+  background: none;
+  color: #e8b86a;
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+[data-skin='ancient'] .comic-object-tag {
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted currentColor;
+  border-radius: 0;
+  color: var(--tw-target);
+}
+
+[data-skin='ancient'] .tw-tab {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: none;
+}
+
+[data-skin='ancient'] .tw-panel-title,
+[data-skin='ancient'] .tw-pager {
+  font-family: 'Cinzel', Georgia, serif;
+  letter-spacing: 0.18em;
+}
+
+[data-skin='ancient'] .tw-npc-arrival-tag {
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* NPC entrance: steps out of the dark into the firelight */
+@keyframes tw-npc-arrive-firelight {
+  0% { opacity: 0; filter: brightness(0.1) sepia(1) blur(6px); transform: translateY(6%); }
+  40% { opacity: 1; filter: brightness(0.6) sepia(0.8) blur(2px); }
+  65% { filter: brightness(1.15) sepia(0.4); }
+  80% { filter: brightness(0.9) sepia(0.2); }
+  100% { opacity: 1; filter: none; transform: none; }
+}

@@ -91,7 +91,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 
 ### 🗺️ Visuals & Sensory Immersion
 * **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
-* **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages.
+* **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages. Proper names (characters, places, items) are never translated.
 
 ### 🧠 Bring Your Own Model (BYOK) & Privacy First
 * **Cloud-Tier Intelligence:** Designed to harness the reasoning power of flagship models (Anthropic Opus 5.x, OpenAI 5.x, DeepSeek v4 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.

@@ -2,7 +2,7 @@
 /**
  * ImmersiveSystemNote — Compact, skinned one-liner for an engine event (dice roll, item,
  * stat or quest change) inside the story feed. Die rolls get a tumbling die graphic.
- * The full list lives in the System tab.
+ * Long texts render as a card. The full list lives in the System tab.
  */
 import { computed, type Component } from 'vue'
 import { Dices, Package, HeartPulse, ScrollText, Award, Info } from 'lucide-vue-next'
@@ -27,13 +27,18 @@ const NOTE_ICONS: Record<SystemNoteKind, Component> = {
 const content = computed(() => cleanSystemContent(props.msg))
 const roll = computed(() => parseDiceRoll(content.value))
 const kind = computed<SystemNoteKind>(() => (roll.value ? 'dice' : systemNoteKind(content.value)))
+// Multi-line or long text (e.g. the opening scene) does not fit the one-line pill shape.
+const BLOCK_NOTE_MIN_LENGTH = 140
+const isBlock = computed(
+  () => !roll.value && (content.value.includes('\n') || content.value.length > BLOCK_NOTE_MIN_LENGTH)
+)
 const html = computed(() => renderFormattedHtml(roll.value ? stripDiceEmoji(content.value) : content.value))
 </script>
 
 <template>
   <div
     class="tw-sysnote shrink-0 self-start max-w-2xl animate-note-in"
-    :class="{ 'tw-sysnote--roll': roll }"
+    :class="{ 'tw-sysnote--roll': roll, 'tw-sysnote--block': isBlock }"
     :data-kind="kind"
     role="note"
   >

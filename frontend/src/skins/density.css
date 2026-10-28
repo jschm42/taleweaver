@@ -1,10 +1,12 @@
 /*
  * Text density of the story feed (player setting, data-density on the immersive root).
  * Independent of the skin: only sizes and spacing change, never colors or shapes.
+ * The font size setting (--tw-text-scale, inline on the immersive root) multiplies the base size.
  */
 
 .tw-skin {
-  --tw-text-size: 0.875rem;
+  --tw-text-base: 0.875rem;
+  --tw-text-size: calc(var(--tw-text-base) * var(--tw-text-scale, 1));
   --tw-text-leading: 1.625;
   --tw-feed-gap: 1rem;
   --tw-narration-pad-y: 1rem;
@@ -15,7 +17,7 @@
 
 @media (min-width: 640px) {
   .tw-skin {
-    --tw-text-size: 1rem;
+    --tw-text-base: 1rem;
     --tw-narration-pad-y: 1.25rem;
     --tw-narration-pad-x: 1.25rem;
     --tw-bubble-pad-y: 1.125rem;
@@ -24,7 +26,7 @@
 }
 
 .tw-skin[data-density='compact'] {
-  --tw-text-size: 0.8125rem;
+  --tw-text-base: 0.8125rem;
   --tw-text-leading: 1.45;
   --tw-feed-gap: 0.5rem;
   --tw-narration-pad-y: 0.625rem;
@@ -34,7 +36,7 @@
 }
 
 .tw-skin[data-density='spacious'] {
-  --tw-text-size: 0.95rem;
+  --tw-text-base: 0.95rem;
   --tw-text-leading: 1.8;
   --tw-feed-gap: 1.5rem;
   --tw-narration-pad-y: 1.25rem;
@@ -45,11 +47,11 @@
 
 @media (min-width: 640px) {
   .tw-skin[data-density='compact'] {
-    --tw-text-size: 0.9rem;
+    --tw-text-base: 0.9rem;
   }
 
   .tw-skin[data-density='spacious'] {
-    --tw-text-size: 1.125rem;
+    --tw-text-base: 1.125rem;
     --tw-narration-pad-y: 1.5rem;
     --tw-narration-pad-x: 1.75rem;
   }

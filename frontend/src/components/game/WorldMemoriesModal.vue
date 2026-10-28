@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { X, BrainCircuit, Globe, MapPin, User, Sparkles, BookOpen, Clock } from 'lucide-vue-next'
 import type { WorldMemory } from '@/types'
 import { useDialogSkin } from '@/skins/dialogSkin'
+import { vDropCap } from '@/skins/vDropCap'
 
 const props = defineProps<{
   memories?: WorldMemory[]
@@ -181,7 +182,7 @@ function getEmotionBadge(emotion?: string) {
           </div>
 
           <section class="tw-narration">
-            <p class="tw-narration-text whitespace-pre-line">{{ chronicleText }}</p>
+            <p v-drop-cap class="tw-narration-text whitespace-pre-line">{{ chronicleText }}</p>
           </section>
 
           <div v-if="chronicleUpdatedAt" class="tw-muted flex items-center gap-1.5 text-[11px] px-1 font-mono">

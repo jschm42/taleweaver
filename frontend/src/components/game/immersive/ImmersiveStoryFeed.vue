@@ -105,7 +105,7 @@ function isLatestExchange(exIdx: number): boolean {
 
       <template v-else-if="props.activeTurn">
         <!-- LICENSE & CREDITS BANNER (Initial Page / Re-run) -->
-        <LicenseInfoBlock v-if="props.activeTurn.licenseMessage" :msg="props.activeTurn.licenseMessage" class="shrink-0" />
+        <LicenseInfoBlock v-if="props.activeTurn.licenseMessage" :msg="props.activeTurn.licenseMessage" class="shrink-0 max-w-2xl" />
 
         <!-- EXCHANGES OF THIS SCENE -->
         <ImmersiveStoryExchange

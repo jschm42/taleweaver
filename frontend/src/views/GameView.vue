@@ -35,6 +35,7 @@ import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import SessionSettingsModal from '@/components/game/SessionSettingsModal.vue'
 import type { SessionSettingsPayload, SettingsTabId } from '@/components/game/settings/types'
 import { useTextDensity } from '@/skins/useTextDensity'
+import { useTextScale } from '@/skins/useTextScale'
 import { describeAutoSkin, resolveSkin, skinPreferenceOf } from '@/skins/skinRegistry'
 import { useSheetSkin } from '@/skins/useSheetSkin'
 import { provideDialogSkin } from '@/skins/dialogSkin'
@@ -57,6 +58,7 @@ import { type GameSettings } from '@/services/gameViewService'
 import { gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
+import { exitTargetInfo } from '@/components/game/immersive/tabs/exitTarget'
 
 const props = defineProps<{
   id: string
@@ -156,6 +158,7 @@ const autoSpeakDialogues = ref(localStorage.getItem('tw_autoSpeakDialogues') !==
 
 const skinPreference = computed(() => skinPreferenceOf(sheet.value?.ui_skin))
 const { textDensity } = useTextDensity()
+const { textScale } = useTextScale()
 const autoSkin = computed(() => resolveSkin('auto', sheet.value?.ui_theme, sheet.value?.adventure_tone))
 const autoSkinReason = computed(() => describeAutoSkin(sheet.value?.ui_theme, sheet.value?.adventure_tone))
 provideDialogSkin(useSheetSkin(() => sheet.value))
@@ -173,6 +176,7 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
   autoSpeakDialogues.value = payload.autoSpeakDialogues
   language.value = payload.language
   textDensity.value = payload.density
+  textScale.value = payload.textScale
   // The save click is a user gesture, so this is the moment to unlock audio playback.
   if (payload.autoSpeech !== audioService.autoSpeechEnabled.value) {
     audioService.toggleAutoSpeech()
@@ -1292,6 +1296,7 @@ const sceneExits = computed<any[]>(() => {
         direction: 'forward',
         target_scene_id: targetId,
         target_scene_name: resolveSceneName(targetId),
+        ...exitTargetInfo(mapData.value, targetId, resolveSceneImage),
       })
     } else if (exitType === 'bidirectional' && toId === current) {
       const targetId = edge.from || fromId
@@ -1300,6 +1305,7 @@ const sceneExits = computed<any[]>(() => {
         direction: 'backward',
         target_scene_id: targetId,
         target_scene_name: resolveSceneName(targetId),
+        ...exitTargetInfo(mapData.value, targetId, resolveSceneImage),
       })
     }
   }
@@ -1848,6 +1854,7 @@ usePlayAgentAutoLoop()
       :initial-tab="settingsInitialTab"
       :initial-skin="skinPreference"
       :initial-density="textDensity"
+      :initial-text-scale="textScale"
       :auto-skin="autoSkin"
       :auto-skin-reason="autoSkinReason"
       :tts-available="configState.isTtsEnabled"

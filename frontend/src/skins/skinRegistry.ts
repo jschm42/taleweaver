@@ -6,7 +6,7 @@
  * `tw-*` classes, so adding a skin never requires touching component markup.
  */
 
-export const SKIN_IDS = ['classic', 'chronicle', 'noir', 'terminal', 'grimoire', 'eldritch', 'toon'] as const
+export const SKIN_IDS = ['classic', 'chronicle', 'noir', 'terminal', 'grimoire', 'eldritch', 'toon', 'ancient'] as const
 
 export type SkinId = (typeof SKIN_IDS)[number]
 
@@ -70,6 +70,12 @@ export const SKINS: SkinDefinition[] = [
     description: 'Loud cartoon panels, bouncy bubbles and halftone dots.',
     swatch: ['#fffbea', '#111111', '#f97316'],
   },
+  {
+    id: 'ancient',
+    label: 'Ancient',
+    description: 'Ochre on tanned hide, carved capitals and firelight.',
+    swatch: ['#2a1c11', '#ecdfc6', '#b5532b'],
+  },
 ]
 
 /** Keyword (lower case) found in the adventure tone → skin. First match wins. */
@@ -99,12 +105,24 @@ const TONE_KEYWORDS: [string, SkinId][] = [
   ['grimdark', 'grimoire'],
   ['gothic', 'grimoire'],
   ['dark', 'grimoire'],
+  ['prehistor', 'ancient'],
+  ['stone age', 'ancient'],
+  ['ice age', 'ancient'],
+  ['primal', 'ancient'],
+  ['primeval', 'ancient'],
+  ['tribal', 'ancient'],
+  ['ancient', 'ancient'],
+  ['antiqu', 'ancient'],
+  ['histor', 'ancient'],
+  ['realistic', 'ancient'],
+  ['gritty', 'ancient'],
   ['heroic', 'chronicle'],
   ['fantasy', 'chronicle'],
   ['whimsical', 'chronicle'],
   ['fairy', 'chronicle'],
   ['epic', 'chronicle'],
-  ['medieval', 'chronicle'],
+  // Checked after the fantasy keywords: "medieval fantasy" stays Chronicle, plain medieval is Ancient.
+  ['medieval', 'ancient'],
 ]
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i

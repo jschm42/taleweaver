@@ -182,6 +182,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
         tone: sheet.value?.adventure_tone || undefined,
         npcMetadata: npcMetadata.value,
         voiceOverride: isNpcLine ? dlg.speaker : undefined,
+        speaker: isNpcLine ? dlg.speaker : undefined,
         style: dlg.voiceTag || undefined,
       })
     }

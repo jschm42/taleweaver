@@ -12,6 +12,7 @@ export type SessionSettingsPayload = {
   language: string
   skin: SkinPreference
   density: TextDensity
+  textScale: number
 }
 
 export type SettingsTabId = 'memory' | 'voice' | 'translation' | 'display'

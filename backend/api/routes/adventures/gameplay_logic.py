@@ -7,7 +7,7 @@ import re
 import time
 from types import SimpleNamespace
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
@@ -1799,7 +1799,8 @@ class GameTurnManager:
             reminders.append(vocal_tag_reminder())
         if language:
             reminders.append(
-                f"Respond in {language.upper()} only (except voice tags like [curious], which MUST always remain in English)."
+                f"Respond in {language.upper()} only (except voice tags like [curious], which MUST always remain in English). "
+                "Never translate proper names (characters, places, items); keep them exactly as written."
             )
 
         exits_task = ""
@@ -2345,7 +2346,7 @@ class GameTurnManager:
                 self.state.compressed_history = {
                     "summary": updated_summary.strip(),
                     "last_compressed_msg_id": last_msg.id,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 }
                 flag_modified(self.state, "compressed_history")
                 await self.db.commit()
@@ -2393,7 +2394,7 @@ class GameTurnManager:
             or self.adventure.title,
             "status": status,
             "outcome_note": note,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
         }
 
         current_log = list(self.user.game_log or [])

@@ -29,6 +29,8 @@ type SpeakOptions = {
   style?: string
   /** Fallback voice (or NPC name resolvable via npcMetadata) for segments without a speaker voice. */
   voiceOverride?: string
+  /** Character whose line this is, for segments without a "Name:" prefix (UI highlighting). */
+  speaker?: string
 }
 
 type RequestContext = {
@@ -48,6 +50,8 @@ type QueuedSegment = {
   displayText: string
   /** Normalized text of the speak() call (used for "is this bubble speaking" checks). */
   ttsText: string
+  /** Character voicing this segment, if any (used to highlight their portrait). */
+  speaker?: string
 }
 
 /** A streaming <audio> element (ElevenLabs) or a whole clip (Gemini, fallback). */
@@ -143,6 +147,8 @@ class AudioService {
   public currentlyGeneratingContent = ref<string | null>(null)
   public lastError = ref<string | null>(null)
   public currentText = ref<string | null>(null)
+  /** Character whose line is playing right now (null for narration or when idle). */
+  public currentSpeaker = ref<string | null>(null)
   public autoSpeechEnabled = ref(false)
   public speechRate = ref<number>(parseFloat(readStorage('tts_speech_rate') ?? '1'))
   public ttsDebugEnabled = ref(readStorage(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
@@ -359,6 +365,7 @@ class AudioService {
       context,
       displayText: normalizedText,
       ttsText,
+      speaker: request.speaker ?? options.speaker,
     }))
   }
 
@@ -411,6 +418,7 @@ class AudioService {
 
   private async playPrepared(playable: PlayableAudio, segment: QueuedSegment, token: number): Promise<void> {
     this.currentText.value = segment.ttsText
+    this.currentSpeaker.value = segment.speaker ?? null
     if (playable instanceof HTMLAudioElement) {
       await this.playStream(playable, segment, token)
       return
@@ -486,6 +494,7 @@ class AudioService {
     this.isGenerating.value = false
     this.currentlyGeneratingContent.value = null
     this.currentText.value = null
+    this.currentSpeaker.value = null
   }
 
   /** Queue text behind whatever is currently playing (used by auto-speak). */
