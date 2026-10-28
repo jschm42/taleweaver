@@ -1092,7 +1092,7 @@ class GameTurnManager:
         # advances on scene/sequence changes (handled inside _run_llm_cycle).
 
         # Record User Message
-        silent_commands = ["/take_direct", "/rule-pass", "/equip", "/unequip", "/consume"]
+        silent_commands = ["/take_direct", "/rule-pass", "/equip", "/unequip", "/consume", "/craft"]
         is_silent = any(actual_user_input.lower().startswith(cmd) for cmd in silent_commands)
 
         if actual_user_input and not is_silent:

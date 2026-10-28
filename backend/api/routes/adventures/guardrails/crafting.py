@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 MIN_INGREDIENTS = 2
 MIN_TOKEN_LENGTH = 3
+CRAFT_TOO_FEW_MESSAGE = "Choose at least two items to combine."
+CRAFT_UNREACHABLE_MESSAGE = "You can only combine items you carry or that are here with you."
+CRAFT_NO_MATCH_MESSAGE = "You try to combine them, but nothing comes of it."
 
 
 @dataclass
@@ -150,6 +153,7 @@ class CraftingGuardMixin:
                         name=ent.name or "Unknown Item",
                         description=ent.description,
                         item_type=ent.item_type,
+                        image_url=ent.image_url,
                     )
                 )
         cs.constructed.add(ent.id.upper())
@@ -188,6 +192,54 @@ class CraftingGuardMixin:
                 cs.messages += blocked
                 continue
             await self._craft(event, ent, needed, cs)
+
+    @staticmethod
+    def _resolve_craft_refs(raw_args: str, cs: CraftingState) -> set[str]:
+        """Upper-case entity ids for the ``A | B`` references of ``/craft`` (ids or names)."""
+        by_name = {
+            ent.name.strip().upper(): eid for eid, ent in cs.entities_by_id.items() if ent.name
+        }
+        refs = {part.strip().upper() for part in raw_args.split("|") if part.strip()}
+        return {ref if ref in cs.entities_by_id else by_name.get(ref, ref) for ref in refs}
+
+    async def _craft_selected(self, raw_args: str) -> tuple[str, list[str]]:
+        """Deterministic crafting from the combine panel (``/craft A | B``), without the GM.
+
+        The chosen items must be reachable and exactly the ingredients of a hidden constructable.
+        Nothing is consumed on a miss. Returns the response text (persisted by the caller) and
+        further messages that are already stored (scripts, success or failure texts).
+        """
+        entities = await self._session_entities()
+        cs = self._crafting_state(entities, "")
+        selected = self._resolve_craft_refs(raw_args, cs)
+        if len(selected) < MIN_INGREDIENTS:
+            return CRAFT_TOO_FEW_MESSAGE, []
+        if not selected.issubset(cs.accessible_ids):
+            return CRAFT_UNREACHABLE_MESSAGE, []
+
+        match = next(
+            (
+                ent
+                for ent in entities
+                if ent.id
+                and str(ent.item_type or "").upper() == "CONSTRUCTABLE"
+                and _ingredients(ent) == selected
+                and self._is_craftable(ent, selected, cs)
+            ),
+            None,
+        )
+        if match is None:
+            return CRAFT_NO_MATCH_MESSAGE, []
+
+        blocked = await self._craft_guard_blocks(match)
+        if blocked is not None:
+            return "", blocked
+
+        event = GameEvent()
+        await self._craft(event, match, selected, cs)
+        applied = await self.manager._apply_game_event(event)
+        response, *extra = cs.messages
+        return response, [*extra, *applied]
 
     @staticmethod
     def _violation(kind: str, ent: WorldEntity | None, cid: str, fallback_name: str) -> str:

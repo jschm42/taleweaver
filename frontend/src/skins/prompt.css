@@ -195,6 +195,47 @@
   box-shadow: 0 0 0 2px var(--tw-accent);
 }
 
+/* Already on the combine workbench. */
+.tw-prompt-tile.is-dimmed {
+  opacity: 0.35;
+}
+
+/* ---------- Combine workbench ---------- */
+.tw-prompt-bench {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px dashed color-mix(in srgb, var(--tw-narration-ink) 30%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+}
+
+.tw-prompt-bench > * {
+  width: 4.5rem;
+}
+
+.tw-prompt-slot {
+  display: flex;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed color-mix(in srgb, var(--tw-narration-ink) 30%, transparent);
+  border-radius: calc(var(--tw-narration-radius) * 0.6);
+  color: color-mix(in srgb, var(--tw-narration-ink) 40%, transparent);
+  font-family: var(--tw-font-label);
+  font-size: 1.25rem;
+}
+
+.tw-prompt-group {
+  margin-bottom: 0.375rem;
+  color: color-mix(in srgb, var(--tw-narration-ink) 60%, transparent);
+  font-family: var(--tw-font-label);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
 /* Captions and the check mark sit on top of item images, so they keep their own contrast. */
 .tw-prompt-tile-caption {
   position: absolute;

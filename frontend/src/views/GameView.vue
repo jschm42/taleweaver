@@ -23,6 +23,7 @@ import SwitchStatePanel from '@/components/game/prompts/SwitchStatePanel.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
 import SwitchUnlockPanel from '@/components/game/prompts/SwitchUnlockPanel.vue'
 import TextLogPanel from '@/components/game/prompts/TextLogPanel.vue'
+import CombinePanel from '@/components/game/prompts/CombinePanel.vue'
 import AdventureGeneratorModal from '@/components/game/AdventureGeneratorModal.vue'
 import ExitSessionModal from '@/components/game/ExitSessionModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
@@ -364,11 +365,14 @@ const isDialogOpen = computed(() => !!pendingDialog.value && status.value !== 'g
 const isChoicePanelOpen = computed(() => isDialogOpen.value && !isPassRunning.value && !sheet.value?.agent_active)
 
 // Inline prompts (containers, locks, switches, readables) at the end of the story feed: one at a time.
+const showCombinePanel = ref(false)
+const combineSeedItem = ref<any>(null)
 const isInlinePromptOpen = computed(() => showUnlockModal.value || showExitUnlockModal.value
   || showSwitchStateModal.value || showSwitchUnlockModal.value || showTextLogModal.value
-  || showContainerModal.value)
+  || showContainerModal.value || showCombinePanel.value)
 const closeInlinePrompts = (): void => {
   showContainerModal.value = false
+  showCombinePanel.value = false
   showUnlockModal.value = false
   showExitUnlockModal.value = false
   showSwitchStateModal.value = false
@@ -381,8 +385,8 @@ const closeSheetForInlinePrompt = (): void => {
   showSheet.value = false
   if (sheetDirty.value) handleSheetChanged()
 }
-/** Set by the readable's Take button, whose turn should leave the text open. */
-const textLogTakePending = ref(false)
+/** Set by a prompt whose own action starts a turn (readable Take, Combine): it stays open. */
+const keepPromptOnTurn = ref<'textLog' | 'combine' | null>(null)
 
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
@@ -391,10 +395,13 @@ const textLogTakePending = ref(false)
 watch(status, (current, previous) => {
   if (current !== 'connecting' || previous === 'connecting') return
   hoveredEntity.value = null
-  const keepTextLog = textLogTakePending.value && showTextLogModal.value
-  textLogTakePending.value = false
+  const keep = keepPromptOnTurn.value
+  keepPromptOnTurn.value = null
+  const keepTextLog = keep === 'textLog' && showTextLogModal.value
+  const keepCombine = keep === 'combine' && showCombinePanel.value
   closeInlinePrompts()
   showTextLogModal.value = keepTextLog
+  showCombinePanel.value = keepCombine
 })
 // Same for inline prompts: opening one switches to the story tab under the cursor.
 watch(isInlinePromptOpen, (isOpen) => {
@@ -479,6 +486,27 @@ const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
 const TEXT_LOG_OPEN_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
+const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
+
+/** Opens the combine workbench with the item (inventory or scene) matching the hint on it. */
+const openCombinePanel = (hint: string): boolean => {
+  const normalized = String(hint || '').trim().toLowerCase()
+  const matches = (entry: any) => [entry?.id, entry?.name].some(value => String(value || '').toLowerCase() === normalized)
+  const item = [...(inventoryItems.value || []), ...(items.value || [])].find(matches)
+  if (!item) return false
+  closeInlinePrompts()
+  closeSheetForInlinePrompt()
+  combineSeedItem.value = item
+  showCombinePanel.value = true
+  return true
+}
+
+/** Deterministic crafting: the engine checks the exact ingredient set (no GM involved). */
+const handleCombineSubmit = async (itemIds: string[]): Promise<void> => {
+  if (itemIds.length < 2 || isActionInputBlocked.value) return
+  keepPromptOnTurn.value = 'combine'
+  await sendMessage(`/craft ${itemIds.join(' | ')}`)
+}
 
 const isSwitchEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -1490,7 +1518,7 @@ const canTakeTextLog = computed(() => {
 const handleTextLogTake = async () => {
   if (!activeTextLog.value?.rawEntity || isTakingTextLog.value) return
   isTakingTextLog.value = true
-  textLogTakePending.value = true
+  keepPromptOnTurn.value = 'textLog'
   try {
     await handleTakeDirect(activeTextLog.value.rawEntity)
   } finally {
@@ -1605,6 +1633,10 @@ const {
     if (action.startsWith(FLIP_SWITCH_PREFIX)) {
       const hint = action.replace(FLIP_SWITCH_PREFIX, '').trim()
       return handleSwitchFlipByHint(hint)
+    }
+
+    if (action.startsWith(COMBINE_WITH_PREFIX)) {
+      return openCombinePanel(action.replace(COMBINE_WITH_PREFIX, '').trim())
     }
 
     if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
@@ -1874,6 +1906,17 @@ usePlayAgentAutoLoop()
           @take-all="handleContainerTakeAll"
           @take-item="handleContainerTakeItem"
           @drop-to-scene="handleContainerDropToScene"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
+        />
+        <CombinePanel
+          :open="showCombinePanel"
+          :seed-item="combineSeedItem"
+          :inventory-items="inventoryItems"
+          :scene-items="items"
+          :busy="isActionInputBlocked"
+          @close="showCombinePanel = false"
+          @combine="handleCombineSubmit"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />

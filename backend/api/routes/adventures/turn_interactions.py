@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from fastapi.encoders import jsonable_encoder
@@ -1015,7 +1015,7 @@ class TurnInteractionsManager:
 
             # Grant universal negative award
             award_key = SPOILER_SEEKER_AWARD["key"]
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             user_awards = list(self.user.earned_awards or [])
             adv_id = (
                 self.manager.adventure.id
@@ -1292,6 +1292,12 @@ class TurnInteractionsManager:
                         await self._save_chat_message("system", meta["on_unequip_text"])
                         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': meta['on_unequip_text']})}\n\n"
             response = msg
+
+        if response.startswith("[TRIGGER_CRAFT]"):
+            craft_args = response.replace("[TRIGGER_CRAFT]", "").strip()
+            response, craft_msgs = await self.manager.guardrails._craft_selected(craft_args)
+            for craft_msg in craft_msgs:
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': craft_msg})}\n\n"
 
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()

@@ -64,6 +64,7 @@ def _format_stat_change_message(gained: dict[str, int], lost: dict[str, int]) ->
 _ARG_TRIGGERS = {
     "/drop": "[TRIGGER_DROP]",
     "/combine": "[TRIGGER_COMBINE]",
+    "/craft": "[TRIGGER_CRAFT]",
     "/use": "[TRIGGER_COMBINE]",
     "/take": "[TRIGGER_TAKE_DIRECT]",
     "/take_direct": "[TRIGGER_TAKE_DIRECT]",
@@ -231,6 +232,7 @@ class CommandParser:
             "- `/unequip <slot>`: Remove an item from a slot.",
             "- `/consume <item>`: Use a consumable item.",
             "- `/combine <item1> <item2>`: Attempt to combine two objects.",
+            "- `/craft <item1> | <item2> [| ...]`: Combine exactly these items deterministically (no GM).",
             "- `/use <item1> [on] <item2>`: Use/Combine objects.",
             "- `/walkthrough`: Open the secret walkthrough panel.",
             "- `/walkthrough reveal`: Reveal all steps for 150 XP.",

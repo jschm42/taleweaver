@@ -106,7 +106,7 @@ Leave descriptions, scene details, minor NPCs and stats as **hints or open**, so
 | **CONTAINER** objects | Same locks as exits (`code`, `unlock_item`, `unlock_guard`); `contains` lists the items inside. |
 | **READABLE** objects | Notes, books, scrolls, signs. `text:` holds at most **500 characters**. This is where clues live. |
 | **SWITCH** objects | Levers, dials, lenses, valves: 2+ named states. Transitions can need a code, item or guard. Outcomes set story flags or unlock containers. To open an exit, guard it on the flag or call `tw.exits.unlock('A', 'B')` in the transition's script. |
-| **CONSTRUCTABLE** items | `combine: A + B`; hidden until crafted; optional `craft_guard`. |
+| **CONSTRUCTABLE** items | `combine: A + B`; hidden until crafted; optional `craft_guard`. Players craft deterministically on the in-game Combine workbench (exact ingredient set) or via chat (GM-judged). |
 | **Hidden** NPCs and objects | `hidden: yes` + `reveal:` (searching, an event, a script). Good for secret rooms and late reveals. |
 | **Combat** | d20 turn-based fights, NPC abilities, `attack: on_sight`, NPCs that attack once a condition holds (`attack_when_holding`, `attack_after_scene`, `attack_guard`). |
 | **Scripts** (Event Scripts setting ON) | Hooks on enter/leave scene, pickup, read, equip, unlock, defeat, sequence start/end, every turn, and **interaction** with any object or NPC (also fixed objects). They can set variables, move NPCs, lock or unlock exits, hand over items, damage, win or lose. |

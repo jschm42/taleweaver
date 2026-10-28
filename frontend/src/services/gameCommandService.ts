@@ -21,6 +21,7 @@ const OPEN_CONTAINER_PREFIX = '[OPEN_CONTAINER] '
 const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
+const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -191,6 +192,8 @@ export const gameCommandService = {
 
       if (isSwitchEntity(entity)) {
         items.push({ label: 'Switch / Flip', action: `${FLIP_SWITCH_PREFIX}${entity.id || entity.name}` })
+      } else {
+        items.push({ label: 'Combine', action: `${COMBINE_WITH_PREFIX}${entity.id || entity.name}` })
       }
     }
 
@@ -223,6 +226,7 @@ export const gameCommandService = {
       items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${item.id || item.name}` })
     }
 
+    items.push({ label: 'Combine', action: `${COMBINE_WITH_PREFIX}${item.id || item.name}` })
     items.push({ label: 'Drop', action: `/drop ${item.name}` })
     items.push({ label: 'Inspect', action: `/inspect ${item.name}` })
 
