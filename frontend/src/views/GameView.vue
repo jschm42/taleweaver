@@ -18,7 +18,7 @@ import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
-import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
+import LockUnlockPanel from '@/components/game/LockUnlockPanel.vue'
 import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
 import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
@@ -364,8 +364,17 @@ const isChoicePanelOpen = computed(() => isDialogOpen.value && !isPassRunning.va
 
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
+// Unlock attempts never start a turn, so a new turn means the player moved on: drop the open
+// unlock prompts instead of keeping them pinned below the new story entries.
 watch(status, (current, previous) => {
-  if (current === 'connecting' && previous !== 'connecting') hoveredEntity.value = null
+  if (current !== 'connecting' || previous === 'connecting') return
+  hoveredEntity.value = null
+  showUnlockModal.value = false
+  showExitUnlockModal.value = false
+})
+// Same for the inline unlock prompt: opening it switches to the story tab under the cursor.
+watch(() => showUnlockModal.value || showExitUnlockModal.value, (isOpen) => {
+  if (isOpen) hoveredEntity.value = null
 })
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || isDialogOpen.value)
 const dialogChoiceBusy = ref(false)
@@ -741,6 +750,11 @@ const openContainerFromInventoryItem = (item: any): boolean => {
       id: String(item.id || item.name || '').trim(),
       name: String(item.name || item.id || 'Container'),
       source: 'inventory',
+    }
+    // The unlock prompt lives in the story feed, which the character sheet would cover.
+    if (showSheet.value) {
+      showSheet.value = false
+      if (sheetDirty.value) handleSheetChanged()
     }
     unlockModalContainer.value = item
     unlockModalError.value = ''
@@ -1761,7 +1775,7 @@ usePlayAgentAutoLoop()
       :turn-error="turnError"
       :active-sequence="activeSequence"
       :adventure-title="displayAdventureTitle"
-      :has-pending-choice="isChoicePanelOpen"
+      :has-inline-prompt="isChoicePanelOpen || showUnlockModal || showExitUnlockModal"
       @send="handlePlayerInput"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"
@@ -1793,6 +1807,30 @@ usePlayAgentAutoLoop()
           :busy="dialogChoiceBusy"
           :error-message="dialogChoiceError"
           @choose="handleDialogChoice"
+        />
+        <LockUnlockPanel
+          :open="showUnlockModal"
+          :container="unlockModalContainer"
+          :inventory-items="inventoryItems"
+          :busy="unlockModalBusy"
+          :error-message="unlockModalError"
+          kind="container"
+          @close="showUnlockModal = false"
+          @submit-code="handleUnlockCodeSubmit"
+          @use-key-item="handleUnlockItemSubmit"
+          @unlock-direct="handleUnlockDirectSubmit"
+        />
+        <LockUnlockPanel
+          :open="showExitUnlockModal"
+          :container="exitUnlockModalTarget"
+          :inventory-items="inventoryItems"
+          :busy="exitUnlockBusy"
+          :error-message="exitUnlockError"
+          kind="exit"
+          @close="showExitUnlockModal = false"
+          @submit-code="handleExitUnlockCodeSubmit"
+          @use-key-item="handleExitUnlockItemSubmit"
+          @unlock-direct="handleExitUnlockDirectSubmit"
         />
       </template>
     </ImmersiveGameView>
@@ -1960,33 +1998,6 @@ usePlayAgentAutoLoop()
       @drop-to-scene="handleContainerDropToScene"
       @item-hover="(item, event) => handleHover(item, event)"
       @item-leave="hoveredEntity = null"
-    />
-
-    <ContainerUnlockModal
-      :open="showUnlockModal"
-      :container="unlockModalContainer"
-      :inventory-items="inventoryItems"
-      :busy="unlockModalBusy"
-      :error-message="unlockModalError"
-      @close="showUnlockModal = false"
-      @submit-code="handleUnlockCodeSubmit"
-      @use-key-item="handleUnlockItemSubmit"
-      @unlock-direct="handleUnlockDirectSubmit"
-    />
-
-    <ContainerUnlockModal
-      :open="showExitUnlockModal"
-      :container="exitUnlockModalTarget"
-      :inventory-items="inventoryItems"
-      :busy="exitUnlockBusy"
-      :error-message="exitUnlockError"
-      kind="exit"
-      header-label="Locked Exit"
-      :accent-color="'cyan'"
-      @close="showExitUnlockModal = false"
-      @submit-code="handleExitUnlockCodeSubmit"
-      @use-key-item="handleExitUnlockItemSubmit"
-      @unlock-direct="handleExitUnlockDirectSubmit"
     />
 
     <SwitchStateModal

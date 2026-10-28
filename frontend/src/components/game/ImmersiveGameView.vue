@@ -81,8 +81,8 @@ const props = defineProps<{
   worldMemories?: any[]
   activeSequence?: any | null
   adventureTitle?: string | null
-  /** A script-opened choice dialog waits for the player at the end of the story feed. */
-  hasPendingChoice?: boolean
+  /** A choice dialog or unlock prompt waits for the player at the end of the story feed. */
+  hasInlinePrompt?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -210,8 +210,8 @@ watch(() => props.status, (status, previous) => {
   goToLatestTurn()
 })
 
-// The choice is answered inline in the story feed, so bring the latest story page into view.
-watch(() => props.hasPendingChoice, (pending) => {
+// Choice dialogs and unlock prompts are answered inline in the story feed, so bring the latest story page into view.
+watch(() => props.hasInlinePrompt, (pending) => {
   if (!pending) return
   showStory()
   goToLatestTurn()
