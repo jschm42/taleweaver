@@ -6,7 +6,7 @@ import { audioService } from '@/services/audioService'
 import { api } from '@/composables/useApi'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
-import { formatObjectIds } from '@/utils/editor_utils'
+import { formatEntityRefs } from '@/utils/entityRefs'
 import { getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 
@@ -159,7 +159,7 @@ watch(
       <p v-if="translatedContent" class="tw-readable-note">
         Translated to {{ translatedLanguage || targetLanguage }}
       </p>
-      <p v-html="formatObjectIds(activeContent || 'No text content found.')"></p>
+      <p v-html="formatEntityRefs(activeContent || 'No text content found.')"></p>
     </div>
   </InlinePromptPanel>
 </template>

@@ -4,6 +4,7 @@ import { X, BrainCircuit, Globe, MapPin, User, Sparkles, BookOpen, Clock } from 
 import type { WorldMemory } from '@/types'
 import { useDialogSkin } from '@/skins/dialogSkin'
 import { vDropCap } from '@/skins/vDropCap'
+import { formatEntityRefs } from '@/utils/entityRefs'
 
 const props = defineProps<{
   memories?: WorldMemory[]
@@ -165,9 +166,7 @@ function getEmotionBadge(emotion?: string) {
               </span>
             </div>
 
-            <p class="text-sm leading-relaxed font-serif tracking-wide">
-              {{ mem.description }}
-            </p>
+            <p class="text-sm leading-relaxed font-serif tracking-wide" v-html="formatEntityRefs(mem.description)"></p>
           </div>
         </div>
 

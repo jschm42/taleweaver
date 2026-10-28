@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { X } from 'lucide-vue-next'
+import { formatEntityRefs } from '@/utils/entityRefs'
 
 /**
  * Shell for prompts answered inline at the end of the story feed (locks, switches, readables),
@@ -86,7 +87,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
           </div>
           <div class="flex-1 min-w-0 space-y-2">
             <h3 class="tw-prompt-title">{{ title }}</h3>
-            <p v-if="description" class="tw-prompt-description">{{ description }}</p>
+            <p v-if="description" class="tw-prompt-description" v-html="formatEntityRefs(description)"></p>
             <slot name="aside" />
           </div>
         </div>

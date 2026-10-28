@@ -5,7 +5,7 @@
  */
 import PassagesPanel from './tabs/PassagesPanel.vue'
 import DiscoveriesPanel from './tabs/DiscoveriesPanel.vue'
-import { switchState } from './switchState'
+import SwitchesPanel from './tabs/SwitchesPanel.vue'
 
 const props = defineProps<{
   sceneExits: any[]
@@ -32,23 +32,12 @@ const emit = defineEmits<{
     class="w-72 2xl:w-80 shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto tw-scroll p-1.5"
     aria-label="Scene"
   >
-    <section v-if="props.sceneSwitches.length > 0" class="tw-sidebar-group flex flex-col gap-2">
-      <h3 class="tw-panel-title">Switches</h3>
-      <div class="flex flex-wrap gap-1.5">
-        <button
-          v-for="sw in props.sceneSwitches"
-          :key="sw.id"
-          type="button"
-          class="tw-tab shrink-0"
-          :class="{ 'opacity-50 pointer-events-none': props.isEvaluating }"
-          :title="`Toggle ${sw.name}`"
-          @click="emit('switchFlip', sw)"
-        >
-          <i class="ra ra-lever text-sm"></i>
-          <span class="truncate max-w-[8rem]">{{ sw.name }}</span>
-          <span class="tw-tab-count">{{ switchState(sw) }}</span>
-        </button>
-      </div>
+    <section v-if="props.sceneSwitches.length > 0" class="tw-sidebar-group">
+      <SwitchesPanel
+        :switches="props.sceneSwitches"
+        :is-evaluating="props.isEvaluating"
+        @switch-flip="(sw) => emit('switchFlip', sw)"
+      />
     </section>
 
     <section v-if="props.sceneExits.length > 0" class="tw-sidebar-group">
@@ -90,17 +79,9 @@ const emit = defineEmits<{
     0 0 10px rgba(0, 0, 0, 0.8);
 }
 
-.tw-sidebar-group :deep(.tw-card),
-.tw-sidebar-group .tw-tab {
+.tw-sidebar-group :deep(.tw-card) {
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.6),
     0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
-.ra {
-  font-family: 'rpgawesome' !important;
-  display: inline-block;
-  line-height: 1;
-  vertical-align: middle;
 }
 </style>

@@ -10,6 +10,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
+from backend.models.world_entity import WorldEntity
 from tests.conftest import TestSessionLocal
 
 LATER_INIT_SCRIPT = "def added_later(index):\n    pass\n"
@@ -105,3 +106,28 @@ async def test_older_snapshot_is_completed_once_then_frozen(auth_client: AsyncCl
     assert manager.adventure.title == "Legacy Quest"
     assert manager.adventure.rules != "Rules changed later"
     assert "added_later" not in (manager.adventure.init_script or "")
+
+
+async def test_chat_snapshot_lists_entity_names_for_references(auth_client: AsyncClient):
+    # Arrange: an item in another scene, referenced as ##BRASS_ROD in sequence texts.
+    ids = await _start_session(auth_client, "Reference Quest")
+    async with TestSessionLocal() as db:
+        db.add(
+            WorldEntity(
+                id="BRASS_ROD",
+                template_id=ids["adventure_id"],
+                session_id=ids["game_id"],
+                entity_type="OBJECT",
+                name="Brass Rod",
+                description="A short brass rod.",
+                current_scene_id="FAR_AWAY",
+            )
+        )
+        await db.commit()
+
+    # Act
+    resp = await auth_client.get(f"/api/adventures/{ids['game_id']}/chat")
+
+    # Assert
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["entity_names"]["BRASS_ROD"] == "Brass Rod"

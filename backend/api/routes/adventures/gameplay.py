@@ -18,6 +18,7 @@ from backend.api.routes.adventures.chat_snapshot import (
     build_awards_for_snapshot,
     build_session_map,
     load_chat_history,
+    load_entity_names,
     load_full_world_debug,
     resolve_prompt_suggestions,
 )
@@ -187,6 +188,7 @@ async def get_chat_history(
         npc_metadata=await AdventureLogic.get_npc_metadata(
             db, state.template_id, session_id=state.session_id
         ),
+        entity_names=await load_entity_names(db, state.session_id),
         image_url=scene_image,
         adventure_image=AdventureLogic.resolve_session_asset(
             state, "cover", adventure.image_url if adventure else None

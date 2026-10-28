@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import type { CombatLogEntry } from '@/types'
+import { resolveEntityRefsText } from '@/utils/entityRefs'
 
 const props = defineProps<{
   entries: CombatLogEntry[]
@@ -63,7 +64,7 @@ watch(
             {{ rollChip(entry) }}
           </span>
         </div>
-        <p class="text-slate-200/90 break-words">{{ entry.text }}</p>
+        <p class="text-slate-200/90 break-words">{{ resolveEntityRefsText(entry.text) }}</p>
       </article>
     </div>
   </section>

@@ -2,6 +2,7 @@ import { ref, computed, watch, type Ref } from 'vue'
 import DOMPurify from 'dompurify'
 import type { ChatMessage } from '@/types'
 import { buildComicPages, type ComicTurn, type DialogueSegment } from './comicPages'
+import { renderEntityRefsHtml } from '@/utils/entityRefs'
 
 export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
 
@@ -367,7 +368,7 @@ export function renderFormattedHtml(text: string): string {
     return `<span class="comic-voice-tag">${en}</span>`
   })
   const withBolds = withVoiceTags.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-bold">$1</strong>')
-  const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="comic-object-tag">$1</span>')
+  const withObjectIds = renderEntityRefsHtml(withBolds, 'comic-object-tag')
     // Merged narration paragraphs keep their breaks instead of running together into one block.
     // A short gap (not a full empty line) lets the next paragraph still flow beside a drop cap.
     .replace(/\n{2,}/g, '<span class="tw-para-break"></span>')

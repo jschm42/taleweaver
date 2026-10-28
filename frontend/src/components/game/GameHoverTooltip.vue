@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import StatBar from '@/components/game/StatBar.vue'
 import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 import { fixNewlines, hasNonZero } from '@/services/hoverEntityService'
-import { formatObjectIds } from '@/utils/editor_utils'
+import { formatEntityRefs } from '@/utils/entityRefs'
 import { DoorClosed, DoorClosedLocked } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -193,7 +193,7 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
                 </div>
                 <!-- Right: Description -->
                 <div class="p-3 flex-1 min-w-0">
-                  <p class="text-[13px] text-slate-400 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text" v-html="formatObjectIds(props.hoveredEntity.description)"></p>
+                  <p class="text-[13px] text-slate-400 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text" v-html="formatEntityRefs(props.hoveredEntity.description)"></p>
                 </div>
               </div>
             </div>
@@ -214,15 +214,14 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
 
             <div :class="bodyPaddingClass">
               <p :class="['text-slate-300 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text', bodyTextClass]"
-                 v-html="formatObjectIds(entityDescription)"></p>
+                 v-html="formatEntityRefs(entityDescription)"></p>
 
               <div v-if="isExit && isEntityLocked" class="border-t border-slate-800 pt-2 mt-2">
                 <p class="text-[11px] uppercase tracking-widest text-rose-300 font-bold flex items-center gap-1.5">
                   <i class="ra ra-lock text-rose-400"></i>
                   This exit is locked
                 </p>
-                <p v-if="props.hoveredEntity.lock_description" class="text-xs text-rose-200/90 italic leading-relaxed whitespace-pre-wrap mt-1">
-                  {{ props.hoveredEntity.lock_description }}
+                <p v-if="props.hoveredEntity.lock_description" class="text-xs text-rose-200/90 italic leading-relaxed whitespace-pre-wrap mt-1" v-html="formatEntityRefs(props.hoveredEntity.lock_description)">
                 </p>
               </div>
             </div>

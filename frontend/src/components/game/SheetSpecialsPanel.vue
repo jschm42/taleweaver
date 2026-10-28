@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Lock } from 'lucide-vue-next'
 import type { CharacterSheet, NormalizedSpecialAttack, SpecialAttack } from '@/types'
 import { CATEGORY_META, STAT_SHORT, checkLabel, costLabel, normalizeSpecialAttack } from '@/utils/specialAttacks'
+import { formatEntityRefs } from '@/utils/entityRefs'
 
 const props = defineProps<{
   sheet: CharacterSheet | null
@@ -61,7 +62,7 @@ function unlockConditions(raw: SpecialAttack): string[] {
               <span class="text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/40 text-violet-500">{{ costLabel(s) }}</span>
               <span class="tw-muted text-[10px] font-mono">{{ checkLabel(s) }}</span>
             </div>
-            <p v-if="s.description" class="text-xs">{{ s.description }}</p>
+            <p v-if="s.description" class="text-xs" v-html="formatEntityRefs(s.description)"></p>
             <ul class="flex flex-wrap gap-1.5">
               <li v-for="line in effectLines(s)" :key="line" class="tw-dialog-chip">{{ line }}</li>
             </ul>

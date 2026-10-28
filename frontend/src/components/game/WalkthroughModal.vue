@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDialogSkin } from '@/skins/dialogSkin'
+import { formatEntityRefs } from '@/utils/entityRefs'
 
 type WorldEntity = {
   id?: string
@@ -138,7 +139,7 @@ function fixNewlines(text: string | null | undefined): string {
                 <p class="tw-panel-title tw-muted">XP</p>
                 <p class="text-lg font-black tabular-nums">{{ data?.current_xp ?? 0 }}</p>
               </div>
-              <p class="mt-3 text-sm leading-relaxed whitespace-pre-wrap">{{ fixNewlines(data?.preview || data?.message || 'No walkthrough available.') }}</p>
+              <p class="mt-3 text-sm leading-relaxed whitespace-pre-wrap" v-html="formatEntityRefs(data?.preview || data?.message || 'No walkthrough available.')"></p>
             </div>
 
             <div v-if="!data?.available" class="tw-dialog-slot p-4 text-sm">

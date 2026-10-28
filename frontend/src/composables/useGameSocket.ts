@@ -8,6 +8,7 @@ import { ref, watch, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
+import { registerEntityNames } from '@/utils/entityRefs'
 import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
@@ -92,6 +93,12 @@ export interface UseGameSocket {
 
 let gameSocketSingleton: UseGameSocket | null = null
 
+const ACTIVE_LANGUAGE_KEY = 'tw_bable_fish_lang'
+
+function sessionLanguageKey(gameId: string): string {
+  return `${ACTIVE_LANGUAGE_KEY}:${gameId}`
+}
+
 export function useGameSocket(): UseGameSocket {
   if (gameSocketSingleton) {
     return gameSocketSingleton
@@ -116,7 +123,8 @@ export function useGameSocket(): UseGameSocket {
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
   const isLegacyFormat = ref(false)
-  const language = ref<string>(localStorage.getItem('tw_bable_fish_lang') || '')
+  // Babel Fish translation target; chosen per session, empty (no translation) by default.
+  const language = ref<string>('')
   const statusText = ref('')
   const statusNote = ref('')
   const inputLocked = ref(false)
@@ -190,15 +198,10 @@ export function useGameSocket(): UseGameSocket {
     return content
   }
 
-  // Sync with User Profile default if no local preference exists
-  watch(() => authState.user?.default_language, (newDef) => {
-    if (localStorage.getItem('tw_bable_fish_lang') === null && newDef) {
-      language.value = newDef
-    }
-  }, { immediate: true })
-
   watch(language, (newLang) => {
-    localStorage.setItem('tw_bable_fish_lang', newLang)
+    if (currentGameId) localStorage.setItem(sessionLanguageKey(currentGameId), newLang)
+    // Mirror of the active session's choice, read by the speech service.
+    localStorage.setItem(ACTIVE_LANGUAGE_KEY, newLang)
   })
 
   // Scene/sequence the session is currently in (from server snapshots). Live messages are
@@ -258,6 +261,9 @@ export function useGameSocket(): UseGameSocket {
     if (data) applySessionSnapshot(data, includeMessages)
   }
 
+  // Names of all session entities (sent with the full chat snapshot only), for ##ID references.
+  let entityNameMap: Record<string, string> = {}
+
   function applySessionSnapshot(data: any, updateMessages = true): void {
     if (!data) return
 
@@ -272,6 +278,8 @@ export function useGameSocket(): UseGameSocket {
     if (data.nodes) nodes.value = data.nodes
     if (data.npc_metadata) npcMetadata.value = data.npc_metadata
     entities.value = data.entities || []
+    if (data.entity_names) entityNameMap = data.entity_names
+    registerEntityNames(entityNameMap, entities.value, sheet.value?.inventory)
     if (data.combat !== undefined) {
       combat.value = data.combat || null
     }
@@ -359,6 +367,8 @@ export function useGameSocket(): UseGameSocket {
    */
   async function connect(gameId: string): Promise<void> {
     currentGameId = gameId
+    language.value = localStorage.getItem(sessionLanguageKey(gameId)) || ''
+    localStorage.setItem(ACTIVE_LANGUAGE_KEY, language.value)
     status.value = 'loading'
     messages.value = []
     stopSyncTimer()

@@ -7,6 +7,7 @@
  * Colors and fonts follow the active dialog skin (--tw-overlay-* tokens).
  */
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { formatEntityRefs } from '@/utils/entityRefs'
 
 const props = defineProps<{
   activeSequence?: any | null
@@ -105,7 +106,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Grand Cinematic Sequence Title -->
-        <h1 class="tw-overlay-title tw-overlay-title--chapter text-2xl sm:text-4xl md:text-5xl font-black tracking-wider leading-tight cinema-title">
+        <h1 class="tw-overlay-title tw-overlay-title--chapter text-2xl sm:text-4xl md:text-5xl font-black leading-tight cinema-title">
           {{ displayedSequence.title || displayedSequence.id }}
         </h1>
 
@@ -120,9 +121,8 @@ onBeforeUnmount(() => {
         <p
           v-if="displayedSequence.description"
           class="tw-overlay-muted text-xs sm:text-sm font-serif italic max-w-md sm:max-w-lg leading-relaxed text-center drop-shadow px-2"
-        >
-          {{ displayedSequence.description }}
-        </p>
+          v-html="formatEntityRefs(displayedSequence.description)"
+        ></p>
 
         <!-- Subtle Skip Hint -->
         <span class="tw-overlay-muted text-[9px] uppercase tracking-[0.25em] font-semibold mt-6 opacity-60 transition-opacity hover:opacity-100">
@@ -153,17 +153,31 @@ onBeforeUnmount(() => {
   transform: scale(1.02);
 }
 
-/* Subtle letter-spacing expansion on title reveal */
+/* Slow reveal of the title. Only transform, opacity and blur are animated: changing the
+   letter spacing would re-wrap a long title in the middle of the animation. */
 .cinema-title {
+  letter-spacing: 0.12em;
   animation: title-breathe 4.5s ease-out forwards;
 }
 
 @keyframes title-breathe {
   0% {
-    letter-spacing: 0.05em;
+    opacity: 0.6;
+    filter: blur(3px);
+    transform: scale(0.94);
+  }
+  40% {
+    opacity: 1;
+    filter: blur(0);
   }
   100% {
-    letter-spacing: 0.12em;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinema-title {
+    animation: none;
   }
 }
 </style>

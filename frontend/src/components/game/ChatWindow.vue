@@ -10,7 +10,7 @@ import GameActionBar from '@/components/game/GameActionBar.vue'
 import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
-import { formatObjectIds } from '@/utils/editor_utils'
+import { formatEntityRefs } from '@/utils/entityRefs'
 import { Compass, SendHorizontal, Mic } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -1398,7 +1398,7 @@ onUnmounted(() => {
             <!-- Item Details -->
             <div class="p-3 flex flex-col gap-1 flex-1">
               <h4 class="text-white font-bold text-sm truncate">{{ entities.find(e => e.id === itemId)?.name }}</h4>
-              <p class="text-slate-400 text-xs leading-tight line-clamp-3 mb-2 italic" v-html="formatObjectIds(entities.find(e => e.id === itemId)?.description)"></p>
+              <p class="text-slate-400 text-xs leading-tight line-clamp-3 mb-2 italic" v-html="formatEntityRefs(entities.find(e => e.id === itemId)?.description)"></p>
               
               <button 
                 v-if="entities.find(e => e.id === itemId)?.is_portable !== false"

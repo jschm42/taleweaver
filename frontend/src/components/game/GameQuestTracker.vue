@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatEntityRefs } from '@/utils/entityRefs'
 const props = defineProps<{
   trackedQuest?: any
 }>()
@@ -25,8 +26,7 @@ const emit = defineEmits<{
                 <span v-else class="text-xs md:text-xxs font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ props.trackedQuest.exp_reward }} XP</span>
               </div>
             </div>
-            <div :class="['text-sm md:text-sm text-slate-300 leading-relaxed line-clamp-3 md:line-clamp-4', props.trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
-              {{ props.trackedQuest.description || props.trackedQuest.goal }}
+            <div :class="['text-sm md:text-sm text-slate-300 leading-relaxed line-clamp-3 md:line-clamp-4', props.trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']" v-html="formatEntityRefs(props.trackedQuest.description || props.trackedQuest.goal)">
             </div>
           </div>
           <!-- Close Button -->

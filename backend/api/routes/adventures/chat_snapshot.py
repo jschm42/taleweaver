@@ -21,7 +21,7 @@ from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldExit, WorldScene
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,14 @@ async def load_chat_history(db: AsyncSession, session_id: str) -> list[dict[str,
         .order_by(ChatMessage.created_at.asc())
     )
     return [m.to_client_dict() for m in chat_res.scalars().all()]
+
+
+async def load_entity_names(db: AsyncSession, session_id: str) -> dict[str, str]:
+    """id -> name of every entity in the session, so texts can show ##ID references by name."""
+    res = await db.execute(
+        select(WorldEntity.id, WorldEntity.name).where(WorldEntity.session_id == session_id)
+    )
+    return {entity_id: name for entity_id, name in res.all() if entity_id and name}
 
 
 async def _session_scene_images(db: AsyncSession, state: SessionState) -> dict[str, str]:

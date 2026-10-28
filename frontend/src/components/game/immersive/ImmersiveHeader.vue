@@ -7,6 +7,7 @@
  * shows indicators while Auto-Speak or the Bable Fish translation is active.
  */
 import { ref, computed } from 'vue'
+import { formatEntityRefs, resolveEntityRefsText } from '@/utils/entityRefs'
 import { configState } from '@/store/config'
 import { audioService } from '@/services/audioService'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
@@ -143,8 +144,7 @@ const sequenceOrder = computed(() => {
                     {{ sequenceTitle }}
                   </h4>
 
-                  <p v-if="sequenceDescription" class="text-xs leading-relaxed text-slate-300 font-serif italic max-h-56 overflow-y-auto">
-                    {{ sequenceDescription }}
+                  <p v-if="sequenceDescription" class="text-xs leading-relaxed text-slate-300 font-serif italic max-h-56 overflow-y-auto" v-html="formatEntityRefs(sequenceDescription)">
                   </p>
                   <p v-else class="text-xs italic text-slate-500">
                     No short description available for this sequence.
@@ -179,7 +179,7 @@ const sequenceOrder = computed(() => {
       @click="emit('openQuests')"
     >
       <Scroll class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-      <span class="max-w-[20rem] truncate font-bold">{{ props.trackedQuest.title || props.trackedQuest.description }}</span>
+      <span class="max-w-[20rem] truncate font-bold">{{ resolveEntityRefsText(props.trackedQuest.title || props.trackedQuest.description) }}</span>
     </div>
 
     <!-- Right: Status & Audio Controls -->

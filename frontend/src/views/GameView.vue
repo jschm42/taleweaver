@@ -388,8 +388,8 @@ const closeSheetForInlinePrompt = (): void => {
   showSheet.value = false
   if (sheetDirty.value) handleSheetChanged()
 }
-/** Set by a prompt whose own action starts a turn (readable Take, Combine): it stays open. */
-const keepPromptOnTurn = ref<'textLog' | 'combine' | null>(null)
+/** Set by a prompt whose own action starts a turn (Combine): it stays open. */
+const keepPromptOnTurn = ref<'combine' | null>(null)
 
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
@@ -400,10 +400,8 @@ watch(status, (current, previous) => {
   hoveredEntity.value = null
   const keep = keepPromptOnTurn.value
   keepPromptOnTurn.value = null
-  const keepTextLog = keep === 'textLog' && showTextLogModal.value
   const keepCombine = keep === 'combine' && showCombinePanel.value
   closeInlinePrompts()
-  showTextLogModal.value = keepTextLog
   showCombinePanel.value = keepCombine
 })
 // Same for inline prompts: opening one switches to the story tab under the cursor, and closing
@@ -1522,11 +1520,12 @@ const canTakeTextLog = computed(() => {
 const handleTextLogTake = async () => {
   if (!activeTextLog.value?.rawEntity || isTakingTextLog.value) return
   isTakingTextLog.value = true
-  keepPromptOnTurn.value = 'textLog'
   try {
     await handleTakeDirect(activeTextLog.value.rawEntity)
   } finally {
     isTakingTextLog.value = false
+    // Taking the readable ends reading it; it can be reopened from the inventory.
+    closeTextLogModal()
   }
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')

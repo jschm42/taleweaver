@@ -552,6 +552,8 @@ class ChatResponse(BaseModel):
     nodes: Optional[dict[str, Any]] = None
     entities: Optional[list[dict[str, Any]]] = None
     npc_metadata: Optional[dict[str, Any]] = None
+    # id -> display name of every session entity, for ##ID references in texts.
+    entity_names: Optional[dict[str, str]] = None
     image_url: Optional[str] = None
     adventure_image: Optional[str] = None
     quests: Optional[list[dict[str, Any]]] = None
