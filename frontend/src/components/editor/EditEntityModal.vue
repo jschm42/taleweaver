@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import RecipeEditorPanel from '@/components/editor/RecipeEditorPanel.vue'
+import SwitchStatesEditor from '@/components/editor/SwitchStatesEditor.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue'
@@ -47,6 +48,7 @@ const props = defineProps<{
     pickup_trigger_mode?: string
     pickup_trigger_cue?: string
     switch_states_json: string
+    switch_state_labels?: Record<string, string>
     switch_initial_state: string
     switch_transitions_json: string
     on_success_script?: string
@@ -163,6 +165,7 @@ const localForm = ref({
   ...props.initialForm
 })
 const switchStates = ref<string[]>([])
+const switchStateLabels = ref<Record<string, string>>({})
 const switchTransitions = ref<any[]>([])
 
 function syncFromForm() {
@@ -177,6 +180,10 @@ function syncFromForm() {
     states = ['OFF', 'ON']
   }
   switchStates.value = states
+  const labels = localForm.value.switch_state_labels || {}
+  switchStateLabels.value = Object.fromEntries(
+    Object.entries(labels).filter(([state, label]) => states.includes(state.toUpperCase()) && String(label).trim())
+  )
 
   const initial = String(localForm.value.switch_initial_state || '').trim().toUpperCase()
   if (!initial || !states.includes(initial)) {
@@ -233,6 +240,9 @@ function addState() {
 function removeState(index: number) {
   const removed = switchStates.value[index]
   switchStates.value.splice(index, 1)
+  switchStateLabels.value = Object.fromEntries(
+    Object.entries(switchStateLabels.value).filter(([state]) => state !== removed)
+  )
   
   if (localForm.value.switch_initial_state === removed) {
     localForm.value.switch_initial_state = switchStates.value[0] || ''
@@ -247,10 +257,15 @@ function removeState(index: number) {
   }
 }
 
+// State IDs are script keys: A-Z, 0-9, "_" and "-", at most 15 characters.
 function updateStateValue(index: number, val: string) {
   const oldVal = switchStates.value[index]
-  const cleanVal = val.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+  const cleanVal = val.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 15)
   switchStates.value[index] = cleanVal
+  if (oldVal in switchStateLabels.value) {
+    const { [oldVal]: label, ...rest } = switchStateLabels.value
+    switchStateLabels.value = cleanVal ? { ...rest, [cleanVal]: label } : rest
+  }
   
   if (localForm.value.switch_initial_state === oldVal) {
     localForm.value.switch_initial_state = cleanVal
@@ -325,6 +340,16 @@ const containedItemReferenceOptions = computed(() => {
   })
 })
 
+// CONSTRUCTABLE recipes never appear in the game, so physical/item fields are hidden for them.
+const isRecipe = computed(() => props.context?.type === 'object' && currentItemType.value === 'CONSTRUCTABLE')
+
+/** Recipes have no player-facing description; one is derived from the recipe for the editor lists. */
+function recipeDescription(ingredients: string[], results: string[]): string {
+  const from = ingredients.join(' + ') || '?'
+  const to = results.join(', ') || '?'
+  return `Recipe: ${from} -> ${to}`
+}
+
 const recipeIngredientOptions = computed(() => {
   return itemReferenceOptions.value.filter((option) => {
     if (String(option.id || '').toUpperCase() === currentEntityId.value) return false
@@ -382,7 +407,7 @@ const entityIdError = computed(() => {
 const isFormInvalid = computed(() => {
   const nameInvalid = !(localForm.value.name || '').trim() ||
          (localForm.value.name || '').length > 50
-  const descInvalid = !(localForm.value.description || '').trim() ||
+  const descInvalid = !isRecipe.value && !(localForm.value.description || '').trim() ||
          (localForm.value.description || '').length > 1000
   const personaInvalid = (localForm.value.goal || '').length > 200 ||
          (localForm.value.character || '').length > 200
@@ -529,6 +554,7 @@ watch(() => localForm.value.item_type, (newType) => {
     localForm.value.is_portable = true
   }
   if (type === 'CONSTRUCTABLE') {
+    localForm.value.is_portable = false
     // A recipe starts with two ingredient slots and one result slot.
     if (!Array.isArray(localForm.value.combination_ingredients_input) ||
         localForm.value.combination_ingredients_input.length === 0) {
@@ -541,6 +567,19 @@ watch(() => localForm.value.item_type, (newType) => {
 })
 
 function handleSave() {
+  if (isRecipe.value) {
+    const ingredients = (localForm.value.combination_ingredients_input || []).filter(Boolean)
+    const results = (localForm.value.result_item_ids_input || []).filter(Boolean)
+    localForm.value.description = recipeDescription(ingredients, results)
+    localForm.value.appearance = ''
+    localForm.value.is_portable = false
+    localForm.value.on_pickup_script = ''
+    localForm.value.on_pickup_text = ''
+    localForm.value.on_drop_script = ''
+    localForm.value.on_drop_text = ''
+    localForm.value.pickup_trigger_mode = 'silent'
+    localForm.value.pickup_trigger_cue = ''
+  }
   if (!(localForm.value.name || '').trim() || !(localForm.value.description || '').trim()) {
     return
   }
@@ -622,7 +661,9 @@ function handleSave() {
   // backend stay in sync (e.g. reveals_item_id is upper-cased to match the
   // entity-id convention; an empty string becomes `null` server-side so the
   // combination has no revealed item).
-  const revealsItemId = String(localForm.value.reveals_item_id || '').trim().toUpperCase()
+  const revealsItemId = currentItemType.value === 'SWITCH'
+    ? ''
+    : String(localForm.value.reveals_item_id || '').trim().toUpperCase()
   const revealRule = String(localForm.value.reveal_rule || '').trim()
   const spatialPosition = String(localForm.value.spatial_position || '').trim()
 
@@ -632,6 +673,11 @@ function handleSave() {
     inventory: parsedInventory,
     wearable_slots: parsedWearableSlots,
     switch_states: parsedSwitchStates,
+    switch_state_labels: Object.fromEntries(
+      Object.entries(switchStateLabels.value)
+        .filter(([state, label]) => parsedSwitchStates.includes(state) && label.trim())
+        .map(([state, label]) => [state, label.trim().slice(0, 20)])
+    ),
     switch_transitions: parsedSwitchTransitions,
     on_success_script: String(localForm.value.on_success_script || '').trim(),
     on_failure_script: String(localForm.value.on_failure_script || '').trim(),
@@ -1205,7 +1251,9 @@ const textLogPreviewClass = computed(() => {
                       class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-300 font-bold uppercase tracking-widest cursor-not-allowed"
                     />
                   </div>
-                  <div v-if="currentItemType !== 'WEARABLE'" class="space-y-2">
+                  <!-- Recipes are never picked up: no Portable toggle (empty cell keeps the grid). -->
+                  <div v-if="isRecipe"></div>
+                  <div v-else-if="currentItemType !== 'WEARABLE'" class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
                     <button
                       type="button"
@@ -1275,7 +1323,8 @@ const textLogPreviewClass = computed(() => {
                     </div>
                   </div>
 
-                  <div class="space-y-2">
+                  <!-- Switches reveal things through their transitions, outcomes and scripts. -->
+                  <div v-if="currentItemType !== 'SWITCH'" class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveals Item</label>
                     <EntityReferenceCombobox
                       v-model="localForm.reveals_item_id"
@@ -1291,7 +1340,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
                 <div v-else class="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
                   <p class="text-xs text-violet-300 font-bold leading-relaxed">
-                    CONSTRUCTABLE recipes are meta items: they never appear in the game and need no position, hidden flag or reveal rule.
+                    CONSTRUCTABLE recipes are meta items: they never appear in the game, so they need no description, appearance, position, hidden flag, reveal rule, portability or pickup/drop triggers.
                   </p>
                 </div>
 
@@ -1485,44 +1534,13 @@ const textLogPreviewClass = computed(() => {
                   </div>
 
                   <!-- 1. States Management -->
-                  <div class="space-y-3 bg-black/20 border border-white/5 p-4 rounded-2xl">
-                    <div class="flex justify-between items-center">
-                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Switch States</label>
-                      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">At least 2 required</span>
-                    </div>
-                    
-                    <div class="space-y-2">
-                      <div
-                        v-for="(state, idx) in switchStates"
-                        :key="idx"
-                        class="flex items-center gap-2"
-                      >
-                        <input
-                          v-model="switchStates[idx]"
-                          @input="(e) => updateStateValue(idx, (e.target as HTMLInputElement).value)"
-                          placeholder="e.g. OFF"
-                          class="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-sm text-white font-mono font-bold focus:border-lime-500 outline-none transition-all"
-                        />
-                        <button
-                          type="button"
-                          @click="removeState(idx)"
-                          :disabled="switchStates.length <= 2"
-                          class="shrink-0 px-2.5 py-2 rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:hover:bg-transparent"
-                          title="Remove State"
-                        >
-                          <Trash2 class="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <button
-                        type="button"
-                        @click="addState"
-                        class="w-full py-2 bg-lime-500/5 border border-lime-500/10 hover:bg-lime-500/10 hover:border-lime-500/30 rounded-xl text-[10px] font-black text-lime-400 uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <Plus class="w-3.5 h-3.5" /> Add State
-                      </button>
-                    </div>
-                  </div>
+                  <SwitchStatesEditor
+                    v-model:labels="switchStateLabels"
+                    :states="switchStates"
+                    @add="addState"
+                    @remove="removeState"
+                    @rename="updateStateValue"
+                  />
 
                   <!-- 2. Initial State Selection -->
                   <div class="space-y-2 bg-black/20 border border-white/5 p-4 rounded-2xl">
@@ -1531,7 +1549,7 @@ const textLogPreviewClass = computed(() => {
                       v-model="localForm.switch_initial_state"
                       class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-lime-500/50 outline-none transition-all"
                     >
-                      <option v-for="state in switchStates" :key="state" :value="state">{{ state }}</option>
+                      <option v-for="state in switchStates" :key="state" :value="state">{{ switchStateLabels[state] ? `${state} (${switchStateLabels[state]})` : state }}</option>
                     </select>
                   </div>
 
@@ -2022,7 +2040,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
               </div>
 
-              <div class="space-y-3">
+              <div v-if="!isRecipe" class="space-y-3">
                 <div class="flex justify-between items-center">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Description / Biography <span class="text-red-400">*</span></label>
                   <span :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
@@ -2059,7 +2077,7 @@ const textLogPreviewClass = computed(() => {
               </div>
 
               <AppearanceField
-                v-if="['cover', 'protagonist', 'npc', 'object'].includes(context.type)"
+                v-if="['cover', 'protagonist', 'npc', 'object'].includes(context.type) && !isRecipe"
                 v-model="localForm.appearance"
                 :target-type="context.type"
               />
@@ -2103,7 +2121,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <!-- Non-Switch Object Triggers -->
-                <div v-if="currentItemType !== 'SWITCH' && localForm.is_portable && currentItemType !== 'WEARABLE'" class="space-y-3 border border-white/5 bg-black/20 p-4 rounded-xl">
+                <div v-if="!isRecipe && currentItemType !== 'SWITCH' && localForm.is_portable && currentItemType !== 'WEARABLE'" class="space-y-3 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <div class="space-y-1">
                     <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">On Pickup Mode</label>
                     <p class="text-[10px] text-slate-500 uppercase tracking-tighter">Choose whether the Game Master or an NPC reacts when the player takes this item.</p>
@@ -2132,7 +2150,7 @@ const textLogPreviewClass = computed(() => {
                   entity-label="object"
                 />
 
-                <div v-if="currentItemType !== 'SWITCH'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                <div v-if="!isRecipe && currentItemType !== 'SWITCH'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <ScriptEditor
                     v-model="localForm.on_pickup_script"
                     label="On Pickup Script"
@@ -2154,7 +2172,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <div v-if="currentItemType !== 'SWITCH'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                <div v-if="!isRecipe && currentItemType !== 'SWITCH'" class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
                   <ScriptEditor
                     v-model="localForm.on_drop_script"
                     label="On Drop Script"

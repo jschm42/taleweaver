@@ -4,6 +4,7 @@ import { Check, ChevronRight } from 'lucide-vue-next'
 import { getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 import { parseMetadata, isTypingTarget } from './promptUtils'
+import { stateLabel } from '../immersive/switchState'
 
 /** State picker for a switch, shown inline at the end of the story feed. */
 const props = defineProps<{
@@ -105,7 +106,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
           <Check v-if="isCurrent(state)" class="w-3 h-3" stroke-width="3" />
           <ChevronRight v-else class="w-3 h-3" stroke-width="3" />
         </span>
-        <span class="flex-1 font-mono tracking-wider">{{ state.toUpperCase() }}</span>
+        <span class="flex-1 tracking-wider">{{ stateLabel(switchEntity, state) }}</span>
         <i v-if="busy && focusedIndex === idx && !isCurrent(state)" class="ra ra-hourglass text-xs animate-spin opacity-60"></i>
       </button>
     </div>

@@ -4,6 +4,7 @@ import { Lock, Unlock, Check } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 import { parseMetadata } from './promptUtils'
+import { stateLabel } from '../immersive/switchState'
 
 /** Gate (code, item or rule) of a locked switch transition, shown inline at the end of the story feed. */
 const props = defineProps<{
@@ -131,7 +132,7 @@ watch(() => props.errorMessage, (message) => {
   >
     <template #label-icon><Lock class="w-3 h-3" /></template>
     <template #aside>
-      <p class="tw-prompt-hint">Flipping to <span class="tw-prompt-chip">{{ targetState }}</span></p>
+      <p class="tw-prompt-hint">Flipping to <span class="tw-prompt-chip">{{ stateLabel(switchEntity, targetState) }}</span></p>
     </template>
 
     <!-- CODE REQUIREMENT -->

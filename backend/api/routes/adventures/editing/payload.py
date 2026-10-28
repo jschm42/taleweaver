@@ -126,6 +126,7 @@ def _switch_fields(metadata_json: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "switch_states": pick("switch_states", "states", []),
+        "switch_state_labels": pick("switch_state_labels", "state_labels", {}),
         "switch_initial_state": pick("switch_initial_state", "initial_state", ""),
         "switch_transitions": pick("switch_transitions", "transitions", []),
         "on_success_script": pick("on_success_script", "on_success_script", ""),

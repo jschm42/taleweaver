@@ -25,6 +25,7 @@ from backend.core.awards import SPOILER_SEEKER_AWARD
 from backend.engine.debug_engine import DebugEngine
 from backend.engine.switch_service import SwitchService
 from backend.engine.trigger_service import TriggerService
+from backend.engine.switch_states import state_label
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -771,7 +772,7 @@ class TurnInteractionsManager:
         configured_current = str(config.get("initial_state") or allowed_states[0]).strip().upper()
         current_state = str(entry.get("switch_state") or configured_current).strip().upper()
         if current_state == target_state:
-            return f"{switch_entity.name} is already set to {target_state}."
+            return f"{switch_entity.name} is already set to {state_label(config, target_state)}."
 
         transition = SwitchService.resolve_transition(config, current_state, target_state)
         script_context = await self.manager._build_script_context()
@@ -827,7 +828,7 @@ class TurnInteractionsManager:
         outcome_notes = await self._apply_switch_outcomes(
             config.get("outcomes") if isinstance(config.get("outcomes"), list) else [], target_state
         )
-        message = f"{switch_entity.name} set to {target_state}."
+        message = f"{switch_entity.name} set to {state_label(config, target_state)}."
         if trans_success_msg:
             message = f"{message} {trans_success_msg}"
         if state_note:

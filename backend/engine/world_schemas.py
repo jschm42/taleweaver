@@ -433,6 +433,13 @@ class SwitchGatesSchema(WorldBaseSchema):
     model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
+class SwitchStateLabelSchema(WorldBaseSchema):
+    state: str = Field(..., description="State ID from switch_states, e.g. 'HALF-OPEN'.")
+    label: str = Field(
+        ..., description="Short in-game text for this state (max 20 characters), e.g. 'Half open'."
+    )
+
+
 class SwitchTransitionSchema(WorldBaseSchema):
     from_state: Optional[str] = Field(
         default="",
@@ -588,7 +595,11 @@ class WorldObjectSchema(WorldBaseSchema):
     )
     switch_states: list[str] = Field(
         default_factory=list,
-        description="Only for SWITCH objects: ordered states, e.g. ['OFF','ON'].",
+        description="Only for SWITCH objects: ordered state IDs used by scripts and transitions, e.g. ['OFF','ON']. Each ID: 1-15 characters, upper-case letters, digits, '_' or '-'.",
+    )
+    switch_state_labels: list[SwitchStateLabelSchema] = Field(
+        default_factory=list,
+        description="Only for SWITCH objects: optional in-game text per state ID (max 20 characters each). States without a label show their ID. Use [] if the IDs read well.",
     )
     switch_initial_state: Optional[str] = Field(
         default="", description="Only for SWITCH objects: initial state value."

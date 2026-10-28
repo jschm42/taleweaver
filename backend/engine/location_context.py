@@ -10,6 +10,8 @@ Two detail levels exist:
 
 from typing import Any, Optional
 
+from backend.engine.switch_states import state_label
+
 
 def _format_item_refs(items: Optional[list]) -> list[str]:
     refs: list[str] = []
@@ -69,16 +71,26 @@ def _describe_npc(e: Any, detail: str) -> str:
     )
 
 
+def _state_with_label(switch_cfg: dict[str, Any], state: Any) -> str:
+    label = state_label(switch_cfg, state)
+    state_id = str(state or "").strip().upper()
+    return state_id if label == state_id else f'{state_id} "{label}"'
+
+
 def _switch_details(e: Any, detail: str) -> str:
     metadata = e.metadata_json or {}
     switch_cfg = metadata.get("switch") or {}
     states = metadata.get("switch_states") or switch_cfg.get("states") or []
-    states_str = f" (Possible states: {', '.join(states)})" if states else ""
+    # The GM sees the ID (used by mechanics) and the label the player reads.
+    shown = [_state_with_label(switch_cfg, s) for s in states]
+    states_str = f" (Possible states: {', '.join(shown)})" if states else ""
 
     current_st = getattr(e, "current_switch_state", None)
     if not current_st:
         current_st = switch_cfg.get("initial_state") or metadata.get("switch_initial_state") or ""
-    current_str = f" [Current State: {current_st}]" if current_st else ""
+    current_str = (
+        f" [Current State: {_state_with_label(switch_cfg, current_st)}]" if current_st else ""
+    )
 
     if detail != "concise":
         return f"{states_str}{current_str}"

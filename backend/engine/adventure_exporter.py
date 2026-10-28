@@ -203,6 +203,7 @@ def _extract_item_switch_metadata(
         filtered["switch_states"] = (
             switch_config.get("states") or metadata.pop("switch_states", []) or []
         )
+        filtered["switch_state_labels"] = dict(switch_config.get("state_labels") or {})
         filtered["switch_initial_state"] = (
             switch_config.get("initial_state") or metadata.pop("switch_initial_state", "") or ""
         )

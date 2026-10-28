@@ -9,6 +9,8 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from backend.engine.switch_states import STATE_ID_MAX, STATE_LABEL_MAX, is_valid_state_id
+
 _TRUE_WORDS = {"yes", "true", "on", "1", "y"}
 _FALSE_WORDS = {"no", "false", "off", "0", "n"}
 STAT_ALIASES = {
@@ -60,6 +62,31 @@ def ident(raw: str) -> str:
 
 def ident_list(raw: str) -> list[str]:
     return [normalize_id(part) for part in re.split(r"[,+]", raw) if normalize_id(part)]
+
+
+def switch_states(raw: str) -> dict[str, Any]:
+    """``OFF=Dark, HALF-OPEN, ON=Lights on`` -> state IDs plus labels (only when given)."""
+    states: list[str] = []
+    labels: dict[str, str] = {}
+    for part in text_list(raw):
+        state_raw, _, label = part.partition("=")
+        state = state_raw.strip().upper().replace(" ", "_")
+        if not is_valid_state_id(state):
+            raise ValueError(
+                f"state ID '{state_raw.strip()}' must be 1-{STATE_ID_MAX} characters "
+                "(letters, digits, '_' or '-')"
+            )
+        if len(label.strip()) > STATE_LABEL_MAX:
+            raise ValueError(
+                f"label of state '{state}' is longer than {STATE_LABEL_MAX} characters"
+            )
+        states.append(state)
+        if label.strip():
+            labels[state] = label.strip()
+    result: dict[str, Any] = {"switch_states": states}
+    if labels:
+        result["switch_state_labels"] = labels
+    return result
 
 
 def text_list(raw: str) -> list[str]:

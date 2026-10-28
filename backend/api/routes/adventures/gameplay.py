@@ -651,7 +651,7 @@ async def flip_switch_with_code(
         await runner.fail(flip.fail_message or "Incorrect code. The switch does not move.")
     await runner.enforce_gate_expression()
     return await runner.succeed(
-        state, f"{flip.entity.name} switched to {flip.target_state} using the correct code."
+        state, f"{flip.entity.name} switched to {flip.target_label} using the correct code."
     )
 
 
@@ -682,7 +682,7 @@ async def flip_switch_with_item(
 
     item_name = inventory_item_name(avatar, submitted_item_id)
     return await runner.succeed(
-        state, f"{flip.entity.name} switched to {flip.target_state} using {item_name}."
+        state, f"{flip.entity.name} switched to {flip.target_label} using {item_name}."
     )
 
 

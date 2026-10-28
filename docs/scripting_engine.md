@@ -359,12 +359,13 @@ Inspects and manipulates interactive switches, levers, buttons, and puzzle mecha
 When interacting with a `SwitchProxy` or an `ObjectProxy` for a switch entity:
 - `.state` *(str)*: Gets or sets the switch state. Assigning a new state (e.g. `switch.state = "ON"`) triggers the state transition and runs configured outcomes.
 - `.switch_state` *(str)*: Alias for `.state`.
+- `.label` *(str, read-only)*: In-game text of the current state (its label, or the state ID when no label is set). Use `.state` in conditions and `.label` in narration.
 - `.get_state() -> str`: Returns current state.
 - `.set_state(new_state: str, apply_outcomes: bool = True)`: Sets state and optionally applies outcomes.
 - `.is_state(state: str) -> bool`: Checks if the switch matches `state`.
 - `.flip(apply_outcomes: bool = True) -> str`: Cycles to the next state in sequence.
 - `.toggle(apply_outcomes: bool = True) -> str`: Alias for `flip()`.
-- `.states` *(list[str])*: List of declared switch states.
+- `.states` *(list[str])*: List of declared switch state IDs (1-15 characters: `A-Z`, `0-9`, `_`, `-`).
 - `.initial_state` *(str)*: Configured initial state.
 - `.is_switch` *(bool)*: `True` if the object is a switch.
 

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.engine.switch_service import SwitchService
+from backend.engine.switch_states import state_label
 from backend.engine.trigger_service import TriggerService
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -165,7 +166,9 @@ def mark_container_unlocked(state: SessionState, entity_id: str) -> bool:
 
 
 def award_unlock_xp(avatar: Avatar, metadata_json: dict) -> int:
-    xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or DEFAULT_UNLOCK_XP
+    xp_reward = (
+        metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or DEFAULT_UNLOCK_XP
+    )
     avatar.exp = (avatar.exp or 0) + xp_reward
     return xp_reward
 
@@ -217,6 +220,11 @@ class SwitchFlip:
     def fail_message(self) -> str:
         return str(self.transition.get("fail_message") or "").strip()
 
+    @property
+    def target_label(self) -> str:
+        """In-game text of the target state (its label, or the ID)."""
+        return state_label(self.config, self.target_state)
+
 
 async def resolve_switch_flip(
     db: AsyncSession, state: SessionState, entity_id: str, requested_state: str
@@ -224,7 +232,9 @@ async def resolve_switch_flip(
     """Validates the requested target state and finds the matching transition (HTTP 4xx otherwise)."""
     entity = await load_session_object(db, state, entity_id, "SWITCH", "Switch not found.")
     config = SwitchService.resolve_switch_config(entity)
-    allowed_states = [str(s).strip().upper() for s in (config.get("states") or []) if str(s).strip()]
+    allowed_states = [
+        str(s).strip().upper() for s in (config.get("states") or []) if str(s).strip()
+    ]
 
     target_state = str(requested_state or "").strip().upper()
     if target_state not in allowed_states:

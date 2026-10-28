@@ -18,6 +18,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
     uses_advanced_model,
 )
+from backend.engine.switch_states import normalize_state_id, normalize_state_labels
 from backend.models.world_entity import WorldEntity
 from backend.utils.text_utils import slugify
 
@@ -160,7 +161,7 @@ def recipe_metadata(obj: dict[str, Any]) -> dict[str, Any]:
 def normalize_switch_states(raw_states: Any) -> list[str]:
     states: list[str] = []
     for state in raw_states or []:
-        token = str(state or "").strip().upper()
+        token = normalize_state_id(state)
         if token and token not in states:
             states.append(token)
     return states if len(states) >= 2 else ["OFF", "ON"]
@@ -172,13 +173,14 @@ def _list_or_empty(value: Any) -> list:
 
 def _switch_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
     states = normalize_switch_states(obj.get("switch_states"))
-    initial = str(obj.get("switch_initial_state") or states[0]).strip().upper()
+    initial = normalize_state_id(obj.get("switch_initial_state") or states[0])
     scripts = {
         key: str(obj.get(key) or metadata.get(key) or "").strip()
         for key in ("on_success_script", "on_failure_script")
     }
     metadata["switch"] = {
         "states": states,
+        "state_labels": normalize_state_labels(states, obj.get("switch_state_labels")),
         "initial_state": initial if initial in states else states[0],
         "transitions": _list_or_empty(obj.get("switch_transitions")),
         "outcomes": _list_or_empty(obj.get("switch_outcomes")),

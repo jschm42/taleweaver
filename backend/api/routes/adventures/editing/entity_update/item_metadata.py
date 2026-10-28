@@ -12,6 +12,13 @@ from backend.api.routes.adventures.editing.common import _normalize_lock_fields
 from backend.api.routes.adventures.editing.entity_update.fields import given, put_metadata
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
+from backend.engine.switch_states import (
+    STATE_ID_MAX,
+    STATE_LABEL_MAX,
+    invalid_state_ids,
+    long_state_labels,
+    normalize_state_labels,
+)
 from backend.models.world_entity import WorldEntity
 
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
@@ -46,9 +53,15 @@ _ITEM_EVENT_FIELDS = (
     "on_interact_script",
     "on_interact_text",
 )
-_SWITCH_FLAT_KEYS = ("switch_states", "switch_initial_state", "switch_transitions")
+_SWITCH_FLAT_KEYS = (
+    "switch_states",
+    "switch_state_labels",
+    "switch_initial_state",
+    "switch_transitions",
+)
 _SWITCH_FIELDS = (
     "switch_states",
+    "switch_state_labels",
     "switch_initial_state",
     "switch_transitions",
     "on_success_script",
@@ -142,10 +155,33 @@ def update_pickup_trigger(metadata_json: dict[str, Any], payload: EntityUpdateRe
         metadata_json["pickup_trigger"] = {"mode": mode, "cue": cue}
 
 
-def _validated_switch(switch_config: dict[str, Any]) -> dict[str, Any]:
+def _validated_state_ids(switch_config: dict[str, Any]) -> list[str]:
     states = [str(s).strip().upper() for s in switch_config.get("states") or [] if str(s).strip()]
     if len(states) < 2:
         raise HTTPException(status_code=400, detail="A switch must have at least 2 states.")
+    invalid = invalid_state_ids(states)
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid switch state ID(s): {', '.join(invalid)}. Use 1-{STATE_ID_MAX} "
+                "characters: letters, digits, '_' or '-'."
+            ),
+        )
+    if len(set(states)) != len(states):
+        raise HTTPException(status_code=400, detail="Switch state IDs must be unique.")
+    return states
+
+
+def validated_switch(switch_config: dict[str, Any]) -> dict[str, Any]:
+    """Checks state IDs, labels and the initial state; returns the normalized config."""
+    states = _validated_state_ids(switch_config)
+    too_long = long_state_labels(switch_config.get("state_labels"))
+    if too_long:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Switch state labels must be at most {STATE_LABEL_MAX} characters: {', '.join(too_long)}.",
+        )
     initial_state = str(switch_config.get("initial_state") or "").strip().upper()
     if not initial_state:
         raise HTTPException(
@@ -156,7 +192,13 @@ def _validated_switch(switch_config: dict[str, Any]) -> dict[str, Any]:
             status_code=400,
             detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states)}.",
         )
-    return {**switch_config, "states": states, "initial_state": initial_state}
+    labels = normalize_state_labels(states, switch_config.get("state_labels"))
+    return {
+        **switch_config,
+        "states": states,
+        "state_labels": labels,
+        "initial_state": initial_state,
+    }
 
 
 def _merged_switch(metadata_json: dict[str, Any], payload: EntityUpdateRequest) -> dict[str, Any]:
@@ -164,6 +206,7 @@ def _merged_switch(metadata_json: dict[str, Any], payload: EntityUpdateRequest) 
     switch_config = dict(switch_config) if isinstance(switch_config, dict) else {}
     for field, key in (
         ("switch_states", "states"),
+        ("switch_state_labels", "state_labels"),
         ("switch_initial_state", "initial_state"),
         ("switch_transitions", "transitions"),
     ):
@@ -184,7 +227,7 @@ def update_switch(
         _drop(metadata_json, ("switch", *_SWITCH_FLAT_KEYS))
         return
     if any(given(payload, f) for f in _SWITCH_FIELDS):
-        metadata_json["switch"] = _validated_switch(_merged_switch(metadata_json, payload))
+        metadata_json["switch"] = validated_switch(_merged_switch(metadata_json, payload))
     # Clean up flat switch keys that were previously written as pollution
     _drop(metadata_json, _SWITCH_FLAT_KEYS)
 

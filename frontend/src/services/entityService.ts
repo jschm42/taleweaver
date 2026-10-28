@@ -39,6 +39,7 @@ export interface EntityEditData {
   pickup_trigger_mode?: string
   pickup_trigger_cue?: string
   switch_states?: string[] | null
+  switch_state_labels?: Record<string, string> | null
   switch_initial_state?: string | null
   switch_transitions?: any[] | null
   effects?: Record<string, any> | null

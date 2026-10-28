@@ -15,6 +15,7 @@ from backend.api.routes.adventures.editing.common import (
     _sanitize_object_id,
 )
 from backend.api.routes.adventures.editing.entity_update.item import hide_recipe_results
+from backend.api.routes.adventures.editing.entity_update.item_metadata import validated_switch
 from backend.api.routes.adventures.editing.image_clone import _clone_entity_image
 from backend.api.routes.adventures.editing.payload import _serialize_model
 from backend.api.routes.adventures.editing.schemas import (
@@ -311,24 +312,7 @@ async def create_editor_entity(
         metadata_json[RESULT_FIELD] = normalize_ids(payload.result_item_ids)
         metadata_json[KEPT_FIELD] = normalize_ids(payload.kept_ingredients)
     if item_type == "SWITCH":
-        switch_config = metadata_json.get("switch") or {}
-        states = switch_config.get("states") or []
-        states_list = [str(s).strip().upper() for s in states if str(s).strip()]
-        if len(states_list) < 2:
-            raise HTTPException(status_code=400, detail="A switch must have at least 2 states.")
-        initial_state = str(switch_config.get("initial_state") or "").strip().upper()
-        if not initial_state:
-            raise HTTPException(
-                status_code=400, detail="An initial state must be defined for the switch."
-            )
-        if initial_state not in states_list:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states_list)}.",
-            )
-        switch_config["states"] = states_list
-        switch_config["initial_state"] = initial_state
-        metadata_json["switch"] = switch_config
+        metadata_json["switch"] = validated_switch(dict(metadata_json.get("switch") or {}))
 
     entity = WorldEntity(
         id=entity_id,

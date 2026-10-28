@@ -83,6 +83,14 @@ class SwitchProxy:
         """Alias for state."""
         return self.state
 
+    @property
+    def label(self) -> str:
+        """In-game text of the current state: its label, or the state ID."""
+        from backend.engine.switch_service import SwitchService
+        from backend.engine.switch_states import state_label
+
+        return state_label(SwitchService.resolve_switch_config(self._data), self.state)
+
     @switch_state.setter
     def switch_state(self, val: str) -> None:
         self.set_state(val)

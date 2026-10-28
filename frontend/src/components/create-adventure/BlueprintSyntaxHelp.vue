@@ -6,7 +6,7 @@ const tags = [
   '[Exit: CELL -> HALL] label  code: / key_item:',
   '[NPC: WARDEN] Name  in: / hp: / attack:',
   '[Item: KEY] Name  in: / type: / hidden:',
-  '[Switch: LEVER]  states: / transition:',
+  '[Switch: LEVER]  states: OFF=Dark, ON / transition:',
   '[Sequence: 1] Title  goal_item: / guard:',
   '  [Rule: ID] condition  script:',
   '[Script: ID]  trigger: / code: |',

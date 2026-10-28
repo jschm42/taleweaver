@@ -45,6 +45,7 @@ class EntityUpdateRequest(BaseModel):
     pickup_trigger_mode: Optional[str] = None
     pickup_trigger_cue: Optional[str] = None
     switch_states: Optional[list[str]] = None
+    switch_state_labels: Optional[dict[str, str]] = None
     switch_initial_state: Optional[str] = None
     switch_transitions: Optional[list[dict[str, Any]]] = None
     on_success_script: Optional[str] = None

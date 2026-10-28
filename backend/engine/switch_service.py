@@ -46,6 +46,7 @@ class SwitchService:
         if isinstance(states, list):
             return {
                 "states": states,
+                "state_labels": metadata.get("switch_state_labels") or {},
                 "initial_state": metadata.get("switch_initial_state", ""),
                 "transitions": metadata.get("switch_transitions", []),
                 "outcomes": metadata.get("switch_outcomes", []),
@@ -216,4 +217,3 @@ class SwitchService:
         s_script = str(config.get("on_failure_script") or "").strip()
         if s_script:
             runner.execute_code(s_script, scope, script_id=f"switch_{switch_id}_on_failure")
-

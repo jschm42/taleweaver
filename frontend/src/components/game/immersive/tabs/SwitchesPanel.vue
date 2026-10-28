@@ -5,7 +5,7 @@
  */
 import { ref } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
-import { switchState } from '../switchState'
+import { switchState, switchStateId } from '../switchState'
 
 const props = defineProps<{
   switches: any[]
@@ -37,7 +37,7 @@ function hasImage(sw: any): boolean {
 
 /** ON-like states get the accent badge; everything else reads as idle. */
 function isActive(sw: any): boolean {
-  return ['ON', 'OPEN', 'ACTIVE', 'UP', 'TRUE'].includes(switchState(sw))
+  return ['ON', 'OPEN', 'ACTIVE', 'UP', 'TRUE'].includes(switchStateId(sw))
 }
 </script>
 

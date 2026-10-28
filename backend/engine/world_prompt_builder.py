@@ -299,6 +299,8 @@ def _build_item_requirement(min_items: Optional[int], max_items: Optional[int]) 
 
 _SWITCH_DETAILS_HINT = (
     "- Every SWITCH must include switch_states (>=2), switch_initial_state, and switch_transitions.\n"
+    "- State IDs are script keys: 1-15 characters, upper-case letters, digits, '_' or '-' (e.g. 'OFF', 'HALF-OPEN', 'LEVEL_2'). "
+    "For player-friendly text add `switch_state_labels` ({state, label}, label max 20 characters, e.g. {state: 'HALF-OPEN', label: 'Half open'}); without a label the ID is shown in-game.\n"
     "- Transition objects shape: {from (optional), to, gates{item,code,rule,expression}, fail_message, success_message, on_success_script, on_failure_script}.\n"
     "- Transition guards (`gates`):\n"
     "  * `item`: inventory item ID required to operate switch (e.g. 'RUSTY_KEY').\n"

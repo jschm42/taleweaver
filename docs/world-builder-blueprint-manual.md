@@ -224,7 +224,7 @@ Switch outcomes can set flags but cannot unlock exits directly, so the exit chec
 ```text
 [Switch: FLOODGATE_LEVER] Floodgate Lever
 in: PUMP_ROOM
-states: DOWN, UP
+states: DOWN=Lowered, UP=Raised
 initial: DOWN
 transition: DOWN -> UP | item: CRANK_HANDLE | fail: The socket is empty. A handle is missing.
 outcome: UP -> flag: FLOODGATE_OPEN
@@ -233,6 +233,8 @@ outcome: UP -> flag: FLOODGATE_OPEN
 guard: tw.flags.get('FLOODGATE_OPEN')
 lock: The floodgate is shut. Water roars behind it.
 ```
+
+`DOWN` and `UP` are the state IDs: transitions, outcomes and scripts use them (`tw.switch('FLOODGATE_LEVER').is_state('UP')`). The text after `=` is what the player sees ("Raised"). It is optional and at most 20 characters; without it the ID is shown. IDs may use letters, digits, `_` and `-`, up to 15 characters.
 
 ### A hidden item revealed by searching
 

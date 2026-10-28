@@ -160,7 +160,8 @@ Interactive elements, items, containers, and state machines.
 | `unlock_item` | `string \| null` | Item ID required to unlock the container. |
 | `unlock_rule` | `string \| null` | Narrative condition or requirement to open the container. |
 | `switch_state` | `string \| null` | Current active state for `SWITCH` objects (e.g., `"OFF"`). |
-| `switch_states` | `array \| null` | List of valid states for `SWITCH` objects (e.g., `["OFF", "ON"]`). |
+| `switch_states` | `array \| null` | State IDs of `SWITCH` objects (e.g., `["OFF", "HALF-OPEN", "ON"]`). Each ID is 1-15 characters: upper-case letters, digits, `_` or `-`. Scripts, transitions and gates use the IDs. |
+| `switch_state_labels` | `object` | Optional in-game text per state ID, max. 20 characters (e.g., `{"HALF-OPEN": "Half open"}`). States without a label show their ID. *(since 1.3.1)* |
 | `switch_actions` | `array \| null` | Action definitions triggered upon state transitions. |
 | `combination_ingredients`| `array` | `CONSTRUCTABLE` recipes: all item IDs that must be combined (at least 2). |
 | `result_item_ids` | `array` | `CONSTRUCTABLE` recipes: IDs of the regular items that crafting reveals (at least 1, any item type except `CONSTRUCTABLE`). Results always start hidden. *(since 1.3.1)* |

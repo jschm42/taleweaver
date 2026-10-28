@@ -57,7 +57,7 @@ Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switc
 Hooks: `on_pickup`, `on_drop`, `on_equip`, `on_unequip`, `on_interact`/`on_use`, `on_unlock`, `on_unlock_fail`, `on_read`, `on_craft`, `on_craft_fail` (+ `_text` variants).
 
 Switch keys:
-- `states: OFF, ON` and `initial: OFF`
+- `states: OFF, ON` and `initial: OFF`. Each state is an **ID** used by scripts, transitions and gates: 1-15 characters, letters, digits, `_` and `-` (stored upper-case, e.g. `HALF-OPEN`). Add an optional **in-game text** (max. 20 characters) with `=`: `states: OFF=Dark, HALF-OPEN=Half open, ON=Lights on`. States without a text show their ID to the player.
 - `transition: OFF -> ON | item: FUSE | code: 12 | guard: <expr> | rule: <text> | fail: <msg> | success: <msg>` (repeatable; use `*` as the source state for "any")
 - `outcome: ON -> flag: POWER_ON; unlock_container: FUSE_BOX` (repeatable). To unlock an exit, set a flag and give the exit `guard: tw.flags.get('POWER_ON')`, or call `tw.exits.unlock('FROM', 'TO')` in a script.
 

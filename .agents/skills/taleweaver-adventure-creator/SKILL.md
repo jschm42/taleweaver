@@ -47,7 +47,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[NPC: ID] Name` | `in`, `type`, `hp`, `hidden`, `reveal`, `inventory`, `attack` (`passive`/`on_sight`), `attack_when_holding`, `attack_guard`, `killable`, `on_defeat`, `on_meet`, `on_interact` |
 | `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_guard`, `contains`, `reveals`, `bonus` (`str+2`), `damage`, `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read` |
 | `[Recipe: ID] Name` | `combine` (`A + B`), `results` (crafted item IDs), `keep` (ingredients not consumed), `craft_guard`, `on_craft`, `on_craft_fail_text` |
-| `[Switch: ID] Name` | `states`, `initial`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: …`, `outcome: B -> flag: KEY; unlock_container: ID` |
+| `[Switch: ID] Name` | `states` (IDs ≤15 chars, `A-Z 0-9 _ -`; optional in-game text ≤20 chars: `OFF=Dark, ON=Lights on`), `initial`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: …`, `outcome: B -> flag: KEY; unlock_container: ID` |
 | `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `on_start`, `on_end` |
 | `[Rule: ID] condition` | `guard`, `script`, `text`, `max` |
 | `[Script: ID] Name` | `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, …), `target`, `code` |

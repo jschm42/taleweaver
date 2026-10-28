@@ -645,6 +645,17 @@ class ObjectProxy(EntityProxy):
     def state(self, val: str) -> None:
         self.set_state(val)
 
+    @property
+    def label(self) -> str:
+        """In-game text of the current switch state (its label, or the ID); "" for non-switches."""
+        from backend.engine.switch_service import SwitchService
+        from backend.engine.switch_states import state_label
+
+        current = self.switch_state
+        if current is None:
+            return ""
+        return state_label(SwitchService.resolve_switch_config(self._data), current)
+
     def get_state(self) -> Optional[str]:
         """Returns the current switch state."""
         return self.switch_state

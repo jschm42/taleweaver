@@ -32,6 +32,7 @@ CHECKS: tuple[Check, ...] = (
     entities.check_container_inventory,
     recipes.check_constructable_recipes,
     entities.check_switch_state_consistency,
+    entities.check_switch_state_ids,
     entities.check_npc_stats,
     entities.check_npc_references,
     entities.check_reveal_targets,

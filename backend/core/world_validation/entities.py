@@ -15,6 +15,12 @@ from backend.core.world_validation.context import (
     ref_id,
     ref_ids,
 )
+from backend.engine.switch_states import (
+    STATE_ID_MAX,
+    STATE_LABEL_MAX,
+    invalid_state_ids,
+    long_state_labels,
+)
 from backend.schemas.validation import ValidationFinding
 
 # Hard caps that mirror the engine-side thresholds (world_schemas.py / world_generator.py).
@@ -157,6 +163,39 @@ def check_switch_state_consistency(ctx: ValidationContext) -> list[ValidationFin
                     states=states,
                 )
             )
+    return findings
+
+
+def _switch_state_findings(eid: str, entity: dict[str, Any]) -> list[ValidationFinding]:
+    states = [str(s) for s in entity.get("switch_states") or []]
+    messages = [
+        (
+            "switch_invalid_state_id",
+            f"Switch '{eid}' state ID '{state}' must be 1-{STATE_ID_MAX} characters "
+            "(letters, digits, '_' or '-').",
+        )
+        for state in invalid_state_ids([s.strip().upper() for s in states])
+    ]
+    messages += [
+        (
+            "switch_state_label_too_long",
+            f"Switch '{eid}' label of state '{state}' is longer than {STATE_LABEL_MAX} "
+            "characters and will be shortened.",
+        )
+        for state in long_state_labels(entity.get("switch_state_labels"))
+    ]
+    return [
+        finding("warn", code, message, location=f"entity:{eid}", entity_id=eid)
+        for code, message in messages
+    ]
+
+
+def check_switch_state_ids(ctx: ValidationContext) -> list[ValidationFinding]:
+    """State IDs are script keys (A-Z, 0-9, _ and -, max 15); labels are max 20 characters."""
+    findings: list[ValidationFinding] = []
+    for entity in ctx.entities:
+        if item_type(entity) == "SWITCH":
+            findings += _switch_state_findings(entity_id(entity) or "?", entity)
     return findings
 
 
