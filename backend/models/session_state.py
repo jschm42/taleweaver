@@ -41,7 +41,7 @@ class SessionState(Base, TimestampMixin):
     enable_history_compression = Column(Boolean, default=True, nullable=False)
     # How much the narrator writes per turn (terse | dialogue | balanced | rich | epic), see core/narration_styles.py
     narration_style = Column(
-        String(16), default="dialogue", nullable=False, server_default="dialogue"
+        String(16), default="balanced", nullable=False, server_default="balanced"
     )
     # Dialog skin the player picked for this session; NULL means "auto" (see core/ui_theme.py)
     ui_skin = Column(String(16), nullable=True)

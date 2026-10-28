@@ -1569,6 +1569,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   autoSpeakDialogues,
   // Speech stays silent while the player answers a choice dialog.
   speechSuppressed: isDialogOpen,
+  // The new scene's narration waits until the travel overlay is gone.
+  speechDeferred: isSceneTransitioning,
 })
 
 const handleTrackQuest = (questId: string | null) => {

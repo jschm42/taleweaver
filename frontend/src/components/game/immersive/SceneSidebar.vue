@@ -29,10 +29,10 @@ const emit = defineEmits<{
 <template>
   <aside
     v-if="props.sceneExits.length > 0 || props.items.length > 0 || props.sceneSwitches.length > 0"
-    class="w-72 2xl:w-80 shrink-0 flex flex-col gap-2 min-h-0 overflow-y-auto tw-scroll"
+    class="w-72 2xl:w-80 shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto tw-scroll p-1.5"
     aria-label="Scene"
   >
-    <section v-if="props.sceneSwitches.length > 0" class="tw-panel flex flex-col gap-2 p-2.5">
+    <section v-if="props.sceneSwitches.length > 0" class="tw-sidebar-group flex flex-col gap-2">
       <h3 class="tw-panel-title">Switches</h3>
       <div class="flex flex-wrap gap-1.5">
         <button
@@ -51,7 +51,7 @@ const emit = defineEmits<{
       </div>
     </section>
 
-    <section v-if="props.sceneExits.length > 0" class="tw-panel p-2.5">
+    <section v-if="props.sceneExits.length > 0" class="tw-sidebar-group">
       <PassagesPanel
         compact
         :scene-exits="props.sceneExits"
@@ -61,7 +61,7 @@ const emit = defineEmits<{
       />
     </section>
 
-    <section v-if="props.items.length > 0" class="tw-panel p-2.5">
+    <section v-if="props.items.length > 0" class="tw-sidebar-group">
       <DiscoveriesPanel
         compact
         :items="props.items"
@@ -77,6 +77,26 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
+/* No panel background: the groups sit directly on the scene image (test layout). */
+.tw-sidebar-group {
+  color: var(--tw-panel-ink);
+}
+
+/* Without a panel behind them, headings and tiles need their own shadow to stay readable. */
+.tw-sidebar-group :deep(.tw-panel-title),
+.tw-sidebar-group :deep(.tw-muted) {
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.tw-sidebar-group :deep(.tw-card),
+.tw-sidebar-group .tw-tab {
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.6),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
 .ra {
   font-family: 'rpgawesome' !important;
   display: inline-block;

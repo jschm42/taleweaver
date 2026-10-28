@@ -45,7 +45,7 @@ function formatSceneTitle(name?: string | null): string {
   <Transition name="scene-veil">
     <div
       v-if="props.active"
-      class="tw-overlay absolute inset-0 z-40 flex flex-col items-center justify-center p-6 select-none overflow-hidden"
+      class="tw-overlay fixed inset-0 z-[60] flex flex-col items-center justify-center p-6 select-none overflow-hidden"
     >
       <!-- Destination Scene Backdrop -->
       <div class="absolute inset-0 pointer-events-none">

@@ -55,7 +55,7 @@ function handleInput(event: Event) {
     <SettingCard
       title="Narrator Turn Memory"
       description="Number of recent turns passed verbatim to the narrator with every action."
-      hint="A turn is one exchange: your action plus the narrator's response. Older turns fall out of the window or are compressed (see below)."
+      hint="A turn is one narrator response together with what started it: usually your action, but entering a new scene or starting a new sequence also opens a turn of its own. Older turns fall out of the window or are compressed (see below)."
     >
       <template #control>
         <div class="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/15 bg-black/50 px-2.5 py-1.5">

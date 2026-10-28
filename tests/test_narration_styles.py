@@ -90,7 +90,7 @@ async def test_session_update_rejects_unknown_narration_style(auth_client):
     assert resp.status_code == 422
 
 
-async def test_new_sessions_default_to_dialogue(auth_client):
+async def test_new_sessions_default_to_balanced(auth_client):
     # Arrange / Act
     ids = await _create_adventure(auth_client, "Default Style Quest")
 
@@ -108,9 +108,9 @@ async def test_new_sessions_default_to_dialogue(auth_client):
     assert state.narration_style == DEFAULT_NARRATION_STYLE
 
 
-def test_default_style_is_dialogue():
+def test_default_style_is_balanced():
     # Arrange / Act / Assert
-    assert DEFAULT_NARRATION_STYLE == "dialogue"
+    assert DEFAULT_NARRATION_STYLE == "balanced"
 
 
 @pytest.mark.parametrize("style", ["terse", "dialogue", "balanced", "rich", "epic", None])

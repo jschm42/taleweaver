@@ -3,6 +3,8 @@ import { audioService } from '@/services/audioService'
 import { parseAssistantContent, parseUserMessage, type DialogueSegment } from '@/composables/useComicTurns'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
+/** Lets the travel overlay finish fading out before the new scene's narration starts. */
+const DEFERRED_SPEECH_DELAY_MS = 500
 const MAX_TRACKED_SIGNATURES = 200
 
 type AutoSpeakOptions = {
@@ -18,6 +20,8 @@ type AutoSpeakOptions = {
   autoSpeakDialogues?: Ref<boolean>
   /** While true (e.g. a choice dialog waits for the player), nothing is spoken and running speech stops. */
   speechSuppressed?: Ref<boolean>
+  /** While true (e.g. the travel overlay is shown), new text waits and is spoken once it turns false. */
+  speechDeferred?: Ref<boolean>
 }
 
 function computeContentHash(content: string): string {
@@ -136,6 +140,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     if (!audioService.isUnlocked.value) return
     if (isCombatActive.value) return
     if (!force && (status.value === 'connecting' || status.value === 'loading' || inputLocked.value)) return
+    // Not marked as spoken: the deferral watcher speaks it once the overlay is gone.
+    if (options.speechDeferred?.value) return
 
     const now = Date.now()
     if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
@@ -213,6 +219,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
    */
   function speakStreamingProgress(): void {
     if (status.value !== 'connecting' && status.value !== 'loading') return
+    if (options.speechDeferred?.value) return
     if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
     if (isCombatActive.value) return
 
@@ -279,6 +286,21 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
   watch(() => options.speechSuppressed?.value, (suppressed) => {
     if (suppressed) audioService.stop()
+  })
+
+  // Leaving the scene silences the old narration; the new scene is read once the overlay is gone.
+  let deferredSpeechTimer: ReturnType<typeof setTimeout> | null = null
+  watch(() => options.speechDeferred?.value, (deferred) => {
+    if (deferredSpeechTimer) clearTimeout(deferredSpeechTimer)
+    deferredSpeechTimer = null
+    if (deferred) {
+      audioService.stop()
+      return
+    }
+    deferredSpeechTimer = setTimeout(() => {
+      deferredSpeechTimer = null
+      speakLatestAssistantMessage()
+    }, DEFERRED_SPEECH_DELAY_MS)
   })
 
   watch(() => audioService.autoSpeechEnabled.value, (enabled) => {

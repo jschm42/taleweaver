@@ -348,7 +348,7 @@ defineExpose({
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
         <!-- Full scene artwork (top-right corner of the story area) -->
         <!-- Wrapper owns the positioning: .tw-tab sets position: relative on the button itself. -->
-        <!-- z-[35]: above the story tabs (z-30, full width, rendered later), below travel (z-40) and sequence (z-[70]) overlays. -->
+        <!-- z-[35]: above the story tabs (z-30, full width, rendered later), below the sequence overlay (z-[70]). -->
         <div v-if="activeSceneImageUrl" class="absolute right-0 top-0 z-[35]">
           <button
             type="button"
@@ -426,15 +426,6 @@ defineExpose({
           </template>
         </ImmersiveStoryFeed>
 
-        <!-- Cinematic Scene Transition Curtain -->
-        <SceneTransitionOverlay
-          :active="Boolean(props.isSceneTransitioning || props.exitTraversalBusy)"
-          :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
-          :exit-label="props.sceneTransitionTarget?.label"
-          :status-text="props.statusText"
-          :background-image-url="transitionSceneImageUrl"
-        />
-
         <!-- Cinematic Movie-Style Sequence Title Overlay -->
         <CinematicSequenceOverlay
           :active-sequence="props.activeSequence"
@@ -508,6 +499,15 @@ defineExpose({
         @cancel-turn-error="emit('cancelTurnError')"
       />
     </footer>
+
+    <!-- 5. CINEMATIC SCENE TRANSITION CURTAIN (covers the whole game view, header and footer included) -->
+    <SceneTransitionOverlay
+      :active="Boolean(props.isSceneTransitioning || props.exitTraversalBusy)"
+      :target-scene-name="props.sceneTransitionTarget?.targetSceneName"
+      :exit-label="props.sceneTransitionTarget?.label"
+      :status-text="props.statusText"
+      :background-image-url="transitionSceneImageUrl"
+    />
 
     <SceneImageViewer
       v-if="showSceneImage && activeSceneImageUrl"

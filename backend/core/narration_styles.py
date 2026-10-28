@@ -11,7 +11,7 @@ from typing import Final, Literal
 
 NarrationStyle = Literal["terse", "dialogue", "balanced", "rich", "epic"]
 
-DEFAULT_NARRATION_STYLE: Final[NarrationStyle] = "dialogue"
+DEFAULT_NARRATION_STYLE: Final[NarrationStyle] = "balanced"
 
 # One-line length reminders, repeated at the end of every turn message where the model weighs
 # them most (the full rules in the system prompt alone were too easy to ignore).
