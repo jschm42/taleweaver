@@ -97,6 +97,11 @@ To ensure codebase quality, security, and prevent regression:
   * Use them sparingly. They only make sense if a specific algorithm is extremely complex, a surprising fix was implemented, or an obscure workaround needs documentation.
 * **TODOs:**
   * Use `TODO: [Short Description]` for pending tasks in the code. These tasks should be tracked in issue trackers.
+* **Project Documentation Stays in Sync (Mandatory):**
+  * Every change to user-facing behavior, syntax, settings, APIs, scripting functions or file formats must update the affected documentation in the same change. This covers `docs/`, `README.md`, in-app help texts (popovers, tooltips, placeholders), `.agents/skills/` and `.agents/rules/`.
+  * Documented examples (blueprints, scripts, commands) must match the current code. Validate them with the real parser or validator where one exists.
+  * New features get a docs entry. Removed or renamed features leave no stale references behind.
+  * Documentation is written in **English only**, regardless of the conversation language.
 
 ---
 

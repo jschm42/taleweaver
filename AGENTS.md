@@ -29,6 +29,14 @@ Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customi
    - Never suppress complexity (`C901`, `PLR0912`, `PLR0915`) or security (`S`) warnings with `# noqa`; refactor the code instead.
    - Full check / fix command: `poetry run python scripts/lint.py --fix`.
 
+4. **Documentation Stays in Sync (Mandatory)**:
+   - Every change to user-facing behavior, syntax, settings, APIs, scripting functions or file formats **must update the affected documentation in the same task**. A task is not finished while its docs are outdated.
+   - Check and update, where affected: `docs/` (e.g. `world-builder-syntax.md`, `world-builder-blueprint-manual.md`, `scripting_engine.md`), `README.md`, in-app help texts (info popovers, tooltips, placeholders), `.agents/skills/` and `.agents/rules/`.
+   - Keep the examples in the docs working: a documented blueprint, script or command must match the current code. Run examples through the real validator where one exists (e.g. `backend.engine.blueprint.analyze_blueprint` for Story Idea blueprints).
+   - New features get a docs entry. Removed or renamed features are removed or renamed in the docs too, with no stale references left behind.
+   - Documentation is written **in English only**, regardless of the language used in the conversation.
+   - In the final summary, list the docs that were updated, or state explicitly that none were affected.
+
 ---
 
 ## 1. Workspace Rules (`.agents/rules/`)
