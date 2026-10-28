@@ -73,9 +73,18 @@ const teaser = computed(() => (hero.value?.teaser || '').replace(/\\n/g, '\n'))
     class="tale-enter relative overflow-hidden rounded-3xl min-h-[180px] sm:min-h-[220px] lg:min-h-[250px] flex items-end"
     :style="{ '--accent-rgb': accent.rgb, boxShadow: `0 0 0 1px rgb(251 191 36 / 0.16), 0 30px 60px -30px rgb(${accent.rgb} / 0.45)` }"
   >
-    <img v-if="hero.imageUrl" :src="hero.imageUrl" alt="" class="hero-kenburns absolute inset-0 w-full h-full object-cover object-top" />
-    <div class="absolute inset-0 bg-gradient-to-r from-[#050b14] via-[#050b14]/80 to-transparent"></div>
-    <div class="absolute inset-0 bg-gradient-to-t from-[#050b14] via-transparent to-transparent"></div>
+    <div class="absolute inset-0 bg-[#050b14]"></div>
+    <template v-if="hero.imageUrl">
+      <img :src="hero.imageUrl" alt="" aria-hidden="true" class="hero-ambient absolute inset-0 w-full h-full object-cover" />
+      <div class="hero-cover absolute inset-y-0 right-0 w-[70%] sm:w-[55%] lg:w-[42%] overflow-hidden">
+        <img :src="hero.imageUrl" alt="" class="hero-kenburns absolute inset-0 w-full h-full object-cover object-[center_30%]" />
+      </div>
+    </template>
+    <div
+      class="absolute inset-0"
+      :style="{ background: `radial-gradient(ellipse at 0% 100%, rgb(${accent.rgb} / 0.22), transparent 55%)` }"
+    ></div>
+    <div class="absolute inset-0 bg-gradient-to-t from-[#050b14]/90 via-transparent to-transparent"></div>
     <div class="tale-card__frame absolute inset-0"><div class="tale-card__frame-bl"></div></div>
 
     <div class="relative z-10 p-4 sm:p-6 lg:p-7 max-w-2xl space-y-2 sm:space-y-3">

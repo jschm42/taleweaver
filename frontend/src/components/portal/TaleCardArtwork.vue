@@ -1,27 +1,50 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import type { GenreAccent } from '@/composables/useGenreAccent'
 
 /**
- * Artwork layer for portrait tale cards. Covers are generated at 3:2, so instead of cropping them
- * into the 2:3 card, the full cover sits at the top and a blurred copy fills the space below it.
+ * Artwork layer for portrait tale cards. Covers are generated at 2:3 and fill the card.
+ * Older landscape covers are not cropped: they sit at the top and a blurred copy fills the rest.
  */
-defineProps<{
+const props = defineProps<{
   imageUrl: string | null
   accent: GenreAccent
   /** Desaturates the art, e.g. for defeated sessions. */
   muted?: boolean
 }>()
+
+const isLandscape = ref(false)
+
+watch(
+  () => props.imageUrl,
+  () => {
+    isLandscape.value = false
+  }
+)
+
+function onCoverLoad(event: Event) {
+  const img = event.target as HTMLImageElement
+  isLandscape.value = img.naturalWidth > img.naturalHeight
+}
 </script>
 
 <template>
   <div class="absolute inset-0 overflow-hidden rounded-2xl bg-slate-950" :class="muted ? 'grayscale-[85%] brightness-75' : ''">
     <template v-if="imageUrl">
-      <img :src="imageUrl" alt="" aria-hidden="true" class="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl brightness-[0.45] saturate-150" />
+      <img
+        v-if="isLandscape"
+        :src="imageUrl"
+        alt=""
+        aria-hidden="true"
+        class="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl brightness-[0.45] saturate-150"
+      />
       <img
         :src="imageUrl"
         alt=""
         loading="lazy"
-        class="tale-card__cover relative w-full aspect-[3/2] object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-105"
+        class="tale-card__cover relative w-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-105"
+        :class="isLandscape ? 'tale-card__cover--landscape aspect-[3/2]' : 'h-full object-[center_30%]'"
+        @load="onCoverLoad"
       />
     </template>
     <div

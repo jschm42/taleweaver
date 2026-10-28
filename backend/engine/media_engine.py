@@ -67,6 +67,8 @@ logger = logging.getLogger(__name__)
 
 BFL_DEFAULT_MODEL = "black_forest_labs/flux-pro-1.1"
 BFL_API_BASE = "https://api.bfl.ai/v1"
+COVER_ASPECT_RATIO = "2:3"
+
 # Use centralized prompts
 NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 
@@ -300,7 +302,7 @@ class MediaEngine:
             return int(round(val / 8.0) * 8)
 
         if t_type == "COVER":
-            return round_to_8(edge), round_to_8(edge / 2.0)
+            return round_to_8(edge * 2.0 / 3.0), round_to_8(edge)
         elif t_type == "SCENE":
             return round_to_8(edge), round_to_8(edge * 9.0 / 16.0)
         elif t_type in ("NPC", "PROTAGONIST", "CHARACTER"):
@@ -1165,7 +1167,7 @@ class MediaEngine:
         style_instruction: Optional[str] = None,
         appearance: Optional[str] = None,
     ) -> Optional[str]:
-        """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
+        """High-level wrapper for adventure cover generation (uses Advanced Model, 2:3 portrait)."""
         t2i = user_config.get("t2i_settings")
         if not t2i:
             logger.warning("No T2I settings found in user_config")
@@ -1222,7 +1224,8 @@ class MediaEngine:
 
         # Resolve steps and cfg_scale for advanced model
         options = dict(t2i)
-        options.setdefault("aspect_ratio", "3:2")
+        # Covers are portrait so they fill the 3:4 tale cards; the portal hero fades them in.
+        options["aspect_ratio"] = COVER_ASPECT_RATIO
         existing_neg = options.get("negative_prompt") or ""
         anti_split_neg = "split screen, multi-panel, panels, comic strip, collage, triptych, diptych, multiple views, storyboard, frames, borders, dividers"
         options["negative_prompt"] = (
@@ -1291,7 +1294,10 @@ class MediaEngine:
             # Map theme string to ColorTheme enum
             color_theme = resolve_color_theme(theme)
 
-            if cat in ["SCENE", "COVER", "LANDSCAPE"]:
+            if cat == "COVER":
+                strategy = OrganicGradientStrategy(theme=color_theme)
+                width, height = 800, 1200
+            elif cat in ["SCENE", "LANDSCAPE"]:
                 # Scenes use random generation with subtle blur
                 strategy = OrganicGradientStrategy(theme=color_theme)
                 width, height = 1200, 800

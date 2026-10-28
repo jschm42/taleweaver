@@ -177,10 +177,11 @@ Global negative instruction appended to all image prompts to prevent AI-generate
 ADVENTURE_COVER_PROMPT_TEMPLATE = (
     "A single unified cinematic cover art illustration capturing the iconic atmosphere of {title}. "
     "Depicting: {original_prompt}. {context}"
-    "Single continuous scene, single seamless frame, single focal point, wide-angle cinematic composition. "
+    "Single continuous scene, single seamless frame, single focal point, tall vertical composition "
+    "with the focal point in the upper half and calm, darker ground at the bottom. "
     "ABSOLUTELY NO split-screen, NO multi-panel, NO collage, NO triptych, NO diptych, "
     "NO borders, NO dividers, NO comic strip, NO storyboard, NO multiple views, NO TEXT. "
-    "1:1 aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
+    "2:3 portrait aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
 )
 """
 Template for generating the main cover image of an adventure.
