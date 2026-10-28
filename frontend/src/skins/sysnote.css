@@ -66,6 +66,7 @@
 }
 
 /* Kind accents (icon color only, so the skin look stays intact). */
+.tw-sysnote[data-kind='error'] { --tw-sysnote-icon-kind: #ef4444; }
 .tw-sysnote[data-kind='dice'] { --tw-sysnote-icon-kind: #fbbf24; }
 .tw-sysnote[data-kind='vitals'] { --tw-sysnote-icon-kind: #f87171; }
 .tw-sysnote[data-kind='reward'] { --tw-sysnote-icon-kind: #facc15; }

@@ -19,6 +19,17 @@ from backend.engine.scripting.sandbox import (
 
 logger = logging.getLogger(__name__)
 
+SCRIPT_ERROR_PREFIX = "Script error"
+
+
+def report_script_error(context: Any, script_id: str, exc: Exception) -> None:
+    """Shows a failed script to the player as a system message, whether or not debug mode is on."""
+    changeset = getattr(context, "changeset", None)
+    messages = getattr(changeset, "system_messages", None)
+    if not isinstance(messages, list):
+        return
+    messages.append(f"{SCRIPT_ERROR_PREFIX} in '{script_id}': {exc}")
+
 
 class ScriptRunner:
     """Dispatches and evaluates scripts attached to an adventure."""
@@ -57,6 +68,7 @@ class ScriptRunner:
             tree = ast.parse(self.init_script, mode="exec")
         except Exception as exc:
             logger.error(f"[ScriptRunner] Failed to parse init_script definitions: {exc}")
+            report_script_error(scope.get("tw"), "init_script", exc)
             return
 
         def_body: list[ast.stmt] = []
@@ -88,6 +100,7 @@ class ScriptRunner:
             logger.error(
                 f"[ScriptRunner] Error executing init_script definitions into scope: {exc}"
             )
+            report_script_error(scope.get("tw"), "init_script", exc)
 
     def run_init_script(self, context: GameContext) -> ScriptChangeset:
         """
@@ -101,10 +114,7 @@ class ScriptRunner:
                 self.interpreter.execute(self.init_script, scope)
             except Exception as exc:
                 logger.exception(f"[ScriptRunner] Error executing init_script: {exc}")
-                if hasattr(context, "changeset") and hasattr(
-                    context.changeset, "narrative_messages"
-                ):
-                    context.changeset.narrative_messages.append(f"[Init Script Error]: {exc}")
+                report_script_error(context, "init_script", exc)
 
         # Also dispatch any modular scripts configured with 'on_init'
         self.run_trigger("on_init", context)
@@ -128,16 +138,20 @@ class ScriptRunner:
             self.interpreter.execute(code, scope)
         except ScriptSecurityError as sse:
             logger.error(f"[ScriptRunner] Security violation in script '{script_id}': {sse}")
+            report_script_error(context, script_id, sse)
         except ScriptTimeoutError as ste:
             logger.error(
                 f"[ScriptRunner] Timeout/instruction limit exceeded in script '{script_id}': {ste}"
             )
+            report_script_error(context, script_id, ste)
         except ScriptExecutionError as see:
             logger.error(f"[ScriptRunner] Runtime error in script '{script_id}': {see}")
+            report_script_error(context, script_id, see)
         except Exception as exc:
             logger.exception(
                 f"[ScriptRunner] Unexpected error executing script '{script_id}': {exc}"
             )
+            report_script_error(context, script_id, exc)
 
     def run_trigger(
         self,
@@ -165,6 +179,4 @@ class ScriptRunner:
             logger.exception(
                 f"[ScriptRunner] Unexpected error executing inline script '{script_id}': {exc}"
             )
-            tw = scope.get("tw") or scope.get("game")
-            if tw and hasattr(tw, "changeset") and hasattr(tw.changeset, "narrative_messages"):
-                tw.changeset.narrative_messages.append(f"[Script Error ({script_id})]: {exc}")
+            report_script_error(scope.get("tw") or scope.get("game"), script_id, exc)

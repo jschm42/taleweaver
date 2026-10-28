@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import { BookOpen, Compass, Sparkles, Terminal, Lock } from 'lucide-vue-next'
 import type { StoryTabId } from './tabs/types'
+import { switchState } from './switchState'
 
 const activeTab = defineModel<StoryTabId>({ required: true })
 
@@ -18,6 +19,8 @@ const props = defineProps<{
   unseenSystem: number
   sceneSwitches: any[]
   isEvaluating?: boolean
+  /** Passages, Discoveries and switches live in the scene sidebar: hide them here. */
+  docked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -33,16 +36,13 @@ const tabs = computed<TabEntry[]>(() => {
     { id: 'discoveries', label: 'Discoveries', count: props.itemCount, unseen: props.unseenItems },
     { id: 'system', label: 'System', count: props.systemCount, unseen: props.unseenSystem },
   ]
-  return entries.filter((tab) => tab.id === 'story' || tab.count > 0)
+  const dockedIds: StoryTabId[] = props.docked ? ['passages', 'discoveries'] : []
+  return entries.filter((tab) => tab.id === 'story' || (tab.count > 0 && !dockedIds.includes(tab.id)))
 })
 
 /** "Story" alone is not worth a tab bar: show tabs only when another section has entries. */
 const hasSectionTabs = computed(() => tabs.value.length > 1)
-const hasSwitches = computed(() => props.sceneSwitches.length > 0)
-
-function switchState(sw: any): string {
-  return String(sw.switch_state || sw.metadata_json?.switch?.initial_state || '—').toUpperCase()
-}
+const hasSwitches = computed(() => !props.docked && props.sceneSwitches.length > 0)
 </script>
 
 <template>
@@ -79,7 +79,7 @@ function switchState(sw: any): string {
 
     <!-- Scene switches (levers) -->
     <button
-      v-for="sw in props.sceneSwitches"
+      v-for="sw in hasSwitches ? props.sceneSwitches : []"
       :key="sw.id"
       type="button"
       class="tw-tab shrink-0"

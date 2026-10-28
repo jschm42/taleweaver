@@ -26,6 +26,7 @@ from backend.engine.scripting.dialog import (
     find_option,
     pending_dialog,
 )
+from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
 from backend.models.chat import ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -112,8 +113,13 @@ class DialogChoiceResolver:
         runner.load_init_definitions(definitions)
         if not callable(definitions.get(handler)):
             logger.warning("[Dialog] Handler '%s' is not defined in the init script.", handler)
-            await self._debug(f"[DEBUG: Dialog] Handler '{handler}' is not defined in init_script.")
-            return [], False
+            # Shown even without debug mode: otherwise the choice silently does nothing.
+            note = (
+                f"{SCRIPT_ERROR_PREFIX} in 'dialog_{handler}': the choice handler '{handler}' "
+                "is not defined in the adventure's init_script, so this choice has no effect."
+            )
+            await self.manager._save_chat_message("system", note)
+            return [note], False
 
         context = await self.manager._build_script_context()
         choice = {"index": option["index"], "label": option["label"], "dialog_id": dialog["id"]}
@@ -126,11 +132,6 @@ class DialogChoiceResolver:
         except GameOverError as goe:
             await self.manager._finalize_session("game_over", str(goe))
             return [], True
-
-    async def _debug(self, message: str) -> None:
-        context = await self.manager._build_script_context()
-        if context.is_debug_enabled:
-            await self.manager._save_chat_message("system", message)
 
     async def _narrate(
         self,

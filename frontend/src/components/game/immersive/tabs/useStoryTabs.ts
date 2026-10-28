@@ -9,6 +9,8 @@ type StoryTabsSource = {
   sceneExits: () => any[] | undefined
   items: () => any[] | undefined
   systemMessages: Ref<ChatMessage[]>
+  /** Passages and Discoveries are shown in the scene sidebar instead of as tabs. */
+  docked: () => boolean
 }
 
 /** Active story tab, per-tab counts and "new entries" markers for the immersive view. */
@@ -25,13 +27,13 @@ export function useStoryTabs(source: StoryTabsSource) {
   )
   const { unseen: unseenItems } = useUnseenCount(
     () => sceneItems.value.length,
-    () => activeStoryTab.value === 'discoveries'
+    () => activeStoryTab.value === 'discoveries' || source.docked()
   )
 
   const tabCounts = computed<Record<StoryTabId, number>>(() => ({
     story: 1,
-    passages: sceneExits.value.length,
-    discoveries: sceneItems.value.length,
+    passages: source.docked() ? 0 : sceneExits.value.length,
+    discoveries: source.docked() ? 0 : sceneItems.value.length,
     system: systemLog.value.length,
   }))
 
@@ -47,7 +49,7 @@ export function useStoryTabs(source: StoryTabsSource) {
     { immediate: true }
   )
 
-  // A tab whose content disappeared (scene change, last item taken) falls back to the story.
+  // A tab whose content disappeared (scene change, last item taken, moved to the sidebar) falls back to the story.
   watch(tabCounts, (counts) => {
     if (!counts[activeStoryTab.value]) {
       activeStoryTab.value = 'story'

@@ -20,10 +20,12 @@ export function isTurnErrorMessage(msg: SystemMessage | null | undefined, turnEr
   return Boolean(turnError?.message && String(msg?.content || '').includes(turnError.message))
 }
 
-export type SystemNoteKind = 'dice' | 'item' | 'vitals' | 'quest' | 'reward' | 'info'
+export type SystemNoteKind = 'error' | 'dice' | 'item' | 'vitals' | 'quest' | 'reward' | 'info'
 
 // First match wins; English and German engine wording (word prefixes, so inflections match).
 const NOTE_KIND_PATTERNS: [SystemNoteKind, RegExp][] = [
+  // Failed adventure scripts (backend SCRIPT_ERROR_PREFIX), shown even without debug mode.
+  ['error', /^\s*script error/i],
   ['dice', /\b(roll|dice|d20|skill check|saving throw|würfel|probe)/i],
   ['reward', /\b(xp\b|experience|award|achievement|erfahrung|auszeichnung)/i],
   ['quest', /\b(quest|objective|aufgabe)/i],

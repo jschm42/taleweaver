@@ -37,6 +37,7 @@ import SessionSettingsModal from '@/components/game/SessionSettingsModal.vue'
 import type { SessionSettingsPayload, SettingsTabId } from '@/components/game/settings/types'
 import { useTextDensity } from '@/skins/useTextDensity'
 import { useTextScale } from '@/skins/useTextScale'
+import { useSceneSidebar } from '@/skins/useSceneSidebar'
 import { describeAutoSkin, resolveSkin, skinPreferenceOf } from '@/skins/skinRegistry'
 import { useSheetSkin } from '@/skins/useSheetSkin'
 import { provideDialogSkin } from '@/skins/dialogSkin'
@@ -161,6 +162,7 @@ const autoSpeakDialogues = ref(localStorage.getItem('tw_autoSpeakDialogues') !==
 const skinPreference = computed(() => skinPreferenceOf(sheet.value?.ui_skin))
 const { textDensity } = useTextDensity()
 const { textScale } = useTextScale()
+const { sceneSidebarEnabled } = useSceneSidebar()
 const autoSkin = computed(() => resolveSkin('auto', sheet.value?.ui_theme, sheet.value?.adventure_tone))
 const autoSkinReason = computed(() => describeAutoSkin(sheet.value?.ui_theme, sheet.value?.adventure_tone))
 provideDialogSkin(useSheetSkin(() => sheet.value))
@@ -179,6 +181,7 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
   language.value = payload.language
   textDensity.value = payload.density
   textScale.value = payload.textScale
+  sceneSidebarEnabled.value = payload.sceneSidebar
   // The save click is a user gesture, so this is the moment to unlock audio playback.
   if (payload.autoSpeech !== audioService.autoSpeechEnabled.value) {
     audioService.toggleAutoSpeech()
@@ -2011,6 +2014,7 @@ usePlayAgentAutoLoop()
       :initial-skin="skinPreference"
       :initial-density="textDensity"
       :initial-text-scale="textScale"
+      :initial-scene-sidebar="sceneSidebarEnabled"
       :auto-skin="autoSkin"
       :auto-skin-reason="autoSkinReason"
       :tts-available="configState.isTtsEnabled"

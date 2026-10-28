@@ -83,7 +83,7 @@ function isLatestExchange(exIdx: number): boolean {
     <!-- COMIC STORY CONTAINER (Page Display) -->
     <div
       ref="storyContainerRef"
-      class="comic-story-container tw-feed flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 flex flex-col min-h-0 relative"
+      class="comic-story-container tw-feed flex-1 overflow-y-auto tw-scroll p-2 sm:p-4 flex flex-col min-h-0 relative"
       :class="{ 'pb-12 sm:pb-12': hasPager }"
     >
       <!-- Empty State -->
@@ -248,9 +248,4 @@ function isLatestExchange(exIdx: number): boolean {
 .comic-story-container > * {
   flex-shrink: 0;
 }
-
-.custom-scrollbar::-webkit-scrollbar { width: 5px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 </style>

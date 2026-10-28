@@ -31,6 +31,9 @@ import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
 import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
 import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
+import SceneSidebar from './immersive/SceneSidebar.vue'
+import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useSceneSidebar } from '@/skins/useSceneSidebar'
 import type { SettingsTabId } from './settings/types'
 import { useStoryTabs } from './immersive/tabs/useStoryTabs'
 import { useGameShortcuts } from './immersive/useGameShortcuts'
@@ -186,6 +189,11 @@ const { textScale } = useTextScale()
 const { activeSkin, skinStyle } = useSheetSkin(() => props.sheet)
 
 // --- Story tabs ---
+// Wide screens show passages, discoveries and switches in a right-hand column (unless turned off in
+// the settings); narrower ones keep them in the tab bar.
+const isWideScreen = useMediaQuery('(min-width: 1280px)')
+const { sceneSidebarEnabled } = useSceneSidebar()
+const sidebarDocked = computed(() => isWideScreen.value && sceneSidebarEnabled.value)
 const {
   activeStoryTab,
   sceneExits,
@@ -200,6 +208,7 @@ const {
   sceneExits: () => (Array.isArray(props.sceneExits) ? props.sceneExits : []),
   items: () => (Array.isArray(props.items) ? props.items : []),
   systemMessages: computed(() => gameTurns.value.flatMap((turn) => turn.systemMessages)),
+  docked: () => sidebarDocked.value,
 })
 
 // Any action that starts a turn (item click, context menu, take) shows its outcome in the story.
@@ -363,6 +372,7 @@ defineExpose({
           :unseen-system="unseenSystem"
           :scene-switches="props.sceneSwitches || []"
           :is-evaluating="isEvaluating"
+          :docked="sidebarDocked"
           @switch-flip="(sw) => emit('switchFlip', sw)"
         />
 
@@ -432,7 +442,24 @@ defineExpose({
         />
       </main>
 
-      <!-- 3C. RIGHT / PLAY-AGENT CONTROL PANEL -->
+      <!-- 3C. RIGHT / SCENE SIDEBAR (wide screens) -->
+      <SceneSidebar
+        v-if="sidebarDocked"
+        :scene-exits="sceneExits"
+        :items="sceneItems"
+        :scene-switches="props.sceneSwitches || []"
+        :current-scene-name="props.currentSceneName || props.sheet?.current_scene"
+        :is-evaluating="isEvaluating"
+        @switch-flip="(sw) => emit('switchFlip', sw)"
+        @traverse-exit="handleTraverseExit"
+        @item-click="(item) => emit('itemClick', item)"
+        @item-hover="(item, event) => emit('itemHover', item, event)"
+        @item-leave="emit('itemLeave')"
+        @item-contextmenu="(item, event) => emit('itemContextmenu', item, event)"
+        @take-direct="(item) => emit('takeDirect', item)"
+      />
+
+      <!-- 3D. RIGHT / PLAY-AGENT CONTROL PANEL -->
       <PlayAgentPanel v-if="props.sheet?.agent_active" />
     </div>
 

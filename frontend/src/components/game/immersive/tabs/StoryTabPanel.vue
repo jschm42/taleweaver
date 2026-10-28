@@ -31,7 +31,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div role="tabpanel" class="tw-panel flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 sm:p-5">
+  <div role="tabpanel" class="tw-panel flex-1 min-h-0 overflow-y-auto tw-scroll p-3 sm:p-5">
     <PassagesPanel
       v-if="props.tab === 'passages'"
       :scene-exits="props.sceneExits"

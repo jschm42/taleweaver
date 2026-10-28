@@ -9,6 +9,8 @@ import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/u
 const props = defineProps<{
   items: any[]
   isEvaluating?: boolean
+  /** Narrow column layout (scene sidebar): small three-per-row tiles, no hint or type text. */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -88,15 +90,16 @@ async function takeAll() {
         Take All ({{ portableItems.length }})
       </button>
     </div>
-    <p class="tw-muted text-xs leading-relaxed">
+    <p v-if="!props.compact" class="tw-muted text-xs leading-relaxed">
       Click an object to look at it, right-click for more actions, or use the hand to pick it up.
     </p>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+    <div class="grid" :class="props.compact ? 'grid-cols-3 gap-2' : 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3'">
       <div
         v-for="item in props.items"
         :key="item.id"
-        class="tw-card tw-card--interactive group relative flex flex-col items-center gap-2 p-3 pt-4 text-center"
+        class="tw-card tw-card--interactive group relative flex flex-col items-center text-center"
+        :class="props.compact ? 'gap-1 p-1.5 pt-2' : 'gap-2 p-3 pt-4'"
         role="button"
         tabindex="0"
         :aria-label="`Examine ${item.name}`"
@@ -109,16 +112,20 @@ async function takeAll() {
         <button
           v-if="item.is_portable !== false"
           type="button"
-          class="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-500 hover:scale-110 transition-all cursor-pointer disabled:opacity-40"
+          class="absolute z-10 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-500 hover:scale-110 transition-all cursor-pointer disabled:opacity-40"
+          :class="props.compact ? 'top-1 right-1 p-1' : 'top-2 right-2 p-1.5'"
           :disabled="props.isEvaluating"
           :aria-label="`Take ${item.name}`"
           title="Take item"
           @click.stop="emit('takeDirect', item)"
         >
-          <Hand class="w-3.5 h-3.5" />
+          <Hand :class="props.compact ? 'w-3 h-3' : 'w-3.5 h-3.5'" />
         </button>
 
-        <div class="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-slate-950/90 border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+        <div
+          class="relative rounded-xl overflow-hidden bg-slate-950/90 border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform"
+          :class="props.compact ? 'w-14 h-14' : 'w-20 h-20 sm:w-24 sm:h-24'"
+        >
           <span v-if="isImageLoading(item)" class="tw-image-spinner" role="status" aria-label="Loading image"></span>
           <img
             v-if="hasImage(item)"
@@ -130,11 +137,11 @@ async function takeAll() {
             @load="onImageLoad(item.image_url)"
             @error="onImageError(item.image_url)"
           />
-          <i v-else :class="['ra text-4xl sm:text-5xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+          <i v-else :class="['ra', props.compact ? 'text-3xl' : 'text-4xl sm:text-5xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
         </div>
 
-        <p class="text-xs font-bold leading-snug line-clamp-2">{{ item.name }}</p>
-        <p class="tw-muted text-[10px] uppercase tracking-wider">{{ typeLabel(item) }}</p>
+        <p class="font-bold leading-snug line-clamp-2" :class="props.compact ? 'text-[11px]' : 'text-xs'">{{ item.name }}</p>
+        <p v-if="!props.compact" class="tw-muted text-[10px] uppercase tracking-wider">{{ typeLabel(item) }}</p>
       </div>
     </div>
   </div>

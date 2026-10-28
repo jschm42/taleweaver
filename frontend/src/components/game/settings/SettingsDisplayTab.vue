@@ -3,10 +3,13 @@ import { computed } from 'vue'
 import { SKINS, findSkin, type SkinId, type SkinPreference } from '@/skins/skinRegistry'
 import { TEXT_DENSITY_OPTIONS, type TextDensity } from '@/skins/useTextDensity'
 import { TEXT_SCALES } from '@/skins/useTextScale'
+import SettingCard from './SettingCard.vue'
+import SettingToggle from './SettingToggle.vue'
 
 const skin = defineModel<SkinPreference>('skin', { required: true })
 const density = defineModel<TextDensity>('density', { required: true })
 const textScale = defineModel<number>('textScale', { required: true })
+const sceneSidebar = defineModel<boolean>('sceneSidebar', { required: true })
 
 /** Preview line heights / gaps (px) to illustrate each density in the picker. */
 const DENSITY_PREVIEW: Record<TextDensity, { bar: number; gap: number }> = {
@@ -140,6 +143,16 @@ const autoDefinition = computed(() => findSkin(props.autoSkin))
         </button>
       </div>
     </section>
+
+    <SettingCard
+      title="Scene Sidebar"
+      description="On wide screens, show passages, discoveries and switches as tiles in a column next to the story instead of as tabs."
+      hint="Only applies to screens at least 1280 px wide. Smaller screens and phones always use the tabs."
+    >
+      <template #control>
+        <SettingToggle v-model="sceneSidebar" label="Scene sidebar" />
+      </template>
+    </SettingCard>
 
     <p class="text-[11px] leading-relaxed text-slate-500">
       <span class="font-bold uppercase tracking-wider text-slate-400">About skins · </span>Auto uses the skin the

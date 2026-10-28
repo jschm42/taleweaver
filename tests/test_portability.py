@@ -16,6 +16,16 @@ from backend.models.world_entity import WorldScene
 
 _ADVENTURE_ID = "portability-test-999"
 _ASSET_FILES = ["cover.jpg", "hero.jpg", "start.jpg"]
+_INIT_SCRIPT = "def panel_choice(index):\n    tw.vars.set('panel_result', index)\n"
+_WORLD_SCRIPTS = [
+    {
+        "id": "SCRIPT_GREETING",
+        "name": "Greeting",
+        "trigger": "on_enter_scene",
+        "target_id": "SCENE_START",
+        "code": "tw.story.system_message('Hello')",
+    }
+]
 
 
 async def _ensure_user(db) -> User:
@@ -52,6 +62,7 @@ async def _seed_full_adventure(db, owner_id: str) -> None:
             image_url=f"{library}/cover.jpg",
             is_ready=True,
             creation_status="Ready",
+            original_manifest={"scripts": _WORLD_SCRIPTS, "init_script": _INIT_SCRIPT},
         )
     )
     await db.flush()
@@ -177,6 +188,9 @@ async def _assert_restored(db) -> None:
     assert restored_adv.time_system == "chronology"
     assert restored_adv.allow_dynamic_items is False
     assert restored_adv.plot == "The plot must survive."
+    # tw.dialog handlers and world scripts live in the manifest and must survive the round trip.
+    assert restored_adv.init_script == _INIT_SCRIPT
+    assert restored_adv.original_manifest["scripts"][0]["id"] == "SCRIPT_GREETING"
 
     av_res = await db.execute(select(Avatar).where(Avatar.template_id == restored_adv.id))
     restored_avatar = av_res.scalars().first()

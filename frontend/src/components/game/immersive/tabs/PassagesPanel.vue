@@ -11,6 +11,8 @@ const props = defineProps<{
   sceneExits: any[]
   currentSceneName?: string | null
   isEvaluating?: boolean
+  /** Narrow column layout (scene sidebar): small two-per-row tiles, no hint or origin text. */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -59,9 +61,9 @@ function onImageError(exit: any) {
         {{ props.sceneExits.length }} {{ props.sceneExits.length === 1 ? 'route' : 'routes' }}
       </span>
     </div>
-    <p class="tw-muted text-xs leading-relaxed">Choose a route to leave this place. Locked passages need a key or a solution first.</p>
+    <p v-if="!props.compact" class="tw-muted text-xs leading-relaxed">Choose a route to leave this place. Locked passages need a key or a solution first.</p>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+    <div class="grid" :class="props.compact ? 'grid-cols-2 gap-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3'">
       <button
         v-for="exit in props.sceneExits"
         :key="exit.id || exit.label"
@@ -72,7 +74,7 @@ function onImageError(exit: any) {
         :title="exit.target_known ? targetName(exit) : 'Unexplored'"
         @click="emit('traverseExit', exit)"
       >
-        <span class="tw-passage-media">
+        <span class="tw-passage-media" :style="props.compact ? { aspectRatio: '16 / 7' } : undefined">
           <img
             v-if="targetImage(exit)"
             :src="targetImage(exit)!"
@@ -93,11 +95,13 @@ function onImageError(exit: any) {
           </span>
         </span>
 
-        <span class="flex flex-col gap-0.5 min-w-0 px-3 py-2.5">
-          <span class="tw-passage-label block text-sm font-bold truncate">{{ exit.label || 'Exit' }}</span>
+        <span class="flex flex-col gap-0.5 min-w-0" :class="props.compact ? 'px-2 py-1.5' : 'px-3 py-2.5'">
+          <span class="tw-passage-label block font-bold truncate" :class="props.compact ? 'text-xs' : 'text-sm'">{{ exit.label || 'Exit' }}</span>
           <span v-if="exit.target_scene_name || exit.target_scene_id" class="tw-muted flex items-center gap-1 text-[11px] min-w-0">
-            <span class="truncate">{{ props.currentSceneName || 'Here' }}</span>
-            <ArrowRight class="w-3 h-3 shrink-0" />
+            <template v-if="!props.compact">
+              <span class="truncate">{{ props.currentSceneName || 'Here' }}</span>
+              <ArrowRight class="w-3 h-3 shrink-0" />
+            </template>
             <span class="truncate font-semibold">{{ targetName(exit) }}</span>
           </span>
         </span>

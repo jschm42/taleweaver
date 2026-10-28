@@ -173,6 +173,43 @@ async def test_game_over_handler_ends_session():
 
 
 @pytest.mark.asyncio
+async def test_missing_handler_reports_visible_error_without_debug_mode():
+    async with TestSessionLocal() as db:
+        # Arrange: the dialog is open, but the init_script with its handler got lost.
+        manager = await _manager(db)
+        manager.adventure.original_manifest = {}
+
+        # Act
+        result = await DialogChoiceResolver(manager).resolve(_dialog(manager)["id"], 0, None)
+
+        # Assert
+        assert len(result["messages"]) == 1
+        assert result["messages"][0].startswith("Script error")
+        assert "on_bomb_wire" in result["messages"][0]
+        rows = (
+            (await db.execute(select(ChatMessage.content).where(ChatMessage.role == "system")))
+            .scalars()
+            .all()
+        )
+        assert result["messages"][0] in rows
+
+
+def test_failing_trigger_script_reports_visible_error():
+    # Arrange
+    context = GameContext()
+    script = {"id": "SCRIPT_BROKEN", "trigger": "on_turn_end", "code": "undefined_name + 1"}
+    runner = ScriptRunner([script])
+
+    # Act
+    runner.run_trigger("on_turn_end", context)
+
+    # Assert
+    errors = context.changeset.system_messages
+    assert len(errors) == 1
+    assert errors[0].startswith("Script error in 'SCRIPT_BROKEN'")
+
+
+@pytest.mark.asyncio
 async def test_stale_dialog_id_and_unknown_index_are_rejected():
     async with TestSessionLocal() as db:
         # Arrange

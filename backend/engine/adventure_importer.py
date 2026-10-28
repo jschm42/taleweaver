@@ -518,6 +518,12 @@ class AdventureTemplateImporter:
                     "copyright": adv_data.get("copyright") or manifest_data.get("copyright"),
                     "license": adv_data.get("license") or manifest_data.get("license"),
                     "license_url": resolved_license_url,
+                    # apply_manifest stores this dict as original_manifest, which is where the
+                    # session reads world scripts and the init_script (tw.dialog handlers) from.
+                    "scripts": manifest_data.get("scripts") or adv_data.get("scripts") or [],
+                    "init_script": manifest_data.get("init_script")
+                    or adv_data.get("init_script")
+                    or "",
                 }
 
                 default_scene_id = (

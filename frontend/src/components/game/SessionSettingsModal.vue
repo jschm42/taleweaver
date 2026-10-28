@@ -29,6 +29,7 @@ const props = defineProps<{
   initialSkin?: SkinPreference
   initialDensity?: TextDensity
   initialTextScale?: number
+  initialSceneSidebar?: boolean
   autoSkin?: SkinId
   autoSkinReason?: string
   ttsAvailable?: boolean
@@ -60,6 +61,7 @@ const language = ref(props.initialLanguage ?? '')
 const skin = ref<SkinPreference>(props.initialSkin ?? 'auto')
 const density = ref<TextDensity>(props.initialDensity ?? 'comfortable')
 const textScale = ref(props.initialTextScale ?? DEFAULT_TEXT_SCALE)
+const sceneSidebar = ref(props.initialSceneSidebar ?? true)
 
 if (typeof props.initialTurns === 'number' && props.initialTurns >= 1) {
   turns.value = Math.min(100, Math.max(1, props.initialTurns))
@@ -76,7 +78,12 @@ function isTabActive(id: SettingsTabId): boolean {
     return !!language.value
   }
   if (id === 'display') {
-    return skin.value !== 'auto' || density.value !== 'comfortable' || textScale.value !== DEFAULT_TEXT_SCALE
+    return (
+      skin.value !== 'auto' ||
+      density.value !== 'comfortable' ||
+      textScale.value !== DEFAULT_TEXT_SCALE ||
+      !sceneSidebar.value
+    )
   }
   return false
 }
@@ -93,6 +100,7 @@ function save() {
     skin: skin.value,
     density: density.value,
     textScale: textScale.value,
+    sceneSidebar: sceneSidebar.value,
   })
 }
 
@@ -199,6 +207,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
           v-model:skin="skin"
           v-model:density="density"
           v-model:text-scale="textScale"
+          v-model:scene-sidebar="sceneSidebar"
           :auto-skin="props.autoSkin ?? 'classic'"
           :auto-reason="props.autoSkinReason ?? 'no tone set, using the default look'"
         />

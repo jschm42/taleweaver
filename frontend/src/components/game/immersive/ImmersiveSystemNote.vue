@@ -5,7 +5,7 @@
  * Long texts render as a card. The full list lives in the System tab.
  */
 import { computed, type Component } from 'vue'
-import { Dices, Package, HeartPulse, ScrollText, Award, Info } from 'lucide-vue-next'
+import { Dices, Package, HeartPulse, ScrollText, Award, Info, TriangleAlert } from 'lucide-vue-next'
 import { renderFormattedHtml } from '@/composables/useComicTurns'
 import { cleanSystemContent, systemNoteKind, type SystemNoteKind } from './systemMessages'
 import DiceBadge from './dice/DiceBadge.vue'
@@ -16,6 +16,7 @@ const props = defineProps<{
 }>()
 
 const NOTE_ICONS: Record<SystemNoteKind, Component> = {
+  error: TriangleAlert,
   dice: Dices,
   item: Package,
   vitals: HeartPulse,

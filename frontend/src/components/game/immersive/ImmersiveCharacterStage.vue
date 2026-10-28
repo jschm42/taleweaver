@@ -137,7 +137,7 @@ function isNpcVoiced(npc: any): boolean {
 <template>
   <aside
     ref="stageContainerRef"
-    class="flex flex-col gap-2 shrink-0 overflow-y-auto w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem] custom-scrollbar pr-1 py-1 max-h-full"
+    class="flex flex-col gap-2 shrink-0 overflow-y-auto w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem] tw-scroll pr-1 py-1 max-h-full"
   >
     <TransitionGroup :name="stageReady ? 'tw-npc' : 'tw-npc-initial'" tag="div" class="flex flex-col gap-2 w-full">
       <div
@@ -194,11 +194,6 @@ function isNpcVoiced(npc: any): boolean {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.1); }
-
 @property --tw-voice-angle {
   syntax: '<angle>';
   initial-value: 0deg;
