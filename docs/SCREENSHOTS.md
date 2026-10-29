@@ -79,7 +79,7 @@ This document provides concise overviews and explanations for each screenshot lo
 * **Filename**: [`docs/screenshots/combat-dialog.jpg`](screenshots/combat-dialog.jpg)
 * **View**: Turn-Based Tactical Combat System
 * **Description**:
-  The full-screen battle view engaged when entering combat with hostile entities. It shows the protagonist next to a stack of enemy cards (click a card, or a portrait in the initiative order shown at the top of the arena, to bring that target to the front), abilities as a hand of trading-card style cards below the combatants (basic attack, specials such as spells or a defense stance), consumables as item tiles in the bottom bar next to rest and flee, occasional NPC taunts shown as comic speech bubbles above the speaker, and a transparent combat chronicle logging turn-by-turn dice roll outcomes, hit modifiers, and applied status damage.
+  The full-screen battle view engaged when entering combat with hostile entities. It shows the protagonist next to a stack of enemy cards (click a card, or a portrait in the initiative order shown at the top of the arena, to bring that target to the front), a hand of trading-card style cards below the combatants (one attack card per equipped weapon, then specials such as spells or a defense stance), consumables as item tiles in the bottom bar next to rest and flee, occasional NPC taunts shown as comic speech bubbles above the speaker, and a transparent combat chronicle logging turn-by-turn dice roll outcomes, hit modifiers, and applied status damage.
 
 ---
 

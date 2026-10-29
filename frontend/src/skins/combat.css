@@ -274,6 +274,20 @@ button.tw-initiative-slot:hover .tw-initiative-portrait,
   }
 }
 
+/* Separates the equipped weapons (left) from the special abilities. */
+.tw-ability-divider {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 1px;
+  margin: 0.75rem 0.25rem;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--tw-accent-soft) 55%, transparent),
+    transparent
+  );
+}
+
 .tw-ability-card {
   --ability-tone: var(--tw-accent);
   position: relative;

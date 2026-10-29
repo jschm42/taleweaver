@@ -3,11 +3,16 @@
 import pytest
 from fastapi import HTTPException
 
+from backend.api.routes.adventures.combat.player_actions import split_weapon_hint
 from backend.api.routes.adventures.editing.entity_update.item_metadata import update_weapon
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.engine.blueprint.converters import weapon_effects
-from backend.engine.combat.weapons import apply_on_hit_effects, normalize_weapon_config
+from backend.engine.combat.weapons import (
+    apply_on_hit_effects,
+    equipped_weapons,
+    normalize_weapon_config,
+)
 from tests.test_combat_encounters import LETHAL, SESSION_ID, _patch_dice, _play, _seed
 
 VAMPIRE_BLADE = {
@@ -145,3 +150,68 @@ async def test_player_weapon_uses_hit_stat_and_applies_on_hit_effects(setup_test
             {k: e[k] for k in ("entity", "stat", "delta")} for e in attack["data"]["effects"]
         ]
         assert "On hit:" in attack["text"]
+
+
+DAGGER = {
+    "id": "DAGGER_OFF",
+    "name": "Parrying Dagger",
+    "item_type": "WEAPON",
+    "metadata_json": {"damage_dice": "1d4", "weapon_cost_value": 2},
+}
+
+
+def test_equipped_weapons_lists_main_hand_first_and_skips_non_weapons():
+    # Arrange
+    shield = {"id": "SHIELD", "name": "Shield", "item_type": "WEARABLE"}
+    equipment = {"OffHand": DAGGER, "MainHand": VAMPIRE_BLADE, "Back": shield}
+
+    # Act
+    held = equipped_weapons(equipment)
+
+    # Assert
+    assert [(slot, item["id"]) for slot, item in held] == [
+        ("MainHand", "VAMPIRE_BLADE"),
+        ("OffHand", "DAGGER_OFF"),
+    ]
+    assert equipped_weapons({"MainHand": VAMPIRE_BLADE, "OffHand": VAMPIRE_BLADE}) == [
+        ("MainHand", VAMPIRE_BLADE)
+    ]
+
+
+def test_split_weapon_hint_separates_target_and_weapon():
+    # Act / Assert
+    assert split_weapon_hint("GOBLIN --with DAGGER_OFF") == ("GOBLIN", "DAGGER_OFF")
+    assert split_weapon_hint("GOBLIN") == ("GOBLIN", "")
+    assert split_weapon_hint("--with offhand") == ("", "offhand")
+
+
+@pytest.mark.asyncio
+async def test_attack_with_off_hand_weapon_uses_its_profile(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        user, avatar, _state = await _seed(db)
+        avatar.equipment = {"MainHand": VAMPIRE_BLADE, "OffHand": DAGGER}
+        await db.commit()
+        _patch_dice(monkeypatch)
+        dice_used: list[str] = []
+
+        def fake_roll(_avatar, _hit_stat, _ac, dice):
+            dice_used.append(dice)
+            return {**LETHAL, "damage_total": 2, "damage_rolls": [2]}
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.roll_attack", fake_roll)
+        manager = GameTurnManager(db, SESSION_ID, user)
+        await _play(manager, "/fight GOBLIN")
+
+        # Act
+        await _play(manager, "/attack GOBLIN --with DAGGER_OFF")
+        chunks = await _play(manager, "/attack GOBLIN --with Battleaxe")
+
+        # Assert
+        combat = manager._read_combat_state()
+        labels = [(e.get("data") or {}).get("label") for e in combat["log"]]
+        assert dice_used[0] == "1d4"
+        assert "Parrying Dagger" in labels
+        assert any("no equipped weapon 'Battleaxe'" in chunk for chunk in chunks)

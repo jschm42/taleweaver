@@ -25,7 +25,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  attack: [targetId: string | null]
+  attack: [targetId: string | null, weaponId: string | null]
   run: []
   rest: []
   special: [id: string, targetId: string | null]
@@ -303,7 +303,7 @@ onBeforeUnmount(() => {
               :player-sheet="playerSheet"
               :locked="actionsLocked"
               :target-name="selectedTarget?.name ?? null"
-              @attack="emit('attack', selectedTargetId)"
+              @attack="(weaponId) => emit('attack', selectedTargetId, weaponId)"
               @special="(id) => emit('special', id, selectedTargetId)"
               @hover="(entity, event) => emit('entityHover', entity, event)"
               @leave="emit('entityLeave')"

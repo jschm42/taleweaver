@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.engine.combat.initiative import PLAYER_ID
 from backend.engine.combat.special_attacks import normalize_special_actions
-from backend.engine.combat.weapons import normalize_weapon_config
+from backend.engine.combat.weapons import equipped_weapons, normalize_weapon_config
 from backend.engine.rules.rule_engine import RESOURCE_CAP
 from backend.engine.rules.stat_aggregator import calculate_total_stats
 from backend.models.world_entity import WorldEntity
@@ -141,17 +141,45 @@ class CombatCombatantMixin:
         dice = meta.get("damage_dice")
         return dice if _valid_dice(dice) else "1d6"
 
-    async def _player_weapon_profile(self) -> dict[str, Any]:
-        main_hand = (self.avatar.equipment or {}).get("MainHand")
-        if not isinstance(main_hand, dict):
-            return _weapon_profile("Bare Fists", {}, "1d8")
-        meta = dict(main_hand.get("metadata_json") or {})
-        if not meta and "id" in main_hand:
-            item_ent = await self._load_session_entity(main_hand["id"])
+    async def _held_weapon_profile(self, slot: str, item: dict[str, Any]) -> dict[str, Any]:
+        meta = dict(item.get("metadata_json") or {})
+        if not meta and "id" in item:
+            item_ent = await self._load_session_entity(item["id"])
             meta = dict(item_ent.metadata_json or {}) if item_ent else {}
-        if not _valid_dice(meta.get("damage_dice")) and _valid_dice(main_hand.get("damage_dice")):
-            meta["damage_dice"] = main_hand["damage_dice"]
-        return _weapon_profile(main_hand.get("name", "Weapon"), meta, "1d8")
+        if not _valid_dice(meta.get("damage_dice")) and _valid_dice(item.get("damage_dice")):
+            meta["damage_dice"] = item["damage_dice"]
+        profile = _weapon_profile(item.get("name", "Weapon"), meta, "1d8")
+        return {**profile, "id": item.get("id"), "slot": slot}
+
+    async def _player_weapon_profiles(self) -> list[dict[str, Any]]:
+        """Every weapon the protagonist can attack with; Bare Fists when nothing is held."""
+        held = equipped_weapons(self.avatar.equipment or {})
+        if not held:
+            return [{**_weapon_profile("Bare Fists", {}, "1d8"), "id": None, "slot": None}]
+        return [await self._held_weapon_profile(slot, item) for slot, item in held]
+
+    async def _player_weapon_profile(self, weapon_hint: str = "") -> dict[str, Any] | None:
+        """The weapon named by ``weapon_hint`` (id, name or slot), else the first one.
+
+        Returns None when a hint is given but matches no equipped weapon.
+        """
+        profiles = await self._player_weapon_profiles()
+        hint = weapon_hint.strip().lower()
+        if not hint:
+            return profiles[0]
+        return next(
+            (
+                p
+                for p in profiles
+                if hint
+                in (
+                    str(p.get("id") or "").lower(),
+                    p["name"].lower(),
+                    str(p.get("slot") or "").lower(),
+                )
+            ),
+            None,
+        )
 
     async def _enemy_weapon_profile(self, npc: WorldEntity) -> dict[str, Any]:
         weapon_id = (npc.metadata_json or {}).get("equipped_weapon_id")

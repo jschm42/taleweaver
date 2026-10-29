@@ -29,6 +29,31 @@ DEFAULT_HIT_STAT = "dexterity"
 MAX_WEAPON_EFFECTS = 4
 
 
+WEAPON_SLOT_ORDER = ("MainHand", "OffHand")
+
+
+def equipped_weapons(equipment: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """``(slot, item)`` pairs the protagonist can attack with, MainHand first.
+
+    Whatever is held in MainHand counts (as it always did); other slots only count for
+    WEAPON items. An item listed in several slots (two-handed) appears once.
+    """
+    slots = [*WEAPON_SLOT_ORDER, *(s for s in equipment if s not in WEAPON_SLOT_ORDER)]
+    weapons: list[tuple[str, dict[str, Any]]] = []
+    seen: set[str] = set()
+    for slot in slots:
+        item = equipment.get(slot)
+        if not isinstance(item, dict):
+            continue
+        is_weapon = str(item.get("item_type") or "").upper() == "WEAPON"
+        key = str(item.get("id") or item.get("name") or slot)
+        if (slot != "MainHand" and not is_weapon) or key in seen:
+            continue
+        seen.add(key)
+        weapons.append((slot, item))
+    return weapons
+
+
 def normalize_weapon_config(meta: dict[str, Any]) -> dict[str, Any]:
     """Category, attack-roll stat and on-hit effects of a weapon's metadata."""
     category = str(meta.get("weapon_category") or "").strip().upper()

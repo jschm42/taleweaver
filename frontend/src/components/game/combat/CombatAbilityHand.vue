@@ -12,7 +12,7 @@ import {
 } from '@/utils/specialAttacks'
 import { WEAPON_CATEGORY_META, weaponCheckLabel } from '@/utils/weaponConfig'
 import AbilityCard from './AbilityCard.vue'
-import { useCombatLoadout } from './useCombatLoadout'
+import { useCombatLoadout, type CombatWeapon } from './useCombatLoadout'
 
 const props = defineProps<{
   combat: CombatState
@@ -22,7 +22,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  attack: []
+  /** Weapon item id to attack with; null for the default weapon (Bare Fists). */
+  attack: [weaponId: string | null]
   special: [id: string]
   hover: [entity: Record<string, unknown>, event: MouseEvent]
   leave: []
@@ -30,6 +31,7 @@ const emit = defineEmits<{
 
 /** Card frame colors per category tone (see CATEGORY_META). */
 const TONE_HEX: Record<string, string> = {
+  weapon: '#d4a24c',
   emerald: '#10b981',
   violet: '#8b5cf6',
   orange: '#f97316',
@@ -38,7 +40,7 @@ const TONE_HEX: Record<string, string> = {
   cyan: '#06b6d4',
 }
 
-const { resources, weapon, canAffordWeapon } = useCombatLoadout(toRef(props, 'combat'), toRef(props, 'playerSheet'))
+const { resources, weapons, canAfford } = useCombatLoadout(toRef(props, 'combat'), toRef(props, 'playerSheet'))
 
 const specials = computed<NormalizedSpecialAttack[]>(() => {
   const fromCombat = props.combat.player?.special_actions
@@ -67,24 +69,34 @@ function specialFooter(action: NormalizedSpecialAttack): string {
   return action.targets_enemy ? `→ ${areaLabel(action, props.targetName)}` : '→ Self'
 }
 
-const weaponCostLabel = computed(() => `${weapon.value.cost} ${weapon.value.costType === 'mana' ? 'MP' : 'STA'}`)
-const attackDisabled = computed(() => props.locked || !canAffordWeapon.value || !props.targetName)
+function weaponCostLabel(w: CombatWeapon): string {
+  return `${w.cost} ${w.costType === 'mana' ? 'MP' : 'STA'}`
+}
 
-const weaponEffectsLabel = computed(() => (
-  [`${weapon.value.dice} damage`, describeEffects(weapon.value.effects)].filter(Boolean).join(' · ')
-))
+function weaponDisabled(w: CombatWeapon): boolean {
+  return props.locked || !canAfford(w) || !props.targetName
+}
 
-function weaponTooltip(): Record<string, unknown> {
-  const onHit = describeEffects(weapon.value.effects)
+function weaponEffectsLabel(w: CombatWeapon): string {
+  return [`${w.dice} damage`, describeEffects(w.effects)].filter(Boolean).join(' · ')
+}
+
+function weaponTypeLine(w: CombatWeapon): string {
+  const slot = w.slot && w.slot !== 'MainHand' ? ` · ${w.slot}` : ''
+  return `Weapon — ${WEAPON_CATEGORY_META[w.category].label}${slot}`
+}
+
+function weaponTooltip(w: CombatWeapon): Record<string, unknown> {
+  const onHit = describeEffects(w.effects)
   return {
-    id: 'WEAPON_ATTACK',
+    id: w.id || 'WEAPON_ATTACK',
     entity_type: 'ITEM',
     item_type: 'WEAPON',
-    name: weapon.value.name,
+    name: w.name,
     description: [
-      'Basic weapon attack.',
-      `Cost: ${weaponCostLabel.value} · Check: ${weaponCheckLabel(weapon.value.hitStat)}`,
-      `Damage: ${weapon.value.dice}`,
+      w.slot ? `Equipped: ${w.slot}` : 'No weapon equipped.',
+      `Cost: ${weaponCostLabel(w)} · Check: ${weaponCheckLabel(w.hitStat)}`,
+      `Damage: ${w.dice}`,
       onHit ? `On hit: ${onHit}` : '',
     ].filter(Boolean).join('\n'),
   }
@@ -108,21 +120,25 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
 </script>
 
 <template>
-  <div class="tw-ability-hand" role="toolbar" aria-label="Abilities">
+  <div class="tw-ability-hand" role="toolbar" aria-label="Weapons and abilities">
+    <!-- Equipped weapons first, then the special abilities. -->
     <AbilityCard
-      :icon="WEAPON_CATEGORY_META[weapon.category].icon"
-      :type-line="`Weapon — ${WEAPON_CATEGORY_META[weapon.category].label}`"
-      :title="weapon.name"
-      :cost="weaponCostLabel"
-      :check="weaponCheckLabel(weapon.hitStat)"
-      :effects="weaponEffectsLabel"
+      v-for="w in weapons"
+      :key="w.id || 'bare-fists'"
+      :icon="WEAPON_CATEGORY_META[w.category].icon"
+      :type-line="weaponTypeLine(w)"
+      :title="w.name"
+      :cost="weaponCostLabel(w)"
+      :check="weaponCheckLabel(w.hitStat)"
+      :effects="weaponEffectsLabel(w)"
       :footer="`→ ${targetName || 'no target'}`"
-      :tone="TONE_HEX.emerald"
-      :disabled="attackDisabled"
-      @use="emit('attack')"
-      @hover="(event) => emit('hover', weaponTooltip(), event)"
+      :tone="TONE_HEX.weapon"
+      :disabled="weaponDisabled(w)"
+      @use="emit('attack', w.id)"
+      @hover="(event) => emit('hover', weaponTooltip(w), event)"
       @leave="emit('leave')"
     />
+    <span v-if="specials.length" class="tw-ability-divider" aria-hidden="true"></span>
     <AbilityCard
       v-for="action in specials"
       :key="action.id"

@@ -1681,8 +1681,9 @@ const handleSheetChanged = async () => {
   sheetDirty.value = false
 }
 
-const handleCombatAttack = async (targetId: string | null = null) => {
-  const command = targetId ? `/attack ${targetId}` : '/attack'
+const handleCombatAttack = async (targetId: string | null = null, weaponId: string | null = null) => {
+  // `--with` picks one of several equipped weapons (see combat/player_actions.py).
+  const command = ['/attack', targetId, weaponId ? `--with ${weaponId}` : null].filter(Boolean).join(' ')
   const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, command)
   if (!dispatched) {
     const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'

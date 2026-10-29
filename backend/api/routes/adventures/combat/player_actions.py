@@ -33,7 +33,7 @@ from backend.engine.rules.stat_aggregator import calculate_total_stats
 REST_STAMINA = 40
 NO_DAMAGE_MSG = "The protagonist cannot damage NPCs in this adventure. Use Run, Rest, or /consume."
 INVALID_ACTION_MSG = (
-    "Combat active. Valid actions: Attack [target], Run, Rest, /consume <item>, "
+    "Combat active. Valid actions: Attack [target] [--with <weapon>], Run, Rest, /consume <item>, "
     "or /special <action_id> [target]."
 )
 _VERBS = {
@@ -58,6 +58,15 @@ def parse_combat_command(user_msg: str) -> tuple[str | None, str]:
     if head == "consume":
         verb = None  # Consumables require the explicit slash command.
     return verb, parts[1].strip() if len(parts) > 1 else ""
+
+
+WEAPON_FLAG = "--with"
+
+
+def split_weapon_hint(arg: str) -> tuple[str, str]:
+    """``GOBLIN --with DAGGER`` -> (``GOBLIN``, ``DAGGER``); without the flag the weapon is ""."""
+    target, _, weapon = arg.partition(WEAPON_FLAG)
+    return target.strip(), weapon.strip()
 
 
 def action_result(text: str, entry_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -105,11 +114,14 @@ class CombatPlayerMixin:
     async def _player_attack(self, combat: dict[str, Any], arg: str) -> dict[str, Any]:
         if not bool(getattr(self.adventure, "can_damage_npcs", True)):
             return action_error(NO_DAMAGE_MSG)
-        target = self._resolve_target(combat, arg)
+        target_hint, weapon_hint = split_weapon_hint(arg)
+        target = self._resolve_target(combat, target_hint)
         if not target:
             return action_error("There is no enemy left to attack.")
 
-        weapon = await self._player_weapon_profile()
+        weapon = await self._player_weapon_profile(weapon_hint)
+        if weapon is None:
+            return action_error(f"You have no equipped weapon '{weapon_hint}'.")
         cost_error = self._pay_player_cost(weapon["cost_type"], int(weapon["cost"]), weapon["name"])
         if cost_error:
             return action_error(cost_error)
