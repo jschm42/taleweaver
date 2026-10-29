@@ -10,7 +10,7 @@ import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import { registerEntityNames } from '@/utils/entityRefs'
 import { carryOverMessageKeys, newMessageKey } from '@/composables/messageKeys'
-import { isSilentCommand } from '@/composables/silentCommands'
+import { isHiddenPlayerMessage } from '@/composables/silentCommands'
 import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
@@ -278,7 +278,9 @@ export function useGameSocket(): UseGameSocket {
     if (!data) return
 
     if (updateMessages && Array.isArray(data.messages)) {
-      const reloaded = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+      const reloaded = data.messages
+        .filter((m: any) => !(m.role === 'user' && isHiddenPlayerMessage(m.content)))
+        .map((m: any) => ({ ...m, timestamp: new Date() }))
       messages.value = carryOverMessageKeys(messages.value, reloaded)
     }
 
@@ -520,7 +522,7 @@ export function useGameSocket(): UseGameSocket {
       return
     }
 
-    const isSilent = isSilentCommand(normalizedContent)
+    const isSilent = isHiddenPlayerMessage(normalizedContent)
 
     if (normalizedContent && !isSilent) {
       lastUserAction.value = normalizedContent

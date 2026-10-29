@@ -105,6 +105,7 @@ def build_narration_turn_block(
     rule_violations: list[str],
     exits_task: str = "",
     reminders: tuple[str, ...] = (),
+    author_directions: str = "",
 ) -> str:
     """CURRENT STATE + TURN RESOLUTION block prepended to the player's message in Pass 2."""
     lines = [
@@ -119,6 +120,8 @@ def build_narration_turn_block(
             "violated game rules or preconditions. You MUST narrate that these actions FAILED in this turn and "
             "explain the reason to the player:\n" + "\n".join(f"- {v}" for v in rule_violations)
         )
+    if author_directions:
+        lines.append(author_directions)
     if exits_task:
         lines.append(exits_task)
     if reminders:

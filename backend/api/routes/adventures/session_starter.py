@@ -31,6 +31,7 @@ from backend.core.config import settings
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
+from backend.engine.scripting.gm_directions import store_gm_directions
 from backend.engine.scripting.runner import ScriptRunner
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -213,6 +214,7 @@ def _run_init_scripts(
     if getattr(changes, "story_flag_updates", None):
         entity_states["__switch_story_flags__"] = dict(changes.story_flag_updates)
     store_pending_dialog(entity_states, changes.pending_dialog)
+    store_gm_directions(entity_states, changes.gm_directions)
     _apply_avatar_changes(avatar, changes)
     return [str(message) for message in changes.narrative_messages]
 

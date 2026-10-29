@@ -19,15 +19,10 @@ import ImmersiveSystemNote from './ImmersiveSystemNote.vue'
 import { isDebugMessage, isTurnErrorMessage } from './systemMessages'
 import type { ChatMessage } from '@/types'
 import { Volume2, VolumeX } from 'lucide-vue-next'
-import ThinkingIndicator from './ThinkingIndicator.vue'
 import { vDropCap } from '@/skins/vDropCap'
 
 const props = defineProps<{
   exchange: ComicExchange
-  /** Latest exchange of the latest page: shows the "thinking" indicator while evaluating. */
-  isLatest?: boolean
-  isEvaluating?: boolean
-  statusText?: string
   sheet?: any
   entities: any[]
   currentSceneDescription?: string | null
@@ -181,21 +176,7 @@ function getEntityForHover(nameOrEntity: any) {
           </p>
         </div>
       </div>
-
-      <!-- Thinking indicator right next to the bubble -->
-      <ThinkingIndicator
-        v-if="props.isLatest && props.isEvaluating"
-        class="self-center"
-        :status-text="props.statusText"
-      />
     </div>
-
-    <!-- Fallback thinking indicator if evaluating without a user message -->
-    <ThinkingIndicator
-      v-else-if="props.isLatest && props.isEvaluating"
-      class="self-start my-1"
-      :status-text="props.statusText"
-    />
 
     <!-- 2) ENGINE EVENTS BEFORE THE NARRATION (compact notes; failed turns keep Retry/Cancel) -->
     <template v-for="(event, sysIdx) in leadingEvents" :key="event.msg._key || `leading-${sysIdx}`">

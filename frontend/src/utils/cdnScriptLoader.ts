@@ -262,6 +262,8 @@ class _MockStory:
         print(f"[tw.story.narrate] {text}")
     def narrate_raw(self, text):
         print(f"[tw.story.narrate_raw] {text}")
+    def direct(self, text):
+        print(f"[tw.story.direct] {text}")
     def show_message(self, text):
         self.narrate(text)
 
@@ -316,7 +318,9 @@ class _MockTW:
         self.story.narrate(text)
     def narrate_raw(self, text):
         self.story.narrate_raw(text)
-    def say(self, speaker, text): 
+    def direct(self, text):
+        self.story.direct(text)
+    def say(self, speaker, text):
         print(f"[{speaker}] {text}")
     def log(self, text): 
         print(f"[LOG] {text}")

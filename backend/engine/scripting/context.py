@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
+from backend.engine.scripting.gm_directions import clean_direction
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
@@ -59,6 +60,7 @@ class ScriptChangeset:
 
     narrative_messages: list[str] = field(default_factory=list)
     system_messages: list[str] = field(default_factory=list)
+    gm_directions: list[str] = field(default_factory=list)
     rejected_actions: list[str] = field(default_factory=list)
     new_memories: list[dict[str, Any]] = field(default_factory=list)
 
@@ -97,6 +99,7 @@ class ScriptChangeset:
             or self.npc_attack_requests
             or self.narrative_messages
             or self.system_messages
+            or self.gm_directions
             or self.rejected_actions
             or self.new_memories
             or self.completed_quest_ids
@@ -801,6 +804,12 @@ class EntityManagerProxy:
                 return self._proxy_cls(
                     eid, data, self._changeset, self._current_player_scene_id, self
                 )
+        # Unknown ID: hand out a detached proxy so the script keeps running, but make the
+        # likely typo visible, since its changes target an entity that does not exist.
+        logger.warning(
+            "[Script Warning] Unknown entity ID '%s'; changes made through it have no effect.",
+            entity_id,
+        )
         return self._proxy_cls(
             entity_id,
             {"id": entity_id, "name": entity_id},
@@ -988,6 +997,12 @@ class StoryProxy:
     def system(self, message: str) -> None:
         """Alias for system_message()."""
         self.system_message(message)
+
+    def direct(self, instruction: str) -> None:
+        """Gives the GM a soft direction for its next narration (used once, then dropped)."""
+        text = clean_direction(instruction)
+        if text:
+            self._changeset.gm_directions.append(text)
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active."""
@@ -1257,6 +1272,10 @@ class GameContext:
     def system(self, message: str) -> None:
         """Shortcut for tw.story.system_message(). Emits system notification."""
         self.story.system_message(message)
+
+    def direct(self, instruction: str) -> None:
+        """Shortcut for tw.story.direct(). Gives the GM a soft direction."""
+        self.story.direct(instruction)
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active and logs to console."""

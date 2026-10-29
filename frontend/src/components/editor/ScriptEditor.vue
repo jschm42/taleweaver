@@ -675,7 +675,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('story')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.narrate(text)</code> (GM Narration), <code>.narrate_raw(text)</code> (verbatim GM text), <code>.system(text)</code> (System Note)
+            <code>.narrate(text)</code> (GM Narration), <code>.narrate_raw(text)</code> (verbatim GM text), <code>.direct(text)</code> (soft hint for the GM's next narration), <code>.system(text)</code> (System Note)
           </p>
         </div>
 

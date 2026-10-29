@@ -107,7 +107,7 @@ TW_API_REFERENCE = (
     "- tw.switches: get(id), get_state(id, default), set_state(id, new_state, apply_outcomes=True), "
     "is_state(id, state), flip(id, apply_outcomes=True), toggle(id, apply_outcomes=True) | switch proxies from get() or tw.switch(id): id, state, switch_state, states, initial_state, flip(), toggle()\n"
     "- tw.vars: get(key, default), set(key, value)  (persistent story flags)\n"
-    "- tw.story: narrate(text), narrate_raw(text), system_message(text), reject_action(reason)\n"
+    "- tw.story: narrate(text), narrate_raw(text), direct(text)  (soft hint for the GM's next narration), system_message(text), reject_action(reason)\n"
     "- tw.memories.add(description, scope='global'|'local', emotion='positive'|'negative'|'neutral')\n"
     "- tw.quests: complete(quest_id), fail(quest_id), is_completed(quest_id)\n"
     "- tw.awards.grant(award_key) | tw.sequences.advance() | tw.dice.d20()\n"

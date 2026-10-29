@@ -99,6 +99,7 @@ To ensure player safety and server reliability:
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
 - **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `round`, `str`, `sum`, `tuple`.
 - **Inline conditionals**: `a if condition else b` is supported.
+- **Not supported**: `while` loops, `try`/`except`, `with`, `class`, and list/dict/set comprehensions or generator expressions (`[n.name for n in tw.scene.npcs]`). Use a `for` loop and `list.append()` instead.
 
 ---
 
@@ -300,10 +301,18 @@ Inspects and modifies the avatar's state:
 
 ### `tw.scene`
 Inspects the current scene:
-- `tw.scene.id` *(str)*: ID of the current scene.
-- `tw.scene.name` *(str)*: Display label of the current scene.
-- `tw.scene.description` *(str)*: Scene description text.
-- `tw.scene.entities` *(list[dict])*: List of active entities (items and NPCs) present in the scene.
+- `tw.scene.id` *(str)*: ID of the current scene (the target scene once the script called `tw.scene.teleport`).
+- `tw.scene.npcs` *(list[NPCProxy])*: All NPCs in the current scene, as the same proxies `tw.npcs.get()` returns. Includes NPCs that are hidden (`.is_hidden`) or defeated (`.is_defeated`) and NPCs moved here earlier in the same script; filter them yourself if needed.
+- `tw.scene.items` *(list[ObjectProxy])*: All objects and items lying in the current scene.
+- `tw.scene.teleport(target_scene_id: str)`: Moves the player to another scene.
+- `tw.scene.get_attribute(name, default=None)` / `tw.scene.set_attribute(name, value)`: A script-defined value stored per scene.
+
+```python
+# Everyone present (and visible) gets angry
+for npc in tw.scene.npcs:
+    if not npc.is_hidden and not npc.is_defeated:
+        npc.add_trait("angry")
+```
 
 ### `tw.exits`
 Queries and manipulates passage exits:
@@ -326,7 +335,7 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.set_character(npc_id: str, text: str)`: Replaces the NPC's personality (the `character` field). The GM reads it on every turn, so the NPC talks and acts differently from then on (friendlier, aggressive, funny, frightened, …). An empty text clears it. Whitespace is collapsed to a single line and the text is cut at 1,000 characters.
 - `tw.npcs.set_goal(npc_id: str, text: str)`: Replaces what the NPC wants (the `goal` field), with the same rules.
 - `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
-- `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. Available properties and methods on `NPCProxy`:
+- `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. The ID is matched exactly, then case-insensitively, then against the NPC's name. An unknown ID does not raise: it returns a detached proxy whose changes have no effect, and the server log shows `[Script Warning] Unknown entity ID '...'`, so check the log when a change seems to be ignored. Available properties and methods on `NPCProxy`:
   - `.name`, `.hp`, `.is_defeated`, `.current_scene_id`, `.inventory`
   - `.say(text: str)`
   - `.move_to(target_scene_id: str, spatial_position: str = "")` (supports `"current"`)
@@ -341,7 +350,7 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.character`, `.goal` *(read/write)*: assigning (`npc.character = "Gruff, impatient"`) is the same as calling `.set_character()` / `.set_goal()`
   - `.set_character(text)`, `.set_goal(text)`, `.add_trait(trait)`, `.remove_trait(trait)`, `.has_trait(trait) -> bool`
 
-  Persona changes apply to the current game only: they are stored on the session's copy of the NPC, and the adventure template keeps its original text. To restore the original later, store it first, e.g. `tw.vars.set('brom_bio', tw.npcs.get('BROM').character)`. A persona change shapes the GM's narration and dialogue; it does not start a fight on its own (use `.attack()` for that).
+  Persona changes apply to the current game only: they are stored on the session's copy of the NPC, and the adventure template keeps its original text. To restore the original later, store it first, e.g. `tw.vars.set('brom_bio', tw.npcs.get('BROM').character)`. A persona change shapes the GM's narration and dialogue from the next turn on; it does not start a fight on its own (use `.attack()` for that). The NPC cards in the in-game Debug dialog show the current character and goal, so you can check that a change was applied.
 
 ### `tw.objects` (or `tw.items`)
 Manages world objects and inventory items:
@@ -389,6 +398,7 @@ A persistent key-value store saved into the session state under `__script_vars__
 Injects narrative messages or system notifications into the turn stream:
 - `tw.story.narrate(text: str)` (shortcut `tw.narrate(text)`): Emits Game Master narration (`role: "assistant"`), displayed with the Game Master avatar and styled exactly like standard storytelling turns. The text is parsed like LLM narration: `Name: "..."` lines become NPC speech bubbles, `[tags]` become voice tags, `**bold**` is highlighted (e.g. `tw.story.narrate('You take the piece of chocolate. Maybe it will help with the persuasion.')`).
 - `tw.story.narrate_raw(text: str)` (shortcut `tw.narrate_raw(text)`): Emits Game Master narration that is shown **verbatim**, as one Game Master block: no speaker detection, no voice tags, no bold or `##ID` formatting. Line breaks are kept. Use it for text that must not be interpreted, e.g. LLM output from `tw.llm.ask(...)` that may contain colons or quotes (`tw.story.narrate_raw(news or "Just static noise.")`).
+- `tw.story.direct(instruction: str)` (shortcut `tw.direct(instruction)`): Gives the Game Master a **soft stage direction** instead of fixed text, e.g. `tw.story.direct("Let BRAM sing a sailor song")`. Nothing is shown right away. The direction is stored in the session (`entity_states["__gm_directions__"]`) and handed to the **next GM narration**: the narration of the current turn when the script runs during a turn (e.g. a soft rule in Pass 1.5), otherwise the next turn's narration, or the outcome narration of a choice dialog opened with `narrate=True`. That narration works it in naturally and drops it afterwards, so every direction is used once. The GM treats it as a wish, not as a fact: it never overrides game rules or the technical outcome, and it does not change any state (use the other `tw.*` calls for that). Whitespace is collapsed to a single line, each direction is cut at 500 characters, and at most the 5 newest directions wait at a time.
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`).
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
@@ -427,7 +437,7 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
   - `options`: up to 8 entries, each a label string or `{"label": "...", "visible_if": "<guard expression>"}`. Hidden options keep their position, so indices stay stable.
   - `on_choice`: name of the handler function (a string, or the function itself). **The handler must be defined in the global `init_script`.**
   - `speaker`: optional NPC name shown as the dialog title.
-  - `narrate`: when `True`, the small model narrates the outcome after the handler ran (it is told the handler's messages are binding facts). Default `False`: only the handler's own messages appear, which is instant and deterministic.
+  - `narrate`: when `True`, the small model narrates the outcome after the handler ran (it is told the handler's messages are binding facts). It also receives the current character and goal of the visible NPCs in the player's scene (including changes the handler just made, e.g. `npc.character = "Very angry"`) and any pending `tw.story.direct(...)` directions, which this narration then uses up. Default `False`: only the handler's own messages appear, which is instant and deterministic; directions then wait for the next turn's narration.
   - Returns `False` (and emits a debug note) when no dialog was opened: another dialog is already open this turn, the handler name is invalid, or no option is visible.
 
 **How it works.** Scripts run to completion inside one request, so `choose()` does not wait for the answer. It stores a *pending dialog* in the session state (`entity_states["__pending_dialog__"]`) and the client shows a modal that cannot be dismissed. Free-text input is rejected (HTTP 409) until the player answers. The answer goes to `POST /adventures/{game_id}/dialog/choice`, which:

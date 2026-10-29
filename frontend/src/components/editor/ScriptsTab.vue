@@ -774,7 +774,7 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.scene</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.scene.id</code>, <code>tw.scene.name</code>, <code>tw.scene.description</code>
+                    <code>tw.scene.id</code>, <code>tw.scene.npcs</code> (NPCs here), <code>tw.scene.items</code>, <code>tw.scene.teleport(id)</code>
                   </p>
                 </div>
 

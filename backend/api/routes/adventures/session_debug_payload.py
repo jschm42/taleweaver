@@ -102,6 +102,9 @@ def _build_npc_info(
         "is_hostile": bool(override.get("is_hostile", getattr(ent, "is_hostile", False))),
         "inventory": override.get("inventory", getattr(ent, "inventory", None) or []),
         "notes": override.get("notes") or getattr(ent, "notes", None) or "",
+        # Persona as the GM prompt sees it (scripts may rewrite it during the game).
+        "character": override.get("character") or getattr(ent, "character", None) or "",
+        "goal": override.get("goal") or getattr(ent, "goal", None) or "",
         "moveable": _npc_is_moveable(ent, override),
         "allowed_scenes": override.get("allowed_scenes")
         or getattr(ent, "allowed_scenes", None)

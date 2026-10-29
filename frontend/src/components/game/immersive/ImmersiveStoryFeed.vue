@@ -9,6 +9,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import type { ComicTurn } from '@/composables/useComicTurns'
 import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import ImmersiveStoryExchange from '@/components/game/immersive/ImmersiveStoryExchange.vue'
+import ThinkingIndicator from '@/components/game/immersive/ThinkingIndicator.vue'
 import { Sparkles, ChevronLeft, ChevronRight, ChevronsDown, Compass } from 'lucide-vue-next'
 import { useScrollToLatest } from './useScrollToLatest'
 
@@ -72,10 +73,7 @@ defineExpose({ scrollToLatestExchange })
 
 const hasPager = computed(() => props.gameTurns.length > 1)
 
-function isLatestExchange(exIdx: number): boolean {
-  const isLatestPage = props.activeTurnIndex >= props.gameTurns.length - 1
-  return isLatestPage && exIdx === (props.activeTurn?.exchanges.length ?? 0) - 1
-}
+const isLatestPage = computed(() => props.activeTurnIndex >= props.gameTurns.length - 1)
 </script>
 
 <template>
@@ -114,9 +112,6 @@ function isLatestExchange(exIdx: number): boolean {
           data-story-exchange
           class="shrink-0"
           :exchange="exchange"
-          :is-latest="isLatestExchange(exIdx)"
-          :is-evaluating="props.isEvaluating"
-          :status-text="props.statusText"
           :sheet="props.sheet"
           :entities="props.entities"
           :current-scene-description="props.currentSceneDescription"
@@ -132,6 +127,14 @@ function isLatestExchange(exIdx: number): boolean {
           @npc-hover="(entity, event) => emit('npcHover', entity, event)"
           @npc-leave="emit('npcLeave')"
           @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
+        />
+
+        <!-- "GM is working" badge: always the last item of the latest page, whatever the turn
+             adds (player bubble, engine events, streamed narration) or hides (silent commands). -->
+        <ThinkingIndicator
+          v-if="props.isEvaluating && isLatestPage"
+          class="self-start my-1"
+          :status-text="props.statusText"
         />
       </template>
 

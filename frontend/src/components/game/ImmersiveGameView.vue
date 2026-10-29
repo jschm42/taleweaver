@@ -149,9 +149,9 @@ const transitionSceneImageUrl = computed(() => {
 })
 
 // --- State: Turn Evaluation & Input Blocking ---
-const isEvaluating = computed(() => {
-  return props.status === 'connecting' || props.status === 'loading' || !!props.inputLocked
-})
+const isGmWorking = computed(() => props.status === 'connecting' || props.status === 'loading')
+// Also true while input is locked for other reasons (open choice dialog, finished game).
+const isEvaluating = computed(() => isGmWorking.value || !!props.inputLocked)
 
 // Keep the action buttons visible while one of them glows for new content.
 const actionBarPinned = computed(() => Boolean(props.inventoryGlow || props.mapGlow || props.questGlow))
@@ -401,7 +401,7 @@ defineExpose({
           :active-turn="activeTurn"
           :active-turn-index="activeTurnIndex"
           :viewing-turn-index="viewingTurnIndex"
-          :is-evaluating="isEvaluating"
+          :is-evaluating="isGmWorking"
           :status-text="props.statusText"
           :sheet="props.sheet"
           :entities="props.entities"

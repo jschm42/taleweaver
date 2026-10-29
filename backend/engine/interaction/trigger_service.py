@@ -11,6 +11,7 @@ from backend.core.config import settings
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
+from backend.engine.scripting.gm_directions import store_gm_directions
 from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
 from backend.engine.scripting.runner import ScriptRunner
@@ -186,6 +187,7 @@ class TriggerService:
             or changeset.entity_updates
             or changeset.exit_updates
             or changeset.pending_dialog
+            or changeset.gm_directions
         ):
             return
         cur_states = dict(state.entity_states or {})
@@ -198,6 +200,7 @@ class TriggerService:
             st.update({k: v for k, v in upd.items() if k != "entity_id"})
             cur_states[upd["entity_id"]] = st
         store_pending_dialog(cur_states, changeset.pending_dialog)
+        store_gm_directions(cur_states, changeset.gm_directions)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
 

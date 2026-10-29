@@ -26,8 +26,10 @@ from backend.engine.scripting.dialog import (
     find_option,
     pending_dialog,
 )
+from backend.engine.scripting.gm_directions import pending_gm_directions, take_gm_directions
 from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
 from backend.models.chat import ChatMessage
+from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,9 @@ _NARRATION_SYSTEM_PROMPT = (
     "You are the Game Master of a text adventure. The player just answered a choice dialog. "
     "Narrate the immediate outcome in 2-4 vivid sentences, in second person. The listed outcome "
     "facts were decided by the game engine and are binding: stay consistent with them and never "
-    "invent additional state changes, items, damage or rewards. Output prose only."
+    "invent additional state changes, items, damage or rewards. 'npcs_present' describes the "
+    "current personality and goal of the NPCs in the scene: let them shape how those NPCs react. "
+    "Work any 'author_directions' naturally into the narration. Output prose only."
 )
 
 
@@ -75,6 +79,8 @@ class DialogChoiceResolver:
         elif dialog.get("narrate"):
             narration = await self._narrate(dialog, option, messages, language)
             if narration:
+                # The directions were handed to this narration; on failure they wait for the next.
+                take_gm_directions(self.manager.state)
                 await self.manager._save_chat_message("assistant", narration)
                 messages.append(narration)
         await self.manager.db.commit()
@@ -158,6 +164,8 @@ class DialogChoiceResolver:
             "question": dialog.get("prompt"),
             "player_choice": option["label"],
             "outcome_facts": [str(m) for m in outcome if not str(m).startswith("[DEBUG")],
+            "npcs_present": await self._scene_npc_personas(),
+            "author_directions": pending_gm_directions(self.manager.state.entity_states),
         }
         try:
             llm = GameMasterLLM(user, provider=provider, model_category="small")
@@ -174,6 +182,23 @@ class DialogChoiceResolver:
             logger.exception("[Dialog] Narration failed for session %s", self.manager.game_id)
             return ""
         return str(text or "").strip()
+
+    async def _scene_npc_personas(self) -> list[dict[str, str]]:
+        """Visible NPCs in the player's scene with their (possibly script-changed) persona."""
+        state = self.manager.state
+        res = await self.manager.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == state.session_id,
+                WorldEntity.entity_type == "NPC",
+                WorldEntity.current_scene_id == state.current_scene_id,
+                WorldEntity.is_hidden.is_(False),
+            )
+        )
+        return [
+            {"name": npc.name, "character": npc.character or "", "goal": npc.goal or ""}
+            for npc in res.scalars().all()
+            if npc.character or npc.goal
+        ]
 
     async def _recent_history(self) -> list[dict[str, str]]:
         res = await self.manager.db.execute(

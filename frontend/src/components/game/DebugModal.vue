@@ -133,6 +133,8 @@ const allNpcs = computed<any[]>(() => {
         is_hostile: boolVal(over.is_hostile ?? n.is_hostile),
         inventory: over.inventory || n.inventory || [],
         notes: over.notes || n.notes || '',
+        character: over.character || n.character || '',
+        goal: over.goal || n.goal || '',
         moveable: over.moveable != null ? boolVal(over.moveable) : (n.moveable != null ? boolVal(n.moveable) : String(n.movement_type || '').toUpperCase() === 'MOVABLE'),
         allowed_scenes: over.allowed_scenes || n.allowed_scenes || [],
         is_in_current_scene: (over.current_scene_id || n.start_scene_id) === currentSceneId.value,
@@ -775,6 +777,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                     </div>
                     <p class="text-[11px] text-amber-200/90 font-mono italic leading-snug break-words">
                       "{{ npc.notes }}"
+                    </p>
+                  </div>
+
+                  <!-- Persona (character & goal) as fed to the GM prompt -->
+                  <div v-if="npc.character || npc.goal" class="bg-violet-950/30 border border-violet-500/30 rounded-xl p-2.5 space-y-1 text-[11px] font-mono leading-snug break-words">
+                    <div class="text-[9px] font-black uppercase tracking-wider text-violet-400">Persona</div>
+                    <p v-if="npc.character" class="text-violet-200/90">
+                      <span class="text-violet-400 font-bold">Character:</span> {{ npc.character }}
+                    </p>
+                    <p v-if="npc.goal" class="text-violet-200/90">
+                      <span class="text-violet-400 font-bold">Goal:</span> {{ npc.goal }}
                     </p>
                   </div>
 

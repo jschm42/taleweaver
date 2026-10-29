@@ -76,6 +76,11 @@ from backend.api.routes.adventures.interaction_hooks import fire_interact_trigge
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
 from backend.engine.scripting.dialog import store_pending_dialog
+from backend.engine.scripting.gm_directions import (
+    format_gm_directions,
+    store_gm_directions,
+    take_gm_directions,
+)
 from backend.engine.scripting.npc_persona import apply_persona
 from backend.engine.rules.skill_check import roll_attack, roll_skill_check
 from backend.models.adventure_template import AdventureTemplate
@@ -1766,6 +1771,8 @@ class GameTurnManager:
             rule_violations,
             exits_task=exits_task,
             reminders=tuple(reminders),
+            # Script directions (tw.story.direct) are used by this narration only.
+            author_directions=format_gm_directions(take_gm_directions(self.state)),
         )
 
         pass2_start = time.perf_counter()
@@ -2959,6 +2966,7 @@ class GameTurnManager:
             entity_states["__switch_story_flags__"] = story_flags
 
         store_pending_dialog(entity_states, changeset.pending_dialog)
+        store_gm_directions(entity_states, changeset.gm_directions)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
 
