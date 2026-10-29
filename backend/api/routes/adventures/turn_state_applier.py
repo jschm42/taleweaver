@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
-from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine, load_map_exits
 from backend.engine.rules.quest_manager import QuestManager
 from backend.engine.rules.rule_engine import (
     EntityMovement,
@@ -129,15 +129,7 @@ class TurnStateApplier:
                 )
 
         # Augment with adjacent unvisited scenes
-        # Fetch exits for this session or template
-        exit_query = select(WorldExit).where(
-            or_(
-                WorldExit.session_id == self.state.session_id,
-                WorldExit.template_id == self.state.template_id,
-            )
-        )
-        exits_res = await self.db.execute(exit_query)
-        exits = list(exits_res.scalars().all())
+        exits = await load_map_exits(self.db, self.state.template_id, self.state.session_id)
         map_dict = MapEngine.augment_map_data(map_dict, exits, self.state.current_scene_id)
 
         return map_dict

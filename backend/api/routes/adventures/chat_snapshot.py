@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
@@ -15,13 +15,13 @@ from backend.api.routes.adventures.out_of_turn_progress import (
     TERMINAL_STATUSES,
 )
 from backend.core.config import settings
-from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine, load_map_exits
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.models.world_entity import WorldEntity, WorldScene
 
 logger = logging.getLogger(__name__)
 
@@ -70,16 +70,8 @@ async def build_session_map(db: AsyncSession, state: SessionState) -> dict[str, 
         if image_url:
             node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(image_url)
 
-    exits_res = await db.execute(
-        select(WorldExit).where(
-            or_(
-                WorldExit.session_id == state.session_id, WorldExit.template_id == state.template_id
-            )
-        )
-    )
-    return MapEngine.augment_map_data(
-        map_dict, list(exits_res.scalars().all()), state.current_scene_id
-    )
+    exits = await load_map_exits(db, state.template_id, state.session_id)
+    return MapEngine.augment_map_data(map_dict, exits, state.current_scene_id)
 
 
 async def load_full_world_debug(db: AsyncSession, state: SessionState, requested: bool) -> Any:

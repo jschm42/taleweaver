@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-from typing import Optional, Union
-
 """
 MapEngine — manages the scene graph.
 
@@ -9,13 +5,40 @@ Responsibilities:
   * register_visit  — Upsert the current scene node (idempotent).
   * register_exit   — Add a directed edge between two scenes (deduplicates).
   * augment_map_data — Add adjacent unvisited scenes as placeholders.
+  * load_map_exits  — Load the exits a map is augmented with.
 """
 
-import logging
+from __future__ import annotations
 
+import logging
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.models.world_entity import WorldExit
+
 logger = logging.getLogger(__name__)
+
+
+async def load_map_exits(
+    db: AsyncSession, template_id: str, session_id: Optional[str]
+) -> list[WorldExit]:
+    """
+    Exits of a session's own world copy, or of the template when there is no session.
+
+    Never mixes the two: the template rows keep their original lock state, so they would
+    contradict exits the player has already unlocked in the session.
+    """
+    if session_id:
+        query = select(WorldExit).where(WorldExit.session_id == session_id)
+    else:
+        query = select(WorldExit).where(
+            WorldExit.template_id == template_id, WorldExit.session_id.is_(None)
+        )
+    res = await db.execute(query)
+    return list(res.scalars().all())
 
 
 class MapEngine:

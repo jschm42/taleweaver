@@ -4,7 +4,7 @@ import { Lock, Key, Unlock } from 'lucide-vue-next'
 import { getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 import PromptItemCard from './PromptItemCard.vue'
-import { parseMetadata, formatIdToName } from './promptUtils'
+import { parseMetadata } from './promptUtils'
 
 /** Unlock prompt for a locked container or exit, shown inline at the end of the story feed. */
 const props = defineProps<{
@@ -50,24 +50,18 @@ const effectiveHeader = computed(() => (effectiveKind.value === 'exit' ? 'Locked
 const effectiveDescription = computed(() => String(props.container?.description || props.container?.lock_description || '').trim())
 const imageUrl = computed(() => getImageUrl(props.container?.image_url) || null)
 
-// Find matching key item in inventory
-const matchingInventoryKey = computed(() => {
-  if (!requiredItemId.value) return null
-  return props.inventoryItems.find(item => {
-    const itemId = String(item?.id || '').trim().toUpperCase()
-    const itemName = String(item?.name || '').trim().toUpperCase()
-    return itemId === requiredItemId.value || itemName === requiredItemId.value
-  })
-})
+// The player picks the item to try; the backend decides whether it fits, so the
+// required item is never revealed or preselected here.
+const candidateItems = computed(() => (props.inventoryItems || []).filter(item => String(item?.id || '').trim()))
 
 const handleCodeSubmit = () => {
   if (!codeInput.value.trim() || props.busy) return
   emit('submitCode', codeInput.value.trim())
 }
 
-const handleUseKey = () => {
-  if (!matchingInventoryKey.value || props.busy) return
-  emit('useKeyItem', matchingInventoryKey.value.id || requiredItemId.value)
+const handleUseItem = (item: any) => {
+  if (props.busy) return
+  emit('useKeyItem', String(item.id).trim())
 }
 
 const handleUnlockDirect = () => {
@@ -122,14 +116,19 @@ watch(() => props.errorMessage, (message) => {
 
     <!-- ITEM REQUIREMENT -->
     <template v-else-if="requiredItemId">
-      <PromptItemCard v-if="matchingInventoryKey" :item="matchingInventoryKey">
-        <button type="button" class="tw-prompt-action" :disabled="busy" @click="handleUseKey">
-          <Key class="w-4 h-4" />
-          <span>Use Item</span>
-        </button>
-      </PromptItemCard>
+      <template v-if="candidateItems.length">
+        <p class="tw-prompt-hint">Which item do you want to try on this {{ entityNoun }}?</p>
+        <div class="flex flex-col gap-2 max-h-72 overflow-y-auto tw-scroll">
+          <PromptItemCard v-for="item in candidateItems" :key="item.id" :item="item">
+            <button type="button" class="tw-prompt-action shrink-0" :disabled="busy" @click="handleUseItem(item)">
+              <Key class="w-4 h-4" />
+              <span>Use</span>
+            </button>
+          </PromptItemCard>
+        </div>
+      </template>
       <p v-else class="tw-prompt-hint">
-        This {{ entityNoun }} requires an item you do not possess ({{ formatIdToName(requiredItemId) }}).
+        This {{ entityNoun }} needs something to open it, but you carry nothing you could try.
       </p>
     </template>
 

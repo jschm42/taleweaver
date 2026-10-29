@@ -1054,7 +1054,6 @@ const handleExitUnlockCodeSubmit = async (code: string) => {
     addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
     showExitUnlockModal.value = false
     exitUnlockModalTarget.value = null
-    await traverseSceneExit({ ...(target || {}), is_locked: false }, exitId)
   } catch (error: any) {
     exitUnlockError.value = error?.message || "That code didn't open the way."
   } finally {
@@ -1076,7 +1075,6 @@ const handleExitUnlockItemSubmit = async (itemId: string) => {
     addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
     showExitUnlockModal.value = false
     exitUnlockModalTarget.value = null
-    await traverseSceneExit({ ...(target || {}), is_locked: false }, exitId)
   } catch (error: any) {
     exitUnlockError.value = error?.message || 'Failed to unlock the exit with this item.'
   } finally {
@@ -1098,7 +1096,6 @@ const handleExitUnlockDirectSubmit = async () => {
     addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
     showExitUnlockModal.value = false
     exitUnlockModalTarget.value = null
-    await traverseSceneExit({ ...(target || {}), is_locked: false }, exitId)
   } catch (error: any) {
     exitUnlockError.value = error?.message || 'Guard condition not met. The exit remains locked.'
   } finally {

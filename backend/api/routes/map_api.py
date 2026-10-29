@@ -1,5 +1,3 @@
-from typing import Optional, Union
-
 """
 REST endpoints for the World Map.
 
@@ -10,21 +8,20 @@ POST /api/adventures/{template_id}/map/exit     — register an exit between sce
 All endpoints require authentication and are scoped to the owner of the
 AdventureTemplate (admins always allowed).
 """
+
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine, load_map_exits
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_entity import WorldExit
-from backend.models.world_map import WorldMap
 
 router = APIRouter(tags=["WorldMap"])
 logger = logging.getLogger(__name__)
@@ -88,13 +85,7 @@ async def get_map(
         raw_current_id = current_node.get("id") if current_node else None
 
         if raw_current_id:
-            # Fetch exits for this session or template
-            exit_query = select(WorldExit).where(
-                or_(WorldExit.session_id == session_id, WorldExit.template_id == template_id)
-            )
-            exits_res = await db.execute(exit_query)
-            exits = list(exits_res.scalars().all())
-
+            exits = await load_map_exits(db, template_id, session_id)
             map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
 
     return map_dict
