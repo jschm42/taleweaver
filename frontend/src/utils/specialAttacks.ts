@@ -5,6 +5,7 @@ import type {
   SpecialCategory,
   SpecialEffect,
   SuccessStat,
+  TargetScope,
 } from '@/types'
 
 export const SPECIAL_CATEGORIES: SpecialCategory[] = ['MAGIC', 'MELEE', 'RANGED', 'SOCIAL', 'OTHER']
@@ -57,6 +58,7 @@ export function normalizeSpecialAttack(action: SpecialAttack): NormalizedSpecial
   const legacyCost = costType === 'mana' ? Number(action.mana_cost || 0) : 0
   const effects = (action.effects ?? []).filter((e) => EFFECT_STATS.includes(e.stat) && AMOUNT_PATTERN.test(e.amount))
   const finalEffects = effects.length ? effects : legacyEffects(action)
+  const scope = action.target_scope && TARGET_SCOPES.includes(action.target_scope) ? action.target_scope : 'SINGLE'
   return {
     ...action,
     category,
@@ -65,7 +67,26 @@ export function normalizeSpecialAttack(action: SpecialAttack): NormalizedSpecial
     success_stat: action.success_stat ?? CATEGORY_DEFAULT_STAT[category],
     effects: finalEffects,
     targets_enemy: finalEffects.some((e) => e.target === 'target'),
+    target_scope: scope,
+    splash_radius: Math.min(MAX_SPLASH_RADIUS, Math.max(1, Number(action.splash_radius) || 1)),
   }
+}
+
+export const TARGET_SCOPES: TargetScope[] = ['SINGLE', 'SPLASH', 'ALL_ENEMIES']
+export const MAX_SPLASH_RADIUS = 2
+/** Mirrors `DEFAULT_SAVE_DC` in backend/engine/combat/area_attacks.py. */
+export const DEFAULT_SAVE_DC = 12
+
+export function isAreaAttack(action: NormalizedSpecialAttack): boolean {
+  return action.targets_enemy && action.target_scope !== 'SINGLE'
+}
+
+/** Who an attack hits, e.g. "Harlan", "All enemies" or "Harlan + 1 each side". */
+export function areaLabel(action: NormalizedSpecialAttack, targetName: string | null): string {
+  const target = targetName || 'no target'
+  if (!isAreaAttack(action)) return target
+  if (action.target_scope === 'ALL_ENEMIES') return 'All enemies'
+  return `${target} + ${action.splash_radius} each side`
 }
 
 export function costLabel(action: NormalizedSpecialAttack): string {
@@ -74,6 +95,9 @@ export function costLabel(action: NormalizedSpecialAttack): string {
 }
 
 export function checkLabel(action: NormalizedSpecialAttack): string {
+  if (isAreaAttack(action) && action.save_stat) {
+    return `${STAT_SHORT[action.save_stat]} save vs DC ${action.difficulty || DEFAULT_SAVE_DC}`
+  }
   const stat = STAT_SHORT[action.success_stat]
   if (action.difficulty) return `${stat} vs DC ${action.difficulty}`
   if (action.targets_enemy) return `${stat} vs AC`

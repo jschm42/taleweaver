@@ -89,6 +89,16 @@ export type CombatStat =
   | 'hp' | 'mana' | 'stamina'
   | 'strength' | 'dexterity' | 'intelligence' | 'wisdom' | 'charisma' | 'armor_class'
 export type SuccessStat = 'strength' | 'dexterity' | 'intelligence' | 'wisdom' | 'charisma'
+export type TargetScope = 'SINGLE' | 'SPLASH' | 'ALL_ENEMIES'
+
+/** Per-target outcome of an area special attack. */
+export interface AreaTargetOutcome {
+  id: string
+  name: string
+  hit?: boolean
+  dc?: number
+  save?: { d20: number; modifier: number; total: number; dc: number; success: boolean }
+}
 
 /** One stat change of a special attack, e.g. `{ target: 'target', stat: 'hp', amount: '-2d6' }`. */
 export interface SpecialEffect {
@@ -110,6 +120,14 @@ export interface SpecialAttack {
   success_stat?: SuccessStat | null
   difficulty?: number | null
   effects?: SpecialEffect[]
+  /** Area of effect for `target` effects (protagonist only). */
+  target_scope?: TargetScope | null
+  /** SPLASH only: neighbours hit on each side of the primary target (1-2). */
+  splash_radius?: number | null
+  /** Area attacks only: every target saves with this stat vs `difficulty` and takes half on success. */
+  save_stat?: SuccessStat | null
+  /** Area attacks skip passive encounter NPCs (by default they are hit and join the fight). */
+  spares_passive?: boolean | null
   damage_type?: 'FIXED' | 'ROLLED' | null
   damage_value?: string | null
   outcome_description?: string | null
@@ -135,6 +153,8 @@ export interface NormalizedSpecialAttack extends SpecialAttack {
   success_stat: SuccessStat
   effects: SpecialEffect[]
   targets_enemy: boolean
+  target_scope: TargetScope
+  splash_radius: number
   locked?: boolean
   has_unlock_guard?: boolean
 }
@@ -155,6 +175,9 @@ export interface CombatEventData {
   actor?: string | null
   /** Spoken line of a `banter` event (without the speaker name). */
   line?: string
+  /** Area special attacks: scope and every combatant caught in the area. */
+  scope?: TargetScope
+  targets?: AreaTargetOutcome[]
   target?: string | null
   entity?: string
   label?: string
@@ -372,6 +395,8 @@ export interface AdventureTemplateSummary {
   available_version?: string | null
   has_sequences?: boolean
   is_legacy_format?: boolean
+  /** Manifest format below 1.3.1: still playable, shown as deprecated. */
+  is_deprecated?: boolean
   can_start?: boolean
 }
 

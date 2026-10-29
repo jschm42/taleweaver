@@ -115,10 +115,40 @@ export class ArenaEventPlayer {
       await this.arena.effects.floatText(actorPoint, 'FAILED', COLORS.miss, 28)
       return
     }
-    if (d.target) {
-      await this.arena.effects.projectile(actorPoint, this.arena.cardCenter(d.target), color)
-    }
-    await this.applyEffects(d.effects, !!d.crit, color)
+    // Area attacks list every combatant caught in the area; one projectile flies to each.
+    const targetIds = d.targets?.length ? d.targets.map((t) => t.id) : d.target ? [d.target] : []
+    await Promise.all(targetIds.map((id) => this.arena.effects.projectile(actorPoint, this.arena.cardCenter(id), color)))
+    const selfEffects = (d.effects ?? []).some((e) => e.entity === d.actor && e.delta !== 0)
+    await Promise.all([
+      this.applyEffects(d.effects, !!d.crit, color),
+      selfEffects ? this.selfAura(d.actor, color) : Promise.resolve(),
+      this.areaVerdicts(d),
+    ])
+  }
+
+  /** Marks area targets that resisted: a successful save or a miss. */
+  private async areaVerdicts(d: CombatEventData): Promise<void> {
+    const jobs = (d.targets ?? []).map((t) => {
+      const label = t.save?.success ? 'SAVED' : t.hit === false ? 'MISS' : null
+      if (!label) return Promise.resolve()
+      const point = this.arena.cardCenter(t.id)
+      return this.arena.effects.floatText({ x: point.x, y: point.y - 36 }, label, COLORS.miss, 22)
+    })
+    await Promise.all(jobs)
+  }
+
+  /** Shows that an ability affected its own caster (heals, buffs, stances). */
+  private async selfAura(actorId: string | null | undefined, color: number): Promise<void> {
+    const card = this.arena.card(actorId)
+    if (!card) return
+    const flash = card.flashColor(color)
+    flash.alpha = 0.6
+    const w = card.cardWidth * card.home.scale
+    const h = card.cardHeight * card.home.scale
+    await Promise.all([
+      this.arena.tween.to(flash, { alpha: 0 }, 700),
+      this.arena.effects.aura({ x: card.home.x, y: card.home.y }, w, h, color),
+    ])
   }
 
   private async gmEvent(d: CombatEventData): Promise<void> {

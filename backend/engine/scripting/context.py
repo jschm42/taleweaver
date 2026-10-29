@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
+from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 
 logger = logging.getLogger(__name__)
@@ -1175,6 +1176,7 @@ class GameContext:
         story_flags: Optional[dict[str, Any]] = None,
         variables: Optional[dict[str, Any]] = None,
         is_debug_enabled: bool = False,
+        llm_asker: Optional[LlmAsker] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1218,6 +1220,8 @@ class GameContext:
         self.sequences = SequencesProxy(self.changeset)
         self.dice = DiceProxy()
         self.dialog = DialogProxy(self.changeset, self)
+        # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
+        self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
 
     def switch(self, switch_id_or_name: str) -> SwitchProxy:
         """Shortcut for tw.switches.get(switch_id_or_name)."""

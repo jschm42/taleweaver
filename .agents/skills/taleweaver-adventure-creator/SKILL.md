@@ -53,7 +53,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Script: ID] Name` | `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, …), `target`, `code` |
 | `[Sidequest: ID] Title` | `goal`, `goal_item`, `guard`, `xp` |
 | `[Award: KEY] Title` | `tier`, `requires`, `guard` |
-| `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item` |
+| `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item`, `area` (`splash 1` / `all`, protagonist only), `save` (`dex`), `spare_passive` |
 
 All `on_*` hooks take a script, and each has a matching `on_*_text` key for a fixed message. Scripts use only the sandboxed `tw` API: `tw.vars.get/set`, `tw.flags.get/set`, `tw.player.has_item/give_item/damage/heal`, `tw.npcs.get(ID)`, `tw.objects.get(ID)`, `tw.exits.unlock('A', 'B')`/`lock(...)`, `tw.story.narrate(...)`, `tw.game.win()`/`game_over()`, `tw.quests.complete(ID)`, `tw.awards.grant(KEY)`, `tw.dialog`. No imports, no dunder access.
 
@@ -109,7 +109,7 @@ Leave descriptions, scene details, minor NPCs and stats as **hints or open**, so
 | **SWITCH** objects | Levers, dials, lenses, valves: 2+ named states. Transitions can need a code, item or guard. Outcomes set story flags or unlock containers. To open an exit, guard it on the flag or call `tw.exits.unlock('A', 'B')` in the transition's script. |
 | **CONSTRUCTABLE** recipes | A recipe is a meta item that never appears in the game: `[Recipe: ID]` with `combine: A + B`, `results: X` (one or more regular items of any type, hidden automatically) and optional `keep: A` (tools that are not consumed) and `craft_guard`. Players craft deterministically on the in-game Combine workbench (exact ingredient set) or via chat (GM-judged). |
 | **Hidden** NPCs and objects | `hidden: yes` + `reveal:` (searching, an event, a script). Good for secret rooms and late reveals. |
-| **Combat** | d20 turn-based fights, NPC abilities, `attack: on_sight`, NPCs that attack once a condition holds (`attack_when_holding`, `attack_after_scene`, `attack_guard`). |
+| **Combat** | d20 turn-based fights, NPC abilities, protagonist area abilities (`area: all` + `save: dex` for a fireball), `attack: on_sight`, NPCs that attack once a condition holds (`attack_when_holding`, `attack_after_scene`, `attack_guard`). |
 | **Scripts** (Event Scripts setting ON) | Hooks on enter/leave scene, pickup, read, equip, unlock, defeat, sequence start/end, every turn, and **interaction** with any object or NPC (also fixed objects). They can set variables, move NPCs, lock or unlock exits, hand over items, damage, win or lose. |
 | **Sequence scripts** (scripts ON) | An indented `[Script]` under a chapter only runs while that chapter is active, e.g. "inspecting the bomb opens the wire dialog, but only in chapter 3" (`trigger: on_interact`, `target: BOMB`). |
 | **Soft rules** (scripts ON) | `[Rule: ID] <condition the GM judges>` + `script:` the engine runs, with optional `guard:` and `max:`. This is how social solutions get real effects. |

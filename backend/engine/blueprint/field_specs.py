@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from backend.engine.blueprint.converters import (
     STAT_ALIASES,
+    ability_area,
     ability_cost,
     ability_damage,
     boolean,
@@ -293,6 +294,19 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
     ),
     "dc": FieldSpec("difficulty", integer),
     "damage": FieldSpec("*", ability_damage),
+    "area": FieldSpec("*", ability_area),
+    "save": FieldSpec(
+        "save_stat",
+        choice(
+            "strength",
+            "dexterity",
+            "intelligence",
+            "wisdom",
+            "charisma",
+            aliases={k: v for k, v in STAT_ALIASES.items() if v != "armor_class"},
+        ),
+    ),
+    "spare_passive": FieldSpec("spares_passive", boolean),
     "outcome": FieldSpec("outcome_description"),
     "locked": FieldSpec("is_locked", boolean),
     "unlock_item": _ref("unlock_required_item_id"),

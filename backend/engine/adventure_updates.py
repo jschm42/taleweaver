@@ -12,7 +12,12 @@ from packaging.version import parse as parse_semver
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.adventure_format import CURRENT_VERSION
+from backend.core.adventure_format import (
+    CURRENT_VERSION,
+    PLAYABLE_MIN_VERSION,
+    is_deprecated_version,
+    is_version_below,
+)
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
 from backend.engine.adventure_importer import AdventureTemplateImporter
@@ -270,19 +275,16 @@ def find_matching_file_for_template(
 
 def is_legacy_template(template: AdventureTemplate) -> bool:
     """
-    Checks if a template was previously imported from an older ADV format version (< CURRENT_VERSION)
+    Checks if a template was imported from an ADV format older than PLAYABLE_MIN_VERSION
     or lacks required sequences for imported adventures.
     """
     manifest = template.original_manifest or {}
     manifest_version = manifest.get("format_version") or manifest.get("version")
 
-    if manifest_version:
-        try:
-            if parse_semver(str(manifest_version)) < parse_semver(CURRENT_VERSION):
-                return True
-        except Exception:
-            if str(manifest_version) < CURRENT_VERSION:
-                return True
+    # Below the playable minimum the adventure must be migrated first; versions between that
+    # and DEPRECATED_BELOW_VERSION stay playable and are only flagged as deprecated.
+    if is_version_below(manifest_version, PLAYABLE_MIN_VERSION):
+        return True
 
     # Imported (has a manifest) but lacks sequences; origin_id is set on every template now.
     is_imported = bool(template.original_manifest)
@@ -295,7 +297,7 @@ def is_legacy_session(
     template: Optional[AdventureTemplate] = None,
 ) -> bool:
     """
-    Checks if a game session was created with an outdated/legacy adventure format (< CURRENT_VERSION)
+    Checks if a game session was created with an adventure format older than PLAYABLE_MIN_VERSION
     or is linked to a legacy template without sequence support.
     """
     if template and is_legacy_template(template):
@@ -310,13 +312,8 @@ def is_legacy_session(
         snapshot = AdventureLogic.extract_manifest_snapshot(state)
         manifest = snapshot.get("original_manifest") or {}
         manifest_version = manifest.get("format_version") or manifest.get("version")
-        if manifest_version:
-            try:
-                if parse_semver(str(manifest_version)) < parse_semver(CURRENT_VERSION):
-                    return True
-            except Exception:
-                if str(manifest_version) < CURRENT_VERSION:
-                    return True
+        if is_version_below(manifest_version, PLAYABLE_MIN_VERSION):
+            return True
 
         # Check if imported but lacks sequences
         is_imported = bool(manifest or (template and template.original_manifest))
@@ -373,6 +370,7 @@ def check_template_update(
         "update_file_path": update_file_path,
         "has_sequences": db_has_sequences,
         "is_legacy_format": is_legacy,
+        "is_deprecated": is_deprecated_version(db_format_version),
         "can_start": can_start,
     }
 
@@ -613,5 +611,6 @@ async def migrate_single_adventure(
         "template_id": template.id,
         "has_sequences": True,
         "is_legacy_format": False,
+        "is_deprecated": False,
         "can_start": True,
     }

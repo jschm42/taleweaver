@@ -43,6 +43,8 @@ const { tiltRef, onPointerMove, onPointerLeave } = useCardTilt()
 const toneLabel = computed(() => toneToLabel(props.template.selected_tone))
 const accent = computed(() => resolveGenreAccent(toneLabel.value))
 const needsMigration = computed(() => !!(props.template.is_legacy_format || !props.template.can_start))
+const DEPRECATED_HINT = 'Made with an older adventure format (below 1.3.1). It can still be played; '
+  + 'crafting recipes from older versions may not work.'
 const hasLicenseInfo = computed(() =>
   !!(props.template.license || props.template.creator || props.template.copyright || props.template.license_url)
 )
@@ -128,6 +130,13 @@ function primaryAction(event: MouseEvent): void {
           <i :class="props.isUpdating ? 'ra ra-cycle animate-spin' : 'ra ra-recycle'" class="text-[10px] sm:text-xs"></i>
           <span>{{ props.isUpdating ? 'Updating...' : (props.template.available_version ? `Update v${props.template.available_version}` : 'Update') }}</span>
         </button>
+        <span
+          v-if="props.template.is_deprecated && !needsMigration"
+          class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-950/80 text-amber-300 text-[9px] sm:text-[11px] font-black uppercase tracking-widest border border-amber-500/40 backdrop-blur-md"
+          :title="DEPRECATED_HINT"
+        >
+          Deprecated
+        </span>
         <div
           v-if="props.template.creation_error"
           class="group/warn relative px-2 py-0.5 sm:py-1 rounded-full bg-slate-950/80 text-amber-300 text-[9px] sm:text-[11px] font-bold border border-amber-500/30 flex items-center gap-1.5 backdrop-blur-md cursor-help"

@@ -18,6 +18,7 @@ from backend.api.routes.adventures.agent_commands import (
     handle_playagent_command,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.script_llm import make_script_llm_asker
 from backend.api.routes.adventures.session_adventure import SessionAdventure, load_session_adventure
 from backend.core.narration_budget import log_narration_budget
 from backend.core.narration_styles import (
@@ -2790,6 +2791,12 @@ class GameTurnManager:
             in_game_time=self.state.in_game_time,
             story_flags=story_flags,
             is_debug_enabled=is_debug,
+            llm_asker=make_script_llm_asker(
+                self.user,
+                game_id=self.game_id,
+                adventure_id=self.state.template_id,
+                language=self.turn_language,
+            ),
         )
 
     def _get_script_runner(self) -> ScriptRunner:

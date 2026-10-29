@@ -12,6 +12,12 @@ from backend.api.routes.adventures.combat.attacks import (
     attack_log_text,
 )
 from backend.api.routes.adventures.combat.context import engaged_enemies, find_enemy, is_enemy_alive
+from backend.engine.combat.area_attacks import (
+    describe_area_result,
+    is_area_attack,
+    resolve_area_attack,
+    select_area_targets,
+)
 from backend.engine.combat.initiative import PLAYER_ID
 from backend.engine.combat.special_attacks import (
     STAT_LABELS,
@@ -153,6 +159,8 @@ class CombatPlayerMixin:
             target = self._resolve_target(combat, parts[1].strip() if len(parts) > 1 else "")
             if not target:
                 return action_error("There is no enemy left to target.")
+            if is_area_attack(action):
+                return await self._player_area_special(combat, action, target)
             self._engage(combat, target)
 
         caster = self._player_view(combat)
@@ -163,12 +171,37 @@ class CombatPlayerMixin:
             self._apply_enemy_view(target, target_view)
 
         text = describe_special_result(self.avatar.name, target["name"] if target else None, result)
+        await self._note_special_outcome(action, result)
+        return action_result(text, "player_action", result)
+
+    async def _player_area_special(
+        self, combat: dict[str, Any], action: dict[str, Any], primary: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Splash / all-enemies special: hit passive NPCs join the fight like attacked ones."""
+        candidates = [e for e in combat.get("enemies") or [] if is_enemy_alive(e)]
+        targets = select_area_targets(action, candidates, primary["id"])
+        for enemy in targets:
+            self._engage(combat, enemy)
+        combat["target_id"] = primary["id"]
+
+        caster = self._player_view(combat)
+        views = [dict(enemy) for enemy in targets]
+        result = resolve_area_attack(action, caster, views, primary["id"])
+        self._apply_player_view(combat, caster)
+        for enemy, view in zip(targets, views, strict=True):
+            self._apply_enemy_view(enemy, view)
+
+        await self._note_special_outcome(action, result)
+        return action_result(
+            describe_area_result(self.avatar.name, result), "player_action", result
+        )
+
+    async def _note_special_outcome(self, action: dict[str, Any], result: dict[str, Any]) -> None:
         if result["success"] and action.get("outcome_description"):
             await self._save_chat_message(
                 "system",
                 f"Special action used: {action['name']}. Outcome: {action['outcome_description']}",
             )
-        return action_result(text, "player_action", result)
 
     async def _player_rest(self, combat: dict[str, Any], _arg: str) -> dict[str, Any]:
         before = int(self.avatar.stamina or 0)

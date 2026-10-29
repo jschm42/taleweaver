@@ -10,9 +10,29 @@ from __future__ import annotations
 import ast
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# The interpreter currently evaluating a script, so host calls can adjust its time budget.
+_ACTIVE_INTERPRETER: ContextVar[Any] = ContextVar("tw_active_interpreter", default=None)
+# True while a guard expression (not a script) is evaluated; guards must stay deterministic.
+_EXPRESSION_MODE: ContextVar[bool] = ContextVar("tw_expression_mode", default=False)
+
+
+def in_guard_expression() -> bool:
+    """True while the sandbox evaluates a guard expression rather than running a script."""
+    return _EXPRESSION_MODE.get()
+
+
+def refund_time_budget(seconds: float) -> None:
+    """Gives the running script back wall-clock time spent waiting on a host call (e.g. an LLM)."""
+    interpreter = _ACTIVE_INTERPRETER.get()
+    if interpreter is not None and seconds > 0:
+        interpreter.deadline += seconds
 
 
 class ScriptSecurityError(Exception):
@@ -338,10 +358,32 @@ class SafeAstInterpreter:
 
         return errors
 
+    @contextmanager
+    def _active(self, expression: bool) -> Iterator[None]:
+        """Marks this interpreter as running (and whether it evaluates a guard expression)."""
+        interpreter_token = _ACTIVE_INTERPRETER.set(self)
+        mode_token = _EXPRESSION_MODE.set(expression)
+        try:
+            yield
+        finally:
+            _EXPRESSION_MODE.reset(mode_token)
+            _ACTIVE_INTERPRETER.reset(interpreter_token)
+
     def execute(self, code: str, context: dict[str, Any]) -> None:
         """
         Parses, validates, and executes the script within the provided context.
         """
+        with self._active(expression=False):
+            self._execute(code, context)
+
+    def evaluate_expression(self, expr_str: str, context: dict[str, Any]) -> Any:
+        """
+        Parses, validates, and evaluates a Python expression string within the given context.
+        """
+        with self._active(expression=True):
+            return self._evaluate_expression(expr_str, context)
+
+    def _execute(self, code: str, context: dict[str, Any]) -> None:
         self._start_budget()
         try:
             tree = ast.parse(code, mode="exec")
@@ -364,10 +406,7 @@ class SafeAstInterpreter:
             if k not in SAFE_BUILTINS:
                 context[k] = v
 
-    def evaluate_expression(self, expr_str: str, context: dict[str, Any]) -> Any:
-        """
-        Parses, validates, and evaluates a Python expression string within the given context.
-        """
+    def _evaluate_expression(self, expr_str: str, context: dict[str, Any]) -> Any:
         self._start_budget()
         try:
             tree = ast.parse(expr_str.strip(), mode="eval")

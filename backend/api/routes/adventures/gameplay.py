@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any, cast
+from typing import Any, Optional, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,6 +36,7 @@ from backend.api.routes.adventures.schemas import (
     TranslateTextRequest,
     TranslateTextResponse,
 )
+from backend.api.routes.adventures.script_llm import make_script_llm_asker
 from backend.api.routes.adventures.session_adventure import load_session_adventure
 from backend.api.routes.adventures.session_debug_payload import build_session_debug_payload
 from backend.api.routes.adventures.unlock_service import (
@@ -65,6 +66,7 @@ from backend.core.prompts import (
 )
 from backend.engine.adventure_updates import is_legacy_session
 from backend.engine.scripting.dialog import client_dialog, pending_dialog
+from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.sequence_walkthrough import (
     format_walkthrough_steps,
     sequence_walkthrough_steps,
@@ -508,6 +510,7 @@ async def mark_text_log_read(
             entity.id,
             script_code=meta.get("on_read_script"),
             narrative_text=meta.get("on_read_text"),
+            llm_asker=_script_llm_asker(current_user, state),
         )
 
     await db.commit()
@@ -828,11 +831,17 @@ async def unlock_exit(
     )
 
 
+def _script_llm_asker(user: User, state: SessionState) -> LlmAsker:
+    """tw.llm.ask callback for trigger scripts fired by the gameplay routes."""
+    return make_script_llm_asker(user, game_id=state.session_id, adventure_id=state.template_id)
+
+
 async def _fire_gameplay_exit_triggers(
     db: AsyncSession,
     state: SessionState,
     world_exit: WorldExit,
     current_scene_id: str,
+    llm_asker: Optional[LlmAsker] = None,
 ) -> None:
     """Executes on_leave_scene, on_open_exit, and on_exit_used triggers."""
     old_sc_res = await db.execute(
@@ -855,6 +864,7 @@ async def _fire_gameplay_exit_triggers(
             old_scene.id,
             script_code=old_scene.on_leave_scene_script,
             narrative_text=old_scene.on_leave_scene_text,
+            llm_asker=llm_asker,
         )
 
     if world_exit.on_open_exit_script or world_exit.on_open_exit_text:
@@ -865,6 +875,7 @@ async def _fire_gameplay_exit_triggers(
             world_exit.id,
             script_code=world_exit.on_open_exit_script,
             narrative_text=world_exit.on_open_exit_text,
+            llm_asker=llm_asker,
         )
 
     if getattr(world_exit, "on_exit_used_script", None) or getattr(
@@ -877,6 +888,7 @@ async def _fire_gameplay_exit_triggers(
             world_exit.id,
             script_code=world_exit.on_exit_used_script,
             narrative_text=world_exit.on_exit_used_text,
+            llm_asker=llm_asker,
         )
 
 
@@ -932,7 +944,8 @@ async def traverse_exit(
     if not scene:
         raise HTTPException(status_code=400, detail="The target scene is not available.")
 
-    await _fire_gameplay_exit_triggers(db, state, world_exit, current_scene_id)
+    llm_asker = _script_llm_asker(current_user, state)
+    await _fire_gameplay_exit_triggers(db, state, world_exit, current_scene_id, llm_asker)
 
     state.current_scene_id = target_scene_id
 
@@ -952,6 +965,7 @@ async def traverse_exit(
             scene.id,
             script_code=scene.on_enter_scene_script,
             narrative_text=scene.on_enter_scene_text,
+            llm_asker=llm_asker,
         )
 
     await db.commit()

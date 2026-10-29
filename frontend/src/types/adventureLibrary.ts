@@ -18,6 +18,8 @@ export interface AdventureCatalogEntry {
   size_bytes: number
   /** No longer up to the current standard; still installable, hidden unless the user opts in. */
   deprecated: boolean
+  /** Manifest format version of adventure.adv (from the index or the file header); null if unknown. */
+  format_version?: string | null
   files: string[]
 }
 

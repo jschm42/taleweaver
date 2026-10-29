@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from backend.core.adventure_format import is_deprecated_version
 
 SLUG_PATTERN = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 BLUEPRINT_NAME = "adventure.adv"
@@ -49,7 +51,16 @@ class LibraryEntry(BaseModel):
     size_bytes: int = Field(default=0, ge=0)
     # No longer up to the current standard; still installable, hidden by default in the UI.
     deprecated: bool = False
+    # Manifest format version of adventure.adv. Read from the file header when the index
+    # does not list it; below DEPRECATED_BELOW_VERSION the entry counts as deprecated.
+    format_version: str | None = Field(default=None, max_length=32)
     files: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _old_format_is_deprecated(self) -> LibraryEntry:
+        if not self.deprecated and is_deprecated_version(self.format_version):
+            self.deprecated = True
+        return self
 
     @field_validator("files")
     @classmethod

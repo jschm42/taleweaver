@@ -187,7 +187,8 @@ async def test_fetch_reads_index_and_keeps_a_disk_copy():
 
     def serve(request: httpx.Request) -> httpx.Response:
         requested.append(str(request.url))
-        return httpx.Response(200, json=_index(_entry("online")))
+        # A listed format_version means no adventure.adv header probe is needed.
+        return httpx.Response(200, json=_index(_entry("online", format_version="1.3.1")))
 
     # Act
     async with _client(serve) as client:
@@ -208,7 +209,7 @@ async def test_memory_cache_avoids_a_second_request():
     def serve(request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
-        return httpx.Response(200, json=_index(_entry()))
+        return httpx.Response(200, json=_index(_entry(format_version="1.3.1")))
 
     # Act
     async with _client(serve) as client:

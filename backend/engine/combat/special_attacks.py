@@ -25,6 +25,8 @@ CATEGORIES = ("MAGIC", "MELEE", "RANGED", "SOCIAL", "OTHER")
 COST_TYPES = ("mana", "stamina")
 ACTION_TYPES = ("ATTACK", "HEAL", "UTILITY")
 EFFECT_TARGETS = ("target", "self")
+TARGET_SCOPES = ("SINGLE", "SPLASH", "ALL_ENEMIES")
+MAX_SPLASH_RADIUS = 2
 
 CATEGORY_DEFAULT_STAT = {
     "MAGIC": "intelligence",
@@ -134,6 +136,7 @@ def normalize_special_action(raw: Any) -> Optional[dict[str, Any]]:
     success_stat = _pick(
         raw.get("success_stat"), SUCCESS_STATS, CATEGORY_DEFAULT_STAT[category], upper=False
     )
+    save_stat = _pick(raw.get("save_stat"), SUCCESS_STATS, "", upper=False) or None
     return {
         "id": str(raw.get("id")).strip(),
         "name": str(raw.get("name") or raw.get("id")).strip(),
@@ -146,6 +149,10 @@ def normalize_special_action(raw: Any) -> Optional[dict[str, Any]]:
         "difficulty": difficulty if difficulty > 0 else None,
         "effects": effects,
         "targets_enemy": any(e["target"] == "target" for e in effects),
+        "target_scope": _pick(raw.get("target_scope"), TARGET_SCOPES, "SINGLE"),
+        "splash_radius": max(1, min(MAX_SPLASH_RADIUS, _as_int(raw.get("splash_radius"), 1))),
+        "save_stat": save_stat,
+        "spares_passive": bool(raw.get("spares_passive")),
         "outcome_description": str(raw.get("outcome_description") or ""),
         "is_locked": bool(raw.get("is_locked")),
         "unlock_condition_type": raw.get("unlock_condition_type"),

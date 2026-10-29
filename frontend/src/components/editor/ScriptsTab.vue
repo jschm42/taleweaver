@@ -821,6 +821,13 @@ function handleTabKey(e: KeyboardEvent) {
                 </div>
 
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span class="font-bold text-emerald-400">tw.llm</span>
+                  <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    <code>tw.llm.ask(prompt, model="simple"|"advanced", system="")</code> &mdash; returns the answer as text, <code>""</code> on failure (max 3 calls per trigger, not in guards)
+                  </p>
+                </div>
+
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.log & tw.debug</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
                     <code>tw.log("msg")</code>, <code>print("msg")</code> (server console), <code>tw.debug("msg")</code> (in-game when Debug ON)

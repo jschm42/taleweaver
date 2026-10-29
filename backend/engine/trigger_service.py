@@ -10,6 +10,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.core.config import settings
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
+from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.switch_service import SwitchService
 from backend.models.avatar import Avatar
@@ -32,7 +33,9 @@ class TriggerService:
         )
 
     @classmethod
-    async def build_context(cls, db: AsyncSession, state: SessionState) -> GameContext:
+    async def build_context(
+        cls, db: AsyncSession, state: SessionState, llm_asker: Optional[LlmAsker] = None
+    ) -> GameContext:
         """Builds a GameContext instance from session database state."""
         av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
         avatar = av_res.scalars().first()
@@ -84,6 +87,7 @@ class TriggerService:
             in_game_time=state.in_game_time,
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
+            llm_asker=llm_asker,
         )
 
     @classmethod
@@ -106,6 +110,7 @@ class TriggerService:
         target_id: str,
         script_code: Optional[str] = None,
         narrative_text: Optional[str] = None,
+        llm_asker: Optional[LlmAsker] = None,
     ) -> list[str]:
         """
         Executes a transition trigger (script + narrative text).
@@ -138,7 +143,7 @@ class TriggerService:
 
         code = str(script_code or "").strip()
         if code:
-            context = await cls.build_context(db, state)
+            context = await cls.build_context(db, state, llm_asker)
             runner = ScriptRunner([])
             scope = {"tw": context, "game": context}
             runner.execute_code(code, scope, script_id=f"trigger_{trigger_name}_{target_id}")

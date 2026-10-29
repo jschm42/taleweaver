@@ -70,6 +70,40 @@ export class ArenaEffects {
     orb.destroy()
   }
 
+  /** Self-buff / heal: a glowing frame that swells around the card while sparks rise up it. */
+  async aura(center: Point, width: number, height: number, color: number): Promise<void> {
+    const ring = new Graphics()
+      .roundRect(-width / 2 - 6, -height / 2 - 6, width + 12, height + 12, 18)
+      .stroke({ width: 6, color, alpha: 0.9 })
+    ring.position.set(center.x, center.y)
+    this.layer.addChild(ring)
+
+    const motes = Array.from({ length: 22 }, () => {
+      const g = new Graphics().circle(0, 0, 2 + Math.random() * 3).fill({ color })
+      const x = center.x + (Math.random() - 0.5) * width * 0.9
+      const startY = center.y + height * (0.2 + Math.random() * 0.3)
+      g.position.set(x, startY)
+      this.layer.addChild(g)
+      return { g, x, startY, rise: height * (0.5 + Math.random() * 0.4), delay: Math.random() * 0.35 }
+    })
+
+    await Promise.all([
+      this.tween.run(750, (p) => {
+        ring.scale.set(1 + p * 0.12)
+        ring.alpha = 1 - p
+      }),
+      this.tween.run(1000, (p) => {
+        for (const m of motes) {
+          const local = Math.max(0, (p - m.delay) / (1 - m.delay))
+          m.g.position.set(m.x + Math.sin(local * Math.PI * 2) * 6, m.startY - m.rise * local)
+          m.g.alpha = local === 0 ? 0 : 1 - local
+        }
+      }, (t) => t),
+    ])
+    ring.destroy()
+    motes.forEach((m) => m.g.destroy())
+  }
+
   async banner(center: Point, text: string, color: number, hold = 650, size = 52): Promise<void> {
     const label = new Text({
       text,

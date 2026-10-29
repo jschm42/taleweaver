@@ -33,6 +33,19 @@ The manifest represents the complete blueprint of a generated or exported world.
 }
 ```
 
+`format` and `version` (the manifest **format** version, not the adventure's own version in
+`adventure.version`) must be the first two keys: the adventure library reads them from the
+first 512 bytes of each `adventure.adv` without downloading the whole file.
+
+**Version policy** (`backend/core/adventure_format.py`):
+
+| Manifest version | Status |
+| --- | --- |
+| `1.3.1` (current) | Current format. |
+| `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (hidden there unless *Show deprecated* is on). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
+| `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Imported adventures without sequences are legacy too. |
+| below `1.0` | Rejected on import. |
+
 ---
 
 ### 2.1 Adventure Metadata (`adventure`)

@@ -2,10 +2,36 @@ from __future__ import annotations
 
 from typing import Any
 
+from packaging.version import InvalidVersion
+from packaging.version import parse as parse_version
+
 FORMAT_NAME = "TaleWeaver"
 LEGACY_FORMAT_NAME = "taleweaver.adz"
 CURRENT_VERSION = "1.3.1"
 MIN_SUPPORTED_VERSION = "1.0"
+# Manifests below this version are still playable but shown as deprecated.
+DEPRECATED_BELOW_VERSION = "1.3.1"
+# Manifests below this version must be migrated before they can be played.
+PLAYABLE_MIN_VERSION = "1.3"
+
+
+def is_version_below(version: Any, threshold: str) -> bool:
+    """True when ``version`` parses and is lower than ``threshold`` (``1.3`` == ``1.3.0``).
+
+    Missing or unparsable versions are never "below": callers decide separately what an
+    unknown version means.
+    """
+    text = str(version or "").strip()
+    if not text:
+        return False
+    try:
+        return parse_version(text) < parse_version(threshold)
+    except InvalidVersion:
+        return False
+
+
+def is_deprecated_version(version: Any) -> bool:
+    return is_version_below(version, DEPRECATED_BELOW_VERSION)
 
 
 def _parse_version(value: str) -> tuple[int, ...]:

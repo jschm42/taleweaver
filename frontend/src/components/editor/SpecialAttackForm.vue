@@ -4,7 +4,15 @@ import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
 import type { SpecialAttack, SpecialEffect } from '@/types'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import HardRuleTriggersEditor, { type HardRule } from '@/components/editor/HardRuleTriggersEditor.vue'
-import { AMOUNT_PATTERN, CATEGORY_META, EFFECT_STATS, SPECIAL_CATEGORIES, STAT_SHORT, SUCCESS_STATS } from '@/utils/specialAttacks'
+import {
+  AMOUNT_PATTERN,
+  CATEGORY_META,
+  DEFAULT_SAVE_DC,
+  EFFECT_STATS,
+  SPECIAL_CATEGORIES,
+  STAT_SHORT,
+  SUCCESS_STATS,
+} from '@/utils/specialAttacks'
 
 export type SpecialAttackDraft = SpecialAttack & { effects: SpecialEffect[]; _key: number }
 
@@ -32,6 +40,12 @@ const unlockRule = computed<HardRule>({
     draft.value.unlock_guard_expression = rule.guard_expression || null
   },
 })
+
+const isArea = computed(() => !!draft.value.target_scope && draft.value.target_scope !== 'SINGLE')
+const hasTargetEffect = computed(() => draft.value.effects.some((e) => e.target === 'target'))
+const difficultyPlaceholder = computed(() => (
+  isArea.value && draft.value.save_stat ? `Save DC ${DEFAULT_SAVE_DC}` : 'Target AC'
+))
 
 function addEffect(): void {
   draft.value.effects.push({ target: 'target', stat: 'hp', amount: '-1d4' })
@@ -92,8 +106,50 @@ function validAmount(amount: string): boolean {
       </label>
       <label class="space-y-1 flex-1">
         <span class="text-slate-400 font-bold">Difficulty (DC)</span>
-        <input v-model.number="draft.difficulty" type="number" min="0" placeholder="Target AC" :class="inputClass" />
+        <input v-model.number="draft.difficulty" type="number" min="0" :placeholder="difficultyPlaceholder" :class="inputClass" />
       </label>
+    </div>
+
+    <!-- Area of effect (protagonist only; NPC specials always hit one target) -->
+    <div v-if="props.isProtagonist" class="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+      <label class="space-y-1">
+        <span class="text-slate-400 font-bold">Area</span>
+        <select v-model="draft.target_scope" :class="inputClass">
+          <option :value="null">Single target</option>
+          <option value="SPLASH">Splash (target + neighbours)</option>
+          <option value="ALL_ENEMIES">All enemies</option>
+        </select>
+      </label>
+      <template v-if="isArea">
+        <label v-if="draft.target_scope === 'SPLASH'" class="space-y-1">
+          <span class="text-slate-400 font-bold">Radius</span>
+          <select v-model.number="draft.splash_radius" :class="inputClass">
+            <option :value="1">1 each side</option>
+            <option :value="2">2 each side</option>
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-slate-400 font-bold">Saving throw</span>
+          <select v-model="draft.save_stat" :class="inputClass">
+            <option :value="null">None (one attack roll)</option>
+            <option v-for="s in SUCCESS_STATS" :key="s" :value="s">{{ STAT_SHORT[s] }} save</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-2 text-slate-300 font-bold pb-2">
+          <input v-model="draft.spares_passive" type="checkbox" class="accent-emerald-500" /> Spare passive NPCs
+        </label>
+      </template>
+      <p v-if="isArea" class="md:col-span-4 text-[10px] text-slate-500">
+        Cost is paid once and damage is rolled once.
+        {{ draft.save_stat
+          ? `Every target rolls a ${STAT_SHORT[draft.save_stat]} save against the DC (default ${DEFAULT_SAVE_DC}) and takes half on a success.`
+          : 'One success roll is compared against every target\'s AC (or the fixed DC).' }}
+        <template v-if="draft.target_scope === 'SPLASH'"> Neighbours of the chosen target take half.</template>
+        {{ draft.spares_passive ? 'Passive NPCs in the enemy stack are left out.' : 'Passive NPCs in the enemy stack are hit too and join the fight.' }}
+      </p>
+      <p v-if="isArea && !hasTargetEffect" class="md:col-span-4 text-[10px] text-amber-400">
+        Area only applies to effects on "Target". Add at least one Target effect.
+      </p>
     </div>
 
     <div class="md:col-span-2 space-y-1.5">

@@ -18,7 +18,8 @@ const ID_PATTERN = /^[A-Z0-9_-]{1,128}$/
 // Fields accepted by the backend schema (extra fields are rejected there).
 const SCHEMA_KEYS: Array<keyof SpecialAttack> = [
   'id', 'name', 'description', 'action_type', 'category', 'cost_type', 'cost', 'mana_cost',
-  'success_stat', 'difficulty', 'effects', 'outcome_description', 'is_locked',
+  'success_stat', 'difficulty', 'effects', 'target_scope', 'splash_radius', 'save_stat', 'spares_passive',
+  'outcome_description', 'is_locked',
   'unlock_condition_type', 'unlock_condition_target', 'unlock_required_item_id',
   'unlock_required_scene_id', 'unlock_required_defeated_npc_id', 'unlock_guard_expression',
   'unlock_text', 'on_success_script', 'on_success_text', 'on_failure_script', 'on_failure_text',
@@ -48,6 +49,8 @@ const PRESETS: Record<string, Omit<SpecialAttack, 'id'>> = {
   Fireball: {
     name: 'Fireball', description: 'A roaring ball of flame.', action_type: 'ATTACK', category: 'MAGIC',
     cost_type: 'mana', cost: 25, effects: [{ target: 'target', stat: 'hp', amount: '-3d6' }],
+    // Area settings only apply to the protagonist; NPCs keep a single-target fireball.
+    target_scope: 'ALL_ENEMIES', save_stat: 'dexterity', difficulty: 13,
   },
   'Shield Bash': {
     name: 'Shield Bash', description: 'Slams the shield into the foe, leaving it dazed.', action_type: 'ATTACK',
@@ -79,6 +82,11 @@ function toDraft(attack: SpecialAttack): SpecialAttackDraft {
     cost: n.cost,
     success_stat: n.success_stat,
     effects: n.effects.map((e) => ({ ...e })),
+    // The form uses null for "single target" and "no saving throw".
+    target_scope: n.target_scope === 'SINGLE' ? null : n.target_scope,
+    splash_radius: n.splash_radius,
+    save_stat: attack.save_stat ?? null,
+    spares_passive: !!attack.spares_passive,
     on_success_script: attack.on_success_script ?? '',
     on_failure_script: attack.on_failure_script ?? '',
     _key: ++keyCounter,
@@ -139,6 +147,13 @@ function serialize(d: SpecialAttackDraft): SpecialAttack {
     if (value !== undefined && value !== null && value !== '') out[key] = value
   }
   const cost = Math.max(0, Number(d.cost) || 0)
+  // Area settings only exist on protagonist area attacks; drop leftovers otherwise.
+  const isArea = props.targetType === 'protagonist' && !!d.target_scope && d.target_scope !== 'SINGLE'
+  if (!isArea) {
+    for (const key of ['target_scope', 'splash_radius', 'save_stat', 'spares_passive'] as const) delete out[key]
+  } else if (d.target_scope !== 'SPLASH') {
+    delete out.splash_radius
+  }
   return {
     ...(out as unknown as SpecialAttack),
     id: d.id.trim().toUpperCase(),

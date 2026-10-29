@@ -217,6 +217,32 @@ class SpecialActionSchema(WorldBaseSchema):
         None,
         description="Fixed difficulty class for the success roll. Omit to roll against the target's AC.",
     )
+    target_scope: Optional[Literal["SINGLE", "SPLASH", "ALL_ENEMIES"]] = Field(
+        None,
+        description=(
+            "Area of effect for 'target' effects: SINGLE (default), SPLASH (target plus neighbours) "
+            "or ALL_ENEMIES. Protagonist only; NPC specials always hit one target."
+        ),
+    )
+    splash_radius: Optional[int] = Field(
+        None, ge=1, le=2, description="SPLASH only: neighbours hit on each side (1-2, default 1)."
+    )
+    save_stat: Optional[Literal["strength", "dexterity", "intelligence", "wisdom", "charisma"]] = (
+        Field(
+            None,
+            description=(
+                "Area attacks only: every target rolls a saving throw with this stat against "
+                "`difficulty` (default 12) and takes half on a success. Omit for one attack roll."
+            ),
+        )
+    )
+    spares_passive: Optional[bool] = Field(
+        None,
+        description=(
+            "Area attacks hit passive encounter NPCs too (they then join the fight); "
+            "set true to leave them out."
+        ),
+    )
     effects: list[SpecialEffectSchema] = Field(
         default=[],
         description="Stat effects applied on success. Omit to derive them from damage_type/damage_value.",

@@ -140,6 +140,28 @@ def ability_damage(raw: str) -> dict[str, Any]:
     return {"damage_value": value, "damage_type": "ROLLED" if "d" in value.lower() else "FIXED"}
 
 
+_AREA_SCOPES = {"single": "SINGLE", "splash": "SPLASH", "all": "ALL_ENEMIES"}
+MAX_SPLASH_RADIUS = 2
+
+
+def ability_area(raw: str) -> dict[str, Any]:
+    """``single`` / ``splash`` / ``splash 2`` / ``all`` -> target_scope (+ splash_radius)."""
+    parts = raw.strip().lower().split()
+    scope = _AREA_SCOPES.get(parts[0]) if parts else None
+    if not scope or len(parts) > 2:
+        raise ValueError(f"expected single, splash [1-2] or all, got '{raw.strip()}'")
+    result: dict[str, Any] = {"target_scope": scope}
+    if len(parts) == 1:
+        return result
+    radius = integer(parts[1])
+    if scope != "SPLASH" or not 1 <= radius <= MAX_SPLASH_RADIUS:
+        raise ValueError(
+            f"only splash takes a radius of 1-{MAX_SPLASH_RADIUS}, got '{raw.strip()}'"
+        )
+    result["splash_radius"] = radius
+    return result
+
+
 def movement(raw: str) -> dict[str, Any]:
     moves = boolean(raw)
     return {"moveable": moves, "movement_type": "MOVABLE" if moves else "STATIONARY"}

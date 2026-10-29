@@ -68,7 +68,7 @@ def test_legacy_format_detection():
     assert status["is_legacy_format"] is True
     assert status["can_start"] is False
 
-    # 2. 1.3 predates CONSTRUCTABLE recipes (clean break in 1.3.1)
+    # 2. 1.3 predates CONSTRUCTABLE recipes (1.3.1): still playable, but deprecated
     pre_recipe_tpl = AdventureTemplate(
         id="pre-recipe-1",
         title="Pre-recipe Quest",
@@ -76,7 +76,10 @@ def test_legacy_format_detection():
         original_manifest={"version": "1.3", "sequences": [{"id": "seq1", "name": "Act 1"}]},
         sequences=[{"id": "seq1", "name": "Act 1"}],
     )
-    assert is_legacy_template(pre_recipe_tpl) is True
+    assert is_legacy_template(pre_recipe_tpl) is False
+    status = check_template_update(pre_recipe_tpl, [])
+    assert status["can_start"] is True
+    assert status["is_deprecated"] is True
 
     # 3. Modern 1.3.1 template with sequences
     modern_tpl = AdventureTemplate(
@@ -89,6 +92,7 @@ def test_legacy_format_detection():
     assert is_legacy_template(modern_tpl) is False
     status = check_template_update(modern_tpl, [])
     assert status["is_legacy_format"] is False
+    assert status["is_deprecated"] is False
     assert status["can_start"] is True
 
 

@@ -241,6 +241,13 @@ function getModeBadge(mode?: string): { label: string; class: string; icon: any 
                   <span v-if="template.version" class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400 font-mono">
                     v{{ template.version }}
                   </span>
+                  <span
+                    v-if="template.is_deprecated && !template.is_legacy_format && template.can_start !== false"
+                    class="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300 font-black uppercase tracking-widest"
+                    title="Made with an older adventure format (below 1.3.1). It can still be played; crafting recipes from older versions may not work."
+                  >
+                    Deprecated
+                  </span>
                 </div>
                 <p v-if="template.teaser" class="text-xs text-slate-400 line-clamp-1 mt-0.5 max-w-md">
                   {{ template.teaser }}

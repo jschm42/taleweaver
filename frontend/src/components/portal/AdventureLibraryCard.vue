@@ -128,7 +128,9 @@ function onCardClick() {
       <span
         v-if="entry.deprecated"
         class="absolute top-2 right-2 px-2 py-1 rounded-md border border-amber-500/40 bg-slate-950/80 text-amber-300 text-[10px] font-black uppercase tracking-widest"
-        title="This adventure no longer meets the current standard. It can still be installed and played."
+        :title="entry.format_version
+          ? `Made with adventure format ${entry.format_version} (below 1.3.1). It can still be installed and played.`
+          : 'This adventure no longer meets the current standard. It can still be installed and played.'"
       >
         Deprecated
       </span>

@@ -2,8 +2,10 @@
 import { computed, toRef } from 'vue'
 import type { CharacterSheet, CombatState, NormalizedSpecialAttack } from '@/types'
 import {
+  areaLabel,
   CATEGORY_META,
   checkLabel,
+  isAreaAttack,
   costLabel,
   describeEffects,
   normalizeSpecialAttack,
@@ -54,13 +56,14 @@ function canUse(action: NormalizedSpecialAttack): boolean {
 }
 
 function actionKind(action: NormalizedSpecialAttack): string {
+  if (isAreaAttack(action)) return 'Area Attack'
   if (action.targets_enemy) return 'Attack'
   return action.action_type === 'HEAL' ? 'Heal' : 'Utility'
 }
 
 function specialFooter(action: NormalizedSpecialAttack): string {
   if (action.locked) return 'Locked'
-  return action.targets_enemy ? `→ ${props.targetName || 'no target'}` : '→ Self'
+  return action.targets_enemy ? `→ ${areaLabel(action, props.targetName)}` : '→ Self'
 }
 
 const weaponCostLabel = computed(() => `${weapon.value.cost} ${weapon.value.costType === 'mana' ? 'MP' : 'STA'}`)
@@ -86,6 +89,7 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
     description: [
       action.description,
       `Cost: ${costLabel(action)} · Check: ${checkLabel(action)}`,
+      isAreaAttack(action) ? `Area: ${areaLabel(action, props.targetName)}` : '',
       `Effects: ${describeEffects(action.effects) || 'narrative only'}`,
     ].filter(Boolean).join('\n'),
   }

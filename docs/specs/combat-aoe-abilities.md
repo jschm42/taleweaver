@@ -1,29 +1,29 @@
-# Concept: Area-of-Effect (AoE) Abilities
+# Area-of-Effect (AoE) Abilities
 
-> **Status:** Proposal, not implemented. Describes how special actions such as *Fireball* could hit
-> several combatants in one turn. Nothing in this document is available in blueprints or the UI yet.
+> **Status:** Implemented for protagonist special actions (engine, blueprint keys, editor, combat UI).
+> Section 7 lists what is still open.
 
 ## 1. Goal
 
-Today every special action resolves against **one** combatant: the caster (`self`) or the
-selected enemy (`target`). In a multi-enemy encounter a *Fireball* should be able to hit
-every enemy, and a *Cleave* should hit the target plus its neighbours. All of this
-must stay deterministic, readable in the Battle Chronicle and animatable in the arena.
+A normal special action resolves against **one** combatant: the caster (`self`) or the
+selected enemy (`target`). In a multi-enemy encounter a *Fireball* can hit every enemy, and a
+*Cleave* can hit the target plus its neighbours. Area attacks stay deterministic, readable in
+the Battle Chronicle and animated in the arena.
 
 ## 2. Data model
 
-A special action gets one new, optional field: `target_scope`. Effects get an optional
-`splash_amount` for secondary targets.
+Four optional fields on a special action (`SpecialActionSchema`, normalized in
+`backend/engine/combat/special_attacks.py`):
 
 | Field | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | `target_scope` | `SINGLE`, `SPLASH`, `ALL_ENEMIES` | `SINGLE` | Which combatants receive the `target` effects. |
 | `splash_radius` | `1`-`2` | `1` | `SPLASH` only: neighbours before and after the primary target in the encounter order. |
-| `hits_passive` | `true` / `false` | `false` | Whether passive encounter NPCs are hit too: attackable NPCs in the scene that are part of the encounter with `engaged: false` (PASSIVE tag on their card, no initiative roll). A hit passive NPC is engaged and joins the fight, exactly like attacking it directly does today (`_engage` in `player_actions.py`). |
 | `save_stat` | `strength` ... `charisma` | none | Optional saving throw for every target (see 3.2). |
-| effect `splash_amount` | amount expression | half of `amount` | `SPLASH` only: what secondary targets receive instead of `amount`. |
+| `spares_passive` | `true` / `false` | `false` | Leaves passive encounter NPCs out. By default an area attack also hits them: attackable NPCs in the scene that are part of the encounter with `engaged: false` (PASSIVE tag on their card, no initiative roll). A hit passive NPC is engaged and joins the fight, exactly like attacking it directly (`_engage` in `player_actions.py`). |
 
-`self` effects are always applied exactly once, regardless of the scope.
+`self` effects are applied exactly once, and only when at least one target is affected.
+An area scope only matters for abilities with at least one `target` effect.
 
 ```jsonc
 {
@@ -32,8 +32,7 @@ A special action gets one new, optional field: `target_scope`. Effects get an op
   "category": "MAGIC",
   "cost_type": "mana",
   "cost": 12,
-  "success_stat": "intelligence",
-  "difficulty": 13,              // caster's spell DC for the saving throw
+  "difficulty": 13,              // DC of the saving throw (default 12)
   "target_scope": "ALL_ENEMIES",
   "save_stat": "dexterity",
   "effects": [{ "target": "target", "stat": "hp", "amount": "-3d6" }]
@@ -42,7 +41,7 @@ A special action gets one new, optional field: `target_scope`. Effects get an op
 
 ### Blueprint syntax
 
-Inside a `[Ability: ID]` block (World-Builder syntax), three new keys:
+Inside an `[Ability: ID]` block (World-Builder syntax, see `world-builder-syntax.md`):
 
 ```text
 [Ability: FIREBALL] Fireball
@@ -51,112 +50,100 @@ category: MAGIC
 cost: mana 12
 dc: 13
 damage: 3d6
-area: all            # single | splash | all  (maps to target_scope)
-save: dexterity      # optional saving throw
-hit_passive: no      # optional, default no
+area: all            # single | splash | splash 2 | all  (target_scope + splash_radius)
+save: dex            # optional saving throw (str, dex, int, wis, cha or the full name)
+spare_passive: no    # optional, default no (passive NPCs are hit too)
 ```
 
-`area: splash 1` sets `splash_radius`. The blueprint analyzer must reject `save` without `dc`
-and `area` on abilities without `target` effects.
-
-## 3. Resolution rules
+## 3. Resolution rules (`backend/engine/combat/area_attacks.py`)
 
 ### 3.1 Picking the targets
 
-1. `SINGLE`: unchanged.
+1. `SINGLE`: the normal single-target path (`resolve_special_attack`).
 2. `SPLASH`: the selected target is the **primary** target. Secondary targets are the alive
-   enemies up to `splash_radius` positions before and after it in the encounter order. The
-   arena stack reorders cards when the target changes, so the hover preview (section 5) is
-   what tells the player who gets hit.
-3. `ALL_ENEMIES`: every engaged, alive enemy. With `hits_passive`, passive encounter NPCs too.
+   enemies (passive ones included unless `spares_passive`) up to `splash_radius` positions
+   before and after it in the encounter order.
+   They receive **half** of every target effect.
+3. `ALL_ENEMIES`: every alive enemy card in the stack, passive encounter NPCs included unless
+   `spares_passive` is set.
 
-The cost is paid **once**. Targets that are defeated or fled are skipped.
+The primary target always counts, even when it was passive. The cost is paid **once** and
+every target effect amount is rolled **once**, then shared by all targets.
 
 ### 3.2 Rolling
 
-There are two modes, chosen by the presence of `save_stat`:
+Two modes, chosen by `save_stat`:
 
-* **Attack roll (no `save_stat`)**: the caster rolls **one** d20 + modifier. That single total is
-  compared against every target's own AC (or the ability's `dc`). One roll keeps the
-  Chronicle short and makes a crit or a fumble affect the whole spell.
+* **Attack roll (no `save_stat`)**: the caster rolls **one** d20 + `success_stat` modifier.
+  That total is compared against every target's AC (or the ability's `difficulty`). A natural
+  20 hits every target and doubles the effects, a natural 1 misses everyone.
 * **Saving throw (`save_stat` set)**: the spell always goes off. Every target rolls
-  d20 + its `save_stat` modifier against the ability's `dc`. A failed save takes the full
-  amount, a successful save takes **half** (rounded down). This is the classic *Fireball*
-  behaviour and the recommended default for area spells.
-
-A natural 20 on the caster's attack roll doubles target effects (as today). In save mode a
-target's natural 1 counts as a failed save, a natural 20 as a success.
+  d20 + its `save_stat` modifier against `difficulty` (default **12**). A failed save takes the
+  full amount, a successful save takes **half** (rounded toward zero). A target's natural 20
+  always saves, a natural 1 always fails.
 
 ### 3.3 Balance guard rails
 
-* An AoE should cost noticeably more than a single-target ability. Suggested rule of thumb:
-  about 1.5x the cost of a single-target ability with the same dice.
-* A server-side cap of `MAX_ENCOUNTER_ENEMIES` (6) targets already applies through the
-  encounter size.
-* Defeat checks (`_resolve_casualties`) already loop over all enemies, so several enemies
-  falling in one turn need no new logic. Only the flee check needs to run per hit target
-  instead of only for `data["target"]`.
+* An AoE should cost noticeably more than a single-target ability. Rule of thumb: about
+  1.5x the cost of a single-target ability with the same dice. The world-builder prompt asks
+  the LLM to follow this.
+* At most `MAX_ENCOUNTER_ENEMIES` (6) enemies can be in an encounter, which caps the targets.
+* Defeat checks (`_resolve_casualties`) loop over all enemies, so several enemies can fall in
+  one turn. The low-HP flee check only runs for the primary target.
 
 ## 4. Event and log format
 
-`resolve_special_attack` returns a `targets` list in addition to the existing fields. The
-existing `target` field stays as the primary target so old clients keep working.
+The combat log entry's `data` contains the usual special-attack fields plus `scope`,
+`save_stat` and a `targets` list. `target` stays the primary target.
 
 ```jsonc
 {
   "kind": "special",
   "action_id": "FIREBALL",
   "scope": "ALL_ENEMIES",
+  "save_stat": "dexterity",
   "actor": "PLAYER",
-  "target": "GUARD_HARLAN",            // primary target (unchanged field)
+  "target": "GUARD_HARLAN",
   "targets": [
-    { "id": "GUARD_HARLAN", "save": { "d20": 6, "total": 7, "dc": 13, "success": false } },
-    { "id": "LYRA",         "save": { "d20": 17, "total": 20, "dc": 13, "success": true } }
+    { "id": "GUARD_HARLAN", "name": "Guard Harlan", "save": { "d20": 6, "modifier": 1, "total": 7, "dc": 13, "success": false } },
+    { "id": "LYRA", "name": "Lyra", "save": { "d20": 17, "modifier": 3, "total": 20, "dc": 13, "success": true } }
   ],
   "effects": [
     { "entity": "GUARD_HARLAN", "stat": "hp", "delta": -11, "roll": "3d6 (4+3+4) = 11" },
-    { "entity": "LYRA",         "stat": "hp", "delta": -5,  "roll": "half of 11" }
+    { "entity": "LYRA", "stat": "hp", "delta": -5, "roll": "3d6 (4+3+4) = 11" }
   ]
 }
 ```
 
-The Chronicle line lists the results compactly:
+In attack-roll mode every `targets` entry has `hit` and `dc` instead of `save`. The Chronicle
+line lists the results compactly:
 
 ```text
-Alex Vale casts Fireball (Mana -12). Guard Harlan fails the DEX save (7 vs DC 13): HP -11.
-Lyra saves (20 vs DC 13): HP -5.
+Alex Vale uses Fireball (Mana -12). Guard Harlan fails the Dexterity save (7 vs DC 13): Guard Harlan HP -11.
+Lyra makes the Dexterity save (20 vs DC 13): Lyra HP -5.
 ```
-
-Damage is rolled **once** and shared by all targets (halved on a save), as with tabletop
-fireballs. That keeps the numbers easy to follow.
 
 ## 5. Frontend
 
-* **Ability card**: shows an `AoE` badge and the scope in the footer
-  (`→ All enemies`, `→ Harlan + 1 each side`).
-* **Targeting preview**: while the pointer is on an AoE card, the arena highlights every card
-  that would be hit (primary target with the full glow, secondary targets with a weaker one).
-  `ALL_ENEMIES` needs no selected target, so the card is usable even without one.
-* **Animation** (`eventPlayer.ts`): one projectile to the enemy stack, then a burst
-  effect over every hit card, then the per-target damage numbers from `effects`
-  (already grouped per `entity`, so the existing float-text code can be reused).
-* **Editor**: the special action editor gets an *Area* select (Single / Splash / All enemies),
-  a *Radius* field for Splash and an optional *Saving throw* select.
+* **Editor** (`SpecialAttackForm.vue`, protagonist only): *Area* select (Single / Splash / All
+  enemies), *Radius* for Splash, optional *Saving throw* and *Spare passive NPCs*. The
+  *Fireball* preset is an all-enemies DEX-save attack.
+* **Ability card**: type line `Magic — Area Attack`, the check (`DEX save vs DC 13`) and the
+  scope in the footer (`→ All enemies`, `→ Harlan + 1 each side`).
+* **Animation** (`eventPlayer.ts`): one projectile to every hit card at once, then the
+  per-target damage numbers from `effects`, plus a `SAVED` / `MISS` label on targets that
+  resisted.
 
 ## 6. NPC use
 
-NPCs currently only fight the protagonist, so an NPC AoE would hit just one target. Until
-companions or allies exist, NPC abilities with `target_scope` other than `SINGLE` are
-resolved like `SINGLE`. The field is still stored, so adventures don't need changes later.
+NPCs only fight the protagonist, so an NPC area attack would hit just one target. NPC
+specials always resolve like `SINGLE`; the editor hides the area settings for NPCs and drops
+them on save.
 
-## 7. Implementation steps
+## 7. Open points
 
-1. `special_attacks.py`: normalize the new fields, add `select_targets(...)`, per-target
-   saves and the `targets` list. Unit tests for each scope and both roll modes.
-2. `player_actions.py`: pass the list of targets instead of a single one, engage hit
-   passive NPCs, and run the flee check for each hit target.
-3. Blueprint parser and analyzer: the `area`, `save` and `hit_passive` keys plus validation.
-4. Frontend types (`NormalizedSpecialAttack.target_scope`), ability card badge, hover
-   preview in `ArenaRenderer`, burst animation in `eventPlayer`.
-5. Docs: `world-builder-syntax.md`, `world-builder-blueprint-manual.md` and the
-   adventure creator skill, with a working *Fireball* example run through the analyzer.
+* **Hover preview**: highlight every card an AoE would hit while the pointer is on its card.
+  The arena stack reorders cards when the target changes, so this preview is the best way to
+  show which neighbours a splash reaches.
+* **Per-target flee check**: run the low-HP flee roll for every hit target, not only the primary.
+* **Custom splash share**: an optional per-effect `splash_amount` instead of the fixed half.

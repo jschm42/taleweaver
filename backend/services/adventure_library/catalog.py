@@ -21,13 +21,20 @@ import httpx
 from pydantic import ValidationError
 
 from backend.core.config import settings
-from backend.services.adventure_library.models import AdventureLibrary, LibraryEntry
+from backend.services.adventure_library.format_probe import probe_format_versions
+from backend.services.adventure_library.models import (
+    BLUEPRINT_NAME,
+    AdventureLibrary,
+    LibraryEntry,
+)
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_SCHEMA = 1
 INDEX_FILE = "library.json"
 _FETCH_TIMEOUT = httpx.Timeout(15.0)
+# Header probes are best effort; a slow repository must not hold up the catalog.
+_PROBE_TIMEOUT = httpx.Timeout(5.0)
 # A stale copy is retried soon, so an app coming back online sees the live index.
 _STALE_TTL_SECONDS = 60.0
 
@@ -156,6 +163,32 @@ class LibraryService:
             payload = response.json()
         except ValueError as exc:
             raise LibraryError("library index is not valid JSON") from exc
-        library = parse_library(payload)
+        library = await self._with_format_versions(parse_library(payload), payload)
         _write_disk_copy(payload)
         return library
+
+    async def _with_format_versions(
+        self, library: AdventureLibrary, payload: dict[str, Any]
+    ) -> AdventureLibrary:
+        """Fills in missing ``format_version`` values from the file headers.
+
+        The values are written into ``payload`` so the disk copy keeps them too.
+        """
+        targets = [
+            (entry.id, library_url(entry.slug, BLUEPRINT_NAME))
+            for entry in library.adventures
+            if not entry.format_version
+        ]
+        if not targets:
+            return library
+        if self._http_client is not None:
+            versions = await probe_format_versions(self._http_client, targets)
+        else:
+            async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT) as client:
+                versions = await probe_format_versions(client, targets)
+        if not versions:
+            return library
+        for raw in payload.get("adventures") or []:
+            if isinstance(raw, dict) and raw.get("id") in versions:
+                raw.setdefault("format_version", versions[raw["id"]])
+        return parse_library(payload)

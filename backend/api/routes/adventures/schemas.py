@@ -479,6 +479,8 @@ class AdventureTemplateSummaryResponse(BaseModel):
     available_version: Optional[str] = None
     has_sequences: bool = True
     is_legacy_format: bool = False
+    # Manifest version below DEPRECATED_BELOW_VERSION: still playable, shown as deprecated.
+    is_deprecated: bool = False
     can_start: bool = True
     rule_enforcement_mode: Optional[str] = "rpg"
     selected_image_styles: Optional[list[dict[str, Any]]] = None

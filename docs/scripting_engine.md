@@ -24,6 +24,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
+   - [tw.llm (Ask the LLM)](#twllm-ask-the-llm)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -93,7 +94,7 @@ To ensure player safety and server reliability:
 - **No System Calls or Imports**: Statements like `import`, `from ... import`, `open()`, `eval()`, or `exec()` are rejected at parse time.
 - **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden.
 - **No Introspection Escapes**: `str.format`, `format_map` and `mro` are blocked (format strings could otherwise walk `{0.__globals__}`), as are frame/generator/code attributes (`f_*`, `gi_*`, `cr_*`, `ag_*`, `tb_*`, `co_*`). Use f-strings or `+` for text.
-- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion.
+- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` does not count against the 2 seconds.
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
 - **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `round`, `str`, `sum`, `tuple`.
 - **Inline conditionals**: `a if condition else b` is supported.
@@ -427,6 +428,30 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
 4. optionally narrates the outcome (`narrate=True`).
 
 A handler may call `tw.dialog.choose()` again, which is how multi-step conversations and dialog trees are built. The editor validation warns (`dialog_handler_missing`) when a dialog references a handler that the init script does not define.
+
+### `tw.llm` (Ask the LLM)
+
+- `tw.llm.ask(prompt, model="simple", system="") -> str`: Sends `prompt` to the language model configured in the player's LLM settings and returns the answer as a string.
+  - `model="simple"` uses the **small model** (`small_model` / `small_model_provider`), `model="advanced"` the **complex model** (`complex_model` / `complex_model_provider`). Any other value is a script error.
+  - `system` optionally replaces the default system prompt ("answer briefly, return only the requested text"). The session language is appended automatically.
+- `tw.llm.available -> bool`: `False` where the LLM cannot be used (see below).
+
+Rules and limits:
+
+- **Never raises for provider problems**: when the LLM is not configured, fails, or takes longer than **20 seconds**, `ask()` returns `""`. Always keep a fallback: `line = tw.llm.ask(...) or "The raven stays silent."`
+- **At most 3 calls** per script context (one trigger pass); further calls return `""`. Prompts and system prompts are cut at 4,000 characters, answers at 2,000. Answers are capped at about 600 tokens.
+- **Not available in guard expressions** (`guard`, `visible_if`, unlock and lock guards, soft-rule guards) or in the session's `init_script` run: guards must stay deterministic and cheap. There `ask()` returns `""` without calling the model.
+- **The call blocks**: the turn waits until the model answers. Use it for occasional flavour text, not on every turn.
+- In debug mode, skipped or failed calls show a `[DEBUG]` system message. Calls are logged with the operation `script.llm_ask`.
+
+```python
+# NPC on_interact: a fresh riddle each time, with a fixed fallback.
+riddle = tw.llm.ask(
+    "Write a one-sentence riddle a grumpy bridge troll asks. Only the riddle.",
+    model="simple",
+)
+tw.npcs.say("TROLL", riddle or "What has roots nobody sees and is taller than trees?")
+```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)
 Provides simple, clean logging methods to inspect state during development and playtesting:

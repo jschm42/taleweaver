@@ -86,7 +86,26 @@ Requires **Event Scripts** to be enabled in the generator settings.
 `tier` (bronze, silver, gold, negative), `requires`, `goal_item`, `goal_scene`, `defeat`, `guard`.
 
 ### `[Ability: ID] Name` (inside an NPC or the Protagonist)
-`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
+`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
+
+**Area abilities** (protagonist only; NPC abilities always hit one target): `area: all` hits every
+engaged enemy, `area: splash` (or `splash 2`) hits the target plus 1 (or 2) neighbours in the
+encounter order, who take half. The cost is paid once and damage is rolled once. Without `save`,
+one success roll is compared against each target's AC (or `dc`). With `save: dex`, every target
+rolls a saving throw against `dc` (default 12) and takes half on a success. Passive NPCs of the
+encounter are hit too and then join the fight; `spare_passive: yes` leaves them out.
+
+```text
+[Protagonist] Mara Voss
+  [Ability: FIREBALL] Fireball
+  kind: ATTACK
+  category: MAGIC
+  cost: mana 12
+  dc: 13
+  damage: 3d6
+  area: all
+  save: dex
+```
 
 ## Builder modes
 
