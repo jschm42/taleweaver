@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Combine, X } from 'lucide-vue-next'
-import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
+import PromptItemTile from './PromptItemTile.vue'
 
 /**
  * Combine workbench, shown inline at the end of the story feed. The player puts items from the
@@ -28,7 +28,6 @@ const emit = defineEmits<{
 const MIN_INGREDIENTS = 2
 
 const selectedIds = ref<string[]>([])
-const brokenImages = ref<Record<string, boolean>>({})
 
 const itemId = (item: any): string => String(item?.id || '').trim()
 
@@ -45,15 +44,6 @@ const candidatesById = computed(() => {
 const selectedItems = computed(() => selectedIds.value.map(id => candidatesById.value.get(id)).filter(Boolean))
 const isSelected = (item: any) => selectedIds.value.includes(itemId(item))
 const canCombine = computed(() => selectedItems.value.length >= MIN_INGREDIENTS && !props.busy)
-
-const imageUrl = (item: any): string => {
-  const path = String(item?.image_url || '')
-  return path && !brokenImages.value[path] ? getImageUrl(path) : ''
-}
-const handleImageError = (item: any) => {
-  const path = String(item?.image_url || '')
-  if (path) brokenImages.value[path] = true
-}
 
 const toggle = (item: any) => {
   if (props.busy) return
@@ -107,22 +97,20 @@ watch(candidatesById, (candidates) => {
 
     <!-- Workbench slots -->
     <div class="tw-prompt-bench">
-      <button
+      <PromptItemTile
         v-for="item in selectedItems"
         :key="itemId(item)"
-        type="button"
+        :item="item"
+        selected
+        large
         :disabled="busy"
-        class="tw-prompt-tile is-selected"
         :title="`Remove ${item.name || item.id}`"
         @click="toggle(item)"
         @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"
         @mouseleave="emit('itemLeave')"
       >
-        <img v-if="imageUrl(item)" :src="imageUrl(item)" class="w-full h-full object-cover object-top" @error="handleImageError(item)" />
-        <i v-else :class="['ra text-2xl', getItemIcon(item.item_type ?? undefined), getTypeColor(item.item_type ?? undefined)]"></i>
         <span class="tw-prompt-tile-check"><X class="w-3 h-3" stroke-width="3" /></span>
-        <span class="tw-prompt-tile-caption">{{ item.name || item.id }}</span>
-      </button>
+      </PromptItemTile>
       <span v-for="n in Math.max(0, MIN_INGREDIENTS - selectedItems.length)" :key="`empty-${n}`" class="tw-prompt-slot">+</span>
     </div>
 
@@ -131,22 +119,17 @@ watch(candidatesById, (candidates) => {
       <template v-if="group.items.length">
         <p class="tw-prompt-group">{{ group.label }}</p>
         <div class="grid grid-cols-5 sm:grid-cols-8 gap-2 max-h-44 overflow-y-auto p-0.5">
-          <button
+          <PromptItemTile
             v-for="item in group.items"
             :key="itemId(item)"
-            type="button"
+            :item="item"
+            :dimmed="isSelected(item)"
             :disabled="busy"
-            class="tw-prompt-tile"
-            :class="{ 'is-dimmed': isSelected(item) }"
             :title="isSelected(item) ? `Remove ${item.name || item.id}` : `Add ${item.name || item.id}`"
             @click="toggle(item)"
             @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"
             @mouseleave="emit('itemLeave')"
-          >
-            <img v-if="imageUrl(item)" :src="imageUrl(item)" class="w-full h-full object-cover object-top" @error="handleImageError(item)" />
-            <i v-else :class="['ra text-xl', getItemIcon(item.item_type ?? undefined), getTypeColor(item.item_type ?? undefined)]"></i>
-            <span class="tw-prompt-tile-caption">{{ item.name || item.id }}</span>
-          </button>
+          />
         </div>
       </template>
     </div>

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { Lock, Key, Unlock } from 'lucide-vue-next'
+import { Lock, Key, Unlock, X } from 'lucide-vue-next'
 import { getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
-import PromptItemCard from './PromptItemCard.vue'
+import PromptItemTile from './PromptItemTile.vue'
 import { parseMetadata } from './promptUtils'
 
 /** Unlock prompt for a locked container or exit, shown inline at the end of the story feed. */
@@ -21,6 +21,8 @@ const emit = defineEmits<{
   submitCode: [code: string]
   useKeyItem: [itemId: string]
   unlockDirect: []
+  itemHover: [item: any, event: MouseEvent]
+  itemLeave: []
 }>()
 
 const codeInput = ref('')
@@ -52,16 +54,26 @@ const imageUrl = computed(() => getImageUrl(props.container?.image_url) || null)
 
 // The player picks the item to try; the backend decides whether it fits, so the
 // required item is never revealed or preselected here.
-const candidateItems = computed(() => (props.inventoryItems || []).filter(item => String(item?.id || '').trim()))
+const itemId = (item: any): string => String(item?.id || '').trim()
+const candidateItems = computed(() => (props.inventoryItems || []).filter(item => itemId(item)))
+
+/** Item placed in the lock slot; picking another item replaces it. */
+const chosenId = ref('')
+const chosenItem = computed(() => candidateItems.value.find(item => itemId(item) === chosenId.value) || null)
+const choose = (item: any) => {
+  if (props.busy) return
+  chosenId.value = chosenId.value === itemId(item) ? '' : itemId(item)
+}
 
 const handleCodeSubmit = () => {
   if (!codeInput.value.trim() || props.busy) return
   emit('submitCode', codeInput.value.trim())
 }
 
-const handleUseItem = (item: any) => {
-  if (props.busy) return
-  emit('useKeyItem', String(item.id).trim())
+const handleUseItem = () => {
+  if (!chosenItem.value || props.busy) return
+  emit('itemLeave')
+  emit('useKeyItem', itemId(chosenItem.value))
 }
 
 const handleUnlockDirect = () => {
@@ -72,6 +84,7 @@ const handleUnlockDirect = () => {
 // Fresh input whenever the panel opens or switches to another lock.
 const onRevealed = () => {
   codeInput.value = ''
+  chosenId.value = ''
   codeInputRef.value?.focus({ preventScroll: true })
 }
 
@@ -117,14 +130,47 @@ watch(() => props.errorMessage, (message) => {
     <!-- ITEM REQUIREMENT -->
     <template v-else-if="requiredItemId">
       <template v-if="candidateItems.length">
-        <p class="tw-prompt-hint">Which item do you want to try on this {{ entityNoun }}?</p>
-        <div class="flex flex-col gap-2 max-h-72 overflow-y-auto tw-scroll">
-          <PromptItemCard v-for="item in candidateItems" :key="item.id" :item="item">
-            <button type="button" class="tw-prompt-action shrink-0" :disabled="busy" @click="handleUseItem(item)">
-              <Key class="w-4 h-4" />
-              <span>Use</span>
-            </button>
-          </PromptItemCard>
+        <!-- Lock slot -->
+        <div class="tw-prompt-bench">
+          <PromptItemTile
+            v-if="chosenItem"
+            :item="chosenItem"
+            selected
+            large
+            :disabled="busy"
+            :title="`Remove ${chosenItem.name || chosenItem.id}`"
+            @click="choose(chosenItem)"
+            @mouseenter="emit('itemHover', { ...chosenItem, entity_type: 'ITEM' }, $event)"
+            @mouseleave="emit('itemLeave')"
+          >
+            <span class="tw-prompt-tile-check"><X class="w-3 h-3" stroke-width="3" /></span>
+          </PromptItemTile>
+          <span v-else class="tw-prompt-slot">+</span>
+        </div>
+
+        <p class="tw-prompt-group">Inventory</p>
+        <div class="grid grid-cols-5 sm:grid-cols-8 gap-2 max-h-44 overflow-y-auto p-0.5">
+          <PromptItemTile
+            v-for="item in candidateItems"
+            :key="itemId(item)"
+            :item="item"
+            :dimmed="itemId(item) === chosenId"
+            :disabled="busy"
+            :title="itemId(item) === chosenId ? `Remove ${item.name || item.id}` : `Try ${item.name || item.id}`"
+            @click="choose(item)"
+            @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"
+            @mouseleave="emit('itemLeave')"
+          />
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <p class="tw-prompt-hint">
+            {{ chosenItem ? `Try ${chosenItem.name || chosenItem.id} on this ${entityNoun}.` : `Choose an item to try on this ${entityNoun}.` }}
+          </p>
+          <button type="button" class="tw-prompt-action shrink-0" :disabled="!chosenItem || busy" @click="handleUseItem">
+            <Key class="w-4 h-4" />
+            <span>Use</span>
+          </button>
         </div>
       </template>
       <p v-else class="tw-prompt-hint">

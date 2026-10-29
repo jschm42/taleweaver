@@ -1886,6 +1886,8 @@ usePlayAgentAutoLoop()
           @submit-code="handleUnlockCodeSubmit"
           @use-key-item="handleUnlockItemSubmit"
           @unlock-direct="handleUnlockDirectSubmit"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
         />
         <LockUnlockPanel
           :open="showExitUnlockModal"
@@ -1898,6 +1900,8 @@ usePlayAgentAutoLoop()
           @submit-code="handleExitUnlockCodeSubmit"
           @use-key-item="handleExitUnlockItemSubmit"
           @unlock-direct="handleExitUnlockDirectSubmit"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
         />
         <ContainerPanel
           :open="showContainerModal"
