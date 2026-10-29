@@ -10,6 +10,7 @@ import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import { registerEntityNames } from '@/utils/entityRefs'
 import { carryOverMessageKeys, newMessageKey } from '@/composables/messageKeys'
+import { isSilentCommand } from '@/composables/silentCommands'
 import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
@@ -512,8 +513,7 @@ export function useGameSocket(): UseGameSocket {
       return
     }
 
-    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions', '/traverse_exit']
-    const isSilent = silentCommands.some(cmd => normalizedContent.toLowerCase().startsWith(cmd))
+    const isSilent = isSilentCommand(normalizedContent)
 
     if (normalizedContent && !isSilent) {
       lastUserAction.value = normalizedContent
