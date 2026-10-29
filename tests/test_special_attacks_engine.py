@@ -191,3 +191,21 @@ def test_initiative_orders_by_total_and_prefers_player_on_ties(monkeypatch):
 
     # Assert
     assert [e["id"] for e in order] == ["OGRE", PLAYER_ID, "RAT"]
+
+
+def test_initiative_interleaves_player_between_enemies(monkeypatch):
+    # Arrange
+    rolls = iter([9, 10, 7])
+    monkeypatch.setattr("backend.engine.combat.initiative.random.randint", lambda *_a: next(rolls))
+    participants = [
+        {"id": PLAYER_ID, "name": "Hero", "dexterity": 0},
+        {"id": "NPC_1", "name": "NPC 1", "dexterity": 0},
+        {"id": "NPC_2", "name": "NPC 2", "dexterity": 0},
+    ]
+
+    # Act
+    order = roll_initiative(participants)
+
+    # Assert
+    assert [e["id"] for e in order] == ["NPC_1", PLAYER_ID, "NPC_2"]
+    assert [e["total"] for e in order] == [10, 9, 7]

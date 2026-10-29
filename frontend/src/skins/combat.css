@@ -1,0 +1,464 @@
+/*
+ * Combat dialog (FightDialogModal and its combat/* parts). Like the other game dialogs it
+ * carries .tw-skin + data-skin and only uses the shared tokens, so every skin restyles
+ * the battle screen without combat-specific overrides.
+ */
+
+.tw-combat {
+  background:
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--tw-player) 9%, transparent), transparent 55%),
+    radial-gradient(circle at 82% 82%, color-mix(in srgb, var(--tw-accent) 10%, transparent), transparent 55%),
+    var(--tw-overlay-bg);
+  color: var(--tw-panel-ink);
+  font-family: var(--tw-font-body);
+}
+
+.tw-combat-header,
+.tw-combat-footer {
+  background: color-mix(in srgb, var(--tw-panel-bg) 85%, transparent);
+  border-color: var(--tw-dialog-divider);
+}
+
+.tw-combat-title {
+  font-family: var(--tw-font-overlay-title);
+  text-transform: var(--tw-overlay-title-transform);
+  color: var(--tw-accent-soft);
+  letter-spacing: 0.22em;
+}
+
+.tw-combat-eyebrow {
+  font-family: var(--tw-font-label);
+  color: var(--tw-accent-soft);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.tw-combat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--tw-accent) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tw-panel-bg) 80%, transparent);
+  font-family: var(--tw-font-label);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.tw-combat-pill--player {
+  border-color: color-mix(in srgb, var(--tw-player) 55%, transparent);
+  color: var(--tw-player);
+}
+
+.tw-combat-pill--enemy {
+  border-color: color-mix(in srgb, var(--tw-accent) 55%, transparent);
+  color: var(--tw-accent-soft);
+}
+
+.tw-combat-toggle[aria-pressed='true'] {
+  border-color: var(--tw-accent-soft);
+  background: color-mix(in srgb, var(--tw-accent) 22%, transparent);
+  color: var(--tw-panel-ink);
+}
+
+/* Arena: scene backdrop, Pixi canvas and the hand of ability cards. */
+.tw-combat-stage {
+  border: 1px solid var(--tw-panel-border);
+  border-radius: var(--tw-panel-radius);
+  background: color-mix(in srgb, var(--tw-panel-bg) 45%, transparent);
+}
+
+.tw-combat-panel {
+  border: 1px solid var(--tw-panel-border);
+  border-radius: var(--tw-panel-radius);
+  background: var(--tw-panel-bg);
+  color: var(--tw-panel-ink);
+}
+
+.tw-combat-panel-header {
+  border-bottom: 1px solid var(--tw-dialog-divider);
+  background: var(--tw-dialog-header-bg);
+}
+
+/* ---------- Initiative portraits (top of the arena) ---------- */
+.tw-initiative {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.25rem 0.5rem 0.125rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tw-initiative-arrow {
+  align-self: center;
+  margin-top: -1.1rem;
+  color: color-mix(in srgb, var(--tw-accent-soft) 70%, transparent);
+  font-size: 1.25rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.tw-initiative-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 4.75rem;
+  color: var(--tw-panel-ink);
+  transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
+}
+
+button.tw-initiative-slot:hover {
+  transform: translateY(-3px);
+}
+
+/* Square tile with the combatant's portrait. */
+.tw-initiative-portrait {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--tw-card-radius);
+  border: 2px solid color-mix(in srgb, var(--tw-accent) 55%, transparent);
+  background: var(--tw-card-bg);
+  color: var(--tw-panel-muted);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  overflow: visible;
+}
+
+.tw-initiative-portrait > img {
+  border-radius: calc(var(--tw-card-radius) - 2px);
+}
+
+.tw-initiative-slot.is-player .tw-initiative-portrait {
+  border-color: var(--tw-player);
+  color: var(--tw-player);
+}
+
+button.tw-initiative-slot:hover .tw-initiative-portrait,
+.tw-initiative-slot.is-target .tw-initiative-portrait {
+  box-shadow: 0 0 0 2px var(--tw-overlay-bg), 0 0 0 4px #fb7185;
+}
+
+.tw-initiative-slot.is-active {
+  transform: scale(1.12);
+}
+
+.tw-initiative-slot.is-active .tw-initiative-portrait {
+  border-color: var(--tw-accent-soft);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--tw-accent-soft) 70%, transparent);
+}
+
+.tw-initiative-slot.is-done {
+  opacity: 0.5;
+}
+
+.tw-initiative-slot.is-out {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.tw-initiative-slot.is-out .tw-initiative-name {
+  text-decoration: line-through;
+}
+
+.tw-initiative-total {
+  position: absolute;
+  right: -0.35rem;
+  bottom: -0.25rem;
+  min-width: 1.5rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--tw-accent-soft);
+  background: var(--tw-overlay-bg);
+  color: var(--tw-accent-soft);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3rem;
+  text-align: center;
+}
+
+.tw-initiative-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--tw-font-label);
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- NPC banter speech bubble (positioned above the speaker card) ---------- */
+.tw-combat-bubble {
+  position: absolute;
+  z-index: 20;
+  max-width: 260px;
+  padding: 0.55rem 0.8rem 0.6rem;
+  border: var(--tw-bubble-border-width) solid var(--tw-bubble-color);
+  border-radius: var(--tw-bubble-radius);
+  background: var(--tw-bubble-bg);
+  color: var(--tw-bubble-ink);
+  box-shadow: var(--tw-bubble-shadow);
+  font-family: var(--tw-font-dialogue);
+  font-size: 0.95rem;
+  line-height: 1.3;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 14px)) rotate(-1.5deg);
+}
+
+.tw-combat-bubble.is-flipped {
+  transform: translate(-50%, calc(-100% - 14px)) rotate(1.5deg);
+}
+
+/* Tail pointing down at the speaker. */
+.tw-combat-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: calc(-0.5rem - var(--tw-bubble-border-width) / 2);
+  width: 1rem;
+  height: 1rem;
+  background: var(--tw-bubble-bg);
+  border-right: var(--tw-bubble-border-width) solid var(--tw-bubble-color);
+  border-bottom: var(--tw-bubble-border-width) solid var(--tw-bubble-color);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.tw-combat-bubble-name {
+  display: block;
+  margin-bottom: 0.1rem;
+  font-family: var(--tw-font-label);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--tw-bubble-color);
+}
+
+.tw-combat-bubble-enter-active,
+.tw-combat-bubble-leave-active {
+  transition: opacity 0.2s ease, scale 0.2s ease;
+}
+
+.tw-combat-bubble-enter-from,
+.tw-combat-bubble-leave-to {
+  opacity: 0;
+  scale: 0.85;
+}
+
+/* ---------- Ability cards ---------- */
+.tw-ability-hand {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 0.75rem 0.5rem;
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--tw-accent) 35%, transparent) transparent;
+}
+
+@media (min-width: 768px) {
+  .tw-ability-hand {
+    justify-content: safe center;
+  }
+}
+
+.tw-ability-card {
+  --ability-tone: var(--tw-accent);
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 8.5rem;
+  height: 12rem;
+  padding: 0.3rem;
+  border: 2px solid color-mix(in srgb, var(--ability-tone) 75%, var(--tw-card-border));
+  border-radius: var(--tw-card-radius);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--ability-tone) 22%, transparent), transparent 60%),
+    var(--tw-card-bg);
+  color: var(--tw-card-ink);
+  text-align: left;
+  scroll-snap-align: start;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.tw-ability-card:not(.is-disabled):hover,
+.tw-ability-card:not(.is-disabled):focus-visible {
+  transform: translateY(-8px) rotate(-1deg);
+  box-shadow: 0 0 0 1px var(--ability-tone), 0 16px 32px rgba(0, 0, 0, 0.5),
+    0 0 26px color-mix(in srgb, var(--ability-tone) 45%, transparent);
+  outline: none;
+}
+
+.tw-ability-card.is-disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.85) brightness(0.7);
+}
+
+.tw-ability-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.45rem;
+  border-radius: calc(var(--tw-card-radius) * 0.6);
+  background: color-mix(in srgb, var(--tw-card-ink) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ability-tone) 40%, transparent);
+  font-family: var(--tw-font-overlay-title);
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+.tw-ability-cost {
+  flex-shrink: 0;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--ability-tone);
+  color: #ffffff;
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.tw-ability-art {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  border-radius: calc(var(--tw-card-radius) * 0.5);
+  border: 1px solid color-mix(in srgb, var(--ability-tone) 35%, transparent);
+  background:
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--ability-tone) 55%, transparent), transparent 70%),
+    color-mix(in srgb, var(--tw-overlay-bg) 70%, transparent);
+  color: #ffffff;
+  font-size: 2.25rem;
+  text-shadow: 0 0 18px var(--ability-tone);
+}
+
+.tw-ability-type {
+  padding: 0 0.3rem;
+  font-family: var(--tw-font-label);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tw-ability-text {
+  display: block;
+  padding: 0.25rem 0.35rem;
+  border-radius: calc(var(--tw-card-radius) * 0.4);
+  background: color-mix(in srgb, var(--tw-card-ink) 7%, transparent);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.tw-ability-footer {
+  display: block;
+  padding: 0 0.3rem 0.1rem;
+  font-size: 10px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--ability-tone) 55%, var(--tw-card-ink));
+}
+
+/* ---------- Item tiles ---------- */
+.tw-item-tray {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.125rem;
+  scrollbar-width: thin;
+}
+
+.tw-item-tile {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 5.5rem;
+  padding: 0.375rem;
+  border: 1px solid var(--tw-card-border);
+  border-radius: var(--tw-card-radius);
+  background: var(--tw-card-bg);
+  color: var(--tw-card-ink);
+  text-align: center;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.tw-item-tile:not(:disabled):hover {
+  transform: translateY(-3px);
+  border-color: var(--tw-accent-soft);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--tw-accent) 30%, transparent);
+}
+
+.tw-item-tile:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tw-item-tile-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  overflow: hidden;
+  border-radius: calc(var(--tw-card-radius) * 0.6);
+  border: 1px solid color-mix(in srgb, var(--tw-card-ink) 18%, transparent);
+  background: color-mix(in srgb, var(--tw-overlay-bg) 75%, transparent);
+}
+
+.tw-combat-loot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--tw-card-border);
+  border-radius: var(--tw-card-radius);
+  background: var(--tw-card-bg);
+  color: var(--tw-card-ink);
+}
+
+.tw-combat-rest-hint {
+  border-color: var(--tw-player);
+  color: var(--tw-player);
+  animation: twCombatPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes twCombatPulse {
+  50% {
+    box-shadow: 0 0 16px color-mix(in srgb, var(--tw-player) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-combat-rest-hint {
+    animation: none;
+  }
+
+  .tw-ability-card,
+  .tw-item-tile {
+    transition: none;
+  }
+}

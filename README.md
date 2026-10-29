@@ -79,7 +79,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Strict Rule Enforcement:** While the narrative flows freely, a strict 2-pass RPG rulebook (Mechanics + Narrative) runs in the background.
 * **State Management:** Manage Hitpoints, Stamina, and Mana, while reacting to plot-driven status effects (e.g., Poisoned, Blessed).
 * **Loot & Inventory System:** Dedicated isolated inventory system with specific equipment slots (Head, Chest, Rings, etc.).
-* **Tactical Combat Dialog:** Dedicated combat modal with contextual actions (attack, run, rest, consume) plus integrated loot resolution flow.
+* **Tactical Combat Dialog:** Full-screen combat view with per-round initiative (every combatant acts in rolled order, shown as clickable portraits above the arena), a stack of enemy cards to pick your target from (the selected target moves to the front), abilities dealt as a hand of trading-card style cards below the combatants (attack, specials), consumables as item tiles in the bottom bar next to rest and flee, an optional browser fullscreen toggle, NPC taunts in comic speech bubbles every 3-4 rounds (LLM-written, with built-in fallback lines), and styling that follows the session's dialog skin, plus integrated loot resolution flow.
 * **Container Gameplay:** Containers can be generated in scenes and inventory, support locked/unlocked states, and may require a code or item condition before access.
 * **Text-Log Discovery System:** Readable objects can contain structured text logs (document, scroll, book, sign) that can be opened directly from scene and inventory interactions.
 

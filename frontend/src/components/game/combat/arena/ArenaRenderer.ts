@@ -13,8 +13,11 @@ export interface ArenaView {
 }
 
 const CARD_RATIO = 0.7
+const PLAYER_X = 0.19
+const STACK_X = 0.62
 const STACK_ROTATION = 0.07
 const STACK_SCALE_STEP = 0.07
+const EDGE_MARGIN = 12
 
 /** Owns the Pixi application and lays out the protagonist card and the enemy card stack. */
 export class ArenaRenderer {
@@ -90,6 +93,18 @@ export class ArenaRenderer {
     return card ? { x: card.home.x, y: card.home.y - card.cardHeight * 0.15 } : this.center()
   }
 
+  /** Top centre of a card in canvas (CSS pixel) coordinates, e.g. to anchor a speech bubble. */
+  cardTop(id: string | null | undefined): Point {
+    const card = this.card(id)
+    if (!card) return this.center()
+    return { x: card.home.x, y: card.home.y - (card.cardHeight * card.home.scale) / 2 }
+  }
+
+  /** Restores every card to its layout slot (z-order included) without animation. */
+  relayoutCards(): void {
+    this.relayout(false)
+  }
+
   sync(view: ArenaView, snapDisplayed: boolean): void {
     this.view = view
     if (!this.ready) return
@@ -116,6 +131,12 @@ export class ArenaRenderer {
 
   /** Moves the actor card toward the target and back. */
   async lunge(actorId: string | null | undefined, targetId: string | null | undefined): Promise<void> {
+    await this.advance(actorId, targetId)
+    await this.retreat(actorId)
+  }
+
+  /** Brings the actor card in front and toward the target; it stays there until `retreat`. */
+  async advance(actorId: string | null | undefined, targetId: string | null | undefined): Promise<void> {
     const actor = this.card(actorId)
     const target = this.card(targetId)
     if (!actor || !target) return
@@ -123,6 +144,12 @@ export class ArenaRenderer {
     const dy = (target.home.y - actor.home.y) * 0.22
     actor.zIndex = 500
     await this.tween.to(actor, { x: actor.home.x + dx, y: actor.home.y + dy }, 180, easeOutCubic)
+  }
+
+  /** Returns an advanced actor card to its place in the layout. */
+  async retreat(actorId: string | null | undefined): Promise<void> {
+    const actor = this.card(actorId)
+    if (!actor) return
     await this.tween.to(actor, { x: actor.home.x, y: actor.home.y }, 260, easeOutBack)
     this.relayout(false)
   }
@@ -151,12 +178,13 @@ export class ArenaRenderer {
   }
 
   private cardSize(): { w: number; h: number } {
-    const byHeight = Math.min(340, Math.max(150, this.height * 0.72))
+    const byHeight = Math.min(360, Math.max(150, this.height * 0.72))
     const byWidth = (this.width * 0.36) / CARD_RATIO
     const h = Math.max(140, Math.min(byHeight, byWidth))
     return { w: Math.round(h * CARD_RATIO), h: Math.round(h) }
   }
 
+  /** Selected target on top, then engaged enemies, passive ones, and finally those out of the fight. */
   private stackOrder(view: ArenaView): CardData[] {
     const rank = (d: CardData): number => {
       if (d.out) return 3
@@ -169,17 +197,18 @@ export class ArenaRenderer {
   private relayout(animate: boolean): void {
     if (!this.ready || !this.view) return
     this.drawBackdrop()
-    this.dice.position.set(this.width * 0.405, this.height * 0.42)
+    const center = this.center()
+    this.dice.position.set(center.x, center.y)
     const { w, h } = this.cardSize()
     const playerCard = this.cards.get(this.view.player.id)
     if (playerCard) {
       playerCard.resize(w, h)
-      this.place(playerCard, { x: this.width * 0.19, y: this.height * 0.5, rotation: -0.03, scale: 1, alpha: 1 }, 50, animate)
+      this.place(playerCard, { x: this.width * PLAYER_X, y: this.height * 0.5, rotation: -0.03, scale: 1, alpha: 1 }, 50, animate)
     }
 
     const order = this.stackOrder(this.view)
-    const stackX = this.width * 0.62
-    const room = this.width - stackX - w * 0.5 - 12
+    const stackX = this.width * STACK_X
+    const room = this.width - stackX - w * 0.5 - EDGE_MARGIN
     const spacing = order.length > 1 ? Math.min(w * 0.42, room / (order.length - 1)) : 0
     order.forEach((data, k) => {
       const card = this.cards.get(data.id)
@@ -217,7 +246,7 @@ export class ArenaRenderer {
     for (let i = 6; i >= 1; i -= 1) {
       this.backdrop.ellipse(w * 0.45, h * 0.86, w * 0.08 * i, h * 0.035 * i).fill({ color: COLORS.gold, alpha: 0.012 * (7 - i) })
     }
-    this.backdrop.ellipse(w * 0.19, h * 0.5 + h * 0.36, w * 0.12, h * 0.04).fill({ color: COLORS.player, alpha: 0.08 })
+    this.backdrop.ellipse(w * PLAYER_X, h * 0.5 + h * 0.36, w * 0.12, h * 0.04).fill({ color: COLORS.player, alpha: 0.08 })
     this.backdrop.ellipse(w * 0.7, h * 0.5 + h * 0.36, w * 0.2, h * 0.05).fill({ color: COLORS.enemy, alpha: 0.07 })
   }
 }

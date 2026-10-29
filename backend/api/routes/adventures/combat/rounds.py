@@ -73,6 +73,7 @@ class CombatRoundMixin:
             if not combat.get("active"):
                 break
             if int(combat.get("turn_index") or 0) >= len(combat.get("initiative") or []):
+                await self._maybe_round_banter(combat)
                 combat["round"] = int(combat.get("round") or 1) + 1
                 self._roll_round_initiative(combat)
                 continue

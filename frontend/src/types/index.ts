@@ -151,8 +151,10 @@ export interface AppliedEffect {
 export interface CombatEventData {
   kind:
     | 'attack' | 'special' | 'initiative' | 'turn' | 'rest' | 'consume' | 'run'
-    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over'
+    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'banter'
   actor?: string | null
+  /** Spoken line of a `banter` event (without the speaker name). */
+  line?: string
   target?: string | null
   entity?: string
   label?: string

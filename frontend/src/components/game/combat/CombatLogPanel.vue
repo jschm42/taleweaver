@@ -17,6 +17,7 @@ const SOURCE_BY_TYPE: Record<string, { label: string; cls: string }> = {
   enemy_action: { label: 'Enemy', cls: 'border-rose-500/50 text-rose-200' },
   special: { label: 'Event', cls: 'border-violet-400/60 text-violet-200' },
   loot: { label: 'Loot', cls: 'border-amber-400/60 text-amber-200' },
+  banter: { label: 'Taunt', cls: 'border-rose-400/40 text-rose-200 italic' },
 }
 const GM_SOURCE = { label: 'GM', cls: 'border-amber-500/30 text-slate-300' }
 
@@ -45,11 +46,11 @@ watch(
 </script>
 
 <template>
-  <section class="relative flex flex-col min-h-0 h-full border border-amber-500/20 bg-slate-950/60 rounded-xl backdrop-blur-sm">
-    <header class="px-3 py-2 border-b border-amber-500/15 text-[11px] uppercase tracking-[0.22em] font-black flex items-center gap-2 text-amber-300">
-      <i class="ra ra-scroll-unfurled text-amber-300/80"></i>
+  <section class="tw-combat-panel relative flex flex-col min-h-0 h-full overflow-hidden backdrop-blur-sm">
+    <header class="tw-combat-panel-header tw-combat-eyebrow px-3 py-2 flex items-center gap-2">
+      <i class="ra ra-scroll-unfurled"></i>
       Battle Chronicle
-      <span class="ml-auto text-[10px] text-amber-300/40 font-mono">{{ entries.length }} / {{ total }}</span>
+      <span class="ml-auto text-[10px] opacity-50 font-mono">{{ entries.length }} / {{ total }}</span>
     </header>
     <div ref="container" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-2 space-y-2" aria-live="polite">
       <article
@@ -64,7 +65,7 @@ watch(
             {{ rollChip(entry) }}
           </span>
         </div>
-        <p class="text-slate-200/90 break-words">{{ resolveEntityRefsText(entry.text) }}</p>
+        <p class="break-words" style="color: var(--tw-panel-ink)">{{ resolveEntityRefsText(entry.text) }}</p>
       </article>
     </div>
   </section>
@@ -91,7 +92,7 @@ watch(
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(251, 191, 36, 0.25);
+  background: color-mix(in srgb, var(--tw-accent) 35%, transparent);
   border-radius: 6px;
 }
 </style>

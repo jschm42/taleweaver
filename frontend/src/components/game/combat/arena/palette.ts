@@ -2,7 +2,7 @@ import type { CombatStat, SpecialCategory } from '@/types'
 
 export const ARENA_FONT = 'Acme, "Trebuchet MS", ui-sans-serif, system-ui, sans-serif'
 
-export const COLORS = {
+const DEFAULT_COLORS = {
   ink: 0x0b1120,
   panel: 0x111827,
   panelLight: 0x1e293b,
@@ -19,7 +19,31 @@ export const COLORS = {
   white: 0xf8fafc,
   muted: 0x64748b,
   miss: 0xcbd5e1,
-} as const
+}
+
+/** Arena colors; `applySkinColors` adapts the accents to the active dialog skin. */
+export const COLORS: Record<keyof typeof DEFAULT_COLORS, number> = { ...DEFAULT_COLORS }
+
+/** Skin token -> arena color it drives. Bars and damage colors stay fixed for readability. */
+const SKIN_TOKENS: Partial<Record<keyof typeof DEFAULT_COLORS, string>> = {
+  player: '--tw-player',
+  gold: '--tw-accent-soft',
+}
+
+function parseHexColor(value: string): number | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(value.trim())
+  return match ? parseInt(match[1], 16) : null
+}
+
+/** Reads the skin tokens visible at `el`; call before the arena creates its cards. */
+export function applySkinColors(el: HTMLElement): void {
+  Object.assign(COLORS, DEFAULT_COLORS)
+  const style = getComputedStyle(el)
+  for (const [key, token] of Object.entries(SKIN_TOKENS)) {
+    const color = parseHexColor(style.getPropertyValue(token as string))
+    if (color !== null) COLORS[key as keyof typeof DEFAULT_COLORS] = color
+  }
+}
 
 export const CATEGORY_COLORS: Record<SpecialCategory, number> = {
   MAGIC: 0xa78bfa,

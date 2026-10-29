@@ -5,15 +5,20 @@ import { CATEGORY_COLORS, COLORS, effectColor, formatDelta } from './palette'
 
 const PLAYER_ID = 'PLAYER'
 const RESOURCE_STATS: ResourceStat[] = ['hp', 'mana', 'stamina']
+/** Extra time an attacking NPC stays in front after its action resolved. */
+const ENEMY_FRONT_HOLD_MS = 1500
 
 type Handler = (data: CombatEventData) => Promise<void>
+/** Shows a speech bubble for the combatant and resolves once it has been read. */
+export type SpeakHandler = (entityId: string, line: string) => Promise<void>
 
 /** Turns structured combat log events into arena animations. */
 export class ArenaEventPlayer {
   private readonly handlers: Partial<Record<CombatEventData['kind'], Handler>>
 
-  constructor(private readonly arena: ArenaRenderer) {
+  constructor(private readonly arena: ArenaRenderer, private readonly speak: SpeakHandler | null = null) {
     this.handlers = {
+      banter: (d) => this.banter(d),
       attack: (d) => this.attack(d),
       special: (d) => this.special(d),
       rest: (d) => this.applyEffects(d.effects),
@@ -39,8 +44,27 @@ export class ArenaEventPlayer {
     return actorId === PLAYER_ID ? COLORS.player : COLORS.enemy
   }
 
+  /** Keeps an NPC card in front for its whole action so the player sees who is acting. */
+  private async withEnemyInFront(d: CombatEventData, action: () => Promise<void>): Promise<void> {
+    await this.arena.advance(d.actor, d.target)
+    try {
+      await action()
+      await this.arena.tween.wait(ENEMY_FRONT_HOLD_MS)
+    } finally {
+      await this.arena.retreat(d.actor)
+    }
+  }
+
   private async attack(d: CombatEventData): Promise<void> {
+    if (d.actor !== PLAYER_ID) {
+      await this.withEnemyInFront(d, () => this.resolveAttack(d))
+      return
+    }
     await this.arena.lunge(d.actor, d.target)
+    await this.resolveAttack(d)
+  }
+
+  private async resolveAttack(d: CombatEventData): Promise<void> {
     if (d.d20 !== undefined) {
       await this.arena.dice.roll({
         d20: d.d20,
@@ -62,6 +86,14 @@ export class ArenaEventPlayer {
   }
 
   private async special(d: CombatEventData): Promise<void> {
+    if (d.actor !== PLAYER_ID && d.target) {
+      await this.withEnemyInFront(d, () => this.resolveSpecial(d))
+      return
+    }
+    await this.resolveSpecial(d)
+  }
+
+  private async resolveSpecial(d: CombatEventData): Promise<void> {
     const color = CATEGORY_COLORS[d.category ?? 'MAGIC']
     const actorPoint = this.arena.cardCenter(d.actor)
     void this.arena.effects.burst(actorPoint, color, 14, 70)
@@ -115,6 +147,20 @@ export class ArenaEventPlayer {
     card.markOut(kind)
     if (d.xp) {
       await this.arena.effects.floatText(this.arena.cardCenter(PLAYER_ID), `+${d.xp} XP`, COLORS.gold, 26)
+    }
+  }
+
+  /** Lifts the speaker out of the stack while its speech bubble is shown. */
+  private async banter(d: CombatEventData): Promise<void> {
+    const card = this.arena.card(d.actor)
+    if (!card || !d.line || !this.speak) return
+    card.zIndex = 500
+    await this.arena.tween.to(card.scale, { x: card.home.scale * 1.06, y: card.home.scale * 1.06 }, 180)
+    try {
+      await this.speak(card.entityId, d.line)
+    } finally {
+      await this.arena.tween.to(card.scale, { x: card.home.scale, y: card.home.scale }, 220)
+      this.arena.relayoutCards()
     }
   }
 

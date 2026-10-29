@@ -5,6 +5,7 @@ import { getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import { ArenaRenderer, type ArenaView } from './arena/ArenaRenderer'
 import type { CardData, ResourceStat } from './arena/CombatantCard'
 import { ArenaEventPlayer } from './arena/eventPlayer'
+import { applySkinColors } from './arena/palette'
 
 const PLAYER_ID = 'PLAYER'
 const EVENT_TIMEOUT_MS = 9000
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 
 const host = ref<HTMLElement | null>(null)
 const failed = ref(false)
+const bubble = ref<{ name: string; line: string; x: number; y: number; flip: boolean } | null>(null)
 let arena: ArenaRenderer | null = null
 let player: ArenaEventPlayer | null = null
 let ready = false
@@ -80,6 +82,11 @@ function resourceValues(id: string, source: Record<string, unknown>, deltas: Del
   }
 }
 
+function initiativeOf(id: string): number | null {
+  const entry = (props.combat.initiative ?? []).find((e) => e.id === id)
+  return entry ? entry.total : null
+}
+
 function enemyCard(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>): CardData {
   const values = resourceValues(enemy.id, enemy as unknown as Record<string, unknown>, info.deltas)
   const isOut = !info.outIds.has(enemy.id) && (enemy.defeated || enemy.fled)
@@ -95,6 +102,7 @@ function enemyCard(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>
     modifiers: rewindModifiers(enemy.id, enemy.modifiers, info.deltas),
     engaged: !!enemy.engaged && !info.engageIds.has(enemy.id),
     out: isOut ? (enemy.fled ? 'fled' : 'defeated') : null,
+    initiative: initiativeOf(enemy.id),
   }
 }
 
@@ -116,10 +124,35 @@ function buildView(pending: CombatLogEntry[]): ArenaView {
       modifiers: rewindModifiers(PLAYER_ID, p.modifiers, info.deltas),
       engaged: true,
       out: null,
+      initiative: initiativeOf(PLAYER_ID),
     },
     enemies: enemies.filter(Boolean).map((e) => enemyCard(e, info)),
     selectedId: props.selectedTargetId,
     activeId: props.combat.active ? (props.combat.active_actor ?? null) : null,
+  }
+}
+
+const BUBBLE_HALF_WIDTH = 130
+const BUBBLE_MIN_TOP = 84
+
+/** Comic bubble above the speaker's card; reading time grows with the line length. */
+async function speak(entityId: string, line: string): Promise<void> {
+  if (!arena) return
+  const anchor = arena.cardTop(entityId)
+  const card = arena.card(entityId)
+  const x = Math.min(Math.max(anchor.x, BUBBLE_HALF_WIDTH + 8), arena.width - BUBBLE_HALF_WIDTH - 8)
+  bubble.value = {
+    name: card?.data.name ?? '',
+    line,
+    x,
+    // Without room above the card the bubble overlaps the portrait instead.
+    y: Math.max(anchor.y + 12, BUBBLE_MIN_TOP),
+    flip: anchor.x > arena.width * 0.5,
+  }
+  try {
+    await arena.tween.wait(Math.min(5200, 1800 + line.length * 45))
+  } finally {
+    bubble.value = null
   }
 }
 
@@ -187,7 +220,7 @@ function onLogChange(): void {
 
 watch(() => props.combat.log?.length ?? 0, onLogChange)
 watch(
-  () => [props.selectedTargetId, props.combat.active_actor, props.combat.enemies, props.combat.player],
+  () => [props.selectedTargetId, props.combat.active_actor, props.combat.enemies, props.combat.player, props.combat.initiative],
   () => {
     if (ready) arena?.sync(buildView(queue), !playing)
   },
@@ -195,6 +228,7 @@ watch(
 watch(() => [props.fast, props.reducedMotion], applySpeed)
 
 onMounted(async () => {
+  if (host.value) applySkinColors(host.value)
   arena = new ArenaRenderer()
   arena.onSelect = (id) => emit('selectTarget', id)
   arena.onHover = (id, event) => emit('hover', id, event)
@@ -206,7 +240,7 @@ onMounted(async () => {
     onLogChange()
     return
   }
-  player = new ArenaEventPlayer(arena)
+  player = new ArenaEventPlayer(arena, speak)
   ready = true
   applySpeed()
   seenCount = props.combat.log?.length ?? 0
@@ -225,6 +259,19 @@ onBeforeUnmount(() => {
 <template>
   <div class="relative w-full h-full min-h-[260px]">
     <div ref="host" class="absolute inset-0" aria-label="Combat arena" role="img"></div>
+    <Transition name="tw-combat-bubble">
+      <div
+        v-if="bubble"
+        class="tw-combat-bubble"
+        :class="{ 'is-flipped': bubble.flip }"
+        :style="{ left: `${bubble.x}px`, top: `${bubble.y}px` }"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="tw-combat-bubble-name">{{ bubble.name }}</span>
+        {{ bubble.line }}
+      </div>
+    </Transition>
     <div v-if="failed" class="absolute inset-0 flex items-center justify-center text-sm text-slate-400 italic">
       Animated arena unavailable on this device. Follow the battle chronicle.
     </div>

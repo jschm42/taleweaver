@@ -19,6 +19,8 @@ export interface CardData {
   modifiers: Partial<Record<CombatStat, number>>
   engaged: boolean
   out: 'defeated' | 'fled' | null
+  /** Initiative total this round; null while the combatant is not in the order. */
+  initiative: number | null
 }
 
 const PORTRAIT_RATIO = 0.64
@@ -56,6 +58,8 @@ export class CombatantCard extends Container {
   private readonly modsText: Text
   private readonly tagText: Text
   private readonly tagBg = new Graphics()
+  private readonly initText: Text
+  private readonly initBg = new Graphics()
   private readonly bars = new Graphics()
   private readonly flash = new Graphics()
   private readonly stamp: Text
@@ -79,6 +83,7 @@ export class CombatantCard extends Container {
     this.hpText = new Text({ text: '', style: { fontFamily: ARENA_FONT, fontSize: 12, fill: COLORS.goldSoft } })
     this.modsText = new Text({ text: '', style: { fontFamily: ARENA_FONT, fontSize: 11, fill: COLORS.attribute } })
     this.tagText = new Text({ text: '', style: { fontFamily: ARENA_FONT, fontSize: 10, fill: COLORS.ink, letterSpacing: 1.5 } })
+    this.initText = new Text({ text: '', style: { fontFamily: ARENA_FONT, fontSize: 11, fill: COLORS.goldSoft, letterSpacing: 1 } })
     this.stamp = new Text({
       text: '',
       style: {
@@ -94,7 +99,7 @@ export class CombatantCard extends Container {
 
     this.glow.filters = [new BlurFilter({ strength: 6 })]
     this.addChild(this.glow, this.frame, this.portraitBg, this.placeholder, this.portraitMask, this.flash)
-    this.addChild(this.bars, this.nameText, this.hpText, this.modsText, this.tagBg, this.tagText, this.stamp)
+    this.addChild(this.bars, this.nameText, this.hpText, this.modsText, this.tagBg, this.tagText, this.initBg, this.initText, this.stamp)
     this.flash.alpha = 0
 
     this.setData(data, true)
@@ -227,6 +232,8 @@ export class CombatantCard extends Container {
     this.modsText.text = this.modifierLine()
     this.modsText.position.set(10, h - 18 * fontScale)
 
+    this.layoutInitiative(w)
+
     const tag = this.tagLabel()
     this.tagText.text = tag
     this.tagBg.clear()
@@ -235,6 +242,20 @@ export class CombatantCard extends Container {
     if (!tag) return
     this.tagText.position.set(16, 12)
     this.tagBg.roundRect(10, 9, this.tagText.width + 12, this.tagText.height + 6, 6).fill({ color: accent })
+  }
+
+  private layoutInitiative(w: number): void {
+    const value = this.data.out ? null : this.data.initiative
+    this.initText.visible = value !== null
+    this.initBg.visible = value !== null
+    this.initBg.clear()
+    if (value === null) return
+    this.initText.text = `INIT ${value}`
+    const x = w - this.initText.width - 16
+    this.initText.position.set(x, 12)
+    this.initBg.roundRect(x - 6, 9, this.initText.width + 12, this.initText.height + 6, 6)
+      .fill({ color: COLORS.ink, alpha: 0.8 })
+      .stroke({ width: 1, color: COLORS.gold, alpha: 0.6 })
   }
 
   private drawBars(): void {
