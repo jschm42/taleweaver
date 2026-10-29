@@ -110,7 +110,7 @@ function isLatestExchange(exIdx: number): boolean {
         <!-- EXCHANGES OF THIS SCENE -->
         <ImmersiveStoryExchange
           v-for="(exchange, exIdx) in props.activeTurn.exchanges"
-          :key="exchange.userMessage?.id || exchange.assistantMessage?.id || exIdx"
+          :key="exchange.userMessage?._key || exchange.assistantMessage?._key || exIdx"
           data-story-exchange
           class="shrink-0"
           :exchange="exchange"

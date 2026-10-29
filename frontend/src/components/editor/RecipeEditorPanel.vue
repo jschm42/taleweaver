@@ -64,7 +64,7 @@ function setResult(idx: number, value: string) {
     <div class="px-3 py-2 rounded-lg border border-orange-500/30 bg-orange-500/5 text-[11px] text-orange-200/90 leading-relaxed flex items-start gap-2">
       <i class="ra ra-hammer text-orange-400 mt-0.5 shrink-0"></i>
       <span>
-        A recipe is a meta item: it never appears in the game. When the player combines ALL ingredients (min. 2),
+        A CONSTRUCTABLE is a meta item: it never appears in the game. When the player combines ALL ingredients (min. 2),
         the engine consumes them (except the kept ones) and reveals the result items. Results can be any item type
         and are set to hidden automatically.
       </span>

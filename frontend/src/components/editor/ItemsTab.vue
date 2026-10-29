@@ -15,8 +15,8 @@ const props = defineProps<{
   editorSwitches: any[]
   editorContainers: any[]
   editorTextLogs: any[]
-  /** CONSTRUCTABLE recipes: never in the world, no image, not filtered by scene. */
-  editorRecipes?: any[]
+  /** CONSTRUCTABLE meta items: never in the world, no image, not filtered by scene. */
+  editorConstructables?: any[]
   isBatchGenerating: Record<string, boolean>
   isQuickGenerating: Record<string, boolean>
   activeMenuId: string | null
@@ -87,7 +87,7 @@ const LOG_BADGE = [{ label: 'LOG', class: 'border-cyan-500/40 bg-cyan-500/20 tex
 const LOCKED_BADGE = [{ label: 'LOCKED', class: 'border-amber-400/50 bg-amber-500/25 text-amber-100' }]
 const SWITCH_BADGE = [{ label: 'SWITCH', class: 'border-lime-400/50 bg-lime-500/25 text-lime-100' }]
 const HIDDEN_BADGE = [{ label: 'HIDDEN', class: 'border-violet-500/50 bg-violet-500/30 text-violet-200' }]
-const RECIPE_BADGE = [{ label: 'RECIPE', class: 'border-orange-400/50 bg-orange-500/25 text-orange-100' }]
+const CONSTRUCTABLE_BADGE = [{ label: 'CONSTRUCTABLE', class: 'border-orange-400/50 bg-orange-500/25 text-orange-100' }]
 
 const textLogHover = (obj: any) => ({
   id: obj.id,
@@ -116,7 +116,7 @@ const filteredTextLogs = computed(() => filterByScene(props.editorTextLogs))
 const filteredContainers = computed(() => filterByScene(props.editorContainers))
 const filteredSwitches = computed(() => filterByScene(props.editorSwitches))
 const filteredObjects = computed(() => filterByScene(props.editorObjects))
-const recipes = computed(() => props.editorRecipes || [])
+const constructables = computed(() => props.editorConstructables || [])
 
 const filteredTotal = computed(
   () =>
@@ -124,7 +124,7 @@ const filteredTotal = computed(
     filteredContainers.value.length +
     filteredSwitches.value.length +
     filteredObjects.value.length +
-    recipes.value.length,
+    constructables.value.length,
 )
 const unfilteredTotal = computed(
   () =>
@@ -132,7 +132,7 @@ const unfilteredTotal = computed(
     props.editorContainers.length +
     props.editorSwitches.length +
     props.editorObjects.length +
-    recipes.value.length,
+    constructables.value.length,
 )
 const isFilterActive = computed(() => sceneFilter.value.trim().length > 0)
 
@@ -331,20 +331,20 @@ const activeFilterLabel = computed(() => {
     </div>
 
     <!-- ==================================================================
-         Recipes Section — CONSTRUCTABLE meta items: never in the world, no image
+         Constructables Section — CONSTRUCTABLE meta items: never in the world, no image
          ================================================================== -->
-    <div v-if="recipes.length" class="space-y-6">
+    <div v-if="constructables.length" class="space-y-6">
       <div class="flex items-center justify-between gap-4">
-        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Recipes ({{ recipes.length }})</h3>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Constructables ({{ constructables.length }})</h3>
         <p class="text-[10px] text-slate-500 uppercase tracking-widest">Never appear in the world · no image</p>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
         <ItemTile
-            v-for="obj in recipes"
-            :key="'rcp_' + obj.id"
+            v-for="obj in constructables"
+            :key="'cst_' + obj.id"
             v-bind="tileProps(obj)"
             accent-class="border-orange-500/20"
-            :badges="RECIPE_BADGE"
+            :badges="CONSTRUCTABLE_BADGE"
             v-on="tileListeners"
           />
       </div>

@@ -198,7 +198,7 @@ function getEntityForHover(nameOrEntity: any) {
     />
 
     <!-- 2) ENGINE EVENTS BEFORE THE NARRATION (compact notes; failed turns keep Retry/Cancel) -->
-    <template v-for="(event, sysIdx) in leadingEvents" :key="event.msg.id || `leading-${sysIdx}`">
+    <template v-for="(event, sysIdx) in leadingEvents" :key="event.msg._key || `leading-${sysIdx}`">
       <ImmersiveSystemMessage
         v-if="event.isError"
         :msg="event.msg"
@@ -309,7 +309,7 @@ function getEntityForHover(nameOrEntity: any) {
     </div>
 
     <!-- 4) ENGINE EVENTS AFTER THE NARRATION (items added, stat changes) -->
-    <template v-for="(event, sysIdx) in trailingEvents" :key="event.msg.id || `trailing-${sysIdx}`">
+    <template v-for="(event, sysIdx) in trailingEvents" :key="event.msg._key || `trailing-${sysIdx}`">
       <ImmersiveSystemMessage
         v-if="event.isError"
         :msg="event.msg"

@@ -3,11 +3,11 @@ import { Brain } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor } from '@/utils/game_icons'
 
 /**
- * Recipes group of the scene view. CONSTRUCTABLE recipes are meta items that never appear in the
- * world, so they have no image and their menu offers no image actions and no "Move to Scene".
+ * CONSTRUCTABLE group of the scene view. CONSTRUCTABLE items are meta items that never appear in
+ * the world, so they have no image and their menu offers no image actions and no "Move to Scene".
  */
 const props = defineProps<{
-  recipes: any[]
+  items: any[]
   total: number
   activeMenuId: string | null
   hasScript: (obj: any) => boolean
@@ -21,14 +21,14 @@ const emit = defineEmits<{
   (e: 'delete', id: string): void
 }>()
 
-const menuId = (obj: any) => `scene-recipe-${obj.id}`
+const menuId = (obj: any) => `scene-constructable-${obj.id}`
 const menuItemClass = 'w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:text-white transition-all'
 </script>
 
 <template>
   <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Recipes ({{ recipes.length }}/{{ total }})</p>
+      <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Constructables ({{ items.length }}/{{ total }})</p>
       <div class="flex items-center gap-4">
         <span class="text-[10px] text-slate-500 uppercase tracking-widest">Never in the world · no image</span>
         <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('create')">+ Create</button>
@@ -36,7 +36,7 @@ const menuItemClass = 'w-full px-3.5 py-2 text-left text-xs font-bold text-slate
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
       <article
-        v-for="obj in recipes"
+        v-for="obj in items"
         :key="obj.id"
         :class="[
           'relative group aspect-square bg-slate-900 border border-orange-500/20 rounded-xl shadow-lg overflow-visible',
@@ -48,7 +48,7 @@ const menuItemClass = 'w-full px-3.5 py-2 text-left text-xs font-bold text-slate
         </div>
         <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
         <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-          <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-orange-400/50 bg-orange-500/25 text-orange-100">RECIPE</div>
+          <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-orange-400/50 bg-orange-500/25 text-orange-100">CONSTRUCTABLE</div>
           <div
             v-if="props.hasScript(obj)"
             class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
@@ -79,7 +79,7 @@ const menuItemClass = 'w-full px-3.5 py-2 text-left text-xs font-bold text-slate
           </div>
         </div>
       </article>
-      <div v-if="recipes.length === 0" class="text-xs text-slate-500">No recipes match the current filter.</div>
+      <div v-if="items.length === 0" class="text-xs text-slate-500">No constructables match the current filter.</div>
     </div>
   </div>
 </template>

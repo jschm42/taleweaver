@@ -816,8 +816,8 @@ const editorObjects = computed<any[]>(() =>
 const editorSwitches = computed<any[]>(() => itemsOfType('SWITCH'))
 const editorContainers = computed<any[]>(() => itemsOfType('CONTAINER'))
 const editorTextLogs = computed<any[]>(() => itemsOfType('READABLE'))
-/** CONSTRUCTABLE recipes: meta items that never appear in the world and have no image. */
-const editorRecipes = computed<any[]>(() => itemsOfType('CONSTRUCTABLE'))
+/** CONSTRUCTABLE meta items: never appear in the world and have no image. */
+const editorConstructables = computed<any[]>(() => itemsOfType('CONSTRUCTABLE'))
 
 async function fetchAdventure() {
   if (!props.adventureId) return
@@ -2767,7 +2767,7 @@ watch(
               :editor-switches="editorSwitches"
               :editor-containers="editorContainers"
               :editor-text-logs="editorTextLogs"
-              :editor-recipes="editorRecipes"
+              :editor-constructables="editorConstructables"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"

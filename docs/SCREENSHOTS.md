@@ -125,7 +125,7 @@ This document provides concise overviews and explanations for each screenshot lo
 * **Filename**: [`docs/screenshots/editor-items.jpg`](screenshots/editor-items.jpg)
 * **View**: World Editor &mdash; Items Tab
 * **Description**:
-  The item cataloging workbench for managing weapons, consumables, lore scrolls, containers, environmental switches, and crafting recipes (CONSTRUCTABLE items, listed in their own section without images since they never appear in the world). Creators can define pickup constraints, usability requirements, item effects, and interactive scripting hooks.
+  The item cataloging workbench for managing weapons, consumables, lore scrolls, containers, environmental switches, and CONSTRUCTABLE items (crafting recipes, listed in their own section without images since they never appear in the world). Creators can define pickup constraints, usability requirements, item effects, and interactive scripting hooks.
 
 ---
 

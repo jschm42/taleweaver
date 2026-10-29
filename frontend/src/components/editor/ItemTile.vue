@@ -20,9 +20,9 @@ const props = defineProps<{
   hasScript?: boolean
   /** Entity passed to the hover tooltip; defaults to a plain item. */
   hoverEntity?: any
-  /** Image, generation and upload actions; off for items that never get an image (recipes). */
+  /** Image, generation and upload actions; off for items that never get an image (CONSTRUCTABLE). */
   imageActions?: boolean
-  /** Offer "Move to Scene…" (off for recipes, which never appear in the world). */
+  /** Offer "Move to Scene…" (off for CONSTRUCTABLE items, which never appear in the world). */
   movable?: boolean
   showStatsDot?: boolean
   imageUrl?: string

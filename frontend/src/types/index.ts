@@ -1,5 +1,7 @@
 export interface ChatMessage {
   id?: string
+  /** Client-side render key; stays the same when the history is reloaded after a turn. */
+  _key?: string
   role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info'
   content: string
   timestamp: Date

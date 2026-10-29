@@ -9,12 +9,11 @@ import {
   mergeUniqueById, 
   formatObjectIds,
   hasAnyScript,
-  itemTypeLabel,
 } from '@/utils/editor_utils'
 import { Save, X, Trash2, ArrowLeft, Sparkles, Brain } from 'lucide-vue-next'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
-import SceneRecipesGroup from '@/components/editor/SceneRecipesGroup.vue'
+import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 
 const props = defineProps<{
   adventureId: string
@@ -257,8 +256,8 @@ const routeSceneItems = computed<any[]>(() => {
   return routeSceneObjects.value.filter((obj: any) => !isSpecialItemType(obj.item_type))
 })
 
-// CONSTRUCTABLE recipes: meta items with their own group (no image, never in the world).
-const routeSceneRecipes = computed<any[]>(() => {
+// CONSTRUCTABLE items: meta items with their own group (no image, never in the world).
+const routeSceneConstructables = computed<any[]>(() => {
   return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'CONSTRUCTABLE')
 })
 
@@ -295,7 +294,7 @@ const filteredRouteSceneItems = computed(() => routeSceneItems.value.filter((ent
 const filteredRouteSceneSwitches = computed(() => routeSceneSwitches.value.filter((entry) => matchesRouteSceneSearch(entry)))
 const filteredRouteSceneContainers = computed(() => routeSceneContainers.value.filter((entry) => matchesRouteSceneSearch(entry)))
 const filteredRouteSceneTextLogs = computed(() => routeSceneTextLogs.value.filter((entry) => matchesRouteSceneSearch(entry)))
-const filteredRouteSceneRecipes = computed(() => routeSceneRecipes.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneConstructables = computed(() => routeSceneConstructables.value.filter((entry) => matchesRouteSceneSearch(entry)))
 
 /** Item types with their own group; everything else is listed under "Items". */
 function isSpecialItemType(itemType: string): boolean {
@@ -819,7 +818,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ itemTypeLabel(obj.item_type) }}</div>
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
               <div
                 v-if="hasScript(obj)"
                 class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
@@ -859,10 +858,10 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         </div>
       </div>
 
-      <SceneRecipesGroup
-        v-if="routeSceneRecipes.length && shouldShowSceneGroup(filteredRouteSceneRecipes.length)"
-        :recipes="filteredRouteSceneRecipes"
-        :total="routeSceneRecipes.length"
+      <SceneConstructablesGroup
+        v-if="routeSceneConstructables.length && shouldShowSceneGroup(filteredRouteSceneConstructables.length)"
+        :items="filteredRouteSceneConstructables"
+        :total="routeSceneConstructables.length"
         :active-menu-id="activeMenuId"
         :has-script="hasScript"
         @create="emit('open-create-item', 'CONSTRUCTABLE')"

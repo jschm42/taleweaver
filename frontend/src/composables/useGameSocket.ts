@@ -9,6 +9,7 @@ import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import { registerEntityNames } from '@/utils/entityRefs'
+import { carryOverMessageKeys, newMessageKey } from '@/composables/messageKeys'
 import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
@@ -211,6 +212,7 @@ export function useGameSocket(): UseGameSocket {
 
   function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[], is_debug?: boolean): void {
     messages.value.push({
+      _key: newMessageKey(),
       role,
       content,
       timestamp: new Date(),
@@ -268,7 +270,8 @@ export function useGameSocket(): UseGameSocket {
     if (!data) return
 
     if (updateMessages && Array.isArray(data.messages)) {
-      messages.value = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+      const reloaded = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+      messages.value = carryOverMessageKeys(messages.value, reloaded)
     }
 
     if (data.scene_id !== undefined) currentSceneId = data.scene_id || null
