@@ -812,7 +812,9 @@ class TurnInteractionsManager:
             context=script_context,
             switch_id=switch_entity.id,
         )
-        script_messages = await self.manager._apply_script_changeset(script_context.changeset)
+        # Script narration/system messages are persisted and shown as their own chat entries
+        # by _apply_script_changeset; repeating them here would duplicate them.
+        await self.manager._apply_script_changeset(script_context.changeset)
 
         narration = config.get("narration") if isinstance(config.get("narration"), dict) else {}
         state_change_notes = (
@@ -835,12 +837,6 @@ class TurnInteractionsManager:
             message = f"{message} {state_note}"
         if outcome_notes:
             message = f"{message} {' '.join(outcome_notes)}"
-        if script_messages:
-            user_script_messages = [
-                str(m) for m in script_messages if not str(m).strip().startswith("[DEBUG")
-            ]
-            if user_script_messages:
-                message = f"{message} {' '.join(user_script_messages)}"
         return message
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:

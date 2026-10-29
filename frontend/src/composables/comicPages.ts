@@ -18,6 +18,8 @@ export interface DialogueSegment {
   isAction?: boolean
   voiceTag?: string
   isNarration?: boolean
+  /** Verbatim script narration: rendered as plain text, never split into speakers. */
+  isRaw?: boolean
 }
 
 export interface ComicExchange {
@@ -55,6 +57,13 @@ export interface ComicPageParsers {
     speechText: string
   }
   parseAssistant: (content: string) => { narration: string; dialogues: DialogueSegment[] }
+}
+
+/** A raw message (tw.story.narrate_raw) is one Game Master block with its text untouched. */
+export function rawAssistantContent(content: string): { narration: string; dialogues: DialogueSegment[] } {
+  const text = (content || '').trim()
+  if (!text) return { narration: '', dialogues: [] }
+  return { narration: text, dialogues: [{ speaker: 'Game Master', text, isNarration: true, isRaw: true }] }
 }
 
 // Fallback for messages saved before scene info existed: these engine messages mark a
@@ -149,7 +158,7 @@ class PageBuilder {
       this.flushExchange()
       this.exchange.systemMessages.push(...carried)
     }
-    const parsed = this.parsers.parseAssistant(msg.content)
+    const parsed = msg.raw ? rawAssistantContent(msg.content) : this.parsers.parseAssistant(msg.content)
     this.exchange.assistantMessage = msg
     this.exchange.timestamp = msg.timestamp || this.exchange.timestamp
     this.exchange.narration = parsed.narration

@@ -301,7 +301,7 @@ async function saveScript() {
 const SNIPPET_TEMPLATES = [
   {
     label: 'Story Message',
-    code: 'tw.story.show_message("A mysterious chill fills the air as ancient runes glow faintly.")\n',
+    code: 'tw.story.narrate("A mysterious chill fills the air as ancient runes glow faintly.")\n',
   },
   {
     label: 'Move NPC',
@@ -317,7 +317,7 @@ const SNIPPET_TEMPLATES = [
   },
   {
     label: 'Custom Variable (State)',
-    code: '# Check and toggle custom quest/puzzle flags\nif not tw.vars.get("chamber_cleared", False):\n    tw.vars.set("chamber_cleared", True)\n    tw.story.show_message("You hear the sound of stone shifting in the distance.")\n',
+    code: '# Check and toggle custom quest/puzzle flags\nif not tw.vars.get("chamber_cleared", False):\n    tw.vars.set("chamber_cleared", True)\n    tw.story.narrate("You hear the sound of stone shifting in the distance.")\n',
   },
   {
     label: 'Add Memory',
@@ -337,11 +337,11 @@ const SNIPPET_TEMPLATES = [
   },
   {
     label: 'Dice Roll Check',
-    code: '# Roll a safe die (1 to 20)\nroll = tw.dice.d20()\nif roll >= 12:\n    tw.story.show_message("You skillfully dodge the falling rocks! (Roll: " + str(roll) + ")")\nelse:\n    tw.player.damage(10)\n    tw.story.show_message("A falling boulder grazes your shoulder! (Roll: " + str(roll) + ")")\n',
+    code: '# Roll a safe die (1 to 20)\nroll = tw.dice.d20()\nif roll >= 12:\n    tw.story.narrate("You skillfully dodge the falling rocks! (Roll: " + str(roll) + ")")\nelse:\n    tw.player.damage(10)\n    tw.story.narrate("A falling boulder grazes your shoulder! (Roll: " + str(roll) + ")")\n',
   },
   {
     label: 'Switch Mechanism State',
-    code: '# Inspect or toggle switch mechanism\ncurrent = tw.switches.get_state("LEVER_01")\nif current == "OFF":\n    tw.switches.set_state("LEVER_01", "ON")\n    tw.story.show_message("You pull the lever. Heavy gears churn inside the wall!")\n',
+    code: '# Inspect or toggle switch mechanism\ncurrent = tw.switches.get_state("LEVER_01")\nif current == "OFF":\n    tw.switches.set_state("LEVER_01", "ON")\n    tw.story.narrate("You pull the lever. Heavy gears churn inside the wall!")\n',
   },
   {
     label: 'Console Log',
@@ -809,7 +809,7 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.story & tw.game</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.story.show_message(text)</code>, <code>tw.game.win(msg)</code>, <code>tw.game.game_over(msg)</code>
+                    <code>tw.story.narrate(text)</code>, <code>tw.game.win(msg)</code>, <code>tw.game.game_over(msg)</code>
                   </p>
                 </div>
 

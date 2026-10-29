@@ -217,8 +217,11 @@ class SwitchesProxy:
         eid, data = self._find_entity_data(switch_id_or_name)
         return SwitchProxy(eid, data, self._changeset, self._context)
 
-    def get_state(self, switch_id_or_name: str) -> str:
-        """Reads and returns the current state of the switch."""
+    def get_state(self, switch_id_or_name: str, default: str = "") -> str:
+        """Reads the current state of the switch; returns default if no such switch exists."""
+        eid, _data = self._find_entity_data(switch_id_or_name)
+        if default and eid not in self._entities:
+            return str(default).strip().upper()
         return self.get(switch_id_or_name).get_state()
 
     def set_state(self, switch_id_or_name: str, state: str, apply_outcomes: bool = True) -> None:

@@ -12,7 +12,7 @@ import { configState } from '@/store/config'
 import { audioService } from '@/services/audioService'
 import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import type { ComicExchange, DialogueSegment } from '@/composables/useComicTurns'
-import { renderDialogueHtml, renderFormattedHtml, resolveNpc } from '@/composables/useComicTurns'
+import { renderDialogueHtml, renderFormattedHtml, renderPlainHtml, resolveNpc } from '@/composables/useComicTurns'
 import { useStoryBubbleAudio } from '@/composables/useStoryBubbleAudio'
 import ImmersiveSystemMessage from '@/components/game/immersive/ImmersiveSystemMessage.vue'
 import ImmersiveSystemNote from './ImmersiveSystemNote.vue'
@@ -237,7 +237,7 @@ function getEntityForHover(nameOrEntity: any) {
 
           <div>
             <span class="tw-narration-label">Game Master</span>
-            <span v-drop-cap class="tw-narration-text" v-html="renderFormattedHtml(dlg.text)"></span>
+            <span v-drop-cap class="tw-narration-text" v-html="dlg.isRaw ? renderPlainHtml(dlg.text) : renderFormattedHtml(dlg.text)"></span>
           </div>
         </div>
       </div>

@@ -23,13 +23,18 @@ logger = logging.getLogger(__name__)
 
 
 class ScriptMessage(str):
-    """Subclass of str with an attached role ('assistant' or 'system')."""
+    """Subclass of str with an attached role ('assistant' or 'system').
+
+    ``raw`` marks text the client shows verbatim, without dialogue or voice-tag parsing.
+    """
 
     role: str = "system"
+    raw: bool = False
 
-    def __new__(cls, content: str, role: str = "system"):
+    def __new__(cls, content: str, role: str = "system", raw: bool = False):
         obj = super().__new__(cls, content)
         obj.role = role
+        obj.raw = raw
         return obj
 
 
@@ -963,12 +968,17 @@ class StoryProxy:
         """Emits GM narration as if told by the Game Master."""
         self._changeset.narrative_messages.append(str(message).strip())
 
+    def narrate_raw(self, message: str) -> None:
+        """Emits GM narration shown verbatim: no dialogue, voice-tag or bold parsing."""
+        text = str(message).strip()
+        self._changeset.narrative_messages.append(ScriptMessage(text, role="assistant", raw=True))
+
     def show_message(self, message: str) -> None:
-        """Alias for narrate(). Emits GM narration."""
+        """Deprecated alias for narrate(), kept for existing adventures."""
         self.narrate(message)
 
     def message(self, message: str) -> None:
-        """Alias for narrate(). Emits GM narration."""
+        """Deprecated alias for narrate(), kept for existing adventures."""
         self.narrate(message)
 
     def system_message(self, message: str) -> None:
@@ -1236,8 +1246,12 @@ class GameContext:
         """Shortcut for tw.story.narrate(). Emits GM narration."""
         self.story.narrate(message)
 
+    def narrate_raw(self, message: str) -> None:
+        """Shortcut for tw.story.narrate_raw(). Emits verbatim GM narration."""
+        self.story.narrate_raw(message)
+
     def show_message(self, message: str) -> None:
-        """Shortcut for tw.story.narrate(). Emits GM narration."""
+        """Deprecated alias for tw.story.narrate(), kept for existing adventures."""
         self.story.narrate(message)
 
     def system(self, message: str) -> None:

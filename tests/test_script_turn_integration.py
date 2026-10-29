@@ -397,3 +397,40 @@ tw.npcs.kill("NPC_MARA")
         assert manager.state.entity_states["NPC_MARA"]["is_defeated"] is True
         assert npc_mara.hp == 0
         assert npc_mara.metadata_json.get("is_defeated") is True
+
+
+@pytest.mark.asyncio
+async def test_narrate_raw_is_persisted_as_raw_chat_message(setup_test_db):
+    from sqlalchemy import select
+
+    from backend.models.chat import ChatMessage
+
+    async with TestSessionLocal() as db_session:
+        # Arrange
+        manager = await _build_test_turn_manager(db_session, [], "sess_narrate_raw")
+        ctx = await manager._build_script_context()
+        manager._get_script_runner().execute_code(
+            'tw.story.narrate_raw("Anchor: \\"Live!\\"")\ntw.story.narrate("Parsed.")',
+            {"tw": ctx},
+        )
+
+        # Act
+        returned = await manager._apply_script_changeset(ctx.changeset)
+
+        # Assert
+        assert [getattr(m, "raw", False) for m in returned] == [True, False]
+        rows = (
+            (
+                await db_session.execute(
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == "sess_narrate_raw")
+                    .order_by(ChatMessage.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [(m.content, m.to_client_dict()["raw"]) for m in rows] == [
+            ('Anchor: "Live!"', True),
+            ("Parsed.", False),
+        ]

@@ -211,7 +211,13 @@ export function useGameSocket(): UseGameSocket {
   let currentSceneId: string | null = null
   let currentSequenceId: string | null = null
 
-  function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[], is_debug?: boolean): void {
+  function _pushMessage(
+    role: ChatMessage['role'],
+    content: string,
+    itemIds?: string[],
+    is_debug?: boolean,
+    raw?: boolean
+  ): void {
     messages.value.push({
       _key: newMessageKey(),
       role,
@@ -219,6 +225,7 @@ export function useGameSocket(): UseGameSocket {
       timestamp: new Date(),
       itemIds,
       is_debug,
+      raw,
       scene_id: currentSceneId,
       sequence_id: currentSequenceId,
     } as any)
@@ -627,7 +634,7 @@ export function useGameSocket(): UseGameSocket {
                 if (m.role === 'user' && !m.id) { m.id = data.user_msg_id; break }
               }
             }
-            _pushMessage(role, data.content, undefined, data.is_debug)
+            _pushMessage(role, data.content, undefined, data.is_debug, data.raw)
             // Attach the system message DB id (if provided) so it can be deleted.
             if (data.id) {
               const lastMsg = messages.value[messages.value.length - 1]
@@ -897,7 +904,7 @@ export function useGameSocket(): UseGameSocket {
             if (sheet.value) sheet.value = { ...sheet.value, ...data }
           } else if (event === 'system' || event === 'assistant') {
             const role = data.role || (event === 'assistant' ? 'assistant' : 'system')
-            _pushMessage(role, data.content, undefined, data.is_debug)
+            _pushMessage(role, data.content, undefined, data.is_debug, data.raw)
           } else if (event === 'chunk') {
             let lastMsg = messages.value[messages.value.length - 1]
             if (!lastMsg || lastMsg.role !== 'assistant' || (lastMsg as any).is_debug) {

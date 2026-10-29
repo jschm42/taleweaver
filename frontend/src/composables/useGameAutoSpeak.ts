@@ -1,6 +1,7 @@
 import { ref, watch, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
 import { parseAssistantContent, parseUserMessage, type DialogueSegment } from '@/composables/useComicTurns'
+import { rawAssistantContent } from '@/composables/comicPages'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
 /** Lets the travel overlay finish fading out before the new scene's narration starts. */
@@ -46,7 +47,7 @@ function getMessageSignature(message: { id?: string; content: string }, index: n
  * otherwise the previous turn would be read again while the new narration is still on its way
  * (e.g. when history loaded after auto-speech was switched on and was never marked as spoken).
  */
-function findLatestSpeakableAssistantMessage(messages: any[]): { index: number; message: { id?: string; timestamp?: Date; content: string } } | null {
+function findLatestSpeakableAssistantMessage(messages: any[]): { index: number; message: { id?: string; timestamp?: Date; content: string; raw?: boolean } } | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const candidate = messages[index]
     if (!candidate) continue
@@ -159,7 +160,9 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
     // Lines already spoken while the turn was streaming are skipped.
     const alreadyStreamed = streamedSegmentCounts.get(lastMsg) ?? 0
-    const parsed = parseAssistantContent(lastMsg.content, sheet.value, [], npcMetadata.value)
+    const parsed = lastMsg.raw
+      ? rawAssistantContent(lastMsg.content)
+      : parseAssistantContent(lastMsg.content, sheet.value, [], npcMetadata.value)
     enqueueDialogues(parsed.dialogues.slice(alreadyStreamed))
   }
 
@@ -225,6 +228,8 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
     const latest = findLatestSpeakableAssistantMessage(messages.value)
     if (!latest || isMessageAlreadySpoken(latest.message, latest.index)) return
+    // Raw script narration arrives complete and is spoken as one block once the turn ends.
+    if (latest.message.raw) return
 
     const content = String(latest.message.content || '')
     const completeText = content.slice(0, content.lastIndexOf('\n') + 1)

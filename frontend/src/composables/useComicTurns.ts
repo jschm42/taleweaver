@@ -380,6 +380,18 @@ export function renderFormattedHtml(text: string): string {
   })
 }
 
+/** Verbatim text (tw.story.narrate_raw): only escaped, line breaks kept, no markup parsing. */
+export function renderPlainHtml(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\n{2,}/g, '<span class="tw-para-break"></span>')
+    .replace(/\n/g, '<br>')
+}
+
 /**
  * Dialogue bubble text: like renderFormattedHtml, wrapped in quotes unless the line already
  * carries its own (e.g. `"Coffee?" She chews slower.`).

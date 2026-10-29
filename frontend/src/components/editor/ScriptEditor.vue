@@ -76,7 +76,7 @@ const availableSnippets = computed(() => {
   const common = [
     {
       label: 'GM Narration (Game Master)',
-      code: 'tw.story.show_message("Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.")\n',
+      code: 'tw.story.narrate("You take the piece of chocolate. Maybe it will help with the persuasion.")\n',
     },
     {
       label: 'System Notification',
@@ -172,7 +172,7 @@ const availableSnippets = computed(() => {
     return [
       {
         label: 'React to a critical success',
-        code: "if special['crit']:\n    tw.story.show_message('A devastating blow!')\n",
+        code: "if special['crit']:\n    tw.story.narrate('A devastating blow!')\n",
       },
       {
         label: 'Remember who used the special',
@@ -180,7 +180,7 @@ const availableSnippets = computed(() => {
       },
       {
         label: 'Backfire on failure',
-        code: "if not special['success']:\n    tw.player.damage(5)\n    tw.story.show_message('The spell backfires! (-5 HP)')\n",
+        code: "if not special['success']:\n    tw.player.damage(5)\n    tw.story.narrate('The spell backfires! (-5 HP)')\n",
       },
       ...common,
     ]
@@ -378,7 +378,7 @@ function insertSnippet(snippetCode: string) {
 function insertNamedSnippet(type: string) {
   const snippets: Record<string, string> = {
     player: 'tw.player.damage(5)\n',
-    story: "tw.story.show_message('Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.')\n",
+    story: "tw.story.narrate('You take the piece of chocolate. Maybe it will help with the persuasion.')\n",
     system: "tw.system('System notification message.')\n",
     vars: "tw.vars.set('quest_flag', True)\n",
     scene: "tw.scene.set_attribute('visited', True)\n",
@@ -675,7 +675,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('story')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.show_message(text)</code> (GM Narration), <code>.system(text)</code> (System Note)
+            <code>.narrate(text)</code> (GM Narration), <code>.narrate_raw(text)</code> (verbatim GM text), <code>.system(text)</code> (System Note)
           </p>
         </div>
 

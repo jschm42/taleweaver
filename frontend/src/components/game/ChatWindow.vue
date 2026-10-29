@@ -1347,7 +1347,8 @@ onUnmounted(() => {
             'text-emerald-400 border-emerald-500/30 bg-emerald-500/5 py-2 px-4 rounded-r-lg italic font-medium'
           ]"
         >
-          <template v-for="(part, pIdx) in parseContent(displayMessageContent(msg))" :key="pIdx">
+          <span v-if="msg.raw">{{ msg.content }}</span>
+          <template v-for="(part, pIdx) in (msg.raw ? [] : parseContent(displayMessageContent(msg)))" :key="pIdx">
             <span v-if="part.type === 'text'" v-html="renderMessageHtml(part.value, msg.role === 'system')"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />

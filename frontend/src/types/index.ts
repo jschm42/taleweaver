@@ -9,6 +9,8 @@ export interface ChatMessage {
   /** Scene/sequence the message belongs to; the story feed shows one page per scene/sequence. */
   scene_id?: string | null
   sequence_id?: string | null
+  /** Script narration shown verbatim (tw.story.narrate_raw): no dialogue or voice-tag parsing. */
+  raw?: boolean
 }
 
 /** Character sheet snapshot pushed by the server after every action. */

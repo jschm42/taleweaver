@@ -37,7 +37,10 @@ def sse_system(content: str) -> str:
 
 def sse_role_message(message: Any) -> str:
     role = getattr(message, "role", "system")
-    return f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(message)})}\n\n"
+    payload: dict[str, Any] = {"role": role, "content": str(message)}
+    if getattr(message, "raw", False):
+        payload["raw"] = True
+    return f"event: {role}\ndata: {json.dumps(payload)}\n\n"
 
 
 async def run_guardrail_chain(

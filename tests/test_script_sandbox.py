@@ -378,6 +378,49 @@ tw.system("Inventar aktualisiert.")
     assert sm_sys.role == "system"
 
 
+def test_narrate_raw_marks_message_verbatim():
+    # Arrange
+    ctx = GameContext(
+        avatar_data={"name": "Kaelen", "hp": 100},
+        current_scene_id="LIBRARY",
+        entities={},
+        exit_states={},
+        quests=[],
+        script_vars={},
+        in_game_time=0,
+    )
+    code = """
+tw.story.narrate_raw('Anchor: "Breaking news!" [static]')
+tw.narrate_raw("Second line.")
+tw.story.narrate("Parsed narration.")
+"""
+
+    # Act
+    ScriptRunner().execute_code(code, {"tw": ctx})
+
+    # Assert
+    raw_first, raw_second, parsed = ctx.changeset.narrative_messages
+    assert raw_first == 'Anchor: "Breaking news!" [static]'
+    assert getattr(raw_first, "raw", False) is True
+    assert getattr(raw_first, "role", None) == "assistant"
+    assert getattr(raw_second, "raw", False) is True
+    assert getattr(parsed, "raw", False) is False
+
+
+def test_sse_role_message_carries_raw_flag():
+    from backend.api.routes.adventures.turn_pass_flow import sse_role_message
+    from backend.engine.scripting.context import ScriptMessage
+
+    # Act
+    raw_event = sse_role_message(ScriptMessage("As is.", role="assistant", raw=True))
+    plain_event = sse_role_message(ScriptMessage("Parsed.", role="assistant"))
+
+    # Assert
+    assert raw_event.startswith("event: assistant\n")
+    assert '"raw": true' in raw_event
+    assert '"raw"' not in plain_event
+
+
 def test_sandbox_supports_function_definitions_and_returns():
     interpreter = SafeAstInterpreter()
     code = """
@@ -589,4 +632,3 @@ tw.vars.set("reactor_timer", 10)
     assert ctx.changeset.var_updates["__flag_alien_ejected"] is True
     assert ctx.changeset.var_updates["reactor_timer"] == 10
     assert ctx.changeset.has_changes is True
-

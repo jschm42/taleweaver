@@ -39,6 +39,7 @@ from backend.api.routes.adventures.turn_pass_flow import (
     crossed_turn_boundary,
     extract_usage_tokens,
     run_guardrail_chain,
+    sse_role_message,
     turn_anchor,
 )
 from backend.api.routes.adventures.turn_prompt_layout import (
@@ -404,11 +405,11 @@ class GameTurnManager:
                 # Don't let unhide failures break the turn; log and continue
                 logger.exception("Failed to commit entity unhide changes")
 
-    async def _save_chat_message(self, role: str, content: str) -> ChatMessage:
+    async def _save_chat_message(self, role: str, content: str, raw: bool = False) -> ChatMessage:
         """Persist a ChatMessage and run post-save processing (unhide referenced entities).
         Returns the created ChatMessage instance.
         """
-        cm = ChatMessage(session_id=self.state.session_id, role=role, content=content)
+        cm = ChatMessage(session_id=self.state.session_id, role=role, content=content, is_raw=raw)
         self.db.add(cm)
         try:
             await self.db.flush()
@@ -1403,8 +1404,7 @@ class GameTurnManager:
                         rule_violations.extend(cs_scene.rejected_actions)
                         sys_msgs = await self._apply_script_changeset(cs_scene, game_event)
                         for sm in sys_msgs:
-                            role = getattr(sm, "role", "system")
-                            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
+                            yield sse_role_message(sm)
 
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
@@ -1645,8 +1645,7 @@ class GameTurnManager:
                 )
                 rule_violations.extend(rejected)
                 for sm in sys_msgs:
-                    role = getattr(sm, "role", "system")
-                    yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
+                    yield sse_role_message(sm)
         except GameOverError as goe:
             await self._finalize_session("game_over", str(goe))
             if isinstance(game_event, GameEvent):
@@ -1662,8 +1661,7 @@ class GameTurnManager:
                     rule_violations.extend(cs_logic.rejected_actions)
                     sys_msgs = await self._apply_script_changeset(cs_logic, game_event)
                     for sm in sys_msgs:
-                        role = getattr(sm, "role", "system")
-                        yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
+                        yield sse_role_message(sm)
             except GameOverError as goe:
                 await self._finalize_session("game_over", str(goe))
                 if isinstance(game_event, GameEvent):
@@ -1936,8 +1934,7 @@ class GameTurnManager:
                 if cs_narr.has_changes:
                     sys_msgs = await self._apply_script_changeset(cs_narr, game_event)
                     for sm in sys_msgs:
-                        role = getattr(sm, "role", "system")
-                        yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sm)})}\n\n"
+                        yield sse_role_message(sm)
             except GameOverError as goe:
                 await self._finalize_session("game_over", str(goe))
                 if isinstance(game_event, GameEvent):
@@ -3019,8 +3016,9 @@ class GameTurnManager:
             flag_modified(self.state, "exit_states")
 
         for msg in changeset.narrative_messages:
-            system_messages.append(ScriptMessage(msg, role="assistant"))
-            await self._save_chat_message("assistant", msg)
+            raw = bool(getattr(msg, "raw", False))
+            system_messages.append(ScriptMessage(msg, role="assistant", raw=raw))
+            await self._save_chat_message("assistant", msg, raw=raw)
 
         for msg in getattr(changeset, "system_messages", []):
             system_messages.append(ScriptMessage(msg, role="system"))

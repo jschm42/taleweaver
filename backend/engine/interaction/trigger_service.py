@@ -157,6 +157,7 @@ class TriggerService:
                         session_id=state.session_id,
                         role="assistant",
                         content=narr_msg,
+                        is_raw=bool(getattr(narr_msg, "raw", False)),
                     )
                 )
                 messages.append(narr_msg)

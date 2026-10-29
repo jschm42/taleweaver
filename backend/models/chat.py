@@ -1,5 +1,5 @@
 import uuid6
-from sqlalchemy import Column, ForeignKey, Index, String, Text, event, inspect
+from sqlalchemy import Boolean, Column, ForeignKey, Index, String, Text, event, false, inspect
 from sqlalchemy.orm import Session
 
 from backend.models.base import Base, TimestampMixin
@@ -28,6 +28,9 @@ class ChatMessage(Base, TimestampMixin):
     scene_id = Column(String(100), nullable=True)
     sequence_id = Column(String(100), nullable=True)
 
+    # Shown verbatim: the client skips dialogue/voice-tag parsing (tw.story.narrate_raw).
+    is_raw = Column(Boolean, nullable=False, default=False, server_default=false())
+
     def to_client_dict(self) -> dict:
         """Chat history entry as sent to the client."""
         return {
@@ -36,6 +39,7 @@ class ChatMessage(Base, TimestampMixin):
             "content": self.content,
             "scene_id": self.scene_id,
             "sequence_id": self.sequence_id,
+            "raw": bool(self.is_raw),
         }
 
 

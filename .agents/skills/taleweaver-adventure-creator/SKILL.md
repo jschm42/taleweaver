@@ -55,7 +55,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Award: KEY] Title` | `tier`, `requires`, `guard` |
 | `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item`, `area` (`splash 1` / `all`, protagonist only), `save` (`dex`), `spare_passive` |
 
-All `on_*` hooks take a script, and each has a matching `on_*_text` key for a fixed message. Scripts use only the sandboxed `tw` API: `tw.vars.get/set`, `tw.flags.get/set`, `tw.player.has_item/give_item/damage/heal`, `tw.npcs.get(ID)`, `tw.npcs.set_character(ID, text)`/`add_trait(ID, trait)`/`remove_trait(ID, trait)`/`set_goal(ID, text)` (changes how the GM plays the NPC for the rest of the game), `tw.objects.get(ID)`, `tw.exits.unlock('A', 'B')`/`lock(...)`, `tw.story.narrate(...)`, `tw.game.win()`/`game_over()`, `tw.quests.complete(ID)`, `tw.awards.grant(KEY)`, `tw.dialog`. No imports, no dunder access.
+All `on_*` hooks take a script, and each has a matching `on_*_text` key for a fixed message. Scripts use only the sandboxed `tw` API: `tw.vars.get/set`, `tw.flags.get/set`, `tw.player.has_item/give_item/damage/heal`, `tw.npcs.get(ID)`, `tw.npcs.set_character(ID, text)`/`add_trait(ID, trait)`/`remove_trait(ID, trait)`/`set_goal(ID, text)` (changes how the GM plays the NPC for the rest of the game), `tw.objects.get(ID)`, `tw.exits.unlock('A', 'B')`/`lock(...)`, `tw.story.narrate(...)` (or `narrate_raw(...)` for verbatim text), `tw.game.win()`/`game_over()`, `tw.quests.complete(ID)`, `tw.awards.grant(KEY)`, `tw.dialog`. No imports, no dunder access.
 
 ### Sequences
 - Sequences are numbered 1..N in order of appearance. At most 15.

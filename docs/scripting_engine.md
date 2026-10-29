@@ -224,7 +224,7 @@ The initialization script runs under a dual lifecycle model:
 
 1. **Session Creation (Run Once)**:
    When a player begins a new game session (`/sessions/start`), the initialization script is evaluated with the full `GameContext` before any player actions occur.
-   - Any state mutations performed via `tw.vars.set(...)`, `tw.switches.set_state(...)`, or `tw.story.show_message(...)` are committed directly into the initial session state (`__script_vars__`).
+   - Any state mutations performed via `tw.vars.set(...)`, `tw.switches.set_state(...)`, or `tw.story.narrate(...)` are committed directly into the initial session state (`__script_vars__`).
    - The engine automatically records `__init_script_executed__ = True` so setup logic does not re-run on subsequent turns.
    - Any standalone scripts marked with the `on_init` trigger also fire during this phase.
 
@@ -250,15 +250,15 @@ tw.vars.set("solved_puzzles", [])
 def add_gold(amount):
     current = tw.vars.get("gold", 0)
     tw.vars.set("gold", current + amount)
-    tw.story.show_message("You gained " + str(amount) + " gold! Total: " + str(current + amount))
+    tw.story.narrate("You gained " + str(amount) + " gold! Total: " + str(current + amount))
 
 def spend_gold(amount):
     current = tw.vars.get("gold", 0)
     if current < amount:
-        tw.story.show_message("Not enough gold! Needed: " + str(amount) + ", Have: " + str(current))
+        tw.story.narrate("Not enough gold! Needed: " + str(amount) + ", Have: " + str(current))
         return False
     tw.vars.set("gold", current - amount)
-    tw.story.show_message("You spent " + str(amount) + " gold. Remaining: " + str(current - amount))
+    tw.story.narrate("You spent " + str(amount) + " gold. Remaining: " + str(current - amount))
     return True
 
 def can_access_sanctum():
@@ -273,13 +273,13 @@ Inside an `on_interact` script attached to `NPC_MERCHANT`:
 # The merchant offers a health potion for 20 gold
 if spend_gold(20):
     tw.player.heal(30)
-    tw.story.show_message("The merchant smiles and hands you a steaming vial of healing draught.")
+    tw.story.narrate("The merchant smiles and hands you a steaming vial of healing draught.")
 ```
 
 Inside an `on_enter_scene` script attached to `SCENE_INNER_SANCTUM`:
 ```python
 if not can_access_sanctum():
-    tw.story.show_message("A divine barrier repels you! Your reputation is insufficient.")
+    tw.story.narrate("A divine barrier repels you! Your reputation is insufficient.")
     tw.player.damage(10)
 ```
 
@@ -357,7 +357,7 @@ Manages world objects and inventory items:
 ### `tw.switches`
 Inspects and manipulates interactive switches, levers, buttons, and puzzle mechanisms across the adventure:
 - `tw.switches.get(switch_id: str) -> SwitchProxy`: Retrieves a `SwitchProxy` for the switch entity. Also accessible via shortcut `tw.switch(switch_id)`.
-- `tw.switches.get_state(switch_id: str, default: str = "") -> str`: Returns the current state string (e.g. `"OFF"`, `"ON"`, `"ACTIVE"`).
+- `tw.switches.get_state(switch_id: str, default: str = "") -> str`: Returns the current state string (e.g. `"OFF"`, `"ON"`, `"ACTIVE"`). A known switch without a stored state reports its configured initial state; `default` is only returned when no switch with that ID or name exists.
 - `tw.switches.set_state(switch_id: str, new_state: str, apply_outcomes: bool = True) -> bool`: Deterministically transitions the switch to `new_state`, optionally triggering any associated switch outcomes (unlocking exits, containers, or setting story flags).
 - `tw.switches.is_state(switch_id: str, state: str) -> bool`: Returns `True` if the switch currently matches `state`.
 - `tw.switches.flip(switch_id: str, apply_outcomes: bool = True) -> str`: Cycles or toggles the switch to its next configured state, returning the new state.
@@ -387,7 +387,9 @@ A persistent key-value store saved into the session state under `__script_vars__
 
 ### `tw.story`
 Injects narrative messages or system notifications into the turn stream:
-- `tw.story.show_message(text: str)` / `tw.story.narrate(text: str)` / `tw.narrate(text: str)`: Emits Game Master narration (`role: "assistant"`), displayed with the Game Master avatar, dialogue parsing, and styled exactly like standard storytelling turns (e.g. `tw.story.show_message('Du nimmst das Stück Schokolade. Vielleicht hilft es beim Überzeugen.')`).
+- `tw.story.narrate(text: str)` (shortcut `tw.narrate(text)`): Emits Game Master narration (`role: "assistant"`), displayed with the Game Master avatar and styled exactly like standard storytelling turns. The text is parsed like LLM narration: `Name: "..."` lines become NPC speech bubbles, `[tags]` become voice tags, `**bold**` is highlighted (e.g. `tw.story.narrate('You take the piece of chocolate. Maybe it will help with the persuasion.')`).
+- `tw.story.narrate_raw(text: str)` (shortcut `tw.narrate_raw(text)`): Emits Game Master narration that is shown **verbatim**, as one Game Master block: no speaker detection, no voice tags, no bold or `##ID` formatting. Line breaks are kept. Use it for text that must not be interpreted, e.g. LLM output from `tw.llm.ask(...)` that may contain colons or quotes (`tw.story.narrate_raw(news or "Just static noise.")`).
+- *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`).
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
 
@@ -508,7 +510,7 @@ if not tw.vars.get("chest_trap_sprung", False):
     
     # Inflict trap poison damage
     tw.player.damage(18)
-    tw.story.show_message(
+    tw.story.narrate(
         "A hidden needle snaps forward from the lock mechanism! Poison burns through your veins (-18 HP)."
     )
     tw.memories.add("Triggered a poison needle trap on the gilded chest.")
@@ -528,11 +530,11 @@ Target: `SCENE_CASTLE_GATES`
 if not tw.player.has_item("ROYAL_SIGNET"):
     # Lock the inner courtyard exit
     tw.exits.lock("EXIT_TO_COURTYARD", "The armored sentry lowers his halberd: 'Halt! Only bearers of the Royal Signet may enter.'")
-    tw.story.show_message("The castle guard steps forward, barring the iron gate.")
+    tw.story.narrate("The castle guard steps forward, barring the iron gate.")
 else:
     # Unlock and allow passage
     tw.exits.unlock("EXIT_TO_COURTYARD")
-    tw.story.show_message("The guard notices the Royal Signet ring, salutes respectfully, and raises the heavy portcullis.")
+    tw.story.narrate("The guard notices the Royal Signet ring, salutes respectfully, and raises the heavy portcullis.")
 ```
 
 ---
@@ -554,7 +556,7 @@ if b and r and g:
     if not tw.vars.get("vault_unlocked", False):
         tw.vars.set("vault_unlocked", True)
         tw.exits.unlock("EXIT_VAULT_DOOR")
-        tw.story.show_message("With a resonant chime, all three mechanisms lock into place and the massive vault door unseals!")
+        tw.story.narrate("With a resonant chime, all three mechanisms lock into place and the massive vault door unseals!")
         tw.awards.grant("PUZZLE_MASTER")
 ```
 
@@ -567,7 +569,7 @@ Target: `NPC_SHADOW_LORD`
 ```python
 # If the player uses the Sunstone against the Shadow Lord
 if tw.player.has_item("RELIC_SUNSTONE"):
-    tw.story.show_message(
+    tw.story.narrate(
         "You raise the Sunstone! Blinding solar radiance floods the chamber, dissolving the Shadow Lord into harmless embers."
     )
     tw.quests.complete("MAIN_QUEST_SLAY_SHADOWS")
@@ -575,7 +577,7 @@ if tw.player.has_item("RELIC_SUNSTONE"):
     tw.game.win("The realm is saved! The eternal darkness has been banished forever.")
 else:
     tw.player.damage(25)
-    tw.story.show_message("The Shadow Lord's aura lashes out in icy tendrils (-25 HP). You need a source of holy light!")
+    tw.story.narrate("The Shadow Lord's aura lashes out in icy tendrils (-25 HP). You need a source of holy light!")
 ```
 
 ---
@@ -593,7 +595,7 @@ tw.vars.set("collapse_turn", turn)
 
 remaining = 6 - turn
 if remaining > 0:
-    tw.story.show_message("The cavern tremors intensify! " + str(remaining) + " turn(s) before total collapse.")
+    tw.story.narrate("The cavern tremors intensify! " + str(remaining) + " turn(s) before total collapse.")
 else:
     tw.game.game_over("The cavern roof collapsed, burying all beneath tons of solid rock.")
 ```
@@ -606,7 +608,7 @@ Trigger: `on_equip_script` (Configured directly on the `AMULET_OF_DOOM` item)
 ```python
 # Apply a curse when equipped
 tw.vars.set("cursed_hp_drain", True)
-tw.story.show_message("As the amulet touches your skin, an icy chill grips your heart. You feel your vitality draining away.")
+tw.story.narrate("As the amulet touches your skin, an icy chill grips your heart. You feel your vitality draining away.")
 ```
 
 Trigger: `on_unequip_script` (Configured directly on the `AMULET_OF_DOOM` item)
@@ -614,7 +616,7 @@ Trigger: `on_unequip_script` (Configured directly on the `AMULET_OF_DOOM` item)
 ```python
 # Remove the curse when unequipped
 tw.vars.set("cursed_hp_drain", False)
-tw.story.show_message("You tear the amulet from your neck, gasping for breath. The icy grip subsides.")
+tw.story.narrate("You tear the amulet from your neck, gasping for breath. The icy grip subsides.")
 ```
 
 ---
@@ -625,7 +627,7 @@ Trigger: `on_protagonist_enters_scene_script` (Configured directly on the `GOBLI
 ```python
 # The NPC immediately attacks the player upon entering the scene
 tw.player.damage(5)
-tw.story.show_message("The goblin leaps from the shadows, scoring a quick hit with a rusty dagger! (-5 HP)")
+tw.story.narrate("The goblin leaps from the shadows, scoring a quick hit with a rusty dagger! (-5 HP)")
 tw.memories.add("A goblin ambushed me from the shadows.")
 ```
 
@@ -640,9 +642,9 @@ Target: `LEVER_POWER_GRID`
 if tw.switches.is_state("VALVE_COOLANT", "OPEN"):
     tw.switches.set_state("LEVER_POWER_GRID", "ONLINE")
     tw.exits.unlock("EXIT_VAULT_DOOR")
-    tw.story.show_message("Coolant surges into the coils. The main power grid hums online and the vault unseals!")
+    tw.story.narrate("Coolant surges into the coils. The main power grid hums online and the vault unseals!")
 else:
-    tw.story.show_message("The lever clicks, but nothing happens. A red warning light blinks: 'Coolant valve must be opened first!'")
+    tw.story.narrate("The lever clicks, but nothing happens. A red warning light blinks: 'Coolant valve must be opened first!'")
 ```
 
 **Using Guard Expressions (`gates.expression`):**  
@@ -667,10 +669,10 @@ tw.vars.set("bribe_accepted", False)
 def discover_clue(clue_name):
     count = tw.vars.get("clues_found", 0) + 1
     tw.vars.set("clues_found", count)
-    tw.story.show_message("Discovered clue: " + str(clue_name) + " (" + str(count) + "/3)")
+    tw.story.narrate("Discovered clue: " + str(clue_name) + " (" + str(count) + "/3)")
     if count >= 3:
         tw.quests.complete("QUEST_FIND_EVIDENCE")
-        tw.story.show_message("All clues uncovered! The conspiracy is exposed.")
+        tw.story.narrate("All clues uncovered! The conspiracy is exposed.")
 
 def advance_investigation():
     stage = tw.vars.get("investigation_stage", 1) + 1
@@ -697,7 +699,7 @@ Soft rule `BRENDA_FLIRT`, condition *"Arthur flirts with Brenda"*, `max_triggers
 key = tw.npcs.give_to_player("BRENDA", "BRENDA_KEY")
 if key:
     tw.npcs.say("BRENDA", "Fine, charmer. Take it before I change my mind.")
-    tw.story.show_message("Brenda slips you " + key["name"] + ".")
+    tw.story.narrate("Brenda slips you " + key["name"] + ".")
 ```
 
 If Arthur has angered Brenda first, the guard fails and the flirt has no mechanical effect. Because `give_to_player` returns `None` when Brenda no longer holds the key, the dialogue only plays when the hand-over actually happens.
@@ -708,7 +710,7 @@ Handler in the **global init script**:
 def on_bomb_wire(answ):
     if answ == 0:
         tw.vars.set("bomb_disarmed", True)
-        tw.story.show_message("The ticking stops. You disarmed the trap.")
+        tw.story.narrate("The ticking stops. You disarmed the trap.")
         return
     if answ == 1:
         tw.game.game_over("The bomb exploded.")
@@ -748,10 +750,10 @@ Handler in the global init script:
 def on_sphinx_riddle(answ):
     if answ == 0:
         tw.exits.unlock("SCENE_SPHINX", "SCENE_TEMPLE")
-        tw.story.show_message("The sphinx steps aside.")
+        tw.story.narrate("The sphinx steps aside.")
         return
     tw.player.damage(10)
-    tw.story.show_message("The sphinx's tail lashes you. (-10 HP)")
+    tw.story.narrate("The sphinx's tail lashes you. (-10 HP)")
 ```
 
 The GM decides *that* the player asked (soft rule); the dialog and its handler decide *what* happens, deterministically.

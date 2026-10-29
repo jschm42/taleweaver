@@ -258,10 +258,12 @@ class _MockNPC:
         print(f"[tw.npc.{self.id}] set_attribute: {k} = {v}")
 
 class _MockStory:
-    def show_message(self, text):
-        print(f"[tw.story.show_message] {text}")
     def narrate(self, text):
         print(f"[tw.story.narrate] {text}")
+    def narrate_raw(self, text):
+        print(f"[tw.story.narrate_raw] {text}")
+    def show_message(self, text):
+        self.narrate(text)
 
 class _MockSwitch:
     def __init__(self, switch_id="SWITCH"):
@@ -288,7 +290,7 @@ class _MockSwitches:
         if switch_id not in self._switches:
             self._switches[switch_id] = _MockSwitch(switch_id)
         return self._switches[switch_id]
-    def get_state(self, switch_id):
+    def get_state(self, switch_id, default=""):
         return self.get(switch_id).get_state()
     def set_state(self, switch_id, s):
         self.get(switch_id).set_state(s)
@@ -312,6 +314,8 @@ class _MockTW:
         return self.switches.get(switch_id)
     def narrate(self, text): 
         self.story.narrate(text)
+    def narrate_raw(self, text):
+        self.story.narrate_raw(text)
     def say(self, speaker, text): 
         print(f"[{speaker}] {text}")
     def log(self, text): 
