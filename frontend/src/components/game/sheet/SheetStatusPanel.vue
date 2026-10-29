@@ -20,7 +20,7 @@ const STATUS_ICONS: [string[], string][] = [
   [['fatigue', 'exhaust', 'tired'], 'ra-droplet'],
   [['bless', 'holy'], 'ra-sun'],
   [['shield', 'armor', 'protect'], 'ra-shield'],
-  [['haste', 'speed', 'quick'], 'ra-fast-forward'],
+  [['haste', 'speed', 'quick'], 'ra-player-dodge'],
   [['strength', 'might', 'rage'], 'ra-muscle-up'],
 ]
 

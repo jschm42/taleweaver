@@ -11,6 +11,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.editing.entity_update.loadout import resolve_loadout
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.session_assets import copy_data_asset_to_session
 from backend.api.routes.adventures.session_items import (
@@ -120,12 +121,19 @@ async def _clone_session_avatar(
         db.add(avatar)
         await db.flush()
 
+    # Older templates may list an equipped item in the backpack too; the slot wins.
+    inventory, equipment = resolve_loadout(
+        avatar.inventory,
+        avatar.equipment,
+        deepcopy(avatar.inventory or []),
+        normalize_equipment_keys(avatar.equipment),
+    )
     session_avatar = Avatar(
         template_id=template_id,
         **{field: getattr(avatar, field) for field in _AVATAR_COPY_FIELDS},
         stats=deepcopy(avatar.stats or {}),
-        inventory=deepcopy(avatar.inventory or []),
-        equipment=normalize_equipment_keys(avatar.equipment),
+        inventory=inventory,
+        equipment=equipment,
         status_effects=deepcopy(avatar.status_effects or []),
     )
     db.add(session_avatar)

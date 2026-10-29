@@ -107,6 +107,10 @@ const availableSnippets = computed(() => {
       code: '# NPC hands an item it carries to the player:\ntw.npcs.give_to_player("NPC_ID", "ITEM_ID")\n# Or drop from NPC into scene:\n# tw.npcs.drop_item("NPC_ID", "ITEM_ID")\n# Or give item to NPC:\n# tw.npcs.give_item("NPC_ID", "ITEM_ID")\n',
     },
     {
+      label: 'Change NPC personality',
+      code: '# Changes how the GM plays the NPC for the rest of this game:\ntw.npcs.set_character("NPC_ID", "Hostile and suspicious; short, rude answers.")\n# Or add / remove a single trait:\n# tw.npcs.add_trait("NPC_ID", "drunk")\n# tw.npcs.remove_trait("NPC_ID", "drunk")\n',
+    },
+    {
       label: 'Defeat / Kill NPC',
       code: 'tw.npcs.kill("NPC_ID", drop_inventory=True)\n',
     },
@@ -711,7 +715,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('npcs')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.get(id)</code>, <code>.move(id, target_scene)</code>
+            <code>.get(id)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
           </p>
         </div>
 

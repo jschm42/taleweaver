@@ -16,6 +16,7 @@ from typing import Any, Optional
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
+from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 
 logger = logging.getLogger(__name__)
@@ -409,7 +410,7 @@ class EntityProxy:
         self._changeset.entity_updates.append({"entity_id": self._id, attr_name: val})
 
 
-class NPCProxy(EntityProxy):
+class NPCProxy(EntityProxy, NPCPersonaMixin):
     """Safe proxy for Non-Player Characters."""
 
     @property
@@ -886,6 +887,10 @@ class EntityManagerProxy:
             ent.attack()
 
 
+class NPCManagerProxy(NPCPersonaManagerMixin, EntityManagerProxy):
+    """``tw.npcs``: entity access plus the NPC persona shortcuts."""
+
+
 class StoryFlagsProxy:
     """Safe proxy for persistent story flags."""
 
@@ -1191,7 +1196,7 @@ class GameContext:
             or v.get("is_npc")
         }
         object_entities = {k: v for k, v in entity_dict.items() if k not in npc_entities}
-        self.npcs = EntityManagerProxy(
+        self.npcs = NPCManagerProxy(
             npc_entities,
             self.changeset,
             NPCProxy,

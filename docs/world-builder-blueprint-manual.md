@@ -257,6 +257,21 @@ on_defeat: tw.flags.set('INES_STOPPED')
 
 Set the flag `INES_EXPOSED` in a rule, dialog or script when the twist happens. From that moment, Ines attacks.
 
+### An NPC whose mood changes with the player's behavior
+
+```text
+[NPC: CLERK] Tobin the Clerk
+in: QUAY
+character: Grieving, polite, talkative
+
+[Sequence: 1] The Sealed Office
+  [Rule: CLERK_INSULTED] The player mocks Tobin's dead brother.
+  script: tw.npcs.set_character('CLERK', 'Bitter and hostile toward the player; answers in one cold sentence')
+  max: 1
+```
+
+The GM reads `character` on every turn, so from then on Tobin talks like a bitter man, in this game only. Use `tw.npcs.add_trait('CLERK', 'drunk')` / `remove_trait(...)` for a single trait, or `set_goal(...)` to change what the NPC wants. The change affects dialogue, not combat: pair it with `attack_guard` (see above) if the NPC should also fight.
+
 ### A route that locks when a chapter starts
 
 ```text

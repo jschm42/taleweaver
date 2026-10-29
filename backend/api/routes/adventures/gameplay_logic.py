@@ -75,6 +75,7 @@ from backend.api.routes.adventures.interaction_hooks import fire_interact_trigge
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
 from backend.engine.scripting.dialog import store_pending_dialog
+from backend.engine.scripting.npc_persona import apply_persona
 from backend.engine.rules.skill_check import roll_attack, roll_skill_check
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -2999,6 +3000,7 @@ class GameTurnManager:
                         db_ent.is_hidden = st["is_hidden"]
                     if "is_in_inventory" in st and hasattr(db_ent, "is_in_inventory"):
                         db_ent.is_in_inventory = st["is_in_inventory"]
+                    apply_persona(db_ent, st)
 
         for npc_id in changeset.npc_attack_requests:
             if npc_id not in self.pending_npc_attacks:

@@ -37,6 +37,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [Example 10: NPC Hands the Player an Item (Sequence Soft Rule)](#example-10-npc-hands-the-player-an-item-sequence-soft-rule)
    - [Example 11: Bomb Defusal Choice Dialog](#example-11-bomb-defusal-choice-dialog)
    - [Example 12: Sphinx Riddle Conversation (Soft Rule + Dialog)](#example-12-sphinx-riddle-conversation-soft-rule--dialog)
+   - [Example 13: The Player's Words Change an NPC's Mood](#example-13-the-players-words-change-an-npcs-mood)
 7. [Authoring in the World-Editor](#authoring-in-the-world-editor)
 
 ---
@@ -322,6 +323,9 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.give_to_player(npc_id: str, item_id: str) -> dict | None`: Hands an item the NPC carries directly to the protagonist. The item leaves the NPC's inventory and keeps its world entity data (name, description, image, stats). Returns the new inventory entry, or `None` (and changes nothing) if the NPC doesn't hold the item, so scripts can't conjure items.
 - `tw.npcs.kill(npc_id: str, drop_inventory: bool = True)`: Kills the NPC, setting HP to 0 and marking `is_defeated: True`. When `drop_inventory=True` (default), all items held by the NPC are dropped into their scene.
 - `tw.npcs.attack(npc_id: str)`: Makes an NPC attack the protagonist. Turn-based combat starts right after the current turn if the NPC is in the protagonist's scene, alive and attackable (ignored while a fight is already running). Example (`on_turn_end`): `if tw.player.has_item('IDOL') and not tw.vars.get('alarm'): tw.vars.set('alarm', True); tw.npcs.attack('TEMPLE_GUARD')`.
+- `tw.npcs.set_character(npc_id: str, text: str)`: Replaces the NPC's personality (the `character` field). The GM reads it on every turn, so the NPC talks and acts differently from then on (friendlier, aggressive, funny, frightened, …). An empty text clears it. Whitespace is collapsed to a single line and the text is cut at 1,000 characters.
+- `tw.npcs.set_goal(npc_id: str, text: str)`: Replaces what the NPC wants (the `goal` field), with the same rules.
+- `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
 - `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. Available properties and methods on `NPCProxy`:
   - `.name`, `.hp`, `.is_defeated`, `.current_scene_id`, `.inventory`
   - `.say(text: str)`
@@ -334,6 +338,10 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.kill(drop_inventory: bool = True)` / `.die()`
   - `.attack()` (see `tw.npcs.attack`)
   - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)`
+  - `.character`, `.goal` *(read/write)*: assigning (`npc.character = "Gruff, impatient"`) is the same as calling `.set_character()` / `.set_goal()`
+  - `.set_character(text)`, `.set_goal(text)`, `.add_trait(trait)`, `.remove_trait(trait)`, `.has_trait(trait) -> bool`
+
+  Persona changes apply to the current game only: they are stored on the session's copy of the NPC, and the adventure template keeps its original text. To restore the original later, store it first, e.g. `tw.vars.set('brom_bio', tw.npcs.get('BROM').character)`. A persona change shapes the GM's narration and dialogue; it does not start a fight on its own (use `.attack()` for that).
 
 ### `tw.objects` (or `tw.items`)
 Manages world objects and inventory items:
@@ -747,6 +755,37 @@ def on_sphinx_riddle(answ):
 ```
 
 The GM decides *that* the player asked (soft rule); the dialog and its handler decide *what* happens, deterministically.
+
+### Example 13: The Player's Words Change an NPC's Mood
+The innkeeper Brom (`character: "Friendly, talkative"`) reacts to how the player treats him. Inline `on_interact_script` on `NPC_BROM`:
+```python
+if not tw.vars.get('brom_mood_asked'):
+    tw.vars.set('brom_mood_asked', True)
+    tw.dialog.choose(
+        "Brom wipes the counter. \"Long road behind you?\"",
+        ["Compliment his ale", "Mock his tavern", "Ignore him"],
+        on_choice="on_brom_mood",
+        speaker="Brom",
+    )
+```
+
+Handler in the global init script:
+```python
+def on_brom_mood(answ):
+    brom = tw.npcs.get('NPC_BROM')
+    if answ == 0:
+        brom.add_trait('jokes a lot')
+        brom.say("Ha! Finally someone with taste.")
+        return
+    if answ == 1:
+        brom.character = "Hostile and insulted; short, rude answers; refuses to share rumors"
+        brom.goal = "Get the hero out of his tavern"
+        brom.say("Then drink somewhere else.")
+        return
+    brom.remove_trait('talkative')
+```
+
+From the next turn on, the GM plays Brom with the new personality, in this game only.
 
 ---
 

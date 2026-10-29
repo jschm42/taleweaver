@@ -17,6 +17,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     ref_ids,
     template_rows,
 )
+from backend.api.routes.adventures.editing.entity_update.loadout import resolve_loadout
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.audio.elevenlabs_voices import storable_voice_or_none
@@ -110,12 +111,21 @@ async def _update_items(
     avatar: Avatar,
     payload: EntityUpdateRequest,
 ) -> None:
-    if given(payload, "inventory"):
-        avatar.inventory = list(payload.inventory or [])
-        flag_modified(avatar, "inventory")
-    if given(payload, "equipment"):
-        avatar.equipment = normalize_equipment_keys(payload.equipment)
-        flag_modified(avatar, "equipment")
+    inventory = (
+        list(payload.inventory or [])
+        if given(payload, "inventory")
+        else list(avatar.inventory or [])
+    )
+    equipment = (
+        normalize_equipment_keys(payload.equipment)
+        if given(payload, "equipment")
+        else normalize_equipment_keys(avatar.equipment)
+    )
+    avatar.inventory, avatar.equipment = resolve_loadout(
+        avatar.inventory, avatar.equipment, inventory, equipment
+    )
+    flag_modified(avatar, "inventory")
+    flag_modified(avatar, "equipment")
 
     inventory_ids = ref_ids(avatar.inventory)
     equipment_ids = ref_ids(list((avatar.equipment or {}).values()))

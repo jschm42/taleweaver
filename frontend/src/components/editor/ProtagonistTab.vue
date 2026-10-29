@@ -68,14 +68,14 @@ const objectOptions = computed(() => {
 const equipmentSlots = [
   { key: 'Head', label: 'Head Gear', icon: 'ra ra-knight-helmet' },
   { key: 'Neck', label: 'Necklace / Amulet', icon: 'ra ra-gem-pendant' },
-  { key: 'Chest', label: 'Armor / Chest', icon: 'ra ra-torso' },
-  { key: 'Arms', label: 'Bracers / Arms', icon: 'ra ra-bracers' },
-  { key: 'Hands', label: 'Gloves / Hands', icon: 'ra ra-gloves' },
-  { key: 'Legs', label: 'Greaves / Legs', icon: 'ra ra-layered-armor' },
-  { key: 'Feet', label: 'Boots / Feet', icon: 'ra ra-boot-prints' },
-  { key: 'Ring_1', label: 'Left Ring', icon: 'ra ra-double-ring' },
-  { key: 'Ring_2', label: 'Right Ring', icon: 'ra ra-double-ring' },
-  { key: 'MainHand', label: 'Main Hand Weapon', icon: 'ra ra-sword-brandish' },
+  { key: 'Chest', label: 'Armor / Chest', icon: 'ra ra-vest' },
+  { key: 'Arms', label: 'Bracers / Arms', icon: 'ra ra-muscle-up' },
+  { key: 'Hands', label: 'Gloves / Hands', icon: 'ra ra-hand' },
+  { key: 'Legs', label: 'Greaves / Legs', icon: 'ra ra-player' },
+  { key: 'Feet', label: 'Boots / Feet', icon: 'ra ra-boot-stomp' },
+  { key: 'Ring_1', label: 'Left Ring', icon: 'ra ra-diamond' },
+  { key: 'Ring_2', label: 'Right Ring', icon: 'ra ra-diamond' },
+  { key: 'MainHand', label: 'Main Hand Weapon', icon: 'ra ra-sword' },
   { key: 'OffHand', label: 'Off Hand Shield/Weapon', icon: 'ra ra-shield' },
 ]
 
@@ -329,7 +329,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 <template #default="{ value }">
                   <div class="flex items-center justify-between w-full">
                     <div class="flex items-center gap-1.5 text-amber-400">
-                      <i class="ra ra-sword-brandish text-[14px]"></i>
+                      <i class="ra ra-sword text-[14px]"></i>
                       <span class="text-xs font-black">STR</span>
                     </div>
                     <span class="text-base font-black text-white">{{ value ?? '-' }}</span>

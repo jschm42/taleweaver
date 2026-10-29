@@ -12,6 +12,7 @@ from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.llm_proxy import LlmAsker
+from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
 from backend.engine.scripting.runner import ScriptRunner
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -69,6 +70,8 @@ class TriggerService:
                 "hp": getattr(ent, "hp", 0) or 0,
                 "is_defeated": bool(session_overrides.get(ent.id, {}).get("is_defeated", False)),
                 "metadata_json": dict(ent.metadata_json or {}),
+                "character": ent.character,
+                "goal": ent.goal,
             }
             if ent.id in session_overrides:
                 ent_dict.update(session_overrides[ent.id])
@@ -170,6 +173,7 @@ class TriggerService:
 
             cls._persist_entity_states(state, context.changeset)
             cls._persist_exit_states(state, context.changeset)
+            await cls._sync_npc_personas(db, state, context.changeset)
 
         return messages
 
@@ -195,6 +199,27 @@ class TriggerService:
         store_pending_dialog(cur_states, changeset.pending_dialog)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
+
+    @staticmethod
+    async def _sync_npc_personas(
+        db: AsyncSession, state: SessionState, changeset: ScriptChangeset
+    ) -> None:
+        """The GM prompt reads NPC rows, so script-changed personas are written to them."""
+        changed = {
+            u["entity_id"]: u
+            for u in changeset.entity_updates
+            if u.get("entity_id") and any(f in u for f in PERSONA_FIELDS)
+        }
+        if not changed:
+            return
+        res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == state.session_id, WorldEntity.id.in_(changed)
+            )
+        )
+        states: dict[str, Any] = dict(state.entity_states or {})
+        for ent in res.scalars().all():
+            apply_persona(ent, states.get(str(ent.id), {}))
 
     @staticmethod
     def _persist_exit_states(state: SessionState, changeset: ScriptChangeset) -> None:

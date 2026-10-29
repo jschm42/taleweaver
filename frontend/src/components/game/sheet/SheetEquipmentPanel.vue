@@ -24,8 +24,8 @@ const equipment = computed<Record<string, InventoryItem | null>>(() => props.she
 
 const coreAttributes = computed(() => [
   { label: 'STR', value: props.sheet.strength, icon: 'ra-muscle-up', color: 'text-rose-400' },
-  { label: 'DEX', value: props.sheet.dexterity, icon: 'ra-fast-forward', color: 'text-amber-400' },
-  { label: 'INT', value: props.sheet.intelligence, icon: 'ra-brain', color: 'text-sky-400' },
+  { label: 'DEX', value: props.sheet.dexterity, icon: 'ra-player-dodge', color: 'text-amber-400' },
+  { label: 'INT', value: props.sheet.intelligence, icon: 'ra-crystal-ball', color: 'text-sky-400' },
   { label: 'WIS', value: props.sheet.wisdom, icon: 'ra-book', color: 'text-indigo-400' },
   { label: 'CHA', value: props.sheet.charisma, icon: 'ra-double-team', color: 'text-fuchsia-400' },
   { label: 'AC', value: props.sheet.armor_class, icon: 'ra-shield', color: 'text-emerald-400' },
@@ -33,17 +33,17 @@ const coreAttributes = computed(() => [
 
 // Slot badge position (% of the silhouette container) and its empty-slot icon.
 const SLOTS: Record<string, { top: string; left: string; icon: string }> = {
-  Head: { top: '10%', left: '50%', icon: 'ra-helmet' },
-  Neck: { top: '18%', left: '76%', icon: 'ra-necklace' },
-  Chest: { top: '30%', left: '50%', icon: 'ra-breastplate' },
-  Arms: { top: '26%', left: '20%', icon: 'ra-hand' },
+  Head: { top: '10%', left: '50%', icon: 'ra-knight-helmet' },
+  Neck: { top: '18%', left: '76%', icon: 'ra-gem-pendant' },
+  Chest: { top: '30%', left: '50%', icon: 'ra-vest' },
+  Arms: { top: '26%', left: '20%', icon: 'ra-muscle-up' },
   Hands: { top: '46%', left: '16%', icon: 'ra-hand' },
   MainHand: { top: '68%', left: '16%', icon: 'ra-sword' },
-  Ring_1: { top: '38%', left: '82%', icon: 'ra-ring' },
-  Ring_2: { top: '54%', left: '82%', icon: 'ra-ring' },
+  Ring_1: { top: '38%', left: '82%', icon: 'ra-diamond' },
+  Ring_2: { top: '54%', left: '82%', icon: 'ra-diamond' },
   OffHand: { top: '72%', left: '82%', icon: 'ra-shield' },
-  Legs: { top: '64%', left: '50%', icon: 'ra-leg' },
-  Feet: { top: '86%', left: '50%', icon: 'ra-boot-prints' },
+  Legs: { top: '64%', left: '50%', icon: 'ra-player' },
+  Feet: { top: '86%', left: '50%', icon: 'ra-boot-stomp' },
 }
 
 const hoverSlot = (slot: string, event: MouseEvent) => {
@@ -96,17 +96,17 @@ const contextSlot = (slot: string, event: MouseEvent) => {
           @mouseenter="hoverSlot(slot, $event)"
           @mouseleave="emit('itemLeave')"
         >
+          <!-- Slot name tooltip -->
+          <div class="slot-label absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded px-2 py-0.5 text-xxs font-bold uppercase tracking-wider opacity-0 group-hover/slot:opacity-100 transition-opacity z-20 pointer-events-none">
+            {{ slot.replace('_', ' ') }}
+          </div>
+
           <div
-            class="tw-card w-12 h-12 sm:w-15 sm:h-15 border-2 flex items-center justify-center transition-all relative shadow-xl"
+            class="tw-card w-12 h-12 sm:w-14 sm:h-14 border-2 flex items-center justify-center overflow-hidden transition-all shadow-xl"
             :class="equipment[slot] ? 'tw-dialog-slot-filled scale-105 z-10 cursor-pointer' : 'opacity-70'"
             @click="equipment[slot] && emit('unequip', slot)"
             @contextmenu.prevent="contextSlot(slot, $event)"
           >
-            <!-- Slot name tooltip -->
-            <div class="tw-tab tw-tab--active absolute -top-9 left-1/2 -translate-x-1/2 !min-h-0 !py-0.5 !px-2 text-xxs opacity-0 group-hover/slot:opacity-100 transition-opacity z-20 pointer-events-none">
-              {{ slot.replace('_', ' ') }}
-            </div>
-
             <template v-if="equipment[slot]">
               <div v-if="showImage(equipment[slot]!.image_url)" class="w-full h-full p-1">
                 <img
@@ -132,4 +132,9 @@ const contextSlot = (slot: string, event: MouseEvent) => {
 
 <style scoped>
 .ra { font-family: 'rpgawesome' !important; display: inline-block; line-height: 1; text-align: center; }
+.slot-label {
+  background: var(--tw-tab-active-bg);
+  color: var(--tw-tab-active-ink);
+  border: 1px solid var(--tw-tab-active-border);
+}
 </style>

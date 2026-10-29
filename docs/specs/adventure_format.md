@@ -97,7 +97,7 @@ The baseline state and attributes of the player character.
 | `stamina` / `mana` | `number` | Secondary resources for physical/magical actions. |
 | `stats` | `object` | Core RPG attributes: `strength`, `dexterity`, `intelligence`, `wisdom`, `charisma`, `armor_class`. |
 | `starting_inventory` | `array` | Initial list of item objects or item IDs carried by the protagonist. |
-| `starting_equipment` | `object` | Mapping of equipment slots (e.g. `"MainHand"`, `"Body"`) to starting items. |
+| `starting_equipment` | `object` | Mapping of equipment slots (e.g. `"MainHand"`, `"Body"`) to starting items. An item is either carried or equipped, never both: an equipped item is left out of `starting_inventory` when a session starts. In the editor, equipping an item removes it from the starting inventory, and adding an equipped item to the inventory clears its slot. |
 
 ---
 
