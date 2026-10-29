@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from '@/composables/useApi'
+import { api, type BootstrapStatus } from '@/composables/useApi'
+import { useBackendStatus } from '@/composables/useBackendStatus'
 import { authState, setToken } from '@/store/auth'
-import { configState, isAppVersionKnown, loadPublicAppVersion, refreshConfig } from '@/store/config'
+import { configState, isAppVersionKnown, refreshConfig } from '@/store/config'
 import BackgroundSlideshow from '@/components/common/BackgroundSlideshow.vue'
 import RecoveryCodeForm from '@/components/auth/RecoveryCodeForm.vue'
 
@@ -20,8 +21,25 @@ const rememberMe = ref(false)
 const showPassword = ref(false)
 const isRecovering = ref(false)
 
+const { status: backendStatus } = useBackendStatus(handleBackendOnline)
+
+const backendStatusLabels = {
+  checking: 'Checking engine...',
+  online: 'Engine online',
+  offline: 'Engine starting up...',
+} as const
+
+function handleBackendOnline(bootstrap: BootstrapStatus | null) {
+  if (bootstrap?.app_version) {
+    configState.appVersion = bootstrap.app_version
+  }
+  // The backend may come up as a fresh install while this page waits for it.
+  if (bootstrap && !bootstrap.has_admin) {
+    router.push('/setup')
+  }
+}
+
 onMounted(() => {
-  loadPublicAppVersion()
   const savedUsername = localStorage.getItem('remembered_username')
   if (savedUsername) {
     username.value = savedUsername
@@ -98,6 +116,27 @@ async function handleRecovered(token: string, recoveredUsername: string) {
         </div>
         <h1 class="text-5xl font-black text-white font-display tracking-tighter mb-2">TaleWeaver</h1>
         <p class="text-aether-primary/40 text-xxs font-bold uppercase tracking-[0.4em]">Chronicle Intelligence<span v-if="isAppVersionKnown()"> v{{ configState.appVersion }}</span></p>
+        <div
+          class="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-black/40 text-xxs font-bold uppercase tracking-widest transition-colors"
+          :class="{
+            'border-aether-primary/30 text-aether-primary': backendStatus === 'online',
+            'border-amber-400/30 text-amber-300': backendStatus === 'offline',
+            'border-white/10 text-slate-400': backendStatus === 'checking',
+          }"
+          role="status"
+          aria-live="polite"
+          title="The login page checks the backend every few seconds."
+        >
+          <span
+            class="w-2 h-2 rounded-full"
+            :class="{
+              'bg-aether-primary': backendStatus === 'online',
+              'bg-amber-400 animate-pulse': backendStatus === 'offline',
+              'bg-slate-400 animate-pulse': backendStatus === 'checking',
+            }"
+          ></span>
+          {{ backendStatusLabels[backendStatus] }}
+        </div>
       </div>
 
       <RecoveryCodeForm
@@ -162,10 +201,11 @@ async function handleRecovered(token: string, recoveredUsername: string) {
 
         <button 
           type="submit" 
-          :disabled="isLoggingIn"
+          :disabled="isLoggingIn || backendStatus !== 'online'"
           class="btn-primary w-full !py-4 flex items-center justify-center gap-3 shadow-ambient-emerald/20 disabled:opacity-50"
         >
           <i v-if="isLoggingIn" class="ra ra-cycle animate-spin"></i>
+          <span v-else-if="backendStatus !== 'online'">Waiting for Engine...</span>
           <span v-else>Begin Journey</span>
         </button>
 
@@ -178,9 +218,8 @@ async function handleRecovered(token: string, recoveredUsername: string) {
         </button>
       </form>
 
-      <div class="mt-12 text-center space-y-2">
-        <p class="text-xxs font-bold text-slate-600 uppercase tracking-widest">Powered by Advanced Agentic Intelligence</p>
-        <p class="text-[10px] font-medium text-slate-700 tracking-wide">
+      <div class="mt-12 text-center">
+        <p class="text-xs font-medium text-slate-600 tracking-wide">
           © 2026 Jean Schmitz • Released under MIT License
         </p>
       </div>

@@ -28,9 +28,10 @@ async function checkAuth() {
     }
   } catch (e) {
     console.error('Failed to get bootstrap status:', e)
-    // If we can't get bootstrap status, it's likely a connectivity issue
+    // If we can't get bootstrap status, it's likely a connectivity issue.
+    // Signed-out users wait on the login page, which polls until the backend is up.
     if (!configState.isBackendReachable) {
-      router.push('/error')
+      router.push(authState.token ? '/error' : '/login')
       authState.isInitialized = true
       return
     }

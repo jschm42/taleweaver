@@ -835,8 +835,8 @@ export const api = {
     return request('/auth/me')
   },
 
-  getBootstrapStatus(): Promise<BootstrapStatus> {
-    return request('/auth/bootstrap-status')
+  getBootstrapStatus(init?: ApiFetchInit): Promise<BootstrapStatus> {
+    return request('/auth/bootstrap-status', init)
   },
 
   recoverPasswordWithCode(payload: { username: string; recovery_code: string; new_password: string }): Promise<{ access_token: string; token_type: string }> {
