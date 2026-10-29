@@ -11,6 +11,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import dagre from 'dagre'
 import { getImageUrl, getItemIcon, getTypeColor } from '@/utils/game_icons'
+import { itemTypeLabel } from '@/utils/editor_utils'
 import {
   Users,
   Map as MapIcon,
@@ -1182,7 +1183,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                       <!-- Type -->
                       <td class="py-3 px-4">
                         <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-950 border border-slate-800 text-slate-300">
-                          {{ item.item_type || 'ITEM' }}
+                          {{ item.item_type ? itemTypeLabel(item.item_type) : 'ITEM' }}
                         </span>
                       </td>
 

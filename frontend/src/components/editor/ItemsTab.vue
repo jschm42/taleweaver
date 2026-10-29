@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Brain } from 'lucide-vue-next'
 import { hasAnyScript } from '@/utils/editor_utils'
+import ItemTile from './ItemTile.vue'
 
 interface SceneOption {
   id: string
@@ -15,6 +15,8 @@ const props = defineProps<{
   editorSwitches: any[]
   editorContainers: any[]
   editorTextLogs: any[]
+  /** CONSTRUCTABLE recipes: never in the world, no image, not filtered by scene. */
+  editorRecipes?: any[]
   isBatchGenerating: Record<string, boolean>
   isQuickGenerating: Record<string, boolean>
   activeMenuId: string | null
@@ -51,19 +53,50 @@ const isContainerLocked = (obj: any): boolean => {
   return Boolean(metadata.code_to_unlock || metadata.item_to_unlock)
 }
 
-const hasMissingImage = (obj: any): boolean => {
-  const raw = String(obj?.image_url || '').trim()
-  if (!raw) return true
-  const lowered = raw.toLowerCase()
-  if (lowered.startsWith('assets/') || lowered.startsWith('/assets/')) return true
-  if (lowered.includes('placeholder_') || lowered.includes('/placeholder-')) return true
-  return false
-}
-
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
   return `${imagePath}?v=${props.visualsCacheVersion}`
 }
+
+/** Props every tile gets, whatever its section. */
+const tileProps = (obj: any) => ({
+  obj,
+  hasScript: hasScript(obj),
+  imageUrl: buildVisualImageUrl(obj.image_url),
+  isGenerating: !!props.isQuickGenerating['object_' + obj.id],
+  menuOpen: props.activeMenuId === obj.id,
+})
+
+/** Forwards every tile menu action unchanged to the editor view. */
+const tileListeners = {
+  'quick-regen': (kind: string, id: string) => emit('quick-regen', kind, id),
+  'open-regen-dialog': (kind: string, id: string, label: string) => emit('open-regen-dialog', kind, id, label),
+  'open-upload-picker': (kind: string, id: string, label: string) => emit('open-upload-picker', kind, id, label),
+  'download-asset': (path: string, label: string) => emit('download-asset', path, label),
+  'open-text-edit': (...args: any[]) => emit('open-text-edit', ...args),
+  'toggle-menu': (id: string, event: MouseEvent) => emit('toggle-menu', id, event),
+  'handle-hover': (entity: any, event: MouseEvent) => emit('handle-hover', entity, event),
+  'clear-hover': () => emit('clear-hover'),
+  'request-change-item-type': (id: string, name: string, type: string) => emit('request-change-item-type', id, name, type),
+  'request-move-item-to-scene': (id: string, name: string, scene: string) => emit('request-move-item-to-scene', id, name, scene),
+  'request-delete-item': (id: string, name: string) => emit('request-delete-item', id, name),
+  'export-entity': (kind: 'item', id: string, label: string) => emit('export-entity', kind, id, label),
+}
+
+const LOG_BADGE = [{ label: 'LOG', class: 'border-cyan-500/40 bg-cyan-500/20 text-cyan-200' }]
+const LOCKED_BADGE = [{ label: 'LOCKED', class: 'border-amber-400/50 bg-amber-500/25 text-amber-100' }]
+const SWITCH_BADGE = [{ label: 'SWITCH', class: 'border-lime-400/50 bg-lime-500/25 text-lime-100' }]
+const HIDDEN_BADGE = [{ label: 'HIDDEN', class: 'border-violet-500/50 bg-violet-500/30 text-violet-200' }]
+const RECIPE_BADGE = [{ label: 'RECIPE', class: 'border-orange-400/50 bg-orange-500/25 text-orange-100' }]
+
+const textLogHover = (obj: any) => ({
+  id: obj.id,
+  name: obj.name,
+  description: obj.metadata_json?.text_log_content || obj.description,
+  image_url: obj.image_url,
+  type: 'TEXT_LOG',
+  stats: {},
+})
 
 // ---------------------------------------------------------------------------
 // Scene filter state
@@ -83,20 +116,23 @@ const filteredTextLogs = computed(() => filterByScene(props.editorTextLogs))
 const filteredContainers = computed(() => filterByScene(props.editorContainers))
 const filteredSwitches = computed(() => filterByScene(props.editorSwitches))
 const filteredObjects = computed(() => filterByScene(props.editorObjects))
+const recipes = computed(() => props.editorRecipes || [])
 
 const filteredTotal = computed(
   () =>
     filteredTextLogs.value.length +
     filteredContainers.value.length +
     filteredSwitches.value.length +
-    filteredObjects.value.length,
+    filteredObjects.value.length +
+    recipes.value.length,
 )
 const unfilteredTotal = computed(
   () =>
     props.editorTextLogs.length +
     props.editorContainers.length +
     props.editorSwitches.length +
-    props.editorObjects.length,
+    props.editorObjects.length +
+    recipes.value.length,
 )
 const isFilterActive = computed(() => sceneFilter.value.trim().length > 0)
 
@@ -191,59 +227,18 @@ const activeFilterLabel = computed(() => {
         </div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-        <div
-          v-for="obj in filteredTextLogs"
-          :key="'txt_' + obj.id"
-          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: (obj.metadata_json?.text_log_content || obj.description), image_url: obj.image_url, type: 'TEXT_LOG', stats: {} }, $event)"
-          @mouseleave="emit('clear-hover')"
-          :class="[
-            'relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg transition-all overflow-visible',
-            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
-          ]"
-        >
-          <div class="absolute inset-0 rounded-xl overflow-hidden">
-            <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-            <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-              <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
-            </div>
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
-              <div
-                v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
-                title="Contains custom event script(s)"
-              >
-                <Brain class="w-3 h-3 text-purple-400" />
-              </div>
-            </div>
-            <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
-              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
-            </div>
-          </div>
-          <div class="absolute top-1.5 right-1.5 z-40">
-            <button @click="emit('toggle-menu', obj.id, $event)" class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-cyan-500 transition-all shadow-lg group/dots">
-              <div class="flex flex-col gap-0.5">
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-              </div>
-            </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-56 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
-              <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-              <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-              <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-              <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, (obj.description || ''))" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
-              <div class="my-1 border-t border-white/5"></div>
-              <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
-              <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
-              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
-              <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
-            </div>
-          </div>
-        </div>
+        <ItemTile
+            v-for="obj in filteredTextLogs"
+            :key="'txt_' + obj.id"
+            v-bind="tileProps(obj)"
+            accent-class="border-cyan-500/20"
+            menu-hover-class="hover:bg-cyan-500"
+            :badges="LOG_BADGE"
+            :hover-entity="textLogHover(obj)"
+            image-actions
+            movable
+            v-on="tileListeners"
+          />
       </div>
     </div>
 
@@ -263,59 +258,16 @@ const activeFilterLabel = computed(() => {
         </div>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        <div
-          v-for="obj in filteredContainers"
-          :key="'con_' + obj.id"
-          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)"
-          @mouseleave="emit('clear-hover')"
-          :class="[
-            'relative group aspect-square bg-slate-900 border border-amber-500/20 rounded-xl shadow-lg transition-all overflow-visible',
-            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
-          ]"
-        >
-          <div class="absolute inset-0 rounded-xl overflow-hidden">
-            <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-            <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-              <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
-            </div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div v-if="isContainerLocked(obj)" class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">LOCKED</div>
-              <div
-                v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
-                title="Contains custom event script(s)"
-              >
-                <Brain class="w-3 h-3 text-purple-400" />
-              </div>
-            </div>
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
-            <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
-              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
-            </div>
-          </div>
-          <div class="absolute top-1.5 right-1.5 z-40">
-            <button @click="emit('toggle-menu', obj.id, $event)" class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
-              <div class="flex flex-col gap-0.5">
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-              </div>
-            </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-56 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
-              <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-              <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-              <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-              <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'container'}_image`)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, obj.description)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
-              <div class="my-1 border-t border-white/5"></div>
-              <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
-              <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
-              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
-              <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
-            </div>
-          </div>
-        </div>
+        <ItemTile
+            v-for="obj in filteredContainers"
+            :key="'con_' + obj.id"
+            v-bind="tileProps(obj)"
+            accent-class="border-amber-500/20"
+            :badges="isContainerLocked(obj) ? LOCKED_BADGE : []"
+            image-actions
+            movable
+            v-on="tileListeners"
+          />
       </div>
     </div>
 
@@ -335,60 +287,16 @@ const activeFilterLabel = computed(() => {
         </div>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        <div
-          v-for="obj in filteredSwitches"
-          :key="'sw_' + obj.id"
-          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)"
-          @mouseleave="emit('clear-hover')"
-          :class="[
-            'relative group aspect-square bg-slate-900 border border-lime-500/20 rounded-xl shadow-lg transition-all overflow-visible',
-            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
-          ]"
-        >
-          <div class="absolute inset-0 rounded-xl overflow-hidden">
-            <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-            <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-              <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
-            </div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/25 text-lime-100">SWITCH</div>
-              <div
-                v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
-                title="Contains custom event script(s)"
-              >
-                <Brain class="w-3 h-3 text-purple-400" />
-              </div>
-            </div>
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
-            <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
-              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
-            </div>
-          </div>
-
-          <div class="absolute top-1.5 right-1.5 z-40">
-            <button @click="emit('toggle-menu', obj.id, $event)" class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
-              <div class="flex flex-col gap-0.5">
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-              </div>
-            </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-56 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
-              <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-              <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-              <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-              <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'switch'}_image`)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, obj.description)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
-              <div class="my-1 border-t border-white/5"></div>
-              <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
-              <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
-              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
-              <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
-            </div>
-          </div>
-        </div>
+        <ItemTile
+            v-for="obj in filteredSwitches"
+            :key="'sw_' + obj.id"
+            v-bind="tileProps(obj)"
+            accent-class="border-lime-500/20"
+            :badges="SWITCH_BADGE"
+            image-actions
+            movable
+            v-on="tileListeners"
+          />
       </div>
     </div>
 
@@ -408,63 +316,37 @@ const activeFilterLabel = computed(() => {
         </div>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        <div
-          v-for="obj in filteredObjects"
-          :key="'obj_' + obj.id"
-          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)"
-          @mouseleave="emit('clear-hover')"
-          :class="[
-            'relative group aspect-square bg-slate-900 border border-white/5 rounded-xl shadow-lg transition-all overflow-visible',
-            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
-          ]"
-        >
-          <div class="absolute inset-0 rounded-xl overflow-hidden">
-            <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-            <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-              <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
-            </div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div v-if="obj.is_hidden" class="px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200">HIDDEN</div>
-              <div
-                v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
-                title="Contains custom event script(s)"
-              >
-                <Brain class="w-3 h-3 text-purple-400" />
-              </div>
-            </div>
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
-            <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
-              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
-              <div v-if="ruleEnforcementMode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0" class="flex gap-1 mt-1">
-                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
-              </div>
-            </div>
-          </div>
+        <ItemTile
+            v-for="obj in filteredObjects"
+            :key="'obj_' + obj.id"
+            v-bind="tileProps(obj)"
+            accent-class="border-white/5"
+            :badges="obj.is_hidden ? HIDDEN_BADGE : []"
+            :show-stats-dot="ruleEnforcementMode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0"
+            image-actions
+            movable
+            v-on="tileListeners"
+          />
+      </div>
+    </div>
 
-          <div class="absolute top-1.5 right-1.5 z-40">
-            <button @click="emit('toggle-menu', obj.id, $event)" class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
-              <div class="flex flex-col gap-0.5">
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
-              </div>
-            </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-56 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
-              <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-              <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-              <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-              <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, obj.description)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
-              <div class="my-1 border-t border-white/5"></div>
-              <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Change Type…</button>
-              <button @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
-              <button @click="emit('export-entity', 'item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
-              <button @click="emit('request-delete-item', obj.id, obj.name)" class="w-full px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
-            </div>
-          </div>
-        </div>
+    <!-- ==================================================================
+         Recipes Section — CONSTRUCTABLE meta items: never in the world, no image
+         ================================================================== -->
+    <div v-if="recipes.length" class="space-y-6">
+      <div class="flex items-center justify-between gap-4">
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Recipes ({{ recipes.length }})</h3>
+        <p class="text-[10px] text-slate-500 uppercase tracking-widest">Never appear in the world · no image</p>
+      </div>
+      <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+        <ItemTile
+            v-for="obj in recipes"
+            :key="'rcp_' + obj.id"
+            v-bind="tileProps(obj)"
+            accent-class="border-orange-500/20"
+            :badges="RECIPE_BADGE"
+            v-on="tileListeners"
+          />
       </div>
     </div>
 

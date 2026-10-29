@@ -9,10 +9,12 @@ import {
   mergeUniqueById, 
   formatObjectIds,
   hasAnyScript,
+  itemTypeLabel,
 } from '@/utils/editor_utils'
 import { Save, X, Trash2, ArrowLeft, Sparkles, Brain } from 'lucide-vue-next'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
+import SceneRecipesGroup from '@/components/editor/SceneRecipesGroup.vue'
 
 const props = defineProps<{
   adventureId: string
@@ -252,10 +254,12 @@ const routeSceneTextLogs = computed<any[]>(() => {
 })
 
 const routeSceneItems = computed<any[]>(() => {
-  return routeSceneObjects.value.filter((obj: any) => {
-    const itemType = String(obj.item_type || '').toUpperCase()
-    return itemType !== 'SWITCH' && itemType !== 'CONTAINER' && itemType !== 'READABLE'
-  })
+  return routeSceneObjects.value.filter((obj: any) => !isSpecialItemType(obj.item_type))
+})
+
+// CONSTRUCTABLE recipes: meta items with their own group (no image, never in the world).
+const routeSceneRecipes = computed<any[]>(() => {
+  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'CONSTRUCTABLE')
 })
 
 const routeSceneExits = computed<any[]>(() => {
@@ -291,10 +295,12 @@ const filteredRouteSceneItems = computed(() => routeSceneItems.value.filter((ent
 const filteredRouteSceneSwitches = computed(() => routeSceneSwitches.value.filter((entry) => matchesRouteSceneSearch(entry)))
 const filteredRouteSceneContainers = computed(() => routeSceneContainers.value.filter((entry) => matchesRouteSceneSearch(entry)))
 const filteredRouteSceneTextLogs = computed(() => routeSceneTextLogs.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneRecipes = computed(() => routeSceneRecipes.value.filter((entry) => matchesRouteSceneSearch(entry)))
 
+/** Item types with their own group; everything else is listed under "Items". */
 function isSpecialItemType(itemType: string): boolean {
   const t = String(itemType || '').toUpperCase()
-  return t === 'SWITCH' || t === 'CONTAINER' || t === 'READABLE'
+  return t === 'SWITCH' || t === 'CONTAINER' || t === 'READABLE' || t === 'CONSTRUCTABLE'
 }
 
 const availableItemsForType = computed<any[]>(() => {
@@ -813,7 +819,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
+              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ itemTypeLabel(obj.item_type) }}</div>
               <div
                 v-if="hasScript(obj)"
                 class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
@@ -852,6 +858,19 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           <div v-if="filteredRouteSceneItems.length === 0" class="text-xs text-slate-500">No items match the current filter.</div>
         </div>
       </div>
+
+      <SceneRecipesGroup
+        v-if="routeSceneRecipes.length && shouldShowSceneGroup(filteredRouteSceneRecipes.length)"
+        :recipes="filteredRouteSceneRecipes"
+        :total="routeSceneRecipes.length"
+        :active-menu-id="activeMenuId"
+        :has-script="hasScript"
+        @create="emit('open-create-item', 'CONSTRUCTABLE')"
+        @toggle-menu="(id, event) => emit('toggle-menu', id, event)"
+        @clone="(id) => emit('clone-entity', 'object', id)"
+        @edit="(obj) => editRouteEntity('object', obj)"
+        @delete="(id) => emit('request-delete-entity', id)"
+      />
 
       <div v-if="shouldShowSceneGroup(filteredRouteSceneSwitches.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
         <div class="flex items-center justify-between mb-2">

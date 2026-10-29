@@ -190,7 +190,7 @@ function matchesItemTypeFilter(itemType: string, kind: 'items' | 'switch' | 'con
     case 'text-log':
       return t === 'READABLE'
     case 'items':
-      return t !== 'SWITCH' && t !== 'CONTAINER' && t !== 'READABLE'
+      return !SECTIONED_ITEM_TYPES.has(t)
     case 'npc':
     default:
       return false
@@ -798,43 +798,26 @@ const editorScenes = computed<any[]>(() => {
   return source.filter((scene: any) => !!scene?.id)
 })
 
-const editorObjects = computed<any[]>(() => {
-  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
-  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
-  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred).filter((entity: any) => {
-    const type = String(entity?.item_type || '').toUpperCase()
-    return type !== 'READABLE' && type !== 'CONTAINER' && type !== 'SWITCH'
-  })
-})
-
-const editorSwitches = computed<any[]>(() => {
-  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
-  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
-  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'SWITCH')
-})
-
-const editorContainers = computed<any[]>(() => {
-  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
-  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
-  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'CONTAINER')
-})
-
-const editorTextLogs = computed<any[]>(() => {
-  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
-  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
-  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'READABLE')
-})
-
 const editorAllItems = computed<any[]>(() => {
   const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
   const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
   return mergeUniqueById(source, inferred)
 })
+
+const itemsOfType = (type: string) => editorAllItems.value.filter((entity: any) => String(entity?.item_type || '').toUpperCase() === type)
+
+// Item types with their own section in the Items tab; everything else is a plain object.
+const SECTIONED_ITEM_TYPES = new Set(['READABLE', 'CONTAINER', 'SWITCH', 'CONSTRUCTABLE'])
+
+const editorObjects = computed<any[]>(() =>
+  editorAllItems.value.filter((entity: any) => !SECTIONED_ITEM_TYPES.has(String(entity?.item_type || '').toUpperCase())),
+)
+const editorSwitches = computed<any[]>(() => itemsOfType('SWITCH'))
+const editorContainers = computed<any[]>(() => itemsOfType('CONTAINER'))
+const editorTextLogs = computed<any[]>(() => itemsOfType('READABLE'))
+/** CONSTRUCTABLE recipes: meta items that never appear in the world and have no image. */
+const editorRecipes = computed<any[]>(() => itemsOfType('CONSTRUCTABLE'))
 
 async function fetchAdventure() {
   if (!props.adventureId) return
@@ -1034,7 +1017,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
   createEntitySceneId.value = null
 
   const selectedObject = type === 'object'
-    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || []), ...(editorSwitches.value || []), ...(editorContainers.value || [])]).find((entry: any) => String(entry.id) === String(id))
+    ? editorAllItems.value.find((entry: any) => String(entry.id) === String(id))
     : null
   const selectedNpc = type === 'npc'
     ? (debugData.value?.npcs || []).find((entry: any) => String(entry.id) === String(id))
@@ -2784,6 +2767,7 @@ watch(
               :editor-switches="editorSwitches"
               :editor-containers="editorContainers"
               :editor-text-logs="editorTextLogs"
+              :editor-recipes="editorRecipes"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"

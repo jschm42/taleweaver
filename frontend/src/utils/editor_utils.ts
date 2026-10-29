@@ -69,12 +69,21 @@ export function itemTypePrefix(itemType: string): string {
     CONSUMABLE: 'ITEM_',
     WEARABLE: 'ITEM_',
     WEAPON: 'ITEM_',
-    CONSTRUCTABLE: 'ITEM_',
+    CONSTRUCTABLE: 'RECIPE_',
     READABLE: 'ITEM_',
     CONTAINER: 'CON_',
     SWITCH: 'SW_',
   }
   return map[String(itemType || 'DEFAULT').toUpperCase()] || 'ITEM_'
+}
+
+/**
+ * Item type as shown to users. CONSTRUCTABLE stays the stored value (database, .adv files,
+ * blueprints, LLM prompts) but is presented as "RECIPE".
+ */
+export function itemTypeLabel(itemType?: string | null): string {
+  const type = String(itemType || 'DEFAULT').toUpperCase()
+  return type === 'CONSTRUCTABLE' ? 'RECIPE' : type
 }
 
 export function sanitizeEditorIdToken(token: string): string {

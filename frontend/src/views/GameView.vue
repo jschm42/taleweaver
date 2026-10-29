@@ -1040,7 +1040,11 @@ const traverseSceneExit = async (exit: any, exitRef: string) => {
   }
 }
 
-const handleExitUnlockCodeSubmit = async (code: string) => {
+/**
+ * Runs one exit unlock attempt. On success the panel closes and the story is reloaded, so the
+ * system message the backend wrote for the unlock shows up in the feed.
+ */
+const runExitUnlock = async (attempt: (exitId: string) => Promise<unknown>, fallbackError: string) => {
   if (!exitUnlockModalTarget.value || exitUnlockBusy.value) return
   const exitId = String(exitUnlockModalTarget.value.id || '').trim()
   if (!exitId) return
@@ -1048,60 +1052,30 @@ const handleExitUnlockCodeSubmit = async (code: string) => {
   exitUnlockBusy.value = true
   exitUnlockError.value = ''
   try {
-    await api.unlockExitWithCode(props.id, exitId, code)
-    markExitUnlockedLocally(exitId)
-    const target = exitUnlockModalTarget.value
-    addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
-    showExitUnlockModal.value = false
-    exitUnlockModalTarget.value = null
+    await attempt(exitId)
   } catch (error: any) {
-    exitUnlockError.value = error?.message || "That code didn't open the way."
-  } finally {
+    exitUnlockError.value = error?.message || fallbackError
     exitUnlockBusy.value = false
+    return
   }
-}
-
-const handleExitUnlockItemSubmit = async (itemId: string) => {
-  if (!exitUnlockModalTarget.value || exitUnlockBusy.value) return
-  const exitId = String(exitUnlockModalTarget.value.id || '').trim()
-  if (!exitId) return
-
-  exitUnlockBusy.value = true
-  exitUnlockError.value = ''
+  markExitUnlockedLocally(exitId)
+  showExitUnlockModal.value = false
+  exitUnlockModalTarget.value = null
   try {
-    await api.unlockExitWithItem(props.id, exitId, itemId)
-    markExitUnlockedLocally(exitId)
-    const target = exitUnlockModalTarget.value
-    addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
-    showExitUnlockModal.value = false
-    exitUnlockModalTarget.value = null
-  } catch (error: any) {
-    exitUnlockError.value = error?.message || 'Failed to unlock the exit with this item.'
+    await refreshSession(true)
   } finally {
     exitUnlockBusy.value = false
   }
 }
 
-const handleExitUnlockDirectSubmit = async () => {
-  if (!exitUnlockModalTarget.value || exitUnlockBusy.value) return
-  const exitId = String(exitUnlockModalTarget.value.id || '').trim()
-  if (!exitId) return
+const handleExitUnlockCodeSubmit = (code: string) =>
+  runExitUnlock(exitId => api.unlockExitWithCode(props.id, exitId, code), "That code didn't open the way.")
 
-  exitUnlockBusy.value = true
-  exitUnlockError.value = ''
-  try {
-    await api.unlockExit(props.id, exitId)
-    markExitUnlockedLocally(exitId)
-    const target = exitUnlockModalTarget.value
-    addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
-    showExitUnlockModal.value = false
-    exitUnlockModalTarget.value = null
-  } catch (error: any) {
-    exitUnlockError.value = error?.message || 'Guard condition not met. The exit remains locked.'
-  } finally {
-    exitUnlockBusy.value = false
-  }
-}
+const handleExitUnlockItemSubmit = (itemId: string) =>
+  runExitUnlock(exitId => api.unlockExitWithItem(props.id, exitId, itemId), 'Failed to unlock the exit with this item.')
+
+const handleExitUnlockDirectSubmit = () =>
+  runExitUnlock(exitId => api.unlockExit(props.id, exitId), 'Guard condition not met. The exit remains locked.')
 
 const markExitUnlockedLocally = (exitId: string) => {
   const normalized = String(exitId || '').trim()

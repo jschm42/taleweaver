@@ -301,6 +301,9 @@ async def _regenerate_entity(db: AsyncSession, ctx: _RegenerateContext) -> Optio
     entity = res.scalars().first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
+    # Recipes never appear in the world, so there is nothing to draw.
+    if str(entity.item_type or "").upper() == "CONSTRUCTABLE":
+        raise HTTPException(status_code=400, detail="Recipes (CONSTRUCTABLE) have no image.")
 
     prompt = _build_visual_prompt(
         target_type,

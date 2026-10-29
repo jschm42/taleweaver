@@ -15,6 +15,7 @@ import { DICE_PATTERN, readWeaponConfig, type WeaponConfig } from '@/utils/weapo
 import { AMOUNT_PATTERN } from '@/utils/specialAttacks'
 import type { TtsVoiceList } from '@/types'
 import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, ChevronDown, ChevronRight, Edit3 } from 'lucide-vue-next'
+import { itemTypeLabel } from '@/utils/editor_utils'
 
 const props = defineProps<{
   show: boolean
@@ -1255,14 +1256,14 @@ const textLogPreviewClass = computed(() => {
                       <option value="CONSUMABLE">CONSUMABLE</option>
                       <option value="WEARABLE">WEARABLE</option>
                       <option value="WEAPON">WEAPON</option>
-                      <option value="CONSTRUCTABLE">CONSTRUCTABLE</option>
+                      <option value="CONSTRUCTABLE">RECIPE</option>
                       <option value="READABLE">READABLE</option>
                       <option value="CONTAINER">CONTAINER</option>
                       <option value="SWITCH">SWITCH</option>
                     </select>
                     <input
                       v-else
-                      :value="String(localForm.item_type || '').toUpperCase()"
+                      :value="itemTypeLabel(localForm.item_type)"
                       disabled
                       class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-300 font-bold uppercase tracking-widest cursor-not-allowed"
                     />
@@ -1356,7 +1357,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
                 <div v-else class="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
                   <p class="text-xs text-violet-300 font-bold leading-relaxed">
-                    CONSTRUCTABLE recipes are meta items: they never appear in the game, so they need no description, appearance, position, hidden flag, reveal rule, portability or pickup/drop triggers.
+                    Recipes are meta items: they never appear in the game, so they need no description, appearance, position, hidden flag, reveal rule, portability or pickup/drop triggers.
                   </p>
                 </div>
 
