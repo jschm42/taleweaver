@@ -19,13 +19,13 @@ from backend.api.routes.adventures.turn_context_helpers import (
     resolve_sequence_guidance,
 )
 from backend.core.llm_logger import log_structured_event
-from backend.engine.crafting_recipes import is_recipe
-from backend.engine.memory_manager import MemoryManager
-from backend.engine.soft_rules import (
+from backend.engine.rules.crafting_recipes import is_recipe
+from backend.engine.rules.soft_rules import (
     build_soft_rules_prompt_block,
     fired_counts,
     sequence_soft_rules,
 )
+from backend.engine.sessions.memory_manager import MemoryManager
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 

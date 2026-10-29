@@ -23,7 +23,7 @@ from backend.api.routes.adventures.schemas import (
 from backend.api.routes.adventures.session_items import backfill_avatar_items_from_template_entities
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.media_engine import MediaEngine
+from backend.engine.media.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -246,7 +246,7 @@ async def _build_adventure_editor_assets(
         and adventure.original_manifest.get("scenes")
     ):
         try:
-            from backend.engine.world_generator import WorldGenerator
+            from backend.engine.world.world_generator import WorldGenerator
             from backend.models.user import User
 
             user = None

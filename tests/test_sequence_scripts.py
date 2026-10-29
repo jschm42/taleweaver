@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
-from backend.engine.sequence_scripts import sequence_scripts
+from backend.engine.rules.sequence_scripts import sequence_scripts
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity
 from backend.schemas.adventure import AdventureTemplateUpdate
@@ -123,7 +123,7 @@ async def test_chat_mode_inspect_command_fires_sequence_on_interact(monkeypatch)
     """Regression: without the mechanics pass (chat mode) on_interact never ran."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from backend.engine.rule_engine import AdventureGeneratorToolIntent
+    from backend.engine.rules.rule_engine import AdventureGeneratorToolIntent
     from backend.engine.scripting.dialog import pending_dialog
 
     async with TestSessionLocal() as db:

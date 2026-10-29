@@ -13,7 +13,10 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import PROJECT_ROOT
-from backend.engine.adventure_importer import AdventureConflictError, AdventureTemplateImporter
+from backend.engine.adventures.adventure_importer import (
+    AdventureConflictError,
+    AdventureTemplateImporter,
+)
 from backend.models.user import User
 
 logger = logging.getLogger(__name__)

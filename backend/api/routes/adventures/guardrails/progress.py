@@ -7,8 +7,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from backend.engine.hard_rule_evaluator import HardRuleEvaluator
-from backend.engine.rule_engine import GameEvent
+from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
+from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)

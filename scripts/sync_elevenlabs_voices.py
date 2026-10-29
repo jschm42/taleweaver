@@ -23,7 +23,10 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.core.config import settings  # noqa: E402
-from backend.engine.elevenlabs_voices import BUNDLED_VOICE_LIST, looks_like_voice_id  # noqa: E402
+from backend.engine.audio.elevenlabs_voices import (  # noqa: E402
+    BUNDLED_VOICE_LIST,
+    looks_like_voice_id,
+)
 
 VOICES_URL = "https://api.elevenlabs.io/v1/voices"
 

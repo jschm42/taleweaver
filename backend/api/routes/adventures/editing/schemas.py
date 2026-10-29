@@ -98,6 +98,13 @@ class EntityUpdateRequest(BaseModel):
     on_craft_success_text: Optional[str] = None
     on_craft_failure_script: Optional[str] = None
     on_craft_failure_text: Optional[str] = None
+    # WEAPON items (see backend/engine/combat/weapons.py)
+    damage_dice: Optional[str] = None
+    weapon_cost_type: Optional[str] = None
+    weapon_cost_value: Optional[int] = None
+    weapon_category: Optional[str] = None
+    weapon_hit_stat: Optional[str] = None
+    weapon_effects: Optional[list[dict[str, Any]]] = None
     on_hp_change_script: Optional[str] = None
     on_hp_change_text: Optional[str] = None
     on_status_change_script: Optional[str] = None

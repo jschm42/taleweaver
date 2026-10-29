@@ -43,7 +43,7 @@ def _sequence_completed(
     force_complete: bool,
     **evaluation_inputs: Any,
 ) -> bool:
-    from backend.engine.hard_rule_evaluator import HardRuleEvaluator
+    from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 
     if not HardRuleEvaluator.has_hard_rules(seq):
         return force_complete

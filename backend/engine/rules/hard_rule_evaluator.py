@@ -12,8 +12,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.scripting.context import GameContext
-from backend.engine.switch_service import SwitchService
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 

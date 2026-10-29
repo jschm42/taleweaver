@@ -181,6 +181,11 @@ Interactive elements, items, containers, and state machines.
 | `kept_ingredients` | `array` | `CONSTRUCTABLE` recipes: ingredient IDs that are not consumed by crafting. *(since 1.3.1)* |
 | `craft_guard_expression` | `string` | `CONSTRUCTABLE` recipes: optional guard expression that must hold for crafting. |
 | `reveals_item_id` | `string` | Item spawned or revealed upon interaction/use. |
+| `damage_dice` | `string` | `WEAPON` items: damage formula, e.g. `1d8` or `1d10+2` (default `1d8`). |
+| `weapon_cost_type` / `weapon_cost_value` | `string` / `integer` | `WEAPON` items: resource (`stamina` or `mana`) and amount paid per attack (default `stamina` 20). |
+| `weapon_category` | `string` | `WEAPON` items: `MELEE` (default), `RANGED` or `MAGIC`. |
+| `weapon_hit_stat` | `string` | `WEAPON` items: stat added to the d20 attack roll: `strength`, `dexterity` (default), `intelligence`, `wisdom` or `charisma`. |
+| `weapon_effects` | `array` | `WEAPON` items: up to 4 extra effects applied on a hit, in the special-attack effect format `{target: "target" \| "self", stat, amount}` (e.g. poison `{"target": "target", "stat": "stamina", "amount": "-1d4"}`). |
 
 ---
 

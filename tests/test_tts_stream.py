@@ -4,8 +4,8 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from backend.engine import elevenlabs_stream
-from backend.engine.tts_helpers import TTSProviderError, TTSRateLimitError
+from backend.engine.audio import elevenlabs_stream
+from backend.engine.audio.tts_helpers import TTSProviderError, TTSRateLimitError
 from tests.test_tts_api import _enable_tts_for_test_user
 
 VOICE = "N" * 20

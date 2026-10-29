@@ -4,14 +4,14 @@ import pytest
 
 from backend.core.world_validator import validate_adventure
 from backend.engine.blueprint import analyze_blueprint
-from backend.engine.location_context import _switch_details
-from backend.engine.manifest_apply.objects import _switch_metadata
-from backend.engine.switch_states import (
+from backend.engine.interaction.location_context import _switch_details
+from backend.engine.interaction.switch_states import (
     is_valid_state_id,
     normalize_state_id,
     normalize_state_labels,
     state_label,
 )
+from backend.engine.manifest_apply.objects import _switch_metadata
 from backend.models.world_entity import WorldEntity
 from tests.test_switch_validation import _auth_headers, _seed_template
 

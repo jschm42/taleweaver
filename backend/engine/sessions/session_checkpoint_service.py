@@ -35,13 +35,17 @@ def _reason_title(reason: str, snapshot: dict[str, Any]) -> str:
 
 class SessionCheckpointService:
     @staticmethod
-    async def _load_context(db: AsyncSession, session_id: str) -> tuple[GameSession, SessionState, Avatar]:
+    async def _load_context(
+        db: AsyncSession, session_id: str
+    ) -> tuple[GameSession, SessionState, Avatar]:
         session_res = await db.execute(select(GameSession).where(GameSession.id == session_id))
         game_session = session_res.scalars().first()
         if not game_session:
             raise ValueError("Session not found.")
 
-        state_res = await db.execute(select(SessionState).where(SessionState.session_id == session_id))
+        state_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == session_id)
+        )
         state = state_res.scalars().first()
         if not state:
             raise ValueError("Session state not found.")
@@ -63,7 +67,9 @@ class SessionCheckpointService:
         return list(msg_res.scalars().all())
 
     @staticmethod
-    def _build_snapshot(state: SessionState, avatar: Avatar, scene_label: str | None = None) -> dict[str, Any]:
+    def _build_snapshot(
+        state: SessionState, avatar: Avatar, scene_label: str | None = None
+    ) -> dict[str, Any]:
         return {
             "avatar": {
                 "hp": avatar.hp,
@@ -101,7 +107,9 @@ class SessionCheckpointService:
         }
 
     @staticmethod
-    async def _prune_old_checkpoints(db: AsyncSession, session_id: str, keep: int = MAX_CHECKPOINTS_PER_SESSION) -> None:
+    async def _prune_old_checkpoints(
+        db: AsyncSession, session_id: str, keep: int = MAX_CHECKPOINTS_PER_SESSION
+    ) -> None:
         cp_res = await db.execute(
             select(SessionCheckpoint.id)
             .where(SessionCheckpoint.session_id == session_id)
@@ -138,7 +146,9 @@ class SessionCheckpointService:
         return checkpoint
 
     @staticmethod
-    async def list_checkpoints(db: AsyncSession, session_id: str) -> list[SessionCheckpointResponse]:
+    async def list_checkpoints(
+        db: AsyncSession, session_id: str
+    ) -> list[SessionCheckpointResponse]:
         cp_res = await db.execute(
             select(SessionCheckpoint)
             .where(SessionCheckpoint.session_id == session_id)
@@ -192,7 +202,9 @@ class SessionCheckpointService:
         avatar.equipment = deepcopy(avatar_snapshot.get("equipment") or {})
         avatar.status_effects = deepcopy(avatar_snapshot.get("status_effects") or [])
 
-        state.current_scene_id = str(state_snapshot.get("current_scene_id") or state.current_scene_id)
+        state.current_scene_id = str(
+            state_snapshot.get("current_scene_id") or state.current_scene_id
+        )
         state.in_game_time = int(state_snapshot.get("in_game_time", state.in_game_time or 0))
         state.time_system = str(state_snapshot.get("time_system") or state.time_system)
         state.time_config = deepcopy(state_snapshot.get("time_config") or {})

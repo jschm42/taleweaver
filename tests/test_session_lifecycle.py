@@ -8,8 +8,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.engine.session_exporter import SessionExporter
-from backend.engine.session_importer import SessionImporter
+from backend.engine.sessions.session_exporter import SessionExporter
+from backend.engine.sessions.session_importer import SessionImporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -78,7 +78,11 @@ async def _seed_session_and_adventure(db: AsyncSession, user_id: str) -> tuple[s
         current_scene_id="SCENE_1",
         in_game_time=120,
         inventory=["POTION_1"],
-        entity_states={"__asset_snapshot__": {"scene1": "/data/adventures/sessions/test-session-123/scenes/scene1.jpg"}},
+        entity_states={
+            "__asset_snapshot__": {
+                "scene1": "/data/adventures/sessions/test-session-123/scenes/scene1.jpg"
+            }
+        },
         exit_states={},
         discovered_scenes=["SCENE_1"],
         quests=[{"id": "QUEST_1", "title": "First Quest", "status": "completed"}],
@@ -200,11 +204,16 @@ async def test_session_ads_export_import_cycle(auth_client, setup_test_db, monke
             manifest = json.loads(z.read("session.json"))
 
             assert manifest["format"] == "TaleWeaverSession"
-            assert manifest["game_session"]["status_note"] == "This is a test note for game session."
+            assert (
+                manifest["game_session"]["status_note"] == "This is a test note for game session."
+            )
             assert manifest["avatar"]["name"] == "Test Session Protagonist"
             assert manifest["avatar"]["profile_image"] == "assets/avatar.jpg"
             assert manifest["session_state"]["in_game_time"] == 120
-            assert manifest["session_state"]["entity_states"]["__asset_snapshot__"]["scene1"] == "assets/scenes/scene1.jpg"
+            assert (
+                manifest["session_state"]["entity_states"]["__asset_snapshot__"]["scene1"]
+                == "assets/scenes/scene1.jpg"
+            )
             assert len(manifest["chat_messages"]) == 1
             assert manifest["chat_messages"][0]["content"] == "Welcome to the lifecycle test."
             assert len(manifest["world_scenes"]) == 1
@@ -226,6 +235,7 @@ async def test_session_ads_export_import_cycle(auth_client, setup_test_db, monke
 
         # Mock builtins.open
         import builtins
+
         original_open = builtins.open
         mock_files = {}
 
@@ -262,15 +272,22 @@ async def test_session_ads_export_import_cycle(auth_client, setup_test_db, monke
         assert new_session.template_id == template_id
 
         # Check that state exists
-        state_res = await db.execute(select(SessionState).where(SessionState.session_id == new_session_id))
+        state_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == new_session_id)
+        )
         new_state = state_res.scalars().first()
         assert new_state is not None
         assert new_state.in_game_time == 120
         # Verify localized asset paths got updated to the new session prefix
-        assert f"/data/adventures/sessions/{new_session_id}/" in new_state.entity_states["__asset_snapshot__"]["scene1"]
+        assert (
+            f"/data/adventures/sessions/{new_session_id}/"
+            in new_state.entity_states["__asset_snapshot__"]["scene1"]
+        )
 
         # Check ChatMessage exists
-        chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == new_session_id))
+        chat_res = await db.execute(
+            select(ChatMessage).where(ChatMessage.session_id == new_session_id)
+        )
         messages = chat_res.scalars().all()
         assert len(messages) == 1
         assert messages[0].content == "Welcome to the lifecycle test."

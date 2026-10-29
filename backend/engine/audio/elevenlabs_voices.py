@@ -17,9 +17,7 @@ from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-BUNDLED_VOICE_LIST: Final = (
-    Path(__file__).resolve().parent.parent / "core" / "elevenlabs_voices.json"
-)
+BUNDLED_VOICE_LIST: Final = Path(__file__).resolve().parents[2] / "core" / "elevenlabs_voices.json"
 # ElevenLabs voice ids are 20 alphanumeric characters (e.g. 21m00Tcm4TlvDq8ikWAM).
 _VOICE_ID_PATTERN: Final = re.compile(r"^[A-Za-z0-9]{20}$")
 

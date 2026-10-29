@@ -1,14 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.engine.world_schemas import (
+from backend.engine.world.world_schemas import (
     WorldExitSchema,
     WorldNPCSchema,
     WorldObjectSchema,
     WorldSceneSchema,
     WorldScriptSchema,
 )
-from backend.engine.world_scripting_prompt import (
+from backend.engine.world.world_scripting_prompt import (
     INLINE_TRIGGERS,
     TOP_LEVEL_TRIGGERS,
     build_scripts_requirement,

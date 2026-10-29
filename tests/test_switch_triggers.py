@@ -1,9 +1,9 @@
 import pytest
 
 from backend.core.auth import create_access_token
+from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.runner import ScriptRunner
-from backend.engine.switch_service import SwitchService
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldScene

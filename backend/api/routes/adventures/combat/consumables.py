@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from backend.engine.rule_engine import RESOURCE_CAP
+from backend.engine.rules.rule_engine import RESOURCE_CAP
 
 _RESOURCE_ALIASES = {
     "hp": r"(?:hp|health|lebenspunkte?)",

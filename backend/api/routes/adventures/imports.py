@@ -15,8 +15,11 @@ from backend.core.adventure_identity import manifest_origin_id
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
-from backend.engine.adventure_import_support import find_existing_template
-from backend.engine.adventure_importer import AdventureConflictError, AdventureTemplateImporter
+from backend.engine.adventures.adventure_import_support import find_existing_template
+from backend.engine.adventures.adventure_importer import (
+    AdventureConflictError,
+    AdventureTemplateImporter,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.services.default_adventures import (

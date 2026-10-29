@@ -621,7 +621,7 @@ class ObjectProxy(EntityProxy):
         session_st = self._data.get("switch_state")
         if session_st is not None and str(session_st).strip():
             return str(session_st).strip().upper()
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         cfg = SwitchService.resolve_switch_config(self._data)
         if cfg:
@@ -649,8 +649,8 @@ class ObjectProxy(EntityProxy):
     @property
     def label(self) -> str:
         """In-game text of the current switch state (its label, or the ID); "" for non-switches."""
-        from backend.engine.switch_service import SwitchService
-        from backend.engine.switch_states import state_label
+        from backend.engine.interaction.switch_service import SwitchService
+        from backend.engine.interaction.switch_states import state_label
 
         current = self.switch_state
         if current is None:
@@ -674,7 +674,7 @@ class ObjectProxy(EntityProxy):
 
     def flip(self, target_state: Optional[str] = None) -> str:
         """Flips/toggles the switch. Returns the new state."""
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         cfg = SwitchService.resolve_switch_config(self._data)
         states = [str(s).strip().upper() for s in cfg.get("states", []) if str(s).strip()] or [
@@ -700,7 +700,7 @@ class ObjectProxy(EntityProxy):
     @property
     def is_switch(self) -> bool:
         """Returns True if this entity is configured as a switch."""
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         return str(self._data.get("item_type") or "").strip().upper() == "SWITCH" or bool(
             SwitchService.resolve_switch_config(self._data)

@@ -6,7 +6,7 @@ import zipfile
 
 from backend.api.routes.adventures import session_assets
 from backend.core.config import settings
-from backend.engine import adventure_updates
+from backend.engine.adventures import adventure_updates
 
 
 def _write_adv(path, title: str) -> None:

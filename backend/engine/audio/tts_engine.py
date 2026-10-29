@@ -6,8 +6,8 @@ from typing import Optional
 import httpx
 
 from backend.core.config import settings
-from backend.engine.elevenlabs_stream import synthesize_elevenlabs_bytes
-from backend.engine.tts_helpers import (
+from backend.engine.audio.elevenlabs_stream import synthesize_elevenlabs_bytes
+from backend.engine.audio.tts_helpers import (
     TTSModelSwitchSuggestionError,
     TTSProviderError,
     TTSRateLimitError,
@@ -23,7 +23,7 @@ from backend.engine.tts_helpers import (
     _wait_for_tts_request_slot,
     _write_audio_file,
 )
-from backend.engine.tts_tag_format import canonicalize_tags, prepare_elevenlabs_text
+from backend.engine.audio.tts_tag_format import canonicalize_tags, prepare_elevenlabs_text
 from backend.utils.path_security import sanitize_path_component
 
 logger = logging.getLogger(__name__)

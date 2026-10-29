@@ -122,7 +122,7 @@ def _find_inventory_index(avatar: Avatar, item_name: str) -> int:
 
 def _resolve_equip_slot(item: dict) -> str | None:
     """Determines the target slot for an item, guessing for weapons and generic hand items."""
-    from backend.engine.item_logic import get_item_slot
+    from backend.engine.rules.item_logic import get_item_slot
 
     slot = item.get("slot", "Hands")  # Fallback to hands if missing
     slot = _SLOT_ALIASES.get(slot, slot)

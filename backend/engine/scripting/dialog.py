@@ -94,7 +94,7 @@ class DialogProxy:
         if not expr:
             return True
         # Lazy import: switch_service depends on the scripting context module.
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         passed, _detail = SwitchService.evaluate_gate_expression(expr, self._context)
         return passed

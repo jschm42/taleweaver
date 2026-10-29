@@ -64,14 +64,14 @@ from backend.core.prompts import (
     BABLE_FISH_TRANSLATION_SYSTEM_PROMPT,
     BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE,
 )
-from backend.engine.adventure_updates import is_legacy_session
-from backend.engine.scripting.dialog import client_dialog, pending_dialog
-from backend.engine.scripting.llm_proxy import LlmAsker
-from backend.engine.sequence_walkthrough import (
+from backend.engine.adventures.adventure_updates import is_legacy_session
+from backend.engine.interaction.trigger_service import TriggerService
+from backend.engine.rules.sequence_walkthrough import (
     format_walkthrough_steps,
     sequence_walkthrough_steps,
 )
-from backend.engine.trigger_service import TriggerService
+from backend.engine.scripting.dialog import client_dialog, pending_dialog
+from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession

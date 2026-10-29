@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.adventure_importer import AdventureConflictError
+from backend.engine.adventures.adventure_importer import AdventureConflictError
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.services.adventure_library import (

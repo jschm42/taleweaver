@@ -42,8 +42,8 @@ from backend.core.models_config import (
     TTS_PROVIDERS,
 )
 from backend.core.security import encryption_util
-from backend.engine.media_engine import MediaEngine
-from backend.engine.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
+from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
+from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
 from backend.services.model_discovery import clear_cache as clear_model_discovery_cache
 from backend.utils.path_security import (

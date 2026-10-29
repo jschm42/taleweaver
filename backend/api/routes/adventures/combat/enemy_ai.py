@@ -10,6 +10,7 @@ from backend.api.routes.adventures.combat.attacks import (
     apply_strength_bonus,
     attack_event_data,
     attack_log_text,
+    on_hit_suffix,
 )
 from backend.api.routes.adventures.combat.context import (
     engaged_enemies,
@@ -23,7 +24,8 @@ from backend.engine.combat.special_attacks import (
     effective_ac,
     resolve_special_attack,
 )
-from backend.engine.rule_engine import GameOverException
+from backend.engine.combat.weapons import apply_on_hit_effects
+from backend.engine.rules.rule_engine import GameOverException
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity
 
@@ -172,16 +174,33 @@ class CombatEnemyMixin:
             }
 
         player_ac = effective_ac(player)
-        roll = gl.roll_attack(self._enemy_avatar(enemy), "dexterity", player_ac, weapon["dice"])
+        roll = gl.roll_attack(
+            self._enemy_avatar(enemy), weapon["hit_stat"], player_ac, weapon["dice"]
+        )
         roll = apply_strength_bonus(roll, int((enemy.get("modifiers") or {}).get("strength", 0)))
         damage = 0
+        on_hit: list[dict[str, Any]] = []
         if roll.get("is_hit"):
             hp_before = int(self.avatar.hp or 0)
             self.avatar.hp = max(0, hp_before - int(roll.get("damage_total") or 0))
             damage = hp_before - self.avatar.hp
+            on_hit = self._apply_enemy_on_hit(combat, enemy, weapon)
         self._sync_combat_player_snapshot(combat)
         data = attack_event_data(enemy, player, roll, player_ac, weapon["name"], damage)
-        return attack_log_text(enemy["name"], roll, player_ac), data
+        data["effects"].extend(on_hit)
+        return attack_log_text(enemy["name"], roll, player_ac) + on_hit_suffix(on_hit), data
+
+    def _apply_enemy_on_hit(
+        self, combat: dict[str, Any], enemy: dict[str, Any], weapon: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Weapon on-hit effects of an NPC: drains on the protagonist, boosts on itself."""
+        if not weapon["effects"]:
+            return []
+        player = self._player_view(combat)
+        applied = apply_on_hit_effects(weapon["effects"], enemy, player)
+        self._apply_player_view(combat, player)
+        self._persist_enemy_resources(enemy)
+        return applied
 
     async def _resolve_enemy_turn(
         self, enemy_id: str | None = None, combat: dict[str, Any] | None = None

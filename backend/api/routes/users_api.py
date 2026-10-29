@@ -33,7 +33,7 @@ from backend.core.prompts import (
     USER_BIO_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.core.security import encryption_util
-from backend.engine.media_engine import MediaEngine
+from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
 from backend.utils.path_security import (
     ensure_within_data_dir,

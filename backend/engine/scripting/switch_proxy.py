@@ -39,7 +39,7 @@ class SwitchProxy:
     @property
     def states(self) -> list[str]:
         """Returns the list of valid states configured for this switch."""
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         cfg = SwitchService.resolve_switch_config(self._data)
         states = cfg.get("states")
@@ -50,7 +50,7 @@ class SwitchProxy:
     @property
     def initial_state(self) -> str:
         """Returns the initial state configured for this switch."""
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         cfg = SwitchService.resolve_switch_config(self._data)
         init = cfg.get("initial_state")
@@ -86,8 +86,8 @@ class SwitchProxy:
     @property
     def label(self) -> str:
         """In-game text of the current state: its label, or the state ID."""
-        from backend.engine.switch_service import SwitchService
-        from backend.engine.switch_states import state_label
+        from backend.engine.interaction.switch_service import SwitchService
+        from backend.engine.interaction.switch_states import state_label
 
         return state_label(SwitchService.resolve_switch_config(self._data), self.state)
 
@@ -162,7 +162,7 @@ class SwitchProxy:
 
     def _apply_configured_outcomes(self, on_state: str) -> None:
         """Applies configured outcomes for on_state directly to the ScriptChangeset."""
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         cfg = SwitchService.resolve_switch_config(self._data)
         outcomes = cfg.get("outcomes")
@@ -250,7 +250,7 @@ class SwitchesProxy:
 
     def all(self) -> list[SwitchProxy]:
         """Returns proxies for all configured switches."""
-        from backend.engine.switch_service import SwitchService
+        from backend.engine.interaction.switch_service import SwitchService
 
         result = []
         for eid, data in self._entities.items():

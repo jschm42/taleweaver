@@ -15,7 +15,7 @@ from backend.api.routes.adventures.out_of_turn_progress import (
     TERMINAL_STATUSES,
 )
 from backend.core.config import settings
-from backend.engine.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage

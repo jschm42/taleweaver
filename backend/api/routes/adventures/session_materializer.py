@@ -16,7 +16,7 @@ from backend.api.routes.adventures.session_assets import copy_data_asset_to_sess
 from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
-from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession

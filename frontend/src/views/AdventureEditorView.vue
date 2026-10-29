@@ -45,6 +45,7 @@ import SceneRoutePanel from '@/components/editor/SceneRoutePanel.vue'
 import ExitRoutePanel from '@/components/editor/ExitRoutePanel.vue'
 import EditExitModal from '@/components/editor/EditExitModal.vue'
 import NpcCombatModal from '@/components/editor/NpcCombatModal.vue'
+import { readWeaponConfig, weaponPayload } from '@/utils/weaponConfig'
 
 // Utilities
 import { 
@@ -1135,6 +1136,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_read_text: selectedObject?.on_read_text || metadata?.on_read_text || '',
     on_leave_scene_script: selectedScene?.on_leave_scene_script || metadata?.on_leave_scene_script || '',
     on_leave_scene_text: selectedScene?.on_leave_scene_text || metadata?.on_leave_scene_text || '',
+    weapon_config: type === 'object' ? readWeaponConfig(metadata, selectedObject) : undefined,
   }
   showEditModal.value = true
 
@@ -1433,6 +1435,10 @@ async function saveEntityText(data: any) {
       on_craft_failure_text: editEntityContext.value.type === 'object' ? data.on_craft_failure_text : undefined,
       on_read_script: editEntityContext.value.type === 'object' ? data.on_read_script : undefined,
       on_read_text: editEntityContext.value.type === 'object' ? data.on_read_text : undefined,
+      // The backend only keeps these for WEAPON items.
+      ...(editEntityContext.value.type === 'object' && String(data.item_type || '').toUpperCase() === 'WEAPON'
+        ? weaponPayload(data.weapon_config)
+        : {}),
     })
 
     // Redirect if we renamed the scene we are currently viewing

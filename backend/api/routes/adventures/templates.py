@@ -41,8 +41,8 @@ from backend.core.prompts import (
     TEMPLATE_FIELD_GENERATION_SYSTEM_PROMPT,
     TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE,
 )
-from backend.engine.item_logic import normalize_equipment_keys
-from backend.engine.world_generator import WorldGenerator
+from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.world.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -508,7 +508,7 @@ async def list_templates(
                 scene_label,
             )
 
-    from backend.engine.adventure_updates import (
+    from backend.engine.adventures.adventure_updates import (
         check_template_update,
         scan_available_adventure_files,
     )
@@ -569,7 +569,7 @@ async def update_all_adventure_templates(
     current_user: User = Depends(get_current_user),
 ):
     """Updates all adventure templates for the user that have newer versions in /adventures."""
-    from backend.engine.adventure_updates import update_all_adventures
+    from backend.engine.adventures.adventure_updates import update_all_adventures
 
     try:
         return await update_all_adventures(
@@ -589,7 +589,7 @@ async def update_adventure_template(
     current_user: User = Depends(get_current_user),
 ):
     """Updates an individual adventure template from its matching file in /adventures."""
-    from backend.engine.adventure_updates import update_single_adventure
+    from backend.engine.adventures.adventure_updates import update_single_adventure
 
     try:
         return await update_single_adventure(
@@ -612,7 +612,7 @@ async def migrate_adventure_template(
     current_user: User = Depends(get_current_user),
 ):
     """Migrates a legacy adventure template to the current sequence-supported format."""
-    from backend.engine.adventure_updates import migrate_single_adventure
+    from backend.engine.adventures.adventure_updates import migrate_single_adventure
 
     try:
         return await migrate_single_adventure(
@@ -1121,7 +1121,7 @@ async def export_adventure_adv(
     current_user: User = Depends(get_current_user),
 ):
     """Exports the adventure as a pure .adv JSON manifest."""
-    from backend.engine.adventure_exporter import AdventureExporter
+    from backend.engine.adventures.adventure_exporter import AdventureExporter
 
     try:
         manifest = await AdventureExporter.build_full_manifest(db, template_id)
@@ -1142,7 +1142,7 @@ async def export_adventure_adz(
     """Exports the adventure as a portable .adz (ZIP) bundle including assets."""
     import io
 
-    from backend.engine.adventure_exporter import AdventureExporter
+    from backend.engine.adventures.adventure_exporter import AdventureExporter
 
     try:
         zip_data = await AdventureExporter.export_adz(db, template_id)

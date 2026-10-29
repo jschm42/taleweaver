@@ -24,7 +24,7 @@ from backend.api.routes.adventures.entity_transfer_service import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.entity_bundle import (
+from backend.engine.adventures.entity_bundle import (
     BUNDLE_EXTENSION,
     MAX_BUNDLE_BYTES,
     EntityBundleError,

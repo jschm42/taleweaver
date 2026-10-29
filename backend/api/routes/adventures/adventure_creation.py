@@ -23,8 +23,8 @@ from backend.core.generation_error_log import (
     format_creation_error,
     record_generation_error,
 )
-from backend.engine.license_defaults import default_license_fields
-from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
+from backend.engine.adventures.license_defaults import default_license_fields
+from backend.engine.world.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession

@@ -20,13 +20,13 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.style_catalog import resolve_style_instruction, resolve_tone_instruction
-from backend.engine.image_error_messages import image_error_reason
-from backend.engine.image_prompt_context import (
+from backend.engine.media.image_error_messages import image_error_reason
+from backend.engine.media.image_prompt_context import (
     appearance_context,
     protagonist_context,
     scene_context,
 )
-from backend.engine.media_engine import MediaEngine
+from backend.engine.media.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.utils.path_security import (

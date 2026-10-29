@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, create_model
 
-from backend.engine.rule_engine import AdventureGeneratorToolIntent, ExitUpdate, GameEvent
+from backend.engine.rules.rule_engine import AdventureGeneratorToolIntent, ExitUpdate, GameEvent
 
 # Filled by the backend after dice rolls / tool execution; the LLM must never set them.
 _BACKEND_RESULT_FIELDS = {"skill_check_results", "attack_results", "tool_results"}

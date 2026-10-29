@@ -28,7 +28,7 @@ from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
 from backend.core.config import settings
-from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.runner import ScriptRunner

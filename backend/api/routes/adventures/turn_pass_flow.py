@@ -15,7 +15,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.engine.rule_engine import GameEvent, GameOverException, RuleEngine
+from backend.engine.rules.rule_engine import GameEvent, GameOverException, RuleEngine
 
 logger = logging.getLogger(__name__)
 

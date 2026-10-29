@@ -10,6 +10,7 @@ import {
   describeEffects,
   normalizeSpecialAttack,
 } from '@/utils/specialAttacks'
+import { WEAPON_CATEGORY_META, weaponCheckLabel } from '@/utils/weaponConfig'
 import AbilityCard from './AbilityCard.vue'
 import { useCombatLoadout } from './useCombatLoadout'
 
@@ -69,13 +70,23 @@ function specialFooter(action: NormalizedSpecialAttack): string {
 const weaponCostLabel = computed(() => `${weapon.value.cost} ${weapon.value.costType === 'mana' ? 'MP' : 'STA'}`)
 const attackDisabled = computed(() => props.locked || !canAffordWeapon.value || !props.targetName)
 
+const weaponEffectsLabel = computed(() => (
+  [`${weapon.value.dice} damage`, describeEffects(weapon.value.effects)].filter(Boolean).join(' · ')
+))
+
 function weaponTooltip(): Record<string, unknown> {
+  const onHit = describeEffects(weapon.value.effects)
   return {
     id: 'WEAPON_ATTACK',
     entity_type: 'ITEM',
     item_type: 'WEAPON',
     name: weapon.value.name,
-    description: `Basic weapon attack.\nCost: ${weaponCostLabel.value} · Check: DEX vs AC\nDamage: ${weapon.value.dice}`,
+    description: [
+      'Basic weapon attack.',
+      `Cost: ${weaponCostLabel.value} · Check: ${weaponCheckLabel(weapon.value.hitStat)}`,
+      `Damage: ${weapon.value.dice}`,
+      onHit ? `On hit: ${onHit}` : '',
+    ].filter(Boolean).join('\n'),
   }
 }
 
@@ -99,12 +110,12 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
 <template>
   <div class="tw-ability-hand" role="toolbar" aria-label="Abilities">
     <AbilityCard
-      icon="ra-sword"
-      type-line="Weapon — Attack"
+      :icon="WEAPON_CATEGORY_META[weapon.category].icon"
+      :type-line="`Weapon — ${WEAPON_CATEGORY_META[weapon.category].label}`"
       :title="weapon.name"
       :cost="weaponCostLabel"
-      check="DEX vs AC"
-      :effects="`${weapon.dice} damage`"
+      :check="weaponCheckLabel(weapon.hitStat)"
+      :effects="weaponEffectsLabel"
       :footer="`→ ${targetName || 'no target'}`"
       :tone="TONE_HEX.emerald"
       :disabled="attackDisabled"

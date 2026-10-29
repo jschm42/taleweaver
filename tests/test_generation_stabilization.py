@@ -306,7 +306,7 @@ async def test_world_generator_image_fallback_with_assets_path(monkeypatch):
     """Test that WorldGenerator triggers placeholder generation for 'assets/' paths."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from backend.engine.world_generator import WorldGenerator
+    from backend.engine.world.world_generator import WorldGenerator
     from backend.models.adventure import AdventureTemplate
 
     # Minimal mock of DB and Adventure
@@ -318,7 +318,7 @@ async def test_world_generator_image_fallback_with_assets_path(monkeypatch):
     # Mock MediaEngine.generate_placeholder
     mock_gen_placeholder = AsyncMock(return_value="/data/placeholder.png")
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_placeholder", mock_gen_placeholder
+        "backend.engine.media.media_engine.MediaEngine.generate_placeholder", mock_gen_placeholder
     )
 
     # Mock User
@@ -348,11 +348,11 @@ async def test_world_generator_image_fallback_with_assets_path(monkeypatch):
     gen = WorldGenerator()
     # We mock _publish_generation_status_with_callback to avoid DB calls during status updates
     monkeypatch.setattr(
-        "backend.engine.world_generator._publish_generation_status_with_callback", AsyncMock()
+        "backend.engine.world.world_generator._publish_generation_status_with_callback", AsyncMock()
     )
     # Mock apply_manifest's internal image generation (to skip actual AI gen)
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_entity_image",
+        "backend.engine.media.media_engine.MediaEngine.generate_entity_image",
         AsyncMock(side_effect=Exception("Gen failed")),
     )
 

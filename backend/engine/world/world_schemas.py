@@ -658,6 +658,23 @@ class WorldObjectSchema(WorldBaseSchema):
     weapon_cost_value: Optional[int] = Field(
         20, description="Only for WEAPON items: amount of resource consumed on attack."
     )
+    weapon_category: Optional[Literal["MELEE", "RANGED", "MAGIC"]] = Field(
+        None, description="Only for WEAPON items: MELEE (default), RANGED or MAGIC."
+    )
+    weapon_hit_stat: Optional[
+        Literal["strength", "dexterity", "intelligence", "wisdom", "charisma"]
+    ] = Field(
+        None,
+        description="Only for WEAPON items: stat added to the d20 attack roll (default dexterity).",
+    )
+    weapon_effects: list[SpecialEffectSchema] = Field(
+        default=[],
+        description=(
+            "Only for WEAPON items: up to 4 extra effects applied on a hit, e.g. "
+            "[{target:'target', stat:'stamina', amount:'-1d4'}] (poison) or "
+            "[{target:'self', stat:'hp', amount:'+2'}] (life drain)."
+        ),
+    )
     on_pickup_script: Optional[str] = Field(
         default="",
         description="Optional script executed when the item is picked up. Use empty string for none.",

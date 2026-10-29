@@ -73,7 +73,7 @@ async def generate_image(
 async def placeholder_image(
     ctx: ApplyContext, entity_id: str, category: str, subdir: str = ""
 ) -> Optional[str]:
-    from backend.engine.media_engine import MediaEngine
+    from backend.engine.media.media_engine import MediaEngine
 
     target_dir = os.path.join(ctx.library_dir, subdir) if subdir else ctx.library_dir
     return await MediaEngine.generate_placeholder(

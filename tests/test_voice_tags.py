@@ -50,7 +50,7 @@ def test_every_provider_prompt_uses_square_bracket_tags_only(provider):
 @pytest.mark.asyncio
 async def test_tts_engine_includes_voice_direction_cue_in_prompt():
     """TTSEngine must embed acting-cue instructions so the model honours tags."""
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     captured_payload: dict = {}
 
@@ -109,7 +109,7 @@ async def test_tts_engine_includes_voice_direction_cue_in_prompt():
 @pytest.mark.asyncio
 async def test_tts_engine_passes_voice_tags_in_transcript():
     """Voice tags in the input text must appear verbatim in the TTS transcript."""
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     captured_payload: dict = {}
 
@@ -164,7 +164,7 @@ async def test_tts_engine_passes_voice_tags_in_transcript():
 async def test_tts_engine_converts_uppercase_l16_mime_to_valid_wav(tmp_path, monkeypatch):
     """Gemini 2.5 may return audio/L16;rate=24000 and must be wrapped as WAV."""
     from backend.core.config import settings
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     # 16-bit PCM sample pair (very short test payload)
     raw_pcm = b"\x00\x00\x10\x00"
@@ -230,7 +230,7 @@ async def test_tts_engine_converts_uppercase_l16_mime_to_valid_wav(tmp_path, mon
 async def test_tts_engine_skips_empty_inline_data_and_uses_non_empty_chunk(tmp_path, monkeypatch):
     """Responses with an empty first inlineData part must still produce audio."""
     from backend.core.config import settings
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     non_empty_pcm = b"\x01\x00\x02\x00\x03\x00\x04\x00"
     encoded_non_empty = base64.b64encode(non_empty_pcm).decode("ascii")

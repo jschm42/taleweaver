@@ -32,7 +32,12 @@ from backend.engine.blueprint.converters import (
     text,
     text_list,
     weapon_cost,
+    weapon_effects,
 )
+
+# Stats a d20 roll can use (attack rolls, saves); "ac" is not one of them.
+_ROLL_STATS = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
+_ROLL_STAT_ALIASES = {k: v for k, v in STAT_ALIASES.items() if v in _ROLL_STATS}
 
 FieldRole = Literal["text", "script", "expr", "ref", "refs", "transition", "outcome"]
 
@@ -195,6 +200,9 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "mana": FieldSpec("mana_change", integer),
     "damage": FieldSpec("damage_dice"),
     "cost": FieldSpec("*", weapon_cost),
+    "category": FieldSpec("weapon_category", choice("MELEE", "RANGED", "MAGIC")),
+    "hit": FieldSpec("weapon_hit_stat", choice(*_ROLL_STATS, aliases=_ROLL_STAT_ALIASES)),
+    "hit_effects": FieldSpec("weapon_effects", weapon_effects),
     "text": FieldSpec("text_log_content"),
     "format": FieldSpec("text_log_format", choice("DOCUMENT", "SCROLL", "BOOK", "SIGN")),
     "states": FieldSpec("*", switch_states),
@@ -295,17 +303,7 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
     "dc": FieldSpec("difficulty", integer),
     "damage": FieldSpec("*", ability_damage),
     "area": FieldSpec("*", ability_area),
-    "save": FieldSpec(
-        "save_stat",
-        choice(
-            "strength",
-            "dexterity",
-            "intelligence",
-            "wisdom",
-            "charisma",
-            aliases={k: v for k, v in STAT_ALIASES.items() if v != "armor_class"},
-        ),
-    ),
+    "save": FieldSpec("save_stat", choice(*_ROLL_STATS, aliases=_ROLL_STAT_ALIASES)),
     "spare_passive": FieldSpec("spares_passive", boolean),
     "outcome": FieldSpec("outcome_description"),
     "locked": FieldSpec("is_locked", boolean),

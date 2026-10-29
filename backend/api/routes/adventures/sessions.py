@@ -24,10 +24,10 @@ from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.ui_theme import UI_SKIN_AUTO
-from backend.engine.adventure_updates import is_legacy_session
-from backend.engine.session_checkpoint_service import SessionCheckpointService
-from backend.engine.session_exporter import SessionExporter
-from backend.engine.session_importer import SessionImporter
+from backend.engine.adventures.adventure_updates import is_legacy_session
+from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
+from backend.engine.sessions.session_exporter import SessionExporter
+from backend.engine.sessions.session_importer import SessionImporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -199,7 +199,7 @@ async def start_session_for_template(
         raise HTTPException(status_code=403, detail="You do not have access to this adventure yet.")
 
     # Disallow starting sessions on legacy/outdated format adventures
-    from backend.engine.adventure_updates import (
+    from backend.engine.adventures.adventure_updates import (
         check_template_update,
         scan_available_adventure_files,
     )

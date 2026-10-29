@@ -24,10 +24,10 @@ from backend.api.routes.tts_api import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.elevenlabs_stream import open_elevenlabs_stream
-from backend.engine.tts_helpers import TTSProviderError, TTSRateLimitError, TTSTimeoutError
-from backend.engine.tts_tag_format import prepare_elevenlabs_text
-from backend.engine.voice_casting import NPC_VOICE_PROVIDER
+from backend.engine.audio.elevenlabs_stream import open_elevenlabs_stream
+from backend.engine.audio.tts_helpers import TTSProviderError, TTSRateLimitError, TTSTimeoutError
+from backend.engine.audio.tts_tag_format import prepare_elevenlabs_text
+from backend.engine.audio.voice_casting import NPC_VOICE_PROVIDER
 from backend.models.user import User
 
 router = APIRouter(prefix="/tts", tags=["TTS"])

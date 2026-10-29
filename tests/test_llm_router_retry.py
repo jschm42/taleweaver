@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import litellm
+import pytest
 
 from backend.core.llm_router import GameMasterLLM
 from backend.models.user import User
@@ -14,7 +15,7 @@ def _mock_user():
         username="retryplayer",
         hashed_password="pw",
         role="user",
-        llm_settings={"openai_api_key": "dummy-key"}
+        llm_settings={"openai_api_key": "dummy-key"},
     )
 
 
@@ -45,7 +46,10 @@ async def test_llm_router_transient_retry_success():
         mock_resp.choices = [MagicMock(message=MagicMock(content="Success narrative"))]
         return mock_resp
 
-    with patch.object(router, "_get_litellm") as mock_litellm, patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch.object(router, "_get_litellm") as mock_litellm,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         mock_litellm.return_value.acompletion = AsyncMock(side_effect=_mock_acompletion)
         kwargs = {"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": "Hello"}]}
         result = await router._acompletion_with_openrouter_fallback(kwargs)
@@ -69,7 +73,10 @@ async def test_llm_router_transient_retry_exhausted_raises():
             llm_provider="deepseek",
         )
 
-    with patch.object(router, "_get_litellm") as mock_litellm, patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch.object(router, "_get_litellm") as mock_litellm,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         mock_litellm.return_value.acompletion = AsyncMock(side_effect=_mock_acompletion)
         kwargs = {"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": "Hello"}]}
         with pytest.raises(litellm.Timeout):
@@ -90,7 +97,10 @@ async def test_llm_router_non_transient_error_no_retry():
         call_count += 1
         raise ValueError("Non-transient error")
 
-    with patch.object(router, "_get_litellm") as mock_litellm, patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch.object(router, "_get_litellm") as mock_litellm,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         mock_litellm.return_value.acompletion = AsyncMock(side_effect=_mock_acompletion)
         kwargs = {"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": "Hello"}]}
         with pytest.raises(ValueError):

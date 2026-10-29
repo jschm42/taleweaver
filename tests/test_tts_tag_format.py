@@ -2,8 +2,8 @@
 
 import pytest
 
-from backend.engine.tts_helpers import _convert_brackets_to_angles
-from backend.engine.tts_tag_format import (
+from backend.engine.audio.tts_helpers import _convert_brackets_to_angles
+from backend.engine.audio.tts_tag_format import (
     canonicalize_tags,
     prepare_elevenlabs_text,
     supports_audio_tags,

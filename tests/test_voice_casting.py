@@ -2,13 +2,13 @@
 
 import json
 
-from backend.engine import elevenlabs_voices
-from backend.engine.elevenlabs_voices import (
+from backend.engine.audio import elevenlabs_voices
+from backend.engine.audio.elevenlabs_voices import (
     load_voice_catalog,
     resolve_voice_reference,
     storable_voice_or_none,
 )
-from backend.engine.voice_casting import (
+from backend.engine.audio.voice_casting import (
     CastingCandidate,
     VoiceSetup,
     cast_npc_voices,
@@ -175,7 +175,7 @@ def test_storable_voice_accepts_list_and_custom_ids_only():
 async def test_voice_metadata_includes_protagonist(auth_client):
     # Arrange
     from backend.api.routes.adventures.logic import AdventureLogic
-    from backend.engine.voice_casting import PROTAGONIST_VOICE_KEY
+    from backend.engine.audio.voice_casting import PROTAGONIST_VOICE_KEY
     from tests.conftest import TestSessionLocal
     from tests.test_adventures_api import _create_adventure
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from backend.api.routes.adventures.guardrails.base import inventory_ids_upper
-from backend.engine.switch_service import SwitchService
+from backend.engine.interaction.switch_service import SwitchService
 
 
 @dataclass

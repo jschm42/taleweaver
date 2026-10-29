@@ -13,7 +13,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_scene_ref,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
-from backend.engine.elevenlabs_voices import storable_voice_or_none
+from backend.engine.audio.elevenlabs_voices import storable_voice_or_none
 from backend.models.world_entity import WorldEntity
 
 _NPC_SCRIPT_FIELDS = (

@@ -27,7 +27,7 @@ from backend.core.narration_styles import (
     narration_style_rules,
 )
 from backend.core.voice_tags import vocal_tag_reminder
-from backend.engine.dice_command import handle_roll_command, is_roll_command
+from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.turn_helpers import (
     TurnCombatStateHelper,
     TurnProgressionBuilder,
@@ -52,11 +52,15 @@ from backend.core import prompts
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
-from backend.engine.command_parser import CommandParser
-from backend.engine.map_engine import MapEngine
-from backend.engine.session_checkpoint_service import SessionCheckpointService
-from backend.engine.llm_intents import ChatProgressionIntent, MechanicsIntent, to_game_event
-from backend.engine.rule_engine import (
+from backend.engine.interaction.command_parser import CommandParser
+from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
+from backend.engine.interaction.llm_intents import (
+    ChatProgressionIntent,
+    MechanicsIntent,
+    to_game_event,
+)
+from backend.engine.rules.rule_engine import (
     RESOURCE_CAP,
     AdventureGenerationRequest,
     AdventureGeneratorToolIntent,
@@ -68,10 +72,10 @@ from backend.engine.rule_engine import (
 )
 from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner, ScriptMessage
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
-from backend.engine.interaction_targets import interacted_entity_ids
-from backend.engine.sequence_scripts import sequence_scripts
+from backend.engine.interaction.interaction_targets import interacted_entity_ids
+from backend.engine.rules.sequence_scripts import sequence_scripts
 from backend.engine.scripting.dialog import store_pending_dialog
-from backend.engine.skill_check import roll_attack, roll_skill_check
+from backend.engine.rules.skill_check import roll_attack, roll_skill_check
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage

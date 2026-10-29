@@ -8,9 +8,9 @@ from backend.api.routes.adventures.editor import _clone_entity_image
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.config_api import _build_catalog_upload_path, _route_error_response
 from backend.core.config import settings
-from backend.engine.media_engine import _build_output_filepath
-from backend.engine.session_importer import _ensure_within_base_dir
-from backend.engine.tts_engine import _build_audio_output_path, _strip_vocal_tags
+from backend.engine.audio.tts_engine import _build_audio_output_path, _strip_vocal_tags
+from backend.engine.media.media_engine import _build_output_filepath
+from backend.engine.sessions.session_importer import _ensure_within_base_dir
 
 
 def test_strip_vocal_tags_removes_bracketed_segments():
@@ -170,7 +170,7 @@ def test_friendly_llm_error_message_does_not_expose_raw_exception_text():
 
 
 def test_is_svg_image_file_rejects_paths_outside_data_dir(tmp_path, monkeypatch):
-    from backend.engine.media_engine import _is_svg_image_file
+    from backend.engine.media.media_engine import _is_svg_image_file
 
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True, exist_ok=True)

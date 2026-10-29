@@ -9,11 +9,11 @@ from typing import Any, Optional
 from sqlalchemy import select
 
 from backend.core.ui_theme import normalize_ui_theme
-from backend.engine.image_prompt_context import clean_appearance
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
-from backend.engine.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
 from backend.models.adventure_template import AdventureTemplate
 
 logger = logging.getLogger(__name__)
@@ -171,7 +171,7 @@ async def _create_cover(
     ctx: ApplyContext, adventure: AdventureTemplate
 ) -> tuple[Optional[str], bool]:
     """Returns (cover_url, reused) for a reused source cover or a freshly generated one."""
-    from backend.engine.media_engine import MediaEngine
+    from backend.engine.media.media_engine import MediaEngine
 
     requested = ctx.manifest.get("cover_source_asset_id")
     reused = (

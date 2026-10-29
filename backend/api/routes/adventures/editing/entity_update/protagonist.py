@@ -19,9 +19,9 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.engine.elevenlabs_voices import storable_voice_or_none
-from backend.engine.image_prompt_context import clean_appearance
-from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.audio.elevenlabs_voices import storable_voice_or_none
+from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity

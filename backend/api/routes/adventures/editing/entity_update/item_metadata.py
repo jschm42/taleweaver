@@ -4,6 +4,7 @@ Each section writes its fields when the item has that type and removes them othe
 so a type change never leaves stale configuration behind.
 """
 
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import HTTPException
@@ -11,14 +12,16 @@ from fastapi import HTTPException
 from backend.api.routes.adventures.editing.common import _normalize_lock_fields
 from backend.api.routes.adventures.editing.entity_update.fields import given, put_metadata
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
-from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
-from backend.engine.switch_states import (
+from backend.engine.combat.special_attacks import SUCCESS_STATS, normalize_effects
+from backend.engine.combat.weapons import MAX_WEAPON_EFFECTS, WEAPON_CATEGORIES, WEAPON_DICE_RX
+from backend.engine.interaction.switch_states import (
     STATE_ID_MAX,
     STATE_LABEL_MAX,
     invalid_state_ids,
     long_state_labels,
     normalize_state_labels,
 )
+from backend.engine.rules.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.models.world_entity import WorldEntity
 
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
@@ -68,6 +71,14 @@ _SWITCH_FIELDS = (
     "on_failure_script",
 )
 _PICKUP_TRIGGER_MODES = {"silent", "narration", "turn"}
+_WEAPON_KEYS = (
+    "damage_dice",
+    "weapon_cost_type",
+    "weapon_cost_value",
+    "weapon_category",
+    "weapon_hit_stat",
+    "weapon_effects",
+)
 
 
 def _drop(metadata_json: dict[str, Any], keys: tuple[str, ...]) -> None:
@@ -230,6 +241,61 @@ def update_switch(
         metadata_json["switch"] = validated_switch(_merged_switch(metadata_json, payload))
     # Clean up flat switch keys that were previously written as pollution
     _drop(metadata_json, _SWITCH_FLAT_KEYS)
+
+
+def _weapon_error(detail: str) -> HTTPException:
+    return HTTPException(status_code=400, detail=detail)
+
+
+def _clean_weapon_effects(raw: list[dict[str, Any]]) -> list[dict[str, str]]:
+    effects = normalize_effects(raw)
+    if len(effects) != len(raw):
+        raise _weapon_error(
+            "weapon_effects: every effect needs target, stat and an amount like -1d4."
+        )
+    if len(effects) > MAX_WEAPON_EFFECTS:
+        raise _weapon_error(f"weapon_effects: at most {MAX_WEAPON_EFFECTS} effects.")
+    return effects
+
+
+def _choice(allowed: tuple[str, ...], field: str, transform: Callable[[str], str]):
+    def clean(value: Any) -> str:
+        text = transform(str(value or "").strip())
+        if text not in allowed:
+            raise _weapon_error(f"{field} must be one of {', '.join(allowed)}.")
+        return text
+
+    return clean
+
+
+def _clean_dice(value: Any) -> str:
+    dice = str(value or "").replace(" ", "").lower()
+    if not WEAPON_DICE_RX.match(dice):
+        raise _weapon_error("damage_dice must look like 1d8, 2d6 or 1d10+2.")
+    return dice
+
+
+# Payload field -> validator returning the value stored in metadata_json.
+_WEAPON_CLEANERS: dict[str, Callable[[Any], Any]] = {
+    "damage_dice": _clean_dice,
+    "weapon_cost_type": _choice(("stamina", "mana"), "weapon_cost_type", str.lower),
+    "weapon_cost_value": lambda value: max(0, int(value or 0)),
+    "weapon_category": _choice(WEAPON_CATEGORIES, "weapon_category", str.upper),
+    "weapon_hit_stat": _choice(SUCCESS_STATS, "weapon_hit_stat", str.lower),
+    "weapon_effects": lambda value: _clean_weapon_effects(value or []),
+}
+
+
+def update_weapon(
+    metadata_json: dict[str, Any], payload: EntityUpdateRequest, active: bool
+) -> None:
+    """Damage, cost, attack-roll stat, category and on-hit effects of a WEAPON item."""
+    if not active:
+        _drop(metadata_json, _WEAPON_KEYS)
+        return
+    for field, clean in _WEAPON_CLEANERS.items():
+        if given(payload, field):
+            metadata_json[field] = clean(getattr(payload, field))
 
 
 def update_consumable(

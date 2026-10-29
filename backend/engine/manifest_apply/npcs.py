@@ -5,8 +5,16 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.core.config import settings
-from backend.engine.elevenlabs_voices import VoiceOption, custom_voice_id, resolve_voice_reference
-from backend.engine.image_prompt_context import build_npc_image_prompt, clean_appearance
+from backend.engine.audio.elevenlabs_voices import (
+    VoiceOption,
+    custom_voice_id,
+    resolve_voice_reference,
+)
+from backend.engine.audio.voice_casting import (
+    CastingCandidate,
+    cast_npc_voices,
+    resolve_voice_setup,
+)
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
 from backend.engine.manifest_apply.visuals import (
@@ -16,7 +24,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
     uses_advanced_model,
 )
-from backend.engine.voice_casting import CastingCandidate, cast_npc_voices, resolve_voice_setup
+from backend.engine.media.image_prompt_context import build_npc_image_prompt, clean_appearance
 from backend.models.world_entity import WorldEntity
 
 # NPC settings that may appear at the top level (generated manifests) or inside
@@ -85,7 +93,7 @@ def _is_moveable(npc: dict[str, Any]) -> bool:
 async def _generate_portrait(
     ctx: ApplyContext, npc: dict[str, Any], idx: int, total: int
 ) -> Optional[str]:
-    from backend.engine.media_engine import MediaEngine
+    from backend.engine.media.media_engine import MediaEngine
 
     prompt = build_npc_image_prompt(npc["name"], npc["description"], npc.get("appearance"))
     user_config, api_keys = t2i_config(ctx)

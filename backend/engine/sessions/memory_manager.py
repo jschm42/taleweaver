@@ -3,8 +3,8 @@ import logging
 from typing import Any, Optional
 
 from backend.core import prompts
-from backend.engine import location_context
-from backend.engine.stat_aggregator import calculate_total_stats
+from backend.engine.interaction import location_context
+from backend.engine.rules.stat_aggregator import calculate_total_stats
 from backend.models.avatar import Avatar
 
 logger = logging.getLogger(__name__)

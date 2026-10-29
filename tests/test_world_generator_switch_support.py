@@ -1,5 +1,5 @@
 from backend.core import prompts
-from backend.engine.world_generator import WorldObjectSchema
+from backend.engine.world.world_generator import WorldObjectSchema
 
 
 def test_world_generation_prompt_mentions_switch_item_type() -> None:

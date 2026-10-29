@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.engine.hard_rule_evaluator import HardRuleEvaluator
+from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)

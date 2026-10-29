@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
-from backend.engine.hard_rule_evaluator import HardRuleEvaluator
+from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 
 if TYPE_CHECKING:
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager

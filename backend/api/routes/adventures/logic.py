@@ -20,8 +20,8 @@ from backend.api.routes.adventures.session_start_settings import (
     resolve_start_datetime,
 )
 from backend.api.routes.adventures.sheet_snapshot import build_sheet_snapshot
-from backend.engine.map_engine import MapEngine
-from backend.engine.voice_casting import PROTAGONIST_VOICE_KEY, cast_adventure_voices
+from backend.engine.audio.voice_casting import PROTAGONIST_VOICE_KEY, cast_adventure_voices
+from backend.engine.interaction.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -518,7 +518,7 @@ class AdventureLogic:
         Deletes an adventure template and all associated content.
         Decouples game sessions so they remain playable.
         """
-        from backend.engine.media_engine import MediaEngine
+        from backend.engine.media.media_engine import MediaEngine
 
         # 1. Preserve session playability by detaching session-owned rows from template refs.
         session_avatar_query = select(GameSession.avatar_id).where(

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import and_, or_, select
 
 from backend.api.routes.adventures.guardrails.locks import LockSpec
-from backend.engine.rule_engine import ExitUpdate, GameEvent
+from backend.engine.rules.rule_engine import ExitUpdate, GameEvent
 from backend.models.world_entity import WorldExit
 
 _CODE_FAILURE = "{name} answers with a cold red blink. That code won't open the way."

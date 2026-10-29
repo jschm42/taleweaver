@@ -19,7 +19,7 @@ from backend.api.routes.adventures.editor import (
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.engine.scripting.sandbox import SafeAstInterpreter
-from backend.engine.world_schemas import SpecialActionSchema
+from backend.engine.world.world_schemas import SpecialActionSchema
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity

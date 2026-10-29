@@ -10,15 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.elevenlabs_voices import load_voice_catalog, looks_like_voice_id
-from backend.engine.tts_engine import (
+from backend.engine.audio.elevenlabs_voices import load_voice_catalog, looks_like_voice_id
+from backend.engine.audio.tts_engine import (
     TTSEngine,
     TTSModelSwitchSuggestionError,
     TTSProviderError,
     TTSRateLimitError,
     TTSTimeoutError,
 )
-from backend.engine.voice_casting import NPC_VOICE_PROVIDER, load_tts_owner, provider_api_key
+from backend.engine.audio.voice_casting import NPC_VOICE_PROVIDER, load_tts_owner, provider_api_key
 from backend.models.game_session import GameSession
 from backend.models.user import User
 

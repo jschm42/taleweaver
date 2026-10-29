@@ -1,4 +1,4 @@
-from backend.engine.image_prompt_context import (
+from backend.engine.media.image_prompt_context import (
     MAX_APPEARANCE_LENGTH,
     MAX_PLOT_CONTEXT_LENGTH,
     build_npc_image_prompt,

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from backend.core.config import settings
-from backend.engine.image_prompt_context import build_object_image_prompt, clean_appearance
+from backend.engine.interaction.switch_states import normalize_state_id, normalize_state_labels
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.avatar import StartingItems
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
@@ -18,7 +18,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
     uses_advanced_model,
 )
-from backend.engine.switch_states import normalize_state_id, normalize_state_labels
+from backend.engine.media.image_prompt_context import build_object_image_prompt, clean_appearance
 from backend.models.world_entity import WorldEntity
 from backend.utils.text_utils import slugify
 
@@ -114,6 +114,11 @@ def _weapon_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
     metadata["weapon_cost_type"] = obj.get("weapon_cost_type") or "stamina"
     cost = obj.get("weapon_cost_value")
     metadata["weapon_cost_value"] = cost if cost is not None else 20
+    # Optional; combat falls back to MELEE / dexterity / no extra effects (combat/weapons.py).
+    for key in ("weapon_category", "weapon_hit_stat", "weapon_effects"):
+        value = obj.get(key) or metadata.get(key)
+        if value:
+            metadata[key] = value
 
 
 def _readable_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
@@ -215,7 +220,7 @@ def object_metadata(obj: dict[str, Any], numbers: dict[str, Optional[int]]) -> d
 
 
 def _item_slot(obj: dict[str, Any]) -> Optional[str]:
-    from backend.engine.item_logic import get_item_slot
+    from backend.engine.rules.item_logic import get_item_slot
 
     slots = obj.get("wearable_slots")
     return slots[0] if slots else get_item_slot(obj["name"], obj.get("item_type", "PICKABLE"))
@@ -243,7 +248,7 @@ def resolved_item(
 async def _generate_item_image(
     ctx: ApplyContext, obj: dict[str, Any], idx: int, total: int
 ) -> Optional[str]:
-    from backend.engine.media_engine import MediaEngine
+    from backend.engine.media.media_engine import MediaEngine
 
     prompt = build_object_image_prompt(obj["name"], obj["description"], obj.get("appearance"))
     user_config, api_keys = t2i_config(ctx)

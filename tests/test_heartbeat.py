@@ -4,9 +4,10 @@ Unit tests for the HeartbeatManager and status-effect tick logic.
 LLM calls are not involved here; we test the pure game-logic functions
 in isolation using simple Avatar stubs.
 """
+
 from unittest.mock import MagicMock
 
-from backend.engine.rule_engine import RESOURCE_CAP, RuleEngine
+from backend.engine.rules.rule_engine import RESOURCE_CAP, RuleEngine
 
 
 def _apply_status_effect_ticks(avatar):
@@ -26,6 +27,7 @@ def _make_avatar(hp: int = 200, stamina: int = 200, mana: int = 200, effects=Non
 # ---------------------------------------------------------------------------
 # _apply_status_effect_ticks
 # ---------------------------------------------------------------------------
+
 
 def test_poison_drains_hp():
     """Poisoned status reduces HP by 5 per tick."""

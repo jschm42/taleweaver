@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.engine.debug_commands.context import DebugContext
-from backend.engine.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine
 from backend.models.world_entity import WorldExit, WorldScene
 
 

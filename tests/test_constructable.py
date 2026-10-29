@@ -15,7 +15,7 @@ from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import _merge_session_entity
 from backend.core.world_validator import validate_adventure
 from backend.engine.manifest_apply.objects import recipe_result_ids, starts_hidden
-from backend.engine.rule_engine import GameEvent, InventoryItem, WorldEntityUpdate
+from backend.engine.rules.rule_engine import GameEvent, InventoryItem, WorldEntityUpdate
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState

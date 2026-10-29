@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from backend.api.routes.adventures.guardrails.base import item_id_upper
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.prompts import HIDDEN_ENTITY_DISCOVERY_SYSTEM_PROMPT
-from backend.engine.crafting_recipes import craft_only_result_ids, is_recipe
-from backend.engine.rule_engine import GameEvent
+from backend.engine.rules.crafting_recipes import craft_only_result_ids, is_recipe
+from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)

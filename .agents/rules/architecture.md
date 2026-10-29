@@ -59,7 +59,7 @@ graph TD
 * Pass 2 history contains only player/GM messages of previous turns; system events are kept for the current message only, and `[DEBUG` lines are never sent.
 
 ### Pass 1: Mechanics Evaluation (Small/Fast Model)
-* Uses `small_model` (e.g. Gemini Flash / GPT-4o-mini) with the trimmed structured output schema `MechanicsIntent` (strict/story) or `ChatProgressionIntent` (chat mode) from `backend/engine/llm_intents.py`, converted to `GameEvent` afterwards. Backend-filled result fields and generator tools are never sent to the model.
+* Uses `small_model` (e.g. Gemini Flash / GPT-4o-mini) with the trimmed structured output schema `MechanicsIntent` (strict/story) or `ChatProgressionIntent` (chat mode) from `backend/engine/interaction/llm_intents.py`, converted to `GameEvent` afterwards. Backend-filled result fields and generator tools are never sent to the model.
 * Evaluates player intent against current scene state plus the tail of the last GM narration (to resolve references like "open it").
 * Generates requested state updates:
   * Skill checks (`requested_skill_checks`) & attacks (`requested_attacks`).
@@ -76,10 +76,10 @@ graph TD
 ### Pass 1.5: Rule Validation & Reversion (Critical Guardrail)
 * **Design Rule**: Never parse freeform text to identify which entity or container the player is interacting with.
 * Instead, systematically inspect any state updates requested by the LLM in Pass 1:
-  * **Sequence Soft Rules** (`guardrails/soft_rules.py`, `engine/soft_rules.py`): sequences may declare `soft_rules` (`id`, natural-language `condition`, `script`, `text`, `guard_expression`, `max_triggers`). Pass 1 only sees `{id, condition}` of the active sequence's open rules and reports fulfilled ones in `triggered_soft_rule_ids`; Pass 1.5 runs first in the chain, checks sequence scope, trigger limit (`entity_states["__soft_rule_counts__"]`) and guard, then executes the script. Rejected rules are dropped silently (not violations).
+  * **Sequence Soft Rules** (`guardrails/soft_rules.py`, `engine/rules/soft_rules.py`): sequences may declare `soft_rules` (`id`, natural-language `condition`, `script`, `text`, `guard_expression`, `max_triggers`). Pass 1 only sees `{id, condition}` of the active sequence's open rules and reports fulfilled ones in `triggered_soft_rule_ids`; Pass 1.5 runs first in the chain, checks sequence scope, trigger limit (`entity_states["__soft_rule_counts__"]`) and guard, then executes the script. Rejected rules are dropped silently (not violations).
   * **Choice Dialogs** (`engine/scripting/dialog.py`, `dialog_service.py`, `dialog_routes.py`): scripts call `tw.dialog.choose(prompt, options, on_choice=...)`; the call only records `changeset.pending_dialog`, which every changeset applier stores in `entity_states["__pending_dialog__"]` (first dialog wins). `GET /chat` exposes it as `pending_dialog` (handler name stripped), `POST /chat` returns 409 while it is open, and `POST /{game_id}/dialog/choice` clears it, saves a `[Choice] <label>` user message, runs the init-script handler with the option index, applies its changeset and optionally narrates (`narrate=True`, small model).
-  * **Interaction Triggers** (`engine/interaction_targets.py`, `interaction_hooks.py`): an entity counts as interacted with when Pass 1 reports it in `updated_entities` or the player's message names a reachable entity (current scene or inventory; all context-menu commands do). For each, top-level and active-sequence `on_interact` scripts run, then the entity's inline `on_interact_script` / `on_interact_text` (`metadata_json`, objects and NPCs).
-  * **Sequence Scripts** (`engine/sequence_scripts.py`): `sequence.scripts` (same shape as top-level scripts, no `on_init`) are appended to the top-level scripts in `GameTurnManager._get_script_runner()` only while that sequence is active.
+  * **Interaction Triggers** (`engine/interaction/interaction_targets.py`, `interaction_hooks.py`): an entity counts as interacted with when Pass 1 reports it in `updated_entities` or the player's message names a reachable entity (current scene or inventory; all context-menu commands do). For each, top-level and active-sequence `on_interact` scripts run, then the entity's inline `on_interact_script` / `on_interact_text` (`metadata_json`, objects and NPCs).
+  * **Sequence Scripts** (`engine/rules/sequence_scripts.py`): `sequence.scripts` (same shape as top-level scripts, no `on_init`) are appended to the top-level scripts in `GameTurnManager._get_script_runner()` only while that sequence is active.
   * **Containers & Exits (Deterministic Unlock Guard)**: Validate if `item_to_unlock` is in inventory, `unlock_code` matches, or if deterministic guard `unlock_expression` evaluates to truthy. Execute `on_unlock_success` or `on_unlock_failure` scripts accordingly.
   * **Exits & Movement**: Validate exit locks, destination scene graph connectivity, and fire transition hooks (`on_leave_scene`, `on_open_exit`, `on_exit_used`, `on_enter_scene`) while preventing accidental teleports from hypothetical chat.
   * **Switches**: Verify state transitions match allowed `switch_states`.
@@ -118,7 +118,28 @@ graph TD
 
 ---
 
-## 4. Diagnostics & Inspection Tools
+## 4. Engine Package Layout (`backend/engine/`)
+
+Domain logic lives in subpackages; new modules go into the matching one instead of the package root:
+
+| Package | Contents |
+| --- | --- |
+| `adventures/` | Adventure packages: importer, exporter, cloner, updates/version checks, generator service, entity bundles, license defaults. |
+| `sessions/` | Session start scene, checkpoints, session import/export, memory manager. |
+| `world/` | World generation: generator, world/scripting prompts, manifest schemas, manifest applier entry point. |
+| `manifest_apply/` | Applying generated manifests to the database (scenes, objects, NPCs, ...). |
+| `blueprint/` | World-Builder blueprint parser, key tables and validation. |
+| `rules/` | Game rules and mechanics: rule engine, hard/soft rules, skill checks, stats, dice, items, crafting recipes, quests, sequences. |
+| `interaction/` | Player interaction: command parser, interaction targets, LLM intents, location context, map, switches, triggers. |
+| `combat/` | Turn-based combat rules: initiative, special/area attacks, weapons. |
+| `scripting/` | Sandboxed scripting engine and the `tw` API. |
+| `media/` | Image generation, image prompts, BFL payloads. |
+| `audio/` | TTS engine and helpers, voice casting, ElevenLabs. |
+| `debug_commands/` | `/debug` commands and the debug engine. |
+
+---
+
+## 5. Diagnostics & Inspection Tools
 
 Always use the built-in diagnostic CLI tool rather than crafting ad-hoc SQL queries:
 * **List adventures**: `python scripts/inspect_state.py list-adventures`

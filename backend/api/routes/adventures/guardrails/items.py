@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from backend.core.prompts import KEY_ITEM_REFERENCE_SYSTEM_PROMPT
-from backend.engine.rule_engine import GameEvent
+from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)

@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import (
+from backend.engine.rules.rule_engine import (
     AdventureGeneratorToolIntent,
     ExitUpdate,
     GameEvent,
@@ -413,7 +413,7 @@ async def test_switch_command_rejects_wrong_code(setup_test_db):
 
 async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
     """Verifies that the GameMaster receives plot/rules from SessionState, not AdventureTemplate."""
-    from backend.engine.memory_manager import MemoryManager
+    from backend.engine.sessions.memory_manager import MemoryManager
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -434,7 +434,7 @@ async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
             return original_build(*args, **kwargs)
 
         monkeypatch.setattr(
-            "backend.engine.memory_manager.MemoryManager.build_static_prompt", mock_build
+            "backend.engine.sessions.memory_manager.MemoryManager.build_static_prompt", mock_build
         )
 
         # Mock LLM to avoid actual calls
@@ -480,7 +480,7 @@ async def test_game_loop_skill_check_trigger(setup_test_db, monkeypatch):
         mock_llm_instance = MagicMock()
 
         # Pass 1: Requests a Strength check
-        from backend.engine.rule_engine import SkillCheckRequest
+        from backend.engine.rules.rule_engine import SkillCheckRequest
 
         mock_event = GameEvent(
             narrative_description="The door is heavy.",
@@ -938,7 +938,7 @@ async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db
             lambda *args, **kwargs: mock_llm_instance,
         )
         monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.AdventureGeneratorService.get_available_tones",
+            "backend.engine.adventures.adventure_generator_service.AdventureGeneratorService.get_available_tones",
             AsyncMock(return_value=["heroic", "horror"]),
         )
 
@@ -994,7 +994,7 @@ async def test_adventure_generator_chat_mode_emits_fallback_narrative_when_empty
             lambda *args, **kwargs: mock_llm_instance,
         )
         monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.AdventureGeneratorService.get_available_tones",
+            "backend.engine.adventures.adventure_generator_service.AdventureGeneratorService.get_available_tones",
             AsyncMock(return_value=["heroic"]),
         )
 
@@ -1365,7 +1365,7 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
             lambda *args, **kwargs: mock_llm_instance,
         )
         monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.AdventureGeneratorService.generate_adventure",
+            "backend.engine.adventures.adventure_generator_service.AdventureGeneratorService.generate_adventure",
             generate_adventure_mock,
         )
 
@@ -1982,7 +1982,7 @@ async def test_rule_engine_apply_ticks():
     """Verifies that status effect ticks correctly update avatar resources."""
     avatar = Avatar(hp=100, stamina=100, mana=100, status_effects=["Poisoned", "Resting"])
 
-    from backend.engine.rule_engine import RuleEngine
+    from backend.engine.rules.rule_engine import RuleEngine
 
     messages = RuleEngine.apply_ticks(avatar)
 
@@ -2003,7 +2003,7 @@ async def test_rule_engine_apply_event_game_over():
         new_status_effects=[],
         new_inventory_items=[],
     )
-    from backend.engine.rule_engine import GameOverError, RuleEngine
+    from backend.engine.rules.rule_engine import GameOverError, RuleEngine
 
     with pytest.raises(GameOverError):
         RuleEngine.apply_event(avatar, event)
@@ -2564,7 +2564,7 @@ async def test_read_command_forwards_chat_mirroring_instruction(setup_test_db, m
 
 
 async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, monkeypatch):
-    from backend.engine.rule_engine import AttackRequest
+    from backend.engine.rules.rule_engine import AttackRequest
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -2613,7 +2613,7 @@ async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, mon
 async def test_enemy_requested_attacks_auto_trigger_even_when_player_damage_disabled(
     setup_test_db, monkeypatch
 ):
-    from backend.engine.rule_engine import AttackRequest
+    from backend.engine.rules.rule_engine import AttackRequest
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -2665,7 +2665,7 @@ async def test_enemy_requested_attacks_auto_trigger_even_when_player_damage_disa
 async def test_enemy_requested_attacks_do_not_auto_trigger_when_npc_damage_disabled(
     setup_test_db, monkeypatch
 ):
-    from backend.engine.rule_engine import AttackRequest
+    from backend.engine.rules.rule_engine import AttackRequest
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -3233,7 +3233,7 @@ async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db
 
 
 async def test_quest_and_award_accessibility_guardrail(setup_test_db):
-    from backend.engine.rule_engine import GameEvent
+    from backend.engine.rules.rule_engine import GameEvent
     from backend.models.world_entity import WorldEntity
     from tests.conftest import TestSessionLocal
 
@@ -4323,7 +4323,7 @@ async def test_off_scene_rule_unlock_flow_unlocks_container_globally(setup_test_
 
 
 async def test_mutual_exclusivity_normalization():
-    from backend.engine.world_generator import _normalize_unlock_requirements
+    from backend.engine.world.world_generator import _normalize_unlock_requirements
 
     # Priority 1: code wins over item and rule
     code, item, rule = _normalize_unlock_requirements("1234", "KEY_CARD", "narrative rule")
@@ -4345,7 +4345,7 @@ async def test_mutual_exclusivity_normalization():
 
 
 async def test_world_generator_ensures_container_has_item_from_existing_objects():
-    from backend.engine.world_generator import _ensure_containers_have_minimum_inventory
+    from backend.engine.world.world_generator import _ensure_containers_have_minimum_inventory
 
     objects = [
         {
@@ -4368,7 +4368,7 @@ async def test_world_generator_ensures_container_has_item_from_existing_objects(
 
 
 async def test_world_generator_does_not_create_fallback_item_when_no_candidates():
-    from backend.engine.world_generator import _ensure_containers_have_minimum_inventory
+    from backend.engine.world.world_generator import _ensure_containers_have_minimum_inventory
 
     objects = [
         {

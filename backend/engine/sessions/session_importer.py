@@ -11,8 +11,8 @@ import uuid6
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.engine.image_prompt_context import clean_appearance
-from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage

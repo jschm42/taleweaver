@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.engine.combat.special_attacks import format_effects
+
 
 def apply_strength_bonus(roll: dict[str, Any], strength_mod: int) -> dict[str, Any]:
     """Applies combat strength modifiers (buffs/debuffs) to the damage of a hit."""
@@ -33,6 +35,11 @@ def attack_log_text(attacker_name: str, roll: dict[str, Any], target_ac: int) ->
         f"{head} -> {hit_status} | DMG {roll.get('damage_dice_str', '?')} ({rolls}{bonus_str})"
         f" = {roll.get('damage_total', 0)}"
     )
+
+
+def on_hit_suffix(applied: list[dict[str, Any]]) -> str:
+    """Chronicle text for a weapon's extra on-hit effects, e.g. ' On hit: Orc Stamina -3.'"""
+    return f" On hit: {format_effects(applied)}." if applied else ""
 
 
 def attack_event_data(

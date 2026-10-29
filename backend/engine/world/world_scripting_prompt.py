@@ -8,7 +8,7 @@ The trigger catalogue below mirrors what the gameplay engine actually executes:
 * Inline ``on_*_script`` / ``on_*_text`` fields on entities are executed by the turn
   state applier (``turn_state_applier.py`` / ``turn_interactions.py``).
 * Sequence ``soft_rules`` are judged by the GM and run by the soft rule guard
-  (``engine/soft_rules.py``); ``tw.dialog`` choice handlers live in ``init_script``
+  (``engine/rules/soft_rules.py``); ``tw.dialog`` choice handlers live in ``init_script``
   (``engine/scripting/dialog.py``).
 
 Keep this catalogue in sync with ``docs/scripting_engine.md``.

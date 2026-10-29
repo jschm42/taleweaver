@@ -113,6 +113,4 @@ def repair_json(content: str) -> str:
     if _parses(content):
         return content
 
-    return "".join(
-        _escape_quotes_in_field_line(line) for line in content.splitlines(keepends=True)
-    )
+    return "".join(_escape_quotes_in_field_line(line) for line in content.splitlines(keepends=True))

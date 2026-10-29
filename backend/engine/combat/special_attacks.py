@@ -165,6 +165,13 @@ def normalize_special_action(raw: Any) -> Optional[dict[str, Any]]:
     }
 
 
+def normalize_effects(raw_list: Any) -> list[dict[str, str]]:
+    """Valid ``{target, stat, amount}`` effects of a list; invalid entries are dropped."""
+    if not isinstance(raw_list, list):
+        return []
+    return [e for e in (_normalize_effect(item) for item in raw_list) if e]
+
+
 def normalize_special_actions(raw_list: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_list, list):
         return []

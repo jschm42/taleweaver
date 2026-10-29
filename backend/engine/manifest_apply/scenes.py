@@ -6,7 +6,6 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.engine.image_prompt_context import build_scene_image_prompt
 from backend.engine.manifest_apply.assets import needs_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import (
@@ -15,6 +14,7 @@ from backend.engine.manifest_apply.visuals import (
     placeholder_image,
     t2i_config,
 )
+from backend.engine.media.image_prompt_context import build_scene_image_prompt
 from backend.models.world_entity import WorldExit, WorldScene
 
 MAX_DECORATIVE_OBJECTS = 7
@@ -58,7 +58,7 @@ def _scene_prompt(scene: dict[str, Any]) -> str:
 async def _scene_image(
     ctx: ApplyContext, scene: dict[str, Any], position: tuple[int, int]
 ) -> Optional[str]:
-    from backend.engine.media_engine import MediaEngine
+    from backend.engine.media.media_engine import MediaEngine
 
     image_url = await pick_existing_image(
         ctx,

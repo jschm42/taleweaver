@@ -10,6 +10,7 @@ from backend.api.routes.adventures.combat.attacks import (
     apply_strength_bonus,
     attack_event_data,
     attack_log_text,
+    on_hit_suffix,
 )
 from backend.api.routes.adventures.combat.context import engaged_enemies, find_enemy, is_enemy_alive
 from backend.engine.combat.area_attacks import (
@@ -26,7 +27,8 @@ from backend.engine.combat.special_attacks import (
     effective_ac,
     resolve_special_attack,
 )
-from backend.engine.stat_aggregator import calculate_total_stats
+from backend.engine.combat.weapons import apply_on_hit_effects
+from backend.engine.rules.stat_aggregator import calculate_total_stats
 
 REST_STAMINA = 40
 NO_DAMAGE_MSG = "The protagonist cannot damage NPCs in this adventure. Use Run, Rest, or /consume."
@@ -116,18 +118,22 @@ class CombatPlayerMixin:
         player = self._player_view(combat)
         mods = player.get("modifiers") or {}
         target_ac = max(1, effective_ac(target) - int(mods.get("dexterity", 0)))
-        roll = gl.roll_attack(self.avatar, "dexterity", target_ac, weapon["dice"])
+        roll = gl.roll_attack(self.avatar, weapon["hit_stat"], target_ac, weapon["dice"])
         roll = apply_strength_bonus(roll, int(mods.get("strength", 0)))
         damage = 0
+        on_hit: list[dict[str, Any]] = []
         if roll.get("is_hit"):
             hp_before = int(target.get("hp") or 0)
             target["hp"] = max(0, hp_before - int(roll.get("damage_total") or 0))
             damage = hp_before - target["hp"]
+            on_hit = apply_on_hit_effects(weapon["effects"], player, target)
+            if any(e["entity"] == PLAYER_ID for e in on_hit):
+                self._apply_player_view(combat, player)
             self._persist_enemy_resources(target)
         data = attack_event_data(player, target, roll, target_ac, weapon["name"], damage)
-        return action_result(
-            attack_log_text(self.avatar.name, roll, target_ac), "player_action", data
-        )
+        data["effects"].extend(on_hit)
+        text = attack_log_text(self.avatar.name, roll, target_ac) + on_hit_suffix(on_hit)
+        return action_result(text, "player_action", data)
 
     def _find_player_special(self, action_id: str) -> tuple[dict[str, Any] | None, str | None]:
         actions = self._player_special_actions()

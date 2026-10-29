@@ -1,4 +1,4 @@
-from backend.engine.image_error_messages import MAX_REASON_LENGTH, image_error_reason
+from backend.engine.media.image_error_messages import MAX_REASON_LENGTH, image_error_reason
 
 
 def test_reason_includes_provider_message():

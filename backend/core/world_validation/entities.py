@@ -15,7 +15,7 @@ from backend.core.world_validation.context import (
     ref_id,
     ref_ids,
 )
-from backend.engine.switch_states import (
+from backend.engine.interaction.switch_states import (
     STATE_ID_MAX,
     STATE_LABEL_MAX,
     invalid_state_ids,

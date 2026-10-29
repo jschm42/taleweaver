@@ -6,13 +6,13 @@ from sqlalchemy import select
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.script_validator import check_scripts_and_guards
-from backend.engine.rule_engine import GameEvent
-from backend.engine.scripting.context import GameContext
-from backend.engine.soft_rules import (
+from backend.engine.rules.rule_engine import GameEvent
+from backend.engine.rules.soft_rules import (
     SoftRule,
     build_soft_rules_prompt_block,
     sequence_soft_rules,
 )
+from backend.engine.scripting.context import GameContext
 from backend.models.world_entity import WorldEntity
 from tests.conftest import TestSessionLocal
 from tests.test_game_loop import _seed_game_context

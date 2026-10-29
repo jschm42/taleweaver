@@ -8,16 +8,16 @@ from backend.api.routes.adventures.turn_guardrails import (
     TurnGuardrailEnforcer,
 )
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier
-from backend.engine.hard_rule_evaluator import (
+from backend.engine.rules.hard_rule_evaluator import (
     HardRuleEvaluator,
     RuleEvaluationContext,
 )
-from backend.engine.quest_manager import QuestManager
-from backend.engine.rule_engine import GameEvent
-from backend.engine.world_schemas import (
+from backend.engine.rules.quest_manager import QuestManager
+from backend.engine.rules.rule_engine import GameEvent
+from backend.engine.world.world_schemas import (
     AwardTemplateSchema,
 )
-from backend.engine.world_schemas import (
+from backend.engine.world.world_schemas import (
     QuestSchema as ManifestQuestSchema,
 )
 from backend.schemas.adventure import AwardSchema, QuestSchema

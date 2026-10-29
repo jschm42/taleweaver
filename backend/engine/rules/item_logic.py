@@ -8,23 +8,42 @@ def get_item_slot(name: str, item_type: str) -> Optional[str]:
     """
     if not name or not item_type:
         return None
-        
+
     type_upper = item_type.upper()
     name_lower = name.lower()
-    
+
     # Weapons always go to MainHand by default
     if type_upper == "WEAPON":
         return "MainHand"
-        
+
     if type_upper == "WEARABLE":
         # Hands / Arms
-        if any(kw in name_lower for kw in ["bracers", "gauntlets", "gloves", "mittens", "vambrace", "armguard"]):
+        if any(
+            kw in name_lower
+            for kw in ["bracers", "gauntlets", "gloves", "mittens", "vambrace", "armguard"]
+        ):
             return "Hands"
         # Head
-        if any(kw in name_lower for kw in ["helmet", "cap", "circlet", "crown", "hood", "hat", "mask", "head"]):
+        if any(
+            kw in name_lower
+            for kw in ["helmet", "cap", "circlet", "crown", "hood", "hat", "mask", "head"]
+        ):
             return "Head"
         # Chest
-        if any(kw in name_lower for kw in ["armor", "chest", "cuirass", "vest", "tunic", "robe", "shirt", "breastplate", "plate"]):
+        if any(
+            kw in name_lower
+            for kw in [
+                "armor",
+                "chest",
+                "cuirass",
+                "vest",
+                "tunic",
+                "robe",
+                "shirt",
+                "breastplate",
+                "plate",
+            ]
+        ):
             return "Chest"
         # Legs
         if any(kw in name_lower for kw in ["greaves", "leggings", "pants", "trousers", "breeches"]):
@@ -37,12 +56,12 @@ def get_item_slot(name: str, item_type: str) -> Optional[str]:
             return "Ring_1"
         if any(kw in name_lower for kw in ["amulet", "necklace", "pendant", "locket", "talisman"]):
             return "Neck"
-            
+
     # Tools might go to OffHand if they are held
     if type_upper == "TOOL":
         if any(kw in name_lower for kw in ["shield", "buckler", "torch", "lantern"]):
             return "OffHand"
-        return "MainHand" # Pickaxes, hammers, etc.
+        return "MainHand"  # Pickaxes, hammers, etc.
 
     return None
 
@@ -51,9 +70,17 @@ def normalize_equipment_keys(equipment: Optional[dict]) -> dict:
     """Normalizes equipment slot keys to the standard PascalCase keys expected by the frontend."""
     if not equipment:
         return {
-            "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None,
-            "Neck": None, "MainHand": None, "OffHand": None
+            "Head": None,
+            "Chest": None,
+            "Arms": None,
+            "Legs": None,
+            "Hands": None,
+            "Feet": None,
+            "Ring_1": None,
+            "Ring_2": None,
+            "Neck": None,
+            "MainHand": None,
+            "OffHand": None,
         }
 
     key_mapping = {
@@ -73,9 +100,17 @@ def normalize_equipment_keys(equipment: Optional[dict]) -> dict:
     }
 
     normalized = {
-        "Head": None, "Chest": None, "Arms": None, "Legs": None,
-        "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None,
-        "Neck": None, "MainHand": None, "OffHand": None
+        "Head": None,
+        "Chest": None,
+        "Arms": None,
+        "Legs": None,
+        "Hands": None,
+        "Feet": None,
+        "Ring_1": None,
+        "Ring_2": None,
+        "Neck": None,
+        "MainHand": None,
+        "OffHand": None,
     }
 
     for k, v in equipment.items():
@@ -84,5 +119,3 @@ def normalize_equipment_keys(equipment: Optional[dict]) -> dict:
             normalized[mapped_key] = v
 
     return normalized
-
-

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.dice_command import RollCommandError, roll_from_args
+from backend.engine.rules.dice_command import RollCommandError, roll_from_args
 from backend.models.chat import ChatMessage
 from backend.models.user import User
 

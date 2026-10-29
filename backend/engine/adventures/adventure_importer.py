@@ -12,7 +12,7 @@ from backend.core.adventure_format import validate_manifest_version
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
 from backend.core.ui_theme import normalize_ui_theme
-from backend.engine.adventure_import_support import (
+from backend.engine.adventures.adventure_import_support import (
     check_adz_limits,
     collect_existing_image_urls,
     extract_adz_assets,
@@ -22,13 +22,13 @@ from backend.engine.adventure_import_support import (
     read_adz_manifest,
     resolve_import_user,
 )
-from backend.engine.adventure_import_support import (
+from backend.engine.adventures.adventure_import_support import (
     ensure_within_data_dir as _ensure_within_data_dir,
 )
-from backend.engine.image_prompt_context import clean_appearance
-from backend.engine.item_logic import normalize_equipment_keys
-from backend.engine.sequence_walkthrough import apply_legacy_walkthrough
-from backend.engine.world_generator import WorldGenerator
+from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.world.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -555,7 +555,7 @@ class AdventureTemplateImporter:
                 if adv_data.get("image_url") in existing_images_mapping:
                     new_template.image_url = existing_images_mapping[adv_data["image_url"]]
                 else:
-                    from backend.engine.media_engine import MediaEngine
+                    from backend.engine.media.media_engine import MediaEngine
 
                     new_template.image_url = await MediaEngine.generate_placeholder(
                         new_template_id,
@@ -566,7 +566,7 @@ class AdventureTemplateImporter:
 
                 await db.commit()
                 # Ensure thumbnails are generated for imported assets
-                from backend.engine.media_engine import MediaEngine
+                from backend.engine.media.media_engine import MediaEngine
 
                 await MediaEngine.ensure_thumbnails(new_template_id)
                 return True
@@ -844,7 +844,7 @@ class AdventureTemplateImporter:
 
         await db.commit()
         # Ensure thumbnails are generated for imported assets
-        from backend.engine.media_engine import MediaEngine
+        from backend.engine.media.media_engine import MediaEngine
 
         await MediaEngine.ensure_thumbnails(new_template.id)
         return True
@@ -1015,7 +1015,7 @@ class AdventureTemplateImporter:
         await db.flush()
 
         if not new_template.image_url:
-            from backend.engine.media_engine import MediaEngine
+            from backend.engine.media.media_engine import MediaEngine
 
             new_template.image_url = await MediaEngine.generate_placeholder(
                 new_template.id,
@@ -1049,7 +1049,7 @@ class AdventureTemplateImporter:
         new_template.creation_error = None
         await db.commit()
         # Ensure thumbnails are generated for imported assets
-        from backend.engine.media_engine import MediaEngine
+        from backend.engine.media.media_engine import MediaEngine
 
         await MediaEngine.ensure_thumbnails(new_template.id)
         return True

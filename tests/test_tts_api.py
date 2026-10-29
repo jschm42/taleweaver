@@ -171,7 +171,7 @@ async def test_tts_writes_audio_under_session_folder_when_session_id_present(
     ``<DATA_DIR>/adventures/sessions/<session_id>/tts/`` and expose a matching URL.
     """
     from backend.core.config import settings
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     await _enable_tts_for_test_user()
     await _create_template_avatar_and_session(
@@ -222,7 +222,7 @@ async def test_tts_falls_back_to_global_audio_folder_without_session_id(tmp_path
     persist into the global ``<DATA_DIR>/audio/`` folder.
     """
     from backend.core.config import settings
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
 
@@ -257,7 +257,7 @@ async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(tmp_path
     to the global ``/data/audio/`` folder, never writing outside ``DATA_DIR``.
     """
     from backend.core.config import settings
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
 
@@ -374,7 +374,7 @@ async def test_gemini_api_key_is_sent_as_header_not_in_url(tmp_path, monkeypatch
     """The Google API key must never be embedded in the request URL (it leaks into logs)."""
     # Arrange
     from backend.core.config import settings
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
     captured_urls: list[str] = []
@@ -407,11 +407,11 @@ async def test_elevenlabs_rate_limit_raises_rate_limit_error(monkeypatch):
     # Arrange
     import httpx
 
-    from backend.engine import elevenlabs_stream
-    from backend.engine.tts_engine import TTSEngine, TTSRateLimitError
+    from backend.engine.audio import elevenlabs_stream
+    from backend.engine.audio.tts_engine import TTSEngine, TTSRateLimitError
 
     monkeypatch.setattr(
-        "backend.engine.tts_engine._wait_for_tts_request_slot", AsyncMock(return_value=None)
+        "backend.engine.audio.tts_engine._wait_for_tts_request_slot", AsyncMock(return_value=None)
     )
     real_client = httpx.AsyncClient
     transport = httpx.MockTransport(lambda _r: httpx.Response(429, headers={"Retry-After": "3"}))
@@ -434,7 +434,7 @@ async def test_elevenlabs_rate_limit_raises_rate_limit_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_google_payload_does_not_use_system_instruction():
     """Gemini TTS endpoints reject systemInstruction with 400; ensure it is never set."""
-    from backend.engine.tts_engine import TTSEngine
+    from backend.engine.audio.tts_engine import TTSEngine
 
     payload = TTSEngine._build_google_payload("Guten Morgen", voice="Puck", language="de")
     assert "systemInstruction" not in payload
@@ -444,7 +444,7 @@ async def test_google_payload_does_not_use_system_instruction():
 @pytest.mark.asyncio
 async def test_tts_provider_error_propagates_to_http_502(auth_client: AsyncClient, monkeypatch):
     """When the upstream TTS provider returns an error, the endpoint should return 502 with the message."""
-    from backend.engine.tts_engine import TTSProviderError
+    from backend.engine.audio.tts_engine import TTSProviderError
 
     await _enable_tts_for_test_user()
 

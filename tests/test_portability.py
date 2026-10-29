@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import select
 
-from backend.engine.adventure_exporter import AdventureExporter
-from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.engine.adventures.adventure_exporter import AdventureExporter
+from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -153,9 +153,11 @@ def _patch_import_filesystem(monkeypatch) -> None:
     monkeypatch.setattr("builtins.open", fake_open)
     monkeypatch.setattr("os.path.isfile", fake_isfile)
     # Avoid actual thumbnail generation.
-    monkeypatch.setattr("backend.engine.media_engine.MediaEngine.ensure_thumbnails", AsyncMock())
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_placeholder",
+        "backend.engine.media.media_engine.MediaEngine.ensure_thumbnails", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "backend.engine.media.media_engine.MediaEngine.generate_placeholder",
         AsyncMock(return_value="/data/placeholder.jpg"),
     )
 

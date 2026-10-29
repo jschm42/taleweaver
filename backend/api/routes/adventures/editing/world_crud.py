@@ -26,8 +26,8 @@ from backend.api.routes.adventures.editing.schemas import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
-from backend.engine.image_prompt_context import clean_appearance
+from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.rules.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene

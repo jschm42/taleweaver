@@ -291,7 +291,7 @@ async def _assert_exit_type_everywhere(exit_type: str) -> dict:
     """DB row, stored manifest and exported manifest agree; returns the export."""
     from sqlalchemy import select
 
-    from backend.engine.adventure_exporter import AdventureExporter
+    from backend.engine.adventures.adventure_exporter import AdventureExporter
 
     async with TestSessionLocal() as db:
         exit_row = (
@@ -312,7 +312,7 @@ async def test_exit_type_edit_and_export_lifecycle(client, setup_test_db):
     """Changing exit_type to bidirectional in editor persists to DB, manifests, and survives export/import."""
     from sqlalchemy import select
 
-    from backend.engine.world_manifest_applier import _persist_exits
+    from backend.engine.world.world_manifest_applier import _persist_exits
 
     user = User(username="exit_type_user", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:

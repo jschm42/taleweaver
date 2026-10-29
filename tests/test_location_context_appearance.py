@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from backend.engine.location_context import _describe_npc, build_world_npcs_context
+from backend.engine.interaction.location_context import _describe_npc, build_world_npcs_context
 
 
 def _npc(**overrides):

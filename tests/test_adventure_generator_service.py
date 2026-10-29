@@ -1,14 +1,16 @@
 import pytest
 
-from backend.engine.adventure_generator_service import AdventureGeneratorService
-from backend.engine.rule_engine import AdventureGenerationRequest
+from backend.engine.adventures.adventure_generator_service import AdventureGeneratorService
+from backend.engine.rules.rule_engine import AdventureGenerationRequest
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_service_disables_all_image_generation_when_scene_images_disabled(setup_test_db, monkeypatch):
+async def test_service_disables_all_image_generation_when_scene_images_disabled(
+    setup_test_db, monkeypatch
+):
     """A text-only generation request must disable every AI image-generation branch."""
     from tests.conftest import TestSessionLocal
 
@@ -23,7 +25,7 @@ async def test_service_disables_all_image_generation_when_scene_images_disabled(
             captured_kwargs.update(kwargs)
 
         monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.WorldGenerator.generate_world",
+            "backend.engine.adventures.adventure_generator_service.WorldGenerator.generate_world",
             fake_generate_world,
         )
 
@@ -66,7 +68,7 @@ async def test_service_supports_auto_mode_density_constraints(setup_test_db, mon
             captured_kwargs.update(kwargs)
 
         monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.WorldGenerator.generate_world",
+            "backend.engine.adventures.adventure_generator_service.WorldGenerator.generate_world",
             fake_generate_world,
         )
 

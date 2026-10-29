@@ -20,8 +20,8 @@ from sqlalchemy import delete, func, select
 from backend.api.routes.adventures import session_assets
 from backend.api.routes.adventures.schemas import StoryIdeaSuggestionResponse
 from backend.core.config import settings
-from backend.engine.debug_engine import DebugEngine
-from backend.engine.session_checkpoint_service import SessionCheckpointService
+from backend.engine.debug_commands.debug_engine import DebugEngine
+from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.models.adventure_template import AdventureTemplate as Adventure
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage

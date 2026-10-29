@@ -5,8 +5,8 @@ from typing import Any, Optional
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.engine.image_prompt_context import clean_appearance
 from backend.engine.manifest_apply.objects import recipe_metadata, recipe_result_ids, starts_hidden
+from backend.engine.media.image_prompt_context import clean_appearance
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldScene

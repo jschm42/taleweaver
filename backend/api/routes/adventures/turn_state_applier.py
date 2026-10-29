@@ -11,9 +11,9 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
-from backend.engine.map_engine import MapEngine
-from backend.engine.quest_manager import QuestManager
-from backend.engine.rule_engine import (
+from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.rules.quest_manager import QuestManager
+from backend.engine.rules.rule_engine import (
     EntityMovement,
     GameEvent,
     RuleEngine,
@@ -168,7 +168,7 @@ class TurnStateApplier:
         self, event: GameEvent, script_context: Any = None
     ) -> list[str]:
         """Evaluates awards configured with deterministic hard rules and grants them if conditions are met."""
-        from backend.engine.hard_rule_evaluator import HardRuleEvaluator
+        from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 
         if not self.adventure or not self.adventure.awards or not self.user:
             return []
@@ -296,7 +296,7 @@ class TurnStateApplier:
 
                 if not item.image_url:
                     try:
-                        from backend.engine.media_engine import MediaEngine
+                        from backend.engine.media.media_engine import MediaEngine
                         from backend.core.config import settings
                         import os
                         import uuid
@@ -1041,7 +1041,7 @@ class TurnStateApplier:
         win_guard = raw_win_guard.strip() if isinstance(raw_win_guard, str) else ""
 
         if win_guard:
-            from backend.engine.hard_rule_evaluator import HardRuleEvaluator
+            from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 
             is_win_met, _ = HardRuleEvaluator.check_guard_expression(
                 win_guard, self.avatar, self.state, script_context=script_context

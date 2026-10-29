@@ -6,8 +6,8 @@ import pytest
 
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier
 from backend.core.world_validator import validate_adventure
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
-from backend.engine.world_schemas import SequenceSchema as ManifestSequenceSchema
+from backend.engine.rules.rule_engine import GameEvent, WorldEntityUpdate
+from backend.engine.world.world_schemas import SequenceSchema as ManifestSequenceSchema
 from backend.schemas.adventure import SequenceSchema
 
 
@@ -308,7 +308,7 @@ async def test_hard_rule_guard_expression_blocks_unmet():
 
 def test_world_generator_extract_sequences_with_hard_rules():
     """Verify that WorldGenerator._extract_sequences_from_prompt parses hard rule tags."""
-    from backend.engine.world_generator import WorldGenerator
+    from backend.engine.world.world_generator import WorldGenerator
 
     prompt = (
         "A dark fantasy story.\n\n"
@@ -344,7 +344,7 @@ def test_world_generator_extract_sequences_with_hard_rules():
 
 def test_world_generator_preprocess_manifest_normalizes_sequence_hard_rules():
     """Verify that preprocess_manifest_object_ids strips ## and normalizes empty/null hard rules."""
-    from backend.engine.world_generator import WorldGenerator
+    from backend.engine.world.world_generator import WorldGenerator
 
     manifest_dict = {
         "objects": [{"id": "GOLD_KEY"}],

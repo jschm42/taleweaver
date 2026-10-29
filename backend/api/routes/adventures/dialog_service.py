@@ -20,7 +20,7 @@ from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks
 from backend.core.llm_router import GameMasterLLM
-from backend.engine.rule_engine import GameOverError
+from backend.engine.rules.rule_engine import GameOverError
 from backend.engine.scripting.dialog import (
     clear_pending_dialog,
     find_option,

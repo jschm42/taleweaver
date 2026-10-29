@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from backend.core.config import settings
-from backend.engine import adventure_updates
+from backend.engine.adventures import adventure_updates
 from backend.services.adventure_library import installer as installer_module
 from backend.services.adventure_library.catalog import LibraryError
 from backend.services.adventure_library.installer import (

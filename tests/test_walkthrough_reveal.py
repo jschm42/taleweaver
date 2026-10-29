@@ -2,7 +2,7 @@ import pytest
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.core.auth import get_password_hash
-from backend.engine.sequence_walkthrough import (
+from backend.engine.rules.sequence_walkthrough import (
     apply_legacy_walkthrough,
     format_walkthrough_steps,
     sequence_walkthrough_steps,

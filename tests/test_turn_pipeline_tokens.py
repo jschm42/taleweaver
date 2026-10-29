@@ -18,9 +18,13 @@ from backend.api.routes.adventures.turn_prompt_layout import (
     format_recent_narration,
 )
 from backend.core.llm_request_tuning import apply_prompt_cache_markers, compact_json_schema
-from backend.engine.llm_intents import ChatProgressionIntent, MechanicsIntent, to_game_event
-from backend.engine.location_context import build_location_context
-from backend.engine.rule_engine import GameEvent, SkillCheckRequest
+from backend.engine.interaction.llm_intents import (
+    ChatProgressionIntent,
+    MechanicsIntent,
+    to_game_event,
+)
+from backend.engine.interaction.location_context import build_location_context
+from backend.engine.rules.rule_engine import GameEvent, SkillCheckRequest
 
 
 def _state(scene: str = "START", sequence: str | None = "SEQ_1") -> SimpleNamespace:

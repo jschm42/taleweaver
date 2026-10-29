@@ -4,9 +4,9 @@ World generation orchestrator (facade).
 This module is the public entry point for world generation. The actual
 implementation is split across focused sub-modules:
 
-- ``backend.engine.world_schemas``      — Pydantic schemas for LLM output.
-- ``backend.engine.world_prompt_builder`` — Builds the LLM system/user prompts.
-- ``backend.engine.world_manifest_applier`` — Persists the manifest to the DB.
+- ``backend.engine.world.world_schemas``      — Pydantic schemas for LLM output.
+- ``backend.engine.world.world_prompt_builder`` — Builds the LLM system/user prompts.
+- ``backend.engine.world.world_manifest_applier`` — Persists the manifest to the DB.
 
 All previously public symbols are re-exported here so existing imports remain
 unaffected.
@@ -27,7 +27,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.engine.blueprint import Blueprint, apply_blueprint, prepare_blueprint
 
 # --- Re-exports so existing imports stay valid ---
-from backend.engine.world_schemas import (  # noqa: F401
+from backend.engine.world.world_schemas import (  # noqa: F401
     AwardTemplateSchema,
     EquipmentSchema,
     ProtagonistSchema,
@@ -797,8 +797,8 @@ class WorldGenerator:
         Persists the result to the WorldScene, WorldExit, and WorldEntity tables.
         """
 
-        from backend.engine.world_manifest_applier import apply_manifest  # noqa: PLC0415
-        from backend.engine.world_prompt_builder import (  # noqa: PLC0415
+        from backend.engine.world.world_manifest_applier import apply_manifest  # noqa: PLC0415
+        from backend.engine.world.world_prompt_builder import (  # noqa: PLC0415
             build_world_generation_prompts,
         )
 
@@ -999,7 +999,7 @@ class WorldGenerator:
 
         Delegates to ``world_manifest_applier.apply_manifest``.
         """
-        from backend.engine.world_manifest_applier import apply_manifest  # noqa: PLC0415
+        from backend.engine.world.world_manifest_applier import apply_manifest  # noqa: PLC0415
 
         await apply_manifest(
             db=db,

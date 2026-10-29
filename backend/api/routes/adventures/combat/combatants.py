@@ -7,8 +7,9 @@ from typing import Any
 
 from backend.engine.combat.initiative import PLAYER_ID
 from backend.engine.combat.special_attacks import normalize_special_actions
-from backend.engine.rule_engine import RESOURCE_CAP
-from backend.engine.stat_aggregator import calculate_total_stats
+from backend.engine.combat.weapons import normalize_weapon_config
+from backend.engine.rules.rule_engine import RESOURCE_CAP
+from backend.engine.rules.stat_aggregator import calculate_total_stats
 from backend.models.world_entity import WorldEntity
 
 DICE_RX = re.compile(r"^\d+d\d+([+-]\d+)?$")
@@ -36,6 +37,7 @@ def _weapon_profile(name: str, meta: dict[str, Any], fallback_dice: str) -> dict
         "cost_type": meta.get("weapon_cost_type") or "stamina",
         "cost": DEFAULT_WEAPON_COST if cost is None else int(cost),
         "dice": dice if _valid_dice(dice) else fallback_dice,
+        **normalize_weapon_config(meta),
     }
 
 

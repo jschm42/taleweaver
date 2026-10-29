@@ -1,4 +1,4 @@
-from backend.engine import world_generator
+from backend.engine.world import world_generator
 
 
 def test_world_manifesto_parsing_and_dump():

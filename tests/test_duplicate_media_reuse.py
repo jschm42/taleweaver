@@ -1,12 +1,13 @@
-import pytest
 import asyncio
 from unittest.mock import AsyncMock
 
-from backend.engine.world_generator import WorldGenerator
+import pytest
+from sqlalchemy.future import select
+
+from backend.engine.world.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene, WorldExit
-from sqlalchemy.future import select
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,7 +22,12 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
             username="test_media_user",
             hashed_password="pw",
             role="user",
-            t2i_settings={"provider": "ollama", "advanced_model": "stable-diffusion", "basic_model": "stable-diffusion", "simple_model": "stable-diffusion"},
+            t2i_settings={
+                "provider": "ollama",
+                "advanced_model": "stable-diffusion",
+                "basic_model": "stable-diffusion",
+                "simple_model": "stable-diffusion",
+            },
             image_styles_catalog={},
         )
         db.add(user)
@@ -69,12 +75,24 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
                 "stamina": 100,
                 "starting_inventory": [],
                 "starting_equipment": {
-                    "Head": "", "Chest": "", "Hands": "", "Legs": "", "Feet": "",
-                    "Neck": "", "Ring_1": "", "Ring_2": "", "MainHand": "", "OffHand": ""
-                }
+                    "Head": "",
+                    "Chest": "",
+                    "Hands": "",
+                    "Legs": "",
+                    "Feet": "",
+                    "Neck": "",
+                    "Ring_1": "",
+                    "Ring_2": "",
+                    "MainHand": "",
+                    "OffHand": "",
+                },
             },
             "scenes": [
-                {"id": "CELLAR", "name": "Dark Cellar", "description": "A damp and creepy underground space."}
+                {
+                    "id": "CELLAR",
+                    "name": "Dark Cellar",
+                    "description": "A damp and creepy underground space.",
+                }
             ],
             "exits": [],
             "npcs": [
@@ -95,7 +113,7 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
                     "is_killable": True,
                     "is_hidden": False,
                     "reveal_rule": "",
-                    "inventory": []
+                    "inventory": [],
                 },
                 {
                     "id": "RAT_2",
@@ -114,8 +132,8 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
                     "is_killable": True,
                     "is_hidden": False,
                     "reveal_rule": "",
-                    "inventory": []
-                }
+                    "inventory": [],
+                },
             ],
             "objects": [
                 {
@@ -140,7 +158,7 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
                     "mana_change": 0,
                     "inventory": [],
                     "combination_ingredients": [],
-                    "reveals_item_id": ""
+                    "reveals_item_id": "",
                 },
                 {
                     "id": "POTION_2",
@@ -164,18 +182,20 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
                     "mana_change": 0,
                     "inventory": [],
                     "combination_ingredients": [],
-                    "reveals_item_id": ""
-                }
+                    "reveals_item_id": "",
+                },
             ],
             "quests": [],
-            "awards": []
+            "awards": [],
         }
 
         # Track media generation calls
         generate_npc_calls = []
         generate_object_calls = []
 
-        async def fake_generate_entity_image(prompt, adventure_id, entity_id, entity_type, *args, **kwargs):
+        async def fake_generate_entity_image(
+            prompt, adventure_id, entity_id, entity_type, *args, **kwargs
+        ):
             if entity_type == "NPC":
                 generate_npc_calls.append(entity_id)
                 return f"https://generated.images/npc_{entity_id}.png"
@@ -186,15 +206,15 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
 
         # Mock MediaEngine calls
         monkeypatch.setattr(
-            "backend.engine.media_engine.MediaEngine.generate_entity_image",
+            "backend.engine.media.media_engine.MediaEngine.generate_entity_image",
             fake_generate_entity_image,
         )
         monkeypatch.setattr(
-            "backend.engine.media_engine.MediaEngine.generate_adventure_cover",
+            "backend.engine.media.media_engine.MediaEngine.generate_adventure_cover",
             AsyncMock(return_value="https://generated.images/cover.png"),
         )
         monkeypatch.setattr(
-            "backend.engine.media_engine.MediaEngine.generate_scene_image",
+            "backend.engine.media.media_engine.MediaEngine.generate_scene_image",
             AsyncMock(return_value="https://generated.images/scene.png"),
         )
 
@@ -212,16 +232,14 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
         # Retrieve entities from DB to verify image URLs
         npcs_res = await db.execute(
             select(WorldEntity).where(
-                WorldEntity.template_id == template.id,
-                WorldEntity.entity_type == "NPC"
+                WorldEntity.template_id == template.id, WorldEntity.entity_type == "NPC"
             )
         )
         npcs_in_db = {n.id: n for n in npcs_res.scalars().all()}
 
         objects_res = await db.execute(
             select(WorldEntity).where(
-                WorldEntity.template_id == template.id,
-                WorldEntity.entity_type == "OBJECT"
+                WorldEntity.template_id == template.id, WorldEntity.entity_type == "OBJECT"
             )
         )
         objects_in_db = {o.id: o for o in objects_res.scalars().all()}
@@ -232,7 +250,7 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
         assert npcs_in_db["RAT_1"].image_url == "https://generated.images/npc_RAT_1.png"
         # RAT_2 should have copied the visual from RAT_1
         assert npcs_in_db["RAT_2"].image_url == "https://generated.images/npc_RAT_1.png"
-        
+
         # Verify that generate_entity_image was only called once for the rat NPC (for RAT_1)
         assert len(generate_npc_calls) == 1
         assert "RAT_1" in generate_npc_calls
@@ -244,7 +262,7 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
         assert objects_in_db["POTION_1"].image_url == "https://generated.images/object_POTION_1.png"
         # POTION_2 should have copied the visual from POTION_1
         assert objects_in_db["POTION_2"].image_url == "https://generated.images/object_POTION_1.png"
-        
+
         # Verify that generate_entity_image was only called once for the potion object (for POTION_1)
         assert len(generate_object_calls) == 1
         assert "POTION_1" in generate_object_calls
@@ -353,7 +371,7 @@ async def test_stale_local_image_urls_fall_back_to_placeholders(setup_test_db, m
             return f"/data/adventures/generated/{entity_id}_{category}.png"
 
         monkeypatch.setattr(
-            "backend.engine.media_engine.MediaEngine.generate_placeholder",
+            "backend.engine.media.media_engine.MediaEngine.generate_placeholder",
             fake_generate_placeholder,
         )
 
@@ -449,8 +467,16 @@ async def test_bidirectional_exits_are_persisted_as_single_row(setup_test_db):
                 "stamina": 100,
                 "starting_inventory": [],
                 "starting_equipment": {
-                    "Head": "", "Chest": "", "Hands": "", "Legs": "", "Feet": "",
-                    "Neck": "", "Ring_1": "", "Ring_2": "", "MainHand": "", "OffHand": ""
+                    "Head": "",
+                    "Chest": "",
+                    "Hands": "",
+                    "Legs": "",
+                    "Feet": "",
+                    "Neck": "",
+                    "Ring_1": "",
+                    "Ring_2": "",
+                    "MainHand": "",
+                    "OffHand": "",
                 },
             },
             "scenes": [

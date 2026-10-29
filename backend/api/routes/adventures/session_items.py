@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from typing import Any, Optional
 
-from backend.engine.item_logic import get_item_slot, normalize_equipment_keys
+from backend.engine.rules.item_logic import get_item_slot, normalize_equipment_keys
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity
 

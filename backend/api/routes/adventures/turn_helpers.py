@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent
+from backend.engine.rules.rule_engine import AdventureGeneratorToolIntent, GameEvent
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 

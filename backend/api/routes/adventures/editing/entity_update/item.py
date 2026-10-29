@@ -18,7 +18,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_scene_ref,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
-from backend.engine.crafting_recipes import is_recipe, recipe_results
+from backend.engine.rules.crafting_recipes import is_recipe, recipe_results
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity
 
@@ -129,6 +129,7 @@ def _update_metadata(item: WorldEntity, payload: EntityUpdateRequest, item_type:
     item_metadata.update_pickup_trigger(metadata_json, payload)
     item_metadata.update_switch(metadata_json, payload, item_type == "SWITCH")
     item_metadata.update_consumable(metadata_json, payload, item_type == "CONSUMABLE")
+    item_metadata.update_weapon(metadata_json, payload, item_type == "WEAPON")
     item.metadata_json = metadata_json
     flag_modified(item, "metadata_json")
 

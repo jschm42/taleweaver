@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import select
 
 from backend.core.config import settings
-from backend.engine.adventure_cloner import generate_cloned_adventure_id
-from backend.engine.world_generator import WorldGenerator
+from backend.engine.adventures.adventure_cloner import generate_cloned_adventure_id
+from backend.engine.world.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.game_session import GameSession
 from backend.models.world_entity import WorldScene
@@ -76,8 +76,8 @@ async def test_legacy_unicode_export_keeps_id_and_encodes_filename(
     from unittest.mock import AsyncMock
     from urllib.parse import quote
 
-    from backend.engine.adventure_exporter import AdventureExporter
-    from backend.engine.session_exporter import SessionExporter
+    from backend.engine.adventures.adventure_exporter import AdventureExporter
+    from backend.engine.sessions.session_exporter import SessionExporter
     from backend.models.avatar import Avatar
     from backend.models.user import User
 

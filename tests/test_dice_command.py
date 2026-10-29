@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from backend.engine import dice_command
-from backend.engine.dice_command import (
+from backend.engine.rules import dice_command
+from backend.engine.rules.dice_command import (
     DEFAULT_SIDES,
     RollCommandError,
     format_roll_message,

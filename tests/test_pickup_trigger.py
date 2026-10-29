@@ -45,12 +45,21 @@ async def _seed_template(username: str, trigger: dict | None) -> str:
             sequences=[{"id": "SEQ_1", "title": "Sequence 1", "order": 1}],
             is_ready=True,
             creation_status="Ready",
-            original_manifest={"version": "2.0.0", "format_version": "2.0.0", "sequences": [{"id": "SEQ_1", "title": "Sequence 1", "order": 1}], "start_scene_id": "HR"},
+            original_manifest={
+                "version": "2.0.0",
+                "format_version": "2.0.0",
+                "sequences": [{"id": "SEQ_1", "title": "Sequence 1", "order": 1}],
+                "start_scene_id": "HR",
+            },
         )
         db.add(template)
         await db.flush()
 
-        db.add(WorldScene(id="HR", template_id=template.id, label="HR Office", description="An office."))
+        db.add(
+            WorldScene(
+                id="HR", template_id=template.id, label="HR Office", description="An office."
+            )
+        )
         db.add(Avatar(user_id=user.id, template_id=template.id, name="Arthur", inventory=[]))
         db.add(
             WorldEntity(
@@ -80,7 +89,9 @@ async def _seed_template(username: str, trigger: dict | None) -> str:
         (None, False, ""),
     ],
 )
-async def test_pickup_trigger_chains_llm_pass(client, setup_test_db, monkeypatch, trigger, expect_prompt, expect_text):
+async def test_pickup_trigger_chains_llm_pass(
+    client, setup_test_db, monkeypatch, trigger, expect_prompt, expect_text
+):
     prompts: list[str] = []
 
     async def fake_cycle(self, user_msg, auto_visualize, language=None, narration_only=False):
@@ -107,10 +118,16 @@ async def test_pickup_trigger_chains_llm_pass(client, setup_test_db, monkeypatch
     # The item is always taken deterministically.
     async with TestSessionLocal() as db:
         ent = (
-            await db.execute(
-                select(WorldEntity).where(WorldEntity.id == "CONTRACT", WorldEntity.session_id == game_id)
+            (
+                await db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.id == "CONTRACT", WorldEntity.session_id == game_id
+                    )
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         assert ent is not None and ent.is_in_inventory is True
 
     if expect_prompt:

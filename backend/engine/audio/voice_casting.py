@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.core.security import encryption_util
-from backend.engine.elevenlabs_voices import VoiceOption, custom_voice_id, load_voice_catalog
+from backend.engine.audio.elevenlabs_voices import VoiceOption, custom_voice_id, load_voice_catalog
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.user import User

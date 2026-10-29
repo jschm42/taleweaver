@@ -21,7 +21,7 @@ def generator_module() -> Any:
 
     Helpers are looked up on the module at call time so tests can monkeypatch them.
     """
-    from backend.engine import world_generator
+    from backend.engine.world import world_generator
 
     return world_generator
 

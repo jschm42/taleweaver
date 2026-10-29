@@ -2,7 +2,10 @@
 
 import pytest
 
-from backend.engine.interaction_targets import interacted_entity_ids, mentioned_entity_ids
+from backend.engine.interaction.interaction_targets import (
+    interacted_entity_ids,
+    mentioned_entity_ids,
+)
 from backend.models.world_entity import WorldEntity
 from tests.conftest import TestSessionLocal
 from tests.test_game_loop import _seed_game_context

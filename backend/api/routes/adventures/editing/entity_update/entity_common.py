@@ -16,8 +16,8 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_new_id,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
-from backend.engine.crafting_recipes import KEPT_FIELD, RESULT_FIELD
-from backend.engine.image_prompt_context import clean_appearance
+from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.rules.crafting_recipes import KEPT_FIELD, RESULT_FIELD
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 _MAX_ENTITY_ID_LENGTH = 30

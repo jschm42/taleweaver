@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 
 from backend.engine.combat.initiative import PLAYER_ID
-from backend.engine.rule_engine import GameEvent
+from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
 MAX_ENCOUNTER_ENEMIES = 6

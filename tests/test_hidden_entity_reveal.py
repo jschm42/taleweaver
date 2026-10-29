@@ -1,12 +1,14 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from backend.models.world_entity import WorldEntity
+
+from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.engine.rules.rule_engine import GameEvent, WorldEntityUpdate
 from backend.models.adventure import Adventure
+from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.avatar import Avatar
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
-from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.models.world_entity import WorldEntity
 from tests.conftest import TestSessionLocal
 
 
@@ -18,10 +20,7 @@ async def test_hidden_entity_revealed_on_location_search():
         await db.flush()
 
         adv = Adventure(
-            id="test-adv-reveal",
-            title="Kitchen Crisis",
-            owner_id=user.id,
-            origin_id="LIVING_ROOM"
+            id="test-adv-reveal", title="Kitchen Crisis", owner_id=user.id, origin_id="LIVING_ROOM"
         )
         db.add(adv)
         await db.flush()
@@ -31,7 +30,7 @@ async def test_hidden_entity_revealed_on_location_search():
             adventure_id=adv.id,
             user_id=user.id,
             current_scene_id="LIVING_ROOM",
-            entity_states={}
+            entity_states={},
         )
         db.add(state)
 
@@ -40,7 +39,7 @@ async def test_hidden_entity_revealed_on_location_search():
             user_id=user.id,
             template_id=adv.id,
             name="Jamie Miller",
-            inventory=[]
+            inventory=[],
         )
         db.add(avatar)
 
@@ -53,7 +52,7 @@ async def test_hidden_entity_revealed_on_location_search():
             entity_type="OBJECT",
             item_type="STATIC",
             current_scene_id="LIVING_ROOM",
-            is_hidden=False
+            is_hidden=False,
         )
         batteries = WorldEntity(
             id="LOOSE_BATTERIES",
@@ -66,16 +65,12 @@ async def test_hidden_entity_revealed_on_location_search():
             current_scene_id="LIVING_ROOM",
             spatial_position="buried deep between the ##COUCH cushions",
             reveal_rule="If the protagonist searches the ##COUCH cushions",
-            is_hidden=True
+            is_hidden=True,
         )
         db.add_all([couch, batteries])
         await db.commit()
 
-        logic = GameTurnManager(
-            db=db,
-            game_id=state.session_id,
-            user=user
-        )
+        logic = GameTurnManager(db=db, game_id=state.session_id, user=user)
         logic.state = state
         logic.adventure = adv
         logic.avatar = avatar
@@ -101,7 +96,7 @@ async def test_hidden_entity_revealed_via_discovered_entity_ids():
             id="test-adv-reveal-2",
             title="Kitchen Crisis",
             owner_id=user.id,
-            origin_id="LIVING_ROOM"
+            origin_id="LIVING_ROOM",
         )
         db.add(adv)
         await db.flush()
@@ -111,7 +106,7 @@ async def test_hidden_entity_revealed_via_discovered_entity_ids():
             adventure_id=adv.id,
             user_id=user.id,
             current_scene_id="LIVING_ROOM",
-            entity_states={}
+            entity_states={},
         )
         db.add(state)
 
@@ -120,7 +115,7 @@ async def test_hidden_entity_revealed_via_discovered_entity_ids():
             user_id=user.id,
             template_id=adv.id,
             name="Jamie Miller",
-            inventory=[]
+            inventory=[],
         )
         db.add(avatar)
 
@@ -133,25 +128,28 @@ async def test_hidden_entity_revealed_via_discovered_entity_ids():
             entity_type="OBJECT",
             item_type="PICKABLE",
             current_scene_id="LIVING_ROOM",
-            is_hidden=True
+            is_hidden=True,
         )
         db.add(batteries)
         await db.commit()
 
-        logic = GameTurnManager(
-            db=db,
-            game_id=state.session_id,
-            user=user
-        )
+        logic = GameTurnManager(db=db, game_id=state.session_id, user=user)
         logic.state = state
         logic.adventure = adv
         logic.avatar = avatar
 
-        event = GameEvent(narrative_description="You find a pair of Loose Batteries behind the drawer.", discovered_entity_ids=["LOOSE_BATTERIES"])
+        event = GameEvent(
+            narrative_description="You find a pair of Loose Batteries behind the drawer.",
+            discovered_entity_ids=["LOOSE_BATTERIES"],
+        )
         await logic._enforce_hidden_entity_reveal(event, "i look around")
 
         assert event.updated_entities is not None
-        assert any(up.entity_id == "LOOSE_BATTERIES" and up.is_hidden is False for up in event.updated_entities)
+        assert any(
+            up.entity_id == "LOOSE_BATTERIES" and up.is_hidden is False
+            for up in event.updated_entities
+        )
+
 
 @pytest.mark.asyncio
 async def test_hidden_entity_revealed_via_llm_fallback():
@@ -164,7 +162,7 @@ async def test_hidden_entity_revealed_via_llm_fallback():
             id="test-adv-reveal-3",
             title="Kitchen Crisis",
             owner_id=user.id,
-            origin_id="LIVING_ROOM"
+            origin_id="LIVING_ROOM",
         )
         db.add(adv)
         await db.flush()
@@ -174,7 +172,7 @@ async def test_hidden_entity_revealed_via_llm_fallback():
             adventure_id=adv.id,
             user_id=user.id,
             current_scene_id="LIVING_ROOM",
-            entity_states={}
+            entity_states={},
         )
         db.add(state)
 
@@ -183,7 +181,7 @@ async def test_hidden_entity_revealed_via_llm_fallback():
             user_id=user.id,
             template_id=adv.id,
             name="Jamie Miller",
-            inventory=[]
+            inventory=[],
         )
         db.add(avatar)
 
@@ -196,16 +194,12 @@ async def test_hidden_entity_revealed_via_llm_fallback():
             entity_type="OBJECT",
             item_type="PICKABLE",
             current_scene_id="LIVING_ROOM",
-            is_hidden=True
+            is_hidden=True,
         )
         db.add(batteries)
         await db.commit()
 
-        logic = GameTurnManager(
-            db=db,
-            game_id=state.session_id,
-            user=user
-        )
+        logic = GameTurnManager(db=db, game_id=state.session_id, user=user)
         logic.state = state
         logic.adventure = adv
         logic.avatar = avatar
@@ -213,10 +207,15 @@ async def test_hidden_entity_revealed_via_llm_fallback():
         # Event does NOT have discovered_entity_ids populated
         event = GameEvent(narrative_description="Du findest Batterien.")
 
-        with patch("backend.core.llm_router.GameMasterLLM.__init__", return_value=None), \
-             patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_aexecute:
+        with (
+            patch("backend.core.llm_router.GameMasterLLM.__init__", return_value=None),
+            patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_aexecute,
+        ):
             mock_aexecute.return_value = {"discovered": True}
             await logic._enforce_hidden_entity_reveal(event, "suche batterien")
 
         assert event.updated_entities is not None
-        assert any(up.entity_id == "LOOSE_BATTERIES" and up.is_hidden is False for up in event.updated_entities)
+        assert any(
+            up.entity_id == "LOOSE_BATTERIES" and up.is_hidden is False
+            for up in event.updated_entities
+        )

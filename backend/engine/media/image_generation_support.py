@@ -107,7 +107,9 @@ def build_litellm_image_kwargs(
     _set_if_not_none(kwargs, {field: provider_options.get(field) for field in optional_fields})
 
     if provider_key == "ollama":
-        kwargs["api_base"] = (provider_options.get("ollama_url") or "http://localhost:11434").rstrip("/")
+        kwargs["api_base"] = (
+            provider_options.get("ollama_url") or "http://localhost:11434"
+        ).rstrip("/")
     return kwargs
 
 
@@ -167,9 +169,7 @@ def build_stable_diffusion_payload(
         {"negative_prompt": negative_prompt, "sampler_name": sampler_name, "scheduler": scheduler},
     )
     if model and model != "default":
-        payload["override_settings"] = {
-            "sd_model_checkpoint": model
-        }
+        payload["override_settings"] = {"sd_model_checkpoint": model}
     return payload
 
 
@@ -271,7 +271,7 @@ def _payload_from_text(text: str) -> tuple[Optional[str], Optional[str]]:
         return url_match.group(0), None
     if "data:image/" not in text:
         return None, None
-    data_match = re.search(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', text)
+    data_match = re.search(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", text)
     return None, data_match.group(0) if data_match else None
 
 
@@ -375,7 +375,9 @@ def openrouter_error_message(response: Any) -> str:
 def _retry_error_message(retry_resp: Any) -> str:
     try:
         r_err = retry_resp.json().get("error", {})
-        return r_err.get("message", retry_resp.text[:300]) if isinstance(r_err, dict) else str(r_err)
+        return (
+            r_err.get("message", retry_resp.text[:300]) if isinstance(r_err, dict) else str(r_err)
+        )
     except Exception:
         return retry_resp.text[:300]
 
@@ -398,13 +400,20 @@ async def retry_openrouter_minimal(
     Returns the response to continue with (the retry when it succeeded) and the latest error text.
     """
     error_msg = openrouter_error_message(response)
-    logger.warning("OpenRouter /api/v1/images endpoint returned error (%s): %s", response.status_code, error_msg)
+    logger.warning(
+        "OpenRouter /api/v1/images endpoint returned error (%s): %s",
+        response.status_code,
+        error_msg,
+    )
 
     # If parameter error with size/aspect_ratio, retry with minimal payload (model + prompt)
     if response.status_code != 400 or ("size" not in payload and "aspect_ratio" not in payload):
         return response, error_msg
 
-    logger.info("Retrying OpenRouter /api/v1/images with minimal payload due to parameter rejection: %s", error_msg)
+    logger.info(
+        "Retrying OpenRouter /api/v1/images with minimal payload due to parameter rejection: %s",
+        error_msg,
+    )
     retry_payload = {"model": payload["model"], "prompt": payload["prompt"]}
     retry_resp = await post_openrouter_images(headers, retry_payload)
     if retry_resp.status_code == 200:

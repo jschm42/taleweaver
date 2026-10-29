@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
+from backend.engine.rules.rule_engine import GameEvent, WorldEntityUpdate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from tests.conftest import TestSessionLocal
 from tests.test_game_loop import _seed_game_context

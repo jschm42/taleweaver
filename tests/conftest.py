@@ -198,7 +198,7 @@ def _patch_external_generation_and_media(monkeypatch, request):
 
     # Patch both the engine class and the reference used by the templates/routes module.
     monkeypatch.setattr(
-        "backend.engine.world_generator.WorldGenerator.generate_world",
+        "backend.engine.world.world_generator.WorldGenerator.generate_world",
         _fake_generate_world,
         raising=False,
     )
@@ -215,17 +215,17 @@ def _patch_external_generation_and_media(monkeypatch, request):
     )
 
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_entity_image",
+        "backend.engine.media.media_engine.MediaEngine.generate_entity_image",
         _fake_generate_entity_image,
         raising=False,
     )
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_scene_image",
+        "backend.engine.media.media_engine.MediaEngine.generate_scene_image",
         _fake_generate_scene_image,
         raising=False,
     )
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_adventure_cover",
+        "backend.engine.media.media_engine.MediaEngine.generate_adventure_cover",
         _fake_generate_adventure_cover,
         raising=False,
     )

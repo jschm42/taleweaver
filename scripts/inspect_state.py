@@ -44,7 +44,7 @@ from sqlalchemy import desc, func, select, text
 
 from backend.core.config import settings
 from backend.core.database import AsyncSessionLocal
-from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.character import Character
@@ -565,10 +565,10 @@ async def cmd_show_adventure(args):
             _print_header(f"Exits & Passages ({len(exits)})", char="-")
             for x in exits:
                 lock_tag = "\033[1;31m[LOCKED]\033[0m" if x.is_locked else "\033[1;32m[OPEN]\033[0m"
-                exit_label = getattr(x, "exit_type", None) or getattr(x, "direction", None) or "path"
-                print(
-                    f"  • {x.from_scene_id} -> {x.to_scene_id} ({exit_label}) {lock_tag}"
+                exit_label = (
+                    getattr(x, "exit_type", None) or getattr(x, "direction", None) or "path"
                 )
+                print(f"  • {x.from_scene_id} -> {x.to_scene_id} ({exit_label}) {lock_tag}")
                 if x.is_locked:
                     if x.item_to_unlock:
                         print(f"    Key Item: {x.item_to_unlock}")

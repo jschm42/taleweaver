@@ -15,15 +15,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from backend.api.routes.adventures.guardrails.base import item_id_upper
-from backend.engine.crafting_recipes import (
+from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.rules.crafting_recipes import (
     craft_only_result_ids,
     is_recipe,
     recipe_ingredients,
     recipe_kept,
     recipe_results,
 )
-from backend.engine.rule_engine import GameEvent, InventoryItem
-from backend.engine.switch_service import SwitchService
+from backend.engine.rules.rule_engine import GameEvent, InventoryItem
 from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)

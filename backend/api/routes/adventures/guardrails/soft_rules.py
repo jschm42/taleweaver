@@ -6,15 +6,15 @@ from typing import Any
 
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.engine.rule_engine import GameEvent
-from backend.engine.soft_rules import (
+from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.rules.rule_engine import GameEvent
+from backend.engine.rules.soft_rules import (
     SOFT_RULE_COUNTS_KEY,
     SoftRule,
     fired_counts,
     is_exhausted,
     sequence_soft_rules,
 )
-from backend.engine.switch_service import SwitchService
 
 
 class SoftRuleGuardMixin:

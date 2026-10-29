@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.adventure_format import CURRENT_VERSION
-from backend.engine.adventure_updates import (
+from backend.engine.adventures.adventure_updates import (
     check_template_update,
     is_legacy_session,
     is_legacy_template,
@@ -355,8 +355,8 @@ async def test_update_replaces_template_when_file_title_differs(
     auth_client: AsyncClient, db_session, monkeypatch
 ):
     """An update matched by filename stem must replace the old template, not duplicate it."""
-    from backend.engine import adventure_updates
-    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.engine.adventures import adventure_updates
+    from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 
     # Arrange
     user = (

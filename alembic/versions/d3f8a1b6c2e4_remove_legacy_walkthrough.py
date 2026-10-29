@@ -30,7 +30,7 @@ _templates = sa.table(
 
 
 def _legacy_sequence(walkthrough: str, plot, completed_condition) -> dict:
-    # Same shape as backend.engine.sequence_walkthrough.legacy_main_sequence (kept inline
+    # Same shape as backend.engine.rules.sequence_walkthrough.legacy_main_sequence (kept inline
     # so the migration does not depend on application code).
     return {
         "id": "SEQ_1_MAIN",

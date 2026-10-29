@@ -74,6 +74,7 @@ def log_structured_event(event_type: str, **fields: Any) -> None:
         }
     )
 
+
 def log_llm_interaction(
     model: str,
     provider: str,
@@ -126,21 +127,25 @@ def log_llm_interaction(
         print(
             f"\n>>> [TOKEN USAGE] Phase: {phase or 'unknown'} | Model: {model} | "
             f"Prompt: {prompt_t} | Completion: {completion_t} | Total: {total_t}\n",
-            flush=True
+            flush=True,
         )
     else:
         try:
             import litellm
-            prompt_t = litellm.token_counter(model=model, messages=[
-                {"role": "system", "content": system_prompt or ""},
-                {"role": "user", "content": user_prompt or ""}
-            ])
+
+            prompt_t = litellm.token_counter(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt or ""},
+                    {"role": "user", "content": user_prompt or ""},
+                ],
+            )
             completion_t = litellm.token_counter(model=model, text=response_content or "")
             total_t = prompt_t + completion_t
             print(
                 f"\n>>> [TOKEN USAGE (ESTIMATED)] Phase: {phase or 'unknown'} | Model: {model} | "
                 f"Prompt: {prompt_t} | Completion: {completion_t} | Total: {total_t}\n",
-                flush=True
+                flush=True,
             )
         except Exception:
             prompt_t = int(len((system_prompt or "") + (user_prompt or "")) / 4)
@@ -149,5 +154,5 @@ def log_llm_interaction(
             print(
                 f"\n>>> [TOKEN USAGE (ESTIMATED FALLBACK)] Phase: {phase or 'unknown'} | Model: {model} | "
                 f"Prompt: {prompt_t} | Completion: {completion_t} | Total: {total_t}\n",
-                flush=True
+                flush=True,
             )

@@ -5,9 +5,9 @@ import os
 import pytest
 
 from backend.core import prompts
-from backend.engine import bfl_payloads
-from backend.engine import media_engine as media_engine_module
-from backend.engine.media_engine import MediaEngine
+from backend.engine.media import bfl_payloads
+from backend.engine.media import media_engine as media_engine_module
+from backend.engine.media.media_engine import MediaEngine
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,7 +42,7 @@ async def test_generate_image_ollama_uses_litellm_payload(monkeypatch):
         return "/data/adventures/test/generated.png"
 
     monkeypatch.setattr(
-        "backend.engine.media_engine.litellm.image_generation", fake_image_generation
+        "backend.engine.media.media_engine.litellm.image_generation", fake_image_generation
     )
     monkeypatch.setattr(MediaEngine, "_save_b64_image", fake_save_b64)
 
@@ -75,7 +75,7 @@ async def test_generate_image_ollama_falls_back_to_direct_http(monkeypatch):
         return "/data/adventures/test/fallback.png"
 
     monkeypatch.setattr(
-        "backend.engine.media_engine.litellm.image_generation", fake_image_generation
+        "backend.engine.media.media_engine.litellm.image_generation", fake_image_generation
     )
     monkeypatch.setattr(MediaEngine, "_generate_image_ollama_direct", fake_direct)
 
@@ -129,8 +129,8 @@ async def test_generate_image_black_forest_labs_uses_direct_polling_flow(monkeyp
         assert url == "https://delivery.bfl.ai/sample.png"
         return "/data/adventures/test/bfl.png"
 
-    monkeypatch.setattr("backend.engine.media_engine.requests.post", fake_post)
-    monkeypatch.setattr("backend.engine.media_engine.requests.get", fake_get)
+    monkeypatch.setattr("backend.engine.media.media_engine.requests.post", fake_post)
+    monkeypatch.setattr("backend.engine.media.media_engine.requests.get", fake_get)
     monkeypatch.setattr(MediaEngine, "_save_remote_image", fake_save_remote_image)
 
     result = await MediaEngine.generate_image(
@@ -173,8 +173,8 @@ def _patch_bfl_http(monkeypatch, post_calls):
     async def fake_save_remote_image(_url, _target_dir, _filename):
         return "/data/adventures/test/f3.png"
 
-    monkeypatch.setattr("backend.engine.media_engine.requests.post", fake_post)
-    monkeypatch.setattr("backend.engine.media_engine.requests.get", fake_get)
+    monkeypatch.setattr("backend.engine.media.media_engine.requests.post", fake_post)
+    monkeypatch.setattr("backend.engine.media.media_engine.requests.get", fake_get)
     monkeypatch.setattr(MediaEngine, "_save_remote_image", fake_save_remote_image)
 
 
@@ -338,7 +338,7 @@ async def test_generate_image_ollama_raises_if_local_generation_fails(monkeypatc
         return None
 
     monkeypatch.setattr(
-        "backend.engine.media_engine.litellm.image_generation", fake_image_generation
+        "backend.engine.media.media_engine.litellm.image_generation", fake_image_generation
     )
     monkeypatch.setattr(MediaEngine, "_generate_image_ollama_direct", fake_direct)
 
@@ -398,7 +398,7 @@ async def test_generate_entity_image_forwards_style_instruction(monkeypatch):
 
 async def test_generate_placeholder_uses_static_item_svg(tmp_path, monkeypatch):
     """Item placeholders should copy the curated frontend SVG by item type."""
-    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("backend.engine.media.media_engine.settings.DATA_DIR", str(tmp_path))
 
     target_dir = tmp_path / "adventures" / "library" / "adv-1" / "entities"
     result = await MediaEngine.generate_placeholder(
@@ -424,7 +424,7 @@ async def test_generate_placeholder_uses_static_item_svg(tmp_path, monkeypatch):
 
 async def test_generate_placeholder_uses_static_npc_silhouette(tmp_path, monkeypatch):
     """NPC placeholders should use the static silhouette.svg asset."""
-    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("backend.engine.media.media_engine.settings.DATA_DIR", str(tmp_path))
 
     target_dir = tmp_path / "adventures" / "library" / "adv-2" / "entities"
     result = await MediaEngine.generate_placeholder(
@@ -450,7 +450,7 @@ async def test_generate_placeholder_uses_static_npc_silhouette(tmp_path, monkeyp
 
 async def test_generate_thumbnail_handles_svg(tmp_path, monkeypatch):
     """MediaEngine._generate_thumbnail should copy SVG assets without invoking Pillow."""
-    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("backend.engine.media.media_engine.settings.DATA_DIR", str(tmp_path))
     target_dir = tmp_path / "adventures" / "library" / "test_adv" / "items"
     target_dir.mkdir(parents=True, exist_ok=True)
     svg_file = target_dir / "datapad.svg"
@@ -466,7 +466,7 @@ async def test_generate_thumbnail_handles_svg(tmp_path, monkeypatch):
 
 async def test_generate_thumbnail_handles_svg_with_png_extension(tmp_path, monkeypatch):
     """MediaEngine._generate_thumbnail should detect SVG header even if extension is .png."""
-    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("backend.engine.media.media_engine.settings.DATA_DIR", str(tmp_path))
     target_dir = tmp_path / "adventures" / "library" / "test_adv" / "items"
     target_dir.mkdir(parents=True, exist_ok=True)
     svg_named_png = target_dir / "datapad.png"

@@ -20,8 +20,8 @@ from backend.core.adventure_format import (
 )
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
-from backend.engine.adventure_importer import AdventureTemplateImporter
-from backend.engine.sequence_walkthrough import legacy_main_sequence
+from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
+from backend.engine.rules.sequence_walkthrough import legacy_main_sequence
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
@@ -104,7 +104,9 @@ def is_version_newer(
 
 
 def _adventure_directories() -> list[str]:
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    repo_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
     candidate_dirs = [
         "adventures",
         os.path.join(repo_root, "adventures"),
@@ -587,7 +589,7 @@ async def migrate_single_adventure(
         if isinstance(manifest_data, dict) and (
             manifest_data.get("scenes") or manifest_data.get("npcs") or manifest_data.get("objects")
         ):
-            from backend.engine.world_generator import WorldGenerator
+            from backend.engine.world.world_generator import WorldGenerator
             from backend.models.user import User
 
             user_res = await db.execute(select(User).where(User.id == user_id))

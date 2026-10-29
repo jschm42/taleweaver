@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from backend.api.routes.adventures.schemas import AdventureTemplateUpdate
-from backend.engine.trigger_service import TriggerService
+from backend.engine.interaction.trigger_service import TriggerService
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldExit, WorldScene
 from backend.schemas.adventure import SequenceSchema
@@ -112,7 +112,9 @@ async def test_trigger_service_execute_trigger_with_debug(monkeypatch):
     """Verify execute_trigger adds debug message when debug is enabled."""
     db = _mock_db()
     state = SessionState(session_id="test_sess")
-    monkeypatch.setattr("backend.engine.trigger_service.settings.TALEWEAVER_DEBUG_ENABLED", True)
+    monkeypatch.setattr(
+        "backend.engine.interaction.trigger_service.settings.TALEWEAVER_DEBUG_ENABLED", True
+    )
 
     messages = await TriggerService.execute_trigger(
         db=db,
@@ -137,7 +139,9 @@ async def test_trigger_service_execute_trigger_without_debug(monkeypatch):
     """Verify execute_trigger does not add debug message when debug is disabled."""
     db = _mock_db()
     state = SessionState(session_id="test_sess")
-    monkeypatch.setattr("backend.engine.trigger_service.settings.TALEWEAVER_DEBUG_ENABLED", False)
+    monkeypatch.setattr(
+        "backend.engine.interaction.trigger_service.settings.TALEWEAVER_DEBUG_ENABLED", False
+    )
 
     messages = await TriggerService.execute_trigger(
         db=db,

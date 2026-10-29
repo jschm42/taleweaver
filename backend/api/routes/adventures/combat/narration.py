@@ -13,7 +13,7 @@ from backend.core.prompts import (
     COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT,
     COMBAT_SPECIAL_EVENT_USER_PROMPT_TEMPLATE,
 )
-from backend.engine.rule_engine import GameOverException
+from backend.engine.rules.rule_engine import GameOverException
 
 logger = logging.getLogger(__name__)
 

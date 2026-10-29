@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.switch_service import SwitchService
-from backend.engine.switch_states import state_label
-from backend.engine.trigger_service import TriggerService
+from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.interaction.switch_states import state_label
+from backend.engine.interaction.trigger_service import TriggerService
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState

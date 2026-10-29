@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Optional
 
 from backend.core.config import settings
-from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.models.avatar import Avatar
 from backend.utils.path_security import (
     data_url_to_local_path,

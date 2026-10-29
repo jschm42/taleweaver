@@ -6,7 +6,7 @@ import pytest
 
 from backend.api.routes.adventures.turn_guardrails import TurnGuardrailEnforcer
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier
-from backend.engine.rule_engine import GameEvent
+from backend.engine.rules.rule_engine import GameEvent
 
 
 def _setup_mock_manager():

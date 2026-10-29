@@ -10,7 +10,7 @@ Two detail levels exist:
 
 from typing import Any, Optional
 
-from backend.engine.switch_states import state_label
+from backend.engine.interaction.switch_states import state_label
 
 
 def _format_item_refs(items: Optional[list]) -> list[str]:

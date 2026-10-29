@@ -9,7 +9,11 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from backend.engine.switch_states import STATE_ID_MAX, STATE_LABEL_MAX, is_valid_state_id
+from backend.engine.interaction.switch_states import (
+    STATE_ID_MAX,
+    STATE_LABEL_MAX,
+    is_valid_state_id,
+)
 
 _TRUE_WORDS = {"yes", "true", "on", "1", "y"}
 _FALSE_WORDS = {"no", "false", "off", "0", "n"}
@@ -128,6 +132,35 @@ def _resource_cost(raw: str) -> tuple[str, int]:
 def weapon_cost(raw: str) -> dict[str, Any]:
     kind, amount = _resource_cost(raw)
     return {"weapon_cost_type": kind, "weapon_cost_value": amount}
+
+
+_EFFECT_RX = re.compile(r"(target|self)\s+([a-z_]+)\s+([+-]?\s*\d+(?:d\d+(?:[+-]\d+)?)?)")
+_EFFECT_STATS = {"hp", "mana", "stamina", "mp", "sta"}
+_EFFECT_STAT_ALIASES = {"mp": "mana", "sta": "stamina"}
+
+
+def _effect_stat(raw: str) -> str:
+    key = raw.strip().lower()
+    stat = _EFFECT_STAT_ALIASES.get(key) or STAT_ALIASES.get(key) or key
+    if stat not in {*_EFFECT_STATS, *STAT_ALIASES.values()}:
+        raise ValueError(f"unknown stat '{raw.strip()}'")
+    return stat
+
+
+def weapon_effects(raw: str) -> list[dict[str, str]]:
+    """``target stamina -1d4, self hp +2`` -> weapon on-hit effects."""
+    effects = []
+    for part in (p.strip() for p in raw.split(",")):
+        match = _EFFECT_RX.fullmatch(part.lower())
+        if not match:
+            raise ValueError(
+                f"expected effects like 'target stamina -1d4, self hp +2', got '{part}'"
+            )
+        target, stat, amount = match.groups()
+        effects.append(
+            {"target": target, "stat": _effect_stat(stat), "amount": amount.replace(" ", "")}
+        )
+    return effects
 
 
 def ability_cost(raw: str) -> dict[str, Any]:

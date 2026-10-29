@@ -23,8 +23,8 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
-from backend.engine.adventure_import_support import find_existing_template
-from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.engine.adventures.adventure_import_support import find_existing_template
+from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 from backend.services.adventure_library.catalog import LibraryError, library_url
 from backend.services.adventure_library.models import BLUEPRINT_NAME, LibraryEntry
 
@@ -155,7 +155,7 @@ async def install_entry(
     await asyncio.to_thread(_write_atomic, bundle_path(entry.slug), data)
 
     # Imported lazily: adventure_updates has an import cycle through the API routers.
-    from backend.engine.adventure_updates import scan_available_adventure_files
+    from backend.engine.adventures.adventure_updates import scan_available_adventure_files
 
     await asyncio.to_thread(scan_available_adventure_files, True)
     logger.info("Installed library adventure %s %s", entry.slug, entry.version)

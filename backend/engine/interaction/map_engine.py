@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Optional, Union
+
 """
 MapEngine — manages the scene graph.
 
@@ -23,7 +25,9 @@ class MapEngine:
         Convert an arbitrary scene_id string to a safe node identifier.
         Replaces spaces and hyphens with underscores; strips other specials.
         """
-        return "".join(c if (c.isalnum() or c == "_") else "_" for c in raw.replace("-", "_")).upper()
+        return "".join(
+            c if (c.isalnum() or c == "_") else "_" for c in raw.replace("-", "_")
+        ).upper()
 
     @staticmethod
     def register_visit(
@@ -46,45 +50,45 @@ class MapEngine:
         """
         # Reassign to a new dict so SQLAlchemy detects the mutation.
         nodes: dict = dict(world_map.nodes or {})
-        
+
         # Use safe ID for keys to ensure consistency
         sid = MapEngine._safe_id(scene_id)
 
         if sid not in nodes:
             nodes[sid] = {
-                "id": scene_id, # Preserve original ID in metadata
-                "label": label or scene_id, 
+                "id": scene_id,  # Preserve original ID in metadata
+                "label": label or scene_id,
                 "description": description or "",
-                "image_url": image_url
+                "image_url": image_url,
             }
         else:
             # Update data if missing or if the new data is more detailed.
             if label and (not nodes[sid].get("label") or len(label) > len(nodes[sid]["label"])):
                 nodes[sid]["label"] = label
-            
+
             # If current description is empty, always fill it.
             curr_desc = nodes[sid].get("description", "")
             if description and (not curr_desc or len(description) > len(curr_desc)):
                 nodes[sid]["description"] = description
-                
+
             # Always update image_url if a new one is provided (e.g. old session was deleted)
             if image_url:
                 nodes[sid]["image_url"] = image_url
 
         world_map.nodes = nodes
-        world_map.current_scene_id = sid # Also store safe ID as current location
+        world_map.current_scene_id = sid  # Also store safe ID as current location
 
     @staticmethod
     def register_exit(
-        world_map, 
-        from_scene: str, 
-        to_scene: str, 
-        exit_label: str = "", 
+        world_map,
+        from_scene: str,
+        to_scene: str,
+        exit_label: str = "",
         is_locked: bool = False,
-        exit_type: str = "one_way"
+        exit_type: str = "one_way",
     ) -> None:
         """
-        Adds a directed or bidirectional edge between two scenes. 
+        Adds a directed or bidirectional edge between two scenes.
         Normalizes IDs and prevents self-loops.
         """
         if not (from_scene and to_scene):
@@ -106,13 +110,14 @@ class MapEngine:
             # Compare normalized IDs
             existing_from = MapEngine._safe_id(e["from"])
             existing_to = MapEngine._safe_id(e["to"])
-            
+
             # Match A -> B or (if bidirectional) B -> A
             is_match = (existing_from == src_id and existing_to == dst_id) or (
                 (exit_type == "bidirectional" or e.get("exit_type") == "bidirectional")
-                and existing_from == dst_id and existing_to == src_id
+                and existing_from == dst_id
+                and existing_to == src_id
             )
-            
+
             if is_match:
                 # Update existing edge (e.g. label or lock status)
                 edges[idx]["label"] = exit_label
@@ -123,13 +128,15 @@ class MapEngine:
                 return
 
         # Add new edge
-        edges.append({
-            "from": from_scene, 
-            "to": to_scene, 
-            "label": exit_label,
-            "is_locked": is_locked,
-            "exit_type": exit_type
-        })
+        edges.append(
+            {
+                "from": from_scene,
+                "to": to_scene,
+                "label": exit_label,
+                "is_locked": is_locked,
+                "exit_type": exit_type,
+            }
+        )
         world_map.edges = edges
         flag_modified(world_map, "edges")
 
@@ -137,7 +144,7 @@ class MapEngine:
     def augment_map_data(map_dict: dict, exits: list, current_scene_id: str) -> dict:
         """
         Adds adjacent unvisited scenes as placeholder nodes to the map dictionary.
-        
+
         Args:
             map_dict: The serialized map dictionary (nodes, edges, current_scene_id).
             exits: List of WorldExit objects for the current session/template.
@@ -148,52 +155,61 @@ class MapEngine:
 
         nodes = map_dict.get("nodes", {})
         edges = map_dict.get("edges", [])
-        
+
         # Find all exits starting from or ending at the current scene (if bidirectional)
         current_safe_id = MapEngine._safe_id(current_scene_id)
-        
+
         for ex in exits:
-            is_from_current = (ex.from_scene_id == current_scene_id)
-            is_to_current = (ex.to_scene_id == current_scene_id and ex.exit_type == "bidirectional")
-            
+            is_from_current = ex.from_scene_id == current_scene_id
+            is_to_current = ex.to_scene_id == current_scene_id and ex.exit_type == "bidirectional"
+
             if not (is_from_current or is_to_current):
                 continue
-                
+
             target_raw_id = ex.to_scene_id if is_from_current else ex.from_scene_id
             target_safe_id = MapEngine._safe_id(target_raw_id)
-            
+
             # If the target node is not yet in our visited nodes, add it as unknown
             if target_safe_id not in nodes:
                 nodes[target_safe_id] = {
                     "id": target_raw_id,
                     "label": "?",
                     "description": "An unexplored area...",
-                    "is_unknown": True
+                    "is_unknown": True,
                 }
 
             # Check if this edge already exists and sync its lock state
             matched_edge = None
             for e in edges:
-                if (MapEngine._safe_id(e["from"]) == current_safe_id and MapEngine._safe_id(e["to"]) == target_safe_id):
+                if (
+                    MapEngine._safe_id(e["from"]) == current_safe_id
+                    and MapEngine._safe_id(e["to"]) == target_safe_id
+                ):
                     matched_edge = e
                     break
-                if ex.exit_type == "bidirectional" and MapEngine._safe_id(e["from"]) == target_safe_id and MapEngine._safe_id(e["to"]) == current_safe_id:
+                if (
+                    ex.exit_type == "bidirectional"
+                    and MapEngine._safe_id(e["from"]) == target_safe_id
+                    and MapEngine._safe_id(e["to"]) == current_safe_id
+                ):
                     matched_edge = e
                     break
 
             if matched_edge is None:
-                edges.append({
-                    "id": getattr(ex, "id", None),
-                    "from": current_scene_id if is_from_current else target_raw_id,
-                    "to": target_raw_id if is_from_current else current_scene_id,
-                    "label": getattr(ex, "label", "") or "",
-                    "is_locked": getattr(ex, "is_locked", False),
-                    "exit_type": getattr(ex, "exit_type", "directional"),
-                    "lock_description": getattr(ex, "lock_description", "") or "",
-                    "code_to_unlock": getattr(ex, "code_to_unlock", "") or "",
-                    "item_to_unlock": getattr(ex, "item_to_unlock", "") or "",
-                    "rule_to_unlock": getattr(ex, "rule_to_unlock", "") or "",
-                })
+                edges.append(
+                    {
+                        "id": getattr(ex, "id", None),
+                        "from": current_scene_id if is_from_current else target_raw_id,
+                        "to": target_raw_id if is_from_current else current_scene_id,
+                        "label": getattr(ex, "label", "") or "",
+                        "is_locked": getattr(ex, "is_locked", False),
+                        "exit_type": getattr(ex, "exit_type", "directional"),
+                        "lock_description": getattr(ex, "lock_description", "") or "",
+                        "code_to_unlock": getattr(ex, "code_to_unlock", "") or "",
+                        "item_to_unlock": getattr(ex, "item_to_unlock", "") or "",
+                        "rule_to_unlock": getattr(ex, "rule_to_unlock", "") or "",
+                    }
+                )
             else:
                 # Always refresh the gate state and label from the source-of-truth WorldExit.
                 # `label` may have been populated previously by `register_exit` with an empty
@@ -219,9 +235,9 @@ class MapEngine:
         """
         if not world_map:
             return {"nodes": {}, "edges": [], "current_scene_id": None}
-            
+
         return {
             "nodes": world_map.nodes or {},
             "edges": world_map.edges or [],
-            "current_scene_id": world_map.current_scene_id
+            "current_scene_id": world_map.current_scene_id,
         }

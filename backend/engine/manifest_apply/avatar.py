@@ -8,12 +8,11 @@ from typing import Any, Optional
 from sqlalchemy import select
 
 from backend.core.config import settings
-from backend.engine.elevenlabs_voices import (
+from backend.engine.audio.elevenlabs_voices import (
     custom_voice_id,
     load_voice_catalog,
     resolve_voice_reference,
 )
-from backend.engine.image_prompt_context import build_protagonist_image_prompt, clean_appearance
 from backend.engine.manifest_apply.assets import needs_image
 from backend.engine.manifest_apply.context import ApplyContext
 from backend.engine.manifest_apply.visuals import (
@@ -22,6 +21,10 @@ from backend.engine.manifest_apply.visuals import (
     placeholder_image,
     t2i_config,
     uses_advanced_model,
+)
+from backend.engine.media.image_prompt_context import (
+    build_protagonist_image_prompt,
+    clean_appearance,
 )
 
 EQUIPMENT_SLOTS = (
@@ -123,7 +126,7 @@ def _update_avatar(avatar: Any, prot: dict[str, Any], stats: dict[str, Any]) -> 
 
 
 async def _generate_portrait(ctx: ApplyContext, avatar: Any) -> Optional[str]:
-    from backend.engine.media_engine import MediaEngine
+    from backend.engine.media.media_engine import MediaEngine
 
     prompt = build_protagonist_image_prompt(
         avatar.name,

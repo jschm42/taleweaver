@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.engine.world_schemas import WorldObjectSchema
+from backend.engine.world.world_schemas import WorldObjectSchema
 
 
 def _object_payload(**extra) -> dict:

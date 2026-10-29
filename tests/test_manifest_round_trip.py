@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import select
 
-from backend.engine.adventure_exporter import AdventureExporter
-from backend.engine.world_manifest_applier import apply_manifest
+from backend.engine.adventures.adventure_exporter import AdventureExporter
+from backend.engine.world.world_manifest_applier import apply_manifest
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -98,7 +98,7 @@ async def _seed(db) -> User:
 
 async def test_combat_data_survives_export_and_import(auth_client, setup_test_db, monkeypatch):
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_placeholder",
+        "backend.engine.media.media_engine.MediaEngine.generate_placeholder",
         AsyncMock(return_value="/data/placeholder.svg"),
     )
     async with TestSessionLocal() as db:
@@ -146,7 +146,7 @@ async def test_combat_data_survives_export_and_import(auth_client, setup_test_db
 
 async def test_generated_npc_fields_are_persisted(auth_client, setup_test_db, monkeypatch):
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_placeholder",
+        "backend.engine.media.media_engine.MediaEngine.generate_placeholder",
         AsyncMock(return_value="/data/placeholder.svg"),
     )
     manifest = {

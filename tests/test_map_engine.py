@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from backend.engine.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine
 
 
 def test_augment_map_data_adds_return_edge_for_known_target_scene():
@@ -10,7 +10,12 @@ def test_augment_map_data_adds_return_edge_for_known_target_scene():
             "DINER_INTERIOR": {"id": "DINER_INTERIOR", "label": "Diner Interior"},
         },
         "edges": [
-            {"from": "DINER_ENTRANCE", "to": "DINER_INTERIOR", "label": "swing door", "is_locked": False}
+            {
+                "from": "DINER_ENTRANCE",
+                "to": "DINER_INTERIOR",
+                "label": "swing door",
+                "is_locked": False,
+            }
         ],
         "current_scene_id": "DINER_INTERIOR",
     }
@@ -57,6 +62,5 @@ def test_augment_map_data_still_adds_placeholder_for_unknown_target_scene():
     assert "KITCHEN" in augmented["nodes"]
     assert augmented["nodes"]["KITCHEN"]["is_unknown"] is True
     assert any(
-        edge["from"] == "DINER_ENTRANCE" and edge["to"] == "KITCHEN"
-        for edge in augmented["edges"]
+        edge["from"] == "DINER_ENTRANCE" and edge["to"] == "KITCHEN" for edge in augmented["edges"]
     )

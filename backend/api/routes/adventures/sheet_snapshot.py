@@ -20,7 +20,7 @@ from backend.api.routes.adventures.session_start_settings import resolve_start_d
 from backend.core.config import settings
 from backend.core.narration_styles import DEFAULT_NARRATION_STYLE
 from backend.core.ui_theme import UI_SKIN_AUTO, normalize_ui_theme
-from backend.engine.item_logic import get_item_slot, normalize_equipment_keys
+from backend.engine.rules.item_logic import get_item_slot, normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -301,7 +301,7 @@ async def build_sheet_snapshot(
     session_profile_image: Optional[str],
 ) -> dict:
     """Builds a serialisable character-sheet snapshot."""
-    from backend.engine.stat_aggregator import calculate_total_stats
+    from backend.engine.rules.stat_aggregator import calculate_total_stats
 
     ctx = _SheetContext(
         await load_session_adventure(db, state),

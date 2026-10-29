@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.config import settings
+from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.scripting.runner import ScriptRunner
-from backend.engine.switch_service import SwitchService
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState

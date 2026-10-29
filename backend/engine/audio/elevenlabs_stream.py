@@ -12,7 +12,7 @@ from typing import Final
 
 import httpx
 
-from backend.engine.tts_helpers import (
+from backend.engine.audio.tts_helpers import (
     TTSProviderError,
     TTSRateLimitError,
     TTSTimeoutError,

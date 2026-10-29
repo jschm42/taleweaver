@@ -62,7 +62,9 @@ class SessionExporter:
             raise ValueError(f"GameSession {session_id} not found")
 
         # 2. Fetch associated state
-        state_res = await db.execute(select(SessionState).where(SessionState.session_id == session_id))
+        state_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == session_id)
+        )
         session_state = state_res.scalars().first()
 
         # 3. Fetch avatar
@@ -86,7 +88,9 @@ class SessionExporter:
         exits_res = await db.execute(select(WorldExit).where(WorldExit.session_id == session_id))
         world_exits = exits_res.scalars().all()
 
-        entities_res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == session_id))
+        entities_res = await db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == session_id)
+        )
         world_entities = entities_res.scalars().all()
 
         map_res = await db.execute(select(WorldMap).where(WorldMap.session_id == session_id))

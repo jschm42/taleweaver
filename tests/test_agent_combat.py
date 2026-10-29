@@ -215,7 +215,7 @@ async def test_tactician_plays_a_real_fight_round(setup_test_db, monkeypatch):
     from backend.api.routes.adventures.agent_combat import decide_combat_turn
     from backend.api.routes.adventures.combat.player_actions import INVALID_ACTION_MSG
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-    from backend.engine.rule_engine import GameEvent
+    from backend.engine.rules.rule_engine import GameEvent
     from tests.conftest import TestSessionLocal
     from tests.test_combat_specials import _seed_combat_context
 

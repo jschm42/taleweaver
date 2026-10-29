@@ -9,8 +9,8 @@ cover-source guidance, etc.).
 from typing import Any, Optional
 
 from backend.core import prompts
-from backend.engine.elevenlabs_voices import VoiceOption, load_voice_catalog
-from backend.engine.world_scripting_prompt import build_scripts_requirement
+from backend.engine.audio.elevenlabs_voices import VoiceOption, load_voice_catalog
+from backend.engine.world.world_scripting_prompt import build_scripts_requirement
 
 _CONTAINER_LOCK_HINTS = (
     "- CONTAINER objects may be open or locked depending on story needs.\n"

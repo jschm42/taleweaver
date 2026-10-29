@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy import select
 
-from backend.engine.adventure_exporter import AdventureExporter
+from backend.engine.adventures.adventure_exporter import AdventureExporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldExit, WorldScene

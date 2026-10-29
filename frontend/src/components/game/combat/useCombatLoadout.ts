@@ -1,5 +1,6 @@
 import { computed, type Ref } from 'vue'
 import type { CharacterSheet, CombatState, InventoryItem } from '@/types'
+import { weaponProfile } from '@/utils/weaponConfig'
 
 function num(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -22,6 +23,7 @@ export function useCombatLoadout(combat: Ref<CombatState>, playerSheet: Ref<Char
       dice: String(meta.damage_dice || item?.damage_dice || '1d8'),
       costType,
       cost: num(meta.weapon_cost_value, 20),
+      ...weaponProfile(meta),
     } as const
   })
 

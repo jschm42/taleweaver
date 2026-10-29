@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.engine.debug_commands.context import DebugContext
-from backend.engine.sequence_walkthrough import (
+from backend.engine.rules.sequence_walkthrough import (
     format_walkthrough_steps,
     sequence_walkthrough_steps,
 )

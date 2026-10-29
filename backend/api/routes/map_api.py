@@ -1,4 +1,5 @@
 from typing import Optional, Union
+
 """
 REST endpoints for the World Map.
 
@@ -13,23 +14,24 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.map_engine import MapEngine
+from backend.engine.interaction.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_map import WorldMap
 from backend.models.world_entity import WorldExit
+from backend.models.world_map import WorldMap
 
 router = APIRouter(tags=["WorldMap"])
 logger = logging.getLogger(__name__)
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
+
 
 class VisitPayload(BaseModel):
     scene_id: str
@@ -46,6 +48,7 @@ class ExitPayload(BaseModel):
 
 # ── Route helpers ─────────────────────────────────────────────────────────────
 
+
 async def _get_owned_adventure_or_404(
     db: AsyncSession, template_id: str, user_id: str, is_admin: bool
 ) -> AdventureTemplate:
@@ -59,6 +62,7 @@ async def _get_owned_adventure_or_404(
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/adventures/{template_id}/map")
 async def get_map(
@@ -76,24 +80,21 @@ async def get_map(
         return {"nodes": {}, "edges": [], "current_scene_id": None}
 
     map_dict = MapEngine.to_dict(world_map)
-    
+
     # Augment with adjacent unvisited scenes
     if world_map.current_scene_id:
         # Find the raw ID for the current scene (stored in metadata)
         current_node = world_map.nodes.get(world_map.current_scene_id)
         raw_current_id = current_node.get("id") if current_node else None
-        
+
         if raw_current_id:
             # Fetch exits for this session or template
             exit_query = select(WorldExit).where(
-                or_(
-                    WorldExit.session_id == session_id,
-                    WorldExit.template_id == template_id
-                )
+                or_(WorldExit.session_id == session_id, WorldExit.template_id == template_id)
             )
             exits_res = await db.execute(exit_query)
             exits = list(exits_res.scalars().all())
-            
+
             map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
 
     return map_dict
@@ -114,11 +115,7 @@ async def post_visit(
 
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_visit(
-        world_map, 
-        payload.scene_id, 
-        payload.label, 
-        payload.description,
-        payload.image_url
+        world_map, payload.scene_id, payload.label, payload.description, payload.image_url
     )
     await db.commit()
     return {"status": "ok", "current_scene_id": payload.scene_id}
@@ -137,7 +134,8 @@ async def post_exit(
         db, template_id, current_user.id, current_user.role == "admin"
     )
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
-    MapEngine.register_exit(world_map, payload.from_scene, payload.to_scene, payload.exit_label or "")
+    MapEngine.register_exit(
+        world_map, payload.from_scene, payload.to_scene, payload.exit_label or ""
+    )
     await db.commit()
     return {"status": "ok"}
-

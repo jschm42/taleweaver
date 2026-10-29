@@ -4,6 +4,7 @@ REST routes for Avatar (Character Sheet) management.
 Provides endpoints to read and update an avatar's stats, inventory,
 equipment, and status effects.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
-from backend.engine.stat_aggregator import calculate_total_stats
-from backend.engine.item_logic import normalize_equipment_keys
+from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.rules.stat_aggregator import calculate_total_stats
 from backend.models.avatar import Avatar
 from backend.models.user import User
 from backend.schemas.avatar import Avatar as AvatarSchema
@@ -23,9 +24,7 @@ router = APIRouter(prefix="/avatars", tags=["Avatars"])
 logger = logging.getLogger(__name__)
 
 
-async def _get_owned_avatar_or_404(
-    db: AsyncSession, avatar_id: str, user_id: str
-) -> Avatar:
+async def _get_owned_avatar_or_404(db: AsyncSession, avatar_id: str, user_id: str) -> Avatar:
     """Fetch an avatar only if it belongs to the given user (or user is admin)."""
     result = await db.execute(
         select(Avatar).where(Avatar.id == avatar_id, Avatar.user_id == user_id)
@@ -143,4 +142,3 @@ async def remove_status_effect(
     avatar.status_effects = current_effects
     await db.commit()
     logger.info("Removed status effect '%s' from avatar %s", effect_name, avatar_id)
-

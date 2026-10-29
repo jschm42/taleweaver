@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from backend.engine.rule_engine import EntityMovement, GameEvent, WorldEntityUpdate
+from backend.engine.rules.rule_engine import EntityMovement, GameEvent, WorldEntityUpdate
 from backend.models.world_entity import WorldEntity
 
 if TYPE_CHECKING:

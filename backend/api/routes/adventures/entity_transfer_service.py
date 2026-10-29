@@ -22,7 +22,7 @@ from backend.api.routes.adventures.assets import _build_uploaded_visual_path
 from backend.api.routes.adventures.editor import _get_template_avatar
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.config import settings
-from backend.engine.entity_bundle import (
+from backend.engine.adventures.entity_bundle import (
     IMAGE_EXTENSIONS,
     EntityBundle,
     EntityBundleError,

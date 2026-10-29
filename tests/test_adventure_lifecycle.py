@@ -8,8 +8,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.engine.adventure_exporter import AdventureExporter
-from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.engine.adventures.adventure_exporter import AdventureExporter
+from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -171,11 +171,11 @@ def _patch_export_filesystem(monkeypatch) -> None:
     monkeypatch.setattr("os.makedirs", lambda *args, **kwargs: None)
     # Avoid placeholder generation errors in MediaEngine.
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_svg_placeholder",
+        "backend.engine.media.media_engine.MediaEngine.generate_svg_placeholder",
         AsyncMock(return_value="/data/fake_placeholder.svg"),
     )
     monkeypatch.setattr(
-        "backend.engine.media_engine.MediaEngine.generate_entity_image",
+        "backend.engine.media.media_engine.MediaEngine.generate_entity_image",
         AsyncMock(return_value="/data/fake_portrait.jpg"),
     )
 
@@ -333,11 +333,11 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
 
         # Mock MediaEngine
         monkeypatch.setattr(
-            "backend.engine.media_engine.MediaEngine.generate_svg_placeholder",
+            "backend.engine.media.media_engine.MediaEngine.generate_svg_placeholder",
             AsyncMock(return_value="/data/fake_placeholder.svg"),
         )
         monkeypatch.setattr(
-            "backend.engine.media_engine.MediaEngine.generate_entity_image",
+            "backend.engine.media.media_engine.MediaEngine.generate_entity_image",
             AsyncMock(return_value="/data/fake_portrait.jpg"),
         )
 
@@ -462,7 +462,7 @@ async def test_decorative_objects_built_from_structured_field_only(
     monkeypatch, auth_client, setup_test_db
 ):
     """Memory manager must read decorative_objects from the structured field, not the description."""
-    from backend.engine.memory_manager import MemoryManager
+    from backend.engine.sessions.memory_manager import MemoryManager
     from backend.models.world_entity import WorldEntity
     from tests.conftest import TestSessionLocal
 
@@ -511,7 +511,7 @@ async def test_import_adv_manifest_preserves_nested_adventure_metadata(auth_clie
     the narrative metadata lives under the `adventure` key, not at the top
     level. The result was a silent wipe of the values to empty strings.
     """
-    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
     from tests.conftest import TestSessionLocal
 
     payload = {
@@ -607,7 +607,7 @@ async def test_switch_object_export_import_roundtrip(auth_client, setup_test_db)
     """Verifies that a SWITCH object round-trips correctly through export and import."""
     from sqlalchemy import delete
 
-    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
     from tests.conftest import TestSessionLocal
 
     # 1. Seed adventure with a SWITCH object

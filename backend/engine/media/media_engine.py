@@ -21,8 +21,8 @@ from PIL import Image
 from backend.core import prompts
 from backend.core.config import settings
 from backend.core.security import encryption_util
-from backend.engine.bfl_payloads import build_bfl_payload, resolve_bfl_model_alias
-from backend.engine.image_generation_support import (
+from backend.engine.media.bfl_payloads import build_bfl_payload, resolve_bfl_model_alias
+from backend.engine.media.image_generation_support import (
     build_litellm_image_kwargs,
     build_ollama_request,
     build_openrouter_chat_kwargs,
@@ -44,7 +44,7 @@ from backend.engine.image_generation_support import (
     resolve_required_api_key,
     retry_openrouter_minimal,
 )
-from backend.engine.image_prompt_context import appearance_context, with_context
+from backend.engine.media.image_prompt_context import appearance_context, with_context
 from backend.utils.image_generator import (
     OrganicGradientStrategy,
     PlaceholderImageGenerator,
@@ -77,7 +77,7 @@ _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 _FRONTEND_SVG_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "src", "assets", "svg")
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "src", "assets", "svg")
 )
 
 _ITEM_PLACEHOLDER_ASSET_BY_TYPE = {

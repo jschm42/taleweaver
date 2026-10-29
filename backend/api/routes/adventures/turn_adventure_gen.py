@@ -18,8 +18,8 @@ from backend.core.prompts import (
     FINAL_REPORT_GAMEOVER_FALLBACK,
     FINAL_REPORT_GAMEOVER_SYSTEM_PROMPT,
 )
-from backend.engine.adventure_generator_service import AdventureGeneratorService
-from backend.engine.rule_engine import (
+from backend.engine.adventures.adventure_generator_service import AdventureGeneratorService
+from backend.engine.rules.rule_engine import (
     AdventureGenerationRequest,
     ToolResults,
 )

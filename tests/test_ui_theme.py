@@ -71,7 +71,7 @@ async def test_update_adventure_ui_theme_can_be_cleared(auth_client: AsyncClient
 async def test_import_adv_manifest_reads_nested_ui_theme(auth_client, setup_test_db):
     """The importer keeps a valid ``adventure.ui_theme`` and drops anything else."""
     # Arrange
-    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
     from tests.conftest import TestSessionLocal
 
     payload = {

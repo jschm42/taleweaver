@@ -10,6 +10,9 @@ import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
+import WeaponCombatSettings from '@/components/editor/WeaponCombatSettings.vue'
+import { DICE_PATTERN, readWeaponConfig, type WeaponConfig } from '@/utils/weaponConfig'
+import { AMOUNT_PATTERN } from '@/utils/specialAttacks'
 import type { TtsVoiceList } from '@/types'
 import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, ChevronDown, ChevronRight, Edit3 } from 'lucide-vue-next'
 
@@ -73,6 +76,7 @@ const props = defineProps<{
     on_craft_failure_script?: string
     on_craft_failure_text?: string
     on_read_script?: string
+    weapon_config?: WeaponConfig
     on_read_text?: string
     on_leave_scene_script?: string
     on_leave_scene_text?: string
@@ -433,7 +437,19 @@ const isFormInvalid = computed(() => {
     !uniqueStates.has(String(localForm.value.switch_initial_state).trim().toUpperCase()) ||
     switchTransitions.value.some(t => !t.to || !uniqueStates.has(t.to) || (t.from && !uniqueStates.has(t.from)))
   )
-  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid
+  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid || weaponInvalid.value
+})
+
+const weaponInvalid = computed(() => {
+  const config = localForm.value.weapon_config as WeaponConfig | undefined
+  if (currentItemType.value !== 'WEAPON' || !config) return false
+  return !DICE_PATTERN.test(config.damage_dice.replace(/\s/g, ''))
+    || config.effects.some((e) => !AMOUNT_PATTERN.test(e.amount.replace(/\s/g, '')))
+})
+
+// Items switched to WEAPON in the editor start with the default combat settings.
+watch(currentItemType, (type) => {
+  if (type === 'WEAPON' && !localForm.value.weapon_config) localForm.value.weapon_config = readWeaponConfig()
 })
 
 watch(() => props.initialForm, (newVal) => {
@@ -1343,6 +1359,9 @@ const textLogPreviewClass = computed(() => {
                     CONSTRUCTABLE recipes are meta items: they never appear in the game, so they need no description, appearance, position, hidden flag, reveal rule, portability or pickup/drop triggers.
                   </p>
                 </div>
+
+                <!-- WEAPON: damage, cost, attack roll and on-hit effects -->
+                <WeaponCombatSettings v-if="currentItemType === 'WEAPON' && localForm.weapon_config" v-model="localForm.weapon_config" />
 
                 <!-- WEAPON / WEARABLE: Wearable Slots -->
                 <div v-if="['WEAPON', 'WEARABLE'].includes(currentItemType)" class="space-y-2">

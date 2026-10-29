@@ -7,8 +7,8 @@ from typing import Any
 from sqlalchemy import select
 
 from backend.api.routes.adventures.guardrails.base import inventory_ids_upper
-from backend.engine.rule_engine import GameEvent
-from backend.engine.switch_service import SwitchService
+from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
 

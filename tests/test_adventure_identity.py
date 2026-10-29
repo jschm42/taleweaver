@@ -7,9 +7,9 @@ import os
 import pytest
 
 from backend.core.adventure_identity import manifest_origin_id
-from backend.engine.adventure_exporter import AdventureExporter
-from backend.engine.adventure_import_support import find_existing_template
-from backend.engine.adventure_updates import find_matching_file_for_template
+from backend.engine.adventures.adventure_exporter import AdventureExporter
+from backend.engine.adventures.adventure_import_support import find_existing_template
+from backend.engine.adventures.adventure_updates import find_matching_file_for_template
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
@@ -90,7 +90,7 @@ async def test_export_assigns_and_keeps_origin_id(db_session):
 
 def test_bundled_adventures_have_unique_identity_and_clean_titles():
     """Shipped samples need an origin_id for updates and must not carry export suffixes."""
-    from backend.engine.adventure_updates import scan_available_adventure_files
+    from backend.engine.adventures.adventure_updates import scan_available_adventure_files
 
     repo_adventures = os.path.abspath(
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "adventures")

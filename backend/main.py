@@ -72,7 +72,7 @@ async def lifespan(_app: FastAPI):
     # Auto-import adventures
     from backend.api.routes.adventures.sessions import _cleanup_stale_empty_session_dirs
     from backend.core.database import AsyncSessionLocal
-    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 
     async with AsyncSessionLocal() as db:
         # Check if we have any admins in the database
@@ -252,7 +252,7 @@ class SafeStaticFiles(StaticFiles):
                 source_full, source_stat = self.lookup_path(source_rel)
                 if source_stat is not None and os.path.isfile(source_full):
                     try:
-                        from backend.engine.media_engine import MediaEngine
+                        from backend.engine.media.media_engine import MediaEngine
 
                         await MediaEngine._generate_thumbnail(source_full)
                     except Exception as e:

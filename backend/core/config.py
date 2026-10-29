@@ -131,7 +131,7 @@ class Settings(BaseSettings):
         """Return the directory downloaded adventure bundles are installed into.
 
         Defaults to DATA_DIR/adventures. Warning: any other value takes the directory
-        out of `_adventure_directories()` in backend/engine/adventure_updates.py, which
+        out of `_adventure_directories()` in backend/engine/adventures/adventure_updates.py, which
         scans DATA_DIR/adventures, so the update scanner stops seeing those bundles.
         """
         if self.ADVENTURE_DOWNLOAD_DIR:

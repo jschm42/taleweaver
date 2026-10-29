@@ -8,7 +8,7 @@ from backend.api.routes.adventures.guardrails.crafting import (
     CRAFT_TOO_FEW_MESSAGE,
     CRAFT_UNREACHABLE_MESSAGE,
 )
-from backend.engine.command_parser import CommandParser
+from backend.engine.interaction.command_parser import CommandParser
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState

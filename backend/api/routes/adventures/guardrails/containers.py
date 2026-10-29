@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 
 from backend.api.routes.adventures.guardrails.locks import LockSpec
-from backend.engine.rule_engine import GameEvent, WorldEntityUpdate
+from backend.engine.rules.rule_engine import GameEvent, WorldEntityUpdate
 from backend.models.world_entity import WorldEntity
 
 _REQUIREMENT_KEYS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")

@@ -1,4 +1,4 @@
-from backend.engine.command_parser import CommandParser
+from backend.engine.interaction.command_parser import CommandParser
 from backend.models.avatar import Avatar
 
 

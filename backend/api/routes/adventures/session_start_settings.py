@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Any, Optional
 
-from backend.engine.start_scene import resolve_initial_scene_id
+from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.models.session_state import SessionState
 
 __all__ = ["resolve_initial_scene_id", "resolve_start_datetime"]
