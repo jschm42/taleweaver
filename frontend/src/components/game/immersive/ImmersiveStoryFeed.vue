@@ -43,9 +43,26 @@ const emit = defineEmits<{
 }>()
 
 const storyContainerRef = ref<HTMLElement | null>(null)
-const { hasContentBelow, scrollToLatest } = useScrollToLatest(storyContainerRef)
 
-// New page: start reading at the top.
+/** Gap (px) kept above the newest exchange when auto-follow stops at its start. */
+const FOLLOW_TOP_GAP_PX = 8
+
+function latestExchangeElement(): HTMLElement | undefined {
+  const exchanges = storyContainerRef.value?.querySelectorAll<HTMLElement>('[data-story-exchange]')
+  return exchanges?.[exchanges.length - 1]
+}
+
+// Follow new content (streamed narration, engine events, choice dialogs) down the page, but
+// never past the start of the newest exchange: a long narration stays readable from its top.
+const { hasContentBelow, scrollToLatest, resumeFollowing } = useScrollToLatest(storyContainerRef, {
+  canFollow: () => props.viewingTurnIndex === null,
+  maxFollowTop: () => {
+    const latest = latestExchangeElement()
+    return latest ? Math.max(0, latest.offsetTop - FOLLOW_TOP_GAP_PX) : null
+  },
+})
+
+// New page: start reading at the top (auto-follow then moves on to the newest exchange).
 watch(() => props.activeTurnIndex, () => {
   nextTick(() => {
     if (storyContainerRef.value) {
@@ -55,17 +72,17 @@ watch(() => props.activeTurnIndex, () => {
 })
 
 function scrollToLatestExchange() {
-  const exchanges = storyContainerRef.value?.querySelectorAll('[data-story-exchange]')
-  const latest = exchanges?.[exchanges.length - 1] as HTMLElement | undefined
-  latest?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  resumeFollowing()
+  latestExchangeElement()?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
 
-// New exchange on the page being followed: scroll to its beginning.
+// New exchange on the page being followed (usually the player's own action): follow again,
+// even if the reader had scrolled up before.
 watch(
   () => props.activeTurn?.exchanges.length ?? 0,
   (count, previousCount) => {
     if (props.viewingTurnIndex !== null || count <= previousCount) return
-    nextTick(scrollToLatestExchange)
+    resumeFollowing()
   }
 )
 
