@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * SwitchesPanel — Switches of the current scene as picture tiles with their state badge.
- * Clicking a tile flips the switch.
+ * Clicking a tile flips the switch; right-click opens its context menu (e.g. Take).
  */
 import { ref } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
@@ -14,6 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   switchFlip: [entity: any]
+  switchContextmenu: [entity: any, event: MouseEvent]
 }>()
 
 const thumbFailed = ref<Record<string, boolean>>({})
@@ -56,6 +57,7 @@ function isActive(sw: any): boolean {
         :title="`Toggle ${sw.name}`"
         :aria-label="`Toggle ${sw.name}, currently ${switchState(sw)}`"
         @click="emit('switchFlip', sw)"
+        @contextmenu.prevent="emit('switchContextmenu', sw, $event)"
       >
         <span
           class="absolute top-1 right-1 z-10 rounded-md border px-1 py-px text-[9px] font-black uppercase tracking-wider"

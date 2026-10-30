@@ -173,9 +173,23 @@ def _expand(item: Any, entity_lookup: dict[str, Any]) -> Any:
     return entity_to_item_dict(entity) if entity else {"name": item}
 
 
-def _sync_inventory(avatar: Avatar, entity_lookup: dict, image_map: dict) -> list[dict]:
+def _with_switch_state(item: dict, entity_states: dict) -> dict:
+    """Carried switches show their live session state, not the one copied at pickup."""
+    override = entity_states.get(str(item.get("id") or ""))
+    if isinstance(override, dict) and override.get("switch_state"):
+        item["switch_state"] = override["switch_state"]
+    return item
+
+
+def _sync_inventory(
+    avatar: Avatar, entity_lookup: dict, image_map: dict, entity_states: dict
+) -> list[dict]:
     expanded = (_expand(item, entity_lookup) for item in (avatar.inventory or []))
-    return [_sheet_item(item, image_map) for item in expanded if isinstance(item, dict)]
+    return [
+        _with_switch_state(_sheet_item(item, image_map), entity_states)
+        for item in expanded
+        if isinstance(item, dict)
+    ]
 
 
 def _sync_equipment(avatar: Avatar, entity_lookup: dict, image_map: dict) -> dict[str, Any]:
@@ -314,7 +328,9 @@ async def build_sheet_snapshot(
     return {
         **_avatar_fields(avatar, calculate_total_stats(avatar)),
         "profile_image": await _profile_image(db, state, session_manifest, session_profile_image),
-        "inventory": _sync_inventory(avatar, entity_lookup, image_map),
+        "inventory": _sync_inventory(
+            avatar, entity_lookup, image_map, dict(state.entity_states or {})
+        ),
         "equipment": _sync_equipment(avatar, entity_lookup, image_map),
         "in_game_time": state.in_game_time,
         "start_datetime": await _start_datetime(state, ctx),

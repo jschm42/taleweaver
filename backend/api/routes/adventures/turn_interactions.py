@@ -625,6 +625,16 @@ class TurnInteractionsManager:
         code = parts[2].strip() if len(parts) >= 3 else None
         return target, state, code
 
+    def _switch_in_reach(self, ent: WorldEntity, states: Any) -> bool:
+        """A visible switch in the current scene, or a portable one the player carries."""
+        override = states.get(ent.id, {}) if isinstance(states, dict) else {}
+        if bool(override.get("is_hidden", ent.is_hidden)):
+            return False
+        if bool(override.get("is_in_inventory", ent.is_in_inventory)):
+            return True
+        current_scene_id = override.get("current_scene_id", ent.current_scene_id)
+        return current_scene_id == self.state.current_scene_id
+
     async def _resolve_scene_switch(self, target_hint: str) -> WorldEntity | None:
         hint = (target_hint or "").strip().lower()
         if not hint:
@@ -644,11 +654,7 @@ class TurnInteractionsManager:
             if not self._is_switch_entity(ent):
                 continue
 
-            override = states.get(ent.id, {}) if isinstance(states, dict) else {}
-            current_scene_id = override.get("current_scene_id", ent.current_scene_id)
-            is_hidden = bool(override.get("is_hidden", ent.is_hidden))
-            is_in_inventory = bool(override.get("is_in_inventory", ent.is_in_inventory))
-            if current_scene_id != self.state.current_scene_id or is_hidden or is_in_inventory:
+            if not self._switch_in_reach(ent, states):
                 continue
 
             id_token = str(ent.id or "").strip().lower()
@@ -914,7 +920,7 @@ class TurnInteractionsManager:
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 response = f"{ent.name} is already in your inventory."
-            elif ent and ent.is_portable and str(ent.item_type or "").upper() != "SWITCH":
+            elif ent and ent.is_portable:
                 # Move to inventory
                 new_inv = list(self.avatar.inventory or [])
                 item_dict = jsonable_encoder(

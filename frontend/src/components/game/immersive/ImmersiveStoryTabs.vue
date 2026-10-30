@@ -25,6 +25,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   switchFlip: [entity: any]
+  switchContextmenu: [entity: any, event: MouseEvent]
 }>()
 
 type TabEntry = { id: StoryTabId; label: string; count: number; unseen: number }
@@ -86,6 +87,7 @@ const hasSwitches = computed(() => !props.docked && props.sceneSwitches.length >
       :class="{ 'opacity-50 pointer-events-none': props.isEvaluating }"
       :title="`Toggle ${sw.name}`"
       @click="emit('switchFlip', sw)"
+      @contextmenu.prevent="emit('switchContextmenu', sw, $event)"
     >
       <i class="ra ra-lever text-sm"></i>
       <span class="truncate max-w-[8rem]">{{ sw.name }}</span>

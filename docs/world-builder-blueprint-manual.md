@@ -261,6 +261,22 @@ lock: The floodgate is shut. Water roars behind it.
 
 `DOWN` and `UP` are the state IDs: transitions, outcomes and scripts use them (`tw.switch('FLOODGATE_LEVER').is_state('UP')`). The text after `=` is what the player sees ("Raised"). It is optional and at most 20 characters; without it the ID is shown. IDs may use letters, digits, `_` and `-`, up to 15 characters.
 
+### A switch the player carries
+
+Switches are fixed by default. With `portable: yes` the player can take one and still flip it from the inventory (context menu *Switch / Flip*). A carried switch also works as a key item for other transitions:
+
+```text
+[Switch: TV] Old TV
+in: LIVING_ROOM
+states: OFF, ON
+transition: OFF -> ON | item: REMOTE | fail: There is no button on the set. You need the remote.
+
+[Switch: REMOTE] TV Remote
+in: LIVING_ROOM
+portable: yes
+states: OFF, ON
+```
+
 ### A hidden item revealed by searching
 
 ```text

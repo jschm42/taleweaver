@@ -317,6 +317,16 @@ def recipe_result_ids(objects: list[dict[str, Any]]) -> set[str]:
     return results
 
 
+_FIXED_ITEM_TYPES = {"STATIC", "SWITCH"}
+
+
+def is_portable_default(obj: dict[str, Any]) -> bool:
+    """Explicit `is_portable`, else fixtures (STATIC, SWITCH) stay put and everything else is carried."""
+    if "is_portable" in obj:
+        return bool(obj["is_portable"])
+    return str(obj.get("item_type") or "").upper() not in _FIXED_ITEM_TYPES
+
+
 def starts_hidden(obj: dict[str, Any], result_ids: set[str]) -> bool:
     """Recipes and recipe results are always hidden; everything else follows ``is_hidden``."""
     if _is_recipe_def(obj) or str(obj.get("id") or "") in result_ids:
@@ -362,7 +372,7 @@ def _object_entity(
         reveal_rule=obj.get("reveal_rule") or None,
         unlock_rule=None,
         is_in_inventory=held,
-        is_portable=obj.get("is_portable", obj.get("item_type") != "STATIC"),
+        is_portable=is_portable_default(obj),
         combination_ingredients=obj.get("combination_ingredients"),
         reveals_item_id=obj.get("reveals_item_id"),
         inventory=obj.get("inventory") or [],

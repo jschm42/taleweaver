@@ -1155,24 +1155,17 @@ const handleSwitchFlipByHint = (hint: string): boolean => {
   const normalized = String(hint || '').trim().toLowerCase()
   if (!normalized) return false
 
-  const targetSwitch = (items.value || []).find((entry: any) => {
+  const matches = (entry: any) => {
     if (!isSwitchEntity(entry)) return false
-    const byId = String(entry.id || '').toLowerCase() === normalized
-    const byName = String(entry.name || '').toLowerCase() === normalized
-    return byId || byName
-  }) || (entities.value || []).find((entry: any) => {
-    if (!isSwitchEntity(entry)) return false
-    const byId = String(entry.id || '').toLowerCase() === normalized
-    const byName = String(entry.name || '').toLowerCase() === normalized
-    return byId || byName
-  })
-
-  if (targetSwitch) {
-    openSwitchStateModal(targetSwitch)
-    return true
+    return [entry.id, entry.name].some(value => String(value || '').toLowerCase() === normalized)
   }
+  // Portable switches can also be flipped from the inventory.
+  const targetSwitch = [...(items.value || []), ...(entities.value || []), ...(inventoryItems.value || [])].find(matches)
+  if (!targetSwitch) return false
 
-  return false
+  closeSheetForInlinePrompt()
+  openSwitchStateModal(targetSwitch)
+  return true
 }
 
 const closeContainerModal = () => {

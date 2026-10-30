@@ -167,10 +167,9 @@ export const gameCommandService = {
     } else if (entity?.entity_type === 'OBJECT' || entity?.entity_type === 'ITEM') {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
 
+      // Portable switches (e.g. a remote) can be carried and still be flipped from the inventory.
       if (isPortableEntity(entity)) {
-        if (!isSwitchEntity(entity)) {
         items.push({ label: 'Take', action: `/take ${entity.name}` })
-        }
       }
 
       if (!isStationaryEntity(entity)) {
@@ -224,6 +223,10 @@ export const gameCommandService = {
 
     if (isReadableEntity(item)) {
       items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${item.id || item.name}` })
+    }
+
+    if (isSwitchEntity(item)) {
+      items.push({ label: 'Switch / Flip', action: `${FLIP_SWITCH_PREFIX}${item.id || item.name}` })
     }
 
     items.push({ label: 'Combine', action: `${COMBINE_WITH_PREFIX}${item.id || item.name}` })

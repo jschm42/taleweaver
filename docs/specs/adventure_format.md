@@ -167,7 +167,7 @@ Interactive elements, items, containers, and state machines.
 | `name` | `string` | Item or object display name. |
 | `item_type` | `string` | Classification: `"WEAPON"`, `"WEARABLE"`, `"CONSUMABLE"`, `"KEY"`, `"READABLE"`, `"CONTAINER"`, `"SWITCH"`, or `"CONSTRUCTABLE"`. |
 | `description` | `string` | Physical and visual description. |
-| `is_portable` | `boolean` | `true` for portable inventory items; `false` for static scene objects. |
+| `is_portable` | `boolean` | `true` for portable inventory items; `false` for static scene objects. When omitted: `false` for `STATIC` and `SWITCH`, `true` otherwise. A portable `SWITCH` can be taken and flipped from the inventory. |
 | `spatial_position` | `string` | Location in scene (e.g., `"resting on the wooden pedestal"`). |
 | `wearable_slots` | `array` | Valid equipment slots (e.g., `["Head"]`, `["MainHand"]`, `["Body"]`). |
 | `stat_modifiers` | `object` | Attribute buffs/debuffs (e.g., `{"strength": 2, "armor_class": 1}`). |

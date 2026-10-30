@@ -374,6 +374,7 @@ defineExpose({
           :is-evaluating="isEvaluating"
           :docked="sidebarDocked"
           @switch-flip="(sw) => emit('switchFlip', sw)"
+          @switch-contextmenu="(sw, event) => emit('itemContextmenu', sw, event)"
         />
 
         <StoryTabPanel
@@ -436,6 +437,7 @@ defineExpose({
         :current-scene-name="props.currentSceneName || props.sheet?.current_scene"
         :is-evaluating="isEvaluating"
         @switch-flip="(sw) => emit('switchFlip', sw)"
+        @switch-contextmenu="(sw, event) => emit('itemContextmenu', sw, event)"
         @traverse-exit="handleTraverseExit"
         @item-click="(item) => emit('itemClick', item)"
         @item-hover="(item, event) => emit('itemHover', item, event)"

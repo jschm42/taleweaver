@@ -5,7 +5,12 @@ from typing import Any, Optional
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.engine.manifest_apply.objects import recipe_metadata, recipe_result_ids, starts_hidden
+from backend.engine.manifest_apply.objects import (
+    is_portable_default,
+    recipe_metadata,
+    recipe_result_ids,
+    starts_hidden,
+)
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.world.scene_fields import scene_content_from_dict
 from backend.models.adventure_template import AdventureTemplate
@@ -89,7 +94,7 @@ def _object_from_def(
         is_hidden=starts_hidden(obj_def, result_ids),
         reveal_rule=obj_def.get("reveal_rule") or None,
         unlock_rule=None,
-        is_portable=bool(obj_def.get("is_portable", True)),
+        is_portable=is_portable_default(obj_def),
         combination_ingredients=obj_def.get("combination_ingredients") or [],
         reveals_item_id=obj_def.get("reveals_item_id") or None,
         inventory=obj_def.get("inventory") or [],

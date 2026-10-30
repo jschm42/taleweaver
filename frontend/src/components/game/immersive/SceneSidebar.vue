@@ -17,6 +17,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   switchFlip: [entity: any]
+  switchContextmenu: [entity: any, event: MouseEvent]
   traverseExit: [exit: any]
   itemClick: [item: any]
   itemHover: [item: any, event: MouseEvent]
@@ -37,6 +38,7 @@ const emit = defineEmits<{
         :switches="props.sceneSwitches"
         :is-evaluating="props.isEvaluating"
         @switch-flip="(sw) => emit('switchFlip', sw)"
+        @switch-contextmenu="(sw, event) => emit('switchContextmenu', sw, event)"
       />
     </section>
 
