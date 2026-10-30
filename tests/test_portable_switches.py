@@ -90,3 +90,35 @@ def test_inventory_item_without_override_is_unchanged():
 
     # Assert
     assert "switch_state" not in result
+
+
+def _on_floor(ent, states):
+    manager = SimpleNamespace(state=SimpleNamespace(current_scene_id="TV_ROOM"))
+    return TurnInteractionsManager._on_scene_floor(manager, ent, states)
+
+
+def test_crafted_item_revealed_by_override_can_be_taken():
+    # Arrange: crafted results keep is_hidden=True on the row; the session override reveals them.
+    ent = _switch(hidden=True)
+    states = {"REMOTE": {"is_hidden": False}}
+
+    # Act / Assert
+    assert _on_floor(ent, states) is True
+
+
+def test_item_moved_away_by_override_is_not_on_the_floor():
+    # Arrange
+    ent = _switch()
+    states = {"REMOTE": {"current_scene_id": "HALL"}}
+
+    # Act / Assert
+    assert _on_floor(ent, states) is False
+
+
+def test_carried_item_is_not_on_the_floor():
+    # Arrange
+    ent = _switch()
+    states = {"REMOTE": {"is_in_inventory": True}}
+
+    # Act / Assert
+    assert _on_floor(ent, states) is False

@@ -635,6 +635,16 @@ class TurnInteractionsManager:
         current_scene_id = override.get("current_scene_id", ent.current_scene_id)
         return current_scene_id == self.state.current_scene_id
 
+    def _on_scene_floor(self, ent: WorldEntity, states: Any) -> bool:
+        """Visible, not carried, and in the current scene (session overrides win over the row)."""
+        override = states.get(ent.id, {}) if isinstance(states, dict) else {}
+        if bool(override.get("is_hidden", ent.is_hidden)):
+            return False
+        if bool(override.get("is_in_inventory", ent.is_in_inventory)):
+            return False
+        current_scene_id = override.get("current_scene_id", ent.current_scene_id)
+        return current_scene_id == self.state.current_scene_id
+
     async def _resolve_scene_switch(self, target_hint: str) -> WorldEntity | None:
         hint = (target_hint or "").strip().lower()
         if not hint:
@@ -876,25 +886,21 @@ class TurnInteractionsManager:
                     yield chunk
                 return
 
-            # Find portable OBJECT in current scene (snapshot), matching by name or ID (case-insensitive).
+            # Find an OBJECT in the current scene, matching by name or ID (case-insensitive).
+            # Location and visibility come from the session overrides first: crafted or
+            # revealed items keep is_hidden=True on their row and are shown via entity_states.
             ent_res = await self.db.execute(
                 select(WorldEntity).where(
                     WorldEntity.session_id == self.game_id,
-                    WorldEntity.current_scene_id == self.state.current_scene_id,
                     WorldEntity.entity_type == "OBJECT",
-                    WorldEntity.is_hidden.is_(False),
-                    WorldEntity.is_in_inventory.is_(False),
                 )
             )
             # Session copies only: template objects never leak into a running session.
-            candidates = ent_res.scalars().all()
+            overrides = self.state.entity_states or {}
+            candidates = [c for c in ent_res.scalars().all() if self._on_scene_floor(c, overrides)]
             hint_lower = entity_id_or_name.lower()
             ent = None
-            overrides = self.state.entity_states or {}
             for candidate in candidates:
-                cand_ov = overrides.get(candidate.id, {})
-                if cand_ov.get("is_in_inventory") or cand_ov.get("is_hidden"):
-                    continue
                 if candidate.id and candidate.id.lower() == hint_lower:
                     ent = candidate
                     break

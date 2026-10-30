@@ -33,6 +33,7 @@ const emit = defineEmits<{
   changed: []
   itemContextmenu: [item: any, event: MouseEvent]
   inspectItem: [item: any]
+  flipSwitch: [item: any]
 }>()
 
 type TabType = 'hero' | 'inventory' | 'equipment' | 'ailments' | 'specials'
@@ -86,6 +87,11 @@ const handleInventoryClick = (item: any) => {
   const itemType = String(item.item_type || '').toUpperCase()
   if (itemType === 'CONTAINER') {
     emit('openContainer', item)
+    return
+  }
+  // A carried switch (e.g. a remote) opens the same state picker as in the scene.
+  if (itemType === 'SWITCH') {
+    emit('flipSwitch', item)
     return
   }
   if (itemType === 'CONSUMABLE') {

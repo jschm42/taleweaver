@@ -8,7 +8,7 @@ in ``metadata_json``. Results start hidden and are revealed when the recipe is c
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 RECIPE_TYPE = "CONSTRUCTABLE"
@@ -72,3 +72,20 @@ def craft_only_result_ids(entities: Iterable[Any]) -> set[str]:
         if ent.id and str(getattr(ent, "reveal_rule", "") or "").strip()
     }
     return results - revealed_elsewhere - with_rule
+
+
+def used_up_ingredient_ids(entities: Iterable[Any], is_hidden: Callable[[Any], bool]) -> set[str]:
+    """Consumed ingredients of recipes that were already crafted (a result is out in the world).
+
+    Crafting hides used-up scene ingredients; without this they look like undiscovered items
+    and the reveal logic could bring them back when the narration mentions them.
+    """
+    entities = list(entities)
+    by_id = {str(ent.id).upper(): ent for ent in entities if getattr(ent, "id", None)}
+    used_up: set[str] = set()
+    for recipe in (ent for ent in entities if is_recipe(ent)):
+        results = [by_id.get(rid) for rid in recipe_results(recipe)]
+        if not any(res is not None and not is_hidden(res) for res in results):
+            continue
+        used_up |= recipe_ingredients(recipe) - recipe_kept(recipe)
+    return used_up

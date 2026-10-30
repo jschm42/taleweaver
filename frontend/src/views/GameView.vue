@@ -475,6 +475,13 @@ const handleEntityClick = async (entity: any) => {
   }
 }
 
+/** Inventory click on a carried switch: close the sheet and open the state picker. */
+const handleFlipInventorySwitch = (item: any): void => {
+  if (isActionInputBlocked.value) return
+  closeSheetForInlinePrompt()
+  openSwitchStateModal(item)
+}
+
 /** Inventory click on an item without its own action: close the sheet and look at it. */
 const handleInspectInventoryItem = async (item: any): Promise<void> => {
   const target = item?.name || item?.id
@@ -1942,6 +1949,7 @@ usePlayAgentAutoLoop()
       @item-leave="hoveredEntity = null"
       @item-contextmenu="(item, event) => openInventoryContextMenu(item, event)"
       @inspect-item="handleInspectInventoryItem"
+      @flip-switch="handleFlipInventorySwitch"
     />
     <MapModal :open="showMap" :map-data="mapData" :nodes="nodes" :is-debug="!!sheet?.debug_mode" @close="showMap = false" />
     <QuestsModal 
