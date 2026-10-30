@@ -138,6 +138,13 @@
   background: color-mix(in srgb, var(--tw-speaker-color) 85%, #000000);
 }
 
+/* The player's sand and the target's sage daubs are light: dark soot-brown ink keeps the name readable. */
+[data-skin='ancient'] .tw-speaker--player,
+[data-skin='ancient'] .tw-speaker--target {
+  color: #2a1a0e;
+  text-shadow: 0 1px 0 rgba(255, 245, 225, 0.35);
+}
+
 [data-skin='ancient'] .comic-voice-tag {
   border: 0;
   background: none;
