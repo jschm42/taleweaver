@@ -1,7 +1,6 @@
 ---
 description: Explains TaleWeaver core architecture, including Adventure Manifest (.adv/.adz), multi-pass turn pipeline (Pass 1 mechanics, Pass 1.5 rule validation/reversion, Pass 2 narration), entity state resolution, and scripting engine.
-trigger:
-  type: model_decision
+trigger: model_decision
 ---
 
 # TaleWeaver Architecture Concept

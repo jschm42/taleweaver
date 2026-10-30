@@ -43,11 +43,11 @@ Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customi
 
 Specific project rules are located in `.agents/rules/` and triggered contextually to optimize context usage:
 
-* [architecture.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/architecture.md) (`type: model_decision`) — Complete architectural breakdown of the Game Turn Loop (Pass 1, Pass 1.5, Pass 2), World Manifest (`adventure.adv`/`.adz`), state mutations, and scripting engine.
-* [typescript.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/typescript.md) (`type: glob`, `**/*.{ts,tsx}`) — TypeScript code formatting, naming conventions, and strict typing.
-* [python.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/python.md) (`type: glob`, `**/*.py`) — Python conventions, type hinting, error handling, and Alembic migrations.
-* [testing.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/testing.md) (`type: glob`, `tests/**/*.py`) — AAA pattern, mocking requirements, and mandatory adventure lifecycle verification.
-* [security.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/security.md) (`type: model_decision`) — Path traversal prevention (CWE-22) and secure filesystem handling.
+* [architecture.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/architecture.md) (`trigger: model_decision`) — Complete architectural breakdown of the Game Turn Loop (Pass 1, Pass 1.5, Pass 2), World Manifest (`adventure.adv`/`.adz`), state mutations, and scripting engine.
+* [typescript.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/typescript.md) (`trigger: glob`, `**/*.ts, **/*.tsx`) — TypeScript code formatting, naming conventions, and strict typing.
+* [python.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/python.md) (`trigger: glob`, `**/*.py`) — Python conventions, type hinting, error handling, and Alembic migrations.
+* [testing.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/testing.md) (`trigger: glob`, `tests/**/*.py`) — AAA pattern, mocking requirements, and mandatory adventure lifecycle verification.
+* [security.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/security.md) (`trigger: model_decision`) — Path traversal prevention (CWE-22) and secure filesystem handling.
 
 ---
 

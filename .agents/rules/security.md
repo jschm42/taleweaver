@@ -1,7 +1,6 @@
 ---
 description: Mandatory security rules for file paths, path traversal prevention (CWE-22), and safe file operations.
-trigger:
-  type: model_decision
+trigger: model_decision
 ---
 
 # Security & Path Traversal Prevention (CWE-22)

@@ -1,14 +1,13 @@
 ---
-description: Erzwingt die Namenskonventionen und Best Practices für unsere TypeScript-Dateien.
-trigger:
-  type: glob
-  pattern: "**/*.{ts,tsx}"
+description: Enforces naming conventions, strict typing, and best practices for TypeScript files.
+trigger: glob
+globs: "**/*.ts, **/*.tsx"
 ---
 
 # TypeScript Guidelines
 
-1. Verwende immer `const` anstelle von `let`, es sei denn, die Variable wird zwingend neu zugewiesen.
-2. Typisiere alle Funktionsrückgabewerte explizit.
-3. Nutze `camelCase` für Variablen und Funktionen sowie `PascalCase` für Interfaces und Typen.
-4. Vermeide `any` – nutze präzise Types oder Generics.
-5. Halte React-Komponenten und Hooks modular, sauber typisiert und wiederverwendbar.
+1. Always use `const` instead of `let`, unless the variable must be reassigned.
+2. Explicitly type all function return values.
+3. Use `camelCase` for variables and functions, and `PascalCase` for interfaces and types.
+4. Avoid `any` — use precise types or generics.
+5. Keep components and composables/hooks modular, cleanly typed, and reusable.

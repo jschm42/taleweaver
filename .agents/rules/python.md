@@ -1,8 +1,7 @@
 ---
 description: Enforces Python coding conventions, type hinting, error handling, and Alembic migrations.
-trigger:
-  type: glob
-  pattern: "**/*.py"
+trigger: glob
+globs: "**/*.py"
 ---
 
 # Python Guidelines

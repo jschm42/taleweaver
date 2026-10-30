@@ -68,7 +68,8 @@ const menuItemClass = 'w-full px-3 py-2 text-left text-xs font-bold text-slate-2
     ]"
   >
     <div class="absolute inset-0 rounded-xl overflow-hidden">
-      <img v-if="imageUrl" :src="imageUrl" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+      <!-- Items without image actions (CONSTRUCTABLE) always show their type icon, even if an old image is stored. -->
+      <img v-if="imageActions && imageUrl" :src="imageUrl" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
       <div v-else-if="!imageActions" class="absolute inset-0 flex items-center justify-center pb-6">
         <i :class="['ra text-4xl opacity-70', getItemIcon(obj.item_type ?? undefined), getTypeColor(obj.item_type ?? undefined)]"></i>
       </div>
