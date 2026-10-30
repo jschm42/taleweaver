@@ -175,6 +175,19 @@ code: |
       tw.story.narrate("Thunder. The refugee ship is almost at the reef.")
 ```
 
+**Scene helpers** keep a place's logic with the place. Only `def` statements and constants go in, and every script can call them, wherever the player is. They are the natural home for the scene's dialog handlers:
+
+```text
+[Scene: CRYPT] The Crypt
+helpers: |
+  def crypt_curse():
+      tw.player.damage(8)
+      tw.vars.set('crypt_cursed', True)
+on_enter: |
+  if not tw.vars.get('crypt_cursed'):
+      crypt_curse()
+```
+
 Scripts need the **Event Scripts Engine** switched on in the generator settings.
 
 ---

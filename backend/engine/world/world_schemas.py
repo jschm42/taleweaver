@@ -77,6 +77,15 @@ class WorldSceneSchema(WorldBaseSchema):
         default="",
         description="Optional text output when the protagonist leaves the scene. Use empty string for none.",
     )
+    helpers_script: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional scene helper block: ONLY `def` functions and constant assignments "
+            "(NAME = literal) that every script can call, e.g. this scene's puzzle logic or "
+            "dialog handlers. Loaded on every script run like init_script, wherever the player "
+            "is. Any other statement never runs. Use empty string for none."
+        ),
+    )
 
     model_config = {"extra": "forbid"}
 

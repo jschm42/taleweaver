@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any, Optional
 
 from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.world.scene_fields import scene_content
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -88,11 +89,9 @@ def clone_avatar(source: Avatar, user_id: str, template_id: Optional[str]) -> Av
 
 def clone_scene(scene: WorldScene, session_id: str, image_url: Optional[str]) -> WorldScene:
     return WorldScene(
-        id=scene.id,
+        **scene_content(scene),
         session_id=session_id,
         template_id=None,
-        label=scene.label,
-        description=scene.description,
         image_url=image_url or scene.image_url,
     )
 

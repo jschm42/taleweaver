@@ -38,9 +38,14 @@ class ScriptRunner:
         self,
         scripts: list[dict[str, Any]] | None = None,
         init_script: Optional[str] = None,
+        helpers: Optional[list[tuple[str, str]]] = None,
     ):
         self.scripts = scripts or []
         self.init_script = str(init_script or "").strip()
+        # (source_id, code) of scene helper blocks, loaded after init_script in this order.
+        self.helpers = [
+            (sid, str(code).strip()) for sid, code in (helpers or []) if str(code).strip()
+        ]
         self.interpreter = SafeAstInterpreter()
 
     @staticmethod
@@ -58,17 +63,20 @@ class ScriptRunner:
 
     def load_init_definitions(self, scope: dict[str, Any]) -> None:
         """
-        Loads function definitions and constant assignments from init_script into the target scope.
+        Loads function definitions and constant assignments from init_script and the scene
+        helper blocks into the target scope (later blocks shadow earlier names).
         Top-level expressions and mutable API calls are skipped to prevent state resets.
         """
-        if not self.init_script:
-            return
+        for source_id, code in [("init_script", self.init_script), *self.helpers]:
+            if code:
+                self._load_definitions(code, source_id, scope)
 
+    def _load_definitions(self, code: str, source_id: str, scope: dict[str, Any]) -> None:
         try:
-            tree = ast.parse(self.init_script, mode="exec")
+            tree = ast.parse(code, mode="exec")
         except Exception as exc:
-            logger.error(f"[ScriptRunner] Failed to parse init_script definitions: {exc}")
-            report_script_error(scope.get("tw"), "init_script", exc)
+            logger.error(f"[ScriptRunner] Failed to parse {source_id} definitions: {exc}")
+            report_script_error(scope.get("tw"), source_id, exc)
             return
 
         def_body: list[ast.stmt] = []
@@ -98,9 +106,9 @@ class ScriptRunner:
                 self.interpreter.env = prev_env
         except Exception as exc:
             logger.error(
-                f"[ScriptRunner] Error executing init_script definitions into scope: {exc}"
+                f"[ScriptRunner] Error executing {source_id} definitions into scope: {exc}"
             )
-            report_script_error(scope.get("tw"), "init_script", exc)
+            report_script_error(scope.get("tw"), source_id, exc)
 
     def run_init_script(self, context: GameContext) -> ScriptChangeset:
         """

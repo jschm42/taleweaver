@@ -82,6 +82,7 @@ from backend.engine.scripting.gm_directions import (
     take_gm_directions,
 )
 from backend.engine.scripting.npc_persona import apply_persona
+from backend.engine.scripting.scene_helpers import runner_for_manifest
 from backend.engine.rules.skill_check import roll_attack, roll_skill_check
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -2814,7 +2815,7 @@ class GameTurnManager:
         active_sequence = AdventureLogic.resolve_active_sequence(self.adventure, self.state)
         scripts = [*manifest.get("scripts", []), *sequence_scripts(active_sequence)]
         init_script = manifest.get("init_script") or getattr(self.adventure, "init_script", None)
-        return ScriptRunner(scripts, init_script=init_script)
+        return runner_for_manifest(manifest, scripts, init_script or "")
 
     async def _execute_inline_script(
         self,

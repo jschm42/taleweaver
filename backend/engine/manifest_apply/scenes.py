@@ -15,16 +15,11 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
 )
 from backend.engine.media.image_prompt_context import build_scene_image_prompt
+from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.world_entity import WorldExit, WorldScene
 
 MAX_DECORATIVE_OBJECTS = 7
 MAX_DECORATIVE_LENGTH = 100
-_SCENE_SCRIPT_FIELDS = (
-    "on_enter_scene_script",
-    "on_enter_scene_text",
-    "on_leave_scene_script",
-    "on_leave_scene_text",
-)
 _EXIT_SCRIPT_FIELDS = (
     "unlock_expression",
     "on_open_exit_script",
@@ -109,7 +104,7 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                 image_url=image_url,
                 decorative_objects=clean_decorative_objects(scene.get("decorative_objects"))
                 or None,
-                **{key: scene.get(key) or None for key in _SCENE_SCRIPT_FIELDS},
+                **{key: scene.get(key) or None for key in SCENE_SCRIPT_FIELDS},
             )
         )
 

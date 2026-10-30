@@ -9,6 +9,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
 2. [Sandbox Security & Limits](#sandbox-security--limits)
 3. [Event Triggers & Lifecycle](#event-triggers--lifecycle)
 4. [Global Initialization Script & Helper Methods](#global-initialization-script--helper-methods)
+   - [Scene Helpers](#scene-helpers-helpers_script)
 5. [The `tw` Scripting API](#the-tw-scripting-api)
    - [tw.player](#twplayer)
    - [tw.scene](#twscene)
@@ -142,6 +143,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
+| | `helpers_script` *(definitions)* | Not a trigger: functions and constants every script can call. See [Scene Helpers](#scene-helpers-helpers_script). |
 | **Exits** | `on_open_exit_script`, `..._text` | Executes when the player opens or traverses this exit. |
 | | `on_exit_used_script`, `..._text` | Transition Trigger: Executes specifically when the player successfully traverses this exit to enter the destination scene. |
 | | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when unlocking. If false, unlocking fails. |
@@ -230,7 +232,7 @@ The initialization script runs under a dual lifecycle model:
    - Any standalone scripts marked with the `on_init` trigger also fire during this phase.
 
 2. **Every Turn Scope Injection (Reusable Methods & Constants)**:
-   Whenever an event script fires during gameplay (`on_turn_start`, `on_interact`, `on_enter_scene`, `on_turn_end`, etc.), the engine loads function definitions (`def ...`) and top-level constants from the initialization script and injects them directly into the script's global execution scope.
+   Whenever any script runs during gameplay (top-level and sequence scripts, inline entity, scene and exit triggers, soft rules, dialog handlers), the engine loads function definitions (`def ...`) and top-level constants from the initialization script and injects them directly into the script's global execution scope. Constants are assignments of a literal value (number, string, list, tuple, dict).
    - You can call your helper functions directly from any event script without repeating code!
    - State mutation statements in the initialization script are **not** re-evaluated during this step, ensuring deterministic performance and avoiding unwanted side-effects.
 
@@ -282,6 +284,42 @@ Inside an `on_enter_scene` script attached to `SCENE_INNER_SANCTUM`:
 if not can_access_sanctum():
     tw.story.narrate("A divine barrier repels you! Your reputation is insufficient.")
     tw.player.damage(10)
+```
+
+### Scene Helpers (`helpers_script`)
+
+In a large adventure, putting every helper into the one `init_script` makes it hard to read. A scene can carry its own helper block (`helpers_script`, World-Editor: **Scene â†’ Scripts â†’ Scene Helpers**) for the logic of that place's puzzle, dialog or NPC. In a Story Idea blueprint it is the `helpers:` key of a `[Scene]` tag, and the World-Builder fills it when it generates scripts.
+
+Scene helpers work exactly like the definitions part of `init_script`:
+
+- Only `def` statements and constant assignments are loaded. Any other statement in the block **never runs**; the editor validation warns about it (`helpers_statement_ignored`). Put set-up code into `init_script` or an `on_enter_scene` script.
+- They are loaded on **every script run**, after `init_script`, from all scenes in manifest order. They are available **wherever the player is**, not only in their own scene. This is deliberate: a function that exists only after the player visited a scene would make scripts work for some routes and fail for others.
+- Nothing is stored in the game state. Like everything else, a running game keeps the definitions it started with.
+- A name defined twice (in `init_script` and a scene, or in two scenes) is shadowed by the later block; the editor validation warns (`helper_name_conflict`). Prefix helpers with their scene, e.g. `crypt_open_sarcophagus()`.
+- Dialog handlers (`on_choice`) may live in scene helpers.
+- A syntax error in one block is reported as a script error named after its scene (`helpers_CRYPT`); the other blocks still load.
+
+Helpers block on scene `CRYPT`:
+```python
+CRYPT_CURSE_DAMAGE = 8
+
+def crypt_curse():
+    tw.player.damage(CRYPT_CURSE_DAMAGE)
+    tw.vars.set("crypt_cursed", True)
+
+def on_sarcophagus_choice(answ):
+    if answ == 0:
+        crypt_curse()
+        tw.story.show_message("A cold breath escapes the stone. (-8 HP)")
+        return
+    tw.story.show_message("You leave the lid untouched.")
+```
+
+`on_enter_scene_script` of `CRYPT`:
+```python
+if not tw.vars.get("crypt_cursed"):
+    tw.dialog.choose("The sarcophagus lid is ajar.", ["Push it open", "Leave it"],
+                     on_choice="on_sarcophagus_choice")
 ```
 
 ---
@@ -435,7 +473,7 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
 - `tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False) -> bool` (alias `tw.dialog.ask`)
   - `prompt`: the question or situation shown above the options.
   - `options`: up to 8 entries, each a label string or `{"label": "...", "visible_if": "<guard expression>"}`. Hidden options keep their position, so indices stay stable.
-  - `on_choice`: name of the handler function (a string, or the function itself). **The handler must be defined in the global `init_script`.**
+  - `on_choice`: name of the handler function (a string, or the function itself). **The handler must be defined in the global `init_script` or in a [scene helper block](#scene-helpers-helpers_script).**
   - `speaker`: optional NPC name shown as the dialog title.
   - `narrate`: when `True`, the small model narrates the outcome after the handler ran (it is told the handler's messages are binding facts). It also receives the current character and goal of the visible NPCs in the player's scene (including changes the handler just made, e.g. `npc.character = "Very angry"`) and any pending `tw.story.direct(...)` directions, which this narration then uses up. Default `False`: only the handler's own messages appear, which is instant and deterministic; directions then wait for the next turn's narration.
   - Returns `False` (and emits a debug note) when no dialog was opened: another dialog is already open this turn, the handler name is invalid, or no option is visible.
@@ -447,7 +485,7 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
 3. applies the handler's changeset (variables, items, HP, game over, sequence advance, …) and runs the post-turn checks (special unlocks, NPC attacks),
 4. optionally narrates the outcome (`narrate=True`).
 
-A handler may call `tw.dialog.choose()` again, which is how multi-step conversations and dialog trees are built. The editor validation warns (`dialog_handler_missing`) when a dialog references a handler that the init script does not define.
+A handler may call `tw.dialog.choose()` again, which is how multi-step conversations and dialog trees are built. The editor validation warns (`dialog_handler_missing`) when a dialog references a handler that neither the init script nor any scene helper block defines.
 
 ### `tw.llm` (Ask the LLM)
 

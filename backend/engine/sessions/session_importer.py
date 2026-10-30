@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.world.scene_fields import scene_content_from_dict
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -99,11 +100,9 @@ def _add_world_scenes_and_exits(
 ) -> None:
     for sc in world_scenes_data:
         world_sc = WorldScene(
-            id=sc.get("id"),
+            **scene_content_from_dict(sc),
             template_id=template_id,
             session_id=new_session_id,
-            label=sc.get("label"),
-            description=sc.get("description"),
             image_url=sc.get("image_url"),
         )
         db.add(world_sc)

@@ -106,6 +106,8 @@ _hook(PROTAGONIST_KEYS, "on_status_change", "on_status_change")
 
 SCENE_KEYS: dict[str, FieldSpec] = {
     "decor": FieldSpec("decorative_objects", text_list),
+    # Scene helper block: functions/constants every script can call (like init_script).
+    "helpers": _script("helpers_script"),
 }
 _hook(SCENE_KEYS, "on_enter", "on_enter_scene")
 _hook(SCENE_KEYS, "on_leave", "on_leave_scene")

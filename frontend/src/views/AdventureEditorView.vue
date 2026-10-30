@@ -1119,6 +1119,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_read_text: selectedObject?.on_read_text || metadata?.on_read_text || '',
     on_leave_scene_script: selectedScene?.on_leave_scene_script || metadata?.on_leave_scene_script || '',
     on_leave_scene_text: selectedScene?.on_leave_scene_text || metadata?.on_leave_scene_text || '',
+    helpers_script: selectedScene?.helpers_script || '',
     weapon_config: type === 'object' ? readWeaponConfig(metadata, selectedObject) : undefined,
   }
   showEditModal.value = true
@@ -1406,6 +1407,7 @@ async function saveEntityText(data: any) {
       on_enter_scene_text: editEntityContext.value.type === 'scene' ? data.on_enter_scene_text : undefined,
       on_leave_scene_script: editEntityContext.value.type === 'scene' ? data.on_leave_scene_script : undefined,
       on_leave_scene_text: editEntityContext.value.type === 'scene' ? data.on_leave_scene_text : undefined,
+      helpers_script: editEntityContext.value.type === 'scene' ? data.helpers_script : undefined,
       unlock_expression: editEntityContext.value.type === 'object' ? data.unlock_expression : undefined,
       on_unlock_success_script: editEntityContext.value.type === 'object' ? data.on_unlock_success_script : undefined,
       on_unlock_success_text: editEntityContext.value.type === 'object' ? data.on_unlock_success_text : undefined,

@@ -9,7 +9,7 @@ The trigger catalogue below mirrors what the gameplay engine actually executes:
   state applier (``turn_state_applier.py`` / ``turn_interactions.py``).
 * Sequence ``soft_rules`` are judged by the GM and run by the soft rule guard
   (``engine/rules/soft_rules.py``); ``tw.dialog`` choice handlers live in ``init_script``
-  (``engine/scripting/dialog.py``).
+  or a scene's ``helpers_script`` (``engine/scripting/dialog.py``, ``scene_helpers.py``).
 
 Keep this catalogue in sync with ``docs/scripting_engine.md``.
 """
@@ -119,7 +119,8 @@ TW_API_REFERENCE = (
     "multiple-choice dialog (NPC conversation, riddle, dilemma). `options` is a list of labels or "
     "{'label': ..., 'visible_if': '<guard expression>'} dicts (max 8). The call does NOT wait: once "
     "the player picks, the engine calls the function named by `on_choice` with the chosen option's "
-    "index (its position in `options`). That handler MUST be defined in the top-level `init_script`; "
+    "index (its position in `options`). That handler MUST be defined in the top-level `init_script` or in a scene's "
+    "`helpers_script`; "
     "it may call tw.dialog.choose again for multi-step conversations. narrate=True lets the GM "
     "narrate the outcome.\n"
     "- tw.log / tw.debug: tw.log(msg), tw.log.info/warn/error(msg) or print(msg) (outputs to server console); "
@@ -224,7 +225,8 @@ def build_scripts_requirement(scripts_generation_enabled: bool) -> str:
     """Return the scripting section appended to the world generation user prompt."""
     if not scripts_generation_enabled:
         return (
-            "\nSCRIPTING: Do NOT generate any custom scripts. Keep scripts: [], init_script empty, "
+            "\nSCRIPTING: Do NOT generate any custom scripts. Keep scripts: [], init_script and "
+            "every scene's helpers_script empty, "
             "every sequence's soft_rules: [] and do not populate any on_*_script or on_*_text "
             "fields (leave them as empty strings). Do not use tw.dialog."
         )
@@ -256,7 +258,8 @@ def build_scripts_requirement(scripts_generation_enabled: bool) -> str:
         "action, not its outcome. Use [] for sequences without such interactions.\n\n"
         "4) CHOICE DIALOGS: use tw.dialog.choose (see API below) for NPC conversations, riddles and "
         "dilemmas where the player picks from fixed answers. Open the dialog from a script or a soft "
-        "rule script and define its `on_choice` handler function in the top-level `init_script`. "
+        "rule script and define its `on_choice` handler function in the top-level `init_script` "
+        "or in the `helpers_script` of the scene where the dialog happens. "
         "Every branch must keep the adventure winnable: a wrong answer may cost HP or reopen the "
         "dialog, but must not block the main path unless it is an intended game over.\n\n"
         "5) SEQUENCE SCRIPTS: every sequence has a `scripts` list with the same shape as top-level "
@@ -264,6 +267,14 @@ def build_scripts_requirement(scripts_generation_enabled: bool) -> str:
         "is active (any top-level trigger except on_init). Prefer them over top-level scripts for "
         "chapter-specific behaviour, e.g. an on_interact script on an object that should only "
         "react during one chapter. Use [] for sequences without such scripts.\n\n"
+        "6) SCENE HELPERS: every scene has a `helpers_script` field for functions and constants "
+        "that belong to that place (its puzzle logic, its dialog handlers). It works like the "
+        "definitions in `init_script`: ONLY `def` statements and constant assignments "
+        "(NAME = number/string/list/dict) are loaded, on every script run, and every script can "
+        "call them wherever the player is. Any other statement there NEVER runs, so put set-up "
+        "code into `init_script` or `on_enter_scene_script`. Prefix helper names with the scene "
+        "(e.g. crypt_open_lid) so they never clash with other scenes or `init_script`. Keep "
+        "truly shared helpers in `init_script`; use an empty string for scenes without helpers.\n\n"
         "RULES:\n"
         "- NATURAL-LANGUAGE CONDITIONS VS. HARD RULES (MUTUAL EXCLUSIVITY): Use EITHER a natural-language condition (quest goal, award/win/loss condition text judged by the GM) OR deterministic hard rules / scripted guards on any given asset, but NOT both. If you set a guard_expression or hard rule on a sequence, quest, award, container, exit, or win/loss condition, keep its natural-language condition strictly descriptive. This does not restrict sequence `soft_rules`, which may carry their own guard_expression.\n"
         "- Only reference scene/exit/NPC/object/quest IDs that exist in this manifest.\n"

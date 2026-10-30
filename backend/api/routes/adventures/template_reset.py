@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.engine.manifest_apply.objects import recipe_metadata, recipe_result_ids, starts_hidden
 from backend.engine.media.image_prompt_context import clean_appearance
+from backend.engine.world.scene_fields import scene_content_from_dict
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldScene
@@ -44,13 +45,10 @@ def _object_metadata(obj_def: dict[str, Any], item_type: str) -> dict[str, Any]:
 def _scene_from_def(
     scene_def: dict[str, Any], template_id: str, images: dict[str, Optional[str]]
 ) -> WorldScene:
-    scene_id = scene_def["id"]
     return WorldScene(
-        id=scene_id,
+        **scene_content_from_dict(scene_def),
         template_id=template_id,
-        label=scene_def.get("name") or scene_def.get("label") or scene_id,
-        description=scene_def.get("description", ""),
-        image_url=images.get(scene_id),
+        image_url=images.get(scene_def["id"]),
     )
 
 

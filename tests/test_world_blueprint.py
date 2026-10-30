@@ -12,6 +12,7 @@ from backend.engine.blueprint import (
     prepare_blueprint,
 )
 from backend.engine.blueprint.prompt import blueprint_sequences, render_blueprint_prompt
+from backend.engine.world.world_schemas import WorldSceneSchema
 
 SAMPLE = """A salvage tech wakes in the brig of a derelict ship.
 
@@ -307,3 +308,26 @@ def test_recipe_tag_maps_ingredients_results_and_kept_items():
     assert recipe.fixed()["kept_ingredients"] == ["MORTAR"]
     assert recipe.fixed()["result_item_ids"] == ["ANTIDOTE"]
     assert cure.fixed()["item_type"] == "CONSTRUCTABLE"
+
+
+def test_scene_helpers_key_reaches_the_generated_scene():
+    # Arrange
+    text = (
+        "[Scene: CRYPT] The Crypt\n"
+        "helpers: |\n"
+        "  CURSE_DAMAGE = 8\n"
+        "  def crypt_curse():\n"
+        "      tw.player.damage(CURSE_DAMAGE)\n"
+    )
+    blueprint, _missing = analyze_blueprint(text)
+    manifest = {"scenes": [{"id": "CRYPT", "name": "Crypt", "description": "Cold stone."}]}
+
+    # Act
+    violations = apply_blueprint(manifest, blueprint)
+
+    # Assert
+    assert blueprint.errors == []
+    assert violations == []
+    helpers = manifest["scenes"][0]["helpers_script"]
+    assert helpers.startswith("CURSE_DAMAGE = 8\ndef crypt_curse():")
+    assert WorldSceneSchema.model_validate(manifest["scenes"][0]).helpers_script == helpers

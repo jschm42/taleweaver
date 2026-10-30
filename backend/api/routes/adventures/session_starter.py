@@ -32,7 +32,7 @@ from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
-from backend.engine.scripting.runner import ScriptRunner
+from backend.engine.scripting.scene_helpers import runner_for_manifest
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.base import utc_now
@@ -208,7 +208,10 @@ def _run_init_scripts(
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
     )
-    changes = ScriptRunner(scripts=scripts, init_script=init_script).run_init_script(init_context)
+    runner = runner_for_manifest(
+        getattr(adventure, "original_manifest", None), scripts, init_script or ""
+    )
+    changes = runner.run_init_script(init_context)
 
     entity_states["__script_vars__"] = {**changes.var_updates, "__init_script_executed__": True}
     if getattr(changes, "story_flag_updates", None):

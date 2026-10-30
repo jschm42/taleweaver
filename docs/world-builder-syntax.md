@@ -41,7 +41,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 Nested `[Ability: ID] Name` blocks define special actions (see below).
 
 ### `[Scene: ID] Name`
-`decor` (up to 7 decorative objects, comma-separated), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`.
+`decor` (up to 7 decorative objects, comma-separated), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.

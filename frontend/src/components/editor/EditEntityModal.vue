@@ -80,6 +80,7 @@ const props = defineProps<{
     on_read_text?: string
     on_leave_scene_script?: string
     on_leave_scene_text?: string
+    helpers_script?: string
   }
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
   ruleEnforcementMode: string
@@ -146,6 +147,7 @@ const localForm = ref({
   on_read_text: '',
   on_leave_scene_script: '',
   on_leave_scene_text: '',
+  helpers_script: '',
   on_pickup_script: '',
   on_pickup_text: '',
   on_drop_script: '',
@@ -726,6 +728,7 @@ function handleSave() {
     on_read_text: String(localForm.value.on_read_text || '').trim(),
     on_leave_scene_script: String(localForm.value.on_leave_scene_script || '').trim(),
     on_leave_scene_text: String(localForm.value.on_leave_scene_text || '').trim(),
+    helpers_script: String(localForm.value.helpers_script || '').trim(),
     on_pickup_script: localForm.value.on_pickup_script,
     on_pickup_text: localForm.value.on_pickup_text,
     on_drop_script: localForm.value.on_drop_script,
@@ -2328,6 +2331,16 @@ const textLogPreviewClass = computed(() => {
                   </div>
                     <textarea v-model="localForm.on_leave_scene_text" rows="4" class="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none transition-all resize-y"></textarea>
                   </div>
+                </div>
+
+                <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
+                  <ScriptEditor
+                    v-model="localForm.helpers_script"
+                    label="Scene Helpers"
+                    help-text="Functions and constants (def, NAME = value) that every script can call, like the global init script. Loaded on every script run, wherever the player is. Other statements never run; use the trigger scripts above for those."
+                    context="init_script"
+                    min-height="120px"
+                  />
                 </div>
               </div>
 

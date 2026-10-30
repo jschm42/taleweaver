@@ -80,6 +80,7 @@ class EntityUpdateRequest(BaseModel):
     on_enter_scene_text: Optional[str] = None
     on_leave_scene_script: Optional[str] = None
     on_leave_scene_text: Optional[str] = None
+    helpers_script: Optional[str] = None
     on_open_exit_script: Optional[str] = None
     on_open_exit_text: Optional[str] = None
     on_exit_used_script: Optional[str] = None

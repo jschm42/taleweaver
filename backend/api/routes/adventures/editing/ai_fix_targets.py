@@ -57,6 +57,7 @@ _FIX_SCENE_FIELDS = frozenset(
         "on_enter_scene_text",
         "on_leave_scene_script",
         "on_leave_scene_text",
+        "helpers_script",
     }
 )
 

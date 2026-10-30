@@ -18,6 +18,7 @@ from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
 from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.world.scene_fields import scene_content
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -184,11 +185,9 @@ async def _copy_world_to_session(
         image = copy_data_asset_to_session(session_id, "scenes", scene.image_url, asset_cache)
         db.add(
             WorldScene(
-                id=scene.id,
+                **scene_content(scene),
                 session_id=session_id,
                 template_id=None,
-                label=scene.label,
-                description=scene.description,
                 image_url=image or scene.image_url,
             )
         )

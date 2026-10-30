@@ -1,5 +1,5 @@
 import uuid6
-from sqlalchemy import JSON, Boolean, Column, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, Column, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import synonym
 
 from backend.models.base import Base, TimestampMixin
@@ -33,6 +33,8 @@ class WorldScene(Base, TimestampMixin):
     on_enter_scene_text = Column(String(5000), nullable=True)
     on_leave_scene_script = Column(String(5000), nullable=True)
     on_leave_scene_text = Column(String(5000), nullable=True)
+    # Helper functions/constants (like init_script) available to every script run.
+    helpers_script = Column(Text, nullable=True)
     adventure_id = synonym("template_id")
 
 

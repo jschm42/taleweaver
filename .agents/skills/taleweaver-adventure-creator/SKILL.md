@@ -42,7 +42,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | :--- | :--- |
 | `[World]` | `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script` |
 | `[Protagonist] Name` | `role`, `goal`, `hp`, `str`…`ac`, `inventory`, `weapon`, `armor` |
-| `[Scene: ID] Name` | `decor`, `on_enter`, `on_enter_text`, `on_leave` |
+| `[Scene: ID] Name` | `decor`, `on_enter`, `on_enter_text`, `on_leave`, `helpers` (only `def`s and constants; callable from every script, e.g. the scene's dialog handlers) |
 | `[Exit: A -> B] label` | `code`, `key_item`, `rule`, `guard`, `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |
 | `[NPC: ID] Name` | `in`, `type`, `hp`, `hidden`, `reveal`, `inventory`, `attack` (`passive`/`on_sight`), `attack_when_holding`, `attack_guard`, `killable`, `on_defeat`, `on_meet`, `on_interact` |
 | `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_guard`, `contains`, `reveals`, `bonus` (`str+2`), `damage`, `cost`, weapons: `category` (melee/ranged/magic), `hit` (`str`), `hit_effects` (`target sta -1d4, self hp +2`), `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read` |

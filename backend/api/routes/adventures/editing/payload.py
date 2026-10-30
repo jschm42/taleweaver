@@ -24,6 +24,7 @@ from backend.api.routes.adventures.session_items import backfill_avatar_items_fr
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.engine.media.media_engine import MediaEngine
+from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -33,12 +34,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Editor"])
 
 
-_SCENE_SCRIPT_FIELDS = (
-    "on_enter_scene_script",
-    "on_enter_scene_text",
-    "on_leave_scene_script",
-    "on_leave_scene_text",
-)
 _EXIT_SCRIPT_FIELDS = (
     "unlock_expression",
     "on_unlock_success_script",
@@ -99,7 +94,7 @@ def _scene_extras(scene: WorldScene, data: dict[str, Any]) -> dict[str, Any]:
     decor = decor if isinstance(decor, list) else []
     return {
         "decorative_objects": [str(d) for d in decor if isinstance(d, (str, int, float))],
-        **_text_fields(scene, _SCENE_SCRIPT_FIELDS),
+        **_text_fields(scene, SCENE_SCRIPT_FIELDS),
     }
 
 

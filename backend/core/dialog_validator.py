@@ -1,8 +1,9 @@
-"""Static check for choice dialogs: every ``on_choice`` handler must live in the init script.
+"""Static check for choice dialogs: every ``on_choice`` handler must be a definition.
 
 ``tw.dialog.choose(..., on_choice=handler)`` resolves the handler in a later request, where only
-functions from the global ``init_script`` are in scope. A handler defined in the opening script
-itself (or nowhere) would silently do nothing, so the editor validation flags it.
+functions from the global ``init_script`` and the scene helper blocks are in scope. A handler
+defined in the opening script itself (or nowhere) would silently do nothing, so the editor
+validation flags it.
 """
 
 from __future__ import annotations
@@ -68,9 +69,13 @@ def init_functions(init_script: Any) -> set[str]:
     return {stmt.name for stmt in tree.body if isinstance(stmt, ast.FunctionDef)}
 
 
-def check_dialog_handlers(sources: list[Any], init_script: Any) -> list[ValidationFinding]:
-    """Flags dialog handlers that the init script does not define (one finding per name)."""
+def check_dialog_handlers(
+    sources: list[Any], init_script: Any, helper_scripts: tuple[str, ...] = ()
+) -> list[ValidationFinding]:
+    """Flags dialog handlers that no definition block defines (one finding per name)."""
     defined = init_functions(init_script)
+    for code in helper_scripts:
+        defined |= init_functions(code)
     referenced: set[str] = set()
     for source in sources:
         for code in _strings(source):
@@ -80,8 +85,8 @@ def check_dialog_handlers(sources: list[Any], init_script: Any) -> list[Validati
             severity="warn",
             code="dialog_handler_missing",
             message=(
-                f"tw.dialog handler '{name}' is not defined in the global init_script; "
-                "the choice will have no effect."
+                f"tw.dialog handler '{name}' is not defined in the global init_script "
+                "or in any scene helpers; the choice will have no effect."
             ),
             location="adventure",
             context={"handler": name},

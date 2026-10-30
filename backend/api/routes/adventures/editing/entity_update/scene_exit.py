@@ -16,15 +16,10 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_new_id,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
-_SCENE_SCRIPT_FIELDS = (
-    "on_enter_scene_script",
-    "on_enter_scene_text",
-    "on_leave_scene_script",
-    "on_leave_scene_text",
-)
 _EXIT_SCRIPT_FIELDS = (
     "unlock_expression",
     "on_open_exit_script",
@@ -56,7 +51,7 @@ _MAX_DECORATIVE_OBJECT_LENGTH = 100
 async def _rename_scene(
     db: AsyncSession, template_id: str, adv: AdventureTemplate, scene: WorldScene, raw_id: str
 ) -> None:
-    """Change a scene ID and repoint exits, entities, and the manifest start scene."""
+    """Change a scene ID and repoint exits, entities, and the manifest scene entry."""
     old_id = scene.id
     new_id = validated_new_id(raw_id, "Scene", _MAX_SCENE_ID_LENGTH)
     if new_id == old_id:
@@ -76,10 +71,18 @@ async def _rename_scene(
         if ent.current_scene_id == old_id:
             ent.current_scene_id = new_id
 
+    _rename_manifest_scene(adv, old_id, new_id)
+
+
+def _rename_manifest_scene(adv: AdventureTemplate, old_id: str, new_id: str) -> None:
     manifest = deepcopy(adv.original_manifest or {})
     if manifest.get("start_scene_id") == old_id:
         manifest["start_scene_id"] = new_id
-        adv.original_manifest = manifest
+    for item in manifest.get("scenes") or []:
+        if isinstance(item, dict) and item.get("id") == old_id:
+            item["id"] = new_id
+    adv.original_manifest = manifest
+    flag_modified(adv, "original_manifest")
 
 
 def _decorative_objects(values: list[str]) -> list[str] | None:
@@ -97,13 +100,21 @@ def _decorative_objects(values: list[str]) -> list[str] | None:
 
 
 def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
-    manifest = adv.original_manifest
-    if not isinstance(manifest, dict) or not isinstance(manifest.get("scenes"), list):
+    """Mirrors the scene scripts into the manifest, adding the scene if the editor created it.
+
+    Sessions read init_script and scene helpers from their manifest snapshot, so a scene
+    missing from the manifest would lose its helpers in every new game.
+    """
+    if not isinstance(adv.original_manifest, dict):
         return
-    manifest = deepcopy(manifest)
-    for item in manifest["scenes"]:
-        if isinstance(item, dict) and item.get("id") == scene.id:
-            item.update({f: getattr(scene, f) for f in _SCENE_SCRIPT_FIELDS})
+    manifest = deepcopy(adv.original_manifest)
+    scenes = manifest.get("scenes") if isinstance(manifest.get("scenes"), list) else []
+    entry = next((s for s in scenes if isinstance(s, dict) and s.get("id") == scene.id), None)
+    if entry is None:
+        entry = {"id": scene.id, "name": scene.label, "description": scene.description}
+        scenes.append(entry)
+    entry.update({f: getattr(scene, f) for f in SCENE_SCRIPT_FIELDS})
+    manifest["scenes"] = scenes
     adv.original_manifest = manifest
     flag_modified(adv, "original_manifest")
 
@@ -124,7 +135,7 @@ async def update_scene(
     if given(payload, "decorative_objects"):
         scene.decorative_objects = _decorative_objects(payload.decorative_objects or [])
         flag_modified(scene, "decorative_objects")
-    copy_scripts(scene, payload, _SCENE_SCRIPT_FIELDS)
+    copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
     _sync_scene_manifest(adv, scene)
 
 

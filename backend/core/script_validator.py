@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.core.dialog_validator import check_dialog_handlers
+from backend.core.helpers_validator import check_scene_helpers, scene_helper_blocks
 from backend.engine.scripting.sandbox import SafeAstInterpreter
 from backend.schemas.validation import ValidationFinding
 
@@ -165,7 +166,7 @@ def _check_scenes(scenes: list[dict[str, Any]]) -> list[ValidationFinding]:
         loc = f"scene:{sid}"
         meta = scene.get("metadata_json")
         meta_dict = meta if isinstance(meta, dict) else {}
-        for field in ("on_enter_scene_script", "on_leave_scene_script"):
+        for field in ("on_enter_scene_script", "on_leave_scene_script", "helpers_script"):
             code = scene.get(field) or meta_dict.get(field)
             findings.extend(
                 _validate_script_code(
@@ -511,11 +512,12 @@ def check_scripts_and_guards(
     findings.extend(_check_sequences(sequences))
     findings.extend(_check_quests(quests))
     findings.extend(_check_awards(awards))
+    init_script = _init_script(adv, payload)
+    helpers = tuple(code for _, code in scene_helper_blocks(scs))
     findings.extend(
-        check_dialog_handlers(
-            [adv, payload, scs, exs, ents, protagonist], _init_script(adv, payload)
-        )
+        check_dialog_handlers([adv, payload, scs, exs, ents, protagonist], init_script, helpers)
     )
+    findings.extend(check_scene_helpers(scs, init_script))
     return findings
 
 
