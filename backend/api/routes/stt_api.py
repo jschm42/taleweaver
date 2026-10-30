@@ -165,13 +165,35 @@ def decode_wav_to_numpy(wav_bytes: bytes) -> np.ndarray:
         return audio
 
 
+def transcribe_sync(model_name: str, audio_data: np.ndarray) -> str:
+    """Runs the full transcription; meant to be called in a worker thread.
+
+    faster-whisper returns a lazy segment generator, so the decoding happens while the
+    segments are joined. That must stay inside the worker thread to keep the event loop free.
+    """
+    model = get_whisper_model(model_name)
+    # The VAD filter strips the silence at the start of a push-to-talk recording (the mic
+    # is still warming up on the first use). Without it, language detection runs on
+    # near-silence and the speech gets transcribed as a wrong language.
+    segments, info = model.transcribe(audio_data, vad_filter=True)
+    text = "".join(segment.text for segment in segments).strip()
+    logger.info(
+        "Whisper transcription (%s, language=%s p=%.2f): %s",
+        model_name,
+        getattr(info, "language", "?"),
+        getattr(info, "language_probability", 0.0),
+        text,
+    )
+    return text
+
+
 @router.post("/transcribe")
 async def transcribe_audio(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Transcribes an uploaded WAV file using OpenAI Whisper."""
+    """Transcribes an uploaded WAV file using a local faster-whisper model."""
     from backend.api.routes.config_api import (
         _normalize_game_settings,
         _resolve_global_settings_owner,
@@ -193,10 +215,7 @@ async def transcribe_audio(
         ) from e
 
     try:
-        model = await asyncio.to_thread(get_whisper_model, model_name)
-        segments, _ = await asyncio.to_thread(model.transcribe, audio_data)
-        text = "".join(segment.text for segment in segments).strip()
-        logger.info("Whisper transcription result (%s): %s", model_name, text)
+        text = await asyncio.to_thread(transcribe_sync, model_name, audio_data)
         return {"text": text}
     except Exception as e:
         logger.exception("Whisper transcription failed")

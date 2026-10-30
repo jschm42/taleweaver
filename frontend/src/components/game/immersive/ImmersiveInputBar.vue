@@ -108,11 +108,35 @@ function selectCommand(cmdId: string) {
 const {
   isRecording,
   isTranscribing,
+  voiceError,
+  whisperStatus,
+  whisperModelName,
+  whisperWaitSeconds,
   handleMicButtonMousedown,
 } = useVoiceInput({
   canSendInput: toRef(props, 'canSendInput'),
   inputText,
   onSend: handleSend,
+})
+
+const isWaitingForModel = computed(() => isTranscribing.value && whisperStatus.value === 'loading')
+
+const voiceOverlayText = computed(() => {
+  if (isRecording.value) return 'PTT Active: Recording Voice...'
+  if (isWaitingForModel.value) return `Loading speech model '${whisperModelName.value}'... (${whisperWaitSeconds.value}s)`
+  return 'Transcribing Speech...'
+})
+
+const voiceOverlayHint = computed(() => {
+  if (isRecording.value) return 'Release key or mouse to finish'
+  if (isWaitingForModel.value) return 'First use downloads the model'
+  return 'Please wait...'
+})
+
+const micButtonTitle = computed(() => {
+  if (whisperStatus.value === 'loading') return `Speech model '${whisperModelName.value}' is loading...`
+  if (whisperStatus.value === 'error') return `Speech model '${whisperModelName.value}' failed to load. Check the backend log.`
+  return 'Push-To-Talk (Hold to speak)'
 })
 
 function handleKeydown(e: KeyboardEvent) {
@@ -248,11 +272,20 @@ defineExpose({
       <div class="flex items-center gap-2">
         <span v-if="isRecording" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
         <span v-else class="w-2.5 h-2.5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin"></span>
-        <span>{{ isRecording ? 'PTT Active: Recording Voice...' : 'Transcribing Speech...' }}</span>
+        <span>{{ voiceOverlayText }}</span>
       </div>
       <span class="text-[10px] uppercase font-mono text-slate-400">
-        {{ isRecording ? "Release key or mouse to finish" : "Please wait..." }}
+        {{ voiceOverlayHint }}
       </span>
+    </div>
+
+    <!-- Voice Error -->
+    <div
+      v-else-if="voiceError"
+      class="mb-2 p-3 rounded-xl border border-red-500/40 bg-red-950/60 text-red-200 flex items-center gap-2 text-xs font-bold shadow-lg animate-fade-in"
+    >
+      <AlertTriangle class="w-4 h-4 text-red-400 shrink-0" />
+      <span>{{ voiceError }}</span>
     </div>
 
     <!-- Input Box & Actions -->
@@ -270,12 +303,16 @@ defineExpose({
       <!-- Push-To-Talk Mic Button -->
       <button
         type="button"
-        :disabled="!props.canSendInput"
+        :disabled="!props.canSendInput || isTranscribing"
         @mousedown="handleMicButtonMousedown"
         class="flex items-center justify-center w-11 h-11 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-amber-400/60 hover:bg-amber-500/10 text-slate-300 hover:text-amber-300 transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 cursor-pointer"
-        title="Push-To-Talk (Hold to speak)"
+        :title="micButtonTitle"
       >
-        <Mic class="w-5 h-5" :class="{ 'text-red-400 animate-pulse': isRecording }" />
+        <span
+          v-if="whisperStatus === 'loading' && !isRecording && !isTranscribing"
+          class="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"
+        ></span>
+        <Mic v-else class="w-5 h-5" :class="{ 'text-red-400 animate-pulse': isRecording }" />
       </button>
 
       <!-- Main Input Field -->

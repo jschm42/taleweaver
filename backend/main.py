@@ -185,7 +185,7 @@ async def add_security_headers(request, call_next):
     )
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = (
-        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
     )
     return response
 

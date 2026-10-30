@@ -50,6 +50,7 @@ async def test_stt_transcribe_success(monkeypatch: pytest.MonkeyPatch, client: A
     class MockWhisperModel:
         def transcribe(self, audio_data, **kwargs):
             captured_args["audio_data"] = audio_data
+            captured_args["kwargs"] = kwargs
             return [MockSegment("Hello, world! This is a test.")], {}
 
     def fake_load_model(model_name, *args, **kwargs):
@@ -69,6 +70,7 @@ async def test_stt_transcribe_success(monkeypatch: pytest.MonkeyPatch, client: A
     assert captured_args["model_name"] == "tiny"
     assert isinstance(captured_args["audio_data"], np.ndarray)
     assert len(captured_args["audio_data"]) == 16000
+    assert captured_args["kwargs"].get("vad_filter") is True
 
 
 async def test_stt_transcribe_invalid_samplerate(client: AsyncClient) -> None:

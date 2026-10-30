@@ -33,7 +33,7 @@ watch(() => props.gameForm, (newVal) => {
             <div class="text-xs text-slate-500">Currently, only local Whisper is supported for STT.</div>
           </div>
           <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-            OpenAI Whisper (Local)
+            faster-whisper (Local)
           </span>
         </div>
 

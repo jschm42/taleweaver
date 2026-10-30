@@ -85,9 +85,9 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 
 ### 🎧 The Playable Audiobook & Voice Input (Cinematic Audio)
 * **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth. With ElevenLabs, speech streams as it is generated and every character speaks with their own voice (see [Character Voices](#️-character-voices-elevenlabs-voice-list)).
-* **Speech-to-Text & Push-to-Talk (PTT):** True hands-free roleplaying! Hold down the interactive microphone UI button or hotkeys (`V`, `B`, or `T`) to record and speak directly to NPCs and the GM. Releases auto-transcribe and submit immediately.
+* **Speech-to-Text & Push-to-Talk (PTT):** True hands-free roleplaying! Hold down the interactive microphone UI button or hotkeys (`V`, `B`, or `T`) to record and speak directly to NPCs and the GM. Releases auto-transcribe and submit immediately. A voice activity filter trims silence before transcription, so the spoken language is detected from your speech rather than from microphone noise.
 * **In-Character Speech Shortcuts:** Hold down `B`, `T`, or `Shift` to automatically prepend `/say ` to your transcription, allowing seamless in-character dialogue.
-* **Background Whisper Model Loading:** Configurable local Whisper model preloads in a background thread to prevent UI blocking, with real-time state logging (idle, loading, active, error).
+* **Background Whisper Model Loading:** The configurable local [faster-whisper](https://github.com/SYSTRAN/faster-whisper) model preloads in a background thread as soon as the game screen opens. The first run downloads the model from Hugging Face; while it loads, the microphone button shows a spinner, and a recording made in the meantime waits with a visible "Loading speech model… (Ns)" status instead of appearing frozen.
 
 ### 🗺️ Visuals & Sensory Immersion
 * **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
@@ -207,7 +207,7 @@ TaleWeaver uses an adapter layer ([LiteLLM](https://github.com/BerriAI/litellm))
 | **Mechanics (Pass 1)** | DeepSeek Flash, GPT-6 Luna, Claude 4.5 Haiku | OpenAI, OpenRouter, Anthropic, DeepSeek, OpenAI-compatible APIs | High-speed, deterministic state and inventory rule validation |
 | **Narrative (Pass 2)** | DeepSeek v4 Pro, GPT-6 Luna Pro, Claude 4.5 Sonnet | OpenAI, Anthropic, OpenRouter, DeepSeek, OpenAI-compatible APIs | Rich, atmospheric prose adapting to player choices and mood |
 | **Text-to-Speech (TTS)** | Gemini 3.5 Flash TTS, ElevenLabs | Google Gemini, ElevenLabs | High-fidelity voice narration; feels like a live audiobook |
-| **Speech-to-Text (STT)**| OpenAI Whisper (Base / Small / Medium) | Local Whisper (background thread) | Hands-free microphone input with Push-to-Talk hotkeys |
+| **Speech-to-Text (STT)**| faster-whisper (Whisper Base / Small / Medium, CPU int8) | Local Whisper (background thread) | Hands-free microphone input with Push-to-Talk hotkeys |
 | **Visual Scene Art** | FLUX, Stable Diffusion (A1111 / Forge), Ollama | Local SD WebUI, Ollama, Cloud APIs | Contextual illustrations for scenes, items, and NPCs |
 
 **OpenAI-Compatible API** connects hosted gateways and self-hosted servers through a configurable Chat Completions base URL, optional encrypted key and exact model ID. It is available for all five LLM roles, including the play agent and history compression. See the [configuration guide](docs/custom-openai-compatible.md) for model discovery, structured-output modes and local networking requirements. Endpoint and model compatibility must be checked with your configuration.

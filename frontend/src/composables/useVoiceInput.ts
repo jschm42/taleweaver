@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
+import { useWhisperStatus } from '@/composables/useWhisperStatus'
 
 export interface UseVoiceInputOptions {
   canSendInput: Ref<boolean>
@@ -52,10 +53,24 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
   const recordStartTime = ref<number>(0)
   const pttPrefixSay = ref(false)
   const pttKeyActiveCode = ref('')
+  const voiceError = ref('')
   let globalMouseUpListener: (() => void) | null = null
+  let voiceErrorTimer: ReturnType<typeof setTimeout> | null = null
+
+  const { whisperStatus, whisperModelName, whisperWaitSeconds, ensureWhisperModelReady } =
+    useWhisperStatus()
+
+  function showVoiceError(message: string) {
+    voiceError.value = message
+    if (voiceErrorTimer) clearTimeout(voiceErrorTimer)
+    voiceErrorTimer = setTimeout(() => {
+      voiceError.value = ''
+    }, 8000)
+  }
 
   async function startVoiceRecording() {
-    if (isRecording.value || !canSendInput.value) return
+    if (isRecording.value || isTranscribing.value || !canSendInput.value) return
+    voiceError.value = ''
     try {
       leftChannel.value = []
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -76,6 +91,8 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
       recordStartTime.value = Date.now()
     } catch (err) {
       console.error('Failed to start recording:', err)
+      const denied = err instanceof DOMException && err.name === 'NotAllowedError'
+      showVoiceError(denied ? 'Microphone access was denied by the browser.' : 'Could not start the microphone.')
     }
   }
 
@@ -108,6 +125,12 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
     const audioBlob = new Blob([wavBuffer], { type: 'audio/wav' })
     isTranscribing.value = true
     try {
+      // The first use may download the model; wait here (with visible status) instead of
+      // letting the transcription request run into its timeout.
+      if (!(await ensureWhisperModelReady())) {
+        showVoiceError(`Speech model '${whisperModelName.value}' failed to load. Check the backend log.`)
+        return
+      }
       const { api } = await import('@/composables/useApi')
       const result = await api.transcribeAudio(audioBlob)
       const text = result.text.trim()
@@ -122,6 +145,7 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
       }
     } catch (err) {
       console.error('Failed to transcribe audio:', err)
+      showVoiceError('Speech transcription failed.')
     } finally {
       isTranscribing.value = false
     }
@@ -187,11 +211,16 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
       window.removeEventListener('touchend', globalMouseUpListener)
       globalMouseUpListener = null
     }
+    if (voiceErrorTimer) clearTimeout(voiceErrorTimer)
   })
 
   return {
     isRecording,
     isTranscribing,
+    voiceError,
+    whisperStatus,
+    whisperModelName,
+    whisperWaitSeconds,
     startVoiceRecording,
     stopVoiceRecording,
     handleMicButtonMousedown,
