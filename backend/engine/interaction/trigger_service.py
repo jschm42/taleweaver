@@ -14,6 +14,7 @@ from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
 from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
+from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.scripting.scene_helpers import runner_for_manifest
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -148,7 +149,7 @@ class TriggerService:
         code = str(script_code or "").strip()
         if code:
             context = await cls.build_context(db, state, llm_asker)
-            runner = runner_for_manifest(await cls._session_manifest(db, state))
+            runner = await cls._session_runner(db, state)
             scope = {"tw": context, "game": context}
             runner.execute_code(code, scope, script_id=f"trigger_{trigger_name}_{target_id}")
 
@@ -180,14 +181,17 @@ class TriggerService:
         return messages
 
     @staticmethod
-    async def _session_manifest(db: AsyncSession, state: SessionState) -> dict[str, Any]:
-        """The session's adventure manifest (init_script, scene helpers) from its snapshot."""
+    async def _session_runner(db: AsyncSession, state: SessionState) -> ScriptRunner:
+        """A runner with the session's init_script and sequence/scene helpers (from its snapshot)."""
         # Imported lazily: the session snapshot lives in the API layer, which imports this module.
         from backend.api.routes.adventures.session_adventure import load_session_adventure
 
         adventure = await load_session_adventure(db, state)
         manifest = getattr(adventure, "original_manifest", None)
-        return manifest if isinstance(manifest, dict) else {}
+        return runner_for_manifest(
+            manifest if isinstance(manifest, dict) else {},
+            sequences=getattr(adventure, "sequences", None),
+        )
 
     @staticmethod
     def _persist_entity_states(state: SessionState, changeset: ScriptChangeset) -> None:

@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.core.dialog_validator import check_dialog_handlers
-from backend.core.helpers_validator import check_scene_helpers, scene_helper_blocks
+from backend.core.helpers_validator import check_helper_blocks, helper_blocks
 from backend.engine.scripting.sandbox import SafeAstInterpreter
 from backend.schemas.validation import ValidationFinding
 
@@ -383,7 +383,7 @@ def _check_sequences(sequences: Any) -> list[ValidationFinding]:
                 extra_context={"sequence_id": sid},
             )
         )
-        for field in ("on_start_sequence_script", "on_end_sequence_script"):
+        for field in ("on_start_sequence_script", "on_end_sequence_script", "helpers_script"):
             code = seq.get(field)
             findings.extend(
                 _validate_script_code(
@@ -513,11 +513,11 @@ def check_scripts_and_guards(
     findings.extend(_check_quests(quests))
     findings.extend(_check_awards(awards))
     init_script = _init_script(adv, payload)
-    helpers = tuple(code for _, code in scene_helper_blocks(scs))
+    helpers = tuple(block.code for block in helper_blocks(scs, sequences))
     findings.extend(
         check_dialog_handlers([adv, payload, scs, exs, ents, protagonist], init_script, helpers)
     )
-    findings.extend(check_scene_helpers(scs, init_script))
+    findings.extend(check_helper_blocks(scs, sequences, init_script))
     return findings
 
 

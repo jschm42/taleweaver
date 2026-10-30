@@ -6,6 +6,7 @@ from backend.api.routes.adventures.session_adventure import SESSION_MANIFEST_SNA
 from backend.core.auth import create_access_token
 from backend.core.database import get_db
 from backend.core.script_validator import check_scripts_and_guards
+from backend.engine.blueprint import prepare_blueprint
 from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.scene_helpers import runner_for_manifest, scene_helpers
@@ -209,3 +210,110 @@ async def test_editor_scene_helpers_reach_the_manifest_also_after_rename(client,
         row = (await db.execute(select(WorldScene).where(WorldScene.id == "TOMB"))).scalar_one()
         assert row.helpers_script == CRYPT_HELPERS.strip()
         assert scene_helpers(adv.original_manifest) == [("helpers_TOMB", CRYPT_HELPERS.strip())]
+
+
+SEQUENCES = [
+    {"id": "SEQ_2", "order": 2, "helpers_script": "def trial_score():\n    return 2\n"},
+    {"id": "SEQ_1", "order": 1, "helpers_script": "def trial_score():\n    return 1\n"},
+]
+
+
+def test_sequence_helpers_load_in_chapter_order_before_scenes():
+    # Arrange
+    manifest = _manifest()
+    manifest["scenes"][1]["helpers_script"] = "def last():\n    return trial_score()\n"
+    ctx = GameContext(avatar_data={}, current_scene_id="HALL", entities={})
+
+    # Act
+    runner = runner_for_manifest(manifest, sequences=SEQUENCES)
+    runner.execute_code("tw.vars.set('score', last())", {"tw": ctx})
+
+    # Assert: SEQ_2 is loaded after SEQ_1 and wins; scene blocks see sequence helpers
+    assert [sid for sid, _ in runner.helpers] == [
+        "helpers_sequence_SEQ_1",
+        "helpers_sequence_SEQ_2",
+        "helpers_CRYPT",
+    ]
+    assert ctx.changeset.var_updates == {"score": 2}
+
+
+@pytest.mark.asyncio
+async def test_inline_trigger_can_call_sequence_helpers(setup_test_db):
+    # Arrange: the editor stores sequences on the adventure, the snapshot keeps that column
+    state = _state(_manifest())
+    state.entity_states[SESSION_MANIFEST_SNAPSHOT_KEY]["adventure"]["sequences"] = SEQUENCES
+
+    # Act
+    async with TestSessionLocal() as db:
+        messages = await TriggerService.execute_trigger(
+            db,
+            state,
+            trigger_name="on_enter_scene",
+            target_id="HALL",
+            script_code="tw.vars.set('score', trial_score())",
+        )
+
+    # Assert
+    assert not any("Script error" in m for m in messages)
+    assert state.entity_states["__script_vars__"] == {"score": 2}
+
+
+def test_validator_covers_sequence_helpers():
+    # Arrange
+    payload = {
+        "adventure": {
+            "init_script": "",
+            "sequences": [
+                {
+                    "id": "SEQ_1",
+                    "order": 1,
+                    "title": "Trial",
+                    "on_start_sequence_script": "tw.dialog.choose('Guilty?', ['Yes'], on_choice='on_verdict')",
+                    "helpers_script": "tw.vars.set('x', 1)\ndef on_verdict(answ):\n    pass\n",
+                }
+            ],
+        },
+        "scenes": [{"id": "HALL", "helpers_script": "def on_verdict(answ):\n    pass\n"}],
+    }
+
+    # Act
+    findings = check_scripts_and_guards(payload)
+
+    # Assert
+    codes = [f.code for f in findings]
+    assert "dialog_handler_missing" not in codes
+    ignored = next(f for f in findings if f.code == "helpers_statement_ignored")
+    assert ignored.location == "sequence:SEQ_1"
+    conflict = next(f for f in findings if f.code == "helper_name_conflict")
+    assert conflict.context["shadowed"] == "sequence 'SEQ_1' helpers"
+    assert conflict.location == "scene:HALL"
+
+
+def test_blueprint_sequence_helpers_key():
+    # Arrange
+    text = "[Sequence: 1] The Trial\nhelpers: |\n  def trial_score():\n      return 1\n"
+
+    # Act
+    prepared = prepare_blueprint(text)
+
+    # Assert
+    assert prepared.blueprint.errors == []
+    sequence = next(b for b in prepared.blueprint.blocks if b.kind == "sequence")
+    assert sequence.fixed()["helpers_script"].startswith("def trial_score():")
+
+
+@pytest.mark.asyncio
+async def test_adventure_update_keeps_sequence_helpers(auth_client):
+    # Arrange
+    created = await auth_client.post(
+        "/api/adventures/", json={"title": "Sequence Helpers", "avatar_name": "Hero"}
+    )
+    adv_id = created.json()["adventure_id"]
+    sequences = [{"id": "SEQ_1", "order": 1, "title": "Trial", **SEQUENCES[1]}]
+
+    # Act
+    res = await auth_client.patch(f"/api/adventures/{adv_id}", json={"sequences": sequences})
+
+    # Assert
+    assert res.status_code == 200, res.text
+    assert res.json()["sequences"][0]["helpers_script"] == SEQUENCES[1]["helpers_script"]

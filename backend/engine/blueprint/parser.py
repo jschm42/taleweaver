@@ -141,12 +141,17 @@ def _lookup_spec(kind: str, raw_key: str) -> FieldSpec | None:
 
 
 def _read_block_scalar(lines: list[str], start: int, key_indent: int) -> tuple[str, int]:
+    """Reads a ``key: |`` block: the lines indented deeper than the key.
+
+    A blueprint tag line also ends the block, so an indented ``[Rule: ...]`` right after a
+    sequence's multi-line ``helpers``/``on_start`` value becomes a child, not script code.
+    """
     collected: list[str] = []
     index = start
     while index < len(lines):
         line = lines[index]
         indent = len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip())
-        if line.strip() and indent <= key_indent:
+        if line.strip() and (indent <= key_indent or _match_tag(line)):
             break
         collected.append(line.expandtabs(4))
         index += 1

@@ -142,6 +142,7 @@ _FIX_SEQUENCE_FIELDS = frozenset(
         "on_start_sequence_text",
         "on_end_sequence_script",
         "on_end_sequence_text",
+        "helpers_script",
     }
 )
 

@@ -1,7 +1,7 @@
 """Static check for choice dialogs: every ``on_choice`` handler must be a definition.
 
 ``tw.dialog.choose(..., on_choice=handler)`` resolves the handler in a later request, where only
-functions from the global ``init_script`` and the scene helper blocks are in scope. A handler
+functions from the global ``init_script`` and the sequence/scene helper blocks are in scope. A handler
 defined in the opening script itself (or nowhere) would silently do nothing, so the editor
 validation flags it.
 """
@@ -86,7 +86,7 @@ def check_dialog_handlers(
             code="dialog_handler_missing",
             message=(
                 f"tw.dialog handler '{name}' is not defined in the global init_script "
-                "or in any scene helpers; the choice will have no effect."
+                "or in any sequence or scene helpers; the choice will have no effect."
             ),
             location="adventure",
             context={"handler": name},

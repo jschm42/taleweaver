@@ -18,7 +18,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 | `key: value` | **Fixed** value, guaranteed to end up in the adventure. |
 | `key: ~value` | **Hint**: passed to the AI as a suggestion. |
 | `key: ?` | Explicitly left open for the AI (same as omitting the key). |
-| `key: \|` | Multi-line value (scripts, long texts). The following, deeper indented lines belong to it. |
+| `key: \|` | Multi-line value (scripts, long texts). The following, deeper indented lines belong to it, up to the next tag line such as an indented `[Rule: ...]`. |
 | `@ID` | Reference to another entity inside free text. It is checked like any other reference. |
 | any other line | Free text: the entity's description or design notes for the AI. |
 
@@ -67,7 +67,7 @@ A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game. It 
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `on_start`, `on_end` (+ `_text` variants).
+`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
 The free text becomes the chapter's description and walkthrough.
 Legacy keys still work: `Required Item:`, `Required Scene:`, `Defeat NPC:`, `End Condition:`.
 

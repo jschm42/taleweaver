@@ -1,4 +1,4 @@
-"""Static checks for scene helper blocks (``helpers_script``).
+"""Static checks for sequence and scene helper blocks (``helpers_script``).
 
 Like the global ``init_script`` definitions, a helper block is re-read on every script run and
 only its ``def`` statements and constant assignments are loaded. Anything else in it never
@@ -8,6 +8,7 @@ runs, and two blocks defining the same name shadow each other, so both are flagg
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from backend.schemas.validation import ValidationFinding
@@ -47,47 +48,78 @@ def definition_names(code: Any) -> set[str]:
     return {name for stmt in tree.body if _is_definition(stmt) for name in _names(stmt)}
 
 
-def scene_helper_blocks(scenes: list[Any]) -> list[tuple[str, str]]:
-    """``(scene_id, code)`` of every scene with a non-empty helper block."""
-    blocks: list[tuple[str, str]] = []
-    for scene in scenes or []:
-        if not isinstance(scene, dict):
+@dataclass(frozen=True)
+class HelperBlock:
+    """A ``helpers_script`` of a sequence or a scene."""
+
+    kind: str  # "sequence" or "scene"
+    owner_id: str
+    code: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.kind} '{self.owner_id}' helpers"
+
+    @property
+    def location(self) -> str:
+        return f"{self.kind}:{self.owner_id}"
+
+
+def _owner_blocks(kind: str, owners: Any) -> list[HelperBlock]:
+    blocks: list[HelperBlock] = []
+    for owner in owners or []:
+        if not isinstance(owner, dict):
             continue
-        code = scene.get("helpers_script")
+        code = owner.get("helpers_script")
         if isinstance(code, str) and code.strip():
-            blocks.append((str(scene.get("id") or "?"), code))
+            blocks.append(HelperBlock(kind, str(owner.get("id") or "?"), code))
     return blocks
 
 
-def _ignored_statement_findings(scene_id: str, code: str) -> list[ValidationFinding]:
-    tree = _parse(code)
+def _order(sequence: Any) -> int:
+    order = sequence.get("order") if isinstance(sequence, dict) else None
+    return order if isinstance(order, int) else 0
+
+
+def helper_blocks(scenes: Any, sequences: Any = None) -> list[HelperBlock]:
+    """Every non-empty helper block, in the runtime's load order: sequences, then scenes."""
+    chapters = sorted(sequences, key=_order) if isinstance(sequences, list) else []
+    return [*_owner_blocks("sequence", chapters), *_owner_blocks("scene", scenes)]
+
+
+def _ignored_statement_findings(block: HelperBlock) -> list[ValidationFinding]:
+    tree = _parse(block.code)
     if tree is None:
         return []
+    hint = "on_enter_scene" if block.kind == "scene" else "on_start_sequence"
     return [
         ValidationFinding(
             severity="warn",
             code="helpers_statement_ignored",
             message=(
-                f"Scene '{scene_id}' helpers, line {stmt.lineno}: only 'def' statements and "
-                "constant assignments are loaded; this statement never runs. Move it into a "
-                "trigger script (e.g. on_enter_scene)."
+                f"{block.label[0].upper()}{block.label[1:]}, line {stmt.lineno}: only 'def' "
+                "statements and constant assignments are loaded; this statement never runs. "
+                f"Move it into a trigger script (e.g. {hint})."
             ),
-            location=f"scene:{scene_id}",
-            context={"scene_id": scene_id, "field": "helpers_script", "line": stmt.lineno},
+            location=block.location,
+            context={
+                f"{block.kind}_id": block.owner_id,
+                "field": "helpers_script",
+                "line": stmt.lineno,
+            },
         )
         for stmt in tree.body
         if not _is_definition(stmt)
     ]
 
 
-def _conflict_findings(blocks: list[tuple[str, str]], init_script: Any) -> list[ValidationFinding]:
+def _conflict_findings(blocks: list[HelperBlock], init_script: Any) -> list[ValidationFinding]:
     owners: dict[str, str] = {name: "init_script" for name in definition_names(init_script)}
     findings: list[ValidationFinding] = []
-    for scene_id, code in blocks:
-        source = f"scene '{scene_id}' helpers"
-        for name in sorted(definition_names(code)):
+    for block in blocks:
+        for name in sorted(definition_names(block.code)):
             previous = owners.get(name)
-            owners[name] = source
+            owners[name] = block.label
             if previous is None:
                 continue
             findings.append(
@@ -95,21 +127,25 @@ def _conflict_findings(blocks: list[tuple[str, str]], init_script: Any) -> list[
                     severity="warn",
                     code="helper_name_conflict",
                     message=(
-                        f"'{name}' is defined in {previous} and again in {source}; "
-                        f"every script uses the one from {source}. Rename one of them."
+                        f"'{name}' is defined in {previous} and again in {block.label}; "
+                        f"every script uses the one from {block.label}. Rename one of them."
                     ),
-                    location=f"scene:{scene_id}",
-                    context={"scene_id": scene_id, "name": name, "shadowed": previous},
+                    location=block.location,
+                    context={
+                        f"{block.kind}_id": block.owner_id,
+                        "name": name,
+                        "shadowed": previous,
+                    },
                 )
             )
     return findings
 
 
-def check_scene_helpers(scenes: list[Any], init_script: Any) -> list[ValidationFinding]:
+def check_helper_blocks(scenes: Any, sequences: Any, init_script: Any) -> list[ValidationFinding]:
     """Warns about helper statements that never run and names defined twice."""
-    blocks = scene_helper_blocks(scenes)
+    blocks = helper_blocks(scenes, sequences)
     findings: list[ValidationFinding] = []
-    for scene_id, code in blocks:
-        findings.extend(_ignored_statement_findings(scene_id, code))
+    for block in blocks:
+        findings.extend(_ignored_statement_findings(block))
     findings.extend(_conflict_findings(blocks, init_script))
     return findings

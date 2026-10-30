@@ -2815,7 +2815,12 @@ class GameTurnManager:
         active_sequence = AdventureLogic.resolve_active_sequence(self.adventure, self.state)
         scripts = [*manifest.get("scripts", []), *sequence_scripts(active_sequence)]
         init_script = manifest.get("init_script") or getattr(self.adventure, "init_script", None)
-        return runner_for_manifest(manifest, scripts, init_script or "")
+        return runner_for_manifest(
+            manifest,
+            scripts,
+            init_script or "",
+            sequences=getattr(self.adventure, "sequences", None),
+        )
 
     async def _execute_inline_script(
         self,

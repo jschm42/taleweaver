@@ -47,7 +47,7 @@ const functionCount = computed(() => (draft.value.match(/^def\s+\w+/gm) || []).l
         </p>
         <p class="text-[11px] text-slate-400">
           Runs once when a session starts. Functions defined here are available in every script,
-          and choice-dialog handlers (<code>on_choice</code>) live here or in the scene helpers below.
+          and choice-dialog handlers (<code>on_choice</code>) live here or in a scene's or sequence's helpers (Advanced tab).
         </p>
       </div>
       <component :is="expanded ? ChevronUp : ChevronDown" class="w-4 h-4 text-slate-500 shrink-0" />

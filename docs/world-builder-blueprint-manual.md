@@ -188,6 +188,18 @@ on_enter: |
       crypt_curse()
 ```
 
+**Sequence helpers** do the same for a chapter, when the logic is spread over several places. Like scene helpers they can be called from every script, whichever chapter is active:
+
+```text
+[Sequence: 3] The Trial
+helpers: |
+  def trial_answer(correct):
+      if correct:
+          tw.vars.set('trial_score', tw.vars.get('trial_score', 0) + 1)
+  [Rule: RIGHT_ANSWER] The player answers the judges' question correctly.
+  script: trial_answer(True)
+```
+
 Scripts need the **Event Scripts Engine** switched on in the generator settings.
 
 ---

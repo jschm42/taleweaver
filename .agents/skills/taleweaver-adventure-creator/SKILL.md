@@ -48,7 +48,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_guard`, `contains`, `reveals`, `bonus` (`str+2`), `damage`, `cost`, weapons: `category` (melee/ranged/magic), `hit` (`str`), `hit_effects` (`target sta -1d4, self hp +2`), `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read` |
 | `[Recipe: ID] Name` | `combine` (`A + B`), `results` (crafted item IDs), `keep` (ingredients not consumed), `craft_guard`, `on_craft`, `on_craft_fail_text` |
 | `[Switch: ID] Name` | `states` (IDs ≤15 chars, `A-Z 0-9 _ -`; optional in-game text ≤20 chars: `OFF=Dark, ON=Lights on`), `initial`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: …`, `outcome: B -> flag: KEY; unlock_container: ID` |
-| `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `on_start`, `on_end` |
+| `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `on_start`, `on_end`, `helpers` (only `def`s and constants, e.g. the chapter's dialog handlers; callable from every script) |
 | `[Rule: ID] condition` | `guard`, `script`, `text`, `max` |
 | `[Script: ID] Name` | `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, …), `target`, `code` |
 | `[Sidequest: ID] Title` | `goal`, `goal_item`, `guard`, `xp` |

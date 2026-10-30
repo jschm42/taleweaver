@@ -114,7 +114,7 @@ The physical locations composing the world map.
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
-| `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script`, like its definitions. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |
+| `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |
 
 ---
 

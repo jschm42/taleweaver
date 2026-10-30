@@ -95,6 +95,7 @@ const SEQUENCE_FIELDS: FieldSpec[] = [
   ['completion_guard_expression', 'Completion guard', 'guard'],
   ...SCRIPT_TEXT('on_start_sequence', 'On start'),
   ...SCRIPT_TEXT('on_end_sequence', 'On end'),
+  ['helpers_script', 'Helpers (definitions)', 'script'],
 ]
 
 function asObject(value: unknown): Record<string, any> {

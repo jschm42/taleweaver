@@ -113,6 +113,7 @@ const modalSequence = ref<any>({
   on_start_sequence_text: '',
   on_end_sequence_script: '',
   on_end_sequence_text: '',
+  helpers_script: '',
   soft_rules: [],
   scripts: [],
 })
@@ -145,6 +146,7 @@ function openAddModal() {
     on_start_sequence_text: '',
     on_end_sequence_script: '',
     on_end_sequence_text: '',
+    helpers_script: '',
     soft_rules: [],
     scripts: [],
   }
@@ -170,6 +172,7 @@ function openEditModal(seq: any) {
     on_start_sequence_text: seq.on_start_sequence_text || '',
     on_end_sequence_script: seq.on_end_sequence_script || '',
     on_end_sequence_text: seq.on_end_sequence_text || '',
+    helpers_script: seq.helpers_script || '',
     soft_rules: seq.soft_rules || [],
     scripts: seq.scripts || [],
   }
@@ -463,8 +466,8 @@ function confirmDelete() {
               :class="['pb-2 text-xs font-black uppercase tracking-widest transition-colors border-b-2 flex items-center gap-1.5', activeModalTab === 'advanced' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-white']"
             >
               <Sparkles class="w-3.5 h-3.5" />
-              <span>Advanced Triggers</span>
-              <span v-if="modalSequence.on_start_sequence_script || modalSequence.on_end_sequence_script" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span>Advanced</span>
+              <span v-if="modalSequence.on_start_sequence_script || modalSequence.on_end_sequence_script || modalSequence.helpers_script" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
             </button>
             <button
               type="button"
@@ -711,27 +714,26 @@ function confirmDelete() {
             </div>
           </div>
 
-          <!-- Advanced Tab: Sequence Transitions -->
-          <div v-show="activeModalTab === 'advanced'" class="space-y-6">
+          <!-- Advanced Tab: transition triggers and helpers (same layout as the scene's Scene Scripts) -->
+          <div v-show="activeModalTab === 'advanced'" class="space-y-5">
             <div class="space-y-1">
               <p class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                <Sparkles class="w-4 h-4" /> Sequence Transition Triggers
+                <Sparkles class="w-4 h-4" /> Sequence Scripts
               </p>
               <p class="text-[11px] text-slate-400">
-                Execute scripts or narrative cues when entering or completing this sequence chapter.
+                Start / end triggers of this chapter and its helper functions.
               </p>
             </div>
 
-            <!-- Start Sequence Trigger -->
-            <div class="space-y-4 border border-white/5 bg-black/30 p-4 rounded-2xl">
-              <ScriptEditor
-                v-model="modalSequence.on_start_sequence_script"
-                label="On Start Sequence Script"
-                help-text="Executed immediately when this sequence becomes active."
-                context="start_sequence"
-                min-height="100px"
-              />
-              <div class="space-y-1">
+            <div class="grid lg:grid-cols-2 gap-5">
+              <div class="space-y-3 border border-white/5 bg-black/30 p-4 rounded-2xl">
+                <ScriptEditor
+                  v-model="modalSequence.on_start_sequence_script"
+                  label="On Start Sequence Script"
+                  help-text="Executed immediately when this sequence becomes active."
+                  context="start_sequence"
+                  min-height="100px"
+                />
                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Start Sequence Text</label>
                 <textarea
                   v-model="modalSequence.on_start_sequence_text"
@@ -740,18 +742,14 @@ function confirmDelete() {
                   class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
                 ></textarea>
               </div>
-            </div>
-
-            <!-- End Sequence Trigger -->
-            <div class="space-y-4 border border-white/5 bg-black/30 p-4 rounded-2xl">
-              <ScriptEditor
-                v-model="modalSequence.on_end_sequence_script"
-                label="On End Sequence Script"
-                help-text="Executed immediately when this sequence is completed."
-                context="end_sequence"
-                min-height="100px"
-              />
-              <div class="space-y-1">
+              <div class="space-y-3 border border-white/5 bg-black/30 p-4 rounded-2xl">
+                <ScriptEditor
+                  v-model="modalSequence.on_end_sequence_script"
+                  label="On End Sequence Script"
+                  help-text="Executed immediately when this sequence is completed."
+                  context="end_sequence"
+                  min-height="100px"
+                />
                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On End Sequence Text</label>
                 <textarea
                   v-model="modalSequence.on_end_sequence_text"
@@ -760,6 +758,17 @@ function confirmDelete() {
                   class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
                 ></textarea>
               </div>
+            </div>
+
+            <div class="space-y-2 border border-sky-500/15 bg-black/30 p-4 rounded-2xl">
+              <ScriptEditor
+                v-model="modalSequence.helpers_script"
+                label="Sequence Helpers"
+                help-text="Functions and constants (def, NAME = value) for this chapter, e.g. its dialog handlers. Like the global init script they are loaded on every script run, whichever chapter is active. Other statements never run; use the start/end scripts for those."
+                context="init_script"
+                placeholder="def trial_score_answer(answ):&#10;    tw.vars.set('trial_score', tw.vars.get('trial_score', 0) + answ)"
+                min-height="140px"
+              />
             </div>
           </div>
 

@@ -259,6 +259,8 @@ for _alias in ("end_condition", "completion_condition", "condition"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["end"]
 _hook(SEQUENCE_KEYS, "on_start", "on_start_sequence")
 _hook(SEQUENCE_KEYS, "on_end", "on_end_sequence")
+# Sequence helper block: functions/constants every script can call (like init_script).
+SEQUENCE_KEYS["helpers"] = _script("helpers_script")
 
 RULE_KEYS: dict[str, FieldSpec] = {
     "when": FieldSpec("condition"),

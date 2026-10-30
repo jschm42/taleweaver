@@ -59,6 +59,8 @@ class SequenceSchema(BaseModel):
     on_start_sequence_text: Optional[str] = ""
     on_end_sequence_script: Optional[str] = ""
     on_end_sequence_text: Optional[str] = ""
+    # Helper functions/constants (like init_script) available to every script run.
+    helpers_script: Optional[str] = ""
     soft_rules: list[SoftRuleSchema] = Field(default_factory=list)
     scripts: list[SequenceScriptSchema] = Field(default_factory=list)
 

@@ -209,7 +209,10 @@ def _run_init_scripts(
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
     )
     runner = runner_for_manifest(
-        getattr(adventure, "original_manifest", None), scripts, init_script or ""
+        getattr(adventure, "original_manifest", None),
+        scripts,
+        init_script or "",
+        sequences=getattr(adventure, "sequences", None),
     )
     changes = runner.run_init_script(init_context)
 

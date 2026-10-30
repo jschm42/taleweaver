@@ -331,3 +331,25 @@ def test_scene_helpers_key_reaches_the_generated_scene():
     helpers = manifest["scenes"][0]["helpers_script"]
     assert helpers.startswith("CURSE_DAMAGE = 8\ndef crypt_curse():")
     assert WorldSceneSchema.model_validate(manifest["scenes"][0]).helpers_script == helpers
+
+
+def test_indented_tag_ends_a_multiline_value():
+    # Arrange: a sequence's helpers block followed by one of its rules
+    text = (
+        "[Sequence: 1] The Trial\n"
+        "helpers: |\n"
+        "  def trial_answer(correct):\n"
+        "      return correct\n"
+        "  [Rule: RIGHT_ANSWER] The player answers correctly.\n"
+        "  script: trial_answer(True)\n"
+    )
+
+    # Act
+    blueprint, _missing = analyze_blueprint(text)
+
+    # Assert
+    sequence = next(b for b in blueprint.blocks if b.kind == "sequence")
+    assert blueprint.errors == []
+    assert sequence.fixed()["helpers_script"] == "def trial_answer(correct):\n    return correct"
+    assert [(c.kind, c.ref) for c in sequence.children] == [("rule", "RIGHT_ANSWER")]
+    assert sequence.children[0].fixed()["script"] == "trial_answer(True)"

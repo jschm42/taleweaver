@@ -198,6 +198,19 @@ const hideEmptyFilteredGroups = ref(false)
 // Local saving flag to override or supplement prop
 const localIsSavingText = ref(false)
 
+// The scene page splits plain content (General) from scripting (Advanced).
+const activeSceneTab = ref<'general' | 'advanced'>('general')
+const SCENE_SCRIPT_FIELDS = [
+  'on_enter_scene_script',
+  'on_enter_scene_text',
+  'on_leave_scene_script',
+  'on_leave_scene_text',
+  'helpers_script',
+]
+const sceneScriptCount = computed(
+  () => SCENE_SCRIPT_FIELDS.filter((f) => String(routeSceneDetails.value?.[f] || '').trim()).length,
+)
+
 // Computeds based on debugData
 const editorNpcs = computed<any[]>(() => {
   const source = Array.isArray(props.debugData?.npcs) ? props.debugData.npcs : []
@@ -570,8 +583,37 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         </button>
       </div>
 
+      <!-- Tabs: General content / Advanced scripting -->
+      <div class="flex gap-6 border-b border-white/5 -mt-2">
+        <button
+          type="button"
+          :class="['pb-3 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeSceneTab === 'general' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+          @click="activeSceneTab = 'general'"
+        >
+          General
+        </button>
+        <button
+          type="button"
+          :class="['pb-3 text-xs font-black uppercase tracking-widest transition-colors border-b-2 flex items-center gap-1.5', activeSceneTab === 'advanced' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+          @click="activeSceneTab = 'advanced'"
+        >
+          Advanced
+          <span v-if="sceneScriptCount" class="text-[10px] text-violet-300" :title="`${sceneScriptCount} script field(s) configured`">{{ sceneScriptCount }}</span>
+        </button>
+      </div>
+
+      <!-- Advanced: the scene's scripts -->
+      <SceneScriptsSection
+        v-if="routeSceneDetails"
+        v-show="activeSceneTab === 'advanced'"
+        :key="String(routeSceneDetails.id)"
+        :adventure-id="adventureId"
+        :scene="routeSceneDetails"
+        @refresh="emit('refresh')"
+      />
+
       <!-- Card Body -->
-      <div class="space-y-6">
+      <div v-show="activeSceneTab === 'general'" class="space-y-6">
         <!-- Scene Name Column -->
         <div class="space-y-2">
           <div class="flex justify-between items-center">
@@ -684,14 +726,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
       </div>
     </div>
 
-    <SceneScriptsSection
-      v-if="routeSceneDetails"
-      :key="String(routeSceneDetails.id)"
-      :adventure-id="adventureId"
-      :scene="routeSceneDetails"
-      @refresh="emit('refresh')"
-    />
-
+    <div v-show="activeSceneTab === 'general'" class="space-y-4">
     <div class="grid md:grid-cols-2 gap-3 text-slate-200">
       <label class="text-xs text-slate-300 space-y-1">
         <span>Filter Scene Content</span>
@@ -1142,6 +1177,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           <div v-if="filteredRouteSceneExits.length === 0" class="text-xs text-slate-500">No exits match the current filter.</div>
         </div>
       </div>
+    </div>
     </div>
   </section>
 </template>

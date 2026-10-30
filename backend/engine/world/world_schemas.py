@@ -873,6 +873,15 @@ class SequenceSchema(WorldBaseSchema):
         default="",
         description="Optional text output when this sequence ends/completes. Use empty string for none.",
     )
+    helpers_script: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional sequence helper block: ONLY `def` functions and constant assignments "
+            "(NAME = literal) for this chapter's logic and dialog handlers. Loaded on every "
+            "script run like init_script, whichever chapter is active. Any other statement "
+            "never runs. Use empty string for none."
+        ),
+    )
     soft_rules: list[SoftRuleSchema] = Field(
         default_factory=list,
         description="Narrative rules only active during this sequence: the GM judges the condition, the engine runs the script. Use [] if none.",
