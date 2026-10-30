@@ -8,8 +8,8 @@ This document provides concise overviews and explanations for each screenshot lo
 
 - [Core Gameplay & Player Interfaces](#core-gameplay--player-interfaces)
   - [Adventure Library (`library.jpg`)](#adventure-library-libraryjpg)
-  - [Adventure Library: Archive After Install (`status-library-archive.jpg`)](#adventure-library-archive-after-install-status-library-archivejpg)
-  - [Adventure Library: Catalog Download (`status-library-download.jpg`)](#adventure-library-catalog-download-status-library-downloadjpg)
+  - [Adventure Library: Archive After Install (`library-archive.jpg`)](#adventure-library-archive-after-install-library-archivejpg)
+  - [Adventure Library: Catalog Download (`library-catalog.jpg`)](#adventure-library-catalog-download-library-catalogjpg)
   - [World Generator (`generator.jpg`)](#world-generator-generatorjpg)
   - [Adventure Gameplay (`gameplay.jpg`)](#adventure-gameplay-gameplayjpg)
   - [Character Sheet & Backpack (`character-sheet.jpg`)](#character-sheet--backpack-character-sheetjpg)
@@ -41,22 +41,22 @@ This document provides concise overviews and explanations for each screenshot lo
 
 ---
 
-### Adventure Library: Archive After Install (`status-library-archive.jpg`)
+### Adventure Library: Archive After Install (`library-archive.jpg`)
 
-[![Adventure Library Archive](screenshots/small/status-library-archive.jpg)](screenshots/status-library-archive.jpg)
+[![Adventure Library Archive](screenshots/small/library-archive.jpg)](screenshots/library-archive.jpg)
 
-* **Filename**: [`docs/screenshots/status-library-archive.jpg`](screenshots/status-library-archive.jpg)
+* **Filename**: [`docs/screenshots/library-archive.jpg`](screenshots/library-archive.jpg)
 * **View**: Library Archive after a catalog download
 * **Description**:
   *The Archive* section of the Library view, listing every adventure installed locally with cover art, version badge, genre, tone and play style, plus a *Begin* action per card. The second entry, *Crashed on Proxima-9*, arrived through the catalog browser moments earlier: the top row of *The Forge* holds the entry points — *Start New*, *Generate Adventure* and *Browse Library*.
 
 ---
 
-### Adventure Library: Catalog Download (`status-library-download.jpg`)
+### Adventure Library: Catalog Download (`library-catalog.jpg`)
 
-[![Adventure Library Catalog](screenshots/small/status-library-download.jpg)](screenshots/status-library-download.jpg)
+[![Adventure Library Catalog](screenshots/small/library-catalog.jpg)](screenshots/library-catalog.jpg)
 
-* **Filename**: [`docs/screenshots/status-library-download.jpg`](screenshots/status-library-download.jpg)
+* **Filename**: [`docs/screenshots/library-catalog.jpg`](screenshots/library-catalog.jpg)
 * **View**: Published adventure catalog, opened from *Browse Library*
 * **Description**:
   The catalog served from `jschm42/taleweaver-adventures`: one card per published adventure with cover art, teaser, creator, language, content-advisory icons and pack size, plus a per-card *Download* button and a running total (*10 adventures · 102.6 MB total*). Cards already present locally switch to *Downloaded*; a *Show deprecated* filter reveals packs whose manifest format version predates the current one.

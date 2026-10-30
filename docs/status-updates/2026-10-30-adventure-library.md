@@ -6,8 +6,8 @@ status: draft
 version: v0.7.0-beta
 since_commit: v0.6.0-beta
 images:
-  - screenshots/status-library-archive.jpg
-  - screenshots/status-library-download.jpg
+  - screenshots/library-archive.jpg
+  - screenshots/library-catalog.jpg
 discussion_url:
 ---
 
@@ -19,13 +19,13 @@ Getting a published adventure into TaleWeaver used to mean finding an `.adz` fil
 and importing it by hand. As of this build the game has a catalog browser: pick
 an adventure, hit download, and it lands in your local library ready to play.
 
-![Browsing the catalog](https://raw.githubusercontent.com/jschm42/taleweaver/main/docs/screenshots/status-library-download.jpg)
+![Browsing the catalog](https://raw.githubusercontent.com/jschm42/taleweaver/main/docs/screenshots/library-catalog.jpg)
 
 *Browse Library* opens the catalog: ten adventures, 102.6 MB in total, with
 covers, teasers, creators, sizes, and a `DOWNLOADED` badge once a pack is
 already local.
 
-![The Archive with a downloaded adventure](https://raw.githubusercontent.com/jschm42/taleweaver/main/docs/screenshots/status-library-archive.jpg)
+![The Archive with a downloaded adventure](https://raw.githubusercontent.com/jschm42/taleweaver/main/docs/screenshots/library-archive.jpg)
 
 The Library view lists everything installed locally with cover art, version,
 genre, tone and play style. The second card is *Crashed on Proxima-9*, pulled
