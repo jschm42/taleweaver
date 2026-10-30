@@ -53,6 +53,7 @@ import { useGameInteractionState } from '@/composables/useGameInteractionState'
 import { useGameSessionLifecycle } from '@/composables/useGameSessionLifecycle'
 import { useGameCommandFlow } from '@/composables/useGameCommandFlow'
 import { useGameProgressState } from '@/composables/useGameProgressState'
+import { useSceneArrivalCurtain } from '@/composables/useSceneArrivalCurtain'
 import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
@@ -243,6 +244,7 @@ const {
   questGlow,
   isCheckpointSaving,
   isSceneTransitioning: socketIsSceneTransitioning,
+  sceneArrival,
   generatorProposal,
   generatorAutoStart,
   showGeneratorModal,
@@ -261,6 +263,13 @@ const {
   isLegacyFormat,
   language,
 } = useGameSocket()
+
+// Scene changes without an exit (script teleport, GM move) get the travel curtain too.
+const { arrivalTarget, isArriving } = useSceneArrivalCurtain(
+  sceneArrival,
+  (sceneId) => resolveSceneName(sceneId),
+  (sceneId) => resolveSceneImage(sceneId),
+)
 
 const showLegacyFormatWarning = ref(true)
 
@@ -959,7 +968,7 @@ const handleExitClick = async (exit: any) => {
 }
 
 const isSceneTransitioning = computed(() => {
-  return Boolean(exitTraversalBusy.value) || socketIsSceneTransitioning.value
+  return Boolean(exitTraversalBusy.value) || socketIsSceneTransitioning.value || isArriving.value
 })
 
 const formatSceneIdToTitle = (rawId?: string | null): string => {
@@ -1811,7 +1820,7 @@ usePlayAgentAutoLoop()
       :is-checkpoint-saving="isCheckpointSaving"
       :exit-traversal-busy="exitTraversalBusy"
       :is-scene-transitioning="isSceneTransitioning"
-      :scene-transition-target="sceneTransitionTarget"
+      :scene-transition-target="sceneTransitionTarget || arrivalTarget"
       :exit-unlock-busy="exitUnlockBusy"
       :turn-error="turnError"
       :active-sequence="activeSequence"

@@ -72,6 +72,8 @@ export interface UseGameSocket {
   agentLog: Ref<AgentLogEntry[]>
   isCheckpointSaving: Ref<boolean>
   isSceneTransitioning: Ref<boolean>
+  /** Set when a turn ended in another scene without a travel event (script teleport, GM move). */
+  sceneArrival: Ref<{ sceneId: string; at: number } | null>
   generatorProposal: Ref<any | null>
   generatorAutoStart: Ref<boolean>
   showGeneratorModal: Ref<boolean>
@@ -147,6 +149,7 @@ export function useGameSocket(): UseGameSocket {
   const agentLog = ref<AgentLogEntry[]>([])
   const isCheckpointSaving = ref(false)
   const isSceneTransitioning = ref(false)
+  const sceneArrival = ref<{ sceneId: string; at: number } | null>(null)
   let checkpointPulseTimer: number | null = null
   const generatorProposal = ref<any | null>(null)
   // True when the player already confirmed the blueprint in chat: the modal skips the form.
@@ -273,6 +276,15 @@ export function useGameSocket(): UseGameSocket {
 
   // Names of all session entities (sent with the full chat snapshot only), for ##ID references.
   let entityNameMap: Record<string, string> = {}
+
+  /** A turn's final snapshot; a scene change the turn did not announce plays the travel curtain. */
+  function applyFinalSnapshot(data: any, sawSceneTransition: boolean): void {
+    const previousSceneId = currentSceneId
+    applySessionSnapshot(data, false)
+    if (sawSceneTransition || !previousSceneId || !currentSceneId) return
+    if (currentSceneId === previousSceneId) return
+    sceneArrival.value = { sceneId: currentSceneId, at: Date.now() }
+  }
 
   function applySessionSnapshot(data: any, updateMessages = true): void {
     if (!data) return
@@ -543,6 +555,7 @@ export function useGameSocket(): UseGameSocket {
     }
     let receivedFinalEvent = false
     let receivedErrorEvent = false
+    let sawSceneTransition = false
     const controller = new AbortController()
     activeChatController = controller
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
@@ -654,7 +667,7 @@ export function useGameSocket(): UseGameSocket {
             lastMsg.content += data.content
           } else if (event === 'final') {
             receivedFinalEvent = true
-            applySessionSnapshot(data, false)
+            applyFinalSnapshot(data, sawSceneTransition)
             if (data.game_over) {
               status.value = 'game_over'
               gameOverReason.value = data.game_over_reason || data.status_note || ''
@@ -683,6 +696,7 @@ export function useGameSocket(): UseGameSocket {
           } else if (event === 'scene_transition') {
             // The story feed starts a new page per scene; previous scenes stay browsable.
             isSceneTransitioning.value = true
+            sawSceneTransition = true
             applySessionSnapshot(data, false)
           } else if (event === 'adventure_generator_proposal') {
             generatorProposal.value = data.request || data
@@ -916,7 +930,7 @@ export function useGameSocket(): UseGameSocket {
             lastMsg.content += data.content
           } else if (event === 'final') {
             receivedFinalEvent = true
-            applySessionSnapshot(data, false)
+            applyFinalSnapshot(data, false)
             if (data.game_over) {
               status.value = 'game_over'
               gameOverReason.value = data.game_over_reason || data.status_note || ''
@@ -1052,6 +1066,7 @@ export function useGameSocket(): UseGameSocket {
     agentLog,
     isCheckpointSaving,
     isSceneTransitioning,
+    sceneArrival,
     generatorProposal,
     generatorAutoStart,
     showGeneratorModal,
