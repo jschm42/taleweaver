@@ -340,7 +340,8 @@ class TurnInteractionsManager:
 
         yield f"event: status\ndata: {json.dumps({'content': f'Entering {scene_label}...'})}\n\n"
 
-        # Run full LLM cycle to narrate the new scene
+        # Run full LLM cycle to narrate the new scene (the GM may not move the player on).
+        self.manager.arrival_narration = True
         try:
             async for chunk in self._run_llm_cycle(narration_prompt, False, language=language):
                 yield chunk
@@ -349,6 +350,8 @@ class TurnInteractionsManager:
                 _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
             )
             yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
+        finally:
+            self.manager.arrival_narration = False
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()

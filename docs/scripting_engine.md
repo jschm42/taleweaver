@@ -363,13 +363,14 @@ Inspects and modifies the avatar's state:
 - `tw.player.heal(amount: int)`: Restores `amount` HP (up to avatar maximum).
 - `tw.player.damage(amount: int)`: Inflicts `amount` direct damage to the avatar.
 - `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory.
+- To move the protagonist to another scene, use `tw.scene.teleport(scene_id)` (see [`tw.scene`](#twscene)).
 
 ### `tw.scene`
 Inspects the current scene:
 - `tw.scene.id` *(str)*: ID of the current scene (the target scene once the script called `tw.scene.teleport`).
 - `tw.scene.npcs` *(list[NPCProxy])*: All NPCs in the current scene, as the same proxies `tw.npcs.get()` returns. Includes NPCs that are hidden (`.is_hidden`) or defeated (`.is_defeated`) and NPCs moved here earlier in the same script; filter them yourself if needed.
 - `tw.scene.items` *(list[ObjectProxy])*: All objects and items lying in the current scene.
-- `tw.scene.teleport(target_scene_id: str)`: Moves the player to another scene.
+- `tw.scene.teleport(target_scene_id: str)`: Moves the protagonist directly into another scene, whether or not an exit connects the two. Works in every script, including scene and exit triggers (`on_enter_scene`, `on_leave_scene`, exit scripts). After the call, `tw.scene.id`, `tw.scene.npcs`, `tw.scene.items` and `"current"` targets (e.g. `tw.npcs.move_to_player`) refer to the target scene. A teleport does **not** fire the target scene's `on_enter_scene` or the old scene's `on_leave_scene` script, and no "You have entered" message is shown, so describe the jump yourself (e.g. with `tw.story.direct`).
 - `tw.scene.get_attribute(name, default=None)` / `tw.scene.set_attribute(name, value)`: A script-defined value stored per scene.
 
 ```python
@@ -377,6 +378,13 @@ Inspects the current scene:
 for npc in tw.scene.npcs:
     if not npc.is_hidden and not npc.is_defeated:
         npc.add_trait("angry")
+```
+
+```python
+# A trap door drops the player into the cellar, where the guard is already waiting
+tw.scene.teleport("CELLAR")
+tw.npcs.move_to_player("GUARD", "blocking the stairs")
+tw.story.direct("The floor gives way. The player tumbles down into the cellar.")
 ```
 
 ### `tw.exits`

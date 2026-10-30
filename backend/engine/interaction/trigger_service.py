@@ -177,6 +177,7 @@ class TriggerService:
             cls._persist_entity_states(state, context.changeset)
             cls._persist_exit_states(state, context.changeset)
             await cls._sync_npc_personas(db, state, context.changeset)
+            await cls._sync_moved_entities(db, state, context.changeset)
 
         return messages
 
@@ -195,10 +196,14 @@ class TriggerService:
 
     @staticmethod
     def _persist_entity_states(state: SessionState, changeset: ScriptChangeset) -> None:
-        """Writes variable, entity and dialog updates of a trigger script to the session."""
+        """Writes variable, movement, entity, flag and dialog updates of a trigger script."""
+        if changeset.teleport_scene_id:
+            state.current_scene_id = changeset.teleport_scene_id
         if not (
             changeset.var_updates
+            or changeset.entity_movements
             or changeset.entity_updates
+            or changeset.story_flag_updates
             or changeset.exit_updates
             or changeset.pending_dialog
             or changeset.gm_directions
@@ -209,6 +214,16 @@ class TriggerService:
             sv = dict(cur_states.get("__script_vars__", {}))
             sv.update(changeset.var_updates)
             cur_states["__script_vars__"] = sv
+        if changeset.story_flag_updates:
+            flags = dict(cur_states.get("__switch_story_flags__", {}))
+            flags.update(changeset.story_flag_updates)
+            cur_states["__switch_story_flags__"] = flags
+        for move in (m for m in changeset.entity_movements if m.get("entity_id")):
+            st = dict(cur_states.get(move["entity_id"], {}))
+            st["current_scene_id"] = move["to_scene_id"]
+            if move.get("to_spatial_position"):
+                st["spatial_position"] = move["to_spatial_position"]
+            cur_states[move["entity_id"]] = st
         for upd in (u for u in changeset.entity_updates if u.get("entity_id")):
             st = dict(cur_states.get(upd["entity_id"], {}))
             st.update({k: v for k, v in upd.items() if k != "entity_id"})
@@ -238,6 +253,25 @@ class TriggerService:
         states: dict[str, Any] = dict(state.entity_states or {})
         for ent in res.scalars().all():
             apply_persona(ent, states.get(str(ent.id), {}))
+
+    @staticmethod
+    async def _sync_moved_entities(
+        db: AsyncSession, state: SessionState, changeset: ScriptChangeset
+    ) -> None:
+        """Scene queries read the entity rows, so script movements are written to them too."""
+        moved = {m["entity_id"] for m in changeset.entity_movements if m.get("entity_id")}
+        if not moved:
+            return
+        res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == state.session_id, WorldEntity.id.in_(moved)
+            )
+        )
+        states: dict[str, Any] = dict(state.entity_states or {})
+        for ent in res.scalars().all():
+            st = states.get(str(ent.id), {})
+            ent.current_scene_id = st.get("current_scene_id", ent.current_scene_id)
+            ent.spatial_position = st.get("spatial_position", ent.spatial_position)
 
     @staticmethod
     def _persist_exit_states(state: SessionState, changeset: ScriptChangeset) -> None:

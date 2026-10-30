@@ -2558,7 +2558,10 @@ async function confirmDeleteRouteAsset() {
       await entityService.deleteExit(props.adventureId, target.id)
       await fetchDebugInfo()
       addNotification('Exit deleted.', 'success')
-      router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
+      // Only leave the page when it showed the deleted exit; the scene editor stays open.
+      if (activeMapExitId.value === target.id) {
+        router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
+      }
     } else {
       await entityService.deleteEntity(props.adventureId, target.id)
       await fetchDebugInfo()

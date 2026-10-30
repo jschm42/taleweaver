@@ -432,6 +432,17 @@ class TurnStateApplier:
                 await self._save_chat_message("system", prot_meta["on_status_change_text"])
                 system_messages.append(prot_meta["on_status_change_text"])
 
+        if event.new_scene_id and getattr(self.manager, "arrival_narration", False) is True:
+            # Narrating an arrival through an exit: the player did not ask to move on.
+            logger.info(
+                "[Turn %s] Ignored GM scene change to '%s' during arrival narration",
+                self.game_id,
+                event.new_scene_id,
+            )
+            event.new_scene_id = None
+            event.scene_label = None
+            event.exit_label = None
+
         state_dirty = False
         if event.new_scene_id and event.new_scene_id != self.state.current_scene_id:
             # Enforce that the target scene is adjacent (connected by a WorldExit from the current scene)

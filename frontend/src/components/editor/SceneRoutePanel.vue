@@ -15,6 +15,7 @@ import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
+import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
   adventureId: string
@@ -1153,8 +1154,17 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.22),transparent_55%)]"></div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-85"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-emerald-400/50 bg-emerald-500/20 text-emerald-100">EXIT</div>
+            <!-- Exits have no image: the tile shows the route (from -> to) instead. -->
+            <div
+              class="absolute inset-x-2 top-9 bottom-9 flex flex-col items-center justify-center gap-0.5 text-center"
+              :title="exitRoute(worldExit, editorScenes).text"
+            >
+              <span class="w-full text-xs font-bold leading-tight line-clamp-2" :class="worldExit.from_scene_id === props.sceneId ? 'text-emerald-300' : 'text-white'">{{ exitRoute(worldExit, editorScenes).from }}</span>
+              <span class="text-lg font-black leading-none text-emerald-400">{{ exitRoute(worldExit, editorScenes).bidirectional ? '⇅' : '↓' }}</span>
+              <span class="w-full text-xs font-bold leading-tight line-clamp-2" :class="worldExit.to_scene_id === props.sceneId ? 'text-emerald-300' : 'text-white'">{{ exitRoute(worldExit, editorScenes).to }}</span>
+            </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md" :title="worldExit.label || worldExit.id">{{ worldExit.label || 'Exit' }}</div>
+              <div class="text-[10px] font-black text-slate-300 uppercase tracking-wider truncate" :title="worldExit.label || worldExit.id">{{ worldExit.label || 'Exit' }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button
