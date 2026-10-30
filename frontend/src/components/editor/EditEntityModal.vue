@@ -340,6 +340,23 @@ const itemReferenceOptions = computed(() => {
 
 const currentEntityId = computed(() => String(localForm.value.entity_id || props.initialForm?.entity_id || '').trim().toUpperCase())
 
+/**
+ * Items that can gate a transition or unlock: anything the player can carry, so portable
+ * switches (e.g. a remote) count, while recipes and the entity itself do not.
+ */
+const keyItemReferenceOptions = computed(() => {
+  return (props.referenceOptions || [])
+    .filter((option) => {
+      if (String(option.type || '').toUpperCase() !== 'OBJECT') return false
+      if (String(option.id || '').toUpperCase() === currentEntityId.value) return false
+      return String((option as any).itemType || '').toUpperCase() !== 'CONSTRUCTABLE'
+    })
+    .map((option) => ({
+      ...option,
+      name: option.name || option.id || '',
+    }))
+})
+
 const containedItemReferenceOptions = computed(() => {
   return itemReferenceOptions.value.filter((option) => {
     return String(option.id || '').toUpperCase() !== currentEntityId.value
@@ -1451,6 +1468,7 @@ const textLogPreviewClass = computed(() => {
                   v-model:kept="localForm.kept_ingredients_input"
                   :ingredient-options="recipeIngredientOptions"
                   :result-options="recipeResultOptions"
+                  :recipe-id="currentEntityId || String(context?.id || '')"
                 />
 
                 <!-- CONSTRUCTABLE Panels: Deterministic Guard & Transition Rules -->
@@ -1762,7 +1780,7 @@ const textLogPreviewClass = computed(() => {
                               </span>
                               <EntityReferenceCombobox
                                 v-model="switchTransitions[editingTransitionIndex].gates.item"
-                                :options="itemReferenceOptions"
+                                :options="keyItemReferenceOptions"
                                 placeholder="None"
                                 :enable-search="true"
                               />
@@ -1892,7 +1910,7 @@ const textLogPreviewClass = computed(() => {
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item ID To Unlock</label>
                     <EntityReferenceCombobox
                       v-model="localForm.item_to_unlock"
-                      :options="itemReferenceOptions"
+                      :options="keyItemReferenceOptions"
                       placeholder="Select item reference"
                       :enable-search="true"
                     />

@@ -2028,8 +2028,19 @@ const routeExitDetails = computed<any | null>(() => {
   return exits.find((worldExit: any) => String(worldExit.id) === exitId) || null
 })
 
-const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: string | null; type: string; itemType?: string }>>(() => {
-  const entries: Array<{ id: string; name: string; imageUrl?: string | null; type: string; itemType?: string }> = []
+// Objects carry their scene so pickers can sort and label them by location.
+type ReferenceEntry = {
+  id: string
+  name: string
+  imageUrl?: string | null
+  type: string
+  itemType?: string
+  sceneLabel?: string
+  sceneOrder?: number
+}
+
+const referenceOptions = computed<ReferenceEntry[]>(() => {
+  const entries: ReferenceEntry[] = []
   
   const editorNpcs = Array.isArray(debugData.value?.npcs) ? debugData.value.npcs : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
@@ -2056,13 +2067,19 @@ const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: s
       type: 'NPC',
     })
   }
+  const sceneIndex = new Map<string, number>(editorScenes.value.map((scene: any, i: number) => [String(scene.id), i]))
   for (const obj of objects) {
+    const sceneId = String(obj.current_scene_id || '')
+    const sceneOrder = sceneIndex.get(sceneId)
+    const scene = sceneOrder === undefined ? null : editorScenes.value[sceneOrder]
     entries.push({
       id: String(obj.id || ''),
       name: String(obj.name || obj.id || ''),
       imageUrl: obj.image_url ? buildVisualImageUrl(obj.image_url) : null,
       type: 'OBJECT',
       itemType: String(obj.item_type || '').toUpperCase(),
+      sceneLabel: scene ? String(scene.label || scene.name || scene.id) : undefined,
+      sceneOrder,
     })
   }
   return entries.filter((entry) => entry.id)

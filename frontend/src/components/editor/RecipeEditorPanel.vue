@@ -5,13 +5,18 @@ import EntityReferenceCombobox, { type ReferenceOption } from '@/components/edit
 /**
  * Editor for a CONSTRUCTABLE recipe: the ingredients to combine (each optionally kept instead of
  * consumed) and the separate result items that crafting reveals. Results start hidden.
+ *
+ * Every picker lists items by scene (editor scene order, then items outside any scene) and hides
+ * items already used as an ingredient or result of this recipe, and the recipe itself.
  */
 const props = withDefaults(defineProps<{
   ingredients?: string[]
   results?: string[]
   kept?: string[]
-  ingredientOptions: ReferenceOption[]
-  resultOptions: ReferenceOption[]
+  ingredientOptions: RecipeOption[]
+  resultOptions: RecipeOption[]
+  /** ID of the recipe being edited; never offered as its own ingredient or result. */
+  recipeId?: string
 }>(), {
   ingredients: () => [],
   results: () => [],
@@ -23,6 +28,33 @@ const emit = defineEmits<{
   (e: 'update:results', value: string[]): void
   (e: 'update:kept', value: string[]): void
 }>()
+
+type RecipeOption = ReferenceOption & { sceneLabel?: string; sceneOrder?: number }
+
+const upper = (id: unknown) => String(id || '').trim().toUpperCase()
+const NO_SCENE = Number.MAX_SAFE_INTEGER
+
+function byLocation(a: RecipeOption, b: RecipeOption): number {
+  const scene = (a.sceneOrder ?? NO_SCENE) - (b.sceneOrder ?? NO_SCENE)
+  return scene || String(a.name || a.id).localeCompare(String(b.name || b.id))
+}
+
+function sortedByLocation(options: RecipeOption[]): ReferenceOption[] {
+  return [...options]
+    .filter((option) => upper(option.id) !== upper(props.recipeId))
+    .sort(byLocation)
+    .map((option) => ({ ...option, subtitle: option.sceneLabel || 'No scene' }))
+}
+
+const sortedIngredientOptions = computed(() => sortedByLocation(props.ingredientOptions))
+const sortedResultOptions = computed(() => sortedByLocation(props.resultOptions))
+const assignedIds = computed(() => new Set([...props.ingredients, ...props.results].map(upper).filter(Boolean)))
+
+/** Options for one picker: everything not yet assigned, plus the picker's own current item. */
+function available(options: ReferenceOption[], current: string): ReferenceOption[] {
+  const own = upper(current)
+  return options.filter((option) => upper(option.id) === own || !assignedIds.value.has(upper(option.id)))
+}
 
 const keptIds = computed(() => new Set(props.kept.map((id) => String(id).toUpperCase())))
 
@@ -76,7 +108,7 @@ function setResult(idx: number, value: string) {
       <div v-for="(ing, idx) in ingredients" :key="`ing-${idx}`" class="flex items-center gap-2">
         <EntityReferenceCombobox
           :model-value="ing"
-          :options="ingredientOptions"
+          :options="available(sortedIngredientOptions, ing)"
           placeholder="Select ingredient item"
           :enable-search="true"
           @update:model-value="setIngredient(idx, $event)"
@@ -121,7 +153,7 @@ function setResult(idx: number, value: string) {
       <div v-for="(res, idx) in results" :key="`res-${idx}`" class="flex items-center gap-2">
         <EntityReferenceCombobox
           :model-value="res"
-          :options="resultOptions"
+          :options="available(sortedResultOptions, res)"
           placeholder="Select result item"
           :enable-search="true"
           @update:model-value="setResult(idx, $event)"

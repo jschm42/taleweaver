@@ -6,6 +6,8 @@ export interface ReferenceOption {
   name: string
   imageUrl?: string | null
   type?: string
+  /** Optional extra line in the dropdown, e.g. the item's scene. */
+  subtitle?: string
 }
 
 const props = defineProps<{
@@ -182,7 +184,7 @@ watch(
               />
               <div class="min-w-0">
                 <div class="text-sm text-white truncate">{{ option.name || option.id }}</div>
-                <div class="text-[11px] text-slate-400 truncate">{{ option.id }}</div>
+                <div class="text-[11px] text-slate-400 truncate">{{ option.id }}<template v-if="option.subtitle"> · {{ option.subtitle }}</template></div>
               </div>
             </div>
           </button>
