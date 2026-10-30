@@ -12,11 +12,17 @@ Recurring, screenshot-driven progress posts for GitHub Discussions.
    scope of a post — not the commit subjects. Helper:
    `~/.hermes/profiles/tolkien/skills/software-development/taleweaver-status-update/scripts/doc_delta.py`.
 3. **One file per update**: `YYYY-MM-DD-<slug>.md`.
-4. **Screenshots come from the running instance**, not from mocks. Every image
+4. **Short posts, one topic each.** Target 250–450 words and one idea per post.
+   A build with several new features becomes a series of small posts, not one
+   long one — readers skim Discussions, and a focused post is easier to link,
+   quote and reply to. Everything else waits in [`backlog.md`](backlog.md).
+5. **Screenshots come from the running instance**, not from mocks. Every image
    in a post must be traceable to a real headless browser session against
    `https://127.0.0.1:5173`.
-5. **Draft status lives in the frontmatter** (`status: draft|approved|published`)
+6. **Draft status lives in the frontmatter** (`status: draft|approved|published`)
    together with the discussion URL once published.
+7. **Merging is not publishing.** A merged PR only puts the draft on `main`; the
+   discussion is a separate, explicit step (see *Publishing*).
 
 ## Frontmatter
 
@@ -50,6 +56,29 @@ GitHub shows broken links.
 
 ## Publishing
 
-`status: approved` + explicit go from Jean → create the discussion in the
-`Announcements` category (`gh api graphql`, `createDiscussion`), then set
-`status: published` and `discussion_url` in the frontmatter.
+Nothing posts automatically — there is no workflow that watches `main`. Merging
+the PR that contains the draft is only the point where the text and the images
+become reachable at their `raw.githubusercontent.com` URLs, which is why the post
+must be published *after* the merge, never before.
+
+Publishing is one explicit step, done only on Jean's go:
+
+1. `status: approved` in the frontmatter, body copy final.
+2. Post the body (without the YAML block) as a new discussion:
+
+   ```bash
+   gh api graphql -f query='
+     mutation($repo:ID!, $cat:ID!, $title:String!, $body:String!) {
+       createDiscussion(input:{repositoryId:$repo, categoryId:$cat, title:$title, body:$body}) {
+         discussion { url number }
+       }
+     }' \
+     -f repo=REPO_ID -f cat=DIC_kwDOSAfRcM4C8vKp \
+     -f title='...' -F body=@body.md
+   ```
+
+   `Announcements` is `DIC_kwDOSAfRcM4C8vKp` in this repository; the repo node ID
+   comes from `gh api graphql -f query='{repository(owner:"jschm42",name:"taleweaver"){id}}'`.
+3. Set `status: published` and the returned URL as `discussion_url`, and move the
+   item in [`backlog.md`](backlog.md) to *published*. That commit is what makes
+   the next update's `since_commit` meaningful.
