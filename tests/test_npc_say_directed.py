@@ -28,7 +28,17 @@ def test_say_directed_queues_a_gm_direction_for_the_npc():
     assert ctx.changeset.narrative_messages == []
     [direction] = ctx.changeset.gm_directions
     assert direction.startswith("Bram (BRAM) speaks in this narration")
+    assert 'as a separate dialogue line Bram: "..."' in direction
     assert direction.endswith("Content: sings Yellow Submarine")
+
+
+def test_choice_dialog_narration_asks_for_dialogue_lines():
+    # Arrange
+    from backend.api.routes.adventures.dialog_service import _NARRATION_SYSTEM_PROMPT
+
+    # Act / Assert
+    assert 'Character Name: "Dialogue"' in _NARRATION_SYSTEM_PROMPT
+    assert "never quote speech inside a prose sentence" in _NARRATION_SYSTEM_PROMPT
 
 
 def test_say_directed_works_on_the_npc_proxy():

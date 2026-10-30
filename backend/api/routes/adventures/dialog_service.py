@@ -41,7 +41,12 @@ _NARRATION_SYSTEM_PROMPT = (
     "facts were decided by the game engine and are binding: stay consistent with them and never "
     "invent additional state changes, items, damage or rewards. 'npcs_present' describes the "
     "current personality and goal of the NPCs in the scene: let them shape how those NPCs react. "
-    "Work any 'author_directions' naturally into the narration. Output prose only."
+    "Work any 'author_directions' naturally into the narration; a direction that makes an NPC "
+    "speak becomes its own dialogue line, in addition to the 2-4 sentences. "
+    "Dialogue format (mandatory): every spoken line starts on a NEW line as "
+    'Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" with an emotion tag), '
+    "separated from the prose by a blank line; never quote speech inside a prose sentence. "
+    "Use colons only for this speaker attribution. No JSON, lists or headings."
 )
 
 

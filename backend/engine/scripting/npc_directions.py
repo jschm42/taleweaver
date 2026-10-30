@@ -19,8 +19,9 @@ def speech_direction(name: str, npc_id: str, direction: Any) -> str:
     if not what:
         return ""
     return clean_direction(
-        f"{name} ({npc_id}) speaks in this narration: write it as their own line of dialogue, "
-        f"in character and fitting the scene. Content: {what}"
+        f'{name} ({npc_id}) speaks in this narration, as a separate dialogue line {name}: "..." '
+        f"on its own line (not quoted inside prose), in character and fitting the scene. "
+        f"Content: {what}"
     )
 
 

@@ -21,6 +21,7 @@ import {
   Terminal,
   BookOpen,
 } from 'lucide-vue-next'
+import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -395,6 +396,20 @@ function insertNamedSnippet(type: string) {
   }
 }
 
+/** Replaces the whole code with an accepted AI proposal; Ctrl+Z restores the previous code. */
+function applyAiCode(code: string) {
+  if (cmInstance) {
+    const doc = cmInstance.getDoc()
+    const last = doc.lastLine()
+    doc.replaceRange(code, { line: 0, ch: 0 }, { line: last, ch: doc.getLine(last).length })
+    cmInstance.focus()
+  } else {
+    emit('update:modelValue', code)
+    emit('change', code)
+  }
+  syntaxResult.value = null
+}
+
 function clearScript() {
   if (cmInstance) {
     cmInstance.setValue('')
@@ -583,6 +598,15 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+
+        <!-- AI Optimize / AI Generate (diff preview before anything changes) -->
+        <ScriptAiAssist
+          :code="modelValue || ''"
+          :context="context"
+          :label="label"
+          :disabled="disabled"
+          @apply="applyAiCode"
+        />
 
         <!-- Syntax Check (Skulpt) -->
         <button

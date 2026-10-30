@@ -405,7 +405,7 @@ Queries and manipulates passage exits:
 ### `tw.npcs`
 Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. Also available as `tw.npcs.get(npc_id).say(text)`.
-- `tw.npcs.say_directed(npc_id: str, direction: str)`: Lets the NPC speak in the next GM narration, worded by the GM instead of a fixed text: the direction says *what* the NPC says or does with their voice (`tw.npcs.say_directed("BRAM", "sings Yellow Submarine")`), and the GM writes the actual line in character and in the scene's language. It works like [`tw.story.direct`](#twstory): a soft direction, used once by the next narration (max. 500 characters, at most the 5 newest directions are kept). Also available as `tw.npcs.get(npc_id).say_directed(direction)`.
+- `tw.npcs.say_directed(npc_id: str, direction: str)`: Lets the NPC speak in the next GM narration, worded by the GM instead of a fixed text: the direction says *what* the NPC says or does with their voice (`tw.npcs.say_directed("BRAM", "sings Yellow Submarine")`), and the GM writes the actual line in character and in the scene's language. It works like [`tw.story.direct`](#twstory): a soft direction, used once by the next narration (max. 500 characters, at most the 5 newest directions are kept). The GM is asked to write the line as a separate `Name: "..."` dialogue line, so it shows up as the NPC's own speech bubble (also in the narration of a choice dialog with `narrate=True`); as with every direction, the GM may still word it freely. Also available as `tw.npcs.get(npc_id).say_directed(direction)`.
 - `tw.npcs.move(npc_id: str, target_scene_id: str, spatial_position: str = "")`: Moves an NPC to another scene. Accepts `"current"`, `"here"`, or `"player"` to move them into the protagonist's current location.
 - `tw.npcs.move_to_player(npc_id: str, spatial_position: str = "")`: Convenience shortcut to move an NPC directly into the player's current scene.
 - `tw.npcs.drop_item(npc_id: str, item_id: str, scene_id: str = None, spatial_position: str = "")`: Transfers an item from an NPC's inventory into a scene. If `scene_id` is omitted, it drops into the NPC's current scene; passing `"current"` drops it into the player's scene.
@@ -901,6 +901,15 @@ All scripts are managed directly in the **Scripts** tab:
   - Use the **Insert Snippet** dropdown to paste starter code.
 - Click **Check Syntax** to verify Python syntax, AST safety, and trigger parameters before saving.
 - Click **Create Script** or **Save Changes** to commit the script into the adventure manifest.
+
+### AI Optimize & AI Generate
+Every script and guard editor in the Adventure Editor has two AI buttons next to **Check Syntax**:
+- **AI Optimize** fixes errors and API misuse in the current code, simplifies it while keeping its behaviour, and replaces placeholder comments (`# TODO: give the player the key`) with working code.
+- **AI Generate** opens a prompt: describe what the code should do ("every NPC in the scene gets angry and says what they think about the player"). The AI builds on the current code unless you ask for a rewrite.
+
+The AI knows the field it writes for (e.g. *On Pickup Script* or a guard expression), the `tw` API, the sandbox rules, the adventure's scenes, NPCs, objects, existing hooks and the `init_script` helpers. Every proposal runs through the sandbox syntax check; a failing proposal gets one automatic repair round, and remaining errors are shown as a warning.
+
+Nothing changes until you decide: the proposal opens as a line diff (removed lines red, added lines green) with **Accept** and **Discard**. After accepting, **Ctrl+Z** in the editor restores the previous code. Saving still works as usual through the surrounding form. Texts shown to the player follow the adventure language; code, identifiers and comments are English.
 
 ### Scripts from World-Builder Instructions
 The **World-Builder** prompt at the top of the Adventure Editor can also write inline triggers and guards. Describe the behaviour in plain words, for example *"The chest only opens after the lever in the cellar was pulled"* or *"The amulet hurts the player when it is equipped"*, and pick one of up to three proposals.
