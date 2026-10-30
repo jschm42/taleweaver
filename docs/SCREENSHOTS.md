@@ -32,45 +32,12 @@ This document provides concise overviews and explanations for each screenshot lo
 
 ### Adventure Library (`library.jpg`)
 
-[![Adventure Library](screenshots/small/library.jpg)](screenshots/library.jpg)
+[![Adventure Library](screenshots/small/library-catalog.jpg)](screenshots/library-catalog.jpg)
 
-* **Filename**: [`docs/screenshots/library.jpg`](screenshots/library.jpg)
+* **Filename**: [`docs/screenshots/library.jpg`](screenshots/library-catalog.jpg)
 * **View**: Main Adventure Hub & Campaign Selector
 * **Description**:
   The central portal for browsing and managing adventures. Players can explore curated campaigns, community modules, and locally generated scenarios. Each adventure card presents custom cover artwork, setting summaries, play session statistics, and action triggers to start, resume, clone, or open the campaign directly inside the World Editor.
-
----
-
-### Adventure Library: Archive After Install (`library-archive.jpg`)
-
-[![Adventure Library Archive](screenshots/small/library-archive.jpg)](screenshots/library-archive.jpg)
-
-* **Filename**: [`docs/screenshots/library-archive.jpg`](screenshots/library-archive.jpg)
-* **View**: Library Archive after a catalog download
-* **Description**:
-  *The Archive* section of the Library view, listing every adventure installed locally with cover art, version badge, genre, tone and play style, plus a *Begin* action per card. The second entry, *Crashed on Proxima-9*, arrived through the catalog browser moments earlier: the top row of *The Forge* holds the entry points — *Start New*, *Generate Adventure* and *Browse Library*.
-
----
-
-### Adventure Library: Catalog Download (`library-catalog.jpg`)
-
-[![Adventure Library Catalog](screenshots/small/library-catalog.jpg)](screenshots/library-catalog.jpg)
-
-* **Filename**: [`docs/screenshots/library-catalog.jpg`](screenshots/library-catalog.jpg)
-* **View**: Published adventure catalog, opened from *Browse Library*
-* **Description**:
-  The catalog served from `jschm42/taleweaver-adventures`: one card per published adventure with cover art, teaser, creator, language, content-advisory icons and pack size, plus a per-card *Download* button and a running total (*10 adventures · 102.6 MB total*). Cards already present locally switch to *Downloaded*; a *Show deprecated* filter reveals packs whose manifest format version predates the current one.
-
----
-
-### World Generator (`generator.jpg`)
-
-[![World Generator](screenshots/small/generator.jpg)](screenshots/generator.jpg)
-
-* **Filename**: [`docs/screenshots/generator.jpg`](screenshots/generator.jpg)
-* **View**: AI-Powered World Generation Setup
-* **Description**:
-  The creative initiation console for generating fully fleshed-out RPG adventures from natural language prompts. Users can configure narrative genre, thematic tone, visual art styles (such as dark fantasy, retro pulp, or cyberpunk), quest complexity, and world scope before the LLM synthesis pipeline constructs scenes, inhabitants, items, and initial storylines.
 
 ---
 
@@ -115,6 +82,17 @@ This document provides concise overviews and explanations for each screenshot lo
 * **View**: Container Inspection & Spoils Modal
 * **Description**:
   An interaction modal displayed when searching environmental containers, chests, or fallen adversaries. Features rich item cards with rarity tiers, descriptive lore, and quick-action buttons allowing players to inspect specific items, retrieve individual relics, or transfer all contents into their backpack.
+
+---
+
+### World Generator (`generator.jpg`)
+
+[![World Generator](screenshots/small/generator.jpg)](screenshots/generator.jpg)
+
+* **Filename**: [`docs/screenshots/generator.jpg`](screenshots/generator.jpg)
+* **View**: AI-Powered World Generation Setup
+* **Description**:
+  The creative initiation console for generating fully fleshed-out RPG adventures from natural language prompts. Users can configure narrative genre, thematic tone, visual art styles (such as dark fantasy, retro pulp, or cyberpunk), quest complexity, and world scope before the LLM synthesis pipeline constructs scenes, inhabitants, items, and initial storylines.
 
 ---
 
