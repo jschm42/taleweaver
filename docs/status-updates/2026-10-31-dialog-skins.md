@@ -2,7 +2,7 @@
 title: "One adventure, many looks: introducing TaleWeaver's UI themes"
 date: 2026-10-31
 category: Announcements
-status: draft
+status: published
 version: v0.7.0-beta
 since_commit: 125bf134
 images:
@@ -10,7 +10,7 @@ images:
   - screenshots/themes/theme-eldritch.jpg
   - screenshots/themes/theme-noir.jpg
   - screenshots/themes/theme-terminal.jpg
-discussion_url:
+discussion_url: https://github.com/jschm42/taleweaver/discussions/88
 ---
 
 # One adventure, many looks: introducing TaleWeaver's UI themes

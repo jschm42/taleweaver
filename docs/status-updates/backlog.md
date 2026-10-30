@@ -13,7 +13,6 @@ is published. Order is a suggestion, not a promise.
 | 5 | Entity bundles (`.twe`) | [`../specs/entity_bundle_format.md`](../specs/entity_bundle_format.md) | planned |
 | 6 | Custom OpenAI-compatible endpoints | [`../custom-openai-compatible.md`](../custom-openai-compatible.md) | planned |
 | 7 | Stable identifiers for adventures and sessions | [`../storage-identifiers.md`](../storage-identifiers.md) | planned |
-| 8 | Game UI themes (dialog skins) | [`2026-10-31-dialog-skins.md`](2026-10-31-dialog-skins.md) | draft |
 
 ## Not a post
 
