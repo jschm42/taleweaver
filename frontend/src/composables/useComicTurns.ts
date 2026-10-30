@@ -491,13 +491,34 @@ export function useComicTurns(options: UseComicTurnsOptions) {
         }
       })
 
-    // The hero is not listed here; portrait and bio live in the character sheet's Hero tab.
-    return [...worldNpcs].sort((a, b) => {
+    const sortedWorldNpcs = [...worldNpcs].sort((a, b) => {
       const aSpeaking = isNpcSpeaking(a) ? 1 : 0
       const bSpeaking = isNpcSpeaking(b) ? 1 : 0
       return bSpeaking - aSpeaking
     })
+    // The hero always leads the stage (top-left); its card opens the character sheet's Hero tab.
+    if (!sheet.value?.name) return sortedWorldNpcs
+    return [buildPlayerEntity(), ...sortedWorldNpcs]
   })
+
+  function buildPlayerEntity() {
+    return {
+      id: 'PLAYER',
+      name: sheet.value?.name || 'You',
+      entity_type: 'NPC',
+      description: sheet.value?.description || 'Your hero character.',
+      image_url: sheet.value?.profile_image || null,
+      role: sheet.value?.role || 'Hero',
+      hp: typeof sheet.value?.hp === 'number' ? sheet.value?.hp : 100,
+      max_hp: typeof sheet.value?.max_hp === 'number' ? sheet.value?.max_hp : 100,
+      mana: typeof sheet.value?.mana === 'number' ? sheet.value?.mana : 50,
+      max_mana: typeof sheet.value?.max_mana === 'number' ? sheet.value?.max_mana : 50,
+      stamina: typeof sheet.value?.stamina === 'number' ? sheet.value?.stamina : 50,
+      max_stamina: typeof sheet.value?.max_stamina === 'number' ? sheet.value?.max_stamina : 50,
+      inventory: Array.isArray(sheet.value?.inventory) ? sheet.value?.inventory : [],
+      stats: sheet.value?.stats,
+    }
+  }
 
   function getEntityForHover(nameOrEntity: any) {
     if (typeof nameOrEntity === 'object' && nameOrEntity && nameOrEntity.id) {
@@ -512,22 +533,7 @@ export function useComicTurns(options: UseComicTurnsOptions) {
     const name = typeof nameOrEntity === 'string' ? nameOrEntity.trim() : String(nameOrEntity?.name || '').trim()
     const norm = name.toLowerCase()
     if (norm === 'you' || norm === (sheet.value?.name || '').toLowerCase() || norm === `you (${sheet.value?.name || ''})`.toLowerCase()) {
-      return {
-        id: 'PLAYER',
-        name: sheet.value?.name || 'You',
-        entity_type: 'NPC',
-        description: sheet.value?.description || 'Your hero character.',
-        image_url: sheet.value?.profile_image || null,
-        role: sheet.value?.role || 'Hero',
-        hp: typeof sheet.value?.hp === 'number' ? sheet.value?.hp : 100,
-        max_hp: typeof sheet.value?.max_hp === 'number' ? sheet.value?.max_hp : 100,
-        mana: typeof sheet.value?.mana === 'number' ? sheet.value?.mana : 50,
-        max_mana: typeof sheet.value?.max_mana === 'number' ? sheet.value?.max_mana : 50,
-        stamina: typeof sheet.value?.stamina === 'number' ? sheet.value?.stamina : 50,
-        max_stamina: typeof sheet.value?.max_stamina === 'number' ? sheet.value?.max_stamina : 50,
-        inventory: Array.isArray(sheet.value?.inventory) ? sheet.value?.inventory : [],
-        stats: sheet.value?.stats,
-      }
+      return buildPlayerEntity()
     }
     const found = npcs.value.find((n) => n.name?.toLowerCase() === norm || n.id?.toLowerCase() === norm)
     if (found) {

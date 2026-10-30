@@ -4,7 +4,7 @@
  * inventory, equipment, status effects and special attacks. Styled by the session's
  * dialog skin (it is teleported out of the immersive root, so it carries its own .tw-skin).
  */
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import StatBar from './StatBar.vue'
 import SheetSpecialsPanel from './SheetSpecialsPanel.vue'
 import SheetHeroPanel from './sheet/SheetHeroPanel.vue'
@@ -12,6 +12,7 @@ import SheetInventoryPanel from './sheet/SheetInventoryPanel.vue'
 import SheetEquipmentPanel from './sheet/SheetEquipmentPanel.vue'
 import SheetStatusPanel from './sheet/SheetStatusPanel.vue'
 import { isEquippable, isReadableItem } from './sheet/sheetItems'
+import type { SheetTabId } from './sheet/types'
 import type { CharacterSheet } from '@/types'
 import { useSheetSkin } from '@/skins/useSheetSkin'
 
@@ -19,6 +20,8 @@ const props = defineProps<{
   open: boolean
   sheet: CharacterSheet | null
   isDebug?: boolean
+  /** Tab shown when the dialog opens; without it the last viewed tab stays active. */
+  initialTab?: SheetTabId | null
 }>()
 
 const emit = defineEmits<{
@@ -36,7 +39,7 @@ const emit = defineEmits<{
   flipSwitch: [item: any]
 }>()
 
-type TabType = 'hero' | 'inventory' | 'equipment' | 'ailments' | 'specials'
+type TabType = SheetTabId
 
 type TabDefinition = {
   id: TabType
@@ -48,6 +51,14 @@ type TabDefinition = {
 }
 
 const activeTab = ref<TabType>('hero')
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open || !props.initialTab) return
+    activeTab.value = props.initialTab
+  }
+)
 const stateChanged = ref(false)
 
 const { activeSkin, skinStyle } = useSheetSkin(() => props.sheet)

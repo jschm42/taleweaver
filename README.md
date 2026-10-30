@@ -60,7 +60,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 
 ### 🎭 Immersive In-Game Interface & Comic Turn Feed
 * **Comic-Style Turn Presentation:** Dynamic turn rendering that separates narrator exposition from character dialogue using expressive comic speech bubbles, speaker avatars, and action markers.
-* **Dynamic Character Stage:** Visual character staging area displaying active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback.
+* **Dynamic Character Stage:** Visual character staging area led by the protagonist's portrait (click it to open the hero dialog), followed by the active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback.
 * **Streamlined In-Game HUD:** Modernized HUD featuring a real-time In-Game Clock, contextual action quickbar, expandable Character Sheet, skin-styled inline prompts in the story feed for opened and locked containers, locked exits, switches, readables and a combine workbench for crafting, plus a dedicated combat modal.
 
 ### 🛠️ Fully-Featured Adventure Editor & AI Validation

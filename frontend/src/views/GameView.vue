@@ -61,6 +61,7 @@ import { type GameSettings } from '@/services/gameViewService'
 import { gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
+import type { SheetTabId } from '@/components/game/sheet/types'
 import { exitTargetInfo } from '@/components/game/immersive/tabs/exitTarget'
 
 const props = defineProps<{
@@ -70,6 +71,8 @@ const props = defineProps<{
 const router = useRouter()
 const route = useRoute()
 const showSheet = ref(false)
+/** Tab the hero dialog opens on (the hero portrait asks for 'hero'); null keeps the last tab. */
+const sheetInitialTab = ref<SheetTabId | null>(null)
 const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
@@ -1829,7 +1832,7 @@ usePlayAgentAutoLoop()
       @send="handlePlayerInput"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"
-      @open-sheet="showSheet = true"
+      @open-sheet="(tab?: SheetTabId) => { sheetInitialTab = tab ?? null; showSheet = true }"
       @open-map="showMap = true"
       @open-quests="showQuests = true"
       @open-chronicles="openChroniclesModal"
@@ -1947,7 +1950,8 @@ usePlayAgentAutoLoop()
       :open="showSheet" 
       :sheet="sheet" 
       :is-debug="!!sheet?.debug_mode"
-      @close="() => { showSheet = false; if (sheetDirty) handleSheetChanged(); }" 
+      :initial-tab="sheetInitialTab"
+      @close="() => { showSheet = false; if (sheetDirty) handleSheetChanged(); }"
       @equip="handleEquipFromSheet"
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"

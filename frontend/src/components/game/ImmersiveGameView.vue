@@ -35,6 +35,7 @@ import SceneSidebar from './immersive/SceneSidebar.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useSceneSidebar } from '@/skins/useSceneSidebar'
 import type { SettingsTabId } from './settings/types'
+import type { SheetTabId } from './sheet/types'
 import { useStoryTabs } from './immersive/tabs/useStoryTabs'
 import { useGameShortcuts } from './immersive/useGameShortcuts'
 import { useTextDensity } from '@/skins/useTextDensity'
@@ -92,7 +93,7 @@ const emit = defineEmits<{
   send: [content: string]
   retryTurn: []
   cancelTurnError: []
-  openSheet: []
+  openSheet: [tab?: SheetTabId]
   openMap: []
   openQuests: []
   openChronicles: []
@@ -253,13 +254,14 @@ function handleSend(content: string) {
 }
 
 function handleNpcClick(npc: any) {
+  // The hero portrait (stage card or story avatar) opens the hero dialog on its Hero tab.
   if (npc.id === 'PLAYER') {
-    emit('openSheet')
-  } else {
-    if (!canSendInput.value) return
-    emit('npcClick', npc.name)
-    inputBarRef.value?.setInputText(`/say to ${npc.name}: `)
+    emit('openSheet', 'hero')
+    return
   }
+  if (!canSendInput.value) return
+  emit('npcClick', npc.name)
+  inputBarRef.value?.setInputText(`/say to ${npc.name}: `)
 }
 
 function handleSuggestionSelect(suggestion: string) {
@@ -414,7 +416,7 @@ defineExpose({
           @go-to-latest-turn="goToLatestTurn"
           @retry-turn="emit('retryTurn')"
           @cancel-turn-error="emit('cancelTurnError')"
-          @open-sheet="emit('openSheet')"
+          @open-sheet="emit('openSheet', 'hero')"
           @npc-click="(name) => handleNpcClick({ name })"
           @item-click="(item) => emit('itemClick', item)"
           @take-direct="(item) => emit('takeDirect', item)"

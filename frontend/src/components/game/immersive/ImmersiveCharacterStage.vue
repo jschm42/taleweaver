@@ -93,7 +93,7 @@ watch(
       return
     }
     const known = new Set(previousIds ?? [])
-    const arrivals = ids.filter((id) => !known.has(id))
+    const arrivals = ids.filter((id) => id !== 'PLAYER' && !known.has(id))
     if (!arrivals.length) {
       return
     }
@@ -146,8 +146,13 @@ function isNpcVoiced(npc: any): boolean {
         class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
         :class="[
           { 'tw-npc-arrived': hasJustArrived(npc) },
-          isNpcVoiced(npc) ? 'tw-npc-voiced border-transparent' : 'border-slate-700/70 hover:border-cyan-400/80'
+          isNpcVoiced(npc)
+            ? 'tw-npc-voiced border-transparent'
+            : npc.id === 'PLAYER'
+              ? 'border-emerald-500/70 hover:border-emerald-400'
+              : 'border-slate-700/70 hover:border-cyan-400/80'
         ]"
+        :title="npc.id === 'PLAYER' ? 'Open your hero' : undefined"
         @click="emit('npcClick', npc)"
         @mouseenter="emit('npcHover', npc, $event)"
         @mousemove="emit('npcHover', npc, $event)"
@@ -164,7 +169,7 @@ function isNpcVoiced(npc: any): boolean {
           @error="onImageLoadError($event, npc.image_url)"
         />
         <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
-          <i class="ra ra-helmet text-4xl mb-1 text-cyan-400"></i>
+          <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
         </div>
 
         <!-- Entrance: one-off light sweep and a short "Enters" tag -->
