@@ -396,6 +396,51 @@ async def test_generate_entity_image_forwards_style_instruction(monkeypatch):
     assert captured.get("style_instruction") == "pixel art, warm rim light"
 
 
+@pytest.mark.parametrize(
+    ("entity_type", "expected_ratio"),
+    [("NPC", "2:3"), ("PROTAGONIST", "2:3"), ("OBJECT", None)],
+)
+async def test_generate_entity_image_requests_portrait_ratio_for_characters(
+    monkeypatch, entity_type, expected_ratio
+):
+    """Character portraits are requested in 2:3; other entities keep the provider default."""
+    # Arrange
+    captured = {}
+
+    async def fake_generate_image(**kwargs):
+        captured.update(kwargs)
+        return "/data/adventures/test/entity.png"
+
+    monkeypatch.setattr(MediaEngine, "generate_image", fake_generate_image)
+
+    # Act
+    await MediaEngine.generate_entity_image(
+        prompt="Character portrait: Guard",
+        adventure_id="adv-1",
+        entity_id="NPC_1",
+        entity_type=entity_type,
+        user_config={
+            "t2i_settings": {
+                "provider": "ollama",
+                "simple_model": "x/flux2-klein",
+                "ollama_url": "http://localhost:11434",
+            }
+        },
+        api_keys={},
+    )
+
+    # Assert
+    assert captured["provider_options"].get("aspect_ratio") == expected_ratio
+
+
+async def test_resolve_sd_dimensions_uses_2_3_for_character_portraits():
+    # Act
+    width, height = MediaEngine._resolve_sd_dimensions("NPC", 1200)
+
+    # Assert
+    assert (width, height) == (800, 1200)
+
+
 async def test_generate_placeholder_uses_static_item_svg(tmp_path, monkeypatch):
     """Item placeholders should copy the curated frontend SVG by item type."""
     monkeypatch.setattr("backend.engine.media.media_engine.settings.DATA_DIR", str(tmp_path))

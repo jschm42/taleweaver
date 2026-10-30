@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import StatBar from '@/components/game/StatBar.vue'
+import NpcHoverPoster from '@/components/game/NpcHoverPoster.vue'
 import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 import { fixNewlines, hasNonZero } from '@/services/hoverEntityService'
 import { formatEntityRefs } from '@/utils/entityRefs'
@@ -111,9 +112,18 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
         class="fixed z-[999] pointer-events-none"
         :style="props.tooltipStyle"
       >
+        <!-- NPC with portrait: 2:3 poster card -->
         <div
+          v-if="isNpc && hasHeroImage"
+          class="w-full max-w-full max-h-[inherit] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-tooltip-in"
+        >
+          <NpcHoverPoster :entity="props.hoveredEntity" :rule-mode="props.ruleMode" @image-error="handleImageError" />
+        </div>
+
+        <div
+          v-else
           class="w-full max-w-full bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in"
-          :class="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'min-h-[26rem]' : 'min-h-[20rem]'"
+          :class="isNpc ? 'min-h-[22rem]' : 'min-h-[17rem]'"
         >
 
           <!-- Image (NPC only) -->

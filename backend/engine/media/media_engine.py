@@ -68,6 +68,9 @@ logger = logging.getLogger(__name__)
 BFL_DEFAULT_MODEL = "black_forest_labs/flux-pro-1.1"
 BFL_API_BASE = "https://api.bfl.ai/v1"
 COVER_ASPECT_RATIO = "2:3"
+# Protagonist and NPC portraits share the 2:3 format of the stage cards and hover cards.
+PORTRAIT_ASPECT_RATIO = "2:3"
+PORTRAIT_ENTITY_TYPES = ("NPC", "PROTAGONIST", "CHARACTER")
 
 # Use centralized prompts
 NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
@@ -304,8 +307,8 @@ class MediaEngine:
             return round_to_8(edge * 2.0 / 3.0), round_to_8(edge)
         elif t_type == "SCENE":
             return round_to_8(edge), round_to_8(edge * 9.0 / 16.0)
-        elif t_type in ("NPC", "PROTAGONIST", "CHARACTER"):
-            return round_to_8(edge * 4.0 / 5.0), round_to_8(edge)
+        elif t_type in PORTRAIT_ENTITY_TYPES:
+            return round_to_8(edge * 2.0 / 3.0), round_to_8(edge)
         else:
             # OBJECT, ITEM, etc.
             return round_to_8(edge), round_to_8(edge)
@@ -1138,6 +1141,9 @@ class MediaEngine:
             options["sampler_name"] = t2i.get("simple_sampler_name")
             options["scheduler"] = t2i.get("simple_scheduler")
             min_long_edge = t2i.get("simple_min_long_edge")
+
+        if (entity_type or "").upper() in PORTRAIT_ENTITY_TYPES:
+            options["aspect_ratio"] = PORTRAIT_ASPECT_RATIO
 
         if provider in ("stable_diffusion", "ollama"):
             width, height = MediaEngine._resolve_sd_dimensions(entity_type, min_long_edge)

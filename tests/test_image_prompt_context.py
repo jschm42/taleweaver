@@ -87,6 +87,7 @@ def test_npc_and_object_prompts_include_appearance():
     assert "A bored guard. Visual keywords: burly, chainmail, red cape. Game" in npc_prompt
     assert "A key. Visual keywords: brass, ornate bow. Centered" in object_prompt
     assert "Visual keywords" not in plain_prompt
+    assert "2:3 aspect ratio" in plain_prompt
 
 
 def test_protagonist_prompt_puts_appearance_before_plot():

@@ -230,7 +230,8 @@ Variables: items.
 
 NPC_IMAGE_PROMPT_TEMPLATE = (
     "Character portrait: {name}. {description}. {context}Game attribute art style. "
-    "3:2 aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
+    "NO borders, NO dividers, NO comic strip, NO storyboard, NO multiple views, NO TEXT. "
+    "2:3 aspect ratio, dramatic cinematic lighting, highly detailed digital painting."
 )
 """
 Template for generating NPC portraits.

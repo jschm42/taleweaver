@@ -46,7 +46,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     const my = mousePos.value.y
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
-    const tooltipWidth = Math.max(280, Math.min(384, viewportWidth - EDGE_GAP * 2))
+    const tooltipWidth = Math.max(260, Math.min(320, viewportWidth - EDGE_GAP * 2))
 
     const availableBelow = Math.max(0, viewportHeight - my - OFFSET - EDGE_GAP)
     const availableAbove = Math.max(0, my - OFFSET - EDGE_GAP)
