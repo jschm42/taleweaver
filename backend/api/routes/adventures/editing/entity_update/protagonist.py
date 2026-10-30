@@ -138,15 +138,17 @@ async def _update_items(
         _store_manifest(adv, manifest)
 
 
-def _update_scripts(adv: AdventureTemplate, avatar: Avatar, payload: EntityUpdateRequest) -> None:
+def update_protagonist_scripts(
+    adv: AdventureTemplate, avatar: Avatar, values: dict[str, Any]
+) -> None:
     """HP/status trigger scripts live in ``avatar.stats`` and are mirrored into the manifest."""
-    sent = [f for f in _SCRIPT_FIELDS if given(payload, f)]
+    sent = [f for f in _SCRIPT_FIELDS if values.get(f) is not None]
     if not sent:
         return
     stats = dict(avatar.stats or {})
     manifest = _protagonist_manifest(adv)
     for field in sent:
-        value = getattr(payload, field).strip()
+        value = str(values[field]).strip()
         stats[field] = value or None
         if manifest is not None:
             manifest["protagonist"][field] = value
@@ -172,4 +174,5 @@ async def update_protagonist(
     apply_vitals(avatar, payload)
     if given(payload, "inventory") or given(payload, "equipment"):
         await _update_items(db, template_id, adv, avatar, payload)
-    _update_scripts(adv, avatar, payload)
+    sent_scripts = {f: getattr(payload, f) for f in _SCRIPT_FIELDS if given(payload, f)}
+    update_protagonist_scripts(adv, avatar, sent_scripts)

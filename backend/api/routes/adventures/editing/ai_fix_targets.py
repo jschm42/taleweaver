@@ -6,7 +6,15 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.editing.ai_fix_scripts import (
+    EXIT_SCRIPT_FIELDS,
+    NPC_SCRIPT_FIELDS,
+    OBJECT_SCRIPT_FIELDS,
+    PROTAGONIST_SCRIPT_FIELDS,
+    SEQUENCE_SCRIPT_FIELDS,
+)
 from backend.api.routes.adventures.editing.ai_fix_soft_rules import parse_soft_rule_key
+from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
@@ -28,10 +36,7 @@ _FIX_PROTAGONIST_FIELDS = frozenset(
         "charisma",
         "armor_class",
         "exp",
-        "on_hp_change_script",
-        "on_hp_change_text",
-        "on_status_change_script",
-        "on_status_change_text",
+        *PROTAGONIST_SCRIPT_FIELDS,
     }
 )
 
@@ -53,11 +58,7 @@ _FIX_SCENE_FIELDS = frozenset(
         "label",
         "description",
         "decorative_objects",
-        "on_enter_scene_script",
-        "on_enter_scene_text",
-        "on_leave_scene_script",
-        "on_leave_scene_text",
-        "helpers_script",
+        *SCENE_SCRIPT_FIELDS,
     }
 )
 
@@ -70,15 +71,7 @@ _FIX_EXIT_FIELDS = frozenset(
         "code_to_unlock",
         "item_to_unlock",
         "rule_to_unlock",
-        "unlock_expression",
-        "on_open_exit_script",
-        "on_open_exit_text",
-        "on_exit_used_script",
-        "on_exit_used_text",
-        "on_unlock_success_script",
-        "on_unlock_success_text",
-        "on_unlock_failure_script",
-        "on_unlock_failure_text",
+        *EXIT_SCRIPT_FIELDS,
     }
 )
 
@@ -93,6 +86,7 @@ _FIX_NPC_FIELDS = frozenset(
         "is_hidden",
         "reveal_rule",
         "spatial_position",
+        *NPC_SCRIPT_FIELDS,
     }
 )
 
@@ -106,20 +100,9 @@ _FIX_OBJECT_FIELDS = frozenset(
         "code_to_unlock",
         "item_to_unlock",
         "rule_to_unlock",
-        "unlock_expression",
-        "on_unlock_success_script",
-        "on_unlock_success_text",
-        "on_unlock_failure_script",
-        "on_unlock_failure_text",
         "text_log_content",
         "text_log_format",
-        "on_read_script",
-        "on_read_text",
-        "craft_guard_expression",
-        "on_craft_success_script",
-        "on_craft_success_text",
-        "on_craft_failure_script",
-        "on_craft_failure_text",
+        *OBJECT_SCRIPT_FIELDS,
         "is_hidden",
         "reveal_rule",
         "spatial_position",
@@ -138,11 +121,7 @@ _FIX_SEQUENCE_FIELDS = frozenset(
         "required_defeated_npc_id",
         "guard_expression",
         "completion_guard_expression",
-        "on_start_sequence_script",
-        "on_start_sequence_text",
-        "on_end_sequence_script",
-        "on_end_sequence_text",
-        "helpers_script",
+        *SEQUENCE_SCRIPT_FIELDS,
     }
 )
 

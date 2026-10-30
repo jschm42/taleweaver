@@ -14,6 +14,15 @@ from backend.api.routes.adventures.editing.ai_fix_limits import (
     TEXT_LOG_CONTENT_MAX,
     length_violations,
 )
+from backend.api.routes.adventures.editing.ai_fix_scripts import (
+    EXIT_SCRIPT_FIELDS,
+    NPC_SCRIPT_FIELDS,
+    OBJECT_SCRIPT_FIELDS,
+    PROTAGONIST_SCRIPT_FIELDS,
+    ensure_valid_scripts,
+    set_columns,
+    set_metadata,
+)
 from backend.api.routes.adventures.editing.ai_fix_sequences import patch_sequence
 from backend.api.routes.adventures.editing.ai_fix_soft_rules import is_clearable_soft_rule_key
 from backend.api.routes.adventures.editing.ai_fix_targets import (
@@ -30,6 +39,10 @@ from backend.api.routes.adventures.editing.common import (
     _normalize_lock_fields,
     _restore_missing_template_avatar,
 )
+from backend.api.routes.adventures.editing.entity_update.protagonist import (
+    update_protagonist_scripts,
+)
+from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit
 from backend.schemas.validation import FixProposalEntityPatch
@@ -104,7 +117,11 @@ async def _patch_protagonist(
         avatar = await _restore_missing_template_avatar(db, template_id, adv)
     if not avatar:
         raise HTTPException(status_code=400, detail="Protagonist not found for AI fix")
+    scripts = {f: str(v) for f, v in updates.items() if f in PROTAGONIST_SCRIPT_FIELDS}
+    update_protagonist_scripts(adv, avatar, scripts)
     for field, value in updates.items():
+        if field in PROTAGONIST_SCRIPT_FIELDS:
+            continue
         if field in _VITALS:
             setattr(avatar, field, int(value))
             setattr(avatar, _VITALS[field], int(value))
@@ -139,6 +156,7 @@ async def _patch_scene(
     if "decorative_objects" in updates:
         scene.decorative_objects = _decorative_objects(updates["decorative_objects"])
         flag_modified(scene, "decorative_objects")
+    set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 
 
@@ -175,24 +193,10 @@ async def _patch_exit(
         world_exit.is_locked = bool(updates["locked"])
     if any(k in updates for k in _LOCK_FIELDS):
         _patch_exit_lock(world_exit, updates)
+    set_columns(world_exit, EXIT_SCRIPT_FIELDS, updates)
     return f"exit:{world_exit.id}"
 
 
-# Object script/text fields stored in metadata_json like the editor does (empty -> None).
-_OBJECT_METADATA_FIELDS = (
-    "unlock_expression",
-    "on_unlock_success_script",
-    "on_unlock_success_text",
-    "on_unlock_failure_script",
-    "on_unlock_failure_text",
-    "on_read_script",
-    "on_read_text",
-    "craft_guard_expression",
-    "on_craft_success_script",
-    "on_craft_success_text",
-    "on_craft_failure_script",
-    "on_craft_failure_text",
-)
 _SPATIAL_POSITION_MAX = 255
 
 
@@ -221,6 +225,7 @@ def _patch_npc_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
         ent.allowed_scenes = list(updates["allowed_scenes"] or [])
     if "notes" in updates:
         ent.notes = str(updates["notes"]).strip() or None
+    set_metadata(ent, NPC_SCRIPT_FIELDS, updates)
 
 
 def _patch_container_lock(
@@ -259,10 +264,9 @@ def _patch_object_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     _patch_container_lock(metadata_json, updates, item_type == "CONTAINER")
     if item_type == "READABLE":
         _patch_text_log(metadata_json, updates)
-    for field in (f for f in _OBJECT_METADATA_FIELDS if f in updates):
-        metadata_json[field] = str(updates[field] or "").strip() or None
     ent.metadata_json = metadata_json
     flag_modified(ent, "metadata_json")
+    set_metadata(ent, OBJECT_SCRIPT_FIELDS, updates)
 
 
 def _patch_description(ent: WorldEntity, value: Any) -> None:
@@ -337,6 +341,7 @@ async def _apply_proposal_patch(
     violations = length_violations(patch.target_type, updates)
     if violations:
         raise HTTPException(status_code=400, detail=f"Field too long: {violations[0]}")
+    ensure_valid_scripts(patch.target_type, updates)
 
     target_tag = f"{patch.target_type}:{patch.target_id or ''}"
     if patch.target_type == "adventure":

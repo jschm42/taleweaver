@@ -893,3 +893,13 @@ All scripts are managed directly in the **Scripts** tab:
   - Use the **Insert Snippet** dropdown to paste starter code.
 - Click **Check Syntax** to verify Python syntax, AST safety, and trigger parameters before saving.
 - Click **Create Script** or **Save Changes** to commit the script into the adventure manifest.
+
+### Scripts from World-Builder Instructions
+The **World-Builder** prompt at the top of the Adventure Editor can also write inline triggers and guards. Describe the behaviour in plain words, for example *"The chest only opens after the lever in the cellar was pulled"* or *"The amulet hurts the player when it is equipped"*, and pick one of up to three proposals.
+
+- **Supported fields**: the inline `..._script` / `..._text` triggers of scenes (`on_enter_scene`, `on_leave_scene`, `helpers_script`), exits (`on_open_exit`, `on_exit_used`, `on_unlock_success`, `on_unlock_failure`, `unlock_expression`), NPCs (`on_defeat`, `on_protagonist_enters_scene`, `on_interact`), objects (`on_pickup`, `on_drop`, `on_interact` for every item; `on_equip` / `on_unequip` for weapons and wearables; `on_read` for readables; `unlock_expression` and the unlock hooks for containers; `craft_guard_expression` and the craft hooks for recipes), the protagonist (`on_hp_change`, `on_status_change`) and sequences (`on_start_sequence`, `on_end_sequence`, `helpers_script`, soft rules).
+- **New entities**: a newly created NPC or item gets its hooks from a second patch in the same proposal.
+- **Not supported**: top-level `scripts`, sequence `scripts` and `init_script`. Write those in the **Scripts** tab.
+- **Syntax check**: every proposed script and guard runs through the sandbox syntax check. Proposals with invalid code are discarded and the reason is shown instead.
+- **Existing logic**: the World-Builder sees the hooks that already exist and reuses their `tw.vars` flags.
+- **Language**: proposal titles, summaries and notes are always English. Narrative texts (descriptions, `..._text` fields) follow the adventure's language setting, or English when none is set, never the language the instruction was typed in.

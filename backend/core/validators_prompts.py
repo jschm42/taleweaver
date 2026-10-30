@@ -160,25 +160,42 @@ For each option, emit a JSON object matching this exact schema:
   ]
 }
 
+Write "title", "summary", "rationale" and every patch "description" in English.
+
 """
 
 FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, exit, protagonist, adventure, sequence.
 - Allowed `field_updates` keys MUST match the editor's patch payload exactly:
-    - scene: label, description, decorative_objects
-    - object (CONTAINER): description, code_to_unlock, item_to_unlock, rule_to_unlock, locked,
-      text_log_content, text_log_format
-    - object (READABLE/CONSUMABLE/OTHER): description, is_portable
-    - npc: name, description, goal, character, is_killable, current_scene_id
+    - scene: label, description, decorative_objects, on_enter_scene_script, on_enter_scene_text,
+      on_leave_scene_script, on_leave_scene_text, helpers_script
+    - object (every item type): name, description, is_portable, current_scene_id, is_hidden,
+      reveal_rule, spatial_position, on_pickup_script, on_pickup_text, on_drop_script,
+      on_drop_text, on_interact_script, on_interact_text
+    - object (CONTAINER only): locked, code_to_unlock, item_to_unlock, rule_to_unlock,
+      unlock_expression, on_unlock_success_script, on_unlock_success_text,
+      on_unlock_failure_script, on_unlock_failure_text
+    - object (READABLE only): text_log_content, text_log_format, on_read_script, on_read_text
+    - object (WEAPON/WEARABLE only): on_equip_script, on_equip_text, on_unequip_script,
+      on_unequip_text
+    - object (CONSTRUCTABLE only): craft_guard_expression, on_craft_success_script,
+      on_craft_success_text, on_craft_failure_script, on_craft_failure_text
+    - npc: name, description, goal, character, is_killable, current_scene_id, is_hidden,
+      reveal_rule, spatial_position, on_defeat_script, on_defeat_text,
+      on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
+      on_interact_script, on_interact_text
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
-      rule_to_unlock
+      rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
+      on_exit_used_script, on_exit_used_text, on_unlock_success_script,
+      on_unlock_success_text, on_unlock_failure_script, on_unlock_failure_text
     - protagonist: name, description, goal, character, hp, mana, stamina, strength, intelligence,
-      wisdom, dexterity, charisma, armor_class, exp
+      wisdom, dexterity, charisma, armor_class, exp, on_hp_change_script, on_hp_change_text,
+      on_status_change_script, on_status_change_text
     - adventure: title, teaser, plot, rules, intro_text, tts_director_notes,
       completed_condition, gameover_condition
     - sequence: title, description, walkthrough, end_condition, required_item_id,
       required_scene_id, required_defeated_npc_id, guard_expression,
       completion_guard_expression, on_start_sequence_text, on_end_sequence_text,
-      on_start_sequence_script, on_end_sequence_script,
+      on_start_sequence_script, on_end_sequence_script, helpers_script,
       soft_rules.<RULE_ID>.<field> where <field> is condition, script, text, guard_expression
       or max_triggers (only for rule ids listed in the sequence's `soft_rules`; an empty
       string removes script/text/guard, max_triggers 0 removes the limit)
@@ -188,6 +205,9 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
   `completion_guard_expression` gates when the chapter ENDS. Keep guards valid boolean
   expressions in the same syntax and with the same flag/variable names as the existing
   guards; use an empty string to remove a guard.
+- `..._script` fields hold sandboxed `tw` script code, `..._expression` fields hold a single
+  boolean guard expression and `..._text` fields hold a fixed message shown when the trigger
+  fires. Values with invalid script or guard syntax are discarded.
 - Do NOT add fields outside this allowlist. If the fix requires something else,
   pick the closest narrative field and put a short, in-fiction note inside it.
 - NEVER invent new ids. `target_id` must reference an existing entity you can see in

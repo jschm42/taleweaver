@@ -1,8 +1,9 @@
 """Sanitizes raw LLM fix proposals into applicable ``FixProposal`` objects.
 
 Drops patches for unsupported targets/fields and whole proposals whose values
-exceed the editor's field length limits, recording why so the user is told
-instead of seeing an unexplained empty result.
+exceed the editor's field length limits or carry scripts / guards with invalid
+syntax, recording why so the user is told instead of seeing an unexplained
+empty result.
 """
 
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ from backend.api.routes.adventures.editing.ai_fix_create import (
     limits_type,
 )
 from backend.api.routes.adventures.editing.ai_fix_limits import length_violations
+from backend.api.routes.adventures.editing.ai_fix_scripts import script_violations
 from backend.api.routes.adventures.editing.ai_fix_targets import is_allowed_field
 from backend.schemas.validation import FixProposal, FixProposalEntityPatch, FixTargetType
 
@@ -83,14 +85,17 @@ class _Sanitizer:
     def _reject(self, reasons: list[str]) -> None:
         self.rejected += [r for r in reasons if r not in self.rejected]
 
-    def _length_violations(self, p_dict: dict[str, Any]) -> list[str]:
+    def _value_violations(self, p_dict: dict[str, Any]) -> list[str]:
         target_type = str(p_dict.get("target_type") or "").strip()
         updates = p_dict.get("field_updates")
         if not isinstance(updates, dict):
             return []
         target_id = str(p_dict.get("target_id") or "").strip().upper()
         item_type = self._item_types.get(target_id) or updates.get("item_type")
-        return length_violations(limits_type(target_type), updates, item_type)
+        limit_type = limits_type(target_type)
+        return length_violations(limit_type, updates, item_type) + script_violations(
+            limit_type, updates
+        )
 
     def _is_allowed(self, target_type: str, field_name: str) -> bool:
         if is_create_type(target_type):
@@ -138,10 +143,10 @@ class _Sanitizer:
         if not title or not summary_text:
             return None
         raw_patches = [d for d in (_as_dict(x) for x in raw_dict.get("patches") or []) if d]
-        too_long = [v for d in raw_patches for v in self._length_violations(d)]
-        if too_long:
-            # A shortened value would change the fix's meaning, so drop the whole option.
-            self._reject(too_long)
+        invalid = [v for d in raw_patches for v in self._value_violations(d)]
+        if invalid:
+            # A shortened or repaired value would change the fix's meaning, so drop the option.
+            self._reject(invalid)
             return None
         self._create_failed = False
         patches = [p for p in (self._clean_patch(d) for d in raw_patches) if p]

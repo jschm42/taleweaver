@@ -4,11 +4,18 @@ import json
 import logging
 from typing import Any, Optional
 
+from backend.api.routes.adventures.editing.ai_fix_scripts import (
+    EXIT_SCRIPT_FIELDS,
+    NPC_SCRIPT_FIELDS,
+    OBJECT_SCRIPT_FIELDS,
+    script_summary,
+)
 from backend.api.routes.adventures.editing.ai_fix_sequences import (
     focus_sequence,
     format_sequence_outline,
     summarize_sequences,
 )
+from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.schemas.validation import (
     AIFixSuggestionsRequest,
     FixProposal,
@@ -31,6 +38,7 @@ def _scene_summary(scene: dict[str, Any]) -> dict[str, Any]:
         "label": scene.get("label"),
         "description": _short_state(scene.get("description")),
         "decorative_objects": scene.get("decorative_objects") or [],
+        "scripts": script_summary(scene, SCENE_SCRIPT_FIELDS),
     }
 
 
@@ -46,6 +54,7 @@ def _exit_summary(exit_row: dict[str, Any]) -> dict[str, Any]:
         "code_to_unlock": exit_row.get("code_to_unlock"),
         "item_to_unlock": exit_row.get("item_to_unlock"),
         "rule_to_unlock": _short_state(exit_row.get("rule_to_unlock"), limit=200),
+        "scripts": script_summary(exit_row, EXIT_SCRIPT_FIELDS),
     }
 
 
@@ -59,6 +68,7 @@ def _npc_summary(entity: dict[str, Any]) -> dict[str, Any]:
         "character": _short_state(entity.get("character")),
         "is_killable": entity.get("is_killable"),
         "stats": entity.get("stats") or {},
+        "scripts": script_summary(entity, NPC_SCRIPT_FIELDS),
     }
 
 
@@ -77,6 +87,7 @@ def _object_summary(entity: dict[str, Any]) -> dict[str, Any]:
         "text_log_content": _short_state(entity.get("text_log_content"), limit=400),
         "text_log_format": entity.get("text_log_format"),
         "stats": entity.get("stats") or {},
+        "scripts": script_summary(entity, OBJECT_SCRIPT_FIELDS),
     }
 
 

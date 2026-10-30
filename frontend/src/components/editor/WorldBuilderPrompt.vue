@@ -34,7 +34,7 @@ function onKeydown(event: KeyboardEvent) {
       <Sparkles class="w-4 h-4 text-violet-300" />
       <h2 class="text-xs font-black uppercase tracking-[0.2em] text-violet-200">World-Builder</h2>
       <span class="text-[11px] text-slate-500">
-        Describe a change or a new NPC/item &mdash; you will get up to three proposals to choose from.
+        Describe a change, a new NPC/item, or a script/guard &mdash; you will get up to three proposals to choose from.
       </span>
     </div>
     <div class="flex items-end gap-3">
@@ -44,7 +44,7 @@ function onKeydown(event: KeyboardEvent) {
           rows="2"
           :maxlength="WORLD_BUILDER_INSTRUCTION_MAX"
           :disabled="loading"
-          placeholder="e.g. &quot;Make the innkeeper more suspicious&quot; or &quot;Add a grumpy fisherman to the harbor who sells bait.&quot;"
+          placeholder="e.g. &quot;Make the innkeeper more suspicious&quot; or &quot;The chest only opens after the cellar lever was pulled.&quot;"
           class="w-full resize-y rounded-xl bg-slate-950/60 border border-white/10 focus:border-violet-500/50 focus:outline-none px-4 py-3 pr-20 text-sm text-slate-200 placeholder:text-slate-600 disabled:opacity-60"
           @keydown="onKeydown"
         />
