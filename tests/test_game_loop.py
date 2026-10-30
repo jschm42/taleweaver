@@ -1628,6 +1628,16 @@ async def test_traverse_exit_with_lowercase_uuid_id(setup_test_db, monkeypatch):
         assert any("scene_transition" in c for c in chunks)
         assert any("scene-2" in c for c in chunks)
 
+        # The used exit is recorded on the world map.
+        from sqlalchemy import select
+
+        from backend.models.world_map import WorldMap
+
+        world_map = (
+            await db.execute(select(WorldMap).where(WorldMap.session_id == "session-1"))
+        ).scalar_one()
+        assert {(e["from"], e["to"]) for e in world_map.edges or []} == {("scene-1", "scene-2")}
+
 
 async def test_deterministic_quest_completion_marks_inactive_quest_and_emits_system_message(
     setup_test_db, monkeypatch

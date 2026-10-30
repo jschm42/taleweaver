@@ -4,7 +4,8 @@ MapEngine — manages the scene graph.
 Responsibilities:
   * register_visit  — Upsert the current scene node (idempotent).
   * register_exit   — Add a directed edge between two scenes (deduplicates).
-  * augment_map_data — Add adjacent unvisited scenes as placeholders.
+  * augment_map_data — Add adjacent unvisited scenes as placeholders and the exits
+                       between scenes the player has already visited.
   * load_map_exits  — Load the exits a map is augmented with.
 """
 
@@ -247,9 +248,51 @@ class MapEngine:
                 matched_edge["item_to_unlock"] = ex.item_to_unlock or ""
                 matched_edge["rule_to_unlock"] = ex.rule_to_unlock or ""
 
+        MapEngine._add_exits_between_visited(nodes, edges, exits)
         map_dict["nodes"] = nodes
         map_dict["edges"] = edges
         return map_dict
+
+    @staticmethod
+    def _has_edge(edges: list, src_id: str, dst_id: str, bidirectional: bool) -> bool:
+        """True when an edge already covers src -> dst (or its reverse, for two-way exits)."""
+        for e in edges:
+            pair = (MapEngine._safe_id(e["from"]), MapEngine._safe_id(e["to"]))
+            if pair == (src_id, dst_id):
+                return True
+            two_way = bidirectional or e.get("exit_type") == "bidirectional"
+            if two_way and pair == (dst_id, src_id):
+                return True
+        return False
+
+    @staticmethod
+    def _add_exits_between_visited(nodes: dict, edges: list, exits: list) -> None:
+        """
+        Adds every exit whose two scenes the player has both visited.
+
+        Edges are only stored when the player walks through an exit, so scenes reached by
+        teleport, or sessions whose traversals were never recorded, would otherwise show
+        up as isolated nodes.
+        """
+        visited = {sid for sid, node in nodes.items() if not node.get("is_unknown")}
+        for ex in exits:
+            src_id = MapEngine._safe_id(ex.from_scene_id)
+            dst_id = MapEngine._safe_id(ex.to_scene_id)
+            if src_id == dst_id or not {src_id, dst_id} <= visited:
+                continue
+            exit_type = getattr(ex, "exit_type", "one_way") or "one_way"
+            if MapEngine._has_edge(edges, src_id, dst_id, exit_type == "bidirectional"):
+                continue
+            edges.append(
+                {
+                    "id": getattr(ex, "id", None),
+                    "from": ex.from_scene_id,
+                    "to": ex.to_scene_id,
+                    "label": getattr(ex, "label", "") or "",
+                    "is_locked": getattr(ex, "is_locked", False),
+                    "exit_type": exit_type,
+                }
+            )
 
     @staticmethod
     def to_dict(world_map) -> dict:

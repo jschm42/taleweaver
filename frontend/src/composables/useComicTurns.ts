@@ -179,6 +179,18 @@ export function normalizeVoiceTag(tag: string): string {
   return tag.trim().toLowerCase()
 }
 
+// Speaker line whose quote is closed too early: Name: [tag] "It" comes whether we see it."
+const STRAY_CLOSING_QUOTE = /^([^"\n]*:\s*(?:\[[^\]\n]+\]\s*)?"[^"\n]+)"(\s+\p{Ll}[^"\n]*")$/gmu
+
+/**
+ * Drops a stray closing quote the model put after the first words of a speech. Only lines with
+ * exactly three straight quotes whose text after the second one continues in lowercase and ends
+ * with the third are touched, so a quote followed by narration stays split.
+ */
+export function repairStrayQuotes(text: string): string {
+  return text.replace(STRAY_CLOSING_QUOTE, '$1$2')
+}
+
 // Sentence end (optionally closed by a quote) or a line break inside a captured speaker name.
 const SPEAKER_SENTENCE_BOUNDARY = /[.!?…]["”»]?\s+|\n+/g
 
@@ -219,7 +231,7 @@ export function parseAssistantContent(
   if (!content) return { narration: '', dialogues: [] }
 
   const dialogues: DialogueSegment[] = []
-  let cleanContent = normalizeTagSyntax(content.replace(/\\n/g, '\n')).trim()
+  let cleanContent = repairStrayQuotes(normalizeTagSyntax(content.replace(/\\n/g, '\n')).trim())
 
   // 1) Pre-split embedded/inline dialogues onto separate lines:
   // Detects: (Sentence end, voice tag, or line boundary) -> Speaker: "Dialogue"

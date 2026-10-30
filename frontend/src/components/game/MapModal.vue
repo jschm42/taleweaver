@@ -11,7 +11,6 @@
  */
 import { watch, ref, nextTick, onMounted, computed } from 'vue'
 import dagre from 'dagre'
-import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
 import type { WorldMapData } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
@@ -240,6 +239,14 @@ function updateLayout() {
     height: graphInfo.height || 600
   }
 }
+
+// Image of the scene the player is in, used as the map's blurred backdrop.
+const currentSceneImage = computed(() => {
+  const currentId = props.mapData?.current_scene_id
+  if (!currentId) return null
+  const raw = props.mapData?.nodes?.[currentId]?.image_url || props.nodes[currentId]?.image_url
+  return raw ? getImageUrl(raw) : null
+})
 
 // Compute exit circles positions at the ends of paths
 const exitCircles = computed(() => {
@@ -797,16 +804,14 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Background SVG Overlay -->
-            <div 
-              class="absolute inset-0 pointer-events-none opacity-[0.06] z-0"
-              :style="{ 
-                backgroundImage: `url(${mapSvg})`,
-                backgroundSize: '85% auto',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat'
-              }"
-            ></div>
+            <!-- Current scene backdrop (blurred and darkened) -->
+            <div v-if="currentSceneImage" class="absolute inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">
+              <div
+                class="map-scene-backdrop absolute inset-0"
+                :style="{ backgroundImage: `url(${currentSceneImage})` }"
+              ></div>
+              <div class="absolute inset-0 bg-slate-950/40"></div>
+            </div>
 
             <!-- Gradient Glow -->
             <div class="absolute inset-0 bg-gradient-to-tr from-emerald-500/5 via-transparent to-amber-500/5 pointer-events-none z-0"></div>
@@ -911,6 +916,14 @@ onMounted(() => {
 
 <style scoped>
 /* The map table stays dark in every skin (the overlay color), so edges and room cards read well. */
+/* Scaled up so the blur does not fade out at the edges. */
+.map-scene-backdrop {
+  background-size: cover;
+  background-position: center;
+  filter: blur(2px) brightness(0.7) saturate(0.9);
+  transform: scale(1.02);
+}
+
 .bg-radial-gradient {
   background: radial-gradient(
     circle at center,

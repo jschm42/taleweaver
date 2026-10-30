@@ -92,3 +92,74 @@ async def test_load_map_exits_never_mixes_template_and_session_rows(setup_test_d
         # Assert
         assert [ex.is_locked for ex in session_exits] == [False]
         assert [ex.is_locked for ex in template_exits] == [True]
+
+
+def _exit(from_id: str, to_id: str, exit_type: str = "one_way") -> SimpleNamespace:
+    return SimpleNamespace(
+        id=f"{from_id}->{to_id}",
+        from_scene_id=from_id,
+        to_scene_id=to_id,
+        label=f"{from_id} to {to_id}",
+        is_locked=False,
+        exit_type=exit_type,
+        lock_description="",
+        code_to_unlock="",
+        item_to_unlock="",
+        rule_to_unlock="",
+    )
+
+
+def _visited_map(*scene_ids: str, current: str) -> dict:
+    return {
+        "nodes": {sid: {"id": sid, "label": sid} for sid in scene_ids},
+        "edges": [],
+        "current_scene_id": current,
+    }
+
+
+def _pairs(map_dict: dict) -> set[tuple[str, str]]:
+    return {(edge["from"], edge["to"]) for edge in map_dict["edges"]}
+
+
+def test_augment_map_data_adds_exits_between_visited_scenes():
+    # Arrange
+    map_dict = _visited_map("HEARTH", "TENTS", "HOLLOW", current="TENTS")
+    exits = [
+        _exit("HEARTH", "HOLLOW", "bidirectional"),
+        _exit("HEARTH", "TENTS", "bidirectional"),
+        _exit("HOLLOW", "RIVER", "bidirectional"),
+    ]
+
+    # Act
+    augmented = MapEngine.augment_map_data(map_dict, exits, "TENTS")
+
+    # Assert
+    assert _pairs(augmented) == {("HEARTH", "HOLLOW"), ("HEARTH", "TENTS")}
+    assert "RIVER" not in augmented["nodes"]
+
+
+def test_augment_map_data_does_not_duplicate_a_recorded_two_way_exit():
+    # Arrange
+    map_dict = _visited_map("HEARTH", "HOLLOW", current="HOLLOW")
+    map_dict["edges"].append(
+        {"from": "HOLLOW", "to": "HEARTH", "label": "", "exit_type": "bidirectional"}
+    )
+    exits = [_exit("HEARTH", "HOLLOW", "bidirectional")]
+
+    # Act
+    augmented = MapEngine.augment_map_data(map_dict, exits, "HOLLOW")
+
+    # Assert
+    assert len(augmented["edges"]) == 1
+
+
+def test_augment_map_data_keeps_one_way_exits_in_both_directions():
+    # Arrange
+    map_dict = _visited_map("CLIFF", "BEACH", "CAVE", current="CAVE")
+    exits = [_exit("CLIFF", "BEACH"), _exit("BEACH", "CLIFF")]
+
+    # Act
+    augmented = MapEngine.augment_map_data(map_dict, exits, "CAVE")
+
+    # Assert
+    assert _pairs(augmented) == {("CLIFF", "BEACH"), ("BEACH", "CLIFF")}

@@ -23,6 +23,7 @@ from backend.api.routes.adventures.sequence_hooks import (
 )
 from backend.core.awards import SPOILER_SEEKER_AWARD
 from backend.engine.debug_commands.debug_engine import DebugEngine
+from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.interaction.switch_states import state_label
@@ -191,6 +192,32 @@ class TurnInteractionsManager:
         )
         return exit_res.scalars().first()
 
+    async def _record_map_traversal(
+        self, from_scene_id: str, scene: WorldScene, world_exit: WorldExit
+    ) -> None:
+        """Adds the used exit and the new scene to the session's world map."""
+        try:
+            world_map = await AdventureLogic.get_or_create_map(
+                self.db, self.state.template_id, session_id=self.state.session_id
+            )
+            MapEngine.register_exit(
+                world_map,
+                from_scene_id,
+                scene.id,
+                exit_label=world_exit.label or "",
+                is_locked=bool(world_exit.is_locked),
+                exit_type=world_exit.exit_type or "one_way",
+            )
+            MapEngine.register_visit(
+                world_map,
+                scene.id,
+                label=scene.label,
+                description=scene.description,
+                image_url=scene.image_url,
+            )
+        except Exception as exc:
+            logger.error("Map update failed during exit traversal: %s", exc)
+
     async def _fire_traversal_triggers(
         self,
         current_scene_id: str,
@@ -312,6 +339,7 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
 
         self.state.current_scene_id = scene.id
+        await self._record_map_traversal(current_scene_id, scene, world_exit)
         await self.db.commit()
 
         if scene.on_enter_scene_script or scene.on_enter_scene_text:
