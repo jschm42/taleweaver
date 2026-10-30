@@ -8,6 +8,12 @@ instead of seeing an unexplained empty result.
 from dataclasses import dataclass, field
 from typing import Any, Optional, get_args
 
+from backend.api.routes.adventures.editing.ai_fix_create import (
+    creation_problems,
+    is_allowed_create_field,
+    is_create_type,
+    limits_type,
+)
 from backend.api.routes.adventures.editing.ai_fix_limits import length_violations
 from backend.api.routes.adventures.editing.ai_fix_targets import is_allowed_field
 from backend.schemas.validation import FixProposal, FixProposalEntityPatch, FixTargetType
@@ -67,8 +73,11 @@ class SanitizedProposals:
 
 
 class _Sanitizer:
-    def __init__(self, summary: dict[str, Any]) -> None:
+    def __init__(self, summary: dict[str, Any], allow_create: bool) -> None:
+        self._summary = summary
         self._item_types = _object_item_types(summary)
+        self._allow_create = allow_create
+        self._create_failed = False
         self.rejected: list[str] = []
 
     def _reject(self, reasons: list[str]) -> None:
@@ -80,7 +89,26 @@ class _Sanitizer:
         if not isinstance(updates, dict):
             return []
         target_id = str(p_dict.get("target_id") or "").strip().upper()
-        return length_violations(target_type, updates, self._item_types.get(target_id))
+        item_type = self._item_types.get(target_id) or updates.get("item_type")
+        return length_violations(limits_type(target_type), updates, item_type)
+
+    def _is_allowed(self, target_type: str, field_name: str) -> bool:
+        if is_create_type(target_type):
+            return is_allowed_create_field(target_type, field_name)
+        return is_allowed_field(target_type, field_name)
+
+    def _create_rejected(self, target_type: str, target_id: Any, updates: dict) -> bool:
+        """True (and recorded) when a create patch is not allowed here or cannot be applied."""
+        if not is_create_type(target_type):
+            return False
+        problems = (
+            creation_problems(target_type, str(target_id or ""), updates, self._summary)
+            if self._allow_create
+            else [f"{target_type} (creating entities)"]
+        )
+        self._reject(problems)
+        self._create_failed = self._create_failed or bool(problems)
+        return bool(problems)
 
     def _clean_patch(self, p_dict: dict[str, Any]) -> Optional[FixProposalEntityPatch]:
         target_type = str(p_dict.get("target_type") or "").strip()
@@ -88,12 +116,12 @@ class _Sanitizer:
         if target_type not in _PATCH_TARGET_TYPES or not isinstance(field_updates, dict):
             self._reject([target_type or "?"])
             return None
-        allowed = {str(k) for k in field_updates if is_allowed_field(target_type, str(k))}
+        allowed = {str(k) for k in field_updates if self._is_allowed(target_type, str(k))}
         self._reject([f"{target_type}.{k}" for k in field_updates if k not in allowed])
         kept_updates = {str(k): v for k, v in field_updates.items() if k in allowed}
-        if not kept_updates:
-            return None
         target_id = p_dict.get("target_id")
+        if self._create_rejected(target_type, target_id, kept_updates) or not kept_updates:
+            return None
         return FixProposalEntityPatch(
             target_type=target_type,  # type: ignore[arg-type]
             target_id=str(target_id).strip() if target_id is not None else None,
@@ -115,8 +143,10 @@ class _Sanitizer:
             # A shortened value would change the fix's meaning, so drop the whole option.
             self._reject(too_long)
             return None
+        self._create_failed = False
         patches = [p for p in (self._clean_patch(d) for d in raw_patches) if p]
-        if not patches:
+        if not patches or self._create_failed:
+            # Later patches may build on a creation, so a failed one drops the whole option.
             return None
         rationale = raw_dict.get("rationale")
         return FixProposal(
@@ -127,8 +157,13 @@ class _Sanitizer:
         )
 
 
-def sanitize_proposals(raw_proposals: list[Any], summary: dict[str, Any]) -> SanitizedProposals:
-    """Clean raw LLM proposals against the allowlists and length limits of the world."""
-    sanitizer = _Sanitizer(summary)
+def sanitize_proposals(
+    raw_proposals: list[Any], summary: dict[str, Any], allow_create: bool = False
+) -> SanitizedProposals:
+    """Clean raw LLM proposals against the allowlists and length limits of the world.
+
+    ``allow_create`` admits ``new_npc`` / ``new_object`` patches (World-Builder only).
+    """
+    sanitizer = _Sanitizer(summary, allow_create)
     proposals = [p for p in (sanitizer.clean_proposal(raw) for raw in raw_proposals) if p]
     return SanitizedProposals(proposals=proposals, rejected=sanitizer.rejected)

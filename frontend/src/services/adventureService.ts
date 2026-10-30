@@ -441,6 +441,9 @@ export type FixTargetType =
   | 'protagonist'
   | 'adventure'
   | 'sequence'
+  // World-Builder only: creates a new entity with the id in target_id.
+  | 'new_npc'
+  | 'new_object'
 
 export interface FixProposalEntityPatch {
   target_type: FixTargetType

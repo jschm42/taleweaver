@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.editing.ai_fix_create import apply_create_patch, is_create_type
 from backend.api.routes.adventures.editing.ai_fix_llm import _evict_cached_suggestions
 from backend.api.routes.adventures.editing.ai_fix_patches import (
     _apply_proposal_patch,
@@ -38,27 +39,41 @@ _STALE_REFERENCE_MESSAGE = (
 )
 
 
+async def _apply_one(
+    db: AsyncSession,
+    template_id: str,
+    adv: AdventureTemplate,
+    patch: FixProposalEntityPatch,
+    allow_create: bool,
+) -> Optional[str]:
+    """Apply one patch; create patches only when ``allow_create`` (World-Builder)."""
+    if is_create_type(patch.target_type):
+        return await apply_create_patch(db, template_id, patch) if allow_create else None
+    clean = _clean_updates(patch.target_type, patch.field_updates)
+    if not clean:
+        return None
+    return await _apply_proposal_patch(
+        db=db,
+        template_id=template_id,
+        adv=adv,
+        patch=patch.model_copy(update={"field_updates": clean}),
+    )
+
+
 async def _apply_patches(
     db: AsyncSession,
     template_id: str,
     adv: AdventureTemplate,
     patches: list[FixProposalEntityPatch],
+    allow_create: bool = False,
 ) -> tuple[list[str], bool]:
     """Apply each patch once per target. Returns (applied tags, any stale reference)."""
     applied_tags: list[str] = []
     seen_keys: set[tuple[str, str]] = set()
     failed_resolution = False
     for proposal_patch in patches:
-        clean = _clean_updates(proposal_patch.target_type, proposal_patch.field_updates)
-        if not clean:
-            continue
         try:
-            tag = await _apply_proposal_patch(
-                db=db,
-                template_id=template_id,
-                adv=adv,
-                patch=proposal_patch.model_copy(update={"field_updates": clean}),
-            )
+            tag = await _apply_one(db, template_id, adv, proposal_patch, allow_create)
         except HTTPException as exc:
             if exc.status_code == 400 and "could not be resolved" in str(exc.detail):
                 failed_resolution = True

@@ -178,6 +178,35 @@ async def _patch_exit(
     return f"exit:{world_exit.id}"
 
 
+# Object script/text fields stored in metadata_json like the editor does (empty -> None).
+_OBJECT_METADATA_FIELDS = (
+    "unlock_expression",
+    "on_unlock_success_script",
+    "on_unlock_success_text",
+    "on_unlock_failure_script",
+    "on_unlock_failure_text",
+    "on_read_script",
+    "on_read_text",
+    "craft_guard_expression",
+    "on_craft_success_script",
+    "on_craft_success_text",
+    "on_craft_failure_script",
+    "on_craft_failure_text",
+)
+_SPATIAL_POSITION_MAX = 255
+
+
+def _patch_placement_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
+    """Visibility and position fields shared by NPCs and objects."""
+    if "is_hidden" in updates:
+        ent.is_hidden = bool(updates["is_hidden"])
+    if "reveal_rule" in updates:
+        ent.reveal_rule = str(updates["reveal_rule"] or "").strip() or None
+    if "spatial_position" in updates:
+        position = str(updates["spatial_position"] or "").strip()
+        ent.spatial_position = position[:_SPATIAL_POSITION_MAX] or None
+
+
 def _patch_npc_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     if "goal" in updates:
         ent.goal = str(updates["goal"]).strip() or None
@@ -230,6 +259,8 @@ def _patch_object_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     _patch_container_lock(metadata_json, updates, item_type == "CONTAINER")
     if item_type == "READABLE":
         _patch_text_log(metadata_json, updates)
+    for field in (f for f in _OBJECT_METADATA_FIELDS if f in updates):
+        metadata_json[field] = str(updates[field] or "").strip() or None
     ent.metadata_json = metadata_json
     flag_modified(ent, "metadata_json")
 
@@ -269,6 +300,7 @@ async def _patch_entity(
             raise HTTPException(status_code=400, detail="current_scene_id cannot be empty")
         await _ensure_template_scene_exists(db, template_id, new_scene)
         ent.current_scene_id = new_scene
+    _patch_placement_fields(ent, updates)
 
     if ent.entity_type == "NPC":
         _patch_npc_fields(ent, updates)

@@ -12,10 +12,14 @@ const emit = defineEmits<{
   (e: 'select', index: number): void
 }>()
 
+// Create patches read as an action, e.g. 'new NPC “OLD_FISHERMAN”'.
+const TARGET_LABELS: Record<string, string> = { new_npc: 'new NPC', new_object: 'new object' }
+
 function describeTarget(targetType: string, targetId?: string | null): string {
+  const label = TARGET_LABELS[targetType] || targetType
   const id = (targetId ?? '').trim()
-  if (!id) return targetType
-  return `${targetType} “${id}”`
+  if (!id) return label
+  return `${label} “${id}”`
 }
 </script>
 

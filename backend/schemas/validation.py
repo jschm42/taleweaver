@@ -51,6 +51,9 @@ FixTargetType = Literal[
     "protagonist",
     "adventure",
     "sequence",
+    # World-Builder only: create a new entity (target_id is the new id).
+    "new_npc",
+    "new_object",
 ]
 
 

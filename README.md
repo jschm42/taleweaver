@@ -177,6 +177,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 - **Sandboxed Python Event Scripts** – author deterministic event logic (`on_enter_scene`, `on_interact`, `on_turn`) in an isolated AST sandbox
 - **Dual-Tier Validation Suite** – graph connectivity audits combined with semantic LLM plot-hole detection
 - **One-Click AI Diagnostics** – intelligent AI repairs for broken exits, missing keys, or narrative inconsistencies
+- **World-Builder Instructions** – describe a change in plain words in the editor ("make the innkeeper grumpier", "add a fisherman to the harbor") and pick one of up to three proposals; it edits existing scenes, exits, NPCs and items and can create new NPCs and items (scenes, exits, quests and sequences stay manual)
 - **Dynamic Cartography** – auto-rendered hand-drawn style directed graph maps using rough.js and dagre
 
 </td>

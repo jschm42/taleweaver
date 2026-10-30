@@ -124,7 +124,7 @@ async def world_builder_suggest(
         )
 
     raw_proposals = ((wrapper.proposals if wrapper else []) or [])[:_MAX_PROPOSALS]
-    sanitized = sanitize_proposals(raw_proposals, summary)
+    sanitized = sanitize_proposals(raw_proposals, summary, allow_create=True)
     response = WorldBuilderSuggestionsResponse(
         instruction=instruction,
         proposals=sanitized.proposals,
@@ -162,7 +162,9 @@ async def world_builder_apply(
             status="no_op", message="The selected proposal contained no patches to apply."
         )
 
-    applied_tags, failed_resolution = await _apply_patches(db, template_id, adv, patches)
+    applied_tags, failed_resolution = await _apply_patches(
+        db, template_id, adv, patches, allow_create=True
+    )
     if applied_tags:
         await db.commit()
     else:
