@@ -29,7 +29,8 @@ The manifest represents the complete blueprint of a generated or exported world.
   "exits": [ ... ],
   "quests": [ ... ],
   "awards": [ ... ],
-  "scripts": [ ... ]
+  "scripts": [ ... ],
+  "extensions": { ... }
 }
 ```
 
@@ -233,6 +234,39 @@ Custom sandboxed event scripts reacting to game hooks and global initialization 
 | `target_id` | `string \| null` | Optional target scene ID or entity ID that filters when this script fires. |
 | `code` | `string` | Safe Python script utilizing the sandboxed `tw` GameContext API. |
 | `description` | `string \| null` | Optional narrative/technical description of the script logic. |
+
+---
+
+### 2.10 Extensions (`extensions`)
+
+An optional top-level object where forks and external tools store their own data without
+changing the core format. TaleWeaver never interprets it. It keeps the block on import,
+keeps it while the adventure is edited, and writes it back on export, so data from other
+forks is not lost.
+
+```json
+"extensions": {
+  "my_fork": {
+    "presentation": "visual_novel",
+    "portraits": { "NPC_GUARD": "assets/guard_vn.png" }
+  },
+  "comfyui-scenes": { "checkpoint": "illustrious-xl" }
+}
+```
+
+| Rule | Detail |
+| :--- | :--- |
+| Namespaces | Each key is a namespace you own: your fork or tool name. It must be lower case, 1-64 characters, and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Do not write into another fork's namespace. |
+| Values | Each namespace value must be a JSON object. Inside it, any JSON is allowed. |
+| Limits | At most 32 namespaces and 256 KB (UTF-8 JSON) in total. |
+| Invalid entries | Namespaces with an invalid key, a non-object value, or past the limits are dropped on import and export. The rest of the manifest is not affected. |
+| Assets | Asset paths inside `extensions` are passed through as plain strings. They are not packed into or extracted from `.adz` bundles. |
+| Export | The key is omitted when there are no valid namespaces. |
+
+Implementations that do not recognize the block ignore it. Put fork-specific data here
+rather than adding new top-level keys: unknown top-level keys are ignored on import but are
+not written back on export. For per-entity data, NPCs and objects also accept a free-form
+`metadata_json` object that survives import and export.
 
 ---
 

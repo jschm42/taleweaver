@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
+from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -622,6 +623,10 @@ class AdventureExporter:
             "scripts": (adv.original_manifest or {}).get("scripts", []),
             "init_script": adv.init_script or "",
         }
+        # Fork-specific data is passed through untouched (docs/specs/adventure_format.md 2.10).
+        extensions = manifest_extensions(adv.original_manifest)
+        if extensions:
+            manifest[EXTENSIONS_KEY] = extensions
 
         return manifest
 

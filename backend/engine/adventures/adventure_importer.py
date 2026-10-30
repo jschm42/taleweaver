@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.adventure_format import validate_manifest_version
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
+from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.adventures.adventure_import_support import (
     check_adz_limits,
@@ -524,6 +525,7 @@ class AdventureTemplateImporter:
                     "init_script": manifest_data.get("init_script")
                     or adv_data.get("init_script")
                     or "",
+                    EXTENSIONS_KEY: manifest_extensions(manifest_data),
                 }
 
                 default_scene_id = (
