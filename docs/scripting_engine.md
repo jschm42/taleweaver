@@ -101,7 +101,8 @@ To ensure player safety and server reliability:
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
 - **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `round`, `str`, `sum`, `tuple`.
 - **Inline conditionals**: `a if condition else b` is supported.
-- **Not supported**: `while` loops, `try`/`except`, `with`, `class`, and list/dict/set comprehensions or generator expressions (`[n.name for n in tw.scene.npcs]`). Use a `for` loop and `list.append()` instead.
+- **Comprehensions**: list, set and dict comprehensions and generator expressions are supported, including filters and nested `for` clauses (`[n.id for n in tw.scene.npcs if not n.is_hidden]`, `any(n.id == "GUARD" for n in tw.scene.npcs)`). They are evaluated eagerly: every element counts against the step budget and the result against the size limit, and a generator expression yields a list (so `any()` does not stop at the first match). Loop variables stay inside the comprehension. Async comprehensions are not supported.
+- **Not supported**: `while` loops, `try`/`except`, `with` and `class`.
 
 ---
 
@@ -381,6 +382,12 @@ for npc in tw.scene.npcs:
 ```
 
 ```python
+# Who is visible here, and is the guard among them?
+present = [n.id for n in tw.scene.npcs if not n.is_hidden]
+guard_here = "GUARD" in present
+```
+
+```python
 # A trap door drops the player into the cellar, where the guard is already waiting
 tw.scene.teleport("CELLAR")
 tw.npcs.move_to_player("GUARD", "blocking the stairs")
@@ -398,6 +405,7 @@ Queries and manipulates passage exits:
 ### `tw.npcs`
 Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. Also available as `tw.npcs.get(npc_id).say(text)`.
+- `tw.npcs.say_directed(npc_id: str, direction: str)`: Lets the NPC speak in the next GM narration, worded by the GM instead of a fixed text: the direction says *what* the NPC says or does with their voice (`tw.npcs.say_directed("BRAM", "sings Yellow Submarine")`), and the GM writes the actual line in character and in the scene's language. It works like [`tw.story.direct`](#twstory): a soft direction, used once by the next narration (max. 500 characters, at most the 5 newest directions are kept). Also available as `tw.npcs.get(npc_id).say_directed(direction)`.
 - `tw.npcs.move(npc_id: str, target_scene_id: str, spatial_position: str = "")`: Moves an NPC to another scene. Accepts `"current"`, `"here"`, or `"player"` to move them into the protagonist's current location.
 - `tw.npcs.move_to_player(npc_id: str, spatial_position: str = "")`: Convenience shortcut to move an NPC directly into the player's current scene.
 - `tw.npcs.drop_item(npc_id: str, item_id: str, scene_id: str = None, spatial_position: str = "")`: Transfers an item from an NPC's inventory into a scene. If `scene_id` is omitted, it drops into the NPC's current scene; passing `"current"` drops it into the player's scene.
@@ -410,7 +418,7 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
 - `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. The ID is matched exactly, then case-insensitively, then against the NPC's name. An unknown ID does not raise: it returns a detached proxy whose changes have no effect, and the server log shows `[Script Warning] Unknown entity ID '...'`, so check the log when a change seems to be ignored. Available properties and methods on `NPCProxy`:
   - `.name`, `.hp`, `.is_defeated`, `.current_scene_id`, `.inventory`
-  - `.say(text: str)`
+  - `.say(text: str)` / `.say_directed(direction: str)`
   - `.move_to(target_scene_id: str, spatial_position: str = "")` (supports `"current"`)
   - `.move_to_player(spatial_position: str = "")`
   - `.drop_item(item_id: str, scene_id: str = None, spatial_position: str = "")`

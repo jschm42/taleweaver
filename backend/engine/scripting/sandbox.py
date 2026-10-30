@@ -15,6 +15,13 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
+from backend.engine.scripting.sandbox_comprehensions import ComprehensionMixin
+from backend.engine.scripting.sandbox_errors import (
+    ScriptExecutionError,
+    ScriptSecurityError,
+    ScriptTimeoutError,
+)
+
 logger = logging.getLogger(__name__)
 
 # The interpreter currently evaluating a script, so host calls can adjust its time budget.
@@ -33,24 +40,6 @@ def refund_time_budget(seconds: float) -> None:
     interpreter = _ACTIVE_INTERPRETER.get()
     if interpreter is not None and seconds > 0:
         interpreter.deadline += seconds
-
-
-class ScriptSecurityError(Exception):
-    """Raised when a script attempts an unauthorized or unsafe operation."""
-
-    pass
-
-
-class ScriptExecutionError(Exception):
-    """Raised when a runtime error occurs during script evaluation."""
-
-    pass
-
-
-class ScriptTimeoutError(ScriptExecutionError):
-    """Raised when a script exceeds its maximum execution instruction budget."""
-
-    pass
 
 
 class _ReturnSignalError(Exception):
@@ -122,6 +111,12 @@ ALLOWED_AST_NODES: set[type[ast.AST]] = {
     ast.JoinedStr,
     ast.Lambda,
     ast.IfExp,
+    # Comprehensions (evaluated eagerly, see sandbox_comprehensions)
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+    ast.comprehension,
 }
 
 # Resource limits. Adventure scripts may come from imported (untrusted) adventures, so a
@@ -146,6 +141,18 @@ def attribute_violation(name: str) -> str | None:
     if name in _FORBIDDEN_ATTRIBUTES or name.startswith(_FORBIDDEN_ATTRIBUTE_PREFIXES):
         return f"Access to attribute '{name}' is forbidden in sandbox."
     return None
+
+
+def _reject_method_overwrite(obj: Any, target: ast.Attribute) -> None:
+    """Stops ``npc.add_trait = "angry"``, which would silently replace the method instead of
+    calling it. Properties with setters (``npc.character = ...``) stay assignable."""
+    if not callable(getattr(type(obj), target.attr, None)):
+        return
+    owner = target.value.id if isinstance(target.value, ast.Name) else "obj"
+    raise ScriptExecutionError(
+        f"'{target.attr}' is a method and cannot be assigned. "
+        f"Call it instead: {owner}.{target.attr}(...)"
+    )
 
 
 def _check_sequence_size(value: Any) -> Any:
@@ -267,11 +274,13 @@ def _guard_call_arguments(func: Any, args: list[Any], kwargs: dict[str, Any]) ->
             raise ScriptSecurityError("join() result exceeds safe memory limit.")
 
 
-class SafeAstInterpreter:
+class SafeAstInterpreter(ComprehensionMixin):
     """
     Pure Python AST interpreter for TaleWeaver scripts.
     Executes valid Python code within a bounded, isolated environment.
     """
+
+    max_sequence_length = MAX_SEQUENCE_LENGTH
 
     def __init__(self, max_steps: int = 10000):
         self.max_steps = max_steps
@@ -582,6 +591,7 @@ class SafeAstInterpreter:
             violation = attribute_violation(target.attr)
             if violation:
                 raise ScriptSecurityError(violation)
+            _reject_method_overwrite(obj, target)
             setattr(obj, target.attr, val)
         elif isinstance(target, ast.Subscript):
             container = self._eval_expr(target.value)

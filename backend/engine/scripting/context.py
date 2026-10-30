@@ -17,6 +17,7 @@ from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.gm_directions import clean_direction
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
+from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 
@@ -418,7 +419,7 @@ class EntityProxy:
         self._changeset.entity_updates.append({"entity_id": self._id, attr_name: val})
 
 
-class NPCProxy(EntityProxy, NPCPersonaMixin):
+class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
     """Safe proxy for Non-Player Characters."""
 
     @property
@@ -901,8 +902,8 @@ class EntityManagerProxy:
             ent.attack()
 
 
-class NPCManagerProxy(NPCPersonaManagerMixin, EntityManagerProxy):
-    """``tw.npcs``: entity access plus the NPC persona shortcuts."""
+class NPCManagerProxy(NPCPersonaManagerMixin, NPCDirectionManagerMixin, EntityManagerProxy):
+    """``tw.npcs``: entity access plus the NPC persona and directed-speech shortcuts."""
 
 
 class StoryFlagsProxy:

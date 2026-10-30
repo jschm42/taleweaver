@@ -107,6 +107,10 @@ const availableSnippets = computed(() => {
       code: '# NPC hands an item it carries to the player:\ntw.npcs.give_to_player("NPC_ID", "ITEM_ID")\n# Or drop from NPC into scene:\n# tw.npcs.drop_item("NPC_ID", "ITEM_ID")\n# Or give item to NPC:\n# tw.npcs.give_item("NPC_ID", "ITEM_ID")\n',
     },
     {
+      label: 'NPC speaks (GM-worded)',
+      code: '# The GM writes the line in the next narration, in character:\ntw.npcs.say_directed("NPC_ID", "sings an old sailor song")\n# Fixed wording instead:\n# tw.npcs.say("NPC_ID", "Ahoy!")\n',
+    },
+    {
       label: 'Change NPC personality',
       code: '# Changes how the GM plays the NPC for the rest of this game:\ntw.npcs.set_character("NPC_ID", "Hostile and suspicious; short, rude answers.")\n# Or add / remove a single trait:\n# tw.npcs.add_trait("NPC_ID", "drunk")\n# tw.npcs.remove_trait("NPC_ID", "drunk")\n',
     },
@@ -715,7 +719,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('npcs')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.get(id)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
+            <code>.get(id)</code>, <code>.say(id, text)</code>, <code>.say_directed(id, direction)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
           </p>
         </div>
 

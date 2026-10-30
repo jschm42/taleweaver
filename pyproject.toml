@@ -111,6 +111,8 @@ ignore = [
 "backend/api/routes/adventures/turn_state_applier.py" = ["E701", "I001", "C901", "PLR0911", "PLR0912", "PLR0915", "PLR1714"]
 "backend/api/routes/adventures/turn_interactions.py" = ["E701", "I001", "C901", "PLR0911", "PLR0912", "PLR0915", "PLR1714"]
 "backend/engine/scripting/sandbox.py" = ["N802", "N815", "C901", "PLR0911"]
+# _eval_<AstNode> handlers are named after the AST classes they dispatch on.
+"backend/engine/scripting/sandbox_comprehensions.py" = ["N802"]
 "backend/core/prompts.py" = ["S608"]
 "scripts/*" = ["C901", "PLR0912", "PLR0915", "E402", "S603", "S607"]
 
