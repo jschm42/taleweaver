@@ -74,7 +74,7 @@ function onCover() {
           <div class="p-3.5 rounded-xl bg-slate-800/80 border border-white/10 flex items-start gap-3 text-xs leading-relaxed text-slate-300">
             <ShieldAlert class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p>
-              This adventure was created in an older format without sequence support. To play or edit it, it needs to be updated to the current format. Choose one of the following two options:
+              This adventure was created with an outdated format version (below 1.3) that can no longer be played. To play or edit it, it needs to be updated to the current format. Choose one of the following two options:
             </p>
           </div>
 

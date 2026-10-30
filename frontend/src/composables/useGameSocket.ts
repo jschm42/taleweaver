@@ -277,16 +277,19 @@ export function useGameSocket(): UseGameSocket {
   // Names of all session entities (sent with the full chat snapshot only), for ##ID references.
   let entityNameMap: Record<string, string> = {}
 
-  /** A turn's final snapshot; a scene change the turn did not announce plays the travel curtain. */
-  function applyFinalSnapshot(data: any, sawSceneTransition: boolean): void {
+  /**
+   * Tracks the player's scene. Any change from a known scene that did not come through an exit
+   * (script teleport during a turn or after a pickup/dialog/unlock, GM move) plays the travel
+   * curtain. Exit traversals pass ``announced`` because they show their own overlay.
+   */
+  function updateCurrentScene(sceneId: string | null, announced: boolean): void {
     const previousSceneId = currentSceneId
-    applySessionSnapshot(data, false)
-    if (sawSceneTransition || !previousSceneId || !currentSceneId) return
-    if (currentSceneId === previousSceneId) return
-    sceneArrival.value = { sceneId: currentSceneId, at: Date.now() }
+    currentSceneId = sceneId
+    if (announced || !previousSceneId || !sceneId || sceneId === previousSceneId) return
+    sceneArrival.value = { sceneId, at: Date.now() }
   }
 
-  function applySessionSnapshot(data: any, updateMessages = true): void {
+  function applySessionSnapshot(data: any, updateMessages = true, announcedScene = false): void {
     if (!data) return
 
     if (updateMessages && Array.isArray(data.messages)) {
@@ -296,7 +299,7 @@ export function useGameSocket(): UseGameSocket {
       messages.value = carryOverMessageKeys(messages.value, reloaded)
     }
 
-    if (data.scene_id !== undefined) currentSceneId = data.scene_id || null
+    if (data.scene_id !== undefined) updateCurrentScene(data.scene_id || null, announcedScene)
     if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
     if (data.sheet) sheet.value = data.sheet
     if (data.map_data) mapData.value = data.map_data
@@ -392,6 +395,7 @@ export function useGameSocket(): UseGameSocket {
    */
   async function connect(gameId: string): Promise<void> {
     currentGameId = gameId
+    currentSceneId = null
     language.value = localStorage.getItem(sessionLanguageKey(gameId)) || ''
     localStorage.setItem(ACTIVE_LANGUAGE_KEY, language.value)
     status.value = 'loading'
@@ -555,7 +559,6 @@ export function useGameSocket(): UseGameSocket {
     }
     let receivedFinalEvent = false
     let receivedErrorEvent = false
-    let sawSceneTransition = false
     const controller = new AbortController()
     activeChatController = controller
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
@@ -667,7 +670,7 @@ export function useGameSocket(): UseGameSocket {
             lastMsg.content += data.content
           } else if (event === 'final') {
             receivedFinalEvent = true
-            applyFinalSnapshot(data, sawSceneTransition)
+            applySessionSnapshot(data, false)
             if (data.game_over) {
               status.value = 'game_over'
               gameOverReason.value = data.game_over_reason || data.status_note || ''
@@ -696,8 +699,7 @@ export function useGameSocket(): UseGameSocket {
           } else if (event === 'scene_transition') {
             // The story feed starts a new page per scene; previous scenes stay browsable.
             isSceneTransitioning.value = true
-            sawSceneTransition = true
-            applySessionSnapshot(data, false)
+            applySessionSnapshot(data, false, true)
           } else if (event === 'adventure_generator_proposal') {
             generatorProposal.value = data.request || data
             generatorAutoStart.value = data.auto_start === true
@@ -930,7 +932,7 @@ export function useGameSocket(): UseGameSocket {
             lastMsg.content += data.content
           } else if (event === 'final') {
             receivedFinalEvent = true
-            applyFinalSnapshot(data, false)
+            applySessionSnapshot(data, false)
             if (data.game_over) {
               status.value = 'game_over'
               gameOverReason.value = data.game_over_reason || data.status_note || ''

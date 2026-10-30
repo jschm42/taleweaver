@@ -204,6 +204,36 @@ def test_is_legacy_session_logic():
     assert is_legacy_session(state=modern_state) is False
 
 
+def test_current_adventure_without_sequences_is_playable():
+    """Removing every sequence must not force a migration: only the format version counts."""
+    # Arrange
+    no_sequences_tpl = AdventureTemplate(
+        id="tpl-no-seq",
+        title="Sandbox Lab",
+        version="1.0.0",
+        original_manifest={"format_version": CURRENT_VERSION, "sequences": []},
+        sequences=[],
+    )
+    no_sequences_state = SessionState(
+        id="state-no-seq",
+        session_id="sess-no-seq",
+        entity_states={
+            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: {
+                "original_manifest": {"format_version": CURRENT_VERSION, "sequences": []},
+            }
+        },
+    )
+
+    # Act
+    status = check_template_update(no_sequences_tpl, [])
+
+    # Assert
+    assert is_legacy_template(no_sequences_tpl) is False
+    assert status["is_legacy_format"] is False
+    assert status["can_start"] is True
+    assert is_legacy_session(template=no_sequences_tpl, state=no_sequences_state) is False
+
+
 @pytest.mark.asyncio
 async def test_sessions_and_chat_return_legacy_format(auth_client: AsyncClient, db_session):
     """GET /api/adventures/sessions and GET /api/adventures/{game_id}/chat return is_legacy_format."""

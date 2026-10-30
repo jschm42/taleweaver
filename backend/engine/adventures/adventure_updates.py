@@ -277,20 +277,15 @@ def find_matching_file_for_template(
 
 def is_legacy_template(template: AdventureTemplate) -> bool:
     """
-    Checks if a template was imported from an ADV format older than PLAYABLE_MIN_VERSION
-    or lacks required sequences for imported adventures.
+    Checks if a template was imported from an ADV format older than PLAYABLE_MIN_VERSION.
+
+    Only the format version decides: an adventure without sequences is still playable.
+    Versions between PLAYABLE_MIN_VERSION and DEPRECATED_BELOW_VERSION stay playable and
+    are only flagged as deprecated.
     """
     manifest = template.original_manifest or {}
     manifest_version = manifest.get("format_version") or manifest.get("version")
-
-    # Below the playable minimum the adventure must be migrated first; versions between that
-    # and DEPRECATED_BELOW_VERSION stay playable and are only flagged as deprecated.
-    if is_version_below(manifest_version, PLAYABLE_MIN_VERSION):
-        return True
-
-    # Imported (has a manifest) but lacks sequences; origin_id is set on every template now.
-    is_imported = bool(template.original_manifest)
-    return is_imported and not template.sequences
+    return is_version_below(manifest_version, PLAYABLE_MIN_VERSION)
 
 
 def is_legacy_session(
@@ -300,7 +295,7 @@ def is_legacy_session(
 ) -> bool:
     """
     Checks if a game session was created with an adventure format older than PLAYABLE_MIN_VERSION
-    or is linked to a legacy template without sequence support.
+    or is linked to a legacy template. Missing sequences never make a session legacy.
     """
     if template and is_legacy_template(template):
         return True
@@ -314,18 +309,7 @@ def is_legacy_session(
         snapshot = AdventureLogic.extract_manifest_snapshot(state)
         manifest = snapshot.get("original_manifest") or {}
         manifest_version = manifest.get("format_version") or manifest.get("version")
-        if is_version_below(manifest_version, PLAYABLE_MIN_VERSION):
-            return True
-
-        # Check if imported but lacks sequences
-        is_imported = bool(manifest or (template and template.original_manifest))
-        has_sequences = bool(
-            (manifest.get("sequences") and len(manifest["sequences"]) > 0)
-            or (template and template.sequences and len(template.sequences) > 0)
-            or getattr(state, "active_sequence_id", None)
-        )
-        if is_imported and not has_sequences:
-            return True
+        return is_version_below(manifest_version, PLAYABLE_MIN_VERSION)
 
     return False
 
