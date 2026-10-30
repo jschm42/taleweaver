@@ -47,6 +47,25 @@ export interface UseAdventureLibraryResult {
   downloadSelected: () => Promise<void>
 }
 
+const SHOW_DEPRECATED_KEY = 'tw.adventureLibrary.showDeprecated'
+
+/** The author's "Show deprecated" choice of this browser session; shown when nothing is stored. */
+function readShowDeprecated(): boolean {
+  try {
+    return sessionStorage.getItem(SHOW_DEPRECATED_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function writeShowDeprecated(show: boolean): void {
+  try {
+    sessionStorage.setItem(SHOW_DEPRECATED_KEY, String(show))
+  } catch {
+    // Storage blocked (private mode, disabled site data): the choice lasts until reload.
+  }
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback
 }
@@ -63,12 +82,15 @@ export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): U
   const installingId = ref<string | null>(null)
   const installErrors = ref<string[]>([])
   const installStatus = ref<AdventureInstallStatus | null>(null)
-  // Deprecated adventures stay installable but are hidden by default.
-  const showDeprecated = ref(false)
+  // Deprecated adventures are listed by default; hiding them is remembered for the browser session.
+  const showDeprecated = ref(readShowDeprecated())
 
-  const visibleItems = computed(() =>
-    showDeprecated.value ? items.value : items.value.filter((item) => !item.entry.deprecated),
-  )
+  // Current adventures always come first; each group keeps the catalog order.
+  const visibleItems = computed(() => {
+    const current = items.value.filter((item) => !item.entry.deprecated)
+    const deprecated = items.value.filter((item) => item.entry.deprecated)
+    return showDeprecated.value ? [...current, ...deprecated] : current
+  })
   const deprecatedCount = computed(() => items.value.filter((item) => item.entry.deprecated).length)
   // Hidden entries never count as selected, so they are never installed unseen.
   const selectedItems = computed(() => visibleItems.value.filter((item) => selectedIds.value.has(item.entry.id)))
@@ -111,6 +133,7 @@ export function useAdventureLibrary(options: UseAdventureLibraryOptions = {}): U
   /** Toggles the deprecated filter; hiding entries also drops them from the selection. */
   function setShowDeprecated(show: boolean) {
     showDeprecated.value = show
+    writeShowDeprecated(show)
     pruneSelection()
   }
 

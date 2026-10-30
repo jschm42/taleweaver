@@ -547,6 +547,29 @@ defineExpose({
   overflow: visible;
 }
 
+/* Each reveal lets the dock cards rise in one after another. */
+.tw-footer:hover .tw-action-reveal:not(.is-pinned) :deep(.dock-item) {
+  animation: tw-dock-rise 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+@keyframes tw-dock-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-footer:hover .tw-action-reveal:not(.is-pinned) :deep(.dock-item) {
+    animation: none;
+  }
+}
+
 /* Touch devices cannot hover: keep the buttons visible. */
 @media (hover: none) {
   .tw-action-reveal {
