@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * SheetHeroPanel — Hero tab of the character sheet: full portrait and biography.
- * The backstory reuses the skin's narration box (drop cap, paper, fonts).
+ * SheetHeroPanel — Hero tab of the character sheet: a poster-style stage with the portrait
+ * filling the tab and the name and biography laid over it. The backstory reuses the skin's
+ * narration box (drop cap, paper, fonts).
  */
+import { computed } from 'vue'
 import type { CharacterSheet } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import { useBrokenImages } from './sheetItems'
@@ -13,15 +15,22 @@ const props = defineProps<{
 }>()
 
 const { showImage, handleImageError } = useBrokenImages()
+
+const portraitUrl = computed(() =>
+  showImage(props.sheet.profile_image) ? getImageUrl(props.sheet.profile_image) : null
+)
 </script>
 
 <template>
-  <div class="flex flex-col sm:flex-row gap-5 sm:gap-7 items-center sm:items-start">
-    <!-- Portrait -->
-    <figure class="tw-dialog-portrait shrink-0 w-48 sm:w-56 md:w-64 aspect-[2/3]">
+  <div class="tw-hero-stage h-full min-h-[26rem]">
+    <!-- Ambient backdrop: a blurred copy of the portrait fills the free space -->
+    <img v-if="portraitUrl" :src="portraitUrl" alt="" aria-hidden="true" class="tw-hero-ambient" />
+
+    <!-- Portrait (full height, fades into the backdrop) -->
+    <figure class="tw-hero-portrait">
       <img
-        v-if="showImage(props.sheet.profile_image)"
-        :src="getImageUrl(props.sheet.profile_image)"
+        v-if="portraitUrl"
+        :src="portraitUrl"
         :alt="props.sheet.name || 'Hero portrait'"
         class="w-full h-full object-cover object-top"
         @error="handleImageError(props.sheet.profile_image)"
@@ -35,22 +44,24 @@ const { showImage, handleImageError } = useBrokenImages()
       </div>
     </figure>
 
-    <!-- Identity & Biography -->
-    <div class="flex-1 min-w-0 w-full flex flex-col gap-4">
-      <div class="text-center sm:text-left">
-        <h4 class="tw-dialog-title text-2xl sm:text-3xl">{{ props.sheet.name || 'Unnamed' }}</h4>
-        <div class="tw-dialog-eyebrow text-xs sm:text-sm mt-1">{{ props.sheet.role || 'Adventurer' }}</div>
-        <div v-if="props.sheet.adventure_title" class="tw-muted text-xs mt-1.5">
-          Adventure: <span class="font-semibold">{{ props.sheet.adventure_title }}</span>
+    <!-- Identity & Biography, laid over the portrait -->
+    <div class="tw-hero-copy tw-dialog-scroll">
+      <div class="mt-auto flex flex-col gap-4">
+        <div class="tw-hero-identity">
+          <h4 class="tw-dialog-title text-3xl sm:text-4xl">{{ props.sheet.name || 'Unnamed' }}</h4>
+          <div class="tw-dialog-eyebrow text-xs sm:text-sm mt-1">{{ props.sheet.role || 'Adventurer' }}</div>
+          <div v-if="props.sheet.adventure_title" class="tw-muted text-xs mt-1.5">
+            Adventure: <span class="font-semibold">{{ props.sheet.adventure_title }}</span>
+          </div>
         </div>
-      </div>
 
-      <section class="tw-narration">
-        <div class="tw-narration-label">Backstory</div>
-        <p v-drop-cap class="tw-narration-text tw-dialog-bio">
-          {{ props.sheet.description || 'No detailed biography or historical records found for this adventurer.' }}
-        </p>
-      </section>
+        <section class="tw-narration">
+          <div class="tw-narration-label">Backstory</div>
+          <p v-drop-cap class="tw-narration-text tw-dialog-bio">
+            {{ props.sheet.description || 'No detailed biography or historical records found for this adventurer.' }}
+          </p>
+        </section>
+      </div>
     </div>
   </div>
 </template>
