@@ -64,6 +64,9 @@ export interface EntityEditData {
   on_unequip_text?: string | null
   on_enter_scene_script?: string | null
   on_enter_scene_text?: string | null
+  on_leave_scene_script?: string | null
+  on_leave_scene_text?: string | null
+  helpers_script?: string | null
   on_open_exit_script?: string | null
   on_open_exit_text?: string | null
   on_exit_used_script?: string | null

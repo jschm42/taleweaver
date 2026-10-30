@@ -195,9 +195,15 @@ async def test_editor_scene_helpers_reach_the_manifest_also_after_rename(client,
         json={"target_type": "scene", "target_id": "CRYPT", "new_id": "TOMB"},
     )
 
+    assets = await client.get(f"/api/adventures/{template_id}/editor/assets", headers=headers)
+
     # Assert
     assert saved.status_code == 200, saved.text
     assert renamed.status_code == 200, renamed.text
+    assert assets.status_code == 200, assets.text
+    # The editor's Scene Helpers panel reads the block from the assets payload.
+    tomb = next(s for s in assets.json()["scenes"] if s["id"] == "TOMB")
+    assert tomb["helpers_script"] == CRYPT_HELPERS.strip()
     async with TestSessionLocal() as db:
         adv = await db.get(AdventureTemplate, template_id)
         row = (await db.execute(select(WorldScene).where(WorldScene.id == "TOMB"))).scalar_one()

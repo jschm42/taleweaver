@@ -288,7 +288,7 @@ if not can_access_sanctum():
 
 ### Scene Helpers (`helpers_script`)
 
-In a large adventure, putting every helper into the one `init_script` makes it hard to read. A scene can carry its own helper block (`helpers_script`, World-Editor: **Scene â†’ Scripts â†’ Scene Helpers**) for the logic of that place's puzzle, dialog or NPC. In a Story Idea blueprint it is the `helpers:` key of a `[Scene]` tag, and the World-Builder fills it when it generates scripts.
+In a large adventure, putting every helper into the one `init_script` makes it hard to read. A scene can carry its own helper block (`helpers_script`) for the logic of that place's puzzle, dialog or NPC. In the World-Editor, edit it on the scene's page under **Scene Scripts** (next to the enter/leave scripts), or in the **Scripts** tab under **Scene Helpers**, which shows all scenes' blocks in one place. The **Trigger Overview** tab lists it under the scene as *Helpers (definitions)*. In a Story Idea blueprint it is the `helpers:` key of a `[Scene]` tag, and the World-Builder fills it when it generates scripts.
 
 Scene helpers work exactly like the definitions part of `init_script`:
 

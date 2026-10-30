@@ -14,6 +14,7 @@ import { Save, X, Trash2, ArrowLeft, Sparkles, Brain } from 'lucide-vue-next'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
+import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
 
 const props = defineProps<{
   adventureId: string
@@ -682,6 +683,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         </div>
       </div>
     </div>
+
+    <SceneScriptsSection
+      v-if="routeSceneDetails"
+      :key="String(routeSceneDetails.id)"
+      :adventure-id="adventureId"
+      :scene="routeSceneDetails"
+      @refresh="emit('refresh')"
+    />
 
     <div class="grid md:grid-cols-2 gap-3 text-slate-200">
       <label class="text-xs text-slate-300 space-y-1">

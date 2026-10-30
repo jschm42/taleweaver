@@ -1930,6 +1930,23 @@ async function handleUpdateInitScript(initScript: string): Promise<void> {
   }
 }
 
+async function handleUpdateSceneHelpers(sceneId: string, helpersScript: string): Promise<void> {
+  isSaving.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: sceneId,
+      helpers_script: helpersScript,
+    })
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
+    addNotification(`Helpers of scene ${sceneId} updated.`, 'success')
+  } catch (error: any) {
+    addNotification(error instanceof Error ? error.message : 'Failed to update scene helpers', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 async function handleUpdateScripts(newScripts: any[]) {
   isSaving.value = true
   try {
@@ -2950,6 +2967,8 @@ watch(
               :is-saving="isSaving"
               @update-scripts="handleUpdateScripts"
               @update-init-script="handleUpdateInitScript"
+              :scenes="editorScenes"
+              @update-scene-helpers="handleUpdateSceneHelpers"
               @notify="addNotification"
             />
 

@@ -16,16 +16,19 @@ import {
 import { adventureService } from '@/services/adventureService'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InitScriptPanel from '@/components/editor/InitScriptPanel.vue'
+import SceneHelpersPanel from '@/components/editor/SceneHelpersPanel.vue'
 
 const props = defineProps<{
   adventure: any
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null }>
   isSaving?: boolean
+  scenes?: any[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update-scripts', scripts: any[]): void
   (e: 'update-init-script', initScript: string): void
+  (e: 'update-scene-helpers', sceneId: string, helpersScript: string): void
   (e: 'notify', message: string, type?: 'error' | 'success' | 'info'): void
 }>()
 
@@ -412,6 +415,12 @@ function handleTabKey(e: KeyboardEvent) {
       :init-script="adventure?.init_script"
       :is-saving="isSaving"
       @save="emit('update-init-script', $event)"
+    />
+
+    <SceneHelpersPanel
+      :scenes="scenes || []"
+      :is-saving="isSaving"
+      @save="(sceneId, code) => emit('update-scene-helpers', sceneId, code)"
     />
 
     <!-- Filters & Search Bar -->

@@ -51,6 +51,7 @@ const SCRIPT_TEXT = (base: string, label: string): FieldSpec[] => [
 const SCENE_FIELDS: FieldSpec[] = [
   ...SCRIPT_TEXT('on_enter_scene', 'On enter'),
   ...SCRIPT_TEXT('on_leave_scene', 'On leave'),
+  ['helpers_script', 'Helpers (definitions)', 'script'],
 ]
 
 const EXIT_FIELDS: FieldSpec[] = [
