@@ -202,6 +202,7 @@ async def create_editor_exit(
         rule_to_unlock=rule or None,
     )
     db.add(world_exit)
+    await db.flush()  # assigns the generated id before it is mirrored into the manifest
     if isinstance(adv.original_manifest, dict) and isinstance(
         adv.original_manifest.get("exits"), list
     ):

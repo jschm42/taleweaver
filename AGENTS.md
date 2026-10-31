@@ -56,6 +56,7 @@ Specific project rules are located in `.agents/rules/` and triggered contextuall
 * [taleweaver-inspector](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-inspector/SKILL.md) — Inspect database state, session inventories, entity overrides, and manifests via `python scripts/inspect_state.py`.
 * [taleweaver-adventure-creator](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-adventure-creator/SKILL.md) — Generates structured adventure concepts using sequence, scene, and entity tags.
 * [taleweaver-dev-tools](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-dev-tools/SKILL.md) — Developer toolkit for admin credential resets, security keys, and thumbnail regeneration.
+* [taleweaver-adventure-editor](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-adventure-editor/SKILL.md) — Modify an existing adventure in the DB (scenes, exits, entities, scripts, init script) via JSON change sets and `python scripts/edit_adventure.py` (dry run by default).
 * [taleweaver-telemetry](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-telemetry/SKILL.md) — LLM telemetry, latency percentiles (p50/p90/p95), and token analysis.
 
 ---

@@ -94,6 +94,7 @@ def update_container(
     if not active:
         _drop(metadata_json, _CONTAINER_KEYS)
         return
+    put_metadata(metadata_json, payload, _UNLOCK_SCRIPT_FIELDS, empty_as_none=True)
     if not any(given(payload, f) for f in (*_LOCK_FIELDS, "locked")):
         return
     current = {f: metadata_json.get(f) or "" for f in _LOCK_FIELDS}
@@ -102,7 +103,6 @@ def update_container(
     metadata_json.update(code_to_unlock=code, item_to_unlock=item, rule_to_unlock=rule)
     locked = payload.locked if given(payload, "locked") else (code or item or rule)
     metadata_json["locked"] = bool(locked)
-    put_metadata(metadata_json, payload, _UNLOCK_SCRIPT_FIELDS, empty_as_none=True)
     ent.unlock_rule = None
 
 

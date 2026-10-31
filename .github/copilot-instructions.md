@@ -236,3 +236,4 @@ When debugging game mechanics, missing items, entity visibility issues, scene tr
   * `python scripts/inspect_state.py list-sessions [--limit 10]` — List recent game sessions and their current scenes.
   * `python scripts/inspect_state.py show-session <session_id> [--inventory|--entities|--hidden-only]` — Deep-inspect the runtime state (Avatar inventory, stats, current scene, entity state overrides, quest progress, and world memories).
 * **Agent Rule:** Always inspect the actual database state and manifest before altering turn-pipeline logic or assuming state behavior.
+* **Modifying Adventures in the DB:** Use `python scripts/edit_adventure.py` (see the `taleweaver-adventure-editor` skill): `summary` / `export --scene` to read, then `apply <changes.json>` (dry run) and `apply ... --commit`. Change sets run through the editor endpoints in one transaction; never edit adventure rows with raw SQL.
