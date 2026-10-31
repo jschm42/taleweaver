@@ -12,7 +12,8 @@ from typing import Any, Optional
 _INVENTORY_ENTRY_KEYS = ("id", "name", "description", "item_type", "image_url", "metadata_json")
 
 
-def _ref_id(entry: Any) -> str:
+def ref_id(entry: Any) -> str:
+    """Upper-cased item ID of an inventory entry (a dict with ``id`` or a bare ID string)."""
     raw = entry.get("id") if isinstance(entry, dict) else entry
     return str(raw or "").strip().upper()
 
@@ -21,7 +22,7 @@ def take_from_inventory(inventory: list[Any], item_id: str) -> tuple[Optional[An
     """Splits the first entry matching ``item_id`` off ``inventory``: (taken, remaining)."""
     target = str(item_id).strip().upper()
     for index, entry in enumerate(inventory):
-        if _ref_id(entry) == target:
+        if ref_id(entry) == target:
             return entry, [*inventory[:index], *inventory[index + 1 :]]
     return None, list(inventory)
 

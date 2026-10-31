@@ -24,6 +24,7 @@ SCRIPT_CONTEXTS: dict[str, str] = {
     "exit_unlock_success": "runs when the exit is unlocked",
     "exit_unlock_failure": "runs when unlocking the exit fails or its guard blocks it",
     "container_unlock_success": "runs when the container is unlocked",
+    "container_items_added": "runs after the player put items into the container; added_items (list of dicts) and added_item_ids (list of IDs) are in scope",
     "container_unlock_failure": "runs when unlocking the container fails or its guard blocks it",
     "constructable_success": "runs when the recipe is crafted",
     "constructable_failure": "runs when crafting fails or its guard blocks it",

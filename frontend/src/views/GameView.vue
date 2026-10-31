@@ -116,6 +116,8 @@ const activeContainer = ref<{
   name: string
   items: any[]
   imageUrl?: string | null
+  /** Containers standing in the scene accept items from the inventory. */
+  canPut?: boolean
 } | null>(null)
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
 const awaitingContainerCodeInput = ref(false)
@@ -817,6 +819,7 @@ const openContainerFromEntity = (entity: any): boolean => {
     name: String(entity.name || entity.id || 'Container'),
     items: normalizeContainerItems(entity.inventory || []),
     imageUrl: entity.image_url || null,
+    canPut: true,
   }
   showContainerModal.value = true
   return true
@@ -1289,6 +1292,11 @@ const handleContainerTakeItem = async (item: any) => {
 
 const handleContainerDropToScene = async () => {
   await runContainerAction((id) => `/container_drop_scene ${id}`)
+}
+
+const handleContainerPutItems = async (itemIds: string[]) => {
+  if (!itemIds.length) return
+  await runContainerAction((id) => `/container_put_items ${id} | ${itemIds.join(', ')}`)
 }
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
@@ -1895,10 +1903,14 @@ usePlayAgentAutoLoop()
           :items="activeContainer?.items || []"
           :image-url="activeContainer?.imageUrl || null"
           :busy="containerBusy"
+          :container-id="activeContainer?.id || ''"
+          :inventory-items="inventoryItems"
+          :can-put="!!activeContainer?.canPut"
           @close="closeContainerModal"
           @take-all="handleContainerTakeAll"
           @take-item="handleContainerTakeItem"
           @drop-to-scene="handleContainerDropToScene"
+          @put-items="handleContainerPutItems"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />

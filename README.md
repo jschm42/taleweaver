@@ -22,23 +22,35 @@ cinematic voice acting, comic-style narrative feeds, and deterministic Python ev
 
 <br />
 
-![Adventure Gameplay](docs/screenshots/gameplay.jpg)
-
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/generator.jpg" alt="World Generator" /></a></td>
-    <td width="50%"><a href="docs/screenshots/editor-map.jpg"><img src="docs/screenshots/editor-map.jpg" alt="Interactive Directed Map" /></a></td>
+    <td width="33%"><a href="docs/screenshots/gameplay.jpg"><img src="docs/screenshots/small/gameplay.jpg" alt="Comic Story Feed" /></a></td>
+    <td width="33%"><a href="docs/screenshots/combat-dialog.jpg"><img src="docs/screenshots/small/combat-dialog.jpg" alt="Tactical Combat" /></a></td>
+    <td width="33%"><a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/small/generator.jpg" alt="AI World Generator" /></a></td>
   </tr>
   <tr>
+    <td align="center"><sub><b>Comic Story Feed</b> – dynamic AI narration with speaker portraits & comic speech bubbles</sub></td>
+    <td align="center"><sub><b>Tactical Combat</b> – card-based combat with turn initiative and enemy target deck</sub></td>
     <td align="center"><sub><b>World Generator</b> – synthesize complete adventures, lore, and Python scripts from a prompt</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/character-sheet.jpg"><img src="docs/screenshots/small/character-sheet.jpg" alt="Character Sheet & Backpack" /></a></td>
+    <td width="33%"><a href="docs/screenshots/loot-dialog.jpg"><img src="docs/screenshots/small/loot-dialog.jpg" alt="Containers & Spoils" /></a></td>
+    <td width="33%"><a href="docs/screenshots/editor-map.jpg"><img src="docs/screenshots/small/editor-map.jpg" alt="Directed Cartography" /></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Character Sheet & Gear</b> – real-time gauges, equipment slots, and 24-slot backpack</sub></td>
+    <td align="center"><sub><b>Containers & Spoils</b> – search chests and adversaries with item inspection and rarity tiers</sub></td>
     <td align="center"><sub><b>Directed Cartography</b> – interactive topological maps with real-time pathfinding</sub></td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/screenshots/editor-scenes.jpg"><img src="docs/screenshots/editor-scenes.jpg" alt="World Workbench" /></a></td>
-    <td width="50%"><a href="docs/screenshots/editor-validation.jpg"><img src="docs/screenshots/editor-validation.jpg" alt="Dual-Tier AI Validation" /></a></td>
+    <td width="33%"><a href="docs/screenshots/library-catalog.jpg"><img src="docs/screenshots/small/library-catalog.jpg" alt="Adventure Library & Catalog" /></a></td>
+    <td width="33%"><a href="docs/screenshots/editor-script-engine.jpg"><img src="docs/screenshots/small/editor-script-engine.jpg" alt="Python Event Scripting" /></a></td>
+    <td width="33%"><a href="docs/screenshots/editor-validation.jpg"><img src="docs/screenshots/small/editor-validation.jpg" alt="Dual-Tier AI Validation" /></a></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>Adventure Workbench</b> – full visual CRUD for scenes, NPCs, items, containers, and switches</sub></td>
+    <td align="center"><sub><b>Adventure Catalog</b> – browse and download curated community campaigns and modules</sub></td>
+    <td align="center"><sub><b>Python Event Scripting</b> – deterministic game logic running in a sandboxed AST interpreter</sub></td>
     <td align="center"><sub><b>Dual-Tier Validation</b> – structural graph audits paired with semantic AI story critiques</sub></td>
   </tr>
 </table>

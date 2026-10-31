@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.container_put import put_items_into_container
 from backend.api.routes.adventures.gameplay_logic import (
     WALKTHROUGH_REVEAL_COST,
     _friendly_llm_error_message,
@@ -1201,6 +1202,12 @@ class TurnInteractionsManager:
                                 scene_container, inventory_container, inventory_idx
                             )
                             response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+
+        if response.startswith("[TRIGGER_CONTAINER_PUT_ITEMS]"):
+            put_args = response.replace("[TRIGGER_CONTAINER_PUT_ITEMS]", "").strip()
+            for role, content in await put_items_into_container(self, put_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            response = ""
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):
             take_args = response.replace("[TRIGGER_CONTAINER_TAKE_ITEM]", "").strip()

@@ -79,6 +79,8 @@ _OBJECT_ENTITY_KEYS = {
     "on_unlock_success_text",
     "on_unlock_failure_script",
     "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -177,6 +179,8 @@ _INLINE_OBJECT_SCRIPT_KEYS = (
     "on_unlock_success_text",
     "on_unlock_failure_script",
     "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -227,6 +231,34 @@ def _extract_item_switch_metadata(
     metadata.pop("on_failure_script", None)
 
 
+# Metadata keys that only containers keep in an export.
+_CONTAINER_ONLY_KEYS = (
+    "code_to_unlock",
+    "item_to_unlock",
+    "rule_to_unlock",
+    "unlock_expression",
+    "on_unlock_success_script",
+    "on_unlock_success_text",
+    "on_unlock_failure_script",
+    "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
+)
+
+
+def _export_container_metadata(
+    filtered: dict[str, Any], metadata: dict[str, Any], is_container: bool
+) -> None:
+    """Lifts a container's lock fields to the top level; other items drop container keys."""
+    metadata.pop("locked", None)
+    if is_container:
+        for lock_key in ("code_to_unlock", "item_to_unlock", "rule_to_unlock"):
+            filtered[lock_key] = metadata.pop(lock_key, "")
+        return
+    for container_key in _CONTAINER_ONLY_KEYS:
+        metadata.pop(container_key, None)
+
+
 def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
     if not isinstance(filtered.get("metadata_json"), dict):
         return
@@ -252,20 +284,7 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         metadata.pop("on_read_script", None)
         metadata.pop("on_read_text", None)
 
-    if item_type == "CONTAINER":
-        filtered["code_to_unlock"] = metadata.pop("code_to_unlock", "")
-        filtered["item_to_unlock"] = metadata.pop("item_to_unlock", "")
-        filtered["rule_to_unlock"] = metadata.pop("rule_to_unlock", "")
-    else:
-        metadata.pop("code_to_unlock", None)
-        metadata.pop("item_to_unlock", None)
-        metadata.pop("rule_to_unlock", None)
-        metadata.pop("unlock_expression", None)
-        metadata.pop("on_unlock_success_script", None)
-        metadata.pop("on_unlock_success_text", None)
-        metadata.pop("on_unlock_failure_script", None)
-        metadata.pop("on_unlock_failure_text", None)
-    metadata.pop("locked", None)
+    _export_container_metadata(filtered, metadata, item_type == "CONTAINER")
 
     if item_type == "CONSTRUCTABLE":
         for recipe_key in ("result_item_ids", "kept_ingredients"):

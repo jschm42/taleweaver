@@ -70,6 +70,8 @@ const props = defineProps<{
     on_unlock_success_text?: string
     on_unlock_failure_script?: string
     on_unlock_failure_text?: string
+    on_items_added_script?: string
+    on_items_added_text?: string
     craft_guard_expression?: string
     on_craft_success_script?: string
     on_craft_success_text?: string
@@ -138,6 +140,8 @@ const localForm = ref({
   on_unlock_success_text: '',
   on_unlock_failure_script: '',
   on_unlock_failure_text: '',
+  on_items_added_script: '',
+  on_items_added_text: '',
   craft_guard_expression: '',
   on_craft_success_script: '',
   on_craft_success_text: '',
@@ -736,6 +740,8 @@ function handleSave() {
     on_unlock_success_text: String(localForm.value.on_unlock_success_text || '').trim(),
     on_unlock_failure_script: String(localForm.value.on_unlock_failure_script || '').trim(),
     on_unlock_failure_text: String(localForm.value.on_unlock_failure_text || '').trim(),
+    on_items_added_script: String(localForm.value.on_items_added_script || '').trim(),
+    on_items_added_text: String(localForm.value.on_items_added_text || '').trim(),
     craft_guard_expression: String(localForm.value.craft_guard_expression || '').trim(),
     on_craft_success_script: String(localForm.value.on_craft_success_script || '').trim(),
     on_craft_success_text: String(localForm.value.on_craft_success_text || '').trim(),
@@ -1998,7 +2004,7 @@ const textLogPreviewClass = computed(() => {
                         <span class="text-[11px] font-black text-slate-300 uppercase tracking-wider">
                           Unlocking Transition Rules
                         </span>
-                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
+                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script || localForm.on_items_added_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
                           Configured
                         </span>
                       </div>
@@ -2036,6 +2042,23 @@ const textLogPreviewClass = computed(() => {
                           v-model="localForm.on_unlock_failure_text"
                           rows="2"
                           placeholder="e.g. A small jolt zaps your fingers! The container remains shut."
+                          class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
+                        ></textarea>
+                      </div>
+
+                      <ScriptEditor
+                        v-model="localForm.on_items_added_script"
+                        label="On Items Added Script"
+                        help-text="Executed once after the player put one or more items into this container. added_items (list of dicts) and added_item_ids (list of IDs) are in scope."
+                        context="container_items_added"
+                        min-height="100px"
+                      />
+                      <div class="space-y-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Items Added Text</label>
+                        <textarea
+                          v-model="localForm.on_items_added_text"
+                          rows="2"
+                          placeholder="e.g. The offering bowl glows faintly as the items settle inside."
                           class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
                         ></textarea>
                       </div>

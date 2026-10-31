@@ -75,6 +75,7 @@ from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner,
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
+from backend.engine.interaction.script_item_apply import insert_cloned_entities
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import (
     format_gm_directions,
@@ -2944,6 +2945,7 @@ class GameTurnManager:
         if changeset.teleport_scene_id:
             self.state.current_scene_id = changeset.teleport_scene_id
 
+        await insert_cloned_entities(self.db, self.state, changeset)
         entity_states = dict(self.state.entity_states or {})
         for move in changeset.entity_movements:
             eid = move["entity_id"]

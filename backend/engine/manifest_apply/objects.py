@@ -56,6 +56,7 @@ _BASE_SCRIPT_FIELDS = (
 )  # fmt: skip
 _CONTAINER_SCRIPT_FIELDS = (
     "on_unlock_success_script", "on_unlock_success_text", "on_unlock_failure_script", "on_unlock_failure_text",
+    "on_items_added_script", "on_items_added_text",
 )  # fmt: skip
 _CONSTRUCTABLE_FIELDS = (
     "result_item_ids", "kept_ingredients",

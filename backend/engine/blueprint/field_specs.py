@@ -221,6 +221,7 @@ for _key, _target in (
     ("on_use", "on_interact"),
     ("on_unlock", "on_unlock_success"),
     ("on_unlock_fail", "on_unlock_failure"),
+    ("on_items_added", "on_items_added"),
     ("on_read", "on_read"),
     ("on_craft", "on_craft_success"),
     ("on_craft_fail", "on_craft_failure"),

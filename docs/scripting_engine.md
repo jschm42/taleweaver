@@ -26,6 +26,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
+   - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
    - [tw.llm (Ask the LLM)](#twllm-ask-the-llm)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
@@ -40,6 +41,9 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [Example 11: Bomb Defusal Choice Dialog](#example-11-bomb-defusal-choice-dialog)
    - [Example 12: Sphinx Riddle Conversation (Soft Rule + Dialog)](#example-12-sphinx-riddle-conversation-soft-rule--dialog)
    - [Example 13: The Player's Words Change an NPC's Mood](#example-13-the-players-words-change-an-npcs-mood)
+   - [Example 14: Potion Dispenser (Cloning a Hidden Item)](#example-14-potion-dispenser-cloning-a-hidden-item)
+   - [Example 15: Offering Altar (Player Puts Items into a Container)](#example-15-offering-altar-player-puts-items-into-a-container)
+   - [Example 16: Blacksmith Conversation (Dialogue Tree)](#example-16-blacksmith-conversation-dialogue-tree)
 7. [Authoring in the World-Editor](#authoring-in-the-world-editor)
 
 ---
@@ -137,6 +141,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **Container Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
+| | `on_items_added_script`, `..._text` | Executes once after the player put one or more items into this container (container panel → **Put In**, or `/container_put_items`). `added_items` (list of dicts) and `added_item_ids` (list of IDs) are in scope. |
 | **Constructable Recipes** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
 | | `on_craft_success_script`, `..._text` | Executes when this recipe is successfully crafted (its `result_item_ids` are revealed). The script runs with the recipe as its entity. The text replaces the default craft message. |
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
@@ -360,10 +365,16 @@ The global `tw` object is injected into every script execution environment.
 Inspects and modifies the avatar's state:
 - `tw.player.hp` *(int)*: Current avatar health points.
 - `tw.player.name` *(str)*: Protagonist's name.
-- `tw.player.inventory` *(list[dict])*: List of items currently held by the avatar.
+- `tw.player.inventory` *(list[dict])*: The items the avatar carries right now (`id`, `name`, ...), including changes made earlier in the same script.
+- `tw.player.item_ids` *(list[str])*: IDs of the carried items.
 - `tw.player.heal(amount: int)`: Restores `amount` HP (up to avatar maximum).
 - `tw.player.damage(amount: int)`: Inflicts `amount` direct damage to the avatar.
-- `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory.
+- `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory (case-insensitive).
+- `tw.player.take_item(item_id: str) -> bool`: Moves an existing world item into the inventory, wherever it is (scene, container, NPC inventory). The entry keeps the item's world data (name, description, image, effects). Returns `False` for an unknown ID.
+- `tw.player.drop_item(item_id: str, scene_id: str = None) -> bool`: Drops a carried item into a scene (default: the protagonist's scene).
+- `tw.player.transfer_item(item_id: str, target_id: str) -> bool`: Hands a carried item to an NPC or puts it into a container.
+- `tw.player.remove_item(item_id: str)`: Takes an item out of the inventory without placing it anywhere.
+- `tw.player.give_item(item_id: str, name: str = None, description: str = None)`: Adds a *new* inventory entry that is not a world item (no image, no effects). To hand over an item that exists in the world, use `take_item` instead.
 - To move the protagonist to another scene, use `tw.scene.teleport(scene_id)` (see [`tw.scene`](#twscene)).
 
 ### `tw.scene`
@@ -425,6 +436,9 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.give_item(item_id: str)`
   - `.give_to_player(item_id: str) -> dict | None`
   - `.has_item(item_id: str) -> bool`
+  - `.items` *(list[ObjectProxy])* / `.item_ids` *(list[str])*: The items the NPC carries.
+  - `.put_item(item_id: str) -> bool`: Moves a world item from anywhere (scene, container, the protagonist) into the NPC's inventory.
+  - `.take_item(item_id: str, to: str = "player") -> bool`: Moves a carried item out, to `"player"`, `"current"` (the protagonist's scene), a scene ID, another NPC or a container.
   - `.kill(drop_inventory: bool = True)` / `.die()`
   - `.attack()` (see `tw.npcs.attack`)
   - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)`
@@ -434,15 +448,43 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   Persona changes apply to the current game only: they are stored on the session's copy of the NPC, and the adventure template keeps its original text. To restore the original later, store it first, e.g. `tw.vars.set('brom_bio', tw.npcs.get('BROM').character)`. A persona change shapes the GM's narration and dialogue from the next turn on; it does not start a fight on its own (use `.attack()` for that). The NPC cards in the in-game Debug dialog show the current character and goal, so you can check that a change was applied.
 
 ### `tw.objects` (or `tw.items`)
-Manages world objects and inventory items:
-- `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")`: Moves an object/item into a scene. Accepts `"current"` for protagonist's scene.
-- `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Transfers an item into an NPC's inventory.
-- `tw.objects.add_to_scene(item_id: str, scene_id: str)`: Spawns or moves an item into a scene.
-- `tw.objects.add_to_player(item_id: str)`: Directly places an item into the avatar's inventory.
-- `tw.objects.remove_from_player(item_id: str)`: Removes an item from the player's inventory.
-- `tw.objects.hide(item_id: str)`: Hides an object in the scene until uncovered.
-- `tw.objects.reveal(item_id: str)`: Reveals a previously hidden object.
-- `tw.objects.get(item_id: str) -> ObjectProxy`: Returns an `ObjectProxy` with `.move_to_scene(scene_id)` and `.give_to_npc(npc_id)`. For switch items, `ObjectProxy` also exposes `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+Manages world objects and inventory items. Every world item is held by exactly **one** place: the protagonist's inventory, an NPC's inventory, a container (its contents) or a scene. A move always takes the item away from its current holder first, so items never exist twice and never vanish. Item IDs are matched case-insensitively.
+
+**Moving items**
+- `tw.objects.move_item(item_id: str, target: str) -> bool`: Moves an item to `"player"`, an NPC ID, a container ID, `"current"`/`"here"` (the protagonist's scene) or a scene ID.
+- `tw.objects.add_to_player(item_id: str) -> bool`: Same as `tw.player.take_item(item_id)`.
+- `tw.objects.remove_from_player(item_id: str) -> bool`: Same as `tw.player.remove_item(item_id)`; `False` if the protagonist does not carry it.
+- `tw.objects.add_to_scene(item_id: str, scene_id: str = None) -> bool`: Moves an item into a scene (default: the protagonist's scene).
+- `tw.objects.put_in_container(item_id: str, container_id: str) -> bool`: Moves an item into a container. Only containers that stand in a scene accept items (not one the protagonist carries), and a container never goes into itself.
+- `tw.objects.take_from_container(container_id: str, item_id: str, to: str = "player") -> bool`: Moves an item out of a container; `False` if the container does not hold it. `to` accepts the same targets as `move_item`.
+- `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")` and `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Older shortcuts, kept for existing adventures.
+
+**Querying items**
+- `tw.objects.contents(holder_id: str) -> list[ObjectProxy]`: The items held by `"player"`, an NPC or a container.
+- `tw.objects.location(item_id: str) -> dict`: Where an item is: `{"type": "player"|"npc"|"container"|"scene"|"destroyed"|"unknown", "id": "<holder or scene ID>"}`.
+
+**Creating, destroying and hiding items**
+- `tw.objects.clone(item_id: str, scene_id: str = None, hidden: bool = None) -> ObjectProxy | None`: Creates a copy of the item with a new ID (`<ID>_1`, `<ID>_2`, ...; cloning a clone counts on from the original). The copy has the original's name, description, image, type, effects and scripts. Without `scene_id` it lies where the original lies when that is a scene, otherwise in the protagonist's scene; `"current"` puts it in the protagonist's scene. It keeps the original's hidden flag unless `hidden` is given. A cloned container starts empty. At most 20 clones per script run; returns `None` for an unknown ID. The copy is a new entity of the current game only (the adventure template is not changed) and is usable right away in the same script.
+- `tw.objects.destroy(item_id: str) -> bool`: Removes the item from the game for good: it leaves its holder and is moved to the internal scene `__DESTROYED__`.
+- `tw.objects.hide(item_id: str)` / `tw.objects.reveal(item_id: str)`: Hides an item until revealed again, or reveals it.
+
+**`ObjectProxy`** (`tw.objects.get(item_id)`):
+- `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.location`
+- `.move_to(target)`, `.give_to_player()`, `.put_into(container_id)`, `.move_to_scene(scene_id)`, `.give_to_npc(npc_id)`
+- For containers: `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
+- For switch items: `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+
+```python
+# Potion dispenser: copy a hidden template potion and hand the copy over
+potion = tw.objects.get('HEALING_POTION').clone()
+if potion:
+    potion.reveal()
+    potion.move_to('player')
+
+# Which coins lie in the offering bowl? Move them to the priest.
+for coin in tw.objects.get('OFFERING_BOWL').items:
+    tw.objects.take_from_container('OFFERING_BOWL', coin.id, to='PRIEST')
+```
 
 ### `tw.switches`
 Inspects and manipulates interactive switches, levers, buttons, and puzzle mechanisms across the adventure:
@@ -529,6 +571,38 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
 4. optionally narrates the outcome (`narrate=True`).
 
 A handler may call `tw.dialog.choose()` again, which is how multi-step conversations and dialog trees are built. The editor validation warns (`dialog_handler_missing`) when a dialog references a handler that neither the init script nor any sequence or scene helper block defines.
+
+### `tw.dialog.tree` (Nested NPC Dialogues)
+RPG-style conversations as a tree of nodes. The NPC says a node's `npc_text`; each player response leads to another node, back to an earlier one, or ends the conversation. At the end the adventure gets the list of visited steps.
+
+- `tw.dialog.tree(tree, on_end=None, on_action=None, speaker=None, start_node=None) -> bool`
+  - `tree`: a dict (best defined as a constant in the `init_script`, a scene or a sequence helper block):
+    - `nodes` *(required)*: node ID → `{"npc_text": "...", "responses": [...], "speaker": "..." (optional)}`. At most 100 nodes and 8 responses per node.
+    - `initial_node`: ID of the first node (default: the first node in `nodes`).
+    - `npc_id`: the speaking NPC; its name is the dialog title unless `speaker` is given.
+    - `dialogue_id`: optional name for your own bookkeeping.
+  - A **response** is `{"text": "...", "next_node": "<node ID>" | None, ...}` with the optional keys:
+    - `condition`: a [guard expression](#deterministic-guard-expressions) (e.g. `"tw.vars.get('gold', 0) >= 250"`). The response is only shown while it is true. Guards are evaluated anew for every node, so they see changes made earlier in the conversation.
+    - `once`: `True` hides the response after it was picked once in this conversation (e.g. a question that is answered).
+    - `script`: inline code that runs when the response is picked, e.g. `"tw.vars.set('knows_about_mine', True)"`.
+    - `action`: a string passed to the `on_action` handler, e.g. `"START_QUEST_STAR_SILVER"`. Use it to keep the logic of many responses in one function.
+    - `next_node: None` (or a missing `next_node`) ends the conversation.
+  - `on_end`: handler called as `on_end(path)` when the conversation ends. `path` is the list of visited steps, each `{"node": "<node ID>", "response": <index>, "text": "<response text>", "action": "..." (if any)}`.
+  - `on_action`: handler called as `on_action(action)` after the response's `script`.
+  - **Both handlers must be defined in the global `init_script` or in a scene or sequence helper block** (like `on_choice` handlers; the editor validation warns with `dialog_handler_missing`).
+  - `speaker`: dialog title; `start_node`: start somewhere else than `initial_node` (e.g. to resume a conversation).
+  - Returns `False` (and emits a debug note) when no dialog was opened: another dialog is already open, the tree is invalid (a response points to an unknown node, the start node does not exist), a handler name is invalid, or the start node has no visible response.
+
+**How it works.** The whole tree is stored with the pending dialog, and the client shows one node at a time in the same dialog panel as `tw.dialog.choose` (the player cannot type until the conversation is over). Each answer goes to `POST /adventures/{game_id}/dialog/choice`, which:
+
+1. writes the NPC's line to the story feed as `Speaker: "npc_text"` and the answer as `[Choice] <text>`,
+2. runs the response's `script`, then `on_action(action)`; both get `dialog_choice` (`index`, `label`, `node`, `action`, `dialog_id`) and `dialog_path` in scope,
+3. shows `next_node` with the responses whose `condition` holds,
+4. ends the conversation when `next_node` is `None` or the next node has no visible response, and then calls `on_end(path)`.
+
+A response script that opens another dialog (`tw.dialog.choose` or `tw.dialog.tree`) or ends the adventure (`tw.game.win`, `tw.game.game_over`) stops the conversation; `on_end` is not called then. The tree's text is shown as written: there is no LLM narration of tree steps.
+
+See [Example 16](#example-16-blacksmith-conversation-dialogue-tree) for a complete conversation.
 
 ### `tw.llm` (Ask the LLM)
 
@@ -876,6 +950,93 @@ def on_brom_mood(answ):
         brom.say("Then drink somewhere else.")
         return
     brom.remove_trait('talkative')
+```
+
+### Example 14: Potion Dispenser (Cloning a Hidden Item)
+A hidden template item `HEALING_POTION` (type `CONSUMABLE`, `is_hidden: true`) lies in the scene `ALCHEMY_LAB`. The switch `POTION_DISPENSER` produces a fresh copy each time it is pulled, three times at most. `on_success_script` of the switch:
+```python
+dispensed = tw.vars.get('potions_dispensed', 0)
+if dispensed >= 3:
+    tw.narrate("The dispenser only coughs up a puff of green dust.")
+else:
+    potion = tw.objects.get('HEALING_POTION').clone(scene_id='current', hidden=False)
+    if potion:
+        tw.vars.set('potions_dispensed', dispensed + 1)
+        tw.narrate("With a gurgle, a fresh healing potion drops into the tray.")
+```
+The copies (`HEALING_POTION_1`, `HEALING_POTION_2`, ...) lie visibly in the scene and can be picked up like any item; use `potion.move_to('player')` instead to put them straight into the inventory. The template itself stays hidden.
+
+### Example 15: Offering Altar (Player Puts Items into a Container)
+The container `MOON_ALTAR` stands unlocked in the shrine. In the container panel the player presses **Put In**, selects items from the inventory and confirms. `on_items_added_script` of the altar:
+```python
+if 'SILVER_MOON' in added_item_ids:
+    tw.objects.destroy('SILVER_MOON')
+    tw.exits.unlock('SHRINE', 'MOON_GATE')
+    tw.narrate("The silver moon melts into the altar. Somewhere, a gate grinds open.")
+else:
+    # Not what the altar wants: it spits the offering back out.
+    for item_id in added_item_ids:
+        tw.objects.take_from_container('MOON_ALTAR', item_id, to='player')
+    tw.narrate("The altar stays cold. Your offering rolls back into your hands.")
+```
+
+### Example 16: Blacksmith Conversation (Dialogue Tree)
+In the global init script:
+```python
+GORAN_TALK = {
+    "dialogue_id": "goran_intro",
+    "npc_id": "NPC_GORAN",
+    "initial_node": "root",
+    "nodes": {
+        "root": {
+            "npc_text": "What do you want? I have no time for idle talk.",
+            "responses": [
+                {"text": "I need decent gear for the wilds.", "next_node": "equipment"},
+                {"text": "I heard rumours about the abandoned mine.", "next_node": "mine"},
+                {"text": "Never mind, I'm leaving.", "next_node": None},
+            ],
+        },
+        "equipment": {
+            "npc_text": "Good iron costs good gold. A dwarf-steel broadsword: 250 gold pieces.",
+            "responses": [
+                {"text": "I'll take the sword. [250 Gold]",
+                 "condition": "tw.vars.get('gold', 0) >= 250",
+                 "action": "BUY_DWARF_SWORD", "next_node": "equipment"},
+                {"text": "Too expensive.", "next_node": "root"},
+            ],
+        },
+        "mine": {
+            "npc_text": "The baron sealed the tunnel two months ago. Things crawl down there.",
+            "responses": [
+                {"text": "Is there still ore to find?", "once": True,
+                 "script": "tw.vars.set('knows_star_silver', True)", "next_node": "mine_ore"},
+                {"text": "Enough about mines.", "next_node": "root"},
+            ],
+        },
+        "mine_ore": {
+            "npc_text": "Veins of star silver. Bring me five chunks and I'll forge you a king-slayer.",
+            "responses": [
+                {"text": "Deal. [Accept quest]", "action": "START_QUEST_STAR_SILVER", "next_node": "mine"},
+                {"text": "Too risky.", "next_node": "mine"},
+            ],
+        },
+    },
+}
+
+def on_goran_action(action):
+    if action == "BUY_DWARF_SWORD":
+        tw.vars.set('gold', tw.vars.get('gold', 0) - 250)
+        tw.player.take_item('DWARF_SWORD')
+        return
+    if action == "START_QUEST_STAR_SILVER":
+        tw.vars.set('quest_star_silver', 'active')
+
+def on_goran_end(path):
+    tw.vars.set('goran_topics', [step['node'] for step in path])
+```
+Inline `on_interact_script` of `NPC_GORAN`:
+```python
+tw.dialog.tree(GORAN_TALK, on_end="on_goran_end", on_action="on_goran_action")
 ```
 
 From the next turn on, the GM plays Brom with the new personality, in this game only.

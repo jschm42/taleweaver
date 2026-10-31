@@ -31,6 +31,8 @@ _UNLOCK_SCRIPT_FIELDS = (
     "on_unlock_success_text",
     "on_unlock_failure_script",
     "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
 )
 _CONTAINER_KEYS = (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, "locked")
 _READABLE_SCRIPT_FIELDS = ("on_read_script", "on_read_text")

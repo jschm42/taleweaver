@@ -296,6 +296,7 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                 "on_read_script",
                 "on_unlock_success_script",
                 "on_unlock_failure_script",
+                "on_items_added_script",
                 "on_craft_success_script",
                 "on_craft_failure_script",
                 "on_success_script",

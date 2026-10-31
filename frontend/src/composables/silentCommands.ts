@@ -15,6 +15,7 @@ const SILENT_COMMANDS = new Set([
   '/container_take_all',
   '/container_take_item',
   '/container_drop_scene',
+  '/container_put_items',
   // Equipment and consumables
   '/equip',
   '/unequip',

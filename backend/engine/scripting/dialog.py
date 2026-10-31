@@ -77,6 +77,28 @@ class DialogProxy:
         """Alias for choose()."""
         return self.choose(*args, **kwargs)
 
+    def tree(
+        self,
+        tree: Any,
+        on_end: Any = None,
+        on_action: Any = None,
+        speaker: Optional[str] = None,
+        start_node: Optional[str] = None,
+    ) -> bool:
+        """Opens a nested NPC dialogue (see ``dialog_tree``); returns False when it could not."""
+        # Lazy import: dialog_tree builds on this module's limits and helpers.
+        from backend.engine.scripting.dialog_tree import open_tree
+
+        if self._changeset.pending_dialog is not None:
+            self._context.debug("tw.dialog.tree ignored: another dialog is already open.")
+            return False
+        dialog, problem = open_tree(self._context, tree, on_end, on_action, speaker, start_node)
+        if dialog is None:
+            self._context.debug(f"tw.dialog.tree ignored: {problem}")
+            return False
+        self._changeset.pending_dialog = dialog
+        return True
+
     def _visible_options(self, options: Any) -> list[dict[str, Any]]:
         if not isinstance(options, (list, tuple)):
             return []

@@ -15,10 +15,13 @@ from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.gm_directions import clean_direction
+from backend.engine.scripting.item_ops import ItemMover
+from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
+from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 
 logger = logging.getLogger(__name__)
@@ -80,6 +83,7 @@ class ScriptChangeset:
     completed_guard_expression_override: Optional[str] = None
     gameover_guard_expression_override: Optional[str] = None
     pending_dialog: Optional[dict[str, Any]] = None
+    cloned_entities: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def has_changes(self) -> bool:
@@ -116,10 +120,11 @@ class ScriptChangeset:
             or self.completed_guard_expression_override
             or self.gameover_guard_expression_override
             or self.pending_dialog
+            or self.cloned_entities
         )
 
 
-class PlayerProxy:
+class PlayerProxy(PlayerInventoryMixin):
     """Safe proxy for inspecting and mutating the player character."""
 
     def __init__(self, avatar_data: dict[str, Any], changeset: ScriptChangeset):
@@ -206,27 +211,6 @@ class PlayerProxy:
     ) -> None:
         """Alias for give_item()."""
         self.give_item(item_id, name, description)
-
-    def remove_item(self, item_id: str) -> None:
-        if item_id not in self._changeset.player_removed_item_ids:
-            self._changeset.player_removed_item_ids.append(item_id)
-
-    def has_item(self, item_id: str) -> bool:
-        if item_id in self._changeset.player_removed_item_ids:
-            return False
-        for item in self._changeset.player_new_items:
-            if item.get("id") == item_id:
-                return True
-        current_inv = self._avatar.get("inventory") or []
-        for it in current_inv:
-            if (
-                isinstance(it, dict)
-                and it.get("id") == item_id
-                or isinstance(it, str)
-                and it == item_id
-            ):
-                return True
-        return False
 
     def add_status_effect(self, effect_name: str) -> None:
         if effect_name not in self._changeset.player_status_effects_add:
@@ -419,7 +403,7 @@ class EntityProxy:
         self._changeset.entity_updates.append({"entity_id": self._id, attr_name: val})
 
 
-class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
+class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, ItemHolderMixin):
     """Safe proxy for Non-Player Characters."""
 
     @property
@@ -620,7 +604,7 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
             self.kill()
 
 
-class ObjectProxy(EntityProxy):
+class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
     """Safe proxy for world objects, switches, and containers."""
 
     @property
@@ -736,6 +720,10 @@ class ObjectProxy(EntityProxy):
             target_scene = (
                 self._changeset.teleport_scene_id or self._current_player_scene_id or "START"
             )
+        mover = self._item_mover()
+        if mover and mover.item_id(self._id):
+            # Leaving the inventory, an NPC or a container: the old holder must let go.
+            mover.detach(self._id)
         self._changeset.entity_movements.append(
             {
                 "entity_id": self._id,
@@ -754,6 +742,9 @@ class ObjectProxy(EntityProxy):
 
     def give_to_npc(self, npc_id: str) -> None:
         """Transfers this item into an NPC's inventory."""
+        mover = self._item_mover()
+        if mover and mover.to_npc(self._id, npc_id):
+            return
         if self._entity_mgr:
             self._entity_mgr.give_item(npc_id, self._data or {"id": self._id, "name": self.name})
 
@@ -904,6 +895,12 @@ class EntityManagerProxy:
 
 class NPCManagerProxy(NPCPersonaManagerMixin, NPCDirectionManagerMixin, EntityManagerProxy):
     """``tw.npcs``: entity access plus the NPC persona and directed-speech shortcuts."""
+
+    mover: Optional[ItemMover] = None
+
+
+class ObjectManagerProxy(ItemManagerMixin, EntityManagerProxy):
+    """``tw.objects`` / ``tw.items``: entity access plus clone, destroy and item transfers."""
 
 
 class StoryFlagsProxy:
@@ -1229,13 +1226,15 @@ class GameContext:
             current_player_scene_id=current_scene_id,
             item_entities=object_entities,
         )
-        self.objects = EntityManagerProxy(
+        self.objects = ObjectManagerProxy(
             object_entities,
             self.changeset,
             ObjectProxy,
             current_player_scene_id=current_scene_id,
         )
         self.items = self.objects
+        mover = ItemMover(self.changeset, self.player, self.npcs, self.objects, current_scene_id)
+        self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)
         self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
         self.exits = ExitProxy(exit_states or {}, self.changeset)

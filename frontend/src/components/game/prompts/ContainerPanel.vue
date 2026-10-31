@@ -1,16 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Backpack, PackageOpen, ArrowDownToLine } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { Backpack, PackageOpen, PackagePlus, ArrowDownToLine } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
+import ContainerPutPicker from './ContainerPutPicker.vue'
 
-/** Contents of an opened container, shown inline at the end of the story feed. */
+/**
+ * Contents of an opened container, shown inline at the end of the story feed. With "Put In" the
+ * panel switches to the player's inventory, so items can be stored in the container.
+ */
 const props = defineProps<{
   open: boolean
   title: string
   items: any[]
   imageUrl?: string | null
   busy?: boolean
+  containerId?: string
+  inventoryItems?: any[]
+  /** Only containers standing in the scene accept items. */
+  canPut?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -18,11 +26,15 @@ const emit = defineEmits<{
   takeAll: []
   takeItem: [item: any]
   dropToScene: []
+  putItems: [itemIds: string[]]
   itemHover: [item: any, event: MouseEvent]
   itemLeave: []
 }>()
 
 const hasItems = computed(() => (props.items || []).length > 0)
+const putMode = ref(false)
+
+watch(() => [props.open, props.title], () => { putMode.value = false })
 const resolvedImageUrl = computed(() => getImageUrl(props.imageUrl) || null)
 
 const brokenImages = ref<Record<string, boolean>>({})
@@ -58,7 +70,18 @@ function takeItem(item: any): void {
   >
     <template #label-icon><PackageOpen class="w-3 h-3" /></template>
 
-    <template v-if="hasItems">
+    <ContainerPutPicker
+      v-if="putMode"
+      :inventory-items="inventoryItems || []"
+      :container-id="containerId || ''"
+      :busy="busy"
+      @put="(ids) => emit('putItems', ids)"
+      @cancel="putMode = false"
+      @item-hover="(item, event) => emit('itemHover', item, event)"
+      @item-leave="emit('itemLeave')"
+    />
+
+    <template v-else-if="hasItems">
       <p class="tw-prompt-hint">Click an item to take it.</p>
       <div class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-56 overflow-y-auto p-0.5">
         <button
@@ -84,6 +107,10 @@ function takeItem(item: any): void {
         </button>
       </div>
       <div class="flex flex-wrap justify-end gap-2">
+        <button v-if="canPut" type="button" class="tw-prompt-action tw-prompt-action--ghost" :disabled="busy" @click="putMode = true">
+          <PackagePlus class="w-4 h-4" />
+          <span>Put In</span>
+        </button>
         <button type="button" class="tw-prompt-action tw-prompt-action--ghost" :disabled="busy" @click="emit('dropToScene')">
           <ArrowDownToLine class="w-4 h-4" />
           <span>Drop To Scene</span>
@@ -94,6 +121,14 @@ function takeItem(item: any): void {
         </button>
       </div>
     </template>
-    <p v-else class="tw-prompt-hint">This container is empty.</p>
+    <template v-else>
+      <p class="tw-prompt-hint">This container is empty.</p>
+      <div v-if="canPut" class="flex justify-end">
+        <button type="button" class="tw-prompt-action" :disabled="busy" @click="putMode = true">
+          <PackagePlus class="w-4 h-4" />
+          <span>Put In</span>
+        </button>
+      </div>
+    </template>
   </InlinePromptPanel>
 </template>

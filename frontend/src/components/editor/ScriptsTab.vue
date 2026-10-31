@@ -816,7 +816,15 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.dialog</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False)</code> &mdash; handler lives in the init script
+                    <code>tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False)</code> &mdash; handler lives in the init script<br />
+                    <code>tw.dialog.tree(tree, on_end=None, on_action=None, speaker=None)</code> &mdash; nested NPC dialogue; handlers live in the init script
+                  </p>
+                </div>
+
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span class="font-bold text-emerald-400">Items &amp; containers</span>
+                  <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    <code>tw.objects.clone(id)</code>, <code>tw.objects.destroy(id)</code>, <code>tw.objects.hide(id)</code> / <code>reveal(id)</code>, <code>tw.objects.move_item(id, target)</code>, <code>tw.objects.contents(holder)</code>, <code>tw.player.inventory</code>, <code>tw.player.take_item(id)</code>, <code>npc.items</code> / <code>container.items</code>
                   </p>
                 </div>
 

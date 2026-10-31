@@ -38,8 +38,9 @@ of the allowlist below.
 - Each entity in the context lists its existing hooks under "scripts". Reuse their
   `tw.vars` keys and helper functions instead of inventing parallel flags, and make sure
   every flag a guard reads is set by some script.
-- A `tw.dialog.choose` handler must be defined in the `helpers_script` of a scene or a
-  sequence; include that patch in the same proposal.
+- A `tw.dialog.choose` handler (and the `on_end` / `on_action` handlers of a
+  `tw.dialog.tree`, together with the tree dict) must be defined in the `helpers_script`
+  of a scene or a sequence; include that patch in the same proposal.
 - Only reference ids that exist in the context or are created in the same proposal.
 - Scripts and guards must never make the adventure unwinnable.
 

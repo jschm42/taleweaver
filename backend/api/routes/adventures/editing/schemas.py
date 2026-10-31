@@ -90,6 +90,8 @@ class EntityUpdateRequest(BaseModel):
     on_unlock_success_text: Optional[str] = None
     on_unlock_failure_script: Optional[str] = None
     on_unlock_failure_text: Optional[str] = None
+    on_items_added_script: Optional[str] = None
+    on_items_added_text: Optional[str] = None
     on_read_script: Optional[str] = None
     on_read_text: Optional[str] = None
     result_item_ids: Optional[list[str]] = None

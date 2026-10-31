@@ -744,6 +744,14 @@ class WorldObjectSchema(WorldBaseSchema):
         default="",
         description="Optional text output when container unlocking fails. Use empty string for none.",
     )
+    on_items_added_script: Optional[str] = Field(
+        default="",
+        description="Optional script executed after the player put items into this container (added_items, added_item_ids in scope). Use empty string for none.",
+    )
+    on_items_added_text: Optional[str] = Field(
+        default="",
+        description="Optional text output after the player put items into this container. Use empty string for none.",
+    )
     on_read_script: Optional[str] = Field(
         default="",
         description="Only for READABLE objects: optional script executed when read. Use empty string for none.",

@@ -108,6 +108,31 @@ const availableSnippets = computed(() => {
       code: '# NPC hands an item it carries to the player:\ntw.npcs.give_to_player("NPC_ID", "ITEM_ID")\n# Or drop from NPC into scene:\n# tw.npcs.drop_item("NPC_ID", "ITEM_ID")\n# Or give item to NPC:\n# tw.npcs.give_item("NPC_ID", "ITEM_ID")\n',
     },
     {
+      label: 'Clone item (dispenser)',
+      code: '# Copies a (hidden) template item and hands the copy to the player:
+potion = tw.objects.get("HEALING_POTION").clone()
+if potion:
+    potion.reveal()
+    potion.move_to("player")
+',
+    },
+    {
+      label: 'Container contents',
+      code: '# List, put into and take out of a container:
+ids = tw.objects.get("CHEST_ID").item_ids
+tw.objects.put_in_container("ITEM_ID", "CHEST_ID")
+# tw.objects.take_from_container("CHEST_ID", "ITEM_ID", to="player")
+',
+    },
+    {
+      label: 'Destroy / hide item',
+      code: 'tw.objects.destroy("ITEM_ID")
+# Or keep it, but out of sight:
+# tw.objects.hide("ITEM_ID")
+# tw.objects.reveal("ITEM_ID")
+',
+    },
+    {
       label: 'NPC speaks (GM-worded)',
       code: '# The GM writes the line in the next narration, in character:\ntw.npcs.say_directed("NPC_ID", "sings an old sailor song")\n# Fixed wording instead:\n# tw.npcs.say("NPC_ID", "Ahoy!")\n',
     },
@@ -130,6 +155,33 @@ const availableSnippets = computed(() => {
       {
         label: 'Choice dialog handler',
         code: '# Called with the index of the chosen option (its position in the options list).\ndef on_wire_choice(answ):\n    if answ == 0:\n        tw.vars.set("bomb_disarmed", True)\n        tw.narrate("The ticking stops.")\n        return\n    tw.game.game_over("The bomb exploded.")\n',
+      },
+      {
+        label: 'Dialogue tree',
+        code: '# Start it from any script: tw.dialog.tree(SMITH_TALK, on_end="on_smith_end", on_action="on_smith_action")
+SMITH_TALK = {
+    "npc_id": "SMITH",
+    "initial_node": "root",
+    "nodes": {
+        "root": {
+            "npc_text": "What do you want?",
+            "responses": [
+                {"text": "A sword. [50 Gold]", "condition": "tw.vars.get('gold', 0) >= 50", "action": "BUY_SWORD", "next_node": "root"},
+                {"text": "Any rumours?", "once": True, "script": "tw.vars.set('heard_rumour', True)", "next_node": "root"},
+                {"text": "Bye.", "next_node": None},
+            ],
+        },
+    },
+}
+
+def on_smith_action(action):
+    if action == "BUY_SWORD":
+        tw.vars.set("gold", tw.vars.get("gold", 0) - 50)
+        tw.player.take_item("SWORD")
+
+def on_smith_end(path):
+    tw.vars.set("smith_talked", True)
+',
       },
       {
         label: 'Shared helper function',
