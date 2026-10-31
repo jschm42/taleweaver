@@ -7,11 +7,15 @@
  * animated ring in the skin's accent color. Characters joining the scene
  * get a skin-specific entrance (see src/skins/entrances.css). Changed HP, Mana, Stamina or
  * attributes float up on the card as "-5 HP" / "+2 STR"; an HP loss also flashes the card.
+ * Crowded scenes: defeated characters move last (see stageCastOrder.ts) and cards shrink to fit the
+ * column height, switching to compact/mini layouts (see useStageDensity.ts).
  */
 import { ref, watch, nextTick, computed } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { STAT_POPUP_STAGGER_MS, useStatChangePopups } from './useStatChangePopups'
+import { useStageDensity } from './useStageDensity'
+import { isDefeated, orderStageCast } from './stageCastOrder'
 
 const props = defineProps<{
   npcs: any[]
@@ -161,6 +165,10 @@ function isNpcVoiced(npc: any): boolean {
   }
   return String(npc.name || '').toLowerCase() === speaker || String(npc.id || '').toLowerCase() === speaker
 }
+
+// --- Crowded scenes: defeated characters last, cards shrink to fit the column ---
+const orderedNpcs = computed(() => orderStageCast(props.npcs))
+const { density, cardStyle } = useStageDensity(stageContainerRef, () => orderedNpcs.value.length)
 </script>
 
 <template>
@@ -170,10 +178,12 @@ function isNpcVoiced(npc: any): boolean {
   >
     <TransitionGroup :name="stageReady ? 'tw-npc' : 'tw-npc-initial'" tag="div" class="flex flex-col gap-2 w-full">
       <div
-        v-for="npc in props.npcs"
+        v-for="npc in orderedNpcs"
         :key="npc.id"
-        class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
+        class="relative group flex flex-col items-center bg-slate-950 border-2 transition-all duration-300 shrink-0 w-full overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
+        :style="cardStyle"
         :class="[
+          density === 'mini' ? 'rounded-lg' : 'rounded-xl',
           { 'tw-npc-arrived': hasJustArrived(npc), 'tw-npc-hit': hitCards.has(String(npc.id)) },
           isNpcVoiced(npc)
             ? 'tw-npc-voiced border-transparent'
@@ -194,11 +204,11 @@ function isNpcVoiced(npc: any): boolean {
           :src="getImageUrl(npc.image_url, { thumbnail: true })"
           :alt="npc.name"
           class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
-          :class="{ 'grayscale opacity-50': npc.is_defeated || npc.hp === 0 }"
+          :class="{ 'grayscale opacity-50': isDefeated(npc) }"
           @error="onImageLoadError($event, npc.image_url)"
         />
         <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
-          <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
+          <i :class="['ra mb-1', density === 'full' ? 'text-4xl' : 'text-2xl', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
         </div>
 
         <!-- Entrance: one-off light sweep and a short "Enters" tag -->
@@ -219,17 +229,30 @@ function isNpcVoiced(npc: any): boolean {
         <!-- Voiced by auto-speak: rotating accent ring -->
         <div v-if="isNpcVoiced(npc)" class="tw-npc-voice-ring" aria-hidden="true"></div>
 
-        <!-- Defeated Ribbon -->
-        <div v-if="npc.is_defeated || npc.hp === 0" class="absolute -right-6 top-3 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20">
+        <!-- Defeated: ribbon on larger cards, a small skull badge on mini cards -->
+        <div v-if="isDefeated(npc) && density !== 'mini'" class="absolute -right-6 top-3 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20">
           Defeated
         </div>
+        <div
+          v-else-if="isDefeated(npc)"
+          class="absolute right-1 top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] text-white shadow-lg"
+          title="Defeated"
+        >
+          <i class="ra ra-skull"></i>
+        </div>
 
-        <!-- Name & Role Overlay with Gradient & Strong Shadow -->
-        <div class="absolute inset-x-0 bottom-0 pt-8 pb-2 px-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col items-center text-center pointer-events-none z-10">
-          <h4 class="text-[11px] sm:text-xs font-black text-white group-hover:text-amber-300 transition-colors uppercase tracking-wider drop-shadow-[0_2px_3px_rgba(0,0,0,1)] truncate w-full">
+        <!-- Name & Role Overlay with Gradient & Strong Shadow (role only on full cards) -->
+        <div
+          class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col items-center text-center pointer-events-none z-10"
+          :class="density === 'mini' ? 'pt-3 pb-0.5 px-1' : 'pt-8 pb-2 px-2'"
+        >
+          <h4
+            class="font-black text-white group-hover:text-amber-300 transition-colors uppercase drop-shadow-[0_2px_3px_rgba(0,0,0,1)] truncate w-full"
+            :class="density === 'mini' ? 'text-[9px] tracking-wide' : 'text-[11px] sm:text-xs tracking-wider'"
+          >
             {{ npc.name }}
           </h4>
-          <span v-if="npc.role" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
+          <span v-if="npc.role && density === 'full'" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
             {{ npc.role }}
           </span>
         </div>
