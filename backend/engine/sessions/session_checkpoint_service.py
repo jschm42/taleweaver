@@ -1,12 +1,13 @@
+"""Session checkpoints: full save states created automatically and on request."""
+
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.engine.sessions import session_snapshot
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
@@ -15,19 +16,48 @@ from backend.models.session_state import SessionState
 from backend.schemas.checkpoint import SessionCheckpointResponse
 
 MAX_CHECKPOINTS_PER_SESSION = 5
+MAX_SAVES_PER_SESSION = 10
+
+REASON_SCENE_CHANGE = "SCENE_CHANGE"
+REASON_SEQUENCE_CHANGE = "SEQUENCE_CHANGE"
+REASON_MANUAL_SAVE = "MANUAL_SAVE"
+REASON_SCRIPT_SAVE = "SCRIPT_SAVE"
+# Saves the player or a script asked for are kept apart from the automatic checkpoints,
+# so a run of scene changes never pushes them out.
+SAVE_REASONS = frozenset({REASON_MANUAL_SAVE, REASON_SCRIPT_SAVE})
+
+MAX_SAVE_LABEL_LENGTH = 80
+
+
+def clean_save_label(raw: Any) -> str | None:
+    return " ".join(str(raw or "").split())[:MAX_SAVE_LABEL_LENGTH] or None
+
+
+def save_message(label: str | None) -> str:
+    return f"Game saved: {label}" if label else "Game saved."
+
+
+_FIXED_TITLES = {
+    "QUEST_UPDATE": "Checkpoint: Quest Update",
+    "AWARD_GRANTED": "Checkpoint: Award Granted",
+    REASON_SEQUENCE_CHANGE: "Checkpoint: New Chapter",
+    REASON_MANUAL_SAVE: "Save: Manual Save",
+    REASON_SCRIPT_SAVE: "Save: Story Save",
+}
 
 
 def _reason_title(reason: str, snapshot: dict[str, Any]) -> str:
     scene_label = str(snapshot.get("scene_label") or "").strip()
+    label = str(snapshot.get("label") or "").strip()
     norm = str(reason or "").upper()
-    if norm == "SCENE_CHANGE":
-        if scene_label:
-            return f"Checkpoint: Arrived at {scene_label}"
-        return "Checkpoint: Scene Changed"
-    if norm == "QUEST_UPDATE":
-        return "Checkpoint: Quest Update"
-    if norm == "AWARD_GRANTED":
-        return "Checkpoint: Award Granted"
+    if norm in SAVE_REASONS and label:
+        return f"Save: {label}"
+    if norm == REASON_SCENE_CHANGE:
+        return (
+            f"Checkpoint: Arrived at {scene_label}" if scene_label else "Checkpoint: Scene Changed"
+        )
+    if norm in _FIXED_TITLES:
+        return _FIXED_TITLES[norm]
     if "WORLD_MEMOR" in norm:
         return "Checkpoint: World Memory Updated"
     return f"Checkpoint: {reason.replace('_', ' ').title()}" if reason else "Checkpoint"
@@ -67,56 +97,16 @@ class SessionCheckpointService:
         return list(msg_res.scalars().all())
 
     @staticmethod
-    def _build_snapshot(
-        state: SessionState, avatar: Avatar, scene_label: str | None = None
-    ) -> dict[str, Any]:
-        return {
-            "avatar": {
-                "hp": avatar.hp,
-                "max_hp": avatar.max_hp,
-                "stamina": avatar.stamina,
-                "max_stamina": avatar.max_stamina,
-                "mana": avatar.mana,
-                "max_mana": avatar.max_mana,
-                "exp": avatar.exp,
-                "strength": avatar.strength,
-                "intelligence": avatar.intelligence,
-                "wisdom": avatar.wisdom,
-                "dexterity": avatar.dexterity,
-                "charisma": avatar.charisma,
-                "armor_class": avatar.armor_class,
-                "stats": deepcopy(avatar.stats or {}),
-                "inventory": deepcopy(avatar.inventory or []),
-                "equipment": deepcopy(avatar.equipment or {}),
-                "status_effects": deepcopy(avatar.status_effects or []),
-            },
-            "session_state": {
-                "current_scene_id": state.current_scene_id,
-                "in_game_time": state.in_game_time,
-                "time_system": state.time_system,
-                "time_config": deepcopy(state.time_config or {}),
-                "inventory": deepcopy(state.inventory or []),
-                "entity_states": deepcopy(state.entity_states or {}),
-                "exit_states": deepcopy(state.exit_states or {}),
-                "discovered_scenes": deepcopy(state.discovered_scenes or []),
-                "quests": deepcopy(state.quests or []),
-                "is_completed": bool(state.is_completed),
-                "scene_label": scene_label,
-            },
-            "scene_label": scene_label,
-        }
-
-    @staticmethod
-    async def _prune_old_checkpoints(
-        db: AsyncSession, session_id: str, keep: int = MAX_CHECKPOINTS_PER_SESSION
-    ) -> None:
+    async def _prune_old_checkpoints(db: AsyncSession, session_id: str, is_save: bool) -> None:
+        """Keeps the newest automatic checkpoints and, separately, the newest saves."""
+        kind = SessionCheckpoint.trigger_reason.in_(SAVE_REASONS)
         cp_res = await db.execute(
             select(SessionCheckpoint.id)
-            .where(SessionCheckpoint.session_id == session_id)
+            .where(SessionCheckpoint.session_id == session_id, kind if is_save else ~kind)
             .order_by(SessionCheckpoint.created_at.desc(), SessionCheckpoint.id.desc())
         )
-        checkpoint_ids = list(cp_res.scalars().all())
-        stale_ids = checkpoint_ids[keep:]
+        keep = MAX_SAVES_PER_SESSION if is_save else MAX_CHECKPOINTS_PER_SESSION
+        stale_ids = list(cp_res.scalars().all())[keep:]
         if stale_ids:
             await db.execute(delete(SessionCheckpoint).where(SessionCheckpoint.id.in_(stale_ids)))
 
@@ -126,24 +116,48 @@ class SessionCheckpointService:
         session_id: str,
         trigger_reason: str,
         scene_label: str | None = None,
+        label: str | None = None,
     ) -> SessionCheckpoint:
-        _, state, avatar = await SessionCheckpointService._load_context(db, session_id)
+        game_session, state, avatar = await SessionCheckpointService._load_context(db, session_id)
+        await db.flush()  # the world dump reads the rows, including pending changes
         message_ids = await SessionCheckpointService._message_ids(db, session_id)
 
-        snapshot = SessionCheckpointService._build_snapshot(state, avatar, scene_label=scene_label)
-        payload = jsonable_encoder(snapshot)
+        snapshot = session_snapshot.dump_session(game_session, state, avatar)
+        snapshot["world"] = await session_snapshot.dump_world(db, session_id)
+        snapshot["scene_label"] = scene_label
+        snapshot["label"] = label
 
         checkpoint = SessionCheckpoint(
             session_id=session_id,
             message_index=len(message_ids),
-            state_snapshot=payload,
+            state_snapshot=session_snapshot.encode(snapshot),
             trigger_reason=trigger_reason,
         )
         db.add(checkpoint)
         await db.flush()
 
-        await SessionCheckpointService._prune_old_checkpoints(db, session_id)
+        await SessionCheckpointService._prune_old_checkpoints(
+            db, session_id, is_save=trigger_reason in SAVE_REASONS
+        )
         return checkpoint
+
+    @staticmethod
+    async def save_from_script(db: AsyncSession, session_id: str, labels: list[str]) -> list[str]:
+        """Writes the saves ``tw.save()`` asked for; returns their system messages.
+
+        The confirmation line is stored before the checkpoint, so restoring keeps it.
+        """
+        messages: list[str] = []
+        for raw in labels:
+            label = clean_save_label(raw)
+            message = save_message(label)
+            db.add(ChatMessage(session_id=session_id, role="system", content=message))
+            await db.flush()
+            await SessionCheckpointService.create_checkpoint(
+                db, session_id, REASON_SCRIPT_SAVE, label=label
+            )
+            messages.append(message)
+        return messages
 
     @staticmethod
     async def list_checkpoints(
@@ -179,41 +193,10 @@ class SessionCheckpointService:
         if not checkpoint:
             raise ValueError("Checkpoint not found.")
 
-        _, state, avatar = await SessionCheckpointService._load_context(db, session_id)
+        game_session, state, avatar = await SessionCheckpointService._load_context(db, session_id)
         snapshot = checkpoint.state_snapshot or {}
-        avatar_snapshot = snapshot.get("avatar") or {}
-        state_snapshot = snapshot.get("session_state") or {}
-
-        avatar.hp = int(avatar_snapshot.get("hp", avatar.hp))
-        avatar.max_hp = int(avatar_snapshot.get("max_hp", avatar.max_hp))
-        avatar.stamina = int(avatar_snapshot.get("stamina", avatar.stamina))
-        avatar.max_stamina = int(avatar_snapshot.get("max_stamina", avatar.max_stamina))
-        avatar.mana = int(avatar_snapshot.get("mana", avatar.mana))
-        avatar.max_mana = int(avatar_snapshot.get("max_mana", avatar.max_mana))
-        avatar.exp = int(avatar_snapshot.get("exp", avatar.exp))
-        avatar.strength = int(avatar_snapshot.get("strength", avatar.strength))
-        avatar.intelligence = int(avatar_snapshot.get("intelligence", avatar.intelligence))
-        avatar.wisdom = int(avatar_snapshot.get("wisdom", avatar.wisdom))
-        avatar.dexterity = int(avatar_snapshot.get("dexterity", avatar.dexterity))
-        avatar.charisma = int(avatar_snapshot.get("charisma", avatar.charisma))
-        avatar.armor_class = int(avatar_snapshot.get("armor_class", avatar.armor_class))
-        avatar.stats = deepcopy(avatar_snapshot.get("stats") or {})
-        avatar.inventory = deepcopy(avatar_snapshot.get("inventory") or [])
-        avatar.equipment = deepcopy(avatar_snapshot.get("equipment") or {})
-        avatar.status_effects = deepcopy(avatar_snapshot.get("status_effects") or [])
-
-        state.current_scene_id = str(
-            state_snapshot.get("current_scene_id") or state.current_scene_id
-        )
-        state.in_game_time = int(state_snapshot.get("in_game_time", state.in_game_time or 0))
-        state.time_system = str(state_snapshot.get("time_system") or state.time_system)
-        state.time_config = deepcopy(state_snapshot.get("time_config") or {})
-        state.inventory = deepcopy(state_snapshot.get("inventory") or [])
-        state.entity_states = deepcopy(state_snapshot.get("entity_states") or {})
-        state.exit_states = deepcopy(state_snapshot.get("exit_states") or {})
-        state.discovered_scenes = deepcopy(state_snapshot.get("discovered_scenes") or [])
-        state.quests = deepcopy(state_snapshot.get("quests") or [])
-        state.is_completed = bool(state_snapshot.get("is_completed", state.is_completed))
+        session_snapshot.restore_session(snapshot, game_session, state, avatar)
+        await session_snapshot.restore_world(db, state, snapshot.get("world"))
 
         message_ids = await SessionCheckpointService._message_ids(db, session_id)
         stale_ids = message_ids[checkpoint.message_index :]

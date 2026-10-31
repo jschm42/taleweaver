@@ -24,10 +24,17 @@ function formatCheckpointTime(iso: string): string {
   return dt.toLocaleString()
 }
 
+const REASON_BADGES: Record<SessionCheckpoint['trigger_reason'], string> = {
+  SCENE_CHANGE: 'Scene change',
+  SEQUENCE_CHANGE: 'New chapter',
+  QUEST_UPDATE: 'Quest update',
+  AWARD_GRANTED: 'Award granted',
+  MANUAL_SAVE: 'Saved',
+  SCRIPT_SAVE: 'Story save',
+}
+
 function reasonBadge(reason: SessionCheckpoint['trigger_reason']): string {
-  if (reason === 'SCENE_CHANGE') return 'Scene change'
-  if (reason === 'QUEST_UPDATE') return 'Quest update'
-  return 'Award granted'
+  return REASON_BADGES[reason] ?? 'Checkpoint'
 }
 </script>
 
@@ -60,7 +67,7 @@ function reasonBadge(reason: SessionCheckpoint['trigger_reason']): string {
         </div>
 
         <div v-else-if="!checkpoints.length" class="tw-dialog-slot p-5 text-sm">
-          No checkpoints yet. Continue playing and TaleWeaver will create milestones automatically.
+          No checkpoints yet. TaleWeaver saves automatically when you enter a new scene or chapter. Type <code>/save [name]</code> to save at any time.
         </div>
 
         <article

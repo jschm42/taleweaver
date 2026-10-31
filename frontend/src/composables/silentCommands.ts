@@ -24,6 +24,8 @@ const SILENT_COMMANDS = new Set([
   '/switch',
   '/traverse_exit',
   '/rule-pass',
+  // Save state (only the "Game saved" system line is shown)
+  '/save',
   // Combat start (the fight dialog takes over)
   '/fight',
   '/attack',

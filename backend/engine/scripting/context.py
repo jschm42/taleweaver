@@ -43,6 +43,9 @@ class ScriptMessage(str):
         return obj
 
 
+MAX_SAVES_PER_SCRIPT = 3
+
+
 @dataclass
 class ScriptChangeset:
     """Collected mutations produced during script execution."""
@@ -84,6 +87,7 @@ class ScriptChangeset:
     gameover_guard_expression_override: Optional[str] = None
     pending_dialog: Optional[dict[str, Any]] = None
     cloned_entities: list[dict[str, Any]] = field(default_factory=list)
+    save_requests: list[str] = field(default_factory=list)
 
     @property
     def has_changes(self) -> bool:
@@ -104,6 +108,7 @@ class ScriptChangeset:
             or self.npc_attack_requests
             or self.narrative_messages
             or self.system_messages
+            or self.save_requests
             or self.gm_directions
             or self.rejected_actions
             or self.new_memories
@@ -1272,6 +1277,11 @@ class GameContext:
     def system(self, message: str) -> None:
         """Shortcut for tw.story.system_message(). Emits system notification."""
         self.story.system_message(message)
+
+    def save(self, label: str = "") -> None:
+        """Creates a save state (checkpoint) of the game, e.g. before an important decision."""
+        if len(self.changeset.save_requests) < MAX_SAVES_PER_SCRIPT:
+            self.changeset.save_requests.append(str(label or "").strip())
 
     def direct(self, instruction: str) -> None:
         """Shortcut for tw.story.direct(). Gives the GM a soft direction."""

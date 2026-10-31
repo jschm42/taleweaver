@@ -84,6 +84,10 @@ const availableSnippets = computed(() => {
       code: 'tw.system("System notification message.")\n',
     },
     {
+      label: 'Save game (checkpoint)',
+      code: 'tw.save("Before the duel")\n',
+    },
+    {
       label: 'Modify player stat',
       code: 'hp = tw.player.get_stat("hp", 100)\ntw.player.set_stat("hp", max(0, hp - 10))\n',
     },
@@ -109,28 +113,15 @@ const availableSnippets = computed(() => {
     },
     {
       label: 'Clone item (dispenser)',
-      code: '# Copies a (hidden) template item and hands the copy to the player:
-potion = tw.objects.get("HEALING_POTION").clone()
-if potion:
-    potion.reveal()
-    potion.move_to("player")
-',
+      code: '# Copies a (hidden) template item and hands the copy to the player:\npotion = tw.objects.get("HEALING_POTION").clone()\nif potion:\n    potion.reveal()\n    potion.move_to("player")\n',
     },
     {
       label: 'Container contents',
-      code: '# List, put into and take out of a container:
-ids = tw.objects.get("CHEST_ID").item_ids
-tw.objects.put_in_container("ITEM_ID", "CHEST_ID")
-# tw.objects.take_from_container("CHEST_ID", "ITEM_ID", to="player")
-',
+      code: '# List, put into and take out of a container:\nids = tw.objects.get("CHEST_ID").item_ids\ntw.objects.put_in_container("ITEM_ID", "CHEST_ID")\n# tw.objects.take_from_container("CHEST_ID", "ITEM_ID", to="player")\n',
     },
     {
       label: 'Destroy / hide item',
-      code: 'tw.objects.destroy("ITEM_ID")
-# Or keep it, but out of sight:
-# tw.objects.hide("ITEM_ID")
-# tw.objects.reveal("ITEM_ID")
-',
+      code: 'tw.objects.destroy("ITEM_ID")\n# Or keep it, but out of sight:\n# tw.objects.hide("ITEM_ID")\n# tw.objects.reveal("ITEM_ID")\n',
     },
     {
       label: 'NPC speaks (GM-worded)',
@@ -158,30 +149,7 @@ tw.objects.put_in_container("ITEM_ID", "CHEST_ID")
       },
       {
         label: 'Dialogue tree',
-        code: '# Start it from any script: tw.dialog.tree(SMITH_TALK, on_end="on_smith_end", on_action="on_smith_action")
-SMITH_TALK = {
-    "npc_id": "SMITH",
-    "initial_node": "root",
-    "nodes": {
-        "root": {
-            "npc_text": "What do you want?",
-            "responses": [
-                {"text": "A sword. [50 Gold]", "condition": "tw.vars.get('gold', 0) >= 50", "action": "BUY_SWORD", "next_node": "root"},
-                {"text": "Any rumours?", "once": True, "script": "tw.vars.set('heard_rumour', True)", "next_node": "root"},
-                {"text": "Bye.", "next_node": None},
-            ],
-        },
-    },
-}
-
-def on_smith_action(action):
-    if action == "BUY_SWORD":
-        tw.vars.set("gold", tw.vars.get("gold", 0) - 50)
-        tw.player.take_item("SWORD")
-
-def on_smith_end(path):
-    tw.vars.set("smith_talked", True)
-',
+        code: '# Start it from any script: tw.dialog.tree(SMITH_TALK, on_end="on_smith_end", on_action="on_smith_action")\nSMITH_TALK = {\n    "npc_id": "SMITH",\n    "initial_node": "root",\n    "nodes": {\n        "root": {\n            "npc_text": "What do you want?",\n            "responses": [\n                {"text": "A sword. [50 Gold]", "condition": "tw.vars.get(\'gold\', 0) >= 50", "action": "BUY_SWORD", "next_node": "root"},\n                {"text": "Any rumours?", "once": True, "script": "tw.vars.set(\'heard_rumour\', True)", "next_node": "root"},\n                {"text": "Bye.", "next_node": None},\n            ],\n        },\n    },\n}\n\ndef on_smith_action(action, choice):\n    if action == "BUY_SWORD":\n        tw.vars.set("gold", tw.vars.get("gold", 0) - 50)\n        tw.player.take_item("SWORD")\n\ndef on_smith_end(path):\n    tw.vars.set("smith_talked", True)\n',
       },
       {
         label: 'Shared helper function',

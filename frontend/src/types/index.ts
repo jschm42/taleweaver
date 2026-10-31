@@ -356,7 +356,13 @@ export interface SessionCheckpoint {
   id: string
   session_id: string
   message_index: number
-  trigger_reason: 'SCENE_CHANGE' | 'QUEST_UPDATE' | 'AWARD_GRANTED'
+  trigger_reason:
+    | 'SCENE_CHANGE'
+    | 'SEQUENCE_CHANGE'
+    | 'QUEST_UPDATE'
+    | 'AWARD_GRANTED'
+    | 'MANUAL_SAVE'
+    | 'SCRIPT_SAVE'
   title: string
   created_at: string
 }

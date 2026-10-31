@@ -7,6 +7,11 @@ from backend.engine.rules.sequence_walkthrough import (
     format_walkthrough_steps,
     sequence_walkthrough_steps,
 )
+from backend.engine.rules.walkthrough_unlocks import (
+    revealed_sequence_ids,
+    walkthrough_payload,
+    walkthrough_status,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -134,7 +139,7 @@ async def test_walkthrough_reveal_deducts_150_xp_and_grants_negative_award(setup
         combined = "".join(chunks)
         assert "Walkthrough unlocked" in combined
         assert "-150 XP" in combined
-        assert manager.state.is_walkthrough_revealed is True
+        assert revealed_sequence_ids(manager.state) == ["SEQ_1"]
         # Avatar XP was 200, should now be 50 (200 - 150)
         assert manager.avatar.exp == 50
 
@@ -152,3 +157,54 @@ async def test_walkthrough_reveal_deducts_150_xp_and_grants_negative_award(setup
         assert spoiler_award is not None
         assert spoiler_award.get("tier") == "negative"
         assert spoiler_award.get("is_earned") is True
+
+        # Same chapter again: nothing more is charged
+        repeat = "".join([c async for c in manager.process_turn("/walkthrough reveal")])
+        assert "already unlocked" in repeat
+        assert manager.avatar.exp == 50
+
+        # Next chapter: only its walkthrough can be unlocked, for another 150 XP
+        manager.state.active_sequence_id = "SEQ_2"
+        await db.commit()
+        status = walkthrough_status(manager.adventure, manager.state)
+        assert [s["sequence_id"] for s in status["steps"]] == ["SEQ_1"]
+        assert status["current_revealed"] is False
+        async for _ in manager.process_turn("/walkthrough reveal"):
+            pass
+        assert revealed_sequence_ids(manager.state) == ["SEQ_1", "SEQ_2"]
+        assert manager.avatar.exp == -100
+
+
+class _State:
+    def __init__(self, active=None, revealed=None, legacy=False):
+        self.active_sequence_id = active
+        self.entity_states = {"__walkthrough_revealed__": revealed} if revealed else {}
+        self.is_walkthrough_revealed = legacy
+
+
+class _Adventure:
+    sequences = _SEQUENCES
+
+
+def test_walkthrough_status_never_shows_later_chapters():
+    # Act
+    sealed = walkthrough_status(_Adventure(), _State(active="SEQ_1"))
+    legacy = walkthrough_status(_Adventure(), _State(active="SEQ_1", legacy=True))
+    unlocked = walkthrough_status(_Adventure(), _State(active="SEQ_2", revealed=["SEQ_2"]))
+
+    # Assert
+    assert sealed["steps"] == [] and sealed["current"]["sequence_id"] == "SEQ_1"
+    assert walkthrough_payload(sealed, 10)["can_reveal"] is True
+    assert [s["sequence_id"] for s in legacy["steps"]] == ["SEQ_1"]
+    assert [s["sequence_id"] for s in unlocked["steps"]] == ["SEQ_2"]
+    assert walkthrough_payload(unlocked, 10)["can_reveal"] is False
+
+
+def test_walkthrough_status_without_guide_for_current_chapter():
+    # Act: SEQ_3 has no walkthrough text
+    status = walkthrough_status(_Adventure(), _State(active="SEQ_3", revealed=["SEQ_1"]))
+
+    # Assert
+    assert status["current"] is None
+    assert [s["sequence_id"] for s in status["steps"]] == ["SEQ_1"]
+    assert walkthrough_payload(status, 0)["can_reveal"] is False

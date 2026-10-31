@@ -23,7 +23,7 @@ All debug commands are prefixed with `/debug`.
 | `/debug npcs` | Lists all NPCs with IDs and their current location. |
 | `/debug items` | Lists all items (inventory and world) with IDs. |
 | `/debug exits` | Lists all exits, their destinations, and lock status. |
-| `/debug walkthrough` | Unlocks the walkthrough modal for free and shows the sequence walkthroughs in chat. |
+| `/debug walkthrough` | Unlocks the current chapter's walkthrough for free (players pay 150 XP per chapter with `/walkthrough reveal`) and shows all sequence walkthroughs in chat. |
 | `/debug game_won` | Forces the session into a "Won" state. |
 | `/debug game_over` | Forces the session into a "Lost" state. |
 | `/debug quest_finished` | Completes the currently active quest. |

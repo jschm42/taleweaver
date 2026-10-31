@@ -146,19 +146,22 @@ function fixNewlines(text: string | null | undefined): string {
               No walkthrough available for this adventure yet.
             </div>
 
-            <div v-else-if="!data?.revealed" class="tw-card p-4 border-l-4 !border-l-[var(--tw-accent)]">
-              <p class="text-sm mb-3">The full strategy is sealed. Reveal it to permanently view the walkthrough for this session (-150 XP).</p>
+            <div v-else-if="data?.can_reveal" class="tw-card p-4 border-l-4 !border-l-[var(--tw-accent)]">
+              <p class="text-sm mb-3">
+                The walkthrough for the current chapter<span v-if="data?.current_chapter_title"> ({{ data.current_chapter_title }})</span>
+                is sealed. Each chapter is unlocked separately, and only the chapter you are in can be unlocked.
+              </p>
               <button type="button" class="tw-dialog-button" @click="emit('reveal')">
-                Reveal Walkthrough ({{ data?.reveal_cost ?? 150 }} XP)
+                Unlock Current Chapter ({{ data?.reveal_cost ?? 150 }} XP)
               </button>
             </div>
 
-            <div v-else class="space-y-3">
-              <p class="tw-dialog-eyebrow text-sm">Walkthrough Unlocked</p>
+            <div v-if="data?.available" class="space-y-3">
+              <p v-if="data?.steps?.length" class="tw-dialog-eyebrow text-sm">Unlocked Chapters</p>
 
               <ol v-if="data?.steps && data.steps.length > 0" class="space-y-2">
                 <li v-for="(step, index) in data.steps" :key="index" class="tw-card p-3">
-                  <p class="tw-muted text-xxs uppercase tracking-widest font-black">Chapter {{ index + 1 }}</p>
+                  <p class="tw-muted text-xxs uppercase tracking-widest font-black">Chapter {{ step.chapter ?? index + 1 }}</p>
                   <p v-if="step.title" class="text-sm font-bold mt-1">{{ step.title }}</p>
                   <p class="text-sm mt-1 leading-relaxed whitespace-pre-wrap">
                     <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">

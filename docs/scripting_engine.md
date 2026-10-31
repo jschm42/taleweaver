@@ -20,6 +20,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.switches](#twswitches)
    - [tw.vars](#twvars-persistent-state)
    - [tw.story](#twstory)
+   - [tw.save (Save States)](#twsave-save-states)
    - [tw.memories](#twmemories)
    - [tw.game](#twgame)
    - [tw.quests](#twquests)
@@ -525,6 +526,23 @@ Injects narrative messages or system notifications into the turn stream:
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`).
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
+
+### `tw.save` (Save States)
+- `tw.save(label: str = "")`: Saves the game as a checkpoint, for example right before an important decision. The player can return to it from the **Chronicles Timeline** in the game.
+  - The save is written when the script's changes are applied, so it already contains everything the same script changed before.
+  - The system message `Game saved: <label>` (or `Game saved.`) is shown and stored before the save, so it is still there after a restore.
+  - The label is the checkpoint's title in the timeline (`Save: <label>`), collapsed to one line and cut at 80 characters.
+  - At most 3 saves per script run. A session keeps its 10 newest saves; they are counted apart from the automatic checkpoints, so scene changes never push them out.
+
+```python
+# Before the player chooses a side, keep a way back.
+tw.save("Before the duel")
+tw.dialog.choose("Draw your sword?", ["Fight", "Walk away"], on_choice="on_duel_choice")
+```
+
+A save holds the full session state: the protagonist (vitals, stats, inventory, equipment, status effects), scene, in-game time, script variables and entity overrides, exits, quests, the active sequence, world memories and rumours, and every session-scoped world entity and exit row (positions, container contents, clones). Restoring a save rewinds all of it and deletes the chat messages written after it. Player preferences (narration style, skin, debug mode) are not part of a save.
+
+Besides `tw.save()`, checkpoints are created automatically when a turn changes the **scene** (any way: exit, map, script teleport, Game Master) or the **active sequence**, on quest updates and awards, and when the player types `/save [name]`.
 
 ### `tw.memories`
 Directly writes into the avatar's episodic memory bank:

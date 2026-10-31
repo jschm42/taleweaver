@@ -113,9 +113,11 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### Persistent Game Progress & Memory
 * **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
 * **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
-* **Continuous Auto-Save Milestones:** TaleWeaver now creates automatic checkpoints at major story milestones (scene changes, quest milestones, award events).
+* **Continuous Auto-Save Milestones:** TaleWeaver now creates automatic checkpoints at major story milestones (scene changes, sequence changes, quest milestones, award events).
+* **Save States:** Type `/save [name]` to save at any time; adventure scripts can save before important decisions with `tw.save("label")`. A checkpoint is a full dump of the session (protagonist, world rows, variables, quests, sequence).
 * **Chronicles Timeline + Rollback:** Open the new Chronicles timeline in-game and restore to any recent checkpoint. Rollback performs a hard timeline rewind by restoring stored state and removing future messages after that checkpoint.
-* **Retention Policy:** To keep sessions fast and compact, only the five most recent checkpoints are retained per game session.
+* **Retention Policy:** To keep sessions fast and compact, each game session keeps its five most recent automatic checkpoints and, separately, its ten most recent saves (`/save`, `tw.save()`).
+* **Walkthrough per Chapter:** The in-game walkthrough (`/walkthrough`) only ever unlocks the guide of the current sequence, for 150 XP each time (`/walkthrough reveal`). Unlocked chapters stay readable; later chapters stay hidden until you reach them.
 
 ### Media & Immersion
 * Optional AI-generated images to enhance the aesthetic.

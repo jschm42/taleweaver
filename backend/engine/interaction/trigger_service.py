@@ -21,6 +21,7 @@ from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
 from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.scripting.scene_helpers import runner_for_manifest
+from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
@@ -178,6 +179,11 @@ class TriggerService:
             apply_player_inventory(await cls._load_avatar(db, state), context.changeset)
             await cls._sync_npc_personas(db, state, context.changeset)
             await sync_entity_rows(db, state, context.changeset)
+            messages.extend(
+                await SessionCheckpointService.save_from_script(
+                    db, state.session_id, context.changeset.save_requests
+                )
+            )
 
         return messages
 

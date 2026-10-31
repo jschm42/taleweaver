@@ -55,6 +55,7 @@ from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.interaction.command_parser import CommandParser
 from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.interaction.llm_intents import (
     ChatProgressionIntent,
@@ -103,7 +104,6 @@ __all__ = [
 ]
 
 # Constants
-WALKTHROUGH_REVEAL_COST = 150
 AG_IMAGE_CONFIRMATION_STATE_KEY = "__ag_image_confirmation__"
 AG_LAST_REQUEST_STATE_KEY = "__ag_last_generation_request__"
 AG_LAST_ERROR_STATE_KEY = "__ag_last_generation_error__"
@@ -274,6 +274,7 @@ from backend.api.routes.adventures.turn_adventure_gen import TurnAdventureGenMan
 from backend.api.routes.adventures.turn_combat import TurnCombatManager  # noqa: E402
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks  # noqa: E402
 from backend.api.routes.adventures.turn_guardrails import TurnGuardrailsManager  # noqa: E402
+from backend.api.routes.adventures.turn_checkpoints import TurnCheckpoints  # noqa: E402
 from backend.api.routes.adventures.turn_interactions import TurnInteractionsManager  # noqa: E402
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier  # noqa: E402
 from backend.api.routes.adventures.turn_suggestions import TurnSuggestionsManager  # noqa: E402
@@ -320,16 +321,15 @@ class GameTurnManager:
         self.state_applier = TurnStateApplier(self)
         self.adventure_gen = TurnAdventureGenManager(self)
         self.suggestions = TurnSuggestionsManager(self)
-        self._pending_checkpoint_reasons: set[str] = set()
-        self._checkpoint_scene_label: str | None = None
+        self.checkpoints = TurnCheckpoints()
         # (scene, sequence) at the start of the player's message; an in-game turn only
         # advances when this changes (see turn_pass_flow.advance_in_game_turn).
         self._turn_anchor: tuple[Any, Any] | None = None
 
-    def _queue_checkpoint(self, reason: str, *, scene_label: str | None = None) -> None:
-        self._pending_checkpoint_reasons.add(reason)
-        if scene_label:
-            self._checkpoint_scene_label = scene_label
+    def _queue_checkpoint(
+        self, reason: str, *, scene_label: str | None = None, label: str | None = None
+    ) -> None:
+        self.checkpoints.queue(reason, scene_label=scene_label, label=label)
 
     @staticmethod
     def _normalize_technical_action_input(user_msg: str) -> str:
@@ -358,33 +358,9 @@ class GameTurnManager:
 
         return text
 
-    async def _persist_pending_checkpoints(self) -> list[dict[str, Any]]:
-        if not self._pending_checkpoint_reasons or not self.state:
-            return []
-
-        checkpoint_events: list[dict[str, Any]] = []
-        reasons = sorted(self._pending_checkpoint_reasons)
-        for reason in reasons:
-            checkpoint = await SessionCheckpointService.create_checkpoint(
-                self.db,
-                self.state.session_id,
-                reason,
-                scene_label=self._checkpoint_scene_label,
-            )
-            checkpoint_events.append(
-                {
-                    "id": checkpoint.id,
-                    "trigger_reason": checkpoint.trigger_reason,
-                    "created_at": checkpoint.created_at.isoformat()
-                    if checkpoint.created_at
-                    else None,
-                }
-            )
-
-        await self.db.commit()
-        self._pending_checkpoint_reasons.clear()
-        self._checkpoint_scene_label = None
-        return checkpoint_events
+    async def _persist_pending_checkpoints(self) -> list[str]:
+        """Writes this turn's checkpoints (scene/sequence change, saves); returns SSE events."""
+        return await self.checkpoints.persist(self)
 
     async def _unhide_entities_in_text(self, text: str) -> None:
         """Scan text for entity ID tokens like 'ID: TALKING_RAT' and set their
@@ -757,6 +733,9 @@ class GameTurnManager:
             if not chunk.startswith("event: final"):
                 yield chunk
                 continue
+            # Commands that skip the narration pass still save their checkpoints here.
+            for checkpoint_event in await self._persist_pending_checkpoints():
+                yield checkpoint_event
             async for hooked in hooks.process_final(chunk):
                 yield hooked
 
@@ -789,6 +768,7 @@ class GameTurnManager:
         self.avatar.equipment = jsonable_encoder(self.avatar.equipment)
 
         self._turn_anchor = turn_anchor(self.state)
+        self.checkpoints.start_turn(self.state)
         user_msg = message.strip()
         actual_user_input = user_msg
         if not user_msg:
@@ -2130,11 +2110,8 @@ class GameTurnManager:
         async for comp_event in self._compress_history_if_needed():
             yield comp_event
 
-        checkpoint_events = await self._persist_pending_checkpoints()
-        if checkpoint_events:
-            yield f"event: status\ndata: {json.dumps({'content': 'Saving chronicle...'})}\n\n"
-            for checkpoint_event in checkpoint_events:
-                yield f"event: checkpoint\ndata: {json.dumps(checkpoint_event)}\n\n"
+        for checkpoint_event in await self._persist_pending_checkpoints():
+            yield checkpoint_event
 
         map_payload = await self._build_map_payload()
 
@@ -3144,6 +3121,11 @@ class GameTurnManager:
                         "completed", "Congratulations! You have completed the final sequence."
                     )
 
+        # Last, so the save state holds everything this script changed.
+        for save_msg in await SessionCheckpointService.save_from_script(
+            self.db, self.state.session_id, changeset.save_requests
+        ):
+            system_messages.append(ScriptMessage(save_msg, role="system"))
         return [
             m
             for m in system_messages

@@ -102,7 +102,7 @@ graph TD
 
 ### Post-Message: Persistence & Checkpoints
 * Updates committed to SQLite `SessionState`.
-* Checkpoints created on milestones (`SCENE_CHANGE`, `QUEST_UPDATE`, `AWARD_GRANTED`).
+* Checkpoints are full save states (`engine/sessions/session_snapshot.py`: avatar, session state, session world rows). `TurnCheckpoints` (`turn_checkpoints.py`) writes them at the end of every turn when the scene or active sequence changed (`SCENE_CHANGE`, `SEQUENCE_CHANGE`), plus queued milestones (`QUEST_UPDATE`, `AWARD_GRANTED`) and `/save` (`MANUAL_SAVE`). `tw.save()` (`SCRIPT_SAVE`) is written immediately by both script apply paths. 5 automatic checkpoints and 10 saves are kept per session.
 * Performance metrics logged via `log_structured_event` (p50/p90 latency monitoring); narration token usage (incl. cached prompt tokens) as `gm.turn.pipeline.tokens`.
 
 ---
