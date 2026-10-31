@@ -8,6 +8,7 @@ import {
   isSpeakableSegment,
   normalizeDialoguePrefixes,
   resolveNpcVoice,
+  resolveSpeakerName,
   type SegmentRequest,
 } from '@/services/ttsText'
 import {
@@ -365,7 +366,7 @@ class AudioService {
       context,
       displayText: normalizedText,
       ttsText,
-      speaker: request.speaker ?? options.speaker,
+      speaker: request.speaker ?? resolveSpeakerName(options.speaker, options.npcMetadata),
     }))
   }
 
