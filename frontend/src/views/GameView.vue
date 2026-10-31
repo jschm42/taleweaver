@@ -744,12 +744,13 @@ const isReadableEntity = (entity: any): boolean => {
 
 const extractTextLogPayload = (entity: any) => {
   const metadata = (entity?.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  // No cut here: the editor and backend already cap readable texts at 1000 characters.
   const content = String(
     entity?.text_log_content ||
     metadata.text_log_content ||
     entity?.description ||
     ''
-  ).trim().slice(0, 500)
+  ).trim()
   const format = String(entity?.text_log_format || metadata.text_log_format || 'DOCUMENT').trim().toUpperCase()
   return {
     id: String(entity?.id || ''),
