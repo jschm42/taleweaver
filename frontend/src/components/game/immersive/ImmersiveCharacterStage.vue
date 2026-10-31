@@ -8,7 +8,8 @@
  * get a skin-specific entrance (see src/skins/entrances.css). Changed HP, Mana, Stamina or
  * attributes float up on the card as "-5 HP" / "+2 STR"; an HP loss also flashes the card.
  * Crowded scenes: defeated characters move last (see stageCastOrder.ts) and cards shrink to fit the
- * column height, switching to compact/mini layouts (see useStageDensity.ts).
+ * column height, switching to compact/mini layouts; from six characters on the stage uses two
+ * narrower columns (see useStageDensity.ts).
  */
 import { ref, watch, nextTick, computed } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
@@ -168,15 +169,21 @@ function isNpcVoiced(npc: any): boolean {
 
 // --- Crowded scenes: defeated characters last, cards shrink to fit the column ---
 const orderedNpcs = computed(() => orderStageCast(props.npcs))
-const { density, cardStyle } = useStageDensity(stageContainerRef, () => orderedNpcs.value.length)
+const { columns, density, cardStyle } = useStageDensity(stageContainerRef, () => orderedNpcs.value.length)
 </script>
 
 <template>
   <aside
     ref="stageContainerRef"
-    class="flex flex-col gap-2 shrink-0 overflow-y-auto w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem] tw-scroll pr-1 py-1 max-h-full"
+    class="tw-stage flex flex-col gap-2 shrink-0 overflow-y-auto tw-scroll pr-1 py-1 max-h-full"
+    :class="columns === 2 ? 'w-[6.5rem] sm:w-[8rem] md:w-[9.5rem] lg:w-[11.5rem]' : 'w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem]'"
   >
-    <TransitionGroup :name="stageReady ? 'tw-npc' : 'tw-npc-initial'" tag="div" class="flex flex-col gap-2 w-full">
+    <TransitionGroup
+      :name="stageReady ? 'tw-npc' : 'tw-npc-initial'"
+      tag="div"
+      class="grid gap-2 w-full content-start"
+      :class="columns === 2 ? 'grid-cols-2' : 'grid-cols-1'"
+    >
       <div
         v-for="npc in orderedNpcs"
         :key="npc.id"
@@ -263,6 +270,11 @@ const { density, cardStyle } = useStageDensity(stageContainerRef, () => orderedN
 </template>
 
 <style scoped>
+/* Reserve the scrollbar's space so its appearance never changes the measured width (resize loop). */
+.tw-stage {
+  scrollbar-gutter: stable;
+}
+
 @property --tw-voice-angle {
   syntax: '<angle>';
   initial-value: 0deg;
