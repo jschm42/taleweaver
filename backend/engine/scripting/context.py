@@ -21,6 +21,7 @@ from backend.engine.scripting.item_transfer import inventory_entry, take_from_in
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
+from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
 from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 
@@ -408,7 +409,7 @@ class EntityProxy:
         self._changeset.entity_updates.append({"entity_id": self._id, attr_name: val})
 
 
-class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, ItemHolderMixin):
+class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, NPCVitalsMixin, ItemHolderMixin):
     """Safe proxy for Non-Player Characters."""
 
     @property
@@ -898,8 +899,10 @@ class EntityManagerProxy:
             ent.attack()
 
 
-class NPCManagerProxy(NPCPersonaManagerMixin, NPCDirectionManagerMixin, EntityManagerProxy):
-    """``tw.npcs``: entity access plus the NPC persona and directed-speech shortcuts."""
+class NPCManagerProxy(
+    NPCPersonaManagerMixin, NPCDirectionManagerMixin, NPCVitalsManagerMixin, EntityManagerProxy
+):
+    """``tw.npcs``: entity access plus the NPC persona, directed-speech and vitals shortcuts."""
 
     mover: Optional[ItemMover] = None
 

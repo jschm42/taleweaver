@@ -26,6 +26,7 @@ from backend.core.narration_styles import (
     narration_style_reminder,
     narration_style_rules,
 )
+from backend.core.narrator_voices import narrator_voice_rules
 from backend.core.voice_tags import vocal_tag_reminder
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.turn_helpers import (
@@ -299,6 +300,8 @@ class GameTurnManager:
         self.adventure: AdventureTemplate | SessionAdventure | None = adventure
         self.avatar: Avatar | None = avatar
         self.stop_requested = False
+        # True while the GM only narrates an arrival or the opening: no moves, no on_interact.
+        self.arrival_narration = False
         self.turn_language: str | None = None
         self._progression = TurnProgressionBuilder(
             self,
@@ -1045,6 +1048,8 @@ class GameTurnManager:
             async for c in self._run_llm_cycle(msg, av, language=language):
                 yield c
 
+        # An empty input (the opening prologue) only describes the start scene: the GM may not move the player on.
+        self.arrival_narration = not actual_user_input
         try:
             async for chunk in _run_llm_cycle_with_lang(user_msg, auto_visualize):
                 yield chunk
@@ -1057,6 +1062,8 @@ class GameTurnManager:
                 user_safe_error = _friendly_llm_unexpected_error_message()
             yield f"event: error\ndata: {json.dumps({'detail': user_safe_error, 'retryable': True})}\n\n"
             return
+        finally:
+            self.arrival_narration = False
 
         turn_end = time.perf_counter()
         log_structured_event(
@@ -1618,13 +1625,18 @@ class GameTurnManager:
                 game_event.status_note = str(goe)
 
         # Entity interactions: scripted and inline on_interact triggers. Runs in every rule
-        # mode; without the mechanics pass only entities named in the message count.
+        # mode; without the mechanics pass only entities named in the message count. An
+        # arrival or opening narration only describes the scene: the player touched nothing.
         try:
-            interacted_ids = await interacted_entity_ids(
-                self.db,
-                self.state,
-                user_msg,
-                [ue.entity_id for ue in getattr(game_event, "updated_entities", None) or []],
+            interacted_ids = (
+                []
+                if self.arrival_narration
+                else await interacted_entity_ids(
+                    self.db,
+                    self.state,
+                    user_msg,
+                    [ue.entity_id for ue in getattr(game_event, "updated_entities", None) or []],
+                )
             )
             for entity_id in interacted_ids:
                 sys_msgs, rejected = await fire_interact_triggers(
@@ -1725,6 +1737,7 @@ class GameTurnManager:
             prompts.GM_NARRATION_TURN_CONTRACT,
             prompts.GM_NARRATION_MANDATORY_FORMATTING,
             narration_style_rules(getattr(self.state, "narration_style", None)),
+            narrator_voice_rules(getattr(self.adventure, "narrator_voice", None)),
             prompts.get_vocal_direction_prompt(tts_provider) if use_vocal_tags else "",
             prompts.GM_CHAT_NARRATION_SUFFIX if is_chat_mode else "",
         ]

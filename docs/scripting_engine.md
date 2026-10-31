@@ -120,7 +120,7 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_init` | When a new game session starts, immediately after initial world manifest and entity state setup. | Global (`*` or empty). |
 | `on_turn_start` | When a new in-game turn begins, i.e. right after the player's scene or the active sequence changed (after `on_turn_end` of the previous turn, before narration). | Global (`*` or empty). |
 | `on_enter_scene` | When the player enters a new scene. | Specific `scene_id` or empty for any scene. |
-| `on_interact` | When the player examines, attacks, talks to, or manipulates an entity: the GM reported a state change on it, or the player's message names an entity in the current scene or inventory (all context-menu actions such as *Inspect*, *Use*, *Push* do). | Specific `entity_id` (NPC or object) or empty for all. |
+| `on_interact` | When the player examines, attacks, talks to, or manipulates an entity: the GM reported a state change on it, or the player's message names an entity in the current scene or inventory (all context-menu actions such as *Inspect*, *Use*, *Push* do). It does not fire during the opening narration of a new session or the arrival narration after walking through an exit: those only describe the scene. | Specific `entity_id` (NPC or object) or empty for all. |
 | `on_logic_pass_done` | After game mechanics and state mutations finish, before narration is generated. | Global (`*` or empty). |
 | `on_narration_done` | After narration generation completes, before final turn persistence. | Global (`*` or empty). |
 | `on_turn_end` | When the current in-game turn ends, i.e. when the player's scene or the active sequence changed (before `on_turn_start` of the next turn). | Global (`*` or empty). |
@@ -423,13 +423,14 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.drop_item(npc_id: str, item_id: str, scene_id: str = None, spatial_position: str = "")`: Transfers an item from an NPC's inventory into a scene. If `scene_id` is omitted, it drops into the NPC's current scene; passing `"current"` drops it into the player's scene.
 - `tw.npcs.give_item(npc_id: str, item_id: str)`: Transfers an item from a scene into an NPC's inventory and conceals it from the scene view.
 - `tw.npcs.give_to_player(npc_id: str, item_id: str) -> dict | None`: Hands an item the NPC carries directly to the protagonist. The item leaves the NPC's inventory and keeps its world entity data (name, description, image, stats). Returns the new inventory entry, or `None` (and changes nothing) if the NPC doesn't hold the item, so scripts can't conjure items.
+- `tw.npcs.consume(npc_id: str, item_id: str) -> dict | None`: Lets the NPC use a consumable it carries (`item_type` `CONSUMABLE`). The item is destroyed and its HP, Mana and Stamina effects apply to the NPC, read the same way as for the protagonist's `/consume` (fields such as `hp_change`, `mana_change`, `stamina_change`, else amounts named in the description). Values stay between 0 and the NPC's maximum; HP reaching 0 defeats the NPC. Returns the applied effects, e.g. `{"hp": 25, "stamina": -4}`, or `None` (and changes nothing) if the NPC does not carry the item or it is not a consumable. To let an NPC drink a potion from the scene or from the player, move it first: `tw.npcs.get('BRAM').put_item('POTION')`. The GM sees the new values from the next narration on; describe the moment yourself if needed (e.g. with `tw.npcs.say_directed`).
 - `tw.npcs.kill(npc_id: str, drop_inventory: bool = True)`: Kills the NPC, setting HP to 0 and marking `is_defeated: True`. When `drop_inventory=True` (default), all items held by the NPC are dropped into their scene.
 - `tw.npcs.attack(npc_id: str)`: Makes an NPC attack the protagonist. Turn-based combat starts right after the current turn if the NPC is in the protagonist's scene, alive and attackable (ignored while a fight is already running). Example (`on_turn_end`): `if tw.player.has_item('IDOL') and not tw.vars.get('alarm'): tw.vars.set('alarm', True); tw.npcs.attack('TEMPLE_GUARD')`.
 - `tw.npcs.set_character(npc_id: str, text: str)`: Replaces the NPC's personality (the `character` field). The GM reads it on every turn, so the NPC talks and acts differently from then on (friendlier, aggressive, funny, frightened, …). An empty text clears it. Whitespace is collapsed to a single line and the text is cut at 1,000 characters.
 - `tw.npcs.set_goal(npc_id: str, text: str)`: Replaces what the NPC wants (the `goal` field), with the same rules.
 - `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
 - `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. The ID is matched exactly, then case-insensitively, then against the NPC's name. An unknown ID does not raise: it returns a detached proxy whose changes have no effect, and the server log shows `[Script Warning] Unknown entity ID '...'`, so check the log when a change seems to be ignored. Available properties and methods on `NPCProxy`:
-  - `.name`, `.hp`, `.is_defeated`, `.current_scene_id`, `.inventory`
+  - `.name`, `.hp`, `.mana`, `.stamina`, `.is_defeated`, `.current_scene_id`, `.inventory`
   - `.say(text: str)` / `.say_directed(direction: str)`
   - `.move_to(target_scene_id: str, spatial_position: str = "")` (supports `"current"`)
   - `.move_to_player(spatial_position: str = "")`
@@ -442,7 +443,8 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.take_item(item_id: str, to: str = "player") -> bool`: Moves a carried item out, to `"player"`, `"current"` (the protagonist's scene), a scene ID, another NPC or a container.
   - `.kill(drop_inventory: bool = True)` / `.die()`
   - `.attack()` (see `tw.npcs.attack`)
-  - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)`
+  - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)` (healing stops at the NPC's maximum HP)
+  - `.consume(item_id: str) -> dict | None` (see `tw.npcs.consume`)
   - `.character`, `.goal` *(read/write)*: assigning (`npc.character = "Gruff, impatient"`) is the same as calling `.set_character()` / `.set_goal()`
   - `.set_character(text)`, `.set_goal(text)`, `.add_trait(trait)`, `.remove_trait(trait)`, `.has_trait(trait) -> bool`
 

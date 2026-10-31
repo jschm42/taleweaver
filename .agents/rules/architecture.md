@@ -97,6 +97,8 @@ graph TD
   2. Draft narration from Pass 1.
   3. **Critical Violation Overrides**: If `rule_violations` contains entries, `game_event.narrative_description` is replaced with the failure reason.
   4. Vocal/TTS style tags (`[excited]`, `<sigh>`, `<whisper>`) for atmospheric speech.
+* The static system prompt combines the player's narration style (`core/narration_styles.py`: how *much* is written) with the adventure's narrator voice (`core/narrator_voices.py`, `AdventureTemplate.narrator_voice`: *how* it is worded). The admin curates the voice catalog (`User.narrator_voice_catalog`, `/api/settings/narrator-voices`); adventures store a full copy of their voice.
+* Arrival narrations (after an exit) and the empty opening prologue run with `manager.arrival_narration = True`: GM scene changes are ignored and no `on_interact` trigger fires, because those turns only describe the scene.
 * The narration view of the location never contains lock secrets (codes, key items, unlock rules); unlocks are resolved by Pass 1 and the guardrails.
 * **Enforcement**: This forces the creative model to narrate failure accurately rather than hallucinating success.
 

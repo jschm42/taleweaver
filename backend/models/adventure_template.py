@@ -60,6 +60,8 @@ class AdventureTemplate(Base, TimestampMixin):
         JSON, nullable=True
     )
     selected_tone: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # How the GM narrates: {id, name, instruction, sample} (see core/narrator_voices.py)
+    narrator_voice: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # Dialog skin chosen by the author: {"skin": <id>, "accent": "#rrggbb"} (see core/ui_theme.py)
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 

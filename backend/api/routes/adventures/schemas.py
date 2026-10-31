@@ -3,6 +3,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.core.narrator_voices import normalize_voice
 from backend.core.ui_theme import normalize_ui_theme
 from backend.schemas.adventure import AdventureTemplateDebugResponse
 
@@ -320,6 +321,7 @@ class AdventureTemplateResponse(BaseModel):
     game_over_rules: Optional[dict[str, Any]]
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
+    narrator_voice: Optional[dict[str, Any]] = None
     ui_theme: Optional[dict[str, Any]] = None
     original_prompt: Optional[str] = None
     sequences: Optional[list[dict[str, Any]]] = None
@@ -639,6 +641,7 @@ class AdventureTemplateUpdate(BaseModel):
     generate_item_images: Optional[bool] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
+    narrator_voice: Optional[dict[str, Any]] = None
     ui_theme: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
@@ -784,6 +787,11 @@ class AdventureTemplateUpdate(BaseModel):
         if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
             return [{"id": s, "name": s.capitalize()} for s in v]
         return v
+
+    @field_validator("narrator_voice", mode="before")
+    @classmethod
+    def clean_narrator_voice(cls, v):
+        return normalize_voice(v)
 
 
 class TraitGenerationRequest(BaseModel):

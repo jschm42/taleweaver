@@ -458,6 +458,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "max_memory_turns": getattr(adv, "max_memory_turns", 10) or 10,
         "clock_enabled": adv.clock_enabled,
         "selected_tone": adv.selected_tone,
+        "narrator_voice": adv.narrator_voice,
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
         "generate_scene_images": adv.generate_scene_images,

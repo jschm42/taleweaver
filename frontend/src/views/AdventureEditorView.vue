@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { adventureService } from '@/services/adventureService'
 import { visualService } from '@/services/visualService'
 import type { VisualKind } from '@/services/visualService'
+import type { NarratorVoice } from '@/services/narratorVoiceService'
 import { entityService } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
 import { useEntityTransfer } from '@/composables/useEntityTransfer'
@@ -694,6 +695,7 @@ const form = ref({
   tts_director_notes: '',
   selected_style_id: '',
   selected_tone_id: '',
+  narrator_voice: null as NarratorVoice | null,
   is_adventure_generator: false
 })
 
@@ -932,6 +934,7 @@ async function fetchAdventure() {
     } else {
       form.value.selected_tone_id = rawTone || ''
     }
+    form.value.narrator_voice = data.narrator_voice || null
     form.value.is_adventure_generator = !!data.is_adventure_generator
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
@@ -3008,6 +3011,7 @@ watch(
               :tone-catalog="toneCatalog"
               :is-saving="isSaving"
               @update:tone="form.selected_tone_id = $event"
+              @update:narrator-voice="form.narrator_voice = $event"
               @save-changes="saveChanges"
             />
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Save, X } from 'lucide-vue-next'
+import NarratorVoicePicker from '@/components/editor/NarratorVoicePicker.vue'
+import type { NarratorVoice } from '@/services/narratorVoiceService'
 
 const props = defineProps<{
   form: any
@@ -11,11 +13,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:tone', val: string): void
+  (e: 'update:narrator-voice', val: NarratorVoice | null): void
   (e: 'save-changes'): void
 }>()
 </script>
 
 <template>
+  <div class="space-y-8">
   <section v-if="toneCatalog.length" class="space-y-6 bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
      <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -56,6 +60,15 @@ const emit = defineEmits<{
             </button>
        </div>
   </section>
+
+  <NarratorVoicePicker
+    :model-value="form.narrator_voice || null"
+    :saved="adventure?.narrator_voice || null"
+    :is-saving="isSaving"
+    @update:model-value="$emit('update:narrator-voice', $event)"
+    @save-changes="$emit('save-changes')"
+  />
+  </div>
 </template>
 
 <style scoped>

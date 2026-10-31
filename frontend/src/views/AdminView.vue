@@ -12,7 +12,7 @@ import { restartSetupWizard } from '@/store/setupWizard'
 const router = useRouter()
 
 // ============ NAVIGATION & UI STATE ============
-type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'stt' | 'styles' | 'tones' | 'game' | 'users'
+type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'stt' | 'styles' | 'tones' | 'voices' | 'game' | 'users'
 const activeSection = ref<Section>('keys')
 
 // ============ MODAL STATE (UI only, not shared with services) ============
@@ -39,6 +39,7 @@ import VisualsSection from '@/components/admin/VisualsSection.vue'
 import SpeechSection from '@/components/admin/SpeechSection.vue'
 import SpeechToTextSection from '@/components/admin/SpeechToTextSection.vue'
 import CatalogSection from '@/components/admin/CatalogSection.vue'
+import NarratorVoicesSection from '@/components/admin/NarratorVoicesSection.vue'
 import GameSettingsSection from '@/components/admin/GameSettingsSection.vue'
 import UserManagementSection from '@/components/admin/UserManagementSection.vue'
 import UserEditModal from '@/components/admin/UserEditModal.vue'
@@ -275,6 +276,13 @@ const navCategories: NavCategory[] = [
         activeClass: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30 shadow-sm shadow-indigo-950/20',
         iconColor: 'text-indigo-400',
         badge: () => catalogService.toneCatalog.value.length || null
+      },
+      {
+        id: 'voices',
+        label: 'Narrator Voices',
+        icon: 'ra-speech-bubble',
+        activeClass: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30 shadow-sm shadow-fuchsia-950/20',
+        iconColor: 'text-fuchsia-400'
       }
     ]
   },
@@ -456,6 +464,8 @@ const navCategories: NavCategory[] = [
           @upload-image="({ event, item, index }) => handleUploadCatalogImage(event, activeSection as 'styles' | 'tones', item, index)"
           @update-menu-id="(id) => openMenuId = id"
         />
+
+        <NarratorVoicesSection v-if="activeSection === 'voices'" />
 
         <GameSettingsSection 
           v-if="activeSection === 'game'"

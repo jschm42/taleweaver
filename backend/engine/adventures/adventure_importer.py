@@ -12,6 +12,7 @@ from backend.core.adventure_format import validate_manifest_version
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
+from backend.core.narrator_voices import normalize_voice
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.adventures.adventure_import_support import (
     check_adz_limits,
@@ -256,6 +257,9 @@ class AdventureTemplateImporter:
                     or manifest_data.get("selected_image_styles", []),
                     selected_tone=adv_data.get("selected_tone")
                     or manifest_data.get("selected_tone"),
+                    narrator_voice=normalize_voice(
+                        adv_data.get("narrator_voice") or manifest_data.get("narrator_voice")
+                    ),
                     quests=adv_data.get("quests") or manifest_data.get("quests", []),
                     awards=adv_data.get("awards") or manifest_data.get("awards", []),
                     min_scenes=(
@@ -812,6 +816,7 @@ class AdventureTemplateImporter:
                         "time_system": new_template.time_system,
                         "time_config": deepcopy(new_template.time_config or {}),
                         "selected_tone": deepcopy(new_template.selected_tone or {}),
+                        "narrator_voice": deepcopy(new_template.narrator_voice),
                         "ui_theme": deepcopy(new_template.ui_theme),
                         "selected_image_styles": deepcopy(new_template.selected_image_styles or []),
                         "quests": deepcopy(new_template.quests or []),
@@ -911,6 +916,9 @@ class AdventureTemplateImporter:
             selected_image_styles=adv_meta.get("selected_image_styles")
             or manifest.get("selected_image_styles", []),
             selected_tone=adv_meta.get("selected_tone") or manifest.get("selected_tone"),
+            narrator_voice=normalize_voice(
+                adv_meta.get("narrator_voice") or manifest.get("narrator_voice")
+            ),
             quests=adv_meta.get("quests") or manifest.get("quests") or [],
             awards=adv_meta.get("awards") or manifest.get("awards") or [],
             original_manifest=manifest,

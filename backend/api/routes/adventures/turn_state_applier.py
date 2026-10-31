@@ -433,9 +433,9 @@ class TurnStateApplier:
                 system_messages.append(prot_meta["on_status_change_text"])
 
         if event.new_scene_id and getattr(self.manager, "arrival_narration", False) is True:
-            # Narrating an arrival through an exit: the player did not ask to move on.
+            # Narrating an arrival through an exit or the opening prologue: the player did not ask to move on.
             logger.info(
-                "[Turn %s] Ignored GM scene change to '%s' during arrival narration",
+                "[Turn %s] Ignored GM scene change to '%s' during arrival/opening narration",
                 self.game_id,
                 event.new_scene_id,
             )

@@ -3582,6 +3582,65 @@ async def test_game_loop_adjacent_only_scene_transitions(setup_test_db, monkeypa
         )
 
 
+async def test_opening_prologue_ignores_gm_scene_change(setup_test_db, monkeypatch):
+    """The empty opening turn only describes the start scene: no GM move, no on_interact."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        db.add_all(
+            [
+                WorldExit(
+                    session_id="session-1",
+                    template_id=adv.id,
+                    from_scene_id="START",
+                    to_scene_id="CELLAR",
+                    label="cellar door",
+                    is_locked=False,
+                ),
+                WorldEntity(
+                    id="TELEPORTER",
+                    session_id=state.session_id,
+                    entity_type="OBJECT",
+                    name="A teleporter",
+                    description="A glowing pad.",
+                    current_scene_id=state.current_scene_id,
+                    is_portable=False,
+                    is_hidden=False,
+                    is_in_inventory=False,
+                    metadata_json={"on_interact_script": 'tw.scene.teleport("CELLAR")'},
+                ),
+            ]
+        )
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(
+            return_value=GameEvent(
+                narrative_description="You look around.",
+                new_scene_id="CELLAR",
+                updated_entities=[WorldEntityUpdate(entity_id="TELEPORTER", is_hidden=False)],
+            )
+        )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The hall is quiet."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.GameMasterLLM",
+            lambda *args, **kwargs: mock_llm_instance,
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = [chunk async for chunk in manager.process_turn("")]
+
+        await db.refresh(state)
+        assert state.current_scene_id == "START"
+        assert "You have entered" not in "".join(chunks)
+        assert manager.arrival_narration is False
+
+
 async def test_game_loop_lookaround_exits(setup_test_db, monkeypatch):
     """Verifies that lookaround adds compact exit instructions to the narration prompt."""
     import json

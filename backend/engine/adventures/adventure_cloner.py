@@ -182,6 +182,7 @@ def _create_cloned_template_entity(
             deepcopy(original.selected_image_styles) if original.selected_image_styles else None
         ),
         selected_tone=(deepcopy(original.selected_tone) if original.selected_tone else None),
+        narrator_voice=deepcopy(original.narrator_voice),
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
         quests=deepcopy(original.quests) if original.quests else None,

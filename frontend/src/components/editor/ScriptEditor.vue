@@ -763,7 +763,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('npcs')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.get(id)</code>, <code>.say(id, text)</code>, <code>.say_directed(id, direction)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
+            <code>.get(id)</code>, <code>.say(id, text)</code>, <code>.say_directed(id, direction)</code>, <code>.consume(id, item_id)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
           </p>
         </div>
 
