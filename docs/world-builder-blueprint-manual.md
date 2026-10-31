@@ -422,4 +422,4 @@ When you click **Generate**:
 - **One fact per readable.** Put clues in different scenes, so the player has to combine them.
 - **Write the solution into the chapter text.** It becomes the Game Master's walkthrough and keeps hints consistent.
 - **Let the AI write the atmosphere.** Your free text should say *what matters*; the AI is good at *how it looks*.
-- **Use the adventure-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.
+- **Use the adventure-concept-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-concept-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.

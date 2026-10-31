@@ -1,6 +1,6 @@
 ---
 name: taleweaver-adventure-editor
-description: Modify an existing TaleWeaver adventure template directly in the database - add or change scenes, exits, NPCs, items, containers, scripts, the init script, quests and awards - via scripts/edit_adventure.py change sets. Use when the user asks you to add a scene, build a scripted puzzle, wire a trigger or otherwise edit an adventure that already exists in the DB. Not for writing a new adventure from scratch (use taleweaver-adventure-creator) and not for images.
+description: Modify an existing TaleWeaver adventure template directly in the database - add or change scenes, exits, NPCs, items, containers, scripts, the init script, quests and awards - via scripts/edit_adventure.py change sets. Use when the user asks you to add a scene, build a scripted puzzle, wire a trigger or otherwise edit an adventure that already exists in the DB. Not for writing a new adventure from scratch (use taleweaver-adventure-concept-creator) and not for images.
 ---
 
 # TaleWeaver Adventure Editor (Change Sets)
@@ -151,4 +151,4 @@ that a script unlocks it. That warning is expected for script-unlocked exits; me
   the manifest and the world tables in sync.
 - All adventure content and scripts follow the adventure's language; code comments stay English.
 - Puzzles must be enforceable by the engine (locks, guards, scripts) - see the
-  [taleweaver-adventure-creator](../taleweaver-adventure-creator/SKILL.md) skill for puzzle design.
+  [taleweaver-adventure-concept-creator](../taleweaver-adventure-concept-creator/SKILL.md) skill for puzzle design.

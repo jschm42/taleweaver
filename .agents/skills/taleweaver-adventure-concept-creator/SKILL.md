@@ -1,5 +1,5 @@
 ---
-name: taleweaver-adventure-creator
+name: taleweaver-adventure-concept-creator
 description: Generates TaleWeaver adventure concepts (Story Idea text for the World-Builder) with a gripping story, a planted twist and non-trivial puzzles that the engine can actually enforce. Writes them in the World-Builder blueprint syntax (World, Protagonist, Scene, Exit, NPC, Item, Switch, Sequence, Rule, Script, Sidequest, Award tags with fixed/hint/open keys) and knows the parser's and engine's limits.
 ---
 
