@@ -56,6 +56,14 @@ const isStationaryEntity = (entity: any): boolean => {
   return String(entity.movement_type || '').toUpperCase() === 'STATIONARY'
 }
 
+/**
+ * Whether the player may start a fight with this target. An NPC whose "NPC can be damaged" is
+ * off (stored as is_killable) cannot be fought, like one that is not attackable.
+ */
+function canBeAttacked(entity: any): boolean {
+  return entity?.is_attackable !== false && entity?.is_killable !== false
+}
+
 export const gameCommandService = {
   resolveUiPanelCommand(normalized: string): UiPanelCommand | null {
     if (normalized === '/map') return 'map'
@@ -129,7 +137,7 @@ export const gameCommandService = {
       case 'take':
         return { command: `/take ${targetName}`, errorMessage: null }
       case 'attack':
-        if (entity?.is_attackable === false) {
+        if (!canBeAttacked(entity)) {
           return { command: null, errorMessage: 'You cannot attack this target.' }
         }
         return { command: `/attack ${targetName}`, errorMessage: null }
@@ -158,7 +166,7 @@ export const gameCommandService = {
       items.push({ label: 'Talk', action: `${PREFILL_SAY_TO_PREFIX}${entity.name || ''}` })
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
-      if (!isDefeatedNpc && entity?.is_attackable !== false) {
+      if (!isDefeatedNpc && canBeAttacked(entity)) {
         items.push({ label: 'Attack', action: `/attack ${entity.name}` })
       }
     } else if (entity?.entity_type === 'SCENE') {

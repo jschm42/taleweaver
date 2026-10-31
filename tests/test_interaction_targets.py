@@ -39,6 +39,34 @@ def test_partial_words_and_short_names_do_not_match():
     assert ids == []
 
 
+def test_a_unique_word_of_a_name_matches():
+    # Arrange
+    candidates = [
+        ("GARGOYLE_GRIMSBY", "Grimsby the Gargoyle"),
+        ("LAB_LEVER", "Confirmation Lever"),
+        ("BOX_OAK", "Charred Oak Casket (1)"),
+        ("BOX_BONE", "Bleached Bone Casket (3)"),
+    ]
+
+    # Act / Assert
+    assert mentioned_entity_ids("talk to grimsby", candidates) == ["GARGOYLE_GRIMSBY"]
+    assert mentioned_entity_ids("I glare at the gargoyle", candidates) == ["GARGOYLE_GRIMSBY"]
+    assert mentioned_entity_ids("pull the lever", candidates) == ["LAB_LEVER"]
+
+
+def test_a_word_shared_by_several_names_does_not_match():
+    # Arrange: "casket" is in both names, "oak" is too short to count alone
+    candidates = [
+        ("BOX_OAK", "Charred Oak Casket (1)"),
+        ("BOX_BONE", "Bleached Bone Casket (3)"),
+    ]
+
+    # Act / Assert
+    assert mentioned_entity_ids("open the casket", candidates) == []
+    assert mentioned_entity_ids("the oak looks old", candidates) == []
+    assert mentioned_entity_ids("open the bone casket", candidates) == ["BOX_BONE"]
+
+
 @pytest.mark.asyncio
 async def test_resolver_merges_reported_ids_and_skips_unreachable_entities():
     async with TestSessionLocal() as db:
