@@ -163,3 +163,20 @@ async def fetch_stable_diffusion(
     )
     default = DiscoveredModel(id="default", label="Currently loaded checkpoint", kinds=IMAGE)
     return [default, *(m for m in checkpoints if m)]
+
+
+async def fetch_comfyui(
+    client: httpx.AsyncClient, _api_key: Optional[str], base_url: str
+) -> list[DiscoveredModel]:
+    payload = await _get_json(client, f"{base_url}/object_info/CheckpointLoaderSimple")
+    try:
+        checkpoints = payload["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0]
+    except (KeyError, TypeError, IndexError) as exc:
+        raise DiscoveryError("ComfyUI did not expose checkpoint loader options.") from exc
+    if not isinstance(checkpoints, list):
+        raise DiscoveryError("ComfyUI returned an invalid checkpoint list.")
+    return [
+        DiscoveredModel(id=name, label=name, kinds=IMAGE)
+        for name in checkpoints
+        if isinstance(name, str)
+    ]

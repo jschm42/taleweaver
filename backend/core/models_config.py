@@ -21,6 +21,7 @@ IMAGE_PROVIDERS = [
     {"id": "google", "name": "Google Gemini"},
     {"id": "ollama", "name": "Ollama (Local)"},
     {"id": "stable_diffusion", "name": "Stable Diffusion (Local)"},
+    {"id": "comfyui", "name": "ComfyUI (Local, Experimental)"},
 ]
 
 TTS_PROVIDERS = [
@@ -69,6 +70,7 @@ PREDEFINED_IMAGE_MODELS = {
     ],
     "ollama": ["x/flux2-klein", "stable-diffusion-v1-5"],
     "stable_diffusion": ["default"],
+    "comfyui": [],
 }
 
 PREDEFINED_TTS_MODELS = {

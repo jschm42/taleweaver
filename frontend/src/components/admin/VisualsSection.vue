@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import ComfyUISettings from './ComfyUISettings.vue'
 import ModelCombobox from '@/components/common/ModelCombobox.vue'
 
 const props = defineProps<{
@@ -20,6 +21,10 @@ const emit = defineEmits<{
 
 const localForm = ref({
   ...props.t2iForm,
+  comfyui_url: props.t2iForm?.comfyui_url ?? 'http://127.0.0.1:8188',
+  comfyui_timeout: props.t2iForm?.comfyui_timeout ?? 600,
+  simple_comfyui_workflow: props.t2iForm?.simple_comfyui_workflow ?? 'sdxl',
+  advanced_comfyui_workflow: props.t2iForm?.advanced_comfyui_workflow ?? 'sdxl',
   scene_model_quality: props.t2iForm?.scene_model_quality ?? 'advanced',
   profile_model_quality: props.t2iForm?.profile_model_quality ?? 'advanced',
   protagonist_model_quality: props.t2iForm?.protagonist_model_quality ?? 'advanced',
@@ -29,6 +34,10 @@ const localForm = ref({
 watch(() => props.t2iForm, (newVal) => {
   localForm.value = {
     ...newVal,
+    comfyui_url: newVal?.comfyui_url ?? 'http://127.0.0.1:8188',
+    comfyui_timeout: newVal?.comfyui_timeout ?? 600,
+    simple_comfyui_workflow: newVal?.simple_comfyui_workflow ?? 'sdxl',
+    advanced_comfyui_workflow: newVal?.advanced_comfyui_workflow ?? 'sdxl',
     scene_model_quality: newVal?.scene_model_quality ?? 'advanced',
     profile_model_quality: newVal?.profile_model_quality ?? 'advanced',
     protagonist_model_quality: newVal?.protagonist_model_quality ?? 'advanced',
@@ -47,7 +56,7 @@ const missingProviders = computed(() => {
   ])
   const missing: string[] = []
   for (const p of providers) {
-    if (p && p !== 'ollama' && p !== 'stable_diffusion' && !props.configuredKeys?.[p]) {
+    if (p && p !== 'ollama' && p !== 'stable_diffusion' && p !== 'comfyui' && !props.configuredKeys?.[p]) {
       missing.push(p)
     }
   }
@@ -55,12 +64,13 @@ const missingProviders = computed(() => {
 })
 
 const isProviderConfigured = (providerId: string) => {
-  if (providerId === 'ollama' || providerId === 'stable_diffusion') return true
+  if (providerId === 'ollama' || providerId === 'stable_diffusion' || providerId === 'comfyui') return true
   return Boolean(props.configuredKeys?.[providerId])
 }
 
 /** Self-hosted endpoints whose discovered model list depends on the configured URL. */
 const modelBaseUrl = (provider: string): string => {
+  if (provider === 'comfyui') return localForm.value.comfyui_url || ''
   if (provider === 'ollama') return localForm.value.ollama_url || ''
   if (provider === 'stable_diffusion') return localForm.value.stable_diffusion_url || ''
   return ''
@@ -135,6 +145,9 @@ const testSimple = () => {
     cfg_scale: localForm.value.simple_cfg_scale,
     sampler_name: localForm.value.simple_sampler_name,
     scheduler: localForm.value.simple_scheduler,
+    comfyui_url: localForm.value.comfyui_url,
+    comfyui_timeout: localForm.value.comfyui_timeout,
+    comfyui_workflow: localForm.value.simple_comfyui_workflow,
     min_long_edge: localForm.value.simple_min_long_edge
   })
 }
@@ -150,6 +163,9 @@ const testAdvanced = () => {
     cfg_scale: localForm.value.advanced_cfg_scale,
     sampler_name: localForm.value.advanced_sampler_name,
     scheduler: localForm.value.advanced_scheduler,
+    comfyui_url: localForm.value.comfyui_url,
+    comfyui_timeout: localForm.value.comfyui_timeout,
+    comfyui_workflow: localForm.value.advanced_comfyui_workflow,
     min_long_edge: localForm.value.advanced_min_long_edge
   })
 }
@@ -200,6 +216,16 @@ const testAdvanced = () => {
         </p>
       </div>
     </div>
+
+    <ComfyUISettings
+      v-if="localForm.simple_model_provider === 'comfyui' || localForm.advanced_model_provider === 'comfyui'"
+      v-model:url="localForm.comfyui_url"
+      v-model:timeout="localForm.comfyui_timeout"
+      v-model:simple-workflow="localForm.simple_comfyui_workflow"
+      v-model:advanced-workflow="localForm.advanced_comfyui_workflow"
+      :simple="localForm.simple_model_provider === 'comfyui'"
+      :advanced="localForm.advanced_model_provider === 'comfyui'"
+    />
 
     <!-- QUALITY ROUTING PER CONTENT TYPE -->
     <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
@@ -406,7 +432,7 @@ const testAdvanced = () => {
 
       <!-- Advanced Tuning Toggle (Stable Diffusion / Ollama only) -->
       <div 
-        v-if="localForm.simple_model_provider === 'stable_diffusion' || localForm.simple_model_provider === 'ollama'"
+        v-if="localForm.simple_model_provider === 'stable_diffusion' || localForm.simple_model_provider === 'ollama' || localForm.simple_model_provider === 'comfyui'"
         class="pt-2 border-t border-slate-800/60"
       >
         <button
@@ -560,7 +586,7 @@ const testAdvanced = () => {
 
       <!-- Advanced Tuning Toggle (Stable Diffusion / Ollama only) -->
       <div 
-        v-if="localForm.advanced_model_provider === 'stable_diffusion' || localForm.advanced_model_provider === 'ollama'"
+        v-if="localForm.advanced_model_provider === 'stable_diffusion' || localForm.advanced_model_provider === 'ollama' || localForm.advanced_model_provider === 'comfyui'"
         class="pt-2 border-t border-slate-800/60"
       >
         <button
