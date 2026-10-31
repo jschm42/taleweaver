@@ -36,6 +36,15 @@ All debug commands are prefixed with `/debug`.
 | `/debug map` | Shows summary counts of world elements. |
 | `/debug log on/off` | Toggles detailed engine logging in the console. |
 
+### Running Script Code: `/script <code>`
+
+`/script` runs statements of the [scripting API](scripting_engine.md) (`tw.*`) in the current session. It works only while debug mode is on (`/debug on`, or `TALEWEAVER_DEBUG_ENABLED`); otherwise it is an unknown command. The code runs in the same sandbox as event scripts and its changes are applied for real (items move, variables change, NPCs speak), so it is a quick way to try a script line before putting it into the editor.
+
+- A single expression answers with its value: `/script tw.npcs.get('BRAM').hp` → `= 40`.
+- Several statements are separated with `;`: `/script tw.player.heal(10); tw.vars.set('door', 'open')`.
+- The answer is one debug message: `[DEBUG SCRIPT] OK` (or `FAILED`), the code after `>>>`, then the value (`= ...`) or the syntax and script errors. Script output such as `tw.story.narrate(...)` or NPC lines appears as usual.
+- Unlike `/debug`, the code is passed on exactly as typed, so IDs and strings keep their case.
+
 ## Practical Examples
 
 ### 1. Unlocking the Walkthrough
@@ -52,6 +61,11 @@ If you need to force open a door but don't know the ID:
 (Then use the ID found)
 `user: /debug open_exit exit_42`
 
-### 4. Testing Reward UI
+### 4. Checking a Script Value
+To see whether a variable was set and how many HP an NPC has left:
+`user: /script tw.vars.get('alarm')`
+`user: /script tw.npcs.get('TEMPLE_GUARD').hp`
+
+### 5. Testing Reward UI
 To see how the game looks when won:
 `user: /debug game_won`

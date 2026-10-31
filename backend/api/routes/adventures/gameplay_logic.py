@@ -29,6 +29,10 @@ from backend.core.narration_styles import (
 from backend.core.narrator_voices import narrator_voice_rules
 from backend.core.voice_tags import vocal_tag_reminder
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
+from backend.api.routes.adventures.debug_script_command import (
+    handle_script_command,
+    is_script_command,
+)
 from backend.api.routes.adventures.turn_helpers import (
     TurnCombatStateHelper,
     TurnProgressionBuilder,
@@ -810,6 +814,13 @@ class GameTurnManager:
         # /roll [sides]: a single die roll, no narration pass
         if is_roll_command(user_msg):
             async for chunk in handle_roll_command(self, user_msg):
+                yield chunk
+            yield await self._command_final_event()
+            return
+
+        # /script <code>: run script statements (debug mode only), answered as a debug message
+        if is_script_command(user_msg):
+            async for chunk in handle_script_command(self, user_msg):
                 yield chunk
             yield await self._command_final_event()
             return

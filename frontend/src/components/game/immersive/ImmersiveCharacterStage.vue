@@ -125,6 +125,28 @@ const voicedSpeaker = computed(() => {
   return (audioService.currentSpeaker.value || '').trim().toLowerCase()
 })
 
+/**
+ * Danger level of the protagonist's card in 25% HP steps: 0 above 75%, 1 up to 75%,
+ * 2 up to 50%, 3 up to 25% (and at 0). The card glows redder with each level.
+ */
+function playerDangerLevel(npc: any): 0 | 1 | 2 | 3 {
+  if (npc?.id !== 'PLAYER') return 0
+  const hp = Number(npc.hp)
+  const maxHp = Number(npc.max_hp)
+  if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) return 0
+  const ratio = hp / maxHp
+  if (ratio <= 0.25) return 3
+  if (ratio <= 0.5) return 2
+  if (ratio <= 0.75) return 1
+  return 0
+}
+
+function playerCardClass(npc: any): string {
+  const level = playerDangerLevel(npc)
+  if (level === 0) return 'border-emerald-500/70 hover:border-emerald-400'
+  return `tw-hp-danger-${level}`
+}
+
 function isNpcVoiced(npc: any): boolean {
   const speaker = voicedSpeaker.value
   if (!speaker || !npc) {
@@ -149,10 +171,10 @@ function isNpcVoiced(npc: any): boolean {
           isNpcVoiced(npc)
             ? 'tw-npc-voiced border-transparent'
             : npc.id === 'PLAYER'
-              ? 'border-emerald-500/70 hover:border-emerald-400'
+              ? playerCardClass(npc)
               : 'border-slate-700/70 hover:border-cyan-400/80'
         ]"
-        :title="npc.id === 'PLAYER' ? 'Open your hero' : undefined"
+        :title="npc.id === 'PLAYER' ? (playerDangerLevel(npc) ? `Open your hero (HP ${npc.hp}/${npc.max_hp})` : 'Open your hero') : undefined"
         @click="emit('npcClick', npc)"
         @mouseenter="emit('npcHover', npc, $event)"
         @mousemove="emit('npcHover', npc, $event)"
@@ -248,9 +270,43 @@ function isNpcVoiced(npc: any): boolean {
   }
 }
 
+/* Protagonist low on HP: the card glows redder in 25% steps (see playerDangerLevel). */
+.tw-hp-danger-1 {
+  border-color: rgb(251 113 133 / 0.6);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.7),
+    0 0 12px rgb(239 68 68 / 0.35);
+}
+
+.tw-hp-danger-2 {
+  border-color: rgb(239 68 68 / 0.85);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.7),
+    0 0 20px rgb(239 68 68 / 0.6);
+}
+
+.tw-hp-danger-3 {
+  border-color: rgb(220 38 38);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.7),
+    0 0 30px rgb(220 38 38 / 0.85),
+    inset 0 0 18px rgb(220 38 38 / 0.45);
+  animation: tw-hp-danger-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tw-hp-danger-pulse {
+  50% {
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.7),
+      0 0 42px rgb(239 68 68 / 1),
+      inset 0 0 26px rgb(239 68 68 / 0.6);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tw-npc-voiced,
-  .tw-npc-voice-ring {
+  .tw-npc-voice-ring,
+  .tw-hp-danger-3 {
     animation: none;
   }
 }

@@ -16,7 +16,7 @@ import { renderDialogueHtml, renderFormattedHtml, renderPlainHtml, resolveNpc } 
 import { useStoryBubbleAudio } from '@/composables/useStoryBubbleAudio'
 import ImmersiveSystemMessage from '@/components/game/immersive/ImmersiveSystemMessage.vue'
 import ImmersiveSystemNote from './ImmersiveSystemNote.vue'
-import { isDebugMessage, isTurnErrorMessage } from './systemMessages'
+import { isDebugMessage, isScriptReport, isTurnErrorMessage } from './systemMessages'
 import type { ChatMessage } from '@/types'
 import { Volume2, VolumeX } from 'lucide-vue-next'
 import { vDropCap } from '@/skins/vDropCap'
@@ -51,11 +51,18 @@ const userSpeech = computed(
   () => props.exchange.userSpeechText || props.exchange.userMessage?.content || ''
 )
 
-/** Engine events shown inline: failed turns as full notices, the rest as compact notes (no debug output). */
+/**
+ * Engine events shown inline: failed turns and `/script` answers as full notices, the rest as
+ * compact notes (other debug output only appears in the System tab).
+ */
 function storyEvents(messages: ChatMessage[]) {
   return messages
-    .map((msg) => ({ msg, isError: isTurnErrorMessage(msg, props.turnError) }))
-    .filter((event) => event.isError || !isDebugMessage(event.msg))
+    .map((msg) => ({
+      msg,
+      isError: isTurnErrorMessage(msg, props.turnError),
+      isScriptReport: isScriptReport(msg),
+    }))
+    .filter((event) => event.isError || event.isScriptReport || !isDebugMessage(event.msg))
 }
 
 const leadingEvents = computed(() => storyEvents(props.exchange.systemMessages))
@@ -181,7 +188,7 @@ function getEntityForHover(nameOrEntity: any) {
     <!-- 2) ENGINE EVENTS BEFORE THE NARRATION (compact notes; failed turns keep Retry/Cancel) -->
     <template v-for="(event, sysIdx) in leadingEvents" :key="event.msg._key || `leading-${sysIdx}`">
       <ImmersiveSystemMessage
-        v-if="event.isError"
+        v-if="event.isError || event.isScriptReport"
         :msg="event.msg"
         :turn-error="props.turnError"
         :sheet="props.sheet"
@@ -292,7 +299,7 @@ function getEntityForHover(nameOrEntity: any) {
     <!-- 4) ENGINE EVENTS AFTER THE NARRATION (items added, stat changes) -->
     <template v-for="(event, sysIdx) in trailingEvents" :key="event.msg._key || `trailing-${sysIdx}`">
       <ImmersiveSystemMessage
-        v-if="event.isError"
+        v-if="event.isError || event.isScriptReport"
         :msg="event.msg"
         :turn-error="props.turnError"
         :sheet="props.sheet"

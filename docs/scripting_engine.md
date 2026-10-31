@@ -649,6 +649,8 @@ tw.npcs.say("TROLL", riddle or "What has roots nobody sees and is taller than tr
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)
+
+To try a script line in a running game, turn on debug mode and use `/script <code>` (see [In-Game Debugging](in_game_debugging.md)): `/script tw.npcs.get('BRAM').hp` answers with the value as a debug message.
 Provides simple, clean logging methods to inspect state during development and playtesting:
 
 #### 1. Server Console Logging
