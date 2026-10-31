@@ -112,7 +112,7 @@ const modalAward = ref<any>({
 function openAddModal() {
   isNewAward.value = true
   modalAward.value = {
-    key: 'award_' + Math.random().toString(36).substring(2, 11),
+    key: 'AWARD_' + Math.random().toString(36).substring(2, 11).toUpperCase(),
     title: '',
     description: '',
     tier: 'bronze',

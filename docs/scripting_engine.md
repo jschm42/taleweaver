@@ -563,7 +563,7 @@ Directly manipulates adventure quest entries:
 
 ### `tw.awards`
 Awards achievements to the player's profile:
-- `tw.awards.grant(award_key: str)`: Immediately grants the specified trophy/badge.
+- `tw.awards.grant(award_key: str)`: Immediately grants the specified trophy/badge. The key is matched case-insensitively against the adventure's award keys.
 
 ### `tw.dice`
 Provides deterministic, seeded random number generation:

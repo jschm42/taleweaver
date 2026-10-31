@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from backend.engine.rules.award_keys import canonical_award_keys
 from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
@@ -151,6 +152,9 @@ class ProgressGuardMixin:
                 event.completed_quest_ids, quests, ("goal", "description"), "Quest", context
             )
         if event.earned_award_keys:
+            event.earned_award_keys = canonical_award_keys(
+                event.earned_award_keys, self.adventure.awards or []
+            )
             awards = {a.get("key"): a for a in reversed(self.adventure.awards or [])}
             event.earned_award_keys = self._validated(
                 event.earned_award_keys, awards, ("requirement", "description"), "Award", context

@@ -5,7 +5,7 @@
  * A page covers one scene + sequence (chapter) and shows all of its exchanges in order
  * (see comicPages.ts). The page only changes when the scene or the sequence changes.
  */
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { ComicTurn } from '@/composables/useComicTurns'
 import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import ImmersiveStoryExchange from '@/components/game/immersive/ImmersiveStoryExchange.vue'
@@ -43,6 +43,8 @@ const emit = defineEmits<{
 }>()
 
 const storyContainerRef = ref<HTMLElement | null>(null)
+/** Wrapper of the inline panels after the newest exchange (choice dialog, container, unlock). */
+const inlinePanelsRef = ref<HTMLElement | null>(null)
 
 /** Gap (px) kept above the newest exchange when auto-follow stops at its start. */
 const FOLLOW_TOP_GAP_PX = 8
@@ -58,9 +60,40 @@ const { hasContentBelow, scrollToLatest, resumeFollowing } = useScrollToLatest(s
   canFollow: () => props.viewingTurnIndex === null,
   maxFollowTop: () => {
     const latest = latestExchangeElement()
-    return latest ? Math.max(0, latest.offsetTop - FOLLOW_TOP_GAP_PX) : null
+    const exchangeTop = latest ? Math.max(0, latest.offsetTop - FOLLOW_TOP_GAP_PX) : null
+    const panelTop = inlinePanelsFollowTop()
+    if (panelTop === null) return exchangeTop
+    return exchangeTop === null ? panelTop : Math.max(exchangeTop, panelTop)
   },
 })
+
+/**
+ * Scroll position that shows the open inline panels completely, or their top when they are
+ * taller than the feed; `null` while no panel is open.
+ */
+function inlinePanelsFollowTop(): number | null {
+  const panels = inlinePanelsRef.value
+  const container = storyContainerRef.value
+  if (!panels || !container || panels.offsetHeight === 0) return null
+  const panelTop = Math.max(0, panels.offsetTop - FOLLOW_TOP_GAP_PX)
+  const panelBottom = panels.offsetTop + panels.offsetHeight - container.clientHeight
+  return Math.min(panelTop, Math.max(0, panelBottom))
+}
+
+// A panel that opens (or grows) below the narration is followed into view, even if the
+// reader had scrolled up: it waits for their input.
+let inlinePanelsHeight = 0
+let inlinePanelsObserver: ResizeObserver | null = null
+onMounted(() => {
+  if (!inlinePanelsRef.value || typeof ResizeObserver === 'undefined') return
+  inlinePanelsObserver = new ResizeObserver(() => {
+    const height = inlinePanelsRef.value?.offsetHeight ?? 0
+    if (height > inlinePanelsHeight) resumeFollowing()
+    inlinePanelsHeight = height
+  })
+  inlinePanelsObserver.observe(inlinePanelsRef.value)
+})
+onBeforeUnmount(() => inlinePanelsObserver?.disconnect())
 
 // New page: start reading at the top (auto-follow then moves on to the newest exchange).
 watch(() => props.activeTurnIndex, () => {
@@ -156,7 +189,9 @@ const isLatestPage = computed(() => props.activeTurnIndex >= props.gameTurns.len
       </template>
 
       <!-- Inline content after the latest exchange (e.g. a pending choice dialog); hidden while browsing history. -->
-      <slot v-if="props.viewingTurnIndex === null" name="after-exchanges" />
+      <div ref="inlinePanelsRef" class="shrink-0 flex flex-col">
+        <slot v-if="props.viewingTurnIndex === null" name="after-exchanges" />
+      </div>
     </div>
 
     <!-- COMIC PAGE NAVIGATION & PAGING CONTROLS (revealed on hover; pinned while browsing history) -->

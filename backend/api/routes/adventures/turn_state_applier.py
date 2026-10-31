@@ -12,6 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
+from backend.engine.rules.award_keys import canonical_award_keys
 from backend.engine.rules.quest_manager import QuestManager
 from backend.engine.rules.rule_engine import (
     EntityMovement,
@@ -904,7 +905,7 @@ class TurnStateApplier:
             }
             user_awards = list(self.user.earned_awards or [])
             modified = False
-            for key in event.earned_award_keys:
+            for key in canonical_award_keys(event.earned_award_keys, self.adventure.awards or []):
                 if not key:
                     continue
                 already_earned = any(

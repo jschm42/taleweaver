@@ -85,6 +85,8 @@ Requires **Event Scripts** to be enabled in the generator settings.
 ### `[Award: KEY] Title`
 `tier` (bronze, silver, gold, negative), `requires`, `goal_item`, `goal_scene`, `defeat`, `guard`.
 
+Award keys of newly generated adventures are stored in upper case (`brass lever` becomes `BRASS_LEVER`). Granting matches keys case-insensitively, so `tw.awards.grant('brass_lever')` still finds `BRASS_LEVER`, and older adventures keep their stored keys.
+
 ### `[Ability: ID] Name` (inside an NPC or the Protagonist)
 `kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
 

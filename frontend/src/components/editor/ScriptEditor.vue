@@ -784,8 +784,8 @@ onBeforeUnmount(() => {
       class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
       :style="{
         '--cm-min-height': isFullscreen ? '400px' : minHeight,
+        '--cm-max-height': maxHeight,
         minHeight: isFullscreen ? '400px' : minHeight,
-        maxHeight: isFullscreen ? 'none' : maxHeight,
       }"
     >
       <!-- Loading CDN Spinner / Notice -->
@@ -801,7 +801,7 @@ onBeforeUnmount(() => {
       <div
         ref="editorEl"
         v-show="isCmReady"
-        class="codemirror-wrapper w-full h-full text-slate-200"
+        :class="['codemirror-wrapper w-full h-full text-slate-200', { 'codemirror-fill': isFullscreen }]"
       ></div>
 
       <!-- Fallback Textarea if CDN is offline or unavailable -->
@@ -890,9 +890,11 @@ onBeforeUnmount(() => {
 }
 
 /* CodeMirror overrides to integrate with TaleWeaver dark theme */
+/* Inline: the editor grows with its content up to --cm-max-height, then scrolls. */
 .codemirror-wrapper .CodeMirror {
-  height: 100% !important;
+  height: auto !important;
   min-height: var(--cm-min-height, 120px);
+  max-height: var(--cm-max-height, none);
   background-color: transparent !important;
   color: #e2e8f0 !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
@@ -902,8 +904,16 @@ onBeforeUnmount(() => {
 }
 
 .codemirror-wrapper .CodeMirror-scroll {
-  height: 100% !important;
+  height: auto !important;
   min-height: var(--cm-min-height, 120px);
+  max-height: var(--cm-max-height, none);
+}
+
+/* Fullscreen: the canvas has a fixed height, so the editor fills it and scrolls inside. */
+.codemirror-wrapper.codemirror-fill .CodeMirror,
+.codemirror-wrapper.codemirror-fill .CodeMirror-scroll {
+  height: 100% !important;
+  max-height: none;
 }
 
 .codemirror-wrapper .CodeMirror-gutters {

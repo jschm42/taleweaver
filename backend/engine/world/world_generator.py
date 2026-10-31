@@ -27,6 +27,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.engine.blueprint import Blueprint, apply_blueprint, prepare_blueprint
 
 # --- Re-exports so existing imports stay valid ---
+from backend.engine.rules.award_keys import normalize_new_award_keys
 from backend.engine.world.world_schemas import (  # noqa: F401
     AwardTemplateSchema,
     EquipmentSchema,
@@ -941,6 +942,7 @@ class WorldGenerator:
 
         if not scripts_generation_enabled:
             manifest_dict["scripts"] = []
+        normalize_new_award_keys(manifest_dict.get("awards"))
 
         objects = manifest_dict.get("objects") or []
         _postprocess_containers(objects, container_generation_enabled, max_containers)

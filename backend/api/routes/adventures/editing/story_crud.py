@@ -21,6 +21,7 @@ from backend.api.routes.adventures.schemas import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.rules.award_keys import normalize_award_key
 from backend.engine.scripting import SafeAstInterpreter
 from backend.models.user import User
 
@@ -90,9 +91,9 @@ async def create_editor_award(
 ) -> dict:
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
-    award_key = _sanitize_editor_id(payload.key, "key")
+    award_key = normalize_award_key(_sanitize_editor_id(payload.key, "key"))
     awards = list(adv.awards or [])
-    if any(str(a.get("key") or "") == award_key for a in awards):
+    if any(str(a.get("key") or "").upper() == award_key for a in awards):
         raise HTTPException(status_code=409, detail="award key already exists")
 
     award = {
