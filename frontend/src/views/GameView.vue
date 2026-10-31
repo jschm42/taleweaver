@@ -1557,8 +1557,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   sessionId: computed(() => props.id),
   autoSpeakNarration,
   autoSpeakDialogues,
-  // Speech stays silent while the player answers a choice dialog.
-  speechSuppressed: isDialogOpen,
+  // A choice dialog no longer silences speech: it usually opens at the end of the turn whose
+  // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
   speechDeferred: isSceneTransitioning,
 })
