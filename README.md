@@ -349,6 +349,8 @@ Core server and security settings are configured in `.env` (refer to [`.env.exam
 
 With **ElevenLabs** as speech provider, every NPC and the protagonist speak with their own voice (Gemini TTS reads everything in the narrator voice). The voices come from a curated list, **`backend/core/elevenlabs_voices.json`**. The world builder assigns voices only from this list, automatic casting picks from it (matching gender, never repeating the narrator's or another character's voice), and the editor's voice picker offers it.
 
+A dialogue line (`Name: "..."`, from the Game Master or a script) gets the voice of the NPC it names: by ID, by full name, or by a shortened name made of the leading words of exactly one NPC's name ("Grimsby" for "Grimsby the Gargoyle"). A short name that fits several NPCs falls back to the narrator voice. Each game copies the NPCs' voices when it starts, so a voice changed in the editor is heard in games started afterwards.
+
 **Change the list** by editing the JSON file; the app reloads it automatically when the file changes:
 
 ```json

@@ -142,13 +142,23 @@ export function resolveNpcVoice(speaker: string | undefined, npcMetadata: Record
   // Keys are NPC ids, but dialogue lines name the speaker ("Waitress Betty"): match both. The
   // protagonist is in the map too, so the player's own lines get their voice.
   const loweredSpeaker = speaker.trim().toLowerCase()
+  const shortNameMatches = new Set<string>()
   for (const [key, value] of Object.entries(npcMetadata)) {
     if (!value || typeof value !== 'object' || !value.voice) continue
     const name = String(value.name || '').trim().toLowerCase()
     if (key.toLowerCase() === loweredSpeaker || name === loweredSpeaker) return String(value.voice)
+    if (isShortNameOf(loweredSpeaker, name)) shortNameMatches.add(String(value.voice))
   }
 
-  return undefined
+  // The narrator often shortens names ("Grimsby" for "Grimsby the Gargoyle"); only an
+  // unambiguous match is used, so two "Captain ..." NPCs never swap voices.
+  return shortNameMatches.size === 1 ? [...shortNameMatches][0] : undefined
+}
+
+/** True when one name is the other's leading whole words ("grimsby" / "grimsby the gargoyle"). */
+function isShortNameOf(speaker: string, name: string): boolean {
+  if (!speaker || !name) return false
+  return name.startsWith(`${speaker} `) || speaker.startsWith(`${name} `)
 }
 
 export function buildSegmentRequests(
