@@ -109,7 +109,10 @@ class TestService {
     height?: number | null,
     samplerName?: string | null,
     scheduler?: string | null,
-    minLongEdge?: number | null
+    minLongEdge?: number | null,
+    comfyuiUrl?: string,
+    comfyuiTimeout?: number,
+    comfyuiWorkflow?: string
   ) {
     this.testResults.value[key] = { status: 'loading', message: 'Generating test image...' }
 
@@ -130,6 +133,9 @@ class TestService {
         provider,
         ollama_url: cleanStr(ollamaUrl),
         stable_diffusion_url: cleanStr(stableDiffusionUrl),
+        comfyui_url: cleanStr(comfyuiUrl),
+        comfyui_timeout: cleanNum(comfyuiTimeout),
+        comfyui_workflow: cleanStr(comfyuiWorkflow),
         steps: cleanNum(steps),
         cfg_scale: cleanNum(cfgScale),
         sampler_name: cleanStr(samplerName),

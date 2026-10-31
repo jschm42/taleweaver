@@ -56,6 +56,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
     "ollama": ProviderSpec(
         fetchers.fetch_ollama, "http://localhost:11434", needs_key=False, custom_base=True
     ),
+    "comfyui": ProviderSpec(
+        fetchers.fetch_comfyui, "http://127.0.0.1:8188", needs_key=False, custom_base=True
+    ),
     "stable_diffusion": ProviderSpec(
         fetchers.fetch_stable_diffusion, "http://127.0.0.1:7860", needs_key=False, custom_base=True
     ),

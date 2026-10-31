@@ -28,6 +28,7 @@ from backend.api.routes.settings_normalization import (
 )
 from backend.core.auth import get_current_admin, get_current_user
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
+from backend.core.comfyui import ComfySettings, ComfyTestOptions, default_edge
 from backend.core.config import settings
 from backend.core.custom_openai_diagnostics import connection_test_diagnostic
 from backend.core.database import get_db
@@ -456,7 +457,7 @@ def _is_t2i_configured(user: User, db_keys: dict) -> bool:
     simple_model = t2i.get("simple_model")
 
     def has_key(provider):
-        if provider in ("ollama", "stable_diffusion"):
+        if provider in ("ollama", "stable_diffusion", "comfyui"):
             return True
         return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
 
@@ -534,7 +535,7 @@ class SettingsPayload(BaseModel):
     )
 
 
-class T2ISettingsPayload(BaseModel):
+class T2ISettingsPayload(ComfySettings):
     simple_model: str
     simple_model_provider: str
     advanced_model: str
@@ -999,7 +1000,7 @@ async def test_llm_connection(
         user.llm_settings = old_settings
 
 
-class TestVisionPayload(BaseModel):
+class TestVisionPayload(ComfyTestOptions):
     model: str
     provider: str
     ollama_url: Optional[str] = None
@@ -1013,7 +1014,7 @@ class TestVisionPayload(BaseModel):
     min_long_edge: Optional[int] = None
 
 
-_LOCAL_IMAGE_PROVIDERS = ("ollama", "stable_diffusion")
+_LOCAL_IMAGE_PROVIDERS = ("ollama", "stable_diffusion", "comfyui")
 
 
 def _resolve_vision_api_key(
@@ -1037,6 +1038,8 @@ def _resolve_vision_api_key(
 
 def _build_vision_provider_options(payload: "TestVisionPayload", provider_key: str) -> dict:
     options: dict[str, Any] = {}
+    if provider_key == "comfyui":
+        options.update(ComfyTestOptions.model_validate(payload.model_dump()).model_dump())
     for key in ("ollama_url", "stable_diffusion_url", "sampler_name", "scheduler"):
         if getattr(payload, key):
             options[key] = getattr(payload, key)
@@ -1046,7 +1049,9 @@ def _build_vision_provider_options(payload: "TestVisionPayload", provider_key: s
 
     # Test vision generates a wizard portrait (CHARACTER/4:5 aspect ratio)
     if provider_key in _LOCAL_IMAGE_PROVIDERS and not payload.width and not payload.height:
-        min_long_edge = payload.min_long_edge or 1024
+        min_long_edge = payload.min_long_edge or (
+            default_edge(options) if provider_key == "comfyui" else 1024
+        )
         width, height = MediaEngine._resolve_sd_dimensions("CHARACTER", min_long_edge)
         options["width"] = width
         options["height"] = height
@@ -1208,7 +1213,7 @@ async def generate_catalog_image(
         }
 
     api_key = _resolve_provider_api_key(provider, user.encrypted_api_keys)
-    if provider not in ("ollama", "stable_diffusion") and not api_key:
+    if provider not in ("ollama", "stable_diffusion", "comfyui") and not api_key:
         return {"status": "error", "message": f"No API key for {provider}"}
 
     try:

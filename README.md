@@ -108,7 +108,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### Media & Immersion
 * Optional AI-generated images to enhance the aesthetic.
 * **Import/Export:** Adventures can be backed up or shared.
-* **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
+* **Offline Image Generation:** Local providers are supported, including **Ollama**, **Stable Diffusion via Automatic1111/Forge API**, and [**ComfyUI (Experimental)**](docs/comfyui/README.md) with selectable checkpoints and standard SD 1.5/SDXL workflows.
 
 ### Recent Feature Highlights
 
@@ -208,7 +208,7 @@ TaleWeaver uses an adapter layer ([LiteLLM](https://github.com/BerriAI/litellm))
 | **Narrative (Pass 2)** | DeepSeek v4 Pro, GPT-6 Luna Pro, Claude 4.5 Sonnet | OpenAI, Anthropic, OpenRouter, DeepSeek, OpenAI-compatible APIs | Rich, atmospheric prose adapting to player choices and mood |
 | **Text-to-Speech (TTS)** | Gemini 3.5 Flash TTS, ElevenLabs | Google Gemini, ElevenLabs | High-fidelity voice narration; feels like a live audiobook |
 | **Speech-to-Text (STT)**| faster-whisper (Whisper Base / Small / Medium, CPU int8) | Local Whisper (background thread) | Hands-free microphone input with Push-to-Talk hotkeys |
-| **Visual Scene Art** | FLUX, Stable Diffusion (A1111 / Forge), Ollama | Local SD WebUI, Ollama, Cloud APIs | Contextual illustrations for scenes, items, and NPCs |
+| **Visual Scene Art** | FLUX, Stable Diffusion (A1111 / Forge), ComfyUI (Experimental), Ollama | Local SD WebUI, Ollama, Cloud APIs | Contextual illustrations for scenes, items, and NPCs |
 
 **OpenAI-Compatible API** connects hosted gateways and self-hosted servers through a configurable Chat Completions base URL, optional encrypted key and exact model ID. It is available for all five LLM roles, including the play agent and history compression. See the [configuration guide](docs/custom-openai-compatible.md) for model discovery, structured-output modes and local networking requirements. Endpoint and model compatibility must be checked with your configuration.
 
