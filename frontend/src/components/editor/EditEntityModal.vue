@@ -1090,8 +1090,8 @@ const textLogPreviewClass = computed(() => {
               <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <div class="space-y-1 pr-4">
-                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Killed</p>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC can still fight but is never permanently defeated.</p>
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Damaged</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC never loses HP (scripts, Game Master, combat) and cannot be fought.</p>
                   </div>
                   <button
                     type="button"

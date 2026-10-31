@@ -9,7 +9,7 @@ from tests.conftest import TestSessionLocal
 from tests.test_script_turn_integration import _build_test_turn_manager
 
 
-async def _goblin_manager(db, session_id: str):
+async def _goblin_manager(db, session_id: str, killable: bool = True):
     manager = await _build_test_turn_manager(db, [], session_id=session_id)
     db.add(
         WorldEntity(
@@ -21,6 +21,7 @@ async def _goblin_manager(db, session_id: str):
             current_scene_id="SCENE_START",
             hp=30,
             max_hp=30,
+            is_killable=killable,
         )
     )
     await db.commit()
@@ -80,3 +81,36 @@ async def test_lethal_script_damage_defeats_the_npc(setup_test_db):
         # Assert
         goblin = await _goblin(db)
         assert goblin.hp == 0
+
+
+@pytest.mark.asyncio
+async def test_no_hp_loss_for_an_npc_that_cannot_be_damaged(setup_test_db):
+    async with TestSessionLocal() as db:
+        # Arrange
+        manager = await _goblin_manager(db, "sess_npc_immortal", killable=False)
+
+        # Act: damage, a negative change and a lower HP assignment are all blocked
+        await _run_and_apply(
+            manager,
+            "g = tw.npcs.get('GOBLIN')\ng.damage(99)\ng.modify_hp(-5)\ng.hp = 3",
+        )
+        await db.commit()
+
+        # Assert
+        assert (await _goblin(db)).hp == 30
+        assert not (manager.state.entity_states or {}).get("GOBLIN", {}).get("is_defeated")
+
+
+@pytest.mark.asyncio
+async def test_kill_is_ignored_and_reported_for_an_npc_that_cannot_be_damaged(setup_test_db):
+    async with TestSessionLocal() as db:
+        # Arrange
+        manager = await _goblin_manager(db, "sess_npc_nokill", killable=False)
+
+        # Act
+        messages = await _run_and_apply(manager, "tw.npcs.kill('GOBLIN')")
+        await db.commit()
+
+        # Assert
+        assert (await _goblin(db)).hp == 30
+        assert any("cannot be damaged" in str(m) for m in messages)

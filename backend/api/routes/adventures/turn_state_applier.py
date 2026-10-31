@@ -13,6 +13,7 @@ from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
+from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
 from backend.engine.rules.quest_manager import QuestManager
 from backend.engine.rules.rule_engine import (
     EntityMovement,
@@ -650,6 +651,7 @@ class TurnStateApplier:
             )
             canonical_ents = session_ents_res.scalars().all()
             ent_lookup_by_id = {e.id.upper(): e.id for e in canonical_ents if e.id}
+            ent_rows = {e.id: e for e in canonical_ents if e.id}
             ent_lookup_by_name = {
                 (e.name or "").strip().lower(): e.id for e in canonical_ents if e.name
             }
@@ -673,7 +675,9 @@ class TurnStateApplier:
                     states[eid]["spatial_position"] = update.spatial_position
                 if update.is_hidden is not None:
                     states[eid]["is_hidden"] = update.is_hidden
-                if update.hp is not None:
+                if update.hp is not None and not blocks_hp_loss(
+                    self.state.entity_states.get(eid), ent_rows.get(eid), update.hp
+                ):
                     states[eid]["hp"] = update.hp
                 if update.mana is not None:
                     states[eid]["mana"] = update.mana
@@ -691,6 +695,11 @@ class TurnStateApplier:
                     states[eid]["moveable"] = update.moveable
                 if update.allowed_scenes is not None:
                     states[eid]["allowed_scenes"] = update.allowed_scenes
+                if update.is_defeated is True and not can_be_damaged(
+                    self.state.entity_states.get(eid), ent_rows.get(eid)
+                ):
+                    # "NPC can be damaged" is off: the GM cannot defeat this NPC either.
+                    update.is_defeated = None
                 if update.is_defeated is not None:
                     was_defeated = self.state.entity_states.get(eid, {}).get("is_defeated", False)
                     if not was_defeated and update.is_defeated is True:

@@ -156,6 +156,9 @@ class CombatContextMixin:
         return bool(getattr(npc, "is_killable", True))
 
     def _is_npc_attackable(self, npc: WorldEntity) -> bool:
+        # "NPC can be damaged" off: the NPC cannot be fought at all (no unwinnable fights).
+        if not self._is_npc_killable(npc):
+            return False
         override = self._entity_override(npc.id, "is_attackable")
         if override is None:
             override = npc.is_attackable

@@ -425,6 +425,9 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, NPCVitalsMixin, 
 
     @hp.setter
     def hp(self, val: int) -> None:
+        if self._data.get("is_killable") is False and int(val) < self.hp:
+            # "NPC can be damaged" is off: assigning a lower HP is ignored too.
+            return
         self._changeset.entity_updates.append({"entity_id": self._id, "hp": max(0, int(val))})
 
     @property
@@ -587,8 +590,24 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, NPCVitalsMixin, 
                 return True
         return False
 
+    @property
+    def is_killable(self) -> bool:
+        """False when the editor's "NPC can be damaged" is off (or the game switched it off)."""
+        return self._data.get("is_killable") is not False
+
     def kill(self, drop_inventory: bool = True) -> None:
-        """Kills this NPC, setting HP to 0 and marking them defeated."""
+        """Kills this NPC, setting HP to 0 and marking them defeated.
+
+        An NPC that cannot be damaged stays alive; the chat reports the ignored kill.
+        """
+        if not self.is_killable:
+            from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
+
+            self._changeset.system_messages.append(
+                f"{SCRIPT_ERROR_PREFIX} in 'tw.npcs.kill': {self.name} cannot be damaged "
+                "('NPC can be damaged' is off), so the kill was ignored."
+            )
+            return
         self.hp = 0
         self.is_defeated = True
         self._changeset.entity_updates.append({"entity_id": self._id, "hp": 0, "is_defeated": True})
@@ -608,9 +627,12 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, NPCVitalsMixin, 
             self._changeset.npc_attack_requests.append(self._id)
 
     def modify_hp(self, delta: int) -> None:
+        if not self.is_killable and int(delta) < 0:
+            # "NPC can be damaged" is off: every HP loss is blocked.
+            return
         new_hp = max(0, self.hp + int(delta))
         self.hp = new_hp
-        if new_hp == 0 and not self.is_defeated:
+        if new_hp == 0 and not self.is_defeated and self.is_killable:
             self.kill()
 
 
