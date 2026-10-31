@@ -91,3 +91,33 @@ async def test_script_grant_reaches_the_player():
     assert manager.chat == [("system", expected)]
     assert manager.checkpoints == [CHECKPOINT_REASON_AWARD_GRANTED]
     assert manager.user.earned_awards[0]["key"] == "AWARD_BRASS_LEVER"
+
+
+@pytest.mark.asyncio
+async def test_unknown_script_award_is_reported_in_the_chat():
+    # Arrange
+    manager = _FakeManager(_AWARDS)
+
+    # Act
+    messages = await grant_awards(manager, ["AWARD_TYPO"], from_script=True)
+
+    # Assert
+    assert len(messages) == 1
+    assert messages[0].startswith("Script error in 'tw.awards.grant'")
+    assert "'AWARD_TYPO' does not exist" in messages[0]
+    assert manager.chat == [("system", messages[0])]
+    assert manager.user.earned_awards == []
+    assert manager.checkpoints == []
+
+
+@pytest.mark.asyncio
+async def test_unknown_gm_award_is_only_logged():
+    # Arrange
+    manager = _FakeManager(_AWARDS)
+
+    # Act
+    messages = await grant_awards(manager, ["AWARD_TYPO"])
+
+    # Assert
+    assert messages == []
+    assert manager.chat == []

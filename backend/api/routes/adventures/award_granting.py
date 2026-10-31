@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.engine.rules.award_keys import canonical_award_keys
+from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,12 @@ def _already_earned(user_awards: list[dict[str, Any]], key: str, adventure_id: s
         and (ea.get("template_id") == adventure_id or ea.get("adventure_id") == adventure_id)
         for ea in user_awards
     )
+
+
+def unknown_award_keys(adventure: Any, keys: Iterable[Any]) -> list[str]:
+    """The requested keys that match no award of the adventure (ignoring case)."""
+    known = {str(aw.get("key") or "").upper() for aw in (adventure.awards or [])}
+    return [str(key) for key in keys if key and str(key).upper() not in known]
 
 
 def record_earned_awards(
@@ -62,10 +69,25 @@ def record_earned_awards(
     return granted
 
 
-async def grant_awards(manager: Any, keys: Iterable[Any]) -> list[str]:
-    """Grants the awards, writes one chat message per new award and queues a checkpoint."""
-    granted = record_earned_awards(manager.user, manager.adventure, manager.state.session_id, keys)
+async def grant_awards(
+    manager: Any, keys: Iterable[Any], *, from_script: bool = False
+) -> list[str]:
+    """Grants the awards, writes one chat message per new award and queues a checkpoint.
+
+    For scripts (``from_script``) an unknown key is reported in the chat as a script error, so
+    a typo in ``tw.awards.grant(...)`` is visible; the GM's unknown keys are only logged.
+    """
+    keys = list(keys)
     messages: list[str] = []
+    if from_script:
+        for key in unknown_award_keys(manager.adventure, keys):
+            error = (
+                f"{SCRIPT_ERROR_PREFIX} in 'tw.awards.grant': the award '{key}' does not exist "
+                "in this adventure."
+            )
+            await manager._save_chat_message("system", error)
+            messages.append(error)
+    granted = record_earned_awards(manager.user, manager.adventure, manager.state.session_id, keys)
     for award in granted:
         message = f"{AWARD_MESSAGE_PREFIX}{award.get('title') or award.get('key')}"
         await manager._save_chat_message("system", message)

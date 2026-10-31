@@ -291,7 +291,8 @@ function isNpcVoiced(npc: any): boolean {
 /* Stat changes: values float up from the top of the card and fade (see useStatChangePopups). */
 .tw-stat-popups {
   position: absolute;
-  inset: 0.4rem 0.25rem auto;
+  /* Starts around the card's middle and floats up from there (the name sits at the bottom). */
+  inset: 34% 0.25rem auto;
   z-index: 30;
   display: flex;
   flex-direction: column;

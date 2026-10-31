@@ -2849,6 +2849,11 @@ class GameTurnManager:
             if not str(getattr(m, "content", m)).strip().startswith("[DEBUG")
         ]
 
+    async def _save_script_notice(self, text: str) -> ScriptMessage:
+        """A script's system notice, stored in the chat (dialog choices reload the chat)."""
+        await self._save_chat_message("system", text)
+        return ScriptMessage(text, role="system")
+
     async def _apply_script_changeset(
         self, changeset: ScriptChangeset, game_event: Any = None
     ) -> list[str]:
@@ -2859,8 +2864,8 @@ class GameTurnManager:
             self.avatar.hp = max(0, min(RESOURCE_CAP, self.avatar.hp + changeset.player_hp_change))
             verb = "gain" if changeset.player_hp_change > 0 else "lose"
             system_messages.append(
-                ScriptMessage(
-                    f"You {verb} {abs(changeset.player_hp_change)} HP (Script).", role="system"
+                await self._save_script_notice(
+                    f"You {verb} {abs(changeset.player_hp_change)} HP (Script)."
                 )
             )
             if not getattr(self, "_in_protagonist_hp_trigger", False):
@@ -2888,8 +2893,8 @@ class GameTurnManager:
             )
             verb = "gain" if changeset.player_mana_change > 0 else "lose"
             system_messages.append(
-                ScriptMessage(
-                    f"You {verb} {abs(changeset.player_mana_change)} Mana (Script).", role="system"
+                await self._save_script_notice(
+                    f"You {verb} {abs(changeset.player_mana_change)} Mana (Script)."
                 )
             )
 
@@ -2899,9 +2904,8 @@ class GameTurnManager:
             )
             verb = "gain" if changeset.player_stamina_change > 0 else "lose"
             system_messages.append(
-                ScriptMessage(
-                    f"You {verb} {abs(changeset.player_stamina_change)} Stamina (Script).",
-                    role="system",
+                await self._save_script_notice(
+                    f"You {verb} {abs(changeset.player_stamina_change)} Stamina (Script)."
                 )
             )
 
@@ -2909,8 +2913,8 @@ class GameTurnManager:
             self.avatar.exp = max(0, (self.avatar.exp or 0) + changeset.player_xp_change)
             verb = "gain" if changeset.player_xp_change > 0 else "lose"
             system_messages.append(
-                ScriptMessage(
-                    f"You {verb} {abs(changeset.player_xp_change)} XP (Script).", role="system"
+                await self._save_script_notice(
+                    f"You {verb} {abs(changeset.player_xp_change)} XP (Script)."
                 )
             )
 
@@ -3074,7 +3078,7 @@ class GameTurnManager:
             self.state.quests = quests
 
         # tw.awards.grant(...): same granting as GM-awarded achievements.
-        for award_msg in await grant_awards(self, changeset.granted_award_keys):
+        for award_msg in await grant_awards(self, changeset.granted_award_keys, from_script=True):
             system_messages.append(ScriptMessage(award_msg, role="system"))
 
         if changeset.completed_condition_override:

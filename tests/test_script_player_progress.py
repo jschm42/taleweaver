@@ -1,8 +1,10 @@
 """Scripts reward the protagonist: XP (tw.player.add_xp) and awards (tw.awards.grant)."""
 
 import pytest
+from sqlalchemy import select
 
 from backend.engine.scripting.runner import ScriptRunner
+from backend.models.chat import ChatMessage
 from tests.conftest import TestSessionLocal
 from tests.test_script_turn_integration import _build_test_turn_manager
 
@@ -27,6 +29,18 @@ async def test_script_xp_is_added_to_the_protagonist(setup_test_db):
         assert ctx.changeset.var_updates["before"] == 40
         assert manager.avatar.exp == 65
         assert any("You gain 25 XP" in str(getattr(m, "content", m)) for m in messages)
+        # Stored in the chat: a dialog choice reloads the chat from the database.
+        await db.flush()
+        stored = (
+            (
+                await db.execute(
+                    select(ChatMessage.content).where(ChatMessage.session_id == "sess_xp")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert "You gain 25 XP (Script)." in stored
 
 
 @pytest.mark.asyncio
