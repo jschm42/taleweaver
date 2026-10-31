@@ -117,6 +117,8 @@ _NPC_ENTITY_KEYS = {
     "on_protagonist_enters_scene_text",
     "on_interact_script",
     "on_interact_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 }
 
 _SYSTEM_ENTITY_KEYS = {"pk", "session_id", "created_at", "updated_at", "template_id"}
@@ -318,6 +320,8 @@ def _normalize_exported_npc_metadata(filtered: dict[str, Any]) -> None:
         "on_protagonist_enters_scene_text",
         "on_interact_script",
         "on_interact_text",
+        "on_receive_item_script",
+        "on_receive_item_text",
     ):
         val = metadata.pop(script_key, None)
         if val:

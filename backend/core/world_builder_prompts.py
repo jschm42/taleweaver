@@ -33,7 +33,8 @@ of the allowlist below.
   inventory items in; `added_item_ids` is in scope) only for CONTAINER;
   craft_guard_expression and on_craft_* only for CONSTRUCTABLE recipes.
 - NPC hooks: on_defeat (the NPC is defeated), on_protagonist_enters_scene (the protagonist
-  enters the NPC's scene), on_interact (the protagonist talks to or interacts with it).
+  enters the NPC's scene), on_interact (the protagonist talks to or interacts with it),
+  on_receive_item (the protagonist gives it items; `received_item_ids` is in scope).
 - To give a NEW object or NPC hooks, create it first, then add a regular "object"/"npc"
   patch with the same id that sets the hook fields, in the same proposal.
 - Each entity in the context lists its existing hooks under "scripts". Reuse their

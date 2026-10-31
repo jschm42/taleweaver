@@ -18,6 +18,7 @@ from backend.api.routes.adventures.agent_commands import (
     handle_playagent_command,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.npc_give import typed_give_command
 from backend.api.routes.adventures.script_llm import make_script_llm_asker
 from backend.api.routes.adventures.session_adventure import SessionAdventure, load_session_adventure
 from backend.core.narration_budget import log_narration_budget
@@ -876,6 +877,12 @@ class GameTurnManager:
                 yield chunk
             return
 
+        # Typed "give <item> to <npc>": a real handover becomes /give_items (see npc_give.py).
+        typed_give = await typed_give_command(self, user_msg)
+        if typed_give:
+            await self._save_chat_message("user", actual_user_input)
+            user_msg = typed_give
+
         is_rule_pass = False
         if user_msg.startswith("/"):
             response = CommandParser.parse_command(
@@ -967,9 +974,12 @@ class GameTurnManager:
                 self.interactions.pending_pickup_trigger = None
                 seq_intro = getattr(self.interactions, "pending_sequence_intro", None)
                 self.interactions.pending_sequence_intro = None
-                if pickup or seq_intro:
-                    reaction_prompt = ""
-                    narration_only = True
+                given = getattr(self.interactions, "pending_reaction_prompt", None)
+                self.interactions.pending_reaction_prompt = None
+                if pickup or seq_intro or given:
+                    # A handover lets the GM apply consequences (e.g. the NPC hands something back).
+                    reaction_prompt = given or ""
+                    narration_only = not given
                     status_text = "The Game Master reacts..."
                     if pickup:
                         item_name = pickup.get("item_name") or "the item"

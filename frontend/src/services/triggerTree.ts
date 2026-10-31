@@ -66,6 +66,7 @@ const NPC_FIELDS: FieldSpec[] = [
   ...SCRIPT_TEXT('on_interact', 'On interact'),
   ...SCRIPT_TEXT('on_defeat', 'On defeat'),
   ...SCRIPT_TEXT('on_protagonist_enters_scene', 'On protagonist enters'),
+  ...SCRIPT_TEXT('on_receive_item', 'On receive item'),
 ]
 
 const OBJECT_FIELDS: FieldSpec[] = [

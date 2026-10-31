@@ -77,6 +77,11 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("on_defeat", "the NPC is defeated"),
         ("on_protagonist_enters_scene", "the protagonist enters the scene containing this NPC"),
         ("on_interact", "the protagonist talks to, inspects or otherwise interacts with this NPC"),
+        (
+            "on_receive_item",
+            "the protagonist gives this NPC one or more items; `received_items` and "
+            "`received_item_ids` are in scope",
+        ),
     ),
     "PROTAGONIST": (
         ("on_hp_change", "the protagonist HP changes (e.g. damaged or healed)"),

@@ -38,12 +38,12 @@ function formatDelta(delta: number): string {
 }
 const brokenImages = ref<Record<string, boolean>>({})
 
-function scrollToTop() {
-  if (!stageContainerRef.value) return
-  stageContainerRef.value.scrollTo({
-    top: 0,
-    behavior: 'smooth'
-  })
+/** Scrolls the first speaking character's card into view; cards keep their order. */
+function revealSpeaker() {
+  const speaker = (props.npcs || []).find((npc) => isInLatestExchange(npc))
+  if (!stageContainerRef.value || !speaker) return
+  const card = stageContainerRef.value.querySelector(`[data-npc-id="${CSS.escape(String(speaker.id))}"]`)
+  card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 }
 
 const activeSpeakersSignature = computed(() => {
@@ -61,7 +61,7 @@ watch(
   () => {
     if (hasSpeakingNpc.value) {
       nextTick(() => {
-        scrollToTop()
+        revealSpeaker()
       })
     }
   }
@@ -180,6 +180,7 @@ const { density, cardStyle } = useStageDensity(stageContainerRef, () => orderedN
       <div
         v-for="npc in orderedNpcs"
         :key="npc.id"
+        :data-npc-id="npc.id"
         class="relative group flex flex-col items-center bg-slate-950 border-2 transition-all duration-300 shrink-0 w-full overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
         :style="cardStyle"
         :class="[

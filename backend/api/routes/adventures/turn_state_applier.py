@@ -15,6 +15,7 @@ from backend.api.routes.adventures.sequence_hooks import run_sequence_transition
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
 from backend.engine.rules.quest_manager import QuestManager
+from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
 from backend.engine.rules.rule_engine import (
     EntityMovement,
     GameEvent,
@@ -1091,12 +1092,13 @@ class TurnStateApplier:
         all_objs = obj_res.scalars().all()
         spawned_or_player_ids = set(player_item_ids)
         for obj in all_objs:
-            is_in_inv = states.get(obj.id, {}).get("is_in_inventory", obj.is_in_inventory)
-            if not is_in_inv:
-                # Only add objects that are in the scene (not in any inventory).
-                # Objects with is_in_inventory=True may belong to NPC inventories and
-                # must NOT be added here, otherwise the cleanup loop below would
-                # incorrectly strip them from every NPC's inventory.
+            # Only objects that lie in a scene count. Items held by an NPC are stored with
+            # current_scene_id INVENTORY (given by the player, scripts or the manifest), and
+            # adding them here would strip them from that NPC's inventory again.
+            obj_state = states.get(obj.id, {})
+            is_in_inv = obj_state.get("is_in_inventory", obj.is_in_inventory)
+            scene_id = str(obj_state.get("current_scene_id", obj.current_scene_id) or "")
+            if not is_in_inv and scene_id.upper() != INVENTORY_SCENE_ID:
                 spawned_or_player_ids.add(obj.id)
 
         npc_res = await self.db.execute(

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Backpack, PackageOpen, PackagePlus, ArrowDownToLine } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
-import ContainerPutPicker from './ContainerPutPicker.vue'
+import InventoryPicker from './InventoryPicker.vue'
 
 /**
  * Contents of an opened container, shown inline at the end of the story feed. With "Put In" the
@@ -70,12 +70,12 @@ function takeItem(item: any): void {
   >
     <template #label-icon><PackageOpen class="w-3 h-3" /></template>
 
-    <ContainerPutPicker
+    <InventoryPicker
       v-if="putMode"
       :inventory-items="inventoryItems || []"
-      :container-id="containerId || ''"
+      :exclude-id="containerId || ''"
       :busy="busy"
-      @put="(ids) => emit('putItems', ids)"
+      @confirm="(ids) => emit('putItems', ids)"
       @cancel="putMode = false"
       @item-hover="(item, event) => emit('itemHover', item, event)"
       @item-leave="emit('itemLeave')"

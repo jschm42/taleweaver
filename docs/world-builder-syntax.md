@@ -49,7 +49,7 @@ Use `->` for an exit (the AI decides the direction rules) or `<->` to force a tw
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor`, `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact` (+ `_text` variants).
+`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor`, `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 `killable: no` is the editor's **NPC can be damaged** switch turned off: the NPC never loses HP (scripts, Game Master, combat), cannot be defeated and cannot be fought.
 

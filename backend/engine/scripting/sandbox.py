@@ -584,7 +584,8 @@ class SafeAstInterpreter(ComprehensionMixin):
 
     def _assign_target(self, target: ast.AST, val: Any) -> None:
         if isinstance(target, ast.Name):
-            if target.id.startswith("_"):
+            # A bare "_" is Python's throwaway name (`for key, _ in pairs`); it reaches nothing.
+            if target.id.startswith("_") and target.id != "_":
                 raise ScriptSecurityError(f"Cannot assign to private variable '{target.id}'")
             self.env[target.id] = val
         elif isinstance(target, ast.Attribute):

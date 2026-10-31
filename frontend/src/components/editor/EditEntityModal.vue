@@ -6,6 +6,7 @@ import SwitchStatesEditor from '@/components/editor/SwitchStatesEditor.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue'
+import ReceiveItemTriggerFields from '@/components/editor/ReceiveItemTriggerFields.vue'
 import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
@@ -168,6 +169,8 @@ const localForm = ref({
   on_defeat_text: '',
   on_protagonist_enters_scene_script: '',
   on_protagonist_enters_scene_text: '',
+  on_receive_item_script: '',
+  on_receive_item_text: '',
   on_interact_script: '',
   on_interact_text: '',
   on_success_script: '',
@@ -501,6 +504,8 @@ watch(() => props.initialForm, (newVal) => {
     on_defeat_text: '',
     on_protagonist_enters_scene_script: '',
     on_protagonist_enters_scene_text: '',
+    on_receive_item_script: '',
+    on_receive_item_text: '',
     on_interact_script: '',
     on_interact_text: '',
     ...newVal
@@ -536,6 +541,8 @@ watch(() => props.show, (newVal) => {
       on_defeat_text: '',
       on_protagonist_enters_scene_script: '',
       on_protagonist_enters_scene_text: '',
+      on_receive_item_script: '',
+      on_receive_item_text: '',
       on_interact_script: '',
       on_interact_text: '',
       ...props.initialForm
@@ -768,6 +775,8 @@ function handleSave() {
     on_defeat_text: localForm.value.on_defeat_text,
     on_protagonist_enters_scene_script: localForm.value.on_protagonist_enters_scene_script,
     on_protagonist_enters_scene_text: localForm.value.on_protagonist_enters_scene_text,
+    on_receive_item_script: localForm.value.on_receive_item_script,
+    on_receive_item_text: localForm.value.on_receive_item_text,
     on_interact_script: localForm.value.on_interact_script,
     on_interact_text: localForm.value.on_interact_text,
   })
@@ -2402,6 +2411,11 @@ const textLogPreviewClass = computed(() => {
                   v-model:script="localForm.on_interact_script"
                   v-model:text="localForm.on_interact_text"
                   entity-label="NPC"
+                />
+
+                <ReceiveItemTriggerFields
+                  v-model:script="localForm.on_receive_item_script"
+                  v-model:text="localForm.on_receive_item_text"
                 />
 
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">

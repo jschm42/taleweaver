@@ -502,14 +502,11 @@ export function useComicTurns(options: UseComicTurnsOptions) {
         }
       })
 
-    const sortedWorldNpcs = [...worldNpcs].sort((a, b) => {
-      const aSpeaking = isNpcSpeaking(a) ? 1 : 0
-      const bSpeaking = isNpcSpeaking(b) ? 1 : 0
-      return bSpeaking - aSpeaking
-    })
+    // Scene order stays as the server sends it: cards must not jump when someone speaks
+    // (the stage only moves defeated characters last, see stageCastOrder.ts).
     // The hero always leads the stage (top-left); its card opens the character sheet's Hero tab.
-    if (!sheet.value?.name) return sortedWorldNpcs
-    return [buildPlayerEntity(), ...sortedWorldNpcs]
+    if (!sheet.value?.name) return worldNpcs
+    return [buildPlayerEntity(), ...worldNpcs]
   })
 
   function buildPlayerEntity() {

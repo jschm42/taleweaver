@@ -183,6 +183,16 @@ const availableSnippets = computed(() => {
     ]
   }
 
+  if (props.context === 'on_receive_item') {
+    return [
+      {
+        label: 'Accept the right item, return the rest',
+        code: "if 'SILVER_RING' in received_item_ids:\n    tw.vars.set('ring_returned', True)\n    tw.story.direct('The NPC is deeply moved and thanks the player warmly.')\nelse:\n    for item_id in received_item_ids:\n        tw.npcs.give_to_player('NPC_ID', item_id)\n    tw.story.direct('The NPC politely hands the gift back.')\n",
+      },
+      ...common,
+    ]
+  }
+
   if (props.context === 'on_defeat') {
     return [
       {

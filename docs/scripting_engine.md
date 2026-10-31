@@ -100,7 +100,7 @@ To ensure player safety and server reliability:
 - **Pure AST Interpretation**: Scripts are evaluated node-by-node against a strict AST whitelist without calling unrestricted `eval()`, `exec()`, or invoking CPython bytecode.
 - **Custom Functions & Lambdas**: Scripts can declare custom helper functions (`def func_name(arg1, arg2=default): ...`) and lambda expressions (`lambda x: ...`). Return values are safely handled via internal signal exceptions.
 - **No System Calls or Imports**: Statements like `import`, `from ... import`, `open()`, `eval()`, or `exec()` are rejected at parse time.
-- **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden.
+- **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden. Variables starting with an underscore cannot be assigned either; the only exception is the bare throwaway name `_` (e.g. `for item_id, _ in ITEMS:` or `first, _ = pair`).
 - **No Introspection Escapes**: `str.format`, `format_map` and `mro` are blocked (format strings could otherwise walk `{0.__globals__}`), as are frame/generator/code attributes (`f_*`, `gi_*`, `cr_*`, `ag_*`, `tb_*`, `co_*`). Use f-strings or `+` for text.
 - **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` does not count against the 2 seconds. Loading the definitions of `init_script` and all helper blocks before a run has its own budget of the same size, so large helper blocks (e.g. dialogue-tree constants) do not eat into the script's steps.
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
@@ -149,6 +149,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
 | | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
+| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction. |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
 | | `helpers_script` *(definitions)* | Not a trigger: functions and constants every script can call. See [Scene Helpers](#scene-helpers-helpers_script). |
@@ -1066,6 +1067,21 @@ tw.dialog.tree(GORAN_TALK, on_end="on_goran_end", on_action="on_goran_action")
 
 From the next turn on, the GM plays Brom with the new personality, in this game only.
 
+### Example 17: Returning a Lost Ring (Giving an NPC Items)
+The widow `NPC_MARTA` lost her ring. The player opens her context menu, chooses **Give**, selects items from the inventory and confirms (typing `give the silver ring to Marta` does the same). `on_receive_item_script` of Marta:
+```python
+if 'SILVER_RING' in received_item_ids:
+    tw.vars.set('ring_returned', True)
+    tw.npcs.give_to_player('NPC_MARTA', 'CELLAR_KEY')
+    tw.story.direct('Marta is moved to tears, thanks the player and hands over the cellar key.')
+else:
+    # Not her ring: she gives everything back.
+    for item_id in received_item_ids:
+        tw.npcs.give_to_player('NPC_MARTA', item_id)
+    tw.story.direct('Marta politely returns the gift; it is not what she is looking for.')
+```
+The handover itself is deterministic; the Game Master then narrates Marta's reaction and follows the direction. Giving is refused for defeated NPCs and for items the player does not carry.
+
 ---
 
 ## Authoring in the World-Editor
@@ -1100,7 +1116,7 @@ Nothing changes until you decide: the proposal opens as a line diff (removed lin
 ### Scripts from World-Builder Instructions
 The **World-Builder** prompt at the top of the Adventure Editor can also write inline triggers and guards. Describe the behaviour in plain words, for example *"The chest only opens after the lever in the cellar was pulled"* or *"The amulet hurts the player when it is equipped"*, and pick one of up to three proposals.
 
-- **Supported fields**: the inline `..._script` / `..._text` triggers of scenes (`on_enter_scene`, `on_leave_scene`, `helpers_script`), exits (`on_open_exit`, `on_exit_used`, `on_unlock_success`, `on_unlock_failure`, `unlock_expression`), NPCs (`on_defeat`, `on_protagonist_enters_scene`, `on_interact`), objects (`on_pickup`, `on_drop`, `on_interact` for every item; `on_equip` / `on_unequip` for weapons and wearables; `on_read` for readables; `unlock_expression` and the unlock hooks for containers; `craft_guard_expression` and the craft hooks for recipes), the protagonist (`on_hp_change`, `on_status_change`) and sequences (`on_start_sequence`, `on_end_sequence`, `helpers_script`, soft rules).
+- **Supported fields**: the inline `..._script` / `..._text` triggers of scenes (`on_enter_scene`, `on_leave_scene`, `helpers_script`), exits (`on_open_exit`, `on_exit_used`, `on_unlock_success`, `on_unlock_failure`, `unlock_expression`), NPCs (`on_defeat`, `on_protagonist_enters_scene`, `on_interact`, `on_receive_item`), objects (`on_pickup`, `on_drop`, `on_interact` for every item; `on_equip` / `on_unequip` for weapons and wearables; `on_read` for readables; `unlock_expression` and the unlock hooks for containers; `craft_guard_expression` and the craft hooks for recipes), the protagonist (`on_hp_change`, `on_status_change`) and sequences (`on_start_sequence`, `on_end_sequence`, `helpers_script`, soft rules).
 - **New entities**: a newly created NPC or item gets its hooks from a second patch in the same proposal.
 - **Not supported**: top-level `scripts`, sequence `scripts` and `init_script`. Write those in the **Scripts** tab.
 - **Syntax check**: every proposed script and guard runs through the sandbox syntax check. Proposals with invalid code are discarded and the reason is shown instead.

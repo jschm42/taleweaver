@@ -183,7 +183,7 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - npc: name, description, goal, character, is_killable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_defeat_script, on_defeat_text,
       on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
-      on_interact_script, on_interact_text
+      on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
       rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
       on_exit_used_script, on_exit_used_text, on_unlock_success_script,

@@ -134,3 +134,21 @@ def test_comprehension_over_a_non_iterable_fails_cleanly():
     # Act / Assert
     with pytest.raises(ScriptExecutionError, match="not iterable"):
         SafeAstInterpreter().execute("x = [n for n in 5]", {})
+
+
+def test_bare_underscore_is_allowed_as_throwaway_name():
+    # Act
+    ctx = _run(
+        "found = any(key == 'B' for key, _ in pairs)\nfirst, _ = pairs[0]",
+        pairs=[("A", 1), ("B", 2)],
+    )
+
+    # Assert
+    assert ctx["found"] is True
+    assert ctx["first"] == "A"
+
+
+def test_other_private_names_stay_forbidden():
+    # Act / Assert
+    with pytest.raises(ScriptSecurityError, match="private variable '_secret'"):
+        SafeAstInterpreter().execute("_secret = 1", {})

@@ -23,6 +23,8 @@ _NPC_SCRIPT_FIELDS = (
     "on_protagonist_enters_scene_text",
     "on_interact_script",
     "on_interact_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 )
 INVENTORY_LOCATION = "INVENTORY"
 

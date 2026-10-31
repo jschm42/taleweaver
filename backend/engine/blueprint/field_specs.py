@@ -162,6 +162,7 @@ NPC_KEYS: dict[str, FieldSpec] = {
 _hook(NPC_KEYS, "on_defeat", "on_defeat")
 _hook(NPC_KEYS, "on_meet", "on_protagonist_enters_scene")
 _hook(NPC_KEYS, "on_interact", "on_interact")
+_hook(NPC_KEYS, "on_receive_item", "on_receive_item")
 
 ITEM_TYPES = (
     "CONSUMABLE",

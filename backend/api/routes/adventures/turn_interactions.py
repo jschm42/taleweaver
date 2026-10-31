@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.container_put import put_items_into_container
+from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
 from backend.engine.sessions.session_checkpoint_service import REASON_MANUAL_SAVE
@@ -44,6 +45,7 @@ class TurnInteractionsManager:
         self.manager = manager
         self.pending_pickup_trigger: dict[str, Any] | None = None
         self.pending_sequence_intro: dict[str, Any] | None = None
+        self.pending_reaction_prompt: str | None = None
 
     @property
     def db(self):
@@ -894,6 +896,8 @@ class TurnInteractionsManager:
         self.pending_pickup_trigger: dict[str, Any] | None = None
         # Set when the command completed a sequence: the caller narrates the new chapter.
         self.pending_sequence_intro: dict[str, Any] | None = None
+        # Set when the command wants a Game Master reaction (e.g. items given to an NPC).
+        self.pending_reaction_prompt: str | None = None
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_payload = await self._build_map_payload()
@@ -1168,6 +1172,14 @@ class TurnInteractionsManager:
                 yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             response = ""
 
+        if response.startswith("[TRIGGER_GIVE_ITEMS]"):
+            give_args = response.replace("[TRIGGER_GIVE_ITEMS]", "").strip()
+            outcome = await give_items_to_npc(self.manager, give_args)
+            for role, content in outcome.events:
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):
             take_args = response.replace("[TRIGGER_CONTAINER_TAKE_ITEM]", "").strip()
             response = await self._take_single_container_item(take_args)
@@ -1313,7 +1325,11 @@ class TurnInteractionsManager:
                 self.pending_sequence_intro = build_sequence_intro(adv, new_seq_id)
 
         await self.db.commit()
-        if self.pending_pickup_trigger or self.pending_sequence_intro:
+        if (
+            self.pending_pickup_trigger
+            or self.pending_sequence_intro
+            or self.pending_reaction_prompt
+        ):
             # Caller chains an LLM pass, which emits the final event itself.
             return
         final_data = jsonable_encoder(

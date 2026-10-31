@@ -22,6 +22,8 @@ const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
 const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
+/** Context menu action that opens the Give dialog for an NPC (handled in GameView). */
+export const GIVE_TO_PREFIX = '[GIVE_TO] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -166,6 +168,9 @@ export const gameCommandService = {
       items.push({ label: 'Talk', action: `${PREFILL_SAY_TO_PREFIX}${entity.name || ''}` })
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
+      if (!isDefeatedNpc) {
+        items.push({ label: 'Give', action: `${GIVE_TO_PREFIX}${entity.id || entity.name}` })
+      }
       if (!isDefeatedNpc && canBeAttacked(entity)) {
         items.push({ label: 'Attack', action: `/attack ${entity.name}` })
       }

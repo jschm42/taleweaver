@@ -18,6 +18,8 @@ import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerPanel from '@/components/game/prompts/ContainerPanel.vue'
+import GivePanel from '@/components/game/prompts/GivePanel.vue'
+import { useGivePanel } from '@/composables/useGivePanel'
 import LockUnlockPanel from '@/components/game/prompts/LockUnlockPanel.vue'
 import SwitchStatePanel from '@/components/game/prompts/SwitchStatePanel.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
@@ -58,7 +60,7 @@ import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
-import { gameCommandService } from '@/services/gameCommandService'
+import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 import type { SheetTabId } from '@/components/game/sheet/types'
@@ -384,12 +386,21 @@ const isChoicePanelOpen = computed(() => isDialogOpen.value && !isPassRunning.va
 // Inline prompts (containers, locks, switches, readables) at the end of the story feed: one at a time.
 const showCombinePanel = ref(false)
 const combineSeedItem = ref<any>(null)
+const { showGivePanel, giveTarget, giveBusy, openGivePanel, closeGivePanel, submitGive } = useGivePanel({
+  npcs: () => npcs.value,
+  sendMessage,
+  beforeOpen: () => {
+    closeInlinePrompts()
+    closeSheetForInlinePrompt()
+  },
+})
 const isInlinePromptOpen = computed(() => showUnlockModal.value || showExitUnlockModal.value
   || showSwitchStateModal.value || showSwitchUnlockModal.value || showTextLogModal.value
-  || showContainerModal.value || showCombinePanel.value)
+  || showContainerModal.value || showCombinePanel.value || showGivePanel.value)
 const closeInlinePrompts = (): void => {
   showContainerModal.value = false
   showCombinePanel.value = false
+  closeGivePanel()
   showUnlockModal.value = false
   showExitUnlockModal.value = false
   showSwitchStateModal.value = false
@@ -1635,6 +1646,10 @@ const {
       return openCombinePanel(action.replace(COMBINE_WITH_PREFIX, '').trim())
     }
 
+    if (action.startsWith(GIVE_TO_PREFIX)) {
+      return openGivePanel(action.replace(GIVE_TO_PREFIX, '').trim())
+    }
+
     if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
       if (!action.startsWith(TEXT_LOG_OPEN_PREFIX)) {
         return false
@@ -1912,6 +1927,17 @@ usePlayAgentAutoLoop()
           @take-item="handleContainerTakeItem"
           @drop-to-scene="handleContainerDropToScene"
           @put-items="handleContainerPutItems"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
+        />
+        <GivePanel
+          :open="showGivePanel"
+          :npc-name="giveTarget?.name || ''"
+          :npc-image-url="giveTarget?.imageUrl || null"
+          :inventory-items="inventoryItems"
+          :busy="giveBusy || isActionInputBlocked"
+          @close="closeGivePanel"
+          @give="submitGive"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />

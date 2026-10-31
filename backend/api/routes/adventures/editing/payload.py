@@ -84,6 +84,8 @@ _NPC_METADATA_FIELDS = (
     "on_defeat_text",
     "on_protagonist_enters_scene_script",
     "on_protagonist_enters_scene_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 )
 _OBJECT_STAT_LABELS = (
     ("stat_modifier_strength", "STR"),

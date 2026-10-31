@@ -16,6 +16,8 @@ const SILENT_COMMANDS = new Set([
   '/container_take_item',
   '/container_drop_scene',
   '/container_put_items',
+  // Giving items to an NPC (the "You give ..." line and the GM's reaction are shown)
+  '/give_items',
   // Equipment and consumables
   '/equip',
   '/unequip',

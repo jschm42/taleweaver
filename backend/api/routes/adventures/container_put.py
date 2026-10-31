@@ -15,7 +15,7 @@ PUT_USAGE = "Usage: /container_put_items <container> | <item>[, <item> ...]"
 MAX_ITEMS_PER_PUT = 20
 
 
-def _split_item_refs(raw: str) -> list[str]:
+def split_item_refs(raw: str) -> list[str]:
     refs = [part.strip() for part in raw.replace("|", ",").split(",")]
     return [ref for ref in refs if ref][:MAX_ITEMS_PER_PUT]
 
@@ -28,7 +28,7 @@ def _matches(entry: Any, wanted: str) -> bool:
     )
 
 
-def _pick_items(
+def pick_items(
     inventory: list[Any], refs: list[str], container_id: str
 ) -> tuple[list[Any], list[str]]:
     """(entries to store, refs not found); the container itself can never go inside."""
@@ -48,7 +48,7 @@ def _pick_items(
 async def put_items_into_container(handler: Any, args: str) -> list[tuple[str, str]]:
     """Stores inventory items in a scene container; returns (role, text) events to stream."""
     container_hint, _, item_part = (part.strip() for part in args.partition("|"))
-    refs = _split_item_refs(item_part)
+    refs = split_item_refs(item_part)
     if not container_hint or not refs:
         return [("system", PUT_USAGE)]
 
@@ -60,7 +60,7 @@ async def put_items_into_container(handler: Any, args: str) -> list[tuple[str, s
     if handler._is_container_locked(container, None):
         return [("system", f"{container.name} is locked.")]
 
-    picked, missing = _pick_items(list(handler.avatar.inventory or []), refs, str(container.id))
+    picked, missing = pick_items(list(handler.avatar.inventory or []), refs, str(container.id))
     if not picked:
         return [("system", f"You don't carry {', '.join(missing)}.")]
 

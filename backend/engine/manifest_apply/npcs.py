@@ -42,6 +42,8 @@ _METADATA_FIELDS = (
     "on_protagonist_enters_scene_text",
     "on_interact_script",
     "on_interact_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 )
 _METADATA_DEFAULTS: dict[str, Any] = {"special_actions": [], "attack_mode": "PASSIVE"}
 

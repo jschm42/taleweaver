@@ -431,6 +431,14 @@ class WorldNPCSchema(WorldBaseSchema):
         default="",
         description="Optional text output whenever the protagonist interacts with this NPC. Use empty string for none.",
     )
+    on_receive_item_script: Optional[str] = Field(
+        default="",
+        description="Optional script executed once when the protagonist gives this NPC one or more items; `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Use empty string for none.",
+    )
+    on_receive_item_text: Optional[str] = Field(
+        default="",
+        description="Optional text output when the protagonist gives this NPC items. Use empty string for none.",
+    )
 
     model_config = {"extra": "forbid"}
 
