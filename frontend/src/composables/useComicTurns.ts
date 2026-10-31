@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import type { ChatMessage } from '@/types'
 import { buildComicPages, type ComicTurn, type DialogueSegment } from './comicPages'
 import { renderEntityRefsHtml } from '@/utils/entityRefs'
+import { attachCueToSpeech } from './comicTagOnlyLines'
 
 export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
 
@@ -253,6 +254,8 @@ export function parseAssistantContent(
   // - Character Name: "[tag] "Dialogue"
   // - Character Name: "Dialogue"
   const speechRegex = /^(?:\[([^\]\n]+)\]\s*)?(?:(\*\*([^*:\n]+?):\*\*)|(\*\*([^*:\n]+?)\*\*:)|([\p{L}\p{N}_\s'’\-,.()]{2,60}):)\s*(.*)$/u
+  // Voice tag of a tag-only line ("[calm]"), kept for the narration paragraph that follows it.
+  let pendingVoiceTag: string | undefined
 
   for (const rawLine of lines) {
     // "Narrator: ..." is a format leak, not a character; keep only the prose.
@@ -261,6 +264,7 @@ export function parseAssistantContent(
 
     const match = line.match(speechRegex)
     if (match) {
+      pendingVoiceTag = undefined
       const isBold = Boolean(match[2] || match[4])
       let speakerName = (match[3] || match[5] || match[6] || '').trim()
       const rawSpeech = (match[7] || '').trim()
@@ -341,9 +345,16 @@ export function parseAssistantContent(
         narrationText = tagMatch[2].trim()
       }
 
+      // A tag-only line never becomes an empty Game Master block (see comicTagOnlyLines.ts).
+      if (!narrationText) {
+        pendingVoiceTag = attachCueToSpeech(dialogues, line) ? undefined : pendingVoiceTag || voiceTag
+        continue
+      }
+      voiceTag = voiceTag || pendingVoiceTag
+      pendingVoiceTag = undefined
+
       const last = dialogues[dialogues.length - 1]
       if (last && last.isNarration) {
-        // A lone voice tag line ("[calm]") leaves an empty narration to continue from.
         last.text = last.text ? `${last.text}\n\n${narrationText}` : narrationText
         // Use the voice tag from the first paragraph if the new one doesn't have one
         if (voiceTag && !last.voiceTag) {
