@@ -72,28 +72,6 @@
   filter: saturate(0.9) brightness(0.92);
 }
 
-/* Corner pip like a card suit: the function's icon on a small medallion. */
-.dock-pip {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: max(14px, calc(var(--card-w) * 0.34));
-  height: max(14px, calc(var(--card-w) * 0.34));
-  border-radius: 9999px;
-  color: color-mix(in srgb, var(--tint) 80%, #ffffff);
-  background: rgba(8, 8, 12, 0.78);
-  border: 1px solid color-mix(in srgb, var(--card-frame) 70%, transparent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-.dock-pip :deep(svg) {
-  width: 62%;
-  height: 62%;
-}
-
 .dock-card:hover,
 .dock-card:focus-visible {
   transform: translateY(-9px) rotate(0deg);

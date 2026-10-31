@@ -3,8 +3,8 @@
  * ImmersiveActionBar — the dock under the story feed.
  *
  * Quick access to Quests, World Map, Hero Sheet, Chronicles, Hints, Memories (and Debug) as a
- * fanned hand of playing cards: each card shows its artwork (src/assets/menu-cards) with the
- * icon as a corner pip. macOS-style magnification, plus the Action Ideas popup.
+ * fanned hand of playing cards: each card shows its artwork (src/assets/menu-cards).
+ * macOS-style magnification, plus the Action Ideas popup.
  */
 import { computed, onBeforeUnmount, ref, type Component } from 'vue'
 import {
@@ -12,7 +12,6 @@ import {
   Map as MapIcon,
   User,
   History,
-  Lightbulb,
   BrainCircuit,
   Terminal,
   Sparkles,
@@ -261,7 +260,6 @@ onBeforeUnmount(() => {
             <img v-if="item.art" :src="item.art" class="dock-art" alt="" draggable="false" />
             <component :is="item.icon" v-else class="dock-icon" />
           </span>
-          <span v-if="item.art" class="dock-pip" aria-hidden="true"><component :is="item.icon" /></span>
           <span v-if="item.badge" class="dock-badge">{{ item.badge }}</span>
         </button>
         <span class="dock-label" aria-hidden="true">{{ item.label }}</span>
@@ -289,7 +287,6 @@ onBeforeUnmount(() => {
           <span class="dock-face">
             <img :src="ideasArt" class="dock-art" alt="" draggable="false" />
           </span>
-          <span class="dock-pip" aria-hidden="true"><Lightbulb /></span>
           <span v-if="ideasCount" class="dock-badge">{{ ideasCount }}</span>
         </button>
         <span v-if="!showIdeasPopup" class="dock-label" aria-hidden="true">Ideas</span>
@@ -363,14 +360,11 @@ onBeforeUnmount(() => {
   height: calc(var(--dock-base) * 1.5 + 16px);
   padding: 8px 14px;
   border-radius: calc(var(--tw-card-radius, 0.875rem) + 6px);
-  border: 1px solid var(--tw-panel-border, rgba(51, 65, 85, 0.9));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--tw-panel-ink, #e2e8f0) 6%, transparent), transparent 60%),
-    color-mix(in srgb, var(--tw-panel-bg, #0f172a) 72%, transparent);
-  box-shadow:
-    0 18px 40px -18px rgba(0, 0, 0, 0.75),
-    inset 0 1px 0 color-mix(in srgb, var(--tw-panel-ink, #e2e8f0) 10%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
+  /* No frame; a lightly see-through panel so the scene shows behind the cards. */
+  border: none;
+  background: color-mix(in srgb, var(--tw-panel-bg, #0f172a) 45%, transparent);
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px) saturate(1.15);
 }
 
 @media (max-width: 640px) {

@@ -308,7 +308,7 @@ defineExpose({
 
       <!-- Atmospheric overlays -->
       <div class="absolute inset-0 bg-black/20"></div>
-      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-slate-950/40"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-slate-950/40"></div>
       <div class="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-slate-950/40"></div>
       <div class="tw-scene-tint"></div>
     </div>
@@ -458,7 +458,7 @@ defineExpose({
     </div>
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->
-    <footer class="tw-footer relative z-20 flex flex-col bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
+    <footer class="tw-footer relative z-20 flex flex-col bg-slate-950/55 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
       <!-- Speech playback controls float centered above the footer while something is read aloud
            (the right corner belongs to the story feed's "scroll to latest" button). -->
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-30 max-w-[calc(100%-1.5rem)]">
