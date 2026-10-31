@@ -316,15 +316,15 @@ defineExpose({
     <!-- 2. TOP ATMOSPHERIC HEADER BAR (shown on hover unless pinned) -->
     <HoverRevealHeader>
       <ImmersiveHeader
+        :game-time="props.gameTime"
+        :clock-tick="props.clockTick"
+        :exp="props.exp"
         :scene-name="props.currentSceneName || props.sheet?.current_scene"
         :active-sequence="props.activeSequence"
         :adventure-title="props.sheet?.adventure_title"
         :creator="props.sheet?.creator"
         :copyright="props.sheet?.copyright"
         :tracked-quest="props.trackedQuest"
-        :game-time="props.gameTime"
-        :clock-tick="props.clockTick"
-        :exp="props.exp"
         :mode="props.mode"
         :debug-mode="!!props.sheet?.debug_mode"
         @open-chronicles="emit('openChronicles')"
@@ -477,6 +477,9 @@ defineExpose({
           :world-memories="props.worldMemories"
           :can-send-input="canSendInput"
           :debug-mode="!!props.sheet?.debug_mode"
+          :game-time="props.gameTime"
+          :clock-tick="props.clockTick"
+          :exp="props.exp"
           @open-quests="emit('openQuests')"
           @open-map="emit('openMap')"
           @open-sheet="emit('openSheet')"
@@ -528,7 +531,10 @@ defineExpose({
 </template>
 
 <style scoped>
+/* Above the speech controls (z-30): a magnified card rises past the footer's top edge. */
 .tw-action-reveal {
+  position: relative;
+  z-index: 40;
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;

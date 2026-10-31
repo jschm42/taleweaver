@@ -4,7 +4,8 @@
  *
  * Quick access to Quests, World Map, Hero Sheet, Chronicles, Hints, Memories (and Debug) as a
  * fanned hand of playing cards: each card shows its artwork (src/assets/menu-cards).
- * macOS-style magnification, plus the Action Ideas popup.
+ * macOS-style magnification, plus the Action Ideas popup. The ornamental in-game clock sits
+ * left of the cards and the experience counter right of them (wide screens only).
  */
 import { computed, onBeforeUnmount, ref, type Component } from 'vue'
 import {
@@ -20,6 +21,9 @@ import {
   HelpCircle,
 } from 'lucide-vue-next'
 import { useDockMagnification } from '@/composables/useDockMagnification'
+import FooterClock from './FooterClock.vue'
+import FooterXp from './FooterXp.vue'
+import type { GameTimeView } from './gameClockTime'
 import heroArt from '@/assets/menu-cards/hero.webp'
 import hintsArt from '@/assets/menu-cards/hints.webp'
 import ideasArt from '@/assets/menu-cards/ideas.webp'
@@ -38,6 +42,9 @@ const props = defineProps<{
   promptSuggestions?: string[]
   canSendInput?: boolean
   debugMode?: boolean
+  gameTime?: GameTimeView | null
+  clockTick?: boolean
+  exp?: number
 }>()
 
 const emit = defineEmits<{
@@ -233,7 +240,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative flex justify-center px-4 pt-4 pb-2">
+  <div class="dock-row relative px-4 pt-4 pb-2">
+    <FooterClock :game-time="props.gameTime || null" :clock-tick="props.clockTick" class="dock-side dock-side--left" />
     <div
       ref="dockRef"
       class="dock-shelf"
@@ -346,10 +354,40 @@ onBeforeUnmount(() => {
         </Transition>
       </div>
     </div>
+    <FooterXp :exp="props.exp || 0" class="dock-side dock-side--right" />
   </div>
 </template>
 
 <style scoped>
+/* ── Row: clock | cards | XP ───────────────────────────────────────────── */
+.dock-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 2.5rem;
+}
+
+.dock-row > .dock-shelf {
+  grid-column: 2;
+}
+
+.dock-side--left {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.dock-side--right {
+  grid-column: 3;
+  justify-self: start;
+}
+
+/* Narrow screens: the cards need the whole width. */
+@media (max-width: 1023px) {
+  .dock-side {
+    display: none;
+  }
+}
+
 /* ── Shelf ─────────────────────────────────────────────────────────────── */
 .dock-shelf {
   /* Card width; cards are 2:3 playing cards, so their height is 1.5x. */

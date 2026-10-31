@@ -1040,7 +1040,7 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-slate-950/50 backdrop-blur-md shrink-0">
       <div v-if="props.exp !== undefined && props.mode !== 'chat'" class="flex items-center gap-2 select-none animate-fade-in cursor-help" title="Experience Points">
-        <i class="ra ra-laurels text-xl text-amber-400"></i>
+        <i class="ra ra-trophy text-xl text-amber-400"></i>
         <span class="text-amber-400 text-sm font-black uppercase tracking-[0.12em] tabular-nums">
           {{ props.exp }} XP
         </span>

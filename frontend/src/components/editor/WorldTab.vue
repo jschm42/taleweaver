@@ -691,7 +691,7 @@ const licenseUrlInvalid = computed(() => {
             <div class="space-y-2">
               <label class="block text-xs font-black text-amber-400 uppercase tracking-[0.2em]">Day Label</label>
               <input
-                :value="form.time_config?.day_label || 'Day'"
+                :value="form.time_config?.day_label ?? 'Day'"
                 @input="handleDayLabelInput"
                 type="text"
                 maxlength="30"
@@ -884,7 +884,7 @@ const licenseUrlInvalid = computed(() => {
             <div class="space-y-2">
               <label class="block text-xs font-black text-cyan-400 uppercase tracking-[0.2em]">Time Unit Name</label>
               <input
-                :value="form.time_config?.unit_name || 'Blobs'"
+                :value="form.time_config?.unit_name ?? 'Blobs'"
                 @input="handleUnitNameInput"
                 type="text"
                 maxlength="30"

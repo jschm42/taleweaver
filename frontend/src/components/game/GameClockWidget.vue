@@ -7,6 +7,7 @@
  */
 import { computed, type Component } from 'vue'
 import { Sun, Moon, Sunrise, Sunset, Hourglass } from 'lucide-vue-next'
+import { dayPhase, minuteOfDay as parseMinuteOfDay } from '@/components/game/immersive/gameClockTime'
 
 const props = defineProps<{
   gameTime: {
@@ -31,36 +32,9 @@ const PHASES: Record<'dawn' | 'day' | 'dusk' | 'night', DayPhase> = {
 const RING_RADIUS = 15
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 
-/** Minutes since midnight parsed from "HH:MM" or "hh:MM AM/PM", or null if unparseable. */
-const minuteOfDay = computed<number | null>(() => {
-  if (!props.gameTime || props.gameTime.isUnits) {
-    return null
-  }
-  const match = /(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(props.gameTime.time)
-  if (!match) {
-    return null
-  }
-  const meridiem = match[3]?.toUpperCase()
-  let hours = Number(match[1]) % (meridiem ? 12 : 24)
-  if (meridiem === 'PM') {
-    hours += 12
-  }
-  return hours * 60 + Number(match[2])
-})
+const minuteOfDay = computed<number | null>(() => parseMinuteOfDay(props.gameTime))
 
-const phase = computed<DayPhase>(() => {
-  const hour = (minuteOfDay.value ?? 12 * 60) / 60
-  if (hour >= 5 && hour < 7) {
-    return PHASES.dawn
-  }
-  if (hour >= 7 && hour < 18) {
-    return PHASES.day
-  }
-  if (hour >= 18 && hour < 20) {
-    return PHASES.dusk
-  }
-  return PHASES.night
-})
+const phase = computed<DayPhase>(() => PHASES[dayPhase(minuteOfDay.value)])
 
 const ringOffset = computed(() => {
   const fraction = (minuteOfDay.value ?? 0) / (24 * 60)
