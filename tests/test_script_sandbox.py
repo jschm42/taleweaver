@@ -632,3 +632,30 @@ tw.vars.set("reactor_timer", 10)
     assert ctx.changeset.var_updates["__flag_alien_ejected"] is True
     assert ctx.changeset.var_updates["reactor_timer"] == 10
     assert ctx.changeset.has_changes is True
+
+
+def test_misspelled_tw_attribute_suggests_the_closest_name():
+    # Arrange
+    interpreter = SafeAstInterpreter()
+    ctx = GameContext()
+
+    # Act
+    with pytest.raises(ScriptExecutionError) as exc:
+        interpreter.execute('tw.award.grant("AWARD_BRASS_LEVER")', {"tw": ctx})
+
+    # Assert
+    assert "has no attribute 'award'" in str(exc.value)
+    assert "Did you mean 'awards'?" in str(exc.value)
+
+
+def test_unknown_attribute_without_close_match_has_no_hint():
+    # Arrange
+    interpreter = SafeAstInterpreter()
+    ctx = GameContext()
+
+    # Act
+    with pytest.raises(ScriptExecutionError) as exc:
+        interpreter.execute("tw.zzzqqq", {"tw": ctx})
+
+    # Assert
+    assert "Did you mean" not in str(exc.value)

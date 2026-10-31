@@ -20,6 +20,7 @@ from backend.engine.scripting.sandbox_errors import (
     ScriptExecutionError,
     ScriptSecurityError,
     ScriptTimeoutError,
+    attribute_error_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -728,7 +729,7 @@ class SafeAstInterpreter(ComprehensionMixin):
         try:
             return getattr(obj, expr.attr)
         except AttributeError as exc:
-            raise ScriptExecutionError(f"AttributeError: {exc}") from exc
+            raise ScriptExecutionError(attribute_error_message(obj, expr.attr, exc)) from exc
 
     def _eval_Subscript(self, expr: ast.Subscript) -> Any:
         val = self._eval_expr(expr.value)

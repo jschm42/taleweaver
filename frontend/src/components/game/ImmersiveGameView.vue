@@ -41,9 +41,12 @@ import { useGameShortcuts } from './immersive/useGameShortcuts'
 import { useTextDensity } from '@/skins/useTextDensity'
 import { useTextScale } from '@/skins/useTextScale'
 import { useSheetSkin } from '@/skins/useSheetSkin'
+import AwardUnlockedOverlay from './immersive/AwardUnlockedOverlay.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
+  /** The adventure's awards (title, tier, description) for the award-unlocked overlay. */
+  awards?: any[]
   status: ConnectionStatus
   npcMetadata: Record<string, any>
   entities: any[]
@@ -348,6 +351,8 @@ defineExpose({
 
       <!-- 3B. CENTER / STORY AREA WITH SCENE HOTSPOTS & COMIC FEED -->
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
+        <!-- Award earned during play: glowing card at the top of the story area for a few seconds -->
+        <AwardUnlockedOverlay :messages="props.messages" :awards="props.awards" />
         <!-- Full scene artwork (top-right corner of the story area) -->
         <!-- Wrapper owns the positioning: .tw-tab sets position: relative on the button itself. -->
         <!-- z-[35]: above the story tabs (z-30, full width, rendered later), below the sequence overlay (z-[70]). -->

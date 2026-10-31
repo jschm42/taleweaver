@@ -370,6 +370,8 @@ Inspects and modifies the avatar's state:
 - `tw.player.item_ids` *(list[str])*: IDs of the carried items.
 - `tw.player.heal(amount: int)`: Restores `amount` HP (up to avatar maximum).
 - `tw.player.damage(amount: int)`: Inflicts `amount` direct damage to the avatar.
+- `tw.player.xp` *(int)*: The protagonist's experience points, including changes made earlier in the same script.
+- `tw.player.add_xp(amount: int)` (also `modify_xp(delta)`): Gives the protagonist `amount` XP; a negative amount takes XP away (never below 0). The player sees `You gain 25 XP (Script).`
 - `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory (case-insensitive).
 - `tw.player.take_item(item_id: str) -> bool`: Moves an existing world item into the inventory, wherever it is (scene, container, NPC inventory). The entry keeps the item's world data (name, description, image, effects). Returns `False` for an unknown ID.
 - `tw.player.drop_item(item_id: str, scene_id: str = None) -> bool`: Drops a carried item into a scene (default: the protagonist's scene).
@@ -563,7 +565,7 @@ Directly manipulates adventure quest entries:
 
 ### `tw.awards`
 Awards achievements to the player's profile:
-- `tw.awards.grant(award_key: str)`: Immediately grants the specified trophy/badge. The key is matched case-insensitively against the adventure's award keys.
+- `tw.awards.grant(award_key: str)`: Grants the award, exactly like an award the Game Master grants: it is added to the player's earned awards (once per adventure), the chat shows `Award Achievement: <title>`, a checkpoint is saved, and the game shows the award in a short overlay. The key is matched case-insensitively against the adventure's award keys; an unknown key is ignored (see the server log).
 
 ### `tw.dice`
 Provides deterministic, seeded random number generation:

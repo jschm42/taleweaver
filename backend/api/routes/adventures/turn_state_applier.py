@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
-from backend.engine.rules.award_keys import canonical_award_keys
 from backend.engine.rules.quest_manager import QuestManager
 from backend.engine.rules.rule_engine import (
     EntityMovement,
@@ -899,56 +899,7 @@ class TurnStateApplier:
                 state_dirty = True
 
         if event.earned_award_keys:
-            now = datetime.now(UTC).isoformat()
-            award_defs = {
-                (aw.get("key") or ""): aw for aw in (self.adventure.awards or []) if aw.get("key")
-            }
-            user_awards = list(self.user.earned_awards or [])
-            modified = False
-            for key in canonical_award_keys(event.earned_award_keys, self.adventure.awards or []):
-                if not key:
-                    continue
-                already_earned = any(
-                    ea.get("key") == key
-                    and (
-                        ea.get("template_id") == self.adventure.id
-                        or ea.get("adventure_id") == self.adventure.id
-                    )
-                    for ea in user_awards
-                )
-                if already_earned:
-                    continue
-
-                aw = award_defs.get(key)
-                if not aw:
-                    logger.warning(
-                        "[Turn %s] GM tried to grant non-existent award: %s", self.game_id, key
-                    )
-                    continue
-
-                user_awards.append(
-                    {
-                        "key": key,
-                        "title": aw.get("title") or key,
-                        "description": aw.get("description"),
-                        "tier": aw.get("tier"),
-                        "template_id": self.adventure.id,
-                        "adventure_id": self.adventure.id,
-                        "adventure_title": self.adventure.title,
-                        "session_id": self.state.session_id,
-                        "earned_at": now,
-                    }
-                )
-                award_title = aw.get("title") or key
-                msg = f"Award Achievement: {award_title}"
-                await self._save_chat_message("system", msg)
-                system_messages.append(msg)
-                modified = True
-
-            if modified:
-                self.user.earned_awards = user_awards
-                flag_modified(self.user, "earned_awards")
-                self._queue_checkpoint(CHECKPOINT_REASON_AWARD_GRANTED)
+            system_messages.extend(await grant_awards(self, event.earned_award_keys))
 
         script_context = None
         if hasattr(self, "manager") and hasattr(self.manager, "_build_script_context"):

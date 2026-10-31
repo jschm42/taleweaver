@@ -78,6 +78,7 @@ from backend.engine.rules.rule_engine import (
     WorldEntityUpdate,
 )
 from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner, ScriptMessage
+from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
@@ -2785,6 +2786,7 @@ class GameTurnManager:
             "hp": self.avatar.hp,
             "mana": self.avatar.mana,
             "stamina": self.avatar.stamina,
+            "xp": self.avatar.exp or 0,
             "inventory": list(self.avatar.inventory or []),
             "status_effects": list(self.avatar.status_effects or []),
         }
@@ -2900,6 +2902,15 @@ class GameTurnManager:
                 ScriptMessage(
                     f"You {verb} {abs(changeset.player_stamina_change)} Stamina (Script).",
                     role="system",
+                )
+            )
+
+        if changeset.player_xp_change:
+            self.avatar.exp = max(0, (self.avatar.exp or 0) + changeset.player_xp_change)
+            verb = "gain" if changeset.player_xp_change > 0 else "lose"
+            system_messages.append(
+                ScriptMessage(
+                    f"You {verb} {abs(changeset.player_xp_change)} XP (Script).", role="system"
                 )
             )
 
@@ -3061,6 +3072,10 @@ class GameTurnManager:
                 if isinstance(q, dict) and q.get("id") == qid:
                     q["status"] = "completed"
             self.state.quests = quests
+
+        # tw.awards.grant(...): same granting as GM-awarded achievements.
+        for award_msg in await grant_awards(self, changeset.granted_award_keys):
+            system_messages.append(ScriptMessage(award_msg, role="system"))
 
         if changeset.completed_condition_override:
             self.state.completed_condition = changeset.completed_condition_override

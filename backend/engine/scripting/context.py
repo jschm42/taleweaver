@@ -201,6 +201,10 @@ class PlayerProxy(PlayerInventoryMixin):
     def modify_xp(self, delta: int) -> None:
         self._changeset.player_xp_change += int(delta)
 
+    def add_xp(self, amount: int) -> None:
+        """Gives the protagonist XP (a negative amount takes XP away)."""
+        self.modify_xp(amount)
+
     def give_item(
         self, item_id: str, name: Optional[str] = None, description: Optional[str] = None
     ) -> None:

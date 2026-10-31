@@ -1800,6 +1800,7 @@ usePlayAgentAutoLoop()
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
+      :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"
       :entities="entities"

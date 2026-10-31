@@ -5,11 +5,13 @@
  * Displays portraits of the protagonist and scene NPCs with health status, defeat tags, and quick
  * click/hover interactions. With auto-speak on, the NPC whose line is being read aloud gets an
  * animated ring in the skin's accent color. Characters joining the scene
- * get a skin-specific entrance (see src/skins/entrances.css).
+ * get a skin-specific entrance (see src/skins/entrances.css). Changed HP, Mana, Stamina or
+ * attributes float up on the card as "-5 HP" / "+2 STR"; an HP loss also flashes the card.
  */
 import { ref, watch, nextTick, computed } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
+import { STAT_POPUP_STAGGER_MS, useStatChangePopups } from './useStatChangePopups'
 
 const props = defineProps<{
   npcs: any[]
@@ -25,6 +27,11 @@ const emit = defineEmits<{
 }>()
 
 const stageContainerRef = ref<HTMLElement | null>(null)
+const { popups: statPopups, hitCards } = useStatChangePopups(() => props.npcs)
+
+function formatDelta(delta: number): string {
+  return `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`
+}
 const brokenImages = ref<Record<string, boolean>>({})
 
 function scrollToTop() {
@@ -167,7 +174,7 @@ function isNpcVoiced(npc: any): boolean {
         :key="npc.id"
         class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
         :class="[
-          { 'tw-npc-arrived': hasJustArrived(npc) },
+          { 'tw-npc-arrived': hasJustArrived(npc), 'tw-npc-hit': hitCards.has(String(npc.id)) },
           isNpcVoiced(npc)
             ? 'tw-npc-voiced border-transparent'
             : npc.id === 'PLAYER'
@@ -197,6 +204,17 @@ function isNpcVoiced(npc: any): boolean {
         <!-- Entrance: one-off light sweep and a short "Enters" tag -->
         <div v-if="hasJustArrived(npc)" class="tw-npc-sweep" aria-hidden="true"></div>
         <div v-if="hasJustArrived(npc)" class="tw-npc-arrival-tag">Enters</div>
+
+        <!-- Changed values float up from the top of the card -->
+        <div v-if="statPopups[String(npc.id)]?.length" class="tw-stat-popups" aria-hidden="true">
+          <span
+            v-for="popup in statPopups[String(npc.id)]"
+            :key="popup.id"
+            class="tw-stat-popup"
+            :class="popup.delta < 0 ? 'is-loss' : 'is-gain'"
+            :style="{ animationDelay: `${popup.order * STAT_POPUP_STAGGER_MS}ms` }"
+          >{{ formatDelta(popup.delta) }} {{ popup.label }}</span>
+        </div>
 
         <!-- Voiced by auto-speak: rotating accent ring -->
         <div v-if="isNpcVoiced(npc)" class="tw-npc-voice-ring" aria-hidden="true"></div>
@@ -268,6 +286,98 @@ function isNpcVoiced(npc: any): boolean {
       0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 80%, transparent),
       0 0 34px color-mix(in srgb, var(--tw-accent, #f59e0b) 75%, transparent);
   }
+}
+
+/* Stat changes: values float up from the top of the card and fade (see useStatChangePopups). */
+.tw-stat-popups {
+  position: absolute;
+  inset: 0.4rem 0.25rem auto;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  pointer-events: none;
+  /* The value scales with the card (narrow on phones, wide on desktops). */
+  container-type: inline-size;
+}
+
+.tw-stat-popup {
+  padding: 0.1rem 0.5rem;
+  border-radius: 9999px;
+  font-size: clamp(0.8rem, 14cqi, 1.2rem);
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 1);
+  background: rgba(2, 6, 23, 0.75);
+  opacity: 0;
+  animation: tw-stat-float 3.2s ease-out forwards;
+}
+
+.tw-stat-popup.is-loss {
+  color: rgb(254 202 202);
+  border: 1px solid rgb(239 68 68 / 0.7);
+  box-shadow: 0 0 10px rgb(239 68 68 / 0.45);
+}
+
+.tw-stat-popup.is-gain {
+  color: rgb(187 247 208);
+  border: 1px solid rgb(34 197 94 / 0.7);
+  box-shadow: 0 0 10px rgb(34 197 94 / 0.4);
+}
+
+@keyframes tw-stat-float {
+  0% { opacity: 0; transform: translateY(0.9rem) scale(0.7); }
+  12% { opacity: 1; transform: translateY(0) scale(1.15); }
+  22% { transform: translateY(0) scale(1); }
+  75% { opacity: 1; transform: translateY(-0.6rem); }
+  100% { opacity: 0; transform: translateY(-1.4rem); }
+}
+
+/* HP loss: a short red flash and shake of the whole card. */
+.tw-npc-hit {
+  animation: tw-npc-hit 0.9s ease-out;
+}
+
+.tw-npc-hit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 40%, rgb(239 68 68 / 0.55), rgb(127 29 29 / 0.25) 70%);
+  animation: tw-npc-hit-flash 0.9s ease-out forwards;
+}
+
+@keyframes tw-npc-hit {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(1px); }
+}
+
+@keyframes tw-npc-hit-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-stat-popup {
+    animation-name: tw-stat-fade;
+  }
+
+  .tw-npc-hit {
+    animation: none;
+  }
+}
+
+@keyframes tw-stat-fade {
+  0%, 100% { opacity: 0; }
+  10%, 80% { opacity: 1; }
 }
 
 /* Protagonist low on HP: the card glows redder in 25% steps (see playerDangerLevel). */
