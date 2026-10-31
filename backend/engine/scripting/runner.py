@@ -67,6 +67,9 @@ class ScriptRunner:
         helper blocks into the target scope (later blocks shadow earlier names).
         Top-level expressions and mutable API calls are skipped to prevent state resets.
         """
+        # Definitions get their own step/time budget: without it the step counter and the
+        # deadline of the interpreter's previous run (or the initial 0.0) would apply here.
+        self.interpreter._start_budget()
         for source_id, code in [("init_script", self.init_script), *self.helpers]:
             if code:
                 self._load_definitions(code, source_id, scope)

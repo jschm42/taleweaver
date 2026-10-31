@@ -89,6 +89,26 @@ def test_broken_helper_block_reports_its_scene():
     assert any("helpers_CRYPT" in m for m in ctx.changeset.system_messages)
 
 
+def test_large_helper_block_loads_repeatedly_on_a_fresh_runner():
+    # Arrange: a constant big enough that two loads cross the interpreter's wall-clock check
+    # (the dialog endpoint loads the definitions once to find the handler, then again to run it)
+    table = "{" + ", ".join(f"'K{i}': [{i}, {i + 1}]" for i in range(60)) + "}"
+    manifest = _manifest()
+    manifest["scenes"][1]["helpers_script"] = (
+        f"TABLE = {table}\ndef table_size():\n    return len(TABLE)\n"
+    )
+    ctx = GameContext(avatar_data={}, current_scene_id="HALL", entities={})
+    runner = runner_for_manifest(manifest)
+
+    # Act
+    runner.load_init_definitions({"tw": ctx})
+    runner.execute_code("tw.vars.set('size', table_size())", {"tw": ctx})
+
+    # Assert
+    assert ctx.changeset.system_messages == []
+    assert ctx.changeset.var_updates == {"size": 60}
+
+
 @pytest.mark.asyncio
 async def test_inline_trigger_can_call_init_script_and_scene_helpers(setup_test_db):
     # Arrange: inline scene/exit/read triggers run through TriggerService
