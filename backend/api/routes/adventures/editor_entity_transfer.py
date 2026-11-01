@@ -94,11 +94,15 @@ async def export_entity(
 async def import_entity(
     template_id: str,
     expected_kind: Optional[Literal["protagonist", "npc", "item"]] = Form(default=None),
+    target_scene_id: Optional[str] = Form(default=None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Imports a .twe bundle. NPCs/items are added as new entities; a protagonist replaces the current one."""
+    """Imports a .twe bundle. NPCs/items are added as new entities; a protagonist replaces the current one.
+
+    ``target_scene_id`` (NPCs/items only) places the new entity in that scene.
+    """
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
     content = await file.read(MAX_BUNDLE_BYTES + 1)
     try:
@@ -112,9 +116,11 @@ async def import_entity(
             detail=f"This file contains a {bundle.kind}, but a {expected_kind} was expected.",
         )
 
-    importer = import_protagonist_bundle if bundle.kind == "protagonist" else import_entity_bundle
     try:
-        result = await importer(db, adv, bundle)
+        if bundle.kind == "protagonist":
+            result = await import_protagonist_bundle(db, adv, bundle)
+        else:
+            result = await import_entity_bundle(db, adv, bundle, target_scene_id or None)
     except EntityBundleError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {

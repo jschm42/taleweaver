@@ -2937,6 +2937,8 @@ watch(
               @request-delete-exit="requestDeleteRouteExit"
               @request-delete-entity="requestDeleteRouteEntity"
               @clone-entity="handleCloneRouteEntity"
+              @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @import-entity="(kind, sceneId) => importEntity(kind, sceneId)"
               @request-move-entity-to-scene="requestMoveEntityToScene"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"

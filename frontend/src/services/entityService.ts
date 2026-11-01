@@ -218,11 +218,15 @@ export const entityService = {
     return await res.blob()
   },
 
-  /** Imports a .twe bundle. NPCs/items are added; a protagonist replaces the current one. */
-  async importEntityBundle(adventureId: string, file: File, expectedKind: EntityBundleKind): Promise<EntityBundleImportResult> {
+  /**
+   * Imports a .twe bundle. NPCs/items are added; a protagonist replaces the current one.
+   * `targetSceneId` places an NPC or item in that scene instead of its original one.
+   */
+  async importEntityBundle(adventureId: string, file: File, expectedKind: EntityBundleKind, targetSceneId?: string): Promise<EntityBundleImportResult> {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('expected_kind', expectedKind)
+    if (targetSceneId) formData.append('target_scene_id', targetSceneId)
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/transfer/import`, {
       method: 'POST',
       headers: authHeaders(),
