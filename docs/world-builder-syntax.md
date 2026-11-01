@@ -65,7 +65,7 @@ Switch keys:
 
 `text:` implies READABLE, `states:` implies SWITCH, and `combine:` or `results:` implies CONSTRUCTABLE.
 
-A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game. It needs at least 2 `combine` ingredients and at least 1 `results` item. Results are regular items of any type; they are hidden automatically and revealed when the recipe is crafted. All ingredients are consumed except those listed in `keep`. The `craft_guard` and the `on_craft` / `on_craft_fail` hooks belong to the recipe.
+A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game and therefore gets no image. It needs at least 2 `combine` ingredients and at least 1 `results` item. Results are regular items of any type; they are hidden automatically and revealed when the recipe is crafted. All ingredients are consumed except those listed in `keep`. The `craft_guard` and the `on_craft` / `on_craft_fail` hooks belong to the recipe.
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.

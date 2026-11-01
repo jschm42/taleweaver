@@ -357,6 +357,9 @@ def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
 
     if entity_type == "OBJECT":
         _normalize_exported_object_metadata(filtered)
+        # Recipes never appear in the world; older adventures may still carry a placeholder.
+        if str(filtered.get("item_type") or "").upper() == "CONSTRUCTABLE":
+            filtered.pop("image_url", None)
     elif entity_type == "NPC":
         _normalize_exported_npc_metadata(filtered)
 

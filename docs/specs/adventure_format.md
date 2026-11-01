@@ -187,6 +187,7 @@ Interactive elements, items, containers, and state machines.
 | `combination_ingredients`| `array` | `CONSTRUCTABLE` recipes: all item IDs that must be combined (at least 2). |
 | `result_item_ids` | `array` | `CONSTRUCTABLE` recipes: IDs of the regular items that crafting reveals (at least 1, any item type except `CONSTRUCTABLE`). Results always start hidden. *(since 1.3.1)* |
 | `kept_ingredients` | `array` | `CONSTRUCTABLE` recipes: ingredient IDs that are not consumed by crafting. *(since 1.3.1)* |
+| `image_url` (recipes) | — | `CONSTRUCTABLE` recipes have no image: exports leave out their `image_url` (and the file), and an imported recipe image is ignored. |
 | `craft_guard_expression` | `string` | `CONSTRUCTABLE` recipes: optional guard expression that must hold for crafting. |
 | `reveals_item_id` | `string` | Item spawned or revealed upon interaction/use. |
 | `damage_dice` | `string` | `WEAPON` items: damage formula, e.g. `1d8` or `1d10+2` (default `1d8`). |
