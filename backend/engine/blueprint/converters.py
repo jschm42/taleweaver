@@ -14,6 +14,7 @@ from backend.engine.interaction.switch_states import (
     STATE_LABEL_MAX,
     is_valid_state_id,
 )
+from backend.engine.rules.game_clock import to_minutes
 
 _TRUE_WORDS = {"yes", "true", "on", "1", "y"}
 _FALSE_WORDS = {"no", "false", "off", "0", "n"}
@@ -62,6 +63,12 @@ def boolean(raw: str) -> bool:
 
 def ident(raw: str) -> str:
     return normalize_id(raw)
+
+
+def time_amount(raw: str) -> str:
+    """``2h 30m`` / ``1d`` / ``1:30`` / ``90`` -> elapsed minutes as text (kept when unparsable)."""
+    minutes = to_minutes(raw)
+    return str(minutes) if minutes is not None else raw.strip()
 
 
 def ident_list(raw: str) -> list[str]:

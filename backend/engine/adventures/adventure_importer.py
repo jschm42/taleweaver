@@ -76,6 +76,15 @@ def _resolve_license_url(explicit_url: Optional[str], license_name: Optional[str
     return _LICENSE_URL_DEFAULTS.get(license_name.strip().lower())
 
 
+def _gm_time_control(*sources: Optional[dict[str, Any]]) -> bool:
+    """The first explicit ``gm_time_control`` of the sources; older files default to True."""
+    for source in sources:
+        value = (source or {}).get("gm_time_control")
+        if value is not None:
+            return bool(value)
+    return True
+
+
 class AdventureConflictError(Exception):
     """Raised when an adventure being imported already exists."""
 
@@ -243,6 +252,7 @@ class AdventureTemplateImporter:
                     pacing_minutes=adv_data.get("pacing_minutes", 5),
                     max_time_per_turn=adv_data.get("max_time_per_turn")
                     or manifest_data.get("max_time_per_turn"),
+                    gm_time_control=_gm_time_control(adv_data, manifest_data),
                     max_memory_turns=adv_data.get("max_memory_turns")
                     or manifest_data.get("max_memory_turns")
                     or 10,
@@ -659,6 +669,7 @@ class AdventureTemplateImporter:
             time_per_turn=old_adv.get("time_per_turn", 10),
             pacing_minutes=old_adv.get("pacing_minutes", 5),
             max_time_per_turn=old_adv.get("max_time_per_turn"),
+            gm_time_control=_gm_time_control(old_adv),
             max_memory_turns=old_adv.get("max_memory_turns") or 10,
             clock_enabled=old_adv.get("clock_enabled", False),
             ui_theme=normalize_ui_theme(old_adv.get("ui_theme")),
@@ -908,6 +919,7 @@ class AdventureTemplateImporter:
             pacing_minutes=adv_meta.get("pacing_minutes", 5),
             max_time_per_turn=adv_meta.get("max_time_per_turn")
             or manifest.get("max_time_per_turn"),
+            gm_time_control=_gm_time_control(adv_meta, manifest),
             max_memory_turns=adv_meta.get("max_memory_turns")
             or manifest.get("max_memory_turns")
             or 10,

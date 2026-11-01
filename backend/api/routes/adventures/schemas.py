@@ -32,6 +32,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     time_per_turn: int = 5
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: bool = True
     max_memory_turns: int = 10
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
@@ -313,6 +314,7 @@ class AdventureTemplateResponse(BaseModel):
     time_per_turn: int
     pacing_minutes: int
     max_time_per_turn: Optional[int] = None
+    gm_time_control: bool = True
     max_memory_turns: int = 10
     clock_enabled: bool
     time_system: str = "calendar"
@@ -479,6 +481,8 @@ class AdventureTemplateSummaryResponse(BaseModel):
     cover_source_adventure_name: Optional[str] = None
     has_update: bool = False
     available_version: Optional[str] = None
+    # Where the update comes from: "local" (/adventures file) or "library" (adventure browser).
+    update_source: Optional[str] = None
     has_sequences: bool = True
     is_legacy_format: bool = False
     # Manifest version below DEPRECATED_BELOW_VERSION: still playable, shown as deprecated.
@@ -674,6 +678,7 @@ class AdventureTemplateUpdate(BaseModel):
     time_system: Optional[str] = None
     time_config: Optional[dict[str, Any]] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = None
     max_memory_turns: Optional[int] = None
     allow_dynamic_items: Optional[bool] = None
     can_damage_npcs: Optional[bool] = None

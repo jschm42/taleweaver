@@ -6,6 +6,7 @@ from backend.engine.debug_commands import (
     entity_commands,
     inspect_commands,
     session_commands,
+    time_commands,
     world_commands,
 )
 from backend.engine.debug_commands.context import DebugContext, DebugHandler
@@ -17,7 +18,7 @@ _USAGE = (
     "DEBUG USAGE: /debug [on/off | npc drop_items | item dynamic on/off | session | szene | heal "
     "| scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough "
     "| engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X "
-    "| kill NPC | open_exit ID | gen_item PROMPT]"
+    "| kill NPC | open_exit ID | gen_item PROMPT | time [set|add|sub|tick|pause|resume|pace|gm|cancel]]"
 )
 
 # Sub-command -> handler. A handler returning None falls back to the usage text.
@@ -55,6 +56,7 @@ _HANDLERS: dict[str, DebugHandler] = {
     "awards": world_commands.grant_awards,
     "claim_awards": world_commands.grant_awards,
     "reveal_map": world_commands.reveal_map,
+    "time": time_commands.time_command,
 }
 
 

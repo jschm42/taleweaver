@@ -512,14 +512,20 @@ async def list_templates(
         check_template_update,
         scan_available_adventure_files,
     )
+    from backend.services.adventure_library.catalog import LibraryService
+    from backend.services.adventure_library.updates import merge_library_update
 
     available_files = scan_available_adventure_files()
+    # Cached index only: the list must not wait for the remote library.
+    library = LibraryService().peek_library()
 
     response = []
     for template in templates:
         latest = latest_by_template.get(template.id)
         game_session, state, scene_label = latest if latest else (None, None, None)
-        update_info = check_template_update(template, available_files)
+        update_info = merge_library_update(
+            check_template_update(template, available_files), template, library
+        )
         response.append(
             AdventureTemplateSummaryResponse(
                 template_id=template.id,
@@ -551,6 +557,7 @@ async def list_templates(
                 cover_source_adventure_name=template.cover_source_adventure_name,
                 has_update=update_info["has_update"],
                 available_version=update_info["available_version"],
+                update_source=update_info["update_source"],
                 has_sequences=update_info["has_sequences"],
                 is_legacy_format=update_info["is_legacy_format"],
                 is_deprecated=update_info["is_deprecated"],
@@ -568,14 +575,11 @@ async def update_all_adventure_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Updates all adventure templates for the user that have newer versions in /adventures."""
-    from backend.engine.adventures.adventure_updates import update_all_adventures
+    """Updates all adventure templates that have newer versions in /adventures or the library."""
+    from backend.services.adventure_library.updates import update_all_templates
 
     try:
-        return await update_all_adventures(
-            db=db,
-            user_id=current_user.id,
-        )
+        return await update_all_templates(db, current_user.id)
     except Exception as e:
         logger.exception("Failed to update all adventure templates")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -588,15 +592,14 @@ async def update_adventure_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Updates an individual adventure template from its matching file in /adventures."""
-    from backend.engine.adventures.adventure_updates import update_single_adventure
+    """Updates one adventure template from /adventures or the adventure library (newer wins)."""
+    from backend.services.adventure_library.catalog import LibraryError
+    from backend.services.adventure_library.updates import update_template
 
     try:
-        return await update_single_adventure(
-            db=db,
-            template_id=template_id,
-            user_id=current_user.id,
-        )
+        return await update_template(db, template_id, current_user.id)
+    except LibraryError as e:
+        raise HTTPException(status_code=502, detail=f"Download failed: {e}") from e
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

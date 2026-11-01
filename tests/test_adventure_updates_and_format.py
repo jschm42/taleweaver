@@ -116,8 +116,14 @@ async def test_legacy_template_cannot_start_session(auth_client: AsyncClient, db
 
 
 @pytest.mark.asyncio
-async def test_update_all_endpoint_exists_and_runs(auth_client: AsyncClient):
+async def test_update_all_endpoint_exists_and_runs(auth_client: AsyncClient, monkeypatch):
     """POST /api/adventures/templates/update-all executes cleanly."""
+    from backend.services.adventure_library.catalog import LibraryError, LibraryService
+
+    async def offline(*_args, **_kwargs):
+        raise LibraryError("offline in tests")
+
+    monkeypatch.setattr(LibraryService, "get_library", offline)
     resp = await auth_client.post("/api/adventures/templates/update-all")
     assert resp.status_code == 200
     data = resp.json()

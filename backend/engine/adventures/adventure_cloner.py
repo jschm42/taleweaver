@@ -171,6 +171,7 @@ def _create_cloned_template_entity(
         time_per_turn=original.time_per_turn,
         pacing_minutes=original.pacing_minutes,
         max_time_per_turn=original.max_time_per_turn,
+        gm_time_control=original.gm_time_control,
         clock_enabled=original.clock_enabled,
         max_memory_turns=original.max_memory_turns,
         time_system=original.time_system,

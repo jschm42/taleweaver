@@ -576,6 +576,8 @@ class SafeAstInterpreter(ComprehensionMixin):
 
         # Lets APIs that store a callback by name (e.g. tw.dialog on_choice) accept the function.
         sandbox_function.__name__ = func_name
+        # Lets callers decide whether to pass an event argument (e.g. tw.time handlers).
+        sandbox_function.param_count = len(param_names)  # type: ignore[attr-defined]
         self.env[func_name] = sandbox_function
 
     # -------------------------------------------------------------------------

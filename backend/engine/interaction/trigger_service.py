@@ -14,6 +14,7 @@ from backend.engine.interaction.script_item_apply import (
     sync_entity_rows,
 )
 from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
@@ -89,6 +90,7 @@ class TriggerService:
             quests=state.quests or [],
             script_vars=script_vars,
             in_game_time=state.in_game_time,
+            clock=clock_view(state),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -218,6 +220,7 @@ class TriggerService:
             or changeset.exit_updates
             or changeset.pending_dialog
             or changeset.gm_directions
+            or changeset.clock_ops
         ):
             return
         cur_states = dict(state.entity_states or {})
@@ -241,6 +244,7 @@ class TriggerService:
             cur_states[upd["entity_id"]] = st
         store_pending_dialog(cur_states, changeset.pending_dialog)
         store_gm_directions(cur_states, changeset.gm_directions)
+        apply_changeset_clock(state, cur_states, changeset.clock_ops)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
 

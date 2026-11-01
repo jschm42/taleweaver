@@ -459,6 +459,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "time_per_turn": adv.time_per_turn,
         "pacing_minutes": adv.pacing_minutes,
         "max_time_per_turn": adv.max_time_per_turn,
+        "gm_time_control": bool(getattr(adv, "gm_time_control", True)),
         "max_memory_turns": getattr(adv, "max_memory_turns", 10) or 10,
         "clock_enabled": adv.clock_enabled,
         "selected_tone": adv.selected_tone,

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any, Literal, Optional, Union
+
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -7,8 +8,12 @@ from backend.core.adventure_format import CURRENT_VERSION, FORMAT_NAME
 
 
 class Pacing(BaseModel):
-    scene_length: Optional[Literal["short", "normal", "long"]] = Field(None, description="short|normal|long")
-    event_frequency: Optional[Literal["low", "normal", "high"]] = Field(None, description="low|normal|high")
+    scene_length: Optional[Literal["short", "normal", "long"]] = Field(
+        None, description="short|normal|long"
+    )
+    event_frequency: Optional[Literal["low", "normal", "high"]] = Field(
+        None, description="low|normal|high"
+    )
     notes: Optional[str] = None
 
 
@@ -75,6 +80,7 @@ class AdventureTemplateImportPayload(BaseModel):
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = None
     max_memory_turns: Optional[int] = None
     clock_enabled: Optional[bool] = None
     time_system: Optional[str] = None

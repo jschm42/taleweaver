@@ -81,6 +81,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, switch outcomes, and event scripts directly from the UI with reference autocomplete.
 * **Bidirectional Route Mapping:** Visual route editor for bidirectional and one-way paths with lock descriptions, passcodes, and item unlock conditions.
 * **Sandboxed Python Event Scripts:** Author deterministic, reactive game logic directly in the World-Editor or via AI World-Builder generation. Safely queries and modifies scenes, exits, items, NPCs, avatar stats, variables, and victory conditions without host escapes. See the [Scripting Engine Guide](docs/scripting_engine.md).
+* **In-Game Time Management:** The clock advances after every narrated player message by a configurable pacing. The editor decides whether the Game Master may change the time ("the search took 20 minutes"); scripts read, set, pause and resume the clock with `tw.time`, change the pacing in-game, and react to time with `on_time_reached` scripts and `tw.time.at/after/every` timers. `/debug time` changes the clock by hand for testing.
 * **Dual-Tier AI & Structural Validation:** Built-in world validation engine that checks graph connectivity, reachable scenes, valid exit endpoints, proper container contents, and crafting ingredient completeness, alongside deep LLM story critiques that detect plot holes, logic inconsistencies, and puzzle dead-ends.
 * **One-Click AI Fix Proposals:** Automatically generate and apply intelligent AI repairs for broken exits, missing keys, or narrative inconsistencies directly from the editor's Validation Tab.
 
@@ -124,6 +125,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### Media & Immersion
 * Optional AI-generated images to enhance the aesthetic.
 * **Import/Export:** Adventures can be backed up or shared.
+* **Update Badges:** Installed adventures show an **Update** badge when a newer version is available, either as a file in `/adventures` or in the Adventure Library (matched by the adventure's stable ID). Updating keeps existing game sessions.
 * **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
 
 ### Recent Feature Highlights

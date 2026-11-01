@@ -4,7 +4,7 @@ The trigger catalogue below mirrors what the gameplay engine actually executes:
 
 * Top-level ``scripts`` (see ``WorldScriptSchema``) are dispatched by the script runner
   for ``on_turn_start``, ``on_enter_scene``, ``on_interact``, ``on_logic_pass_done``,
-  ``on_narration_done``, and ``on_turn_end``.
+  ``on_narration_done``, ``on_turn_end`` and ``on_time_reached`` (target = elapsed time).
 * Inline ``on_*_script`` / ``on_*_text`` fields on entities are executed by the turn
   state applier (``turn_state_applier.py`` / ``turn_interactions.py``).
 * Sequence ``soft_rules`` are judged by the GM and run by the soft rule guard
@@ -32,6 +32,11 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     ),
     ("on_narration_done", "after narrative generation completes", "None (global)"),
     ("on_turn_end", "after narration and state changes of every turn", "None (global)"),
+    (
+        "on_time_reached",
+        "once, when the in-game clock reaches the target time (elapsed since the start)",
+        "Elapsed in-game time, e.g. '90' or '2h 30m' (required)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a
@@ -145,6 +150,10 @@ TW_API_REFERENCE = (
     "text (max 3 calls per trigger, returns '' on failure, not usable in guards). Use sparingly for "
     "flavour text and always provide a fallback: tw.llm.ask(...) or 'fixed text'.\n"
     "- tw.game: time | win(reason), game_over(reason)\n"
+    "- tw.time: now, day, hour, minute, format() | set(t), advance(t), rewind(t), pause(), resume(), "
+    "set_minutes_per_tick(t), allow_gm_time(bool) | at(t, handler), after(t, handler), "
+    "every(t, handler), cancel(timer_id). t is minutes or text like '2h 30m'; the clock advances "
+    "after every narrated player message; handlers live in init_script and receive time_event.\n"
     "- tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False): shows the player a "
     "multiple-choice dialog (NPC conversation, riddle, dilemma). `options` is a list of labels or "
     "{'label': ..., 'visible_if': '<guard expression>'} dicts (max 8). The call does NOT wait: once "

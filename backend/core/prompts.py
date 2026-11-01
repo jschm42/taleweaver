@@ -313,7 +313,7 @@ _GM_MECHANICS_SHARED_RULES = (
     "NPCS: Use `updated_entities` for NPC stats, `spatial_position` within the scene, and condition `notes` (e.g. 'is badly hurt'). "
     "Move movable NPCs (respecting `allowed_scenes`) with `moved_entities` (`to_scene_id`, `to_spatial_position`); stationary NPCs never leave. "
     "`new_status_effects` is strictly for the PROTAGONIST's condition (e.g. 'Poisoned').\n"
-    "TIME: The engine advances base time when the scene or sequence changes. Use `extra_time_minutes` for prolonged actions (thorough search, crafting, resting); use `time_override_minutes` or `start_datetime_override` only for calendar jumps.\n"
+    "TIME: The engine advances a base amount of time after every narrated player message. Use `extra_time_minutes` for prolonged actions (thorough search, crafting, resting); use `time_override_minutes` or `start_datetime_override` only for calendar jumps. Never set time fields when the CURRENT STATE says TIME CONTROL: LOCKED.\n"
     "AWARDS: If an award from AVAILABLE AWARDS is earned, return its key in `earned_award_keys` (once per session; only provided keys).\n"
     "NOTES & WORLD MEMORIES: Use `remember_notes`, `forget_notes`, or `clear_notes: true` for persistent facts. "
     "Record lasting consequences in `new_world_memories` (`description` in English, optional `npc_id`, `emotion`, `scope`: 'local' or 'global').\n"
@@ -502,7 +502,7 @@ GM_CHAT_PROGRESSION_RULES_PROMPT = (
     "If the player moves to a different room, set `new_scene_id` (from available exits) and optionally `exit_label`.\n"
     "Set `new_scene_id` ONLY when the movement is actually executed this turn (explicit traversal/action), not for plans, intentions, hypotheticals, or future goals.\n"
     "If an NPC clearly moves to another room or changes their physical spot, reflect this in `moved_entities` (fields: `entity_id`, `to_scene_id`, `to_spatial_position`) or `updated_entities` (fields: `entity_id`, `spatial_position`). "
-    "Use `extra_time_minutes` for actions that take significant time.\n"
+    "Use `extra_time_minutes` for actions that take significant time (never when the CURRENT STATE says TIME CONTROL: LOCKED).\n"
     "Do not request complex dice rolls or detailed combat attacks. "
     "Do NOT set `game_completed` for intermediate sequence transitions (handled automatically by the engine). Use `game_completed` only when the overarching adventure is fully complete. "
     "If uncertain, leave fields empty/false.\n"
@@ -1015,3 +1015,10 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
 System prompt for the autonomous play agent (incl. Monkey Mode robustness tests).
 Output is expected to be a strict JSON action object. Variables are pre-formatted by the caller.
 """
+
+# Appended to the mechanics CURRENT STATE block while the GM may not change the in-game time
+# (adventure gm_time_control off, tw.time.allow_gm_time(False) or a paused clock).
+GM_TIME_LOCKED_NOTE = (
+    "\nTIME CONTROL: LOCKED. The in-game time is managed by the engine only: leave "
+    "`extra_time_minutes`, `time_override_minutes` and `start_datetime_override` empty."
+)

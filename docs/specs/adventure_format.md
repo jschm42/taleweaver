@@ -65,7 +65,9 @@ General configuration, narrative constraints, and gameplay settings.
 | `original_prompt` | `string` | The original prompt used during generation (for documentation purposes). |
 | `image_url` | `string` | Relative path (`assets/...`) or canonical URL (`/data/...`) to the cover visual. |
 | `rule_enforcement_mode` | `string` | `"rpg"` (strict mechanics & dice checks), `"story"` (streamlined mechanics), or `"chat"` (pure narrative). |
-| `time_per_turn` | `number` | In-game minutes elapsed per in-game turn (default: 5). An in-game turn ends when the player changes scene or the active sequence changes; messages within one scene do not advance the base time. |
+| `time_per_turn` | `number` | In-game minutes that pass after every narrated player message (the narration tick, default: 5). Scripts can override it per session with `tw.time.set_minutes_per_tick()`. |
+| `max_time_per_turn` | `number \| null` | Optional cap for the narration tick plus the GM's extra time of one message. |
+| `gm_time_control` | `boolean` | Whether the Game Master may change the in-game time (`extra_time_minutes`, time overrides). Default: `true`; missing in older files means `true`. Scripts can override it per session with `tw.time.allow_gm_time()`. |
 | `pacing_minutes` | `number` | Frequency of world background heartbeats / scheduled events. |
 | `clock_enabled` | `boolean` | Whether to track and display in-game time / calendar. |
 | `ingame_timestamp` | `string` | Formatted starting in-game timestamp (e.g. `"Day 1, 08:00"`). |
@@ -231,7 +233,7 @@ Custom sandboxed event scripts reacting to game hooks and global initialization 
 | :--- | :--- | :--- |
 | `id` | `string` | Unique uppercase slug (e.g., `"SCRIPT_LEVER_PUZZLE"`). |
 | `name` | `string` | Human-readable title for the script. |
-| `trigger` | `string` | Event hook: `"on_init"`, `"on_turn_start"`, `"on_enter_scene"`, `"on_interact"`, `"on_logic_pass_done"`, `"on_narration_done"`, or `"on_turn_end"`. |
+| `trigger` | `string` | Event hook: `"on_init"`, `"on_turn_start"`, `"on_enter_scene"`, `"on_interact"`, `"on_logic_pass_done"`, `"on_narration_done"`, `"on_turn_end"`, or `"on_time_reached"` (its `target_id` is the elapsed in-game time, e.g. `"90"` or `"2h 30m"`). |
 | `target_id` | `string \| null` | Optional target scene ID or entity ID that filters when this script fires. |
 | `code` | `string` | Safe Python script utilizing the sandboxed `tw` GameContext API. |
 | `description` | `string \| null` | Optional narrative/technical description of the script logic. |

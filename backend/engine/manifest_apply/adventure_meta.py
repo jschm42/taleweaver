@@ -44,6 +44,7 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("time_per_turn", int, False),
     ("pacing_minutes", int, False),
     ("max_time_per_turn", int, False),
+    ("gm_time_control", bool, False),
     ("max_memory_turns", int, False),
     ("clock_enabled", bool, False),
     ("time_system", None, True),

@@ -14,6 +14,7 @@ import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from backend.api.routes.adventures.game_clock_flow import run_due_time_events
 from backend.api.routes.adventures.turn_pass_flow import sse_role_message
 from backend.core.config import settings
 from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
@@ -76,6 +77,9 @@ async def _run(manager: Any, code: str) -> tuple[list[Any], str | None, list[str
     source = f"{RESULT_NAME} = {code}" if is_expression else code
     manager._get_script_runner().execute_code(source, scope, script_id="debug_script")
     messages = await manager._apply_script_changeset(context.changeset)
+    if context.changeset.clock_ops:
+        # A changed clock reacts at once, like after /debug time.
+        messages.extend(await run_due_time_events(manager))
     errors = [str(m) for m in messages if str(m).startswith(SCRIPT_ERROR_PREFIX)]
     applied = [m for m in messages if not str(m).startswith(SCRIPT_ERROR_PREFIX)]
     result = _format_result(scope.get(RESULT_NAME)) if is_expression else None

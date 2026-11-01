@@ -31,6 +31,7 @@ from backend.engine.blueprint.converters import (
     switch_transition,
     text,
     text_list,
+    time_amount,
     weapon_cost,
     weapon_effects,
 )
@@ -280,10 +281,13 @@ SCRIPT_TRIGGERS = (
     "on_turn_end",
     "on_logic_pass_done",
     "on_narration_done",
+    "on_time_reached",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),
     "target": _ref("target_id"),
+    # on_time_reached: elapsed in-game time ("90", "2h 30m", "1d"), stored as minutes.
+    "at": FieldSpec("target_id", time_amount),
     "code": _script("code"),
 }
 

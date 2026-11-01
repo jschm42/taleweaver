@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GmTimeControlToggle from '@/components/editor/GmTimeControlToggle.vue'
 import PlotTab from '@/components/editor/PlotTab.vue'
 import { Save, X } from 'lucide-vue-next'
 import { computed } from 'vue'
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   (e: 'update:pacing', val: number): void
   (e: 'update:max-time-per-turn', val: number | null): void
   (e: 'update:clock-enabled', val: boolean): void
+  (e: 'update:gm-time-control', val: boolean): void
   (e: 'update:time-system', val: 'calendar' | 'units' | 'relative'): void
   (e: 'update:start-date', val: string): void
   (e: 'update:start-time', val: string): void
@@ -374,6 +376,7 @@ const clockConfigChanged = computed(() => {
     || formTimeSystem !== advTimeSystem
     || formPacing !== advPacing
     || formMaxTime !== advMaxTime
+    || (props.form?.gm_time_control ?? true) !== (props.adventure?.gm_time_control ?? true)
     || (formTimeConfig.start_time || '08:00') !== (advTimeConfig.start_time || '08:00')
     || (formTimeConfig.day_label || 'Day') !== (advTimeConfig.day_label || 'Day')
     || Number(formTimeConfig.initial_day ?? 1) !== Number(advTimeConfig.initial_day ?? 1)
@@ -393,6 +396,7 @@ function discardClockConfig() {
   emit('update:time-system', props.adventure?.time_system === 'units' ? 'units' : 'relative')
   emit('update:pacing', props.adventure?.time_per_turn ?? 5)
   emit('update:max-time-per-turn', props.adventure?.max_time_per_turn ?? null)
+  emit('update:gm-time-control', props.adventure?.gm_time_control ?? true)
   emit('update:start-time', advTimeConfig.start_time || '08:00')
   emit('update:day-label', advTimeConfig.day_label || 'Day')
   emit('update:initial-day', advTimeConfig.initial_day ?? 1)
@@ -843,7 +847,7 @@ const licenseUrlInvalid = computed(() => {
                 </select>
               </div>
               <p v-if="timeValidationErrors.pacing" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.pacing }}</p>
-              <p v-else class="text-[10px] text-slate-500">Standard in-game time advancement each turn (max: 10,000).</p>
+              <p v-else class="text-[10px] text-slate-500">Time that passes after every narrated player message (max: 10,000). Scripts can change it in-game with tw.time.set_minutes_per_tick().</p>
             </div>
 
             <!-- Max Time per Turn (GM Limit) -->
@@ -872,7 +876,7 @@ const licenseUrlInvalid = computed(() => {
                 </select>
               </div>
               <p v-if="timeValidationErrors.max_time" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.max_time }}</p>
-              <p v-else class="text-[10px] text-slate-500">Maximum time advancement allowed per turn (max: 10,000).</p>
+              <p v-else class="text-[10px] text-slate-500">Caps pacing plus the GM's extra time for one message (max: 10,000).</p>
             </div>
           </div>
         </div>
@@ -934,7 +938,7 @@ const licenseUrlInvalid = computed(() => {
                 :class="timeValidationErrors.units_pacing ? 'border-red-500/80 focus:ring-2 ring-red-500/20' : 'border-cyan-500/50 focus:ring-2 ring-cyan-500/20'"
               />
               <p v-if="timeValidationErrors.units_pacing" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.units_pacing }}</p>
-              <p v-else class="text-[10px] text-slate-500">Default {{ form.time_config?.unit_name || 'units' }} that elapse automatically each turn (max: 10,000).</p>
+              <p v-else class="text-[10px] text-slate-500">Default {{ form.time_config?.unit_name || 'units' }} that elapse after every narrated player message (max: 10,000). Scripts can change it with tw.time.set_minutes_per_tick().</p>
             </div>
 
             <!-- Max Units (GM Limit) -->
@@ -958,6 +962,11 @@ const licenseUrlInvalid = computed(() => {
             </div>
           </div>
         </div>
+
+        <GmTimeControlToggle
+          :model-value="form.gm_time_control ?? true"
+          @update:model-value="emit('update:gm-time-control', $event)"
+        />
 
         <!-- Live Widget Preview -->
         <div class="flex items-center justify-between p-4 rounded-2xl bg-black/40 border border-white/10">

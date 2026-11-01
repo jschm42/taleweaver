@@ -828,6 +828,7 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -1057,9 +1058,10 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m')",
     )
     target_id: Optional[str] = Field(
         None,

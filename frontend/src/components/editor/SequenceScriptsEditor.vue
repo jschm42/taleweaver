@@ -32,13 +32,16 @@ const emit = defineEmits<{
 }>()
 
 // Same triggers as top-level scripts, except on_init (no sequence is active yet).
-const TRIGGERS: { value: string; label: string; target: 'entity' | 'scene' | null }[] = [
+type TargetKind = 'entity' | 'scene' | 'time' | null
+
+const TRIGGERS: { value: string; label: string; target: TargetKind }[] = [
   { value: 'on_interact', label: 'On Interact (object / NPC)', target: 'entity' },
   { value: 'on_enter_scene', label: 'On Enter Scene', target: 'scene' },
   { value: 'on_turn_start', label: 'On Turn Start', target: null },
   { value: 'on_turn_end', label: 'On Turn End', target: null },
   { value: 'on_logic_pass_done', label: 'On Logic Pass Done (every message)', target: null },
   { value: 'on_narration_done', label: 'On Narration Done (every message)', target: null },
+  { value: 'on_time_reached', label: 'On Time Reached (elapsed in-game time)', target: 'time' },
 ]
 
 const scripts = computed<SequenceScript[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
@@ -55,7 +58,7 @@ const duplicateIds = computed(() => {
   return duplicates
 })
 
-function targetKind(trigger: string): 'entity' | 'scene' | null {
+function targetKind(trigger: string): TargetKind {
   return TRIGGERS.find((t) => t.value === trigger)?.target ?? null
 }
 
@@ -193,7 +196,20 @@ function toggle(index: number): void {
               <option v-for="t in TRIGGERS" :key="t.value" :value="t.value">{{ t.label }}</option>
             </select>
           </div>
-          <div v-if="targetKind(script.trigger)" class="space-y-1">
+          <div v-if="targetKind(script.trigger) === 'time'" class="space-y-1">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              Elapsed In-Game Time
+            </label>
+            <input
+              :value="script.target_id || ''"
+              type="text"
+              placeholder="e.g. 90, 2h 30m, 1d"
+              title="Minutes since the adventure started. Fires once when the clock reaches it while this sequence is active."
+              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono focus:border-cyan-500/50 outline-none"
+              @input="updateScript(index, { target_id: ($event.target as HTMLInputElement).value })"
+            />
+          </div>
+          <div v-else-if="targetKind(script.trigger)" class="space-y-1">
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
               Target {{ targetKind(script.trigger) === 'scene' ? 'Scene' : 'Object / NPC' }}
             </label>

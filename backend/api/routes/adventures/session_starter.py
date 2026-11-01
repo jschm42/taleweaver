@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -28,6 +29,7 @@ from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
 from backend.core.config import settings
+from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -47,6 +49,8 @@ _DEFAULT_PROTAGONIST_POOL = 200
 _DEFAULT_PROTAGONIST_STAT = 10
 _DEFAULT_MEMORY_TURNS = 10
 _LOCK_KEYS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
+# Start time set by the init script (tw.time.set); moved into SessionState.in_game_time.
+_START_MINUTES_KEY = "__init_start_minutes__"
 
 
 async def _template_rows(db: AsyncSession, model: Any, template_id: str) -> list[Any]:
@@ -205,6 +209,7 @@ def _run_init_scripts(
         quests=deepcopy(adventure.quests or []),
         script_vars={},
         in_game_time=0,
+        clock=clock_view(SimpleNamespace(in_game_time=0, entity_states={}), adventure),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
     )
@@ -221,6 +226,10 @@ def _run_init_scripts(
         entity_states["__switch_story_flags__"] = dict(changes.story_flag_updates)
     store_pending_dialog(entity_states, changes.pending_dialog)
     store_gm_directions(entity_states, changes.gm_directions)
+    # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
+    clock_start = SimpleNamespace(in_game_time=0)
+    if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):
+        entity_states[_START_MINUTES_KEY] = clock_start.in_game_time
     _apply_avatar_changes(avatar, changes)
     return [str(message) for message in changes.narrative_messages]
 
@@ -251,7 +260,7 @@ def _build_session_state(
         template_id=adventure.id,
         avatar_id=avatar.id,
         current_scene_id=first_scene_id,
-        in_game_time=0,
+        in_game_time=int(entity_states.pop(_START_MINUTES_KEY, 0) or 0),
         max_memory_turns=memory_turns,
         enable_history_compression=compression,
         quests=deepcopy(adventure.quests or []),

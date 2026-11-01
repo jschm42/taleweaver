@@ -49,6 +49,7 @@ export interface CharacterSheet {
   time_config?: Record<string, any> | null
   time_per_turn?: number
   max_time_per_turn?: number | null
+  gm_time_control?: boolean
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
@@ -401,8 +402,12 @@ export interface AdventureTemplateSummary {
   current_scene_name?: string | null
   cover_source_adventure_id?: string | null
   cover_source_adventure_name?: string | null
+  /** Stable adventure id (manifest origin_id); matches the Adventure Library entry id. */
+  origin_id?: string | null
   has_update?: boolean
   available_version?: string | null
+  /** Where the update comes from: a local /adventures file or the Adventure Library. */
+  update_source?: 'local' | 'library' | null
   has_sequences?: boolean
   is_legacy_format?: boolean
   /** Manifest format below 1.3.1: still playable, shown as deprecated. */
@@ -447,6 +452,7 @@ export interface CreateAdventurePayload {
   time_per_turn?: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
+  gm_time_control?: boolean
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean

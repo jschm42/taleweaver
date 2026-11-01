@@ -134,6 +134,15 @@ class LibraryService:
             logger.warning("Using the cached adventure library: %s", exc)
             return _remember(fallback, _STALE_TTL_SECONDS, stale=True)
 
+    def peek_library(self) -> AdventureLibrary | None:
+        """The last known index without any network request (memory, else the disk copy).
+
+        Used where a remote fetch must not delay the response, e.g. the update badges of
+        the "My Adventures" list. ``None`` when the library was never loaded.
+        """
+        cached = _MEMORY_CACHE["library"]
+        return cached if cached is not None else _read_disk_copy()
+
     def is_stale(self) -> bool:
         """True when the last index served came from the disk copy."""
         return bool(_MEMORY_CACHE["stale"])

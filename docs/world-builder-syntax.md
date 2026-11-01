@@ -75,10 +75,17 @@ Legacy keys still work: `Required Item:`, `Required Scene:`, `Defeat NPC:`, `End
 
 Nested blocks (indent them for readability; they always belong to the **latest** sequence):
 - `[Rule: ID] condition`: a soft rule judged by the GM. Keys: `when` (condition), `guard`, `max` (trigger limit), `script`, `text`.
-- `[Script: ID] Name` (indented): a chapter script that only runs while this sequence is active. Keys: `trigger`, `target`, `code`.
+- `[Script: ID] Name` (indented): a chapter script that only runs while this sequence is active. Keys: `trigger`, `target`, `at` (for `on_time_reached`), `code`.
 
 ### `[Script: ID] Name`
-A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`), `target` (entity ID), `code`.
+A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`), `target` (entity ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
+
+```
+[Script: NIGHTFALL] Night falls
+trigger: on_time_reached
+at: 10h
+code: tw.direct('Night has fallen: describe darkness and cold.')
+```
 Requires **Event Scripts** to be enabled in the generator settings.
 
 ### `[Sidequest: ID] Title`

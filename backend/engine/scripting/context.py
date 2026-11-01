@@ -24,6 +24,7 @@ from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPers
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
 from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
+from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,8 @@ class ScriptChangeset:
     pending_dialog: Optional[dict[str, Any]] = None
     cloned_entities: list[dict[str, Any]] = field(default_factory=list)
     save_requests: list[str] = field(default_factory=list)
+    # Ordered tw.time operations, replayed by game_clock.apply_clock_ops.
+    clock_ops: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def has_changes(self) -> bool:
@@ -127,6 +130,7 @@ class ScriptChangeset:
             or self.gameover_guard_expression_override
             or self.pending_dialog
             or self.cloned_entities
+            or self.clock_ops
         )
 
 
@@ -1124,13 +1128,20 @@ class MemoriesProxy:
 class GameProxy:
     """Safe proxy for game outcome and victory/defeat criteria."""
 
-    def __init__(self, changeset: ScriptChangeset, in_game_time: int = 0):
+    def __init__(
+        self,
+        changeset: ScriptChangeset,
+        in_game_time: int = 0,
+        clock: Optional[TimeProxy] = None,
+    ):
         self._changeset = changeset
         self.in_game_time = in_game_time
+        self._clock = clock
 
     @property
     def time(self) -> int:
-        return self.in_game_time
+        """Elapsed in-game minutes; same as tw.time.now (includes this script's changes)."""
+        return self._clock.now if self._clock is not None else self.in_game_time
 
     def win(self, reason: Optional[str] = None) -> None:
         self._changeset.game_completed = True
@@ -1239,6 +1250,7 @@ class GameContext:
         variables: Optional[dict[str, Any]] = None,
         is_debug_enabled: bool = False,
         llm_asker: Optional[LlmAsker] = None,
+        clock: Optional[dict[str, Any]] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1278,7 +1290,9 @@ class GameContext:
         self.log = LogProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.console = self.log
         self.memories = MemoriesProxy(self.changeset)
-        self.game = GameProxy(self.changeset, in_game_time)
+        # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
+        self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
+        self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
         self.sequences = SequencesProxy(self.changeset)

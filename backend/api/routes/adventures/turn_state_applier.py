@@ -13,6 +13,7 @@ from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
+from backend.engine.rules.game_clock import apply_gm_time_request
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
 from backend.engine.rules.quest_manager import QuestManager
 from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
@@ -1183,33 +1184,9 @@ class TurnStateApplier:
             self._queue_checkpoint("world_memories_updated")
             event.new_world_memories = None
 
-        # Time Management
-        if event.start_datetime_override:
-            self.state.start_datetime = event.start_datetime_override
+        # Time Management: GM time requests, unless GM time control is off or time is paused.
+        if apply_gm_time_request(self.state, self.adventure, event):
             state_dirty = True
-
-        if event.time_override_minutes is not None:
-            self.state.in_game_time = max(0, int(event.time_override_minutes))
-            state_dirty = True
-        elif event.extra_time_minutes != 0:
-            base_turn = int(
-                self.adventure.time_per_turn if self.adventure.time_per_turn is not None else 5
-            )
-            max_turn = getattr(self.adventure, "max_time_per_turn", None)
-            if max_turn is None and self.adventure.time_config:
-                max_turn = self.adventure.time_config.get("max_time_per_turn")
-
-            extra = int(event.extra_time_minutes)
-            if max_turn is not None and max_turn > 0:
-                total_turn_time = max(0, min(base_turn + extra, max_turn))
-                delta_to_add = total_turn_time - base_turn
-            else:
-                total_turn_time = max(0, base_turn + extra)
-                delta_to_add = total_turn_time - base_turn
-
-            if delta_to_add != 0:
-                self.state.in_game_time = max(0, self.state.in_game_time + delta_to_add)
-                state_dirty = True
 
         if state_dirty:
             self.state.entity_states = states

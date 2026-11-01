@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.container_put import put_items_into_container
+from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -25,6 +26,7 @@ from backend.api.routes.adventures.sequence_hooks import (
     run_sequence_transition_hooks,
 )
 from backend.engine.debug_commands.debug_engine import DebugEngine
+from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
@@ -412,6 +414,10 @@ class TurnInteractionsManager:
             async for chunk in self._handle_debug_gen_item(prompt):
                 yield chunk
             return
+        elif debug_info.startswith(TIME_CHANGED_MARKER):
+            debug_info = debug_info[len(TIME_CHANGED_MARKER) :].strip()
+            async for chunk in stream_time_events(self.manager):
+                yield chunk
         elif debug_info.startswith("[TRIGGER_NPC_DROP_ITEMS]"):
             dropped_info = await self._debug_drop_npc_items()
             debug_info = f"DEBUG: {dropped_info}"

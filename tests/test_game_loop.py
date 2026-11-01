@@ -131,8 +131,8 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
 
         # Check if state was updated (time)
         await db.refresh(state)
-        # No scene/sequence change: the message stays within the current in-game turn.
-        assert state.in_game_time == 0
+        # Every narrated player message advances the clock by one tick (time_per_turn=5).
+        assert state.in_game_time == 5
 
         # Check if chat message was recorded
         res = await db.execute(
@@ -277,7 +277,7 @@ async def test_off_scene_name_mention_without_inspect_intent_is_not_blocked(
 
         all_output = "".join(chunks).lower()
         assert "cannot inspect or search" not in all_output
-        assert state.in_game_time == 0  # same scene -> same in-game turn
+        assert state.in_game_time == 5  # one narration tick per player message
         assert mock_llm_instance.aexecute_simple_task.await_count == 1
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
         assert mock_llm_instance.stream_simple_task.await_count == 1
@@ -587,7 +587,7 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         # Assert
         await db.refresh(state)
         assert state.current_scene_id == "CELLAR"
-        # A scene change closes the in-game turn: base time advances exactly once.
+        # The narration tick advances the clock exactly once, also across a scene change.
         assert state.in_game_time == adv.time_per_turn
         # Narration is built from the new location, not the pre-turn snapshot.
         narration_text = _llm_call_text(mock_llm_instance.stream_simple_task.await_args_list[0])

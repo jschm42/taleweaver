@@ -16,7 +16,7 @@ TaleWeaver adventures are represented as self-contained blueprints following spe
 * **`.adz`**: ZIP archive containing `adventure.adv` plus localized media in `assets/` (scene backgrounds, entity portraits, audio).
 
 ### Key Manifest Components
-* **`adventure`**: World metadata, title, teaser, lore context, plot overview, tone, time pacing (`time_per_turn`, default: 5 min), rule mode (`"rpg"`, `"story"`, `"chat"`), and win/loss conditions (`completed_condition`, `gameover_condition`).
+* **`adventure`**: World metadata, title, teaser, lore context, plot overview, tone, time pacing (`time_per_turn`: minutes per narration tick, default 5; `gm_time_control`: whether the GM may change time), rule mode (`"rpg"`, `"story"`, `"chat"`), and win/loss conditions (`completed_condition`, `gameover_condition`).
 * **`protagonist`**: Avatar baseline: name, class role, HP/max HP, stamina/mana, RPG stats (`strength`, `dexterity`, `intelligence`, `wisdom`, `charisma`, `armor_class`), starting inventory, and equipped items.
 * **`scenes`**: Graph nodes representing spatial locations (`id`, `label`, `description`, `image_url`).
 * **`exits`**: Graph edges between scenes (`from_scene_id`, `to_scene_id`, `exit_type`, `is_locked`, `code_to_unlock`, `item_to_unlock`, `rule_to_unlock`).
@@ -24,7 +24,7 @@ TaleWeaver adventures are represented as self-contained blueprints following spe
 * **`objects`**: Interactive scene items or inventory objects (`CONTAINER`, `SWITCH`, `WEAPON`, `WEARABLE`, `CONSUMABLE`, `KEY`, `READABLE`, `CONSTRUCTABLE`). Containers support locks and nested items; switches hold finite state machines (`switch_states`, `switch_actions`).
 * **`quests`**: Main and side quests with clear objectives and EXP rewards.
 * **`awards`**: Achievements (`bronze`, `silver`, `gold`) evaluated during turn execution.
-* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message.
+* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`, `on_time_reached`, ...) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message.
 
 ---
 
@@ -41,16 +41,23 @@ graph TD
     E -->|Violations gathered| G["Override Narrative with rule_violations"]
     F --> T{"Scene or sequence changed?"}
     G --> T
-    T -->|yes| U["In-game turn: on_turn_end -> time_per_turn + status ticks -> on_turn_start"]
+    T -->|yes| U["In-game turn: on_turn_end -> status ticks -> on_turn_start"]
     T -->|no| H
     U --> H["Pass 2: Narration Generation (Creative/Complex Model)"]
-    H --> I["Post-Message (Checkpoints, Telemetry, Persistence)"]
+    H --> K["Narration tick (once per player message) -> due time events"]
+    K --> I["Post-Message (Checkpoints, Telemetry, Persistence)"]
 ```
 
 ### In-Game Turns (Turn Clock)
 * An **in-game turn** spans all player messages within one scene and active sequence. It is NOT the same as a player message.
-* Only when the scene or the active sequence changes (`turn_pass_flow.crossed_turn_boundary`), the engine runs `on_turn_end` (old turn), advances `time_per_turn` and status-effect ticks, then runs `on_turn_start` (new turn).
-* LLM-requested `extra_time_minutes` still applies on any message. Per-message script logic belongs in `on_logic_pass_done` / `on_narration_done`.
+* Only when the scene or the active sequence changes (`turn_pass_flow.crossed_turn_boundary`), the engine runs `on_turn_end` (old turn), status-effect ticks, then `on_turn_start` (new turn). Per-message script logic belongs in `on_logic_pass_done` / `on_narration_done`.
+
+### In-Game Clock (`engine/rules/game_clock.py`, `api/routes/adventures/game_clock_flow.py`)
+* The clock (`SessionState.in_game_time`, minutes) advances by one **narration tick** after Pass 2 of a player message (`GameTurnManager.clock_tick_pending`, set in `_process_turn_inner` for non-empty input, consumed once by `tick_after_narration`). The opening prologue, dialog choices and script output never tick.
+* Minutes per tick = `time_per_turn`, unless a script override is set. Runtime clock state lives in `entity_states["__game_clock__"]` (pause, tick override, GM-control override, tick count, timers, fired `on_time_reached` keys), so it is part of every checkpoint.
+* GM time fields of Pass 1 (`extra_time_minutes`, `time_override_minutes`, `start_datetime_override`) go through `apply_gm_time_request`: ignored when `gm_time_control` is off (template column, script override) or the clock is paused; extra time is capped by `max_time_per_turn`. While locked, the mechanics CURRENT STATE block carries `prompts.GM_TIME_LOCKED_NOTE`.
+* `tw.time` (`engine/scripting/time_proxy.py`) records ordered `ScriptChangeset.clock_ops`; every changeset applier (`_apply_script_changeset`, `TriggerService._persist_entity_states`, session start) replays them with `apply_changeset_clock`.
+* Time events (`on_time_reached` scripts with the threshold in `target_id`, and `tw.time.at/after/every` timers whose handlers live in the init script) fire in `run_due_time_events`: after the narration tick, after `/debug time` commands (`debug_commands/time_commands.py`, `TIME_CHANGED_MARKER`) and after `/script` clock changes.
 
 ### Prompt Layout (Token Efficiency)
 * System prompts are **static** (persona, adventure frame, rules, formatting, voice direction) so providers can cache them across messages; Anthropic models get explicit `cache_control` breakpoints (`backend/core/llm_request_tuning.py`).

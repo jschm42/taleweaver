@@ -23,6 +23,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.save (Save States)](#twsave-save-states)
    - [tw.memories](#twmemories)
    - [tw.game](#twgame)
+   - [tw.time (In-Game Clock)](#twtime-in-game-clock)
    - [tw.quests](#twquests)
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
@@ -45,6 +46,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [Example 14: Potion Dispenser (Cloning a Hidden Item)](#example-14-potion-dispenser-cloning-a-hidden-item)
    - [Example 15: Offering Altar (Player Puts Items into a Container)](#example-15-offering-altar-player-puts-items-into-a-container)
    - [Example 16: Blacksmith Conversation (Dialogue Tree)](#example-16-blacksmith-conversation-dialogue-tree)
+   - [Example 18: Ticking Bomb and Nightfall (Time Events)](#example-18-ticking-bomb-and-nightfall-time-events)
 7. [Authoring in the World-Editor](#authoring-in-the-world-editor)
 
 ---
@@ -78,10 +80,14 @@ While TaleWeaver's generative LLM master creates rich, adaptive prose and rolepl
                      scene or sequence changed this message?
                                        |  yes
                                        v
-               [on_turn_end] -> time + status ticks -> [on_turn_start]
+               [on_turn_end] -> status ticks -> [on_turn_start]
                                        |
                                        v
                       LLM narration --> [on_narration_done scripts]
+                                       |
+                                       v
+               clock tick (minutes per tick) --> [time events:
+                     on_time_reached scripts, tw.time timers]
                                        |
                                        v
                            +-----------+------------+
@@ -124,8 +130,9 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_logic_pass_done` | After game mechanics and state mutations finish, before narration is generated. | Global (`*` or empty). |
 | `on_narration_done` | After narration generation completes, before final turn persistence. | Global (`*` or empty). |
 | `on_turn_end` | When the current in-game turn ends, i.e. when the player's scene or the active sequence changed (before `on_turn_start` of the next turn). | Global (`*` or empty). |
+| `on_time_reached` | Once, when the in-game clock reaches the target time (elapsed time since the adventure started). It fires again only after the time was set back below the target. See [tw.time](#twtime-in-game-clock). | **Required**: the elapsed time, e.g. `90`, `2h 30m`, `1d 4h`, `1:30`. |
 
-> **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Base time (`time_per_turn`), status-effect ticks, and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
+> **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Status-effect ticks and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. The **clock** is different: it advances once per narrated player message (see [tw.time](#twtime-in-game-clock)). Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
 
 ### Inline Entity Triggers
 
@@ -558,6 +565,39 @@ Directly writes into the avatar's episodic memory bank:
 Controls session outcome conditions:
 - `tw.game.win(message: str)`: Ends the adventure in victory and displays `message`.
 - `tw.game.game_over(reason: str)`: Ends the adventure in defeat with `reason`.
+- `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
+
+### `tw.time` (In-Game Clock)
+The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
+
+**How time passes**
+- **Narration tick**: after every narrated player message the clock advances by the *minutes per tick* (the adventure's **Round Pacing**, `time_per_turn`, default 5). One player message is one tick, even when it chains a follow-up narration. The opening prologue, choice dialogs and script output (`tw.narrate`, dialog narration) do not tick.
+- **Game Master**: when **GM May Change Time** is enabled in the editor (`gm_time_control`, default on), the GM may add extra time for long actions ("the search took 20 minutes", `extra_time_minutes`) or jump the clock (`time_override_minutes`, `start_datetime_override`). Tick plus extra time of one message is capped by **Max Time per Turn (GM Limit)**. With the flag off, while the clock is paused, or after `tw.time.allow_gm_time(False)`, GM time requests are ignored and Pass 1 is told `TIME CONTROL: LOCKED`.
+- **Scripts and debug commands** can set or move the time at any moment, also while the clock is paused.
+
+**Reading**
+- `tw.time.now` / `tw.time.minutes`: elapsed minutes (includes changes made earlier in the same script).
+- `tw.time.day`, `tw.time.hour`, `tw.time.minute`: the clock of day (from the adventure's start time, default `08:00`, and its initial day).
+- `tw.time.format()`: the time as the player sees it, e.g. `"Day 2, 14:30"`.
+- `tw.time.ticks`: how many narration ticks advanced the clock.
+- `tw.time.is_paused`, `tw.time.minutes_per_tick`, `tw.time.default_minutes_per_tick`, `tw.time.gm_can_change_time`.
+- `tw.time.parse(value)`: converts `"1h 30m"`, `"2d"`, `"1:30"` or `90` to minutes (`None` if it is no time amount).
+
+**Changing** (every time amount accepts minutes or text like `"2h 30m"`, `"1d"`, `"1w"`, `"1:30"`)
+- `tw.time.set(t)`: sets the elapsed time. `tw.time.advance(t)` / `tw.time.rewind(t)`: moves it forward / back (never below 0).
+- `tw.time.set_minutes_per_tick(t)` / `tw.time.reset_minutes_per_tick()`: changes the time per narration tick for the rest of the session (e.g. `0` in a frozen dream world) / goes back to the adventure's pacing.
+- `tw.time.pause()` / `tw.time.resume()`: stops and restarts the narration ticks; GM time requests are ignored while paused.
+- `tw.time.allow_gm_time(allowed=True)` / `tw.time.reset_gm_time()`: overrides the editor's **GM May Change Time** flag for this session / goes back to it.
+
+**Timers (time event handlers)**
+- `tw.time.at(t, handler, timer_id=None, data=None)`: runs `handler` once when the clock reaches the elapsed time `t`.
+- `tw.time.after(t, handler, timer_id=None, data=None)`: runs `handler` once when `t` has passed from now.
+- `tw.time.every(t, handler, timer_id=None, data=None, start=None)`: runs `handler` each time `t` has passed (first at `start`, default now + `t`). A big jump runs it once, not once per missed interval.
+- `tw.time.cancel(timer_id)`, `tw.time.has_timer(timer_id)`, `tw.time.timers` (list of `{id, at, handler, every, data}`).
+- `handler` is a function of the init script, or its name (like `tw.dialog` handlers). Each call returns the timer id (`None` if it was rejected); registering an existing `timer_id` again replaces that timer. `data` must be plain values (text, numbers, lists, dicts). At most 50 timers can be active.
+- A handler with one parameter receives `time_event`: `{"id", "at", "now", "data", "repeats"}`. `on_time_reached` scripts can read the same `time_event` variable.
+
+**When time events fire**: after the narration tick of a player message (after `on_narration_done`), after `/debug time` commands that move the clock, and after `/script` commands that changed the time. A time change inside other scripts (e.g. a dialog choice handler) fires its events at the next of these points. Due events run oldest first; a handler may change the time or register timers again (at most 5 rounds per check). The runtime state (pause, overrides, timers, fired `on_time_reached` scripts) is stored in the session and is part of every save.
 
 ### `tw.quests`
 Directly manipulates adventure quest entries:
@@ -777,7 +817,7 @@ else:
 Trigger: `on_turn_end`  
 Target: `*`
 
-The countdown advances once per in-game turn (scene or sequence change). For a per-message countdown use `on_narration_done` instead.
+The countdown advances once per in-game turn (scene or sequence change). For a per-message countdown use `on_narration_done`; for a countdown in in-game time use `tw.time` (see [Example 18](#example-18-ticking-bomb-and-nightfall-time-events)).
 
 ```python
 # Increment turn counter
@@ -1084,6 +1124,47 @@ The handover itself is deterministic; the Game Master then narrates Marta's reac
 
 ---
 
+### Example 18: Ticking Bomb and Nightfall (Time Events)
+The init script defines the handlers, an `on_interact` script arms the bomb, and an `on_time_reached` script with target `10h` makes it night after ten hours of play.
+
+`init_script`:
+```python
+def bomb_explodes(event):
+    if tw.vars.get("bomb_defused"):
+        return
+    tw.game.game_over("The bomb detonates " + str(event["data"]["room"]) + ".")
+
+def bomb_warning(event):
+    left = tw.vars.get("bomb_at", 0) - tw.time.now
+    if left > 0:
+        tw.system(str(left) + " minutes left on the bomb timer.")
+```
+
+Script `ARM_BOMB` (trigger `on_interact`, target `BOMB`):
+```python
+if not tw.time.has_timer("BOMB"):
+    tw.time.after("30m", bomb_explodes, timer_id="BOMB", data={"room": "in the cellar"})
+    tw.time.every(10, bomb_warning, timer_id="BOMB_WARNING")
+    tw.vars.set("bomb_at", tw.time.now + 30)
+    tw.narrate("A red display lights up: 00:30:00.")
+```
+
+Script `DEFUSE` (trigger `on_interact`, target `BOMB_WIRES`):
+```python
+tw.vars.set("bomb_defused", True)
+tw.time.cancel("BOMB")
+tw.time.cancel("BOMB_WARNING")
+tw.narrate("The display flickers and dies.")
+```
+
+Script `NIGHTFALL` (trigger `on_time_reached`, target `10h`):
+```python
+tw.direct("Night has fallen: describe darkness, cold and the sounds of the night.")
+tw.time.set_minutes_per_tick(15)  # the night passes faster
+```
+
+---
+
 ## Authoring in the World-Editor
 
 You can manage all scripts visually inside TaleWeaver:
@@ -1097,8 +1178,8 @@ All scripts are managed directly in the **Scripts** tab:
 
 - Click **New Script** to open the script authoring modal:
   - Enter a human-readable **Name** and unique **Script ID**.
-  - Select the desired **Trigger** (`on_init`, `on_turn_start`, `on_enter_scene`, `on_interact`, `on_logic_pass_done`, `on_narration_done`, `on_turn_end`).
-  - Optionally pick a **Target** scene or entity using the autocomplete selector.
+  - Select the desired **Trigger** (`on_init`, `on_turn_start`, `on_enter_scene`, `on_interact`, `on_logic_pass_done`, `on_narration_done`, `on_turn_end`, `on_time_reached`).
+  - Optionally pick a **Target** scene or entity using the autocomplete selector. For `on_time_reached` the target field holds the elapsed in-game time instead (e.g. `90`, `2h 30m`, `1d`); **Check Syntax** rejects other values.
   - Adjust **Priority** (lower numbers execute first).
   - Use the **Insert Snippet** dropdown to paste starter code.
 - Click **Check Syntax** to verify Python syntax, AST safety, and trigger parameters before saving.

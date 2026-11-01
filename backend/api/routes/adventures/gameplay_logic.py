@@ -17,6 +17,7 @@ from backend.api.routes.adventures.agent_commands import (
     PLAYAGENT_COMMANDS,
     handle_playagent_command,
 )
+from backend.api.routes.adventures.game_clock_flow import tick_after_narration
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
 from backend.api.routes.adventures.script_llm import make_script_llm_asker
@@ -83,6 +84,7 @@ from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
+from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.interaction.script_item_apply import insert_cloned_entities
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import (
@@ -334,6 +336,8 @@ class GameTurnManager:
         # (scene, sequence) at the start of the player's message; an in-game turn only
         # advances when this changes (see turn_pass_flow.advance_in_game_turn).
         self._turn_anchor: tuple[Any, Any] | None = None
+        # True while the player's message still owes its narration tick (game_clock_flow).
+        self.clock_tick_pending = False
 
     def _queue_checkpoint(
         self, reason: str, *, scene_label: str | None = None, label: str | None = None
@@ -779,6 +783,8 @@ class GameTurnManager:
         self._turn_anchor = turn_anchor(self.state)
         self.checkpoints.start_turn(self.state)
         user_msg = message.strip()
+        # The opening prologue (empty input) is no player action and does not move the clock.
+        self.clock_tick_pending = bool(user_msg)
         actual_user_input = user_msg
         if not user_msg:
             user_msg = "[LOOK AROUND]"
@@ -1054,8 +1060,8 @@ class GameTurnManager:
         if not is_rule_pass:
             yield f"event: status\ndata: {json.dumps({'content': 'Considering...'})}\n\n"
 
-        # Base time and status ticks no longer advance per message: an in-game turn only
-        # advances on scene/sequence changes (handled inside _run_llm_cycle).
+        # The clock advances by one narration tick after Pass 2 (game_clock_flow); status
+        # ticks and turn scripts only on scene/sequence changes (inside _run_llm_cycle).
 
         # Record User Message
         silent_commands = ["/take_direct", "/rule-pass", "/equip", "/unequip", "/consume", "/craft"]
@@ -1965,6 +1971,10 @@ class GameTurnManager:
                     game_event.game_over = True
                     game_event.status_note = str(goe)
 
+        # Narration tick: the clock advances once per narrated player message.
+        async for clock_event in tick_after_narration(self, game_event):
+            yield clock_event
+
         # Add system messages for stat changes and items
         if isinstance(game_event, GameEvent):
             # 1. Protagonist changes
@@ -2813,6 +2823,7 @@ class GameTurnManager:
             quests=self.state.quests or [],
             script_vars=script_vars,
             in_game_time=self.state.in_game_time,
+            clock=clock_view(self.state, self.adventure),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3001,6 +3012,7 @@ class GameTurnManager:
 
         store_pending_dialog(entity_states, changeset.pending_dialog)
         store_gm_directions(entity_states, changeset.gm_directions)
+        apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
 

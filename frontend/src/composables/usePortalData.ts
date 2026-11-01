@@ -1,5 +1,6 @@
 import { ref, computed, type ComputedRef, type Ref } from 'vue'
 import { api } from '@/composables/useApi'
+import { adventureLibraryService } from '@/services/adventureLibrary'
 import { notificationService } from '@/services/notificationService'
 import { usePortalModals, type PortalImportWarningType } from '@/composables/usePortalModals'
 import { usePortalPendingState } from '@/composables/usePortalPendingState'
@@ -259,6 +260,7 @@ export function usePortalData(): UsePortalDataResult {
       }
 
       await syncPendingFromTemplates(fetchPortalData)
+      void checkLibraryUpdates()
     } catch (error) {
       console.error('API Error:', error)
     } finally {
@@ -266,7 +268,30 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Updates an individual adventure template from /adventures. */
+  /**
+   * Loads the Adventure Library index once per page load (in the background) so imported
+   * adventures get an update badge when the library has a newer version. The template list
+   * itself only reads the cached index, so it is reloaded when the check found something new.
+   */
+  let libraryChecked = false
+  async function checkLibraryUpdates() {
+    if (libraryChecked) return
+    libraryChecked = true
+    try {
+      const catalog = await adventureLibraryService.fetchCatalog()
+      const flagged = new Set(
+        templates.value.filter((t) => t.has_update && t.update_source === 'library').map((t) => t.origin_id),
+      )
+      const hasNewUpdate = catalog.items.some((item) => item.update_available && !flagged.has(item.entry.id))
+      if (hasNewUpdate) {
+        await fetchPortalData()
+      }
+    } catch {
+      // Best effort: without the library the badges only reflect local /adventures files.
+    }
+  }
+
+  /** Updates an individual adventure template from /adventures or the Adventure Library. */
   async function updateAdventure(templateId: string) {
     if (updatingTemplateIds.value.has(templateId)) return
     updatingTemplateIds.value.add(templateId)
@@ -298,7 +323,7 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Updates all adventure templates that have newer versions in /adventures. */
+  /** Updates all adventure templates that have newer versions in /adventures or the Adventure Library. */
   async function updateAllAdventures() {
     if (isUpdatingAll.value) return
     isUpdatingAll.value = true

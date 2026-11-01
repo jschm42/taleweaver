@@ -51,7 +51,7 @@ def test_turn_boundary_only_on_scene_or_sequence_change() -> None:
 
 
 @pytest.mark.asyncio
-async def test_advance_in_game_turn_runs_end_time_ticks_start_in_order() -> None:
+async def test_advance_in_game_turn_runs_end_ticks_start_in_order() -> None:
     # Arrange
     calls: list[str] = []
     changeset = SimpleNamespace(has_changes=True)
@@ -75,13 +75,13 @@ async def test_advance_in_game_turn_runs_end_time_ticks_start_in_order() -> None
 
     # Assert
     assert calls == ["on_turn_end", "on_turn_start"]
-    assert manager.state.in_game_time == 7
+    assert manager.state.in_game_time == 0  # the clock moves by the narration tick instead
     assert manager.avatar.hp == 45  # Poisoned tick applied once
     assert any("[Poisoned]" in event for event in events)
 
 
 @pytest.mark.asyncio
-async def test_advance_in_game_turn_without_scripts_only_moves_clock() -> None:
+async def test_advance_in_game_turn_without_scripts_does_not_move_clock() -> None:
     # Arrange
     runner = MagicMock()
     runner.scripts = []
@@ -96,7 +96,7 @@ async def test_advance_in_game_turn_without_scripts_only_moves_clock() -> None:
 
     # Assert
     assert events == []
-    assert manager.state.in_game_time == 5  # default pace
+    assert manager.state.in_game_time == 0  # the clock moves by the narration tick instead
     runner.run_trigger.assert_not_called()
 
 

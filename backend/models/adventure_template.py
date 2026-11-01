@@ -48,6 +48,10 @@ class AdventureTemplate(Base, TimestampMixin):
     time_per_turn: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     pacing_minutes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     max_time_per_turn: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    # Whether the GM (Pass 1) may change the in-game time, e.g. "the search took 20 minutes".
+    gm_time_control: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
     clock_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_memory_turns: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     time_system: Mapped[str] = mapped_column(String(20), default="calendar", nullable=False)

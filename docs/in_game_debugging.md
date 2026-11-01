@@ -35,6 +35,13 @@ All debug commands are prefixed with `/debug`.
 | `/debug szene` | Shows technical details of the current scene. |
 | `/debug map` | Shows summary counts of world elements. |
 | `/debug log on/off` | Toggles detailed engine logging in the console. |
+| `/debug time` | Shows the in-game clock: time, ticks, pause state, minutes per tick, whether the GM may change time, active timers and `on_time_reached` scripts (armed/fired). |
+| `/debug time set T` / `add T` / `sub T` | Sets the elapsed in-game time or moves it forward/back. `T` is minutes or text like `2h 30m`, `1d`, `1:30`. Due time events fire right away. |
+| `/debug time tick [N]` | Simulates N narration ticks (default 1, max 100); respects the pause and the minutes per tick. |
+| `/debug time pause` / `resume` | Pauses or resumes the narration ticks (GM time changes are ignored while paused). |
+| `/debug time pace T` / `pace reset` | Overrides the minutes per tick for this session / goes back to the adventure's pacing. |
+| `/debug time gm on` / `off` / `reset` | Overrides whether the GM may change the time / goes back to the editor setting. |
+| `/debug time cancel TIMER_ID` | Cancels a `tw.time` timer. |
 
 ### Running Script Code: `/script <code>`
 

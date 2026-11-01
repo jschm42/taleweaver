@@ -666,6 +666,7 @@ const form = ref({
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
   max_time_per_turn: null as number | null,
+  gm_time_control: true,
   max_memory_turns: 10,
   clock_enabled: false,
   time_system: 'calendar' as string,
@@ -839,6 +840,7 @@ async function fetchAdventure() {
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
+    form.value.gm_time_control = data.gm_time_control ?? true
     form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 10
     form.value.clock_enabled = data.clock_enabled ?? false
     form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'
@@ -2742,6 +2744,7 @@ watch(
               @update:temp-value="tempValue = $event"
               @update:pacing="form.time_per_turn = $event"
               @update:max-time-per-turn="form.max_time_per_turn = $event"
+              @update:gm-time-control="form.gm_time_control = $event"
               @update:max-memory-turns="form.max_memory_turns = $event"
               @update:clock-enabled="form.clock_enabled = $event"
               @update:time-system="form.time_system = $event"

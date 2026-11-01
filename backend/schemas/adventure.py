@@ -36,6 +36,7 @@ class SequenceScriptSchema(BaseModel):
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     ]
     target_id: Optional[str] = ""
     code: str = ""
@@ -93,6 +94,7 @@ class AdventureTemplateBase(BaseModel):
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = True
     max_memory_turns: Optional[int] = 10
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
@@ -166,6 +168,7 @@ class AdventureTemplateUpdate(BaseModel):
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = None
     max_memory_turns: Optional[int] = None
     clock_enabled: Optional[bool] = None
     time_system: Optional[str] = None
