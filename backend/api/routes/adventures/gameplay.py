@@ -68,6 +68,7 @@ from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.rules.walkthrough_unlocks import walkthrough_payload, walkthrough_status
 from backend.engine.scripting.dialog import client_dialog, pending_dialog
 from backend.engine.scripting.llm_proxy import LlmAsker
+from backend.engine.world.exit_labels import exit_sentence_name
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
@@ -738,7 +739,7 @@ async def unlock_exit_with_code(
         db,
         state,
         world_exit,
-        f"{world_exit.label or 'The exit'} accepts the code and the way is open.",
+        f"{exit_sentence_name(world_exit, state.current_scene_id)} accepts the code and the way is open.",
     )
 
 
@@ -770,7 +771,7 @@ async def unlock_exit_with_item(
         db,
         state,
         world_exit,
-        f"{world_exit.label or 'The exit'} yields to {item_name} and the way is open.",
+        f"{exit_sentence_name(world_exit, state.current_scene_id)} yields to {item_name} and the way is open.",
     )
 
 
@@ -917,7 +918,11 @@ async def traverse_exit(
         ChatMessage(
             session_id=state.session_id,
             role="system",
-            content=f"You pass through {world_exit.label or 'the exit'} into {scene.label}.",
+            content=(
+                f"You pass through {world_exit.label.strip()} into {scene.label}."
+                if (world_exit.label or "").strip()
+                else f"You enter {scene.label}."
+            ),
         )
     )
 

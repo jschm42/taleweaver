@@ -58,6 +58,7 @@ import { useGameProgressState } from '@/composables/useGameProgressState'
 import { useSceneArrivalCurtain } from '@/composables/useSceneArrivalCurtain'
 import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
+import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
 import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
@@ -976,7 +977,7 @@ const handleExitClick = async (exit: any) => {
 
   if (isExitLocked(exit)) {
     closeInlinePrompts()
-    exitUnlockModalTarget.value = { ...exit, id: exitRef, name: exit.label || 'Exit' }
+    exitUnlockModalTarget.value = { ...exit, id: exitRef, name: exitDisplayName(exit) }
     exitUnlockError.value = ''
     showExitUnlockModal.value = true
     return
@@ -1395,13 +1396,10 @@ const isExitLocked = (exit: any): boolean => {
   return Boolean(exit.is_locked)
 }
 
+/** The exit's label, else its target scene (labels are optional; see utils/exitLabel.ts). */
 const exitDisplayName = (exit: any): string => {
   if (!exit) return 'Exit'
-  const raw = String(exit.label || '').trim()
-  if (!raw) return 'Exit'
-  const arrowMatch = raw.match(/^(.+?)\s*(?:->|→)\s*.+$/)
-  if (arrowMatch) return arrowMatch[1].trim()
-  return raw
+  return exitNameOf(exit.label, exit.target_scene_name || resolveSceneName(String(exit.target_scene_id || exit.to || '')))
 }
 
 interface ExitLockBadge {

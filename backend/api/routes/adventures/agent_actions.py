@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 
 from backend.api.routes.adventures.turn_context_helpers import orient_exits
+from backend.engine.world.exit_labels import exit_display_name
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -100,7 +101,7 @@ def format_exits_for_agent(scene_exits: list[SceneExit]) -> str:
     lines = []
     for scene_exit in scene_exits:
         ex = scene_exit.exit
-        label = ex.label or "Exit"
+        label = exit_display_name(ex.label, scene_exit.target_label)
         route = f"- {label} -> leads to {scene_exit.target_label}"
         if not ex.is_locked:
             lines.append(f"{route} [OPEN] -> `/go {label}`")
@@ -178,15 +179,19 @@ async def _go(manager: Any, ref: str) -> AgentActionOutcome:
     )
     scene_exit = _match_exit(scene_exits, ref)
     if not scene_exit:
-        options = ", ".join(s.exit.label for s in scene_exits) or "none"
+        options = (
+            ", ".join(exit_display_name(s.exit.label, s.target_label) for s in scene_exits)
+            or "none"
+        )
         return AgentActionOutcome(
             message=f"There is no exit called '{ref}'. Exits here: {options}."
         )
     ex = scene_exit.exit
     if ex.is_locked:
         reason = ex.lock_description or "The way is locked."
-        hint = _lock_hint(ex.label, ex.code_to_unlock, ex.item_to_unlock)
-        return AgentActionOutcome(message=f"{ex.label} is locked. {reason} {hint}")
+        name = exit_display_name(ex.label, scene_exit.target_label)
+        hint = _lock_hint(name, ex.code_to_unlock, ex.item_to_unlock)
+        return AgentActionOutcome(message=f"{name} is locked. {reason} {hint}")
     return AgentActionOutcome(turn_command=f"/traverse_exit {ex.id}")
 
 
@@ -202,15 +207,17 @@ def _parse_unlock_args(args: str) -> tuple[str, str | None, str | None]:
 
 
 async def _unlock_exit(
-    manager: Any, world_exit: WorldExit, item_id: str | None, code: str | None
+    manager: Any, scene_exit: SceneExit, item_id: str | None, code: str | None
 ) -> str:
     game_id, user, db = manager.game_id, manager.user, manager.db
     gameplay_routes = _routes()
+    world_exit = scene_exit.exit
     # Oriented copies of bidirectional exits lack guard fields; use the stored row.
     world_exit = (
         await gameplay_routes._resolve_session_exit(db, manager.state, world_exit.id) or world_exit
     )
-    label = world_exit.label or "The exit"
+    # The `/go` name: the label, else the target scene as seen from here.
+    label = exit_display_name(world_exit.label, scene_exit.target_label)
     if not world_exit.is_locked:
         return f"{label} is already open. Use `/go {label}`."
     if code:
@@ -275,7 +282,7 @@ async def _unlock(manager: Any, args: str) -> AgentActionOutcome:
 
     try:
         if scene_exit:
-            msg = await _unlock_exit(manager, scene_exit.exit, item_id, code)
+            msg = await _unlock_exit(manager, scene_exit, item_id, code)
         else:
             msg = await _unlock_container(manager, container, item_id, code)
     except HTTPException as exc:

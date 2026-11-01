@@ -1184,7 +1184,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <span class="w-full text-xs font-bold leading-tight line-clamp-2" :class="worldExit.to_scene_id === props.sceneId ? 'text-emerald-300' : 'text-white'">{{ exitRoute(worldExit, editorScenes).to }}</span>
             </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-slate-300 uppercase tracking-wider truncate" :title="worldExit.label || worldExit.id">{{ worldExit.label || 'Exit' }}</div>
+              <div class="text-[10px] font-black text-slate-300 uppercase tracking-wider truncate" :title="worldExit.label || worldExit.id">{{ worldExit.label || `→ ${worldExit.to_scene_id || 'Exit'}` }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button

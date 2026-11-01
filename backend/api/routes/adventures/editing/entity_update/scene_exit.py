@@ -36,6 +36,7 @@ _EXIT_MANIFEST_FIELDS = (
     "label",
     "exit_type",
     "is_locked",
+    "is_revealed",
     "lock_description",
     "code_to_unlock",
     "item_to_unlock",
@@ -190,9 +191,14 @@ async def update_exit(
     if not world_exit:
         return
     if given(payload, "name"):
-        world_exit.label = payload.name
+        label = str(payload.name or "").strip()
+        if not label:
+            raise HTTPException(status_code=400, detail="Exit label is required.")
+        world_exit.label = label
     if given(payload, "locked"):
         world_exit.is_locked = bool(payload.locked)
+    if given(payload, "revealed"):
+        world_exit.is_revealed = bool(payload.revealed)
     if given(payload, "description"):
         world_exit.lock_description = payload.description
     if given(payload, "exit_type"):

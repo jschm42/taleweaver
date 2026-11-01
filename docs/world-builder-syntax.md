@@ -45,8 +45,12 @@ Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: I
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
-`via`/`label`, `locked`, `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
+`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
+
+Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak door`), or leave it out and the AI writes one. The exit tile shows the label on both sides of a two-way exit, with `→ Target scene` below it only once the player has visited that scene; unexplored targets are not named on the tile. With `revealed: yes` the target counts as known from the start: the tile shows its image and `→ Target scene`, and the map shows the scene, before the player has been there (a signposted door, a gate with a view). Only locked exits carry a badge on the tile. Hovering a tile opens a popup with the label, the target's image and where the exit leads, once that is known.
+
+Write the label as the passage itself, not as the way: `an old rusty gate`, `a narrow spiral staircase`, not `Way to the Combat Lab` or `Back to the hall`. A two-way exit shows the same label in both scenes, and the game already adds the target. The World-Builder AI follows the same rule for the labels it writes.
 
 ### `[NPC: ID] Name`
 `in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).

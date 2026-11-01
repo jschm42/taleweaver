@@ -8,6 +8,7 @@ from sqlalchemy import and_, or_, select
 
 from backend.api.routes.adventures.guardrails.locks import LockSpec
 from backend.engine.rules.rule_engine import ExitUpdate, GameEvent
+from backend.engine.world.exit_labels import capitalized, exit_phrase
 from backend.models.world_entity import WorldExit
 
 _CODE_FAILURE = "{name} answers with a cold red blink. That code won't open the way."
@@ -54,9 +55,11 @@ class ExitGuardMixin:
     @staticmethod
     def _exit_spec(scene_exit: SceneExit, being_unlocked: bool) -> LockSpec:
         row = scene_exit.row
+        # Unlabelled exits are named after the scene they lead to from here.
+        name = capitalized(exit_phrase(row.label, target_scene_id=scene_exit.to_scene_id))
         return LockSpec(
             script_target_id=str(row.id),
-            name=row.label,
+            name=name,
             code=str(row.code_to_unlock or "").strip(),
             item_id=str(row.item_to_unlock or "").strip().upper(),
             rule=str(row.rule_to_unlock or "").strip(),
@@ -66,8 +69,8 @@ class ExitGuardMixin:
             being_unlocked=being_unlocked,
             explicit_unlock_required=False,
             rule_uses_switch_flags=False,
-            code_failure_text=_CODE_FAILURE.format(name=row.label),
-            rule_failure_text=f"{row.label} is locked.",
+            code_failure_text=_CODE_FAILURE.format(name=name),
+            rule_failure_text=f"{name} is locked.",
         )
 
     @staticmethod

@@ -2,10 +2,15 @@
 /**
  * PassagesPanel — Exits of the current scene as picture tiles: the target scene's image
  * once it was visited, a "?" while it is still unexplored.
+ * The image fills the whole tile under a gradient that darkens towards the text. A tile shows
+ * the exit's label (it names the passage, e.g. "an old rusty gate"), with "→ Target" below once
+ * the target was visited; unexplored targets are not named on the tile. Only locked exits carry a
+ * badge. Hovering opens the shared game popup with the label, the target image and what is known.
  */
 import { ref } from 'vue'
 import { DoorOpen, Lock, ArrowRight } from 'lucide-vue-next'
 import { getImageUrl } from '@/utils/game_icons'
+import { exitOwnLabel } from '@/utils/exitLabel'
 
 const props = defineProps<{
   sceneExits: any[]
@@ -17,6 +22,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   traverseExit: [exit: any]
+  /** Hover popup (shared game tooltip): label, target image and what is known. */
+  exitHover: [entity: any, event: MouseEvent]
+  exitLeave: []
 }>()
 
 /** Image fallbacks per scene image URL: thumbnail → full image → no image. */
@@ -36,6 +44,25 @@ function formatSceneTitle(name?: string | null): string {
 
 function targetName(exit: any): string {
   return exit.target_scene_name || formatSceneTitle(exit.target_scene_id)
+}
+
+/** The exit's label; legacy exits without one read "Passage" until the target is known. */
+function tileLabel(exit: any): string {
+  return exitOwnLabel(exit.label) || (exit.target_known ? '' : 'Passage')
+}
+
+/** The entity the shared hover popup shows: the label as title, the target once it is known. */
+function hoverEntity(exit: any) {
+  const known = Boolean(exit.target_known)
+  return {
+    id: exit.id,
+    entity_type: 'EXIT',
+    name: tileLabel(exit) || targetName(exit) || 'Exit',
+    description: known ? `Leads to ${targetName(exit)}.` : 'Where this leads is still unknown.',
+    image_url: known ? exit.target_image_url : null,
+    is_locked: Boolean(exit.is_locked),
+    lock_description: exit.lock_description || '',
+  }
 }
 
 function targetImage(exit: any): string | null {
@@ -68,13 +95,16 @@ function onImageError(exit: any) {
         v-for="exit in props.sceneExits"
         :key="exit.id || exit.label"
         type="button"
-        class="tw-card tw-card--interactive tw-passage group flex flex-col overflow-hidden text-left"
-        :class="{ 'is-locked': exit.is_locked, 'opacity-50 pointer-events-none': props.isEvaluating }"
+        class="tw-card tw-card--interactive tw-passage group flex flex-col justify-end overflow-hidden text-left"
+        :class="{ 'is-locked': exit.is_locked, 'is-compact': props.compact, 'opacity-50 pointer-events-none': props.isEvaluating }"
         :disabled="props.isEvaluating"
-        :title="exit.target_known ? targetName(exit) : 'Unexplored'"
+        :aria-label="tileLabel(exit) || targetName(exit) || 'Exit'"
         @click="emit('traverseExit', exit)"
+        @mouseenter="emit('exitHover', hoverEntity(exit), $event)"
+        @mouseleave="emit('exitLeave')"
       >
-        <span class="tw-passage-media" :style="props.compact ? { aspectRatio: '16 / 7' } : undefined">
+        <!-- The target scene's image fills the whole tile; a gradient darkens it towards the text. -->
+        <span class="tw-passage-media" aria-hidden="true">
           <img
             v-if="targetImage(exit)"
             :src="targetImage(exit)!"
@@ -86,24 +116,29 @@ function onImageError(exit: any) {
           <span v-else-if="exit.target_known" class="tw-passage-unknown">
             <DoorOpen class="w-8 h-8" />
           </span>
-          <span v-else class="tw-passage-unknown" aria-label="Unexplored">?</span>
+          <span v-else class="tw-passage-unknown">?</span>
+        </span>
+        <span class="tw-passage-shade" aria-hidden="true"></span>
 
-          <span class="tw-passage-badge" :class="exit.is_locked ? 'is-locked' : 'is-open'">
-            <Lock v-if="exit.is_locked" class="w-3 h-3" />
-            <DoorOpen v-else class="w-3 h-3" />
-            {{ exit.is_locked ? 'Locked' : 'Open' }}
-          </span>
+        <!-- Only a locked exit carries a badge; open exits need no marker. -->
+        <span v-if="exit.is_locked" class="tw-passage-badge is-locked">
+          <Lock class="w-3 h-3" />
+          Locked
         </span>
 
-        <span class="flex flex-col gap-0.5 min-w-0" :class="props.compact ? 'px-2 py-1.5' : 'px-3 py-2.5'">
-          <span class="tw-passage-label block font-bold truncate" :class="props.compact ? 'text-xs' : 'text-sm'">{{ exit.label || 'Exit' }}</span>
-          <span v-if="exit.target_scene_name || exit.target_scene_id" class="tw-muted flex items-center gap-1 text-[11px] min-w-0">
-            <template v-if="!props.compact">
-              <span class="truncate">{{ props.currentSceneName || 'Here' }}</span>
-              <ArrowRight class="w-3 h-3 shrink-0" />
-            </template>
-            <span class="truncate font-semibold">{{ targetName(exit) }}</span>
+        <span class="tw-passage-text flex flex-col gap-0.5 min-w-0" :class="props.compact ? 'px-2 py-1.5' : 'px-3 py-2.5'">
+          <!-- The label names the passage; "→ Target" follows only once the target was visited.
+               Legacy exits without a label show the target alone, or "Passage" while unexplored. -->
+          <span v-if="tileLabel(exit)" class="tw-passage-label block font-bold truncate" :class="props.compact ? 'text-xs' : 'text-sm'">{{ tileLabel(exit) }}</span>
+          <span
+            v-if="exit.target_known"
+            class="flex items-center gap-1 min-w-0"
+            :class="tileLabel(exit) ? 'tw-passage-target text-[11px] font-semibold' : ['tw-passage-label font-bold', props.compact ? 'text-xs' : 'text-sm']"
+          >
+            <ArrowRight class="shrink-0 opacity-80" :class="props.compact ? 'w-3 h-3' : 'w-3.5 h-3.5'" aria-hidden="true" />
+            <span class="truncate">{{ targetName(exit) || 'Exit' }}</span>
           </span>
+          <span v-if="!exit.target_known" class="sr-only">(unexplored)</span>
         </span>
       </button>
     </div>

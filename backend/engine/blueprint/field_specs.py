@@ -118,6 +118,8 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "via": FieldSpec("label"),
     "label": FieldSpec("label"),
     "locked": FieldSpec("is_locked", boolean),
+    # The target scene is known from the start (name and image on the exit tile and map).
+    "revealed": FieldSpec("is_revealed", boolean),
     "lock": FieldSpec("lock_description"),
     "code": FieldSpec("code_to_unlock"),
     "key_item": _ref("item_to_unlock"),

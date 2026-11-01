@@ -7,7 +7,7 @@
  * macOS-style magnification, plus the Action Ideas popup. The ornamental in-game clock sits
  * left of the cards and the experience counter right of them (wide screens only).
  */
-import { computed, onBeforeUnmount, ref, type Component } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import {
   Scroll,
   Map as MapIcon,
@@ -21,6 +21,7 @@ import {
   HelpCircle,
 } from 'lucide-vue-next'
 import { useDockMagnification } from '@/composables/useDockMagnification'
+import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import FooterClock from './FooterClock.vue'
 import FooterXp from './FooterXp.vue'
 import type { GameTimeView } from './gameClockTime'
@@ -45,6 +46,8 @@ const props = defineProps<{
   gameTime?: GameTimeView | null
   clockTick?: boolean
   exp?: number
+  /** The protagonist's portrait; the Hero card shows it instead of the generic artwork. */
+  heroImage?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -59,6 +62,26 @@ const emit = defineEmits<{
   selectSuggestion: [suggestion: string]
 }>()
 
+// --- Hero card: the protagonist's portrait (thumbnail -> full image -> generic artwork) ---
+const heroArtStage = ref<'thumb' | 'full' | 'generic'>('thumb')
+watch(
+  () => props.heroImage,
+  () => {
+    heroArtStage.value = 'thumb'
+  },
+)
+
+const heroCardArt = computed(() => {
+  const path = props.heroImage
+  if (!path || heroArtStage.value === 'generic') return heroArt
+  if (heroArtStage.value === 'full') return getOriginalImageUrl(path) || heroArt
+  return getImageUrl(path, { thumbnail: true }) || heroArt
+})
+
+function onHeroArtError() {
+  heroArtStage.value = heroArtStage.value === 'thumb' ? 'full' : 'generic'
+}
+
 interface DockItem {
   id: string
   label: string
@@ -66,6 +89,8 @@ interface DockItem {
   icon: Component
   /** Card artwork; without it the card shows the icon large (e.g. Debug). */
   art?: string
+  /** The artwork is a character portrait: keep the head in view when cropping. */
+  portrait?: boolean
   /** Signature hue of the card, blended with the theme's ink. */
   tint: string
   badge?: number
@@ -99,7 +124,8 @@ const dockItems = computed<DockItem[]>(() => {
     },
     {
       id: 'hero',
-      art: heroArt,
+      art: heroCardArt.value,
+      portrait: heroCardArt.value !== heroArt,
       label: 'Hero',
       title: 'Open Character Sheet & Inventory',
       icon: User,
@@ -265,7 +291,15 @@ onBeforeUnmount(() => {
           @click="activate(item)"
         >
           <span class="dock-face">
-            <img v-if="item.art" :src="item.art" class="dock-art" alt="" draggable="false" />
+            <img
+              v-if="item.art"
+              :src="item.art"
+              class="dock-art"
+              :class="{ 'is-portrait': item.portrait }"
+              alt=""
+              draggable="false"
+              @error="item.id === 'hero' && onHeroArtError()"
+            />
             <component :is="item.icon" v-else class="dock-icon" />
           </span>
           <span v-if="item.badge" class="dock-badge">{{ item.badge }}</span>

@@ -70,13 +70,18 @@ const { hasContentBelow, scrollToLatest, resumeFollowing } = useScrollToLatest(s
 /**
  * Scroll position that shows the open inline panels completely, or their top when they are
  * taller than the feed; `null` while no panel is open.
+ *
+ * The visible area ends above the container's bottom padding: that space is reserved for the
+ * turn pager, which overlays the feed. Without it the panel's last row (e.g. its buttons)
+ * would end up under the pager.
  */
 function inlinePanelsFollowTop(): number | null {
   const panels = inlinePanelsRef.value
   const container = storyContainerRef.value
   if (!panels || !container || panels.offsetHeight === 0) return null
+  const reservedBottom = parseFloat(window.getComputedStyle(container).paddingBottom) || 0
   const panelTop = Math.max(0, panels.offsetTop - FOLLOW_TOP_GAP_PX)
-  const panelBottom = panels.offsetTop + panels.offsetHeight - container.clientHeight
+  const panelBottom = panels.offsetTop + panels.offsetHeight + reservedBottom - container.clientHeight
   return Math.min(panelTop, Math.max(0, panelBottom))
 }
 

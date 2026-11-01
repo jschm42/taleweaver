@@ -68,7 +68,7 @@ fields are rejected (no silent typos).
 | op | Purpose | Key fields |
 |---|---|---|
 | `create_scene` | New scene | `scene_id`, `label`, `description`, `decorative_objects` |
-| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label`, `exit_type` (`one_way`/`bidirectional`), `is_locked`, `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `ref` |
+| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `ref` |
 | `create_entity` | New NPC or object | `entity_id`, `entity_type` (`NPC`/`OBJECT`), `scene_id`, `name`, `description`, `item_type`, `is_portable`, `is_hidden`, `inventory`, `metadata_json`, ... |
 | `update` | Change any editor field (incl. all trigger scripts) | `target_type` (`scene`/`exit`/`npc`/`object`/`protagonist`/`cover`), `target_id`, fields |
 | `set_npc_combat` | NPC combat behaviour (the Aggression section in the NPC dialog's Combat tab) | `npc_id`, `attack_mode` (`PASSIVE`/`ATTACK_ON_SIGHT`), `attack_trigger`, `special_chance`, `combat_group`, `assist_mode` (`GROUP`/`ANYONE`/`NEVER`); omitted fields keep their current value |
@@ -83,7 +83,7 @@ fields are rejected (no silent typos).
 
 - **scene**: `name` sets the label; `description`, `decorative_objects`, `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
-- **exit**: `name` sets the label, `description` sets the **lock description**, `locked`,
+- **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
   `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
   `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`.
   A code/item/rule lock needs a lock description (set `description` in the same or an earlier update,

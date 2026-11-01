@@ -60,7 +60,13 @@ class WorldExitSchema(WorldBaseSchema):
     from_scene_id: str = Field(..., description="The ID of the source scene.")
     to_scene_id: str = Field(..., description="The ID of the destination scene.")
     label: str = Field(
-        ..., description="How to describe the transition, e.g., 'a narrow stone staircase'"
+        ...,
+        description=(
+            "The physical passage itself, as seen from either side, e.g. 'an old rusty gate' or "
+            "'a narrow stone staircase'. Never a destination or direction ('Way to the Combat "
+            "Lab', 'Back to the hall'): both sides show the same label and the game shows the "
+            "target scene next to it. Required, even for a plain opening ('a low archway')."
+        ),
     )
     is_bidirectional: bool = Field(
         True,
@@ -72,6 +78,14 @@ class WorldExitSchema(WorldBaseSchema):
         ),
     )
     is_locked: bool = Field(..., description="Whether the path is initially blocked.")
+    is_revealed: bool = Field(
+        False,
+        description=(
+            "True when the player already knows where this exit leads before using it "
+            "(a signposted door, a gate with a view into the courtyard): the target scene's "
+            "name and image are shown from the start. Usually False."
+        ),
+    )
     lock_description: Optional[str] = Field(
         default="",
         description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.",

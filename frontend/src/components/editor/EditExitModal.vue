@@ -15,6 +15,7 @@ const props = defineProps<{
     to_scene_id: string
     label: string
     exit_type: 'one_way' | 'bidirectional'
+    is_revealed?: boolean
     lock_description: string
     code_to_unlock?: string
     item_to_unlock?: string
@@ -41,6 +42,7 @@ const emit = defineEmits<{
     to_scene_id: string
     label: string
     exit_type: 'one_way' | 'bidirectional'
+    is_revealed?: boolean
     lock_description: string
     code_to_unlock?: string
     item_to_unlock?: string
@@ -62,6 +64,7 @@ const EMPTY_FORM = {
   to_scene_id: '',
   label: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
+  is_revealed: false,
   lock_description: '',
   code_to_unlock: '',
   item_to_unlock: '',
@@ -123,6 +126,7 @@ const hasGate = computed(() => {
 })
 
 const isFormInvalid = computed(() => {
+  // Required: the label names the passage itself ("an old rusty gate").
   const labelText = (form.value.label || '').trim()
   if (!labelText || labelText.length > 100) return true
   if ((form.value.lock_description || '').length > 255) return true
@@ -191,7 +195,13 @@ function submit() {
                     {{ (form.label || '').length }} / 100
                   </span>
                 </div>
-                <input v-model="form.label" maxlength="100" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all" />
+                <input
+                  v-model="form.label"
+                  maxlength="100"
+                  placeholder="e.g. an old rusty gate"
+                  title="Name the passage itself, e.g. 'an old rusty gate'. A two-way exit shows the same label on both sides, so never name the destination ('Way to the lab'); the game adds the target once it was visited."
+                  class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none transition-all"
+                />
               </label>
               <label class="text-xs text-slate-300 space-y-1">
                 <span>Type</span>
@@ -201,6 +211,11 @@ function submit() {
                 </select>
               </label>
             </div>
+
+            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="The target scene's name and image are shown on the exit tile and the map from the start, before the player has been there (e.g. a signposted door or a gate with a view).">
+              <input v-model="form.is_revealed" type="checkbox" class="accent-emerald-500" />
+              <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
+            </label>
 
             <label class="text-xs text-slate-300 space-y-1 block">
               <div class="flex justify-between items-center">

@@ -5,7 +5,9 @@ Responsibilities:
   * register_visit  — Upsert the current scene node (idempotent).
   * register_exit   — Add a directed edge between two scenes (deduplicates).
   * augment_map_data — Add adjacent unvisited scenes as placeholders and the exits
-                       between scenes the player has already visited.
+                       between scenes the player has already visited. The target of a
+                       revealed exit (``is_revealed``) is known though not visited, and is
+                       shown from every visited scene, not only the current one.
   * load_map_exits  — Load the exits a map is augmented with.
 """
 
@@ -193,31 +195,11 @@ class MapEngine:
             target_raw_id = ex.to_scene_id if is_from_current else ex.from_scene_id
             target_safe_id = MapEngine._safe_id(target_raw_id)
 
-            # If the target node is not yet in our visited nodes, add it as unknown
-            if target_safe_id not in nodes:
-                nodes[target_safe_id] = {
-                    "id": target_raw_id,
-                    "label": "?",
-                    "description": "An unexplored area...",
-                    "is_unknown": True,
-                }
-
+            MapEngine._ensure_target_node(nodes, target_safe_id, target_raw_id, ex)
             # Check if this edge already exists and sync its lock state
-            matched_edge = None
-            for e in edges:
-                if (
-                    MapEngine._safe_id(e["from"]) == current_safe_id
-                    and MapEngine._safe_id(e["to"]) == target_safe_id
-                ):
-                    matched_edge = e
-                    break
-                if (
-                    ex.exit_type == "bidirectional"
-                    and MapEngine._safe_id(e["from"]) == target_safe_id
-                    and MapEngine._safe_id(e["to"]) == current_safe_id
-                ):
-                    matched_edge = e
-                    break
+            matched_edge = MapEngine._find_edge(
+                edges, current_safe_id, target_safe_id, ex.exit_type == "bidirectional"
+            )
 
             if matched_edge is None:
                 edges.append(
@@ -227,6 +209,7 @@ class MapEngine:
                         "to": target_raw_id if is_from_current else current_scene_id,
                         "label": getattr(ex, "label", "") or "",
                         "is_locked": getattr(ex, "is_locked", False),
+                        "is_revealed": bool(getattr(ex, "is_revealed", False)),
                         "exit_type": getattr(ex, "exit_type", "directional"),
                         "lock_description": getattr(ex, "lock_description", "") or "",
                         "code_to_unlock": getattr(ex, "code_to_unlock", "") or "",
@@ -243,15 +226,49 @@ class MapEngine:
                     matched_edge["id"] = ex.id
                 matched_edge["label"] = ex.label or ""
                 matched_edge["is_locked"] = ex.is_locked
+                matched_edge["is_revealed"] = bool(getattr(ex, "is_revealed", False))
                 matched_edge["lock_description"] = ex.lock_description or ""
                 matched_edge["code_to_unlock"] = ex.code_to_unlock or ""
                 matched_edge["item_to_unlock"] = ex.item_to_unlock or ""
                 matched_edge["rule_to_unlock"] = ex.rule_to_unlock or ""
 
+        MapEngine._add_revealed_exits(nodes, edges, exits)
         MapEngine._add_exits_between_visited(nodes, edges, exits)
         map_dict["nodes"] = nodes
         map_dict["edges"] = edges
         return map_dict
+
+    @staticmethod
+    def _ensure_target_node(nodes: dict, safe_id: str, raw_id: str, ex) -> None:
+        """Adds an unvisited target as an unknown placeholder; a revealed exit makes it known."""
+        if safe_id not in nodes:
+            nodes[safe_id] = {
+                "id": raw_id,
+                "label": "?",
+                "description": "An unexplored area...",
+                "is_unknown": True,
+            }
+        if getattr(ex, "is_revealed", False):
+            MapEngine._reveal_node(nodes[safe_id])
+
+    @staticmethod
+    def _find_edge(edges: list, src_id: str, dst_id: str, bidirectional: bool) -> Optional[dict]:
+        """The stored edge for src -> dst (or its reverse, for two-way exits), if any."""
+        for e in edges:
+            pair = (MapEngine._safe_id(e["from"]), MapEngine._safe_id(e["to"]))
+            if pair == (src_id, dst_id) or (bidirectional and pair == (dst_id, src_id)):
+                return e
+        return None
+
+    @staticmethod
+    def _reveal_node(node: dict) -> None:
+        """Marks an unvisited placeholder as known; visited nodes stay as they are.
+
+        The label is left empty so clients show the scene's own name and image.
+        """
+        if not node.get("is_unknown"):
+            return
+        node.update(is_unknown=False, is_revealed=True, label="", description="")
 
     @staticmethod
     def _has_edge(edges: list, src_id: str, dst_id: str, bidirectional: bool) -> bool:
@@ -266,6 +283,58 @@ class MapEngine:
         return False
 
     @staticmethod
+    def _visited_ids(nodes: dict) -> set[str]:
+        """Node ids the player has actually visited (not placeholders or revealed targets)."""
+        return {
+            sid
+            for sid, node in nodes.items()
+            if not node.get("is_unknown") and not node.get("is_revealed")
+        }
+
+    @staticmethod
+    def _revealed_target(ex, visited: set[str]) -> Optional[str]:
+        """The raw id of a revealed exit's far side, seen from a visited scene; else None."""
+        if not getattr(ex, "is_revealed", False):
+            return None
+        if MapEngine._safe_id(ex.from_scene_id) in visited:
+            return ex.to_scene_id
+        two_way = (getattr(ex, "exit_type", "") or "") == "bidirectional"
+        if two_way and MapEngine._safe_id(ex.to_scene_id) in visited:
+            return ex.from_scene_id
+        return None
+
+    @staticmethod
+    def _add_revealed_exits(nodes: dict, edges: list, exits: list) -> None:
+        """
+        Shows the target of every revealed exit that leaves a visited scene, not only the
+        current one: the player already knows where those exits lead.
+        """
+        visited = MapEngine._visited_ids(nodes)
+        for ex in exits:
+            target_raw_id = MapEngine._revealed_target(ex, visited)
+            if not target_raw_id:
+                continue
+            MapEngine._ensure_target_node(
+                nodes, MapEngine._safe_id(target_raw_id), target_raw_id, ex
+            )
+            exit_type = getattr(ex, "exit_type", "one_way") or "one_way"
+            src_id = MapEngine._safe_id(ex.from_scene_id)
+            dst_id = MapEngine._safe_id(ex.to_scene_id)
+            if MapEngine._has_edge(edges, src_id, dst_id, exit_type == "bidirectional"):
+                continue
+            edges.append(
+                {
+                    "id": getattr(ex, "id", None),
+                    "from": ex.from_scene_id,
+                    "to": ex.to_scene_id,
+                    "label": getattr(ex, "label", "") or "",
+                    "is_locked": getattr(ex, "is_locked", False),
+                    "is_revealed": True,
+                    "exit_type": exit_type,
+                }
+            )
+
+    @staticmethod
     def _add_exits_between_visited(nodes: dict, edges: list, exits: list) -> None:
         """
         Adds every exit whose two scenes the player has both visited.
@@ -274,7 +343,7 @@ class MapEngine:
         teleport, or sessions whose traversals were never recorded, would otherwise show
         up as isolated nodes.
         """
-        visited = {sid for sid, node in nodes.items() if not node.get("is_unknown")}
+        visited = MapEngine._visited_ids(nodes)
         for ex in exits:
             src_id = MapEngine._safe_id(ex.from_scene_id)
             dst_id = MapEngine._safe_id(ex.to_scene_id)

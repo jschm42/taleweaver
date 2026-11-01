@@ -57,6 +57,7 @@ _EXIT_COPY_FIELDS = (
     "label",
     "exit_type",
     "is_locked",
+    "is_revealed",
     "lock_description",
     "code_to_unlock",
     "item_to_unlock",

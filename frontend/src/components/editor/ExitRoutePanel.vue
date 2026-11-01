@@ -36,6 +36,7 @@ const exitEditForm = ref({
   label: '',
   lock_description: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
+  is_revealed: false,
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
@@ -49,6 +50,7 @@ watch(
         label: '',
         lock_description: '',
         exit_type: 'one_way',
+        is_revealed: false,
         code_to_unlock: '',
         item_to_unlock: '',
         rule_to_unlock: '',
@@ -59,6 +61,7 @@ watch(
       label: String(exitData.label || ''),
       lock_description: String(exitData.lock_description || ''),
       exit_type: String(exitData.exit_type || 'one_way').toLowerCase() === 'bidirectional' ? 'bidirectional' : 'one_way',
+      is_revealed: Boolean(exitData.is_revealed),
       code_to_unlock: String(exitData.code_to_unlock || ''),
       item_to_unlock: String(exitData.item_to_unlock || ''),
       rule_to_unlock: String(exitData.rule_to_unlock || ''),
@@ -86,6 +89,7 @@ const hasGate = computed(() => {
 })
 
 const isFormInvalid = computed(() => {
+  // Required: the label names the passage itself ("an old rusty gate").
   const labelText = (exitEditForm.value.label || '').trim()
   if (!labelText || labelText.length > 100) return true
   if ((exitEditForm.value.lock_description || '').length > 255) return true
@@ -114,6 +118,7 @@ async function saveRouteExit() {
     name: trimmedLabel,
     description: trimmedLockDesc,
     exit_type: exitEditForm.value.exit_type,
+    revealed: exitEditForm.value.is_revealed,
     code_to_unlock: rawCode,
     item_to_unlock: rawItem,
     rule_to_unlock: rawRule,
@@ -154,7 +159,7 @@ async function saveRouteExit() {
 
     <div>
       <p class="text-xs uppercase tracking-widest text-emerald-300">Exit Route</p>
-      <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || 'Exit' }}</h3>
+      <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || `→ ${routeExitDetails?.to_scene_id || 'Exit'}` }}</h3>
       <p class="text-sm text-slate-300 mt-1">
         {{ routeExitDetails?.from_scene_id }} -> {{ routeExitDetails?.to_scene_id }}
       </p>
@@ -168,7 +173,13 @@ async function saveRouteExit() {
             {{ (exitEditForm.label || '').length }} / 100
           </span>
         </div>
-        <input v-model="exitEditForm.label" maxlength="100" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" />
+        <input
+          v-model="exitEditForm.label"
+          maxlength="100"
+          placeholder="e.g. an old rusty gate"
+          title="Name the passage itself, e.g. 'an old rusty gate'. A two-way exit shows the same label on both sides, so never name the destination ('Way to the lab'); the game adds the target once it was visited."
+          class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none"
+        />
       </label>
       <label class="text-xs text-slate-300 space-y-1">
         <span>Type</span>
@@ -178,6 +189,11 @@ async function saveRouteExit() {
         </select>
       </label>
     </div>
+
+    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="The target scene's name and image are shown on the exit tile and the map from the start, before the player has been there (e.g. a signposted door or a gate with a view).">
+      <input v-model="exitEditForm.is_revealed" type="checkbox" class="accent-emerald-500" />
+      <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
+    </label>
 
     <label class="text-xs text-slate-300 space-y-1 block">
       <div class="flex justify-between items-center">

@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from backend.engine.interaction.switch_states import state_label
 from backend.engine.rules.reveal_policy import entity_is_script_only
+from backend.engine.world.exit_labels import exit_display_name
 
 
 def _format_item_refs(items: Optional[list]) -> list[str]:
@@ -179,14 +180,16 @@ def _describe_exits(exits: list, detail: str) -> str:
                 if getattr(e, "rule_to_unlock", None):
                     status_parts.append(f"rule:{e.rule_to_unlock}")
             status_req = f"({','.join(status_parts)})" if status_parts else ""
-            exit_list.append(f"{e.label}->{e.to_scene_id}{status}{status_req}")
+            name = exit_display_name(e.label, target_scene_id=e.to_scene_id)
+            exit_list.append(f"{name}->{e.to_scene_id}{status}{status_req}")
         return "EXITS: " + "; ".join(exit_list) + "\n"
 
     exit_list = []
     for e in exits:
         status = "[LOCKED]" if e.is_locked else "[OPEN]"
         lock_desc = f" ({e.lock_description})" if (e.is_locked and e.lock_description) else ""
-        exit_list.append(f"- {e.label} to {e.to_scene_id} {status}{lock_desc}")
+        name = exit_display_name(e.label, target_scene_id=e.to_scene_id)
+        exit_list.append(f"- {name} to {e.to_scene_id} {status}{lock_desc}")
     return "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
 
 

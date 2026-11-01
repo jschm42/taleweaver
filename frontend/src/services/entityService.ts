@@ -21,6 +21,8 @@ export interface EntityEditData {
   item_type?: string
   is_portable?: boolean
   locked?: boolean
+  /** Exits: the target scene is known from the start. */
+  revealed?: boolean
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
@@ -95,6 +97,7 @@ export interface ExitCreateData {
   label: string
   exit_type?: 'one_way' | 'bidirectional'
   is_locked?: boolean
+  is_revealed?: boolean
   lock_description?: string
   code_to_unlock?: string
   item_to_unlock?: string

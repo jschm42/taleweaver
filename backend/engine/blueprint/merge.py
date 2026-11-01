@@ -46,6 +46,7 @@ def _default_talent(block: BlueprintBlock) -> dict[str, Any]:
 
 
 def _default_exit(block: BlueprintBlock) -> dict[str, Any]:
+    # Labels are required and name the passage itself, so a generic one fills the gap.
     return {"label": "a passage", "is_bidirectional": True, "is_locked": False}
 
 

@@ -28,6 +28,8 @@ class EntityUpdateRequest(BaseModel):
     item_type: Optional[str] = None
     is_portable: Optional[bool] = None
     locked: Optional[bool] = None
+    # Exits: the target scene is known from the start.
+    revealed: Optional[bool] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
@@ -136,9 +138,12 @@ class SceneCreateRequest(BaseModel):
 class ExitCreateRequest(BaseModel):
     from_scene_id: str
     to_scene_id: str
+    # Required: names the passage itself ("an old rusty gate"), the same from both sides.
     label: str
     exit_type: Literal["one_way", "bidirectional"] = "one_way"
     is_locked: bool = False
+    # The target scene is known from the start (shown on the exit tile and map).
+    is_revealed: bool = False
     lock_description: Optional[str] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None

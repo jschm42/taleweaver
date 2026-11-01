@@ -130,10 +130,11 @@ Connections and passageways between scenes.
 | :--- | :--- | :--- |
 | `from_scene_id` | `string` | Origin scene ID. |
 | `to_scene_id` | `string` | Destination scene ID. |
-| `label` | `string` | Descriptive name of the exit (e.g., `"Heavy Iron Portcullis"`). |
+| `label` | `string` | Required. Names the passage itself, the same from both sides (e.g., `"Heavy Iron Portcullis"`, not `"Way to the Crypt"`); the game adds `→ Target` below it once the target was visited. Older files without a label still load; such exits are shown under their target scene's name. |
 | `exit_type` | `string` | `"one_way"` or `"bidirectional"` (default: `"bidirectional"` for normal passages). |
 | `is_bidirectional` | `boolean` | Whether the passage can be traversed in both directions (convenience boolean, matches `exit_type == "bidirectional"`). |
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
+| `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
