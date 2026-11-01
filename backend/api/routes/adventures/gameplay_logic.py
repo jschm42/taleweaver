@@ -83,6 +83,7 @@ from backend.engine.rules.rule_engine import (
 from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner, ScriptMessage
 from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
+from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
@@ -1704,6 +1705,15 @@ class GameTurnManager:
                 if isinstance(game_event, GameEvent):
                     game_event.game_over = True
                     game_event.status_note = str(goe)
+
+        # The scripts above ran after the logic pass evaluated quests, awards and sequences;
+        # re-check so what they changed (e.g. a console setting a quest variable) counts now.
+        try:
+            progress_msgs, _status = await apply_out_of_turn_progress(self)
+            for pm in progress_msgs:
+                yield sse_role_message(pm)
+        except GameOverError as goe:
+            await self._finalize_session("game_over", str(goe))
 
         # In-game turn: only a scene or sequence change advances time, ticks, and turn scripts.
         turn_advanced = crossed_turn_boundary(self.state, self._turn_anchor)

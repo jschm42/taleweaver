@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-from copy import deepcopy
 from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
@@ -11,11 +10,15 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.quest_completion import (
+    announce_completed_quests,
+    hard_rule_quest_ids,
+    mark_quests_completed,
+)
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
 from backend.engine.rules.game_clock import apply_gm_time_request
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
-from backend.engine.rules.quest_manager import QuestManager
 from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
 from backend.engine.rules.rule_engine import (
     EntityMovement,
@@ -24,7 +27,6 @@ from backend.engine.rules.rule_engine import (
     WorldEntityUpdate,
 )
 from backend.models.adventure_template import AdventureTemplate
-from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.path_security import ensure_within_data_dir as _ensure_within_data_dir
 from backend.utils.path_security import sanitize_path_component as _sanitize_path_component
@@ -35,7 +37,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CHECKPOINT_REASON_SCENE_CHANGE = "SCENE_CHANGE"
-CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
 CHECKPOINT_REASON_AWARD_GRANTED = "AWARD_GRANTED"
 
 
@@ -894,20 +895,11 @@ class TurnStateApplier:
             )
 
         # Quest Updates
-        newly_completed_quests: list[dict] = []
-        if event.completed_quest_ids:
-            new_quests = deepcopy(self.state.quests or [])
-            modified = False
-            for qid in event.completed_quest_ids:
-                for q in new_quests:
-                    if q.get("id") == qid and q.get("status") != "completed":
-                        q["status"] = "completed"
-                        newly_completed_quests.append(q)
-                        modified = True
-
-            if modified:
-                self.state.quests = new_quests
-                state_dirty = True
+        newly_completed_quests = mark_quests_completed(
+            self.state, list(event.completed_quest_ids or [])
+        )
+        if newly_completed_quests:
+            state_dirty = True
 
         if event.earned_award_keys:
             system_messages.extend(await grant_awards(self, event.earned_award_keys))
@@ -924,50 +916,17 @@ class TurnStateApplier:
         system_messages.extend(det_award_msgs)
 
         # Deterministic Quest Sync (Post-LLM check)
-        det_completed = QuestManager.evaluate_quests(
-            self.avatar,
+        det_completed = mark_quests_completed(
             self.state,
-            new_inventory_items=event.new_inventory_items,
-            new_scene_id=event.new_scene_id,
-            updated_entities=event.updated_entities,
-            script_context=script_context,
+            hard_rule_quest_ids(self.avatar, self.state, script_context, event),
+            game_id=self.game_id,
         )
         if det_completed:
-            new_quests = deepcopy(self.state.quests or [])
-            modified = False
-            for qid in det_completed:
-                for q in new_quests:
-                    if q.get("id") == qid and q.get("status") != "completed":
-                        q["status"] = "completed"
-                        if not any(nq.get("id") == qid for nq in newly_completed_quests):
-                            newly_completed_quests.append(q)
-                        logger.info(
-                            "[Turn %s] Deterministic Quest Completion: %s", self.game_id, qid
-                        )
-                        modified = True
-            if modified:
-                self.state.quests = new_quests
-                state_dirty = True
+            state_dirty = True
+            newly_completed_quests.extend(det_completed)
 
-        if newly_completed_quests:
-            self._queue_checkpoint(CHECKPOINT_REASON_QUEST_UPDATE)
-            # Emit one system entry per newly completed quest so players get explicit feedback.
-            for q in newly_completed_quests:
-                quest_title = q.get("title") or q.get("id")
-                xp_reward = int(q.get("exp_reward") or 0)
-                if xp_reward > 0:
-                    self.avatar.exp = (self.avatar.exp or 0) + xp_reward
-                    msg = f"Side-quest completed: {quest_title} (+{xp_reward} XP)"
-                else:
-                    msg = f"Side-quest completed: {quest_title}"
-                self.db.add(
-                    ChatMessage(
-                        session_id=self.state.session_id,
-                        role="system",
-                        content=msg,
-                    )
-                )
-                system_messages.append(msg)
+        # One system entry per newly completed quest so players get explicit feedback.
+        system_messages.extend(announce_completed_quests(self, newly_completed_quests))
 
         # Sequence Completion Logic
         old_seq_id = self.state.active_sequence_id
