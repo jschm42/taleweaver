@@ -8,7 +8,7 @@
  * get a skin-specific entrance (see src/skins/entrances.css). Changed HP, Mana, Stamina or
  * attributes float up on the card as "-5 HP" / "+2 STR"; an HP loss also flashes the card.
  * Crowded scenes: defeated characters move last (see stageCastOrder.ts) and cards shrink to fit the
- * column height, switching to compact/mini layouts; from six characters on the stage uses two
+ * column height, switching to compact/mini layouts; from eight characters on the stage uses two
  * narrower columns (see useStageDensity.ts).
  */
 import { ref, watch, nextTick, computed } from 'vue'

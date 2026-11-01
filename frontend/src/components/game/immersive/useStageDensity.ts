@@ -1,7 +1,7 @@
 /**
  * useStageDensity — fits the character cards of the left stage into the available height.
  *
- * Up to five characters stand in one column; from STAGE_TWO_COLUMN_MIN characters on, the stage
+ * Up to seven characters stand in one column; from STAGE_TWO_COLUMN_MIN characters on, the stage
  * switches to two narrower columns. A full card is a 2:3 portrait; when the cast does not fit at
  * that size, every card shrinks to the height that fits all rows. Below certain aspect ratios the
  * cards switch to a denser layout:
@@ -22,7 +22,7 @@ export type StageDensity = 'full' | 'compact' | 'mini'
 export const STAGE_CARD_GAP_PX = 8
 
 /** From this many characters on, the stage uses two columns. */
-export const STAGE_TWO_COLUMN_MIN = 6
+export const STAGE_TWO_COLUMN_MIN = 8
 
 const FULL_RATIO = 1.5
 const COMPACT_RATIO = 0.75
