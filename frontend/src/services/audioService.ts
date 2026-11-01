@@ -260,10 +260,11 @@ class AudioService {
       const status = errorStatus(err)
       const isNonRetryable = status !== undefined && NON_RETRYABLE_STATUSES.has(status)
       const canRetry = !isNonRetryable && retryText !== request.requestText && isSpeakableSegment(retryText)
-      if (isNonRetryable) this.setPlaybackError(err)
       if (!canRetry || token !== this.playbackToken) {
-        // Do not abort the whole queue because one segment failed upstream.
+        // Do not abort the whole queue because one segment failed upstream, but tell the player
+        // why it stays silent (e.g. "TTS Provider error: ... quota ..."); the game shows lastError.
         this.logDebug('TTS segment failed; skipping', { status, error: String(err) })
+        if (token === this.playbackToken) this.setPlaybackError(err)
         return null
       }
     }
@@ -274,6 +275,7 @@ class AudioService {
       return (await this.requestAudio(retryText, { ...context, tone: undefined }, request.voiceOverride)).blob
     } catch (retryErr) {
       this.logDebug('TTS segment retry failed; skipping', { error: String(retryErr) })
+      if (token === this.playbackToken) this.setPlaybackError(retryErr)
       return null
     }
   }
