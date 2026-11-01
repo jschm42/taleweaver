@@ -56,6 +56,8 @@ async def test_catalog_marks_entries_with_old_format_as_deprecated(tmp_path, mon
     requested: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.github.com":
+            return httpx.Response(404)  # no commit pin: files are read from the branch
         requested.append(request.url.path)
         if request.url.path.endswith("library.json"):
             return httpx.Response(200, json=index)

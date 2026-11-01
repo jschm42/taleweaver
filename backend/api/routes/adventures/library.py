@@ -28,7 +28,9 @@ from backend.services.adventure_library import (
     LibraryItemView,
     LibraryService,
     install_entry,
+    is_newer_version,
     is_version_at_least,
+    library_update_for,
     library_url,
 )
 
@@ -67,16 +69,11 @@ async def _installed_versions(
 
 
 def _item_view(entry: LibraryEntry, installed_version: str | None) -> LibraryItemView:
-    update_available = (
-        installed_version is not None
-        and entry.version != installed_version
-        and is_version_at_least(entry.version, installed_version)
-    )
     return LibraryItemView(
         entry=entry,
         cover_url=library_url(entry.slug, entry.cover) if entry.cover else None,
         installed_version=installed_version,
-        update_available=update_available,
+        update_available=is_newer_version(entry.version, installed_version),
     )
 
 
@@ -118,6 +115,38 @@ async def refresh_library_catalog(
     """Bypass the cache, then return the same view as ``GET /library/catalog``."""
     library = await _load_library(force_refresh=True)
     return await _library_response(library, db, current_user.id)
+
+
+@router.get("/library/updates")
+async def get_library_updates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Installed adventures of the caller that have a newer version in the library.
+
+    Uses the cached catalog like ``GET /library/catalog``. The portal calls this in the
+    background, so an unreachable repository yields an empty list instead of an error.
+    """
+    try:
+        library = await _library_service.get_library()
+    except LibraryError as exc:
+        logger.info("Library updates unavailable: %s", exc)
+        return {"updates": [], "stale": True}
+    ids = [entry.id for entry in library.adventures]
+    result = await db.execute(
+        select(AdventureTemplate).where(
+            AdventureTemplate.owner_id == current_user.id,
+            AdventureTemplate.origin_id.in_(ids),
+        )
+    )
+    updates = []
+    for template in result.scalars().all():
+        entry = library_update_for(library, template)
+        if entry is not None:
+            updates.append(
+                {"template_id": template.id, "library_id": entry.id, "version": entry.version}
+            )
+    return {"updates": updates, "stale": _library_service.is_stale()}
 
 
 @router.post("/library/install")

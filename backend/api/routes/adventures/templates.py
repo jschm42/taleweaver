@@ -568,14 +568,25 @@ async def update_all_adventure_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Updates all adventure templates for the user that have newer versions in /adventures."""
+    """Updates all adventure templates that have newer versions in /adventures or the library.
+
+    Newer library versions are downloaded first, so the local update path applies them.
+    """
     from backend.engine.adventures.adventure_updates import update_all_adventures
+    from backend.services.adventure_library import stage_library_updates
 
     try:
-        return await update_all_adventures(
+        owned = await db.execute(
+            select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id)
+        )
+        staging_errors = await stage_library_updates(owned.scalars().all())
+        result = await update_all_adventures(
             db=db,
             user_id=current_user.id,
         )
+        if staging_errors:
+            result["errors"] = [*staging_errors, *(result.get("errors") or [])]
+        return result
     except Exception as e:
         logger.exception("Failed to update all adventure templates")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -588,8 +599,25 @@ async def update_adventure_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Updates an individual adventure template from its matching file in /adventures."""
+    """Updates an individual adventure template from /adventures or the library.
+
+    A newer library version is downloaded first, so the local update path applies it and
+    keeps the linked game sessions.
+    """
     from backend.engine.adventures.adventure_updates import update_single_adventure
+    from backend.services.adventure_library import stage_library_updates
+
+    owned = await db.execute(
+        select(AdventureTemplate).where(
+            AdventureTemplate.id == template_id,
+            AdventureTemplate.owner_id == current_user.id,
+        )
+    )
+    template = owned.scalars().first()
+    if template is not None:
+        staging_errors = await stage_library_updates([template])
+        if staging_errors:
+            raise HTTPException(status_code=502, detail=staging_errors[0])
 
     try:
         return await update_single_adventure(

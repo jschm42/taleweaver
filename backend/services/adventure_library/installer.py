@@ -133,6 +133,32 @@ def _manifest_title(files: dict[str, bytes]) -> str | None:
     return adventure.get("title") if isinstance(adventure, dict) else None
 
 
+async def _store_bundle(entry: LibraryEntry, data: bytes) -> Path:
+    """Write the bundle to the download dir and rescan it, so the update scanner sees it."""
+    path = bundle_path(entry.slug)
+    await asyncio.to_thread(_write_atomic, path, data)
+
+    # Imported lazily: adventure_updates has an import cycle through the API routers.
+    from backend.engine.adventures.adventure_updates import scan_available_adventure_files
+
+    await asyncio.to_thread(scan_available_adventure_files, True)
+    return path
+
+
+async def download_bundle(
+    entry: LibraryEntry, http_client: httpx.AsyncClient | None = None
+) -> Path:
+    """Fetch ``entry`` into the download dir without importing it.
+
+    Updating an installed adventure goes through ``update_single_adventure``, which keeps
+    the linked game sessions; it only needs the newer bundle on disk.
+    """
+    data = build_bundle(await fetch_files(entry, http_client))
+    path = await _store_bundle(entry, data)
+    logger.info("Downloaded library update %s %s", entry.slug, entry.version)
+    return path
+
+
 async def install_entry(
     db: AsyncSession,
     entry: LibraryEntry,
@@ -152,12 +178,7 @@ async def install_entry(
     )
     if not imported:
         raise AdventureInstallError(f"the importer rejected {entry.slug} {entry.version}")
-    await asyncio.to_thread(_write_atomic, bundle_path(entry.slug), data)
-
-    # Imported lazily: adventure_updates has an import cycle through the API routers.
-    from backend.engine.adventures.adventure_updates import scan_available_adventure_files
-
-    await asyncio.to_thread(scan_available_adventure_files, True)
+    await _store_bundle(entry, data)
     logger.info("Installed library adventure %s %s", entry.slug, entry.version)
 
     title = _manifest_title(files) or entry.title

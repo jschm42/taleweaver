@@ -20,6 +20,7 @@
     { "id": "nPczCjzI2devNBz1zQrb", "name": "Brian", "gender": "male", "age": "middle-aged", "accent": "american", "description": "deep, resonant", "good_for": ["king", "commander", "giant"] },
     { "id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "gender": "male", "age": "middle-aged", "accent": "british", "description": "authoritative, formal", "good_for": ["judge", "butler", "official"] },
     { "id": "pqHfZKP75CvOlQylNhV4", "name": "Bill", "gender": "male", "age": "old", "accent": "american", "description": "wise, weathered", "good_for": ["old man", "hermit", "sage"] },
-    { "id": "SAz9YHcvj6GT2YYXdXww", "name": "River", "gender": null, "age": "middle-aged", "accent": "american", "description": "calm, neutral", "good_for": ["spirit", "ai", "creature"] }
+    { "id": "SAz9YHcvj6GT2YYXdXww", "name": "River", "gender": null, "age": "middle-aged", "accent": "american", "description": "calm, neutral", "good_for": ["spirit", "ai", "creature"] },
+    { "id": "bICR68fw9p7rUiAEAgn6", "name": "Eliza Nightshade - Doomed Doll & Innocent Nightmare ", "gender": "female", "age": "young", "accent": "british", "description": "cute", "good_for": ["porcelain-doll", "horror", "rpg"] }
   ]
 }
