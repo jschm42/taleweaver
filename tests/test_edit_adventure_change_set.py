@@ -173,3 +173,39 @@ async def test_file_values_are_read_from_the_change_set_folder(tmp_path):
 
     # Assert
     assert init_script.startswith("def helper")
+
+
+async def test_set_npc_combat_changes_given_fields_and_keeps_the_rest():
+    # Arrange
+    await _seed()
+    async with Session() as db:
+        db.add(WorldEntity(id="GUARD", template_id="adv-1", entity_type="NPC", name="Guard",
+                           description="A guard.", current_scene_id="HALL",
+                           metadata_json={"attack_mode": "ATTACK_ON_SIGHT", "special_chance": 85}))  # fmt: skip
+        await db.commit_for_real()
+    ops = [{"op": "set_npc_combat", "npc_id": "GUARD", "combat_group": "town guards"}]
+
+    # Act
+    async with Session() as db:
+        result = await apply_change_set(db, "adv-1", ops, base_dir=Path("."))
+        await db.commit_for_real()
+
+    # Assert
+    async with Session() as db:
+        meta = (await _row(db, WorldEntity, "GUARD")).metadata_json
+    assert meta["combat_group"] == "TOWN_GUARDS"
+    assert (meta["attack_mode"], meta["special_chance"]) == ("ATTACK_ON_SIGHT", 85)
+    assert result.applied == ["set_npc_combat: GUARD: combat_group"]
+
+
+async def test_set_npc_combat_rejects_unknown_npc():
+    # Arrange
+    await _seed()
+
+    # Act / Assert
+    async with Session() as db:
+        with pytest.raises(ChangeSetError, match="NPC 'NOBODY' not found"):
+            await apply_change_set(
+                db, "adv-1", [{"op": "set_npc_combat", "npc_id": "NOBODY"}], base_dir=Path(".")
+            )
+        await db.rollback()

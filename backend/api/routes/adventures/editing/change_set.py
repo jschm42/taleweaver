@@ -48,13 +48,17 @@ from backend.api.routes.adventures.editing.world_crud import (
     delete_editor_scene,
     update_editor_start_scene,
 )
+from backend.api.routes.adventures.editor_npc_combat import (
+    NpcCombatUpdateRequest,
+    update_npc_combat,
+)
 from backend.api.routes.adventures.schemas import AdventureTemplateUpdate
 from backend.api.routes.adventures.templates import update_adventure
 from backend.core.world_validator import validate_adventure
 from backend.engine.scripting.sandbox import SafeAstInterpreter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_entity import WorldExit
+from backend.models.world_entity import WorldEntity, WorldExit
 from backend.schemas.validation import ValidationFinding
 
 MAX_OPERATIONS = 200
@@ -180,6 +184,30 @@ async def _update(ctx: _OpContext, fields: dict[str, Any]) -> str:
     return f"{payload.target_type} {payload.target_id}: {', '.join(changed)}"
 
 
+async def _set_npc_combat(ctx: _OpContext, fields: dict[str, Any]) -> str:
+    """NPC aggression, special chance, combat group and assist mode; omitted fields keep their value."""
+    npc_id = str(fields.get("npc_id") or "").strip()
+    npc = (
+        await ctx.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == ctx.template_id,
+                WorldEntity.session_id.is_(None),
+                WorldEntity.id == npc_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if npc is None:
+        raise ChangeSetError(f"NPC '{npc_id}' not found.")
+    meta = npc.metadata_json if isinstance(npc.metadata_json, dict) else {}
+    current = {
+        k: meta.get(k) for k in NpcCombatUpdateRequest.model_fields if meta.get(k) is not None
+    }
+    payload = _build(NpcCombatUpdateRequest, {**current, **fields})
+    await update_npc_combat(ctx.template_id, payload, db=ctx.db, current_user=ctx.user)
+    changed = sorted(k for k in fields if k != "npc_id")
+    return f"{npc_id}: {', '.join(changed)}"
+
+
 async def _update_adventure(ctx: _OpContext, fields: dict[str, Any]) -> str:
     payload = _build(AdventureTemplateUpdate, fields)
     await update_adventure(ctx.template_id, payload, db=ctx.db, current_user=ctx.user)
@@ -207,6 +235,7 @@ OPERATIONS: dict[str, _Handler] = {
     "create_exit": _create_exit,
     "create_entity": _payload_op(EntityCreateRequest, create_editor_entity),
     "update": _update,
+    "set_npc_combat": _set_npc_combat,
     "set_script": _payload_op(ScriptCreateRequest, save_editor_script),
     "set_init_script": _init_script_op(append=False),
     "append_init_script": _init_script_op(append=True),
@@ -228,6 +257,7 @@ OPERATION_MODELS: dict[str, Optional[type[BaseModel]]] = {
     "create_exit": ExitCreateRequest,
     "create_entity": EntityCreateRequest,
     "update": EntityUpdateRequest,
+    "set_npc_combat": NpcCombatUpdateRequest,
     "set_script": ScriptCreateRequest,
     "create_quest": QuestCreateRequest,
     "create_award": AwardCreateRequest,
