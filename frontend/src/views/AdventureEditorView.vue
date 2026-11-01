@@ -17,6 +17,7 @@ import type { TtsVoiceList } from '@/types'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
 import WorldTab from '@/components/editor/WorldTab.vue'
+import TimeTab from '@/components/editor/TimeTab.vue'
 import SequencesSection from '@/components/editor/SequencesSection.vue'
 import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
@@ -429,7 +430,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -509,6 +510,7 @@ async function fetchVoiceList() {
 
 const editorTabs = [
   { key: 'world', label: 'World' },
+  { key: 'time', label: 'Time & Pacing' },
   { key: 'sequences', label: 'Sequences' },
   { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
@@ -2742,10 +2744,20 @@ watch(
               @cancel-edit="cancelEditing"
               @generate-field="handleGenerateField"
               @update:temp-value="tempValue = $event"
+              @update:max-memory-turns="form.max_memory_turns = $event"
+              @update:mode="handleUpdateRuleMode"
+              @save-changes="saveChanges"
+              @notify="addNotification"
+            />
+
+            <TimeTab
+              v-else-if="activeTab === 'time'"
+              :form="form"
+              :adventure="adventure"
+              :is-saving="isSaving"
               @update:pacing="form.time_per_turn = $event"
               @update:max-time-per-turn="form.max_time_per_turn = $event"
               @update:gm-time-control="form.gm_time_control = $event"
-              @update:max-memory-turns="form.max_memory_turns = $event"
               @update:clock-enabled="form.clock_enabled = $event"
               @update:time-system="form.time_system = $event"
               @update:start-date="form.time_config = { ...(form.time_config || {}), start_date: $event }"
@@ -2759,9 +2771,7 @@ watch(
               @update:calendar-pacing-unit="form.time_config = { ...(form.time_config || {}), calendar_pacing_unit: $event }"
               @update:calendar-max-value="form.time_config = { ...(form.time_config || {}), calendar_max_value: $event }"
               @update:calendar-max-unit="form.time_config = { ...(form.time_config || {}), calendar_max_unit: $event }"
-              @update:mode="handleUpdateRuleMode"
               @save-changes="saveChanges"
-              @notify="addNotification"
             />
 
             <div v-else-if="activeTab === 'sequences'" class="space-y-6">

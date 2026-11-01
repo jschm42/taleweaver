@@ -571,8 +571,8 @@ Controls session outcome conditions:
 The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
 
 **How time passes**
-- **Narration tick**: after every narrated player message the clock advances by the *minutes per tick* (the adventure's **Round Pacing**, `time_per_turn`, default 5). One player message is one tick, even when it chains a follow-up narration. The opening prologue, choice dialogs and script output (`tw.narrate`, dialog narration) do not tick.
-- **Game Master**: when **GM May Change Time** is enabled in the editor (`gm_time_control`, default on), the GM may add extra time for long actions ("the search took 20 minutes", `extra_time_minutes`) or jump the clock (`time_override_minutes`, `start_datetime_override`). Tick plus extra time of one message is capped by **Max Time per Turn (GM Limit)**. With the flag off, while the clock is paused, or after `tw.time.allow_gm_time(False)`, GM time requests are ignored and Pass 1 is told `TIME CONTROL: LOCKED`.
+- **Narration tick**: after every narrated player message the clock advances by the *minutes per tick* (the adventure's **Round Pacing** in the editor's **Time & Pacing** tab, `time_per_turn`, default 5). One player message is one tick, even when it chains a follow-up narration. The opening prologue, choice dialogs and script output (`tw.narrate`, dialog narration) do not tick.
+- **Game Master**: when **GM May Change Time** is enabled in the editor's **Time & Pacing** tab (`gm_time_control`, default on), the GM may add extra time for long actions ("the search took 20 minutes", `extra_time_minutes`) or jump the clock (`time_override_minutes`, `start_datetime_override`). Tick plus extra time of one message is capped by **Max Time per Turn (GM Limit)**. With the flag off, while the clock is paused, or after `tw.time.allow_gm_time(False)`, GM time requests are ignored and Pass 1 is told `TIME CONTROL: LOCKED`.
 - **Scripts and debug commands** can set or move the time at any moment, also while the clock is paused.
 
 **Reading**
