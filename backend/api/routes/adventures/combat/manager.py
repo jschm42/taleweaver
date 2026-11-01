@@ -17,7 +17,7 @@ from backend.api.routes.adventures.combat.context import (
     system_event,
 )
 from backend.api.routes.adventures.combat.enemy_ai import CombatEnemyMixin
-from backend.api.routes.adventures.combat.loot import CombatLootMixin
+from backend.api.routes.adventures.combat.loot import LOOT_FINISH_ACTIONS, CombatLootMixin
 from backend.api.routes.adventures.combat.narration import CombatNarrationMixin
 from backend.api.routes.adventures.combat.player_actions import (
     INVALID_ACTION_MSG,
@@ -35,6 +35,11 @@ if TYPE_CHECKING:
 
 FLEE_HP_RATIO = 0.2
 FLEE_CHANCE = 0.10
+
+
+def _is_loot_finish(user_msg: str) -> bool:
+    parts = user_msg.lower().split()
+    return len(parts) >= 2 and parts[0] == "/loot" and parts[1] in LOOT_FINISH_ACTIONS
 
 
 class TurnCombatManager(
@@ -66,13 +71,13 @@ class TurnCombatManager(
         loot_msg = await self._resolve_loot_command(user_msg, combat)
         if not loot_msg:
             async for chunk in self._reply(
-                "Loot phase active. Use /loot take, /loot leave, or /loot done."
+                "Loot phase active. Use /loot take, /loot leave, /loot take_all, or /loot done."
             ):
                 yield chunk
             return
 
         yield system_event(loot_msg)
-        if user_msg.lower().strip().startswith("/loot done"):
+        if _is_loot_finish(user_msg):
             combat_after_loot = self._read_combat_state() or combat
             # Re-inject the outcome for narration when it was just popped.
             if not combat_after_loot.get("outcome") and pre_resolve_outcome:

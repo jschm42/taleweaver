@@ -53,17 +53,19 @@ export const gameActionService = {
     })
   },
 
+  /** Ends the loot phase: `done` drops the remaining loot into the scene, `take_all` keeps it. */
   async runLootDone(
     inFlight: Ref<boolean>,
     sendMessage: SendMessage,
     markClosing: () => void,
     clearClosingIfNoCombat: () => void,
+    action: 'done' | 'take_all' = 'done',
   ): Promise<void> {
     if (inFlight.value) return
     markClosing()
     inFlight.value = true
     try {
-      await sendMessage('/loot done')
+      await sendMessage(`/loot ${action}`)
     } finally {
       inFlight.value = false
       clearClosingIfNoCombat()

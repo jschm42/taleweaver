@@ -34,6 +34,7 @@ const emit = defineEmits<{
   lootTake: [item: InventoryItem]
   lootLeave: [item: InventoryItem]
   lootDone: []
+  lootTakeAll: []
   entityHover: [entity: any, event: MouseEvent]
   entityLeave: []
   debugWin: []
@@ -345,9 +346,22 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
               </div>
-              <button class="tw-dialog-button mt-2.5 w-full" :disabled="evaluating" @click="emit('lootDone')">
-                Finish &amp; Continue
-              </button>
+              <div class="mt-2.5 flex gap-2">
+                <button
+                  v-if="lootItems.length"
+                  class="tw-dialog-button flex-1"
+                  :disabled="evaluating"
+                  title="Put all remaining loot into your inventory and end the fight"
+                  @click="emit('lootTakeAll')"
+                >Take All &amp; Finish</button>
+                <button
+                  class="tw-dialog-button flex-1"
+                  :class="{ 'tw-dialog-button--ghost': lootItems.length }"
+                  :disabled="evaluating"
+                  :title="lootItems.length ? 'Leave the remaining loot lying in the scene' : 'End the fight'"
+                  @click="emit('lootDone')"
+                >{{ lootItems.length ? 'Drop Rest &amp; Finish' : 'Finish &amp; Continue' }}</button>
+              </div>
             </section>
           </div>
         </div>

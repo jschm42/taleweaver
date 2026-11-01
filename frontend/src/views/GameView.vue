@@ -1752,7 +1752,7 @@ const handleLootLeave = async (item: any) => {
   await gameActionService.runLootCommand(combatActionInFlight, sendMessage, 'leave', item)
 }
 
-const handleLootDone = async () => {
+const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
   await gameActionService.runLootDone(
     combatActionInFlight,
     sendMessage,
@@ -1765,7 +1765,8 @@ const handleLootDone = async () => {
       if (!combat.value) {
         isClosingCombat.value = false
       }
-    }
+    },
+    action,
   )
 }
 
@@ -2123,7 +2124,8 @@ usePlayAgentAutoLoop()
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
-      @loot-done="handleLootDone"
+      @loot-done="handleLootDone('done')"
+      @loot-take-all="handleLootDone('take_all')"
       @debug-win="handleCombatDebugWin"
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
@@ -2135,7 +2137,10 @@ usePlayAgentAutoLoop()
       :items="lootPopupItems"
       :busy="combatActionInFlight"
       @close="closeLootPopup"
-      @confirm="handleLootDone"
+      @confirm="handleLootDone('done')"
+      @take-all="handleLootDone('take_all')"
+      @take="handleLootTake"
+      @drop="handleLootLeave"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
       @item-leave="hoveredEntity = null"
     />
