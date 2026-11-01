@@ -100,7 +100,7 @@ const emit = defineEmits<{
   (e: 'combat-saved'): void
 }>()
 
-const activeTab = ref<'simple' | 'advanced'>('simple')
+const activeTab = ref<'simple' | 'combat' | 'advanced'>('simple')
 const editingTransitionIndex = ref<number | null>(null)
 const showTransitionGuards = ref<boolean>(false)
 const showTransitionScripts = ref<boolean>(false)
@@ -903,6 +903,13 @@ const textLogPreviewClass = computed(() => {
               General
             </button>
             <button
+              v-if="context.type === 'npc'"
+              @click="activeTab = 'combat'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'combat' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              Combat
+            </button>
+            <button
               @click="activeTab = 'advanced'"
               :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'advanced' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
             >
@@ -1092,22 +1099,6 @@ const textLogPreviewClass = computed(() => {
                   >
                     <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['character'] }"></i>
                     <span>Quick-Gen Traits</span>
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
-                <div class="flex items-center justify-between">
-                  <div class="space-y-1 pr-4">
-                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Damaged</p>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC never loses HP (scripts, Game Master, combat) and cannot be fought.</p>
-                  </div>
-                  <button
-                    type="button"
-                    @click="localForm.is_killable = !localForm.is_killable"
-                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_killable ? 'bg-emerald-600' : 'bg-slate-700']"
-                  >
-                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
                   </button>
                 </div>
               </div>
@@ -2155,6 +2146,44 @@ const textLogPreviewClass = computed(() => {
               />
             </div> <!-- End simple tab -->
 
+            <div v-if="context.type === 'npc'" v-show="activeTab === 'combat'" class="space-y-6">
+              <div class="space-y-2">
+                <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Combat</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                  How this NPC fights: damage, aggression, combat group, attributes, main attack and special attacks.
+                  The damage switch is saved with Apply Changes; the sections below have their own Save buttons.
+                </p>
+              </div>
+
+              <div class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1 pr-4">
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Damaged</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC never loses HP (scripts, Game Master, combat) and cannot be fought.</p>
+                  </div>
+                  <button
+                    type="button"
+                    @click="localForm.is_killable = !localForm.is_killable"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_killable ? 'bg-emerald-600' : 'bg-slate-700']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- NPC combat behaviour & special attacks (shared with the NPC combat modal) -->
+              <div class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <NpcCombatSettings
+                  v-if="adventureId && npcData && !isCreateEntityMode"
+                  :adventure-id="adventureId"
+                  :npc="npcData"
+                  :reference-options="referenceOptions"
+                  @saved="emit('combat-saved')"
+                />
+                <p v-else class="text-[11px] text-slate-400">Save the NPC first to configure attack behaviour, combat group and special attacks.</p>
+              </div>
+            </div> <!-- End combat tab -->
+
             <div v-show="activeTab === 'advanced'" class="space-y-6">
               <div class="space-y-2">
                 <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Advanced Triggers</p>
@@ -2395,18 +2424,6 @@ const textLogPreviewClass = computed(() => {
               </div>
 
               <div v-else-if="context.type === 'npc'" class="space-y-6">
-                <!-- NPC combat behaviour & special attacks (shared with the NPC combat modal) -->
-                <div class="p-4 bg-black/30 border border-white/10 rounded-2xl">
-                  <NpcCombatSettings
-                    v-if="adventureId && npcData && !isCreateEntityMode"
-                    :adventure-id="adventureId"
-                    :npc="npcData"
-                    :reference-options="referenceOptions"
-                    @saved="emit('combat-saved')"
-                  />
-                  <p v-else class="text-[11px] text-slate-400">Save the NPC first to configure attack behaviour and special attacks.</p>
-                </div>
-
                 <InteractTriggerFields
                   v-model:script="localForm.on_interact_script"
                   v-model:text="localForm.on_interact_text"

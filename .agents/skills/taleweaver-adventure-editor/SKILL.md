@@ -71,7 +71,7 @@ fields are rejected (no silent typos).
 | `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label`, `exit_type` (`one_way`/`bidirectional`), `is_locked`, `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `ref` |
 | `create_entity` | New NPC or object | `entity_id`, `entity_type` (`NPC`/`OBJECT`), `scene_id`, `name`, `description`, `item_type`, `is_portable`, `is_hidden`, `inventory`, `metadata_json`, ... |
 | `update` | Change any editor field (incl. all trigger scripts) | `target_type` (`scene`/`exit`/`npc`/`object`/`protagonist`/`cover`), `target_id`, fields |
-| `set_npc_combat` | NPC combat behaviour (the editor's Aggression section) | `npc_id`, `attack_mode` (`PASSIVE`/`ATTACK_ON_SIGHT`), `attack_trigger`, `special_chance`, `combat_group`, `assist_mode` (`GROUP`/`ANYONE`/`NEVER`); omitted fields keep their current value |
+| `set_npc_combat` | NPC combat behaviour (the Aggression section in the NPC dialog's Combat tab) | `npc_id`, `attack_mode` (`PASSIVE`/`ATTACK_ON_SIGHT`), `attack_trigger`, `special_chance`, `combat_group`, `assist_mode` (`GROUP`/`ANYONE`/`NEVER`); omitted fields keep their current value |
 | `set_script` | Add/replace a global script | `id`, `name`, `trigger`, `target`, `code`, `priority`, `is_active` |
 | `set_init_script` / `append_init_script` | Replace / extend the global init script (helpers, dialog handlers, dialogue trees) | `code` |
 | `create_quest` / `create_award` | Quest / award | see `ops` |

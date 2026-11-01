@@ -94,7 +94,7 @@ assist: anyone
 in: ROAD
 ```
 
-Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
+Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. In the World-Editor, every combat setting of an NPC (the **NPC can be damaged** switch, aggression, combat group, *Joins a fight*, attributes, main attack and special attacks) is in the **Combat** tab of the NPC dialog. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
 
 ### `[Item: ID] Name`
 Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switch: ...]`/`[Mechanism: ...]`, `[Weapon: ...]`, `[Recipe: ...]` (CONSTRUCTABLE). `portable` defaults to `no` for STATIC items and switches and to `yes` for everything else; a `portable: yes` switch (e.g. a remote) can be taken and flipped from the inventory.
