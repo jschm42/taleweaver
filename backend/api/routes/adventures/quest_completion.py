@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
 
 
-def mark_quests_completed(state: Any, quest_ids: list[str], game_id: Optional[str] = None) -> list[dict]:
+def mark_quests_completed(
+    state: Any, quest_ids: list[str], game_id: Optional[str] = None
+) -> list[dict]:
     """Sets the given open quests to ``completed``; returns the quests that changed."""
     if not quest_ids:
         return []

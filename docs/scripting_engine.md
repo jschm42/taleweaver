@@ -230,6 +230,8 @@ Deterministic guards (`unlock_expression` on containers and exits, `craft_guard_
 
 If the expression evaluates to truthy, the guard passes; otherwise, the action or completion is blocked deterministically.
 
+**When progress guards are checked.** The hard rules and `guard_expression` of sidequests, awards and sequences (and the adventure's win/loss guards) are checked when the logic pass is applied, and **again after the scripts that run later in the same message**: `on_interact` triggers (top-level, sequence and inline) and `on_logic_pass_done` scripts. A dialog choice (`tw.dialog.choose` handler) runs the same check. So a console script that sets `tw.vars.set('teleport_attempt', 3)` completes a sidequest guarded by `tw.vars.get('teleport_attempt', 0) >= 3` in the same message, not one message later.
+
 ### Priority Execution
 Scripts carry an integer `priority` (default: `100`). Scripts with **lower** priority numbers execute before scripts with higher numbers.
 
@@ -641,7 +643,7 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
 
 1. records the choice in the chat as `[Choice] <label>` (so the GM keeps continuity),
 2. calls `<on_choice>(index)` with the **position of the chosen option in `options`**, plus a `dialog_choice` dict (`index`, `label`, `dialog_id`) in scope,
-3. applies the handler's changeset (variables, items, HP, game over, sequence advance, …) and runs the post-turn checks (special unlocks, NPC attacks),
+3. applies the handler's changeset (variables, items, HP, game over, sequence advance, …), completes sidequests, awards and sequences whose hard rules now hold, checks the win/loss guards and runs the post-turn checks (special unlocks, NPC attacks),
 4. optionally narrates the outcome (`narrate=True`).
 
 A handler may call `tw.dialog.choose()` again, which is how multi-step conversations and dialog trees are built. The editor validation warns (`dialog_handler_missing`) when a dialog references a handler that neither the init script nor any sequence or scene helper block defines.
