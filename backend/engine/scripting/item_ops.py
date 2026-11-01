@@ -15,6 +15,7 @@ from backend.engine.scripting.item_transfer import inventory_entry, ref_id
 if TYPE_CHECKING:
     from backend.engine.scripting.context import (
         EntityManagerProxy,
+        NPCProxy,
         ObjectProxy,
         PlayerProxy,
         ScriptChangeset,
@@ -288,6 +289,47 @@ class ItemMover:
             }
         )
         return self._objects.get(new_id)
+
+    def clone_npc(
+        self, npc_id: str, scene_id: Optional[str] = None, hidden: Optional[bool] = None
+    ) -> Optional[NPCProxy]:
+        """Creates a fresh copy of an NPC (full HP, not defeated, empty inventory).
+
+        The copy stands in the original's scene (``"current"``: the protagonist's scene) and
+        keeps its combat profile, group and scripts. Shares the per-script clone limit.
+        """
+        source = self._find_id(self._npcs._entities, npc_id)
+        if source is None or len(self._changeset.cloned_entities) >= MAX_CLONES_PER_SCRIPT:
+            return None
+        data = self._npcs._entities[source]
+        original = str(data.get("cloned_from") or source)
+        new_id = self._clone_id(original)
+        target = str(scene_id or "").strip()
+        if target.lower() in _HERE_TARGETS - {""}:
+            target = self._player_scene()
+        placement = target or str(data.get("current_scene_id") or "") or self._player_scene()
+        is_hidden = bool(data.get("is_hidden")) if hidden is None else bool(hidden)
+        max_hp = data.get("max_hp") or data.get("hp") or 0
+        self._npcs._entities[new_id] = {
+            **data,
+            "id": new_id,
+            "cloned_from": original,
+            "inventory": [],
+            "current_scene_id": placement,
+            "is_hidden": is_hidden,
+            "hp": max_hp,
+            "is_defeated": False,
+        }
+        self._changeset.cloned_entities.append(
+            {
+                "source_id": source,
+                "new_id": new_id,
+                "current_scene_id": placement,
+                "is_hidden": is_hidden,
+                "fresh_npc": True,
+            }
+        )
+        return self._npcs.get(new_id)
 
     def _clone_scene(self, source: str, scene_id: Optional[str]) -> str:
         target = str(scene_id or "").strip()

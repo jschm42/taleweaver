@@ -136,6 +136,10 @@ const availableSnippets = computed(() => {
       code: '# NPCs in the same combat group fight together (applies from the next fight on):\ntw.npcs.set_combat_group("NPC_ID", "GUARDS")\n# Turn an NPC into a bystander who only fights when attacked directly:\n# tw.npcs.set_assist_mode("NPC_ID", "NEVER")\n',
     },
     {
+      label: 'Spawn NPC pack (clone)',
+      code: '# Spawns fresh copies of a (hidden) template NPC; clones share its combat group:\nfor i in range(5):\n    tw.npcs.clone("NPC_ID", scene_id="current", hidden=False)\n',
+    },
+    {
       label: 'Defeat / Kill NPC',
       code: 'tw.npcs.kill("NPC_ID", drop_inventory=True)\n',
     },

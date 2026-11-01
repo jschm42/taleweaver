@@ -13,7 +13,8 @@ from backend.engine.combat.initiative import PLAYER_ID
 from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
-MAX_ENCOUNTER_ENEMIES = 6
+# Combatants per fight besides the protagonist (engaged enemies plus bystanders of the scene).
+MAX_ENCOUNTER_ENEMIES = 20
 
 
 class CombatSetupMixin:

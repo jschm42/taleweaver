@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 _NOT_COPIED = {"pk", "id", "created_at", "updated_at"}
 # Session-state keys of the original that describe where it is, not what it is.
 _PLACEMENT_KEYS = {"current_scene_id", "spatial_position", "is_in_inventory", "inventory"}
+# Session-state keys a fresh NPC clone does not inherit: it starts unhurt and undefeated.
+_FRESH_NPC_KEYS = {
+    "hp",
+    "mana",
+    "stamina",
+    "is_defeated",
+    "is_attackable",
+    "attack_trigger_fired",
+}
 _ROW_FIELDS = ("current_scene_id", "spatial_position", "is_hidden", "is_in_inventory", "inventory")
 
 
@@ -38,7 +47,7 @@ async def _load_entity(db: AsyncSession, session_id: str, entity_id: str) -> Wor
 async def insert_cloned_entities(
     db: AsyncSession, state: SessionState, changeset: ScriptChangeset
 ) -> None:
-    """Creates a session entity row for every item a script cloned."""
+    """Creates a session entity row for every item or NPC a script cloned."""
     if not changeset.cloned_entities:
         return
     states: dict[str, Any] = dict(state.entity_states or {})
@@ -59,10 +68,12 @@ async def insert_cloned_entities(
             is_in_inventory=False,
             inventory=[],
         )
+        skipped = _PLACEMENT_KEYS
+        if clone.get("fresh_npc"):
+            columns["hp"] = source.max_hp or source.hp
+            skipped = _PLACEMENT_KEYS | _FRESH_NPC_KEYS
         db.add(WorldEntity(**columns))
-        inherited = {
-            k: v for k, v in (states.get(source.id) or {}).items() if k not in _PLACEMENT_KEYS
-        }
+        inherited = {k: v for k, v in (states.get(source.id) or {}).items() if k not in skipped}
         states[clone["new_id"]] = {
             **inherited,
             "current_scene_id": clone["current_scene_id"],

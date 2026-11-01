@@ -94,6 +94,9 @@ fields are rejected (no silent typos).
 - **npc**: `goal`, `character`, `inventory`, `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.
+  `strength`…`charisma` and `armor_class` in `update` apply to the protagonist only and are ignored
+  for NPCs; NPC attributes and the main attack live in the editor's combat profile (a `main_attack`
+  can also be passed in `metadata_json` on `create_entity`).
 
 ### Script sandbox limits worth knowing
 

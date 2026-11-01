@@ -19,6 +19,7 @@ from backend.engine.scripting.item_ops import ItemMover
 from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
+from backend.engine.scripting.npc_clone import NPCCloneManagerMixin, NPCCloneMixin
 from backend.engine.scripting.npc_combat_group import (
     NPCCombatGroupManagerMixin,
     NPCCombatGroupMixin,
@@ -426,6 +427,7 @@ class NPCProxy(
     EntityProxy,
     NPCPersonaMixin,
     NPCCombatGroupMixin,
+    NPCCloneMixin,
     NPCDirectionMixin,
     NPCVitalsMixin,
     NPCVisibilityMixin,
@@ -945,6 +947,7 @@ class EntityManagerProxy:
 class NPCManagerProxy(
     NPCPersonaManagerMixin,
     NPCCombatGroupManagerMixin,
+    NPCCloneManagerMixin,
     NPCDirectionManagerMixin,
     NPCVitalsManagerMixin,
     NPCVisibilityManagerMixin,
