@@ -4,6 +4,7 @@ An installed adventure (``AdventureTemplate``) belongs to a library entry when i
 ``origin_id`` equals the entry id. A newer entry version marks the template as updatable in
 "My Adventures", next to the local ``/adventures`` file check of ``adventure_updates``.
 
+- ``library_update`` / ``library_update_for``: the newer library entry of one template.
 - ``merge_library_update``: overlays the library status on ``check_template_update``'s result.
   It uses the cached index only (``LibraryService.peek_library``), never the network.
 - ``update_template``: updates one template from whichever source has the newer version.
@@ -61,6 +62,11 @@ def library_update(template: Any, library: Optional[AdventureLibrary]) -> Option
     if entry is None or not is_newer_version(entry.version, getattr(template, "version", None)):
         return None
     return entry
+
+
+def library_update_for(library: AdventureLibrary, template: Any) -> Optional[LibraryEntry]:
+    """``library_update`` with the arguments in catalog order (used by ``GET /library/updates``)."""
+    return library_update(template, library)
 
 
 def _library_wins(entry: Optional[LibraryEntry], status: dict[str, Any]) -> bool:

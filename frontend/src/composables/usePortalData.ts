@@ -1,6 +1,7 @@
 import { ref, computed, type ComputedRef, type Ref } from 'vue'
 import { api } from '@/composables/useApi'
 import { adventureLibraryService } from '@/services/adventureLibrary'
+import { withLibraryUpdates } from '@/utils/libraryUpdates'
 import { notificationService } from '@/services/notificationService'
 import { usePortalModals, type PortalImportWarningType } from '@/composables/usePortalModals'
 import { usePortalPendingState } from '@/composables/usePortalPendingState'
@@ -216,6 +217,25 @@ export function usePortalData(): UsePortalDataResult {
   const imageStylesCatalog = ref<CatalogTile[]>([])
   const toneCatalog = ref<CatalogTile[]>([])
 
+  // Only the newest check may apply its result; an older one would describe stale templates.
+  let libraryUpdatesRequest = 0
+
+  /**
+   * Marks templates with a newer version in the adventure library, in the background.
+   * The portal never waits for the remote repository; failures leave the cards unchanged.
+   */
+  async function applyLibraryUpdates() {
+    const requestId = ++libraryUpdatesRequest
+    try {
+      const { updates } = await adventureLibraryService.fetchUpdates()
+      if (requestId === libraryUpdatesRequest) {
+        templates.value = withLibraryUpdates(templates.value, updates)
+      }
+    } catch (err) {
+      console.debug('[Portal] Library update check failed', err)
+    }
+  }
+
   /** Loads templates and sessions and synchronizes pending generation state. */
   async function fetchPortalData() {
     try {
@@ -242,6 +262,7 @@ export function usePortalData(): UsePortalDataResult {
             selected_tone: formatToneLabel(entry.selected_tone),
           }))
         : []
+      void applyLibraryUpdates()
       sessions.value = Array.isArray(fetchedSessions)
         ? fetchedSessions.map((entry) => ({
             ...entry,

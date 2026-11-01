@@ -37,6 +37,19 @@ export interface AdventureCatalogResponse {
   stale: boolean
 }
 
+/** An installed adventure with a newer library version (`GET /library/updates`). */
+export interface AdventureLibraryUpdate {
+  template_id: string
+  library_id: string
+  version: string
+}
+
+/** Response of `GET /library/updates`; empty when the repository is unreachable. */
+export interface AdventureLibraryUpdatesResponse {
+  updates: AdventureLibraryUpdate[]
+  stale: boolean
+}
+
 /** Response of `POST /library/install`. */
 export interface AdventureInstallResponse {
   template_id: string | null

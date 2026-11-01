@@ -1,5 +1,9 @@
 import { apiFetch, type ApiFetchInit } from '@/services/http'
-import type { AdventureCatalogResponse, AdventureInstallResponse } from '@/types/adventureLibrary'
+import type {
+  AdventureCatalogResponse,
+  AdventureInstallResponse,
+  AdventureLibraryUpdatesResponse,
+} from '@/types/adventureLibrary'
 
 const LIBRARY_PATH = '/adventures/library'
 // Catalog calls may hit the remote repository, so allow more than the default timeout.
@@ -70,6 +74,13 @@ async function request<T>(path: string, fallbackMessage: string, init: ApiFetchI
 export const adventureLibraryService = {
   fetchCatalog(): Promise<AdventureCatalogResponse> {
     return request('/catalog', 'Failed to load the adventure catalog.', { timeoutMs: CATALOG_TIMEOUT_MS })
+  },
+
+  /** Installed adventures with a newer library version; uses the cached catalog. */
+  fetchUpdates(): Promise<AdventureLibraryUpdatesResponse> {
+    return request('/updates', 'Failed to check the adventure library for updates.', {
+      timeoutMs: CATALOG_TIMEOUT_MS,
+    })
   },
 
   refreshCatalog(): Promise<AdventureCatalogResponse> {

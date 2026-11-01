@@ -123,3 +123,13 @@ def is_version_at_least(current: str, required: str) -> bool:
     required_parts = version_tuple(required)
     length = max(len(current_parts), len(required_parts))
     return _padded(current_parts, length) >= _padded(required_parts, length)
+
+
+def is_newer_version(available: str, installed: str | None) -> bool:
+    """True when ``available`` is a strictly higher version than an installed ``installed``.
+
+    Nothing installed (``None``) is not an update.
+    """
+    if installed is None:
+        return False
+    return available != installed and is_version_at_least(available, installed)
