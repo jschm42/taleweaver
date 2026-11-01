@@ -286,6 +286,28 @@ hidden: yes
 reveal: The player searches the keeper's coat.
 ```
 
+### Something only a script may reveal
+
+```text
+[Scene: PAD_ROOM] Teleporter Room
+A raised metal platform hums next to a control console.
+
+[NPC: STOWAWAY] Bewildered Stowaway
+in: PAD_ROOM
+position: standing on the raised metal platform
+hidden: yes
+reveal: script
+
+[Item: PAD_CONSOLE] Teleporter Console
+in: PAD_ROOM
+type: STATIC
+on_use: |
+  tw.npcs.reveal('STOWAWAY')
+  tw.story.narrate('With a pop, a bewildered stowaway materializes on the platform.')
+```
+
+Without `reveal: script`, the hidden stowaway could already turn up when the player looks at the platform, because a hidden entity without a reveal condition is revealed by searching. With `reveal: script` the Game Master is not told about it, and only the console script brings it in.
+
 ### An ally who turns hostile after the twist
 
 ```text
@@ -379,7 +401,7 @@ type: ANIMAL
   max: 1
 ```
 
-`tw.npcs.hide(id)` takes the NPC out of the story: it disappears from the scene and cannot be talked to, fought or targeted. `tw.npcs.reveal(id)` brings it back where it stands; move it first with `tw.npcs.move(id, scene_id)` to make it reappear elsewhere.
+`tw.npcs.hide(id)` takes the NPC out of the story: it disappears from the scene and cannot be talked to, fought or targeted. `tw.npcs.reveal(id)` brings it back where it stands; move it first with `tw.npcs.move(id, scene_id)` to make it reappear elsewhere. A hidden NPC without a `reveal:` condition can still be found again when the player searches its scene; add `reveal: script` if only a script may bring it back.
 
 ### A route that locks when a chapter starts
 

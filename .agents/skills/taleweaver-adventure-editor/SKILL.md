@@ -90,7 +90,8 @@ fields are rejected (no silent typos).
   or `lock_description` on `create_exit`).
 - **object**: scripts such as `on_interact_*`, `on_pickup_*`, `on_read_*`, `unlock_expression`,
   container `on_unlock_success_*`, `on_items_added_script/_text`, `inventory` (container contents),
-  switch fields, `is_hidden`, `reveal_rule`, `current_scene_id`, ...
+  switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it; npc too),
+  `current_scene_id`, ...
 - **npc**: `goal`, `character`, `inventory`, `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.

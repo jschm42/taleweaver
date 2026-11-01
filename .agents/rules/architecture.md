@@ -93,7 +93,7 @@ graph TD
   * **Switches**: Verify state transitions match allowed `switch_states`.
   * **Constructables**: A `CONSTRUCTABLE` is a recipe (meta item, never visible). Validate that all `combination_ingredients` are reachable and verify `craft_guard_expression`; then consume the ingredients (except `kept_ingredients`) and reveal the hidden `result_item_ids`. Hidden craft-only results (no `reveal_rule`, not another item's `reveals_item_id`) may not be spawned or revealed by the GM.
   * **Quests & Awards (Deterministic Hard Rules & Scripting Guards)**: Validate LLM-proposed quest completions and award grants against defined hard rules (`required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`). If any configured hard rule is unmet, the completion/grant is reverted and recorded as a rule violation, forcing Pass 2 to narrate the unmet condition.
-  * **Hidden Entities**: Require explicit search/inspection actions before revealing hidden NPCs or items.
+  * **Hidden Entities**: Require explicit search/inspection actions before revealing hidden NPCs or items. Entities whose `reveal_rule` is `script` are never shown to the GM as hidden and never auto-discovered; only scripts and deterministic mechanics (crafting, `reveals_item_id`) reveal them (`backend/engine/rules/reveal_policy.py`).
 * **Reversion Mechanism**: Any invalid state change is immediately **reverted** back to its pre-turn database state.
 * Violations are recorded into the `rule_violations` list.
 

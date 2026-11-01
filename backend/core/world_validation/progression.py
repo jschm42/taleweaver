@@ -27,6 +27,7 @@ from backend.core.world_validation.context import (
     ref_ids,
 )
 from backend.core.world_validation.topology import build_adjacency, reachable_scenes
+from backend.engine.rules.reveal_policy import has_discoverable_reveal_rule
 from backend.schemas.validation import ValidationFinding
 
 
@@ -107,7 +108,7 @@ def _craft_only(ctx: ValidationContext, results: set[str]) -> set[str]:
     with_rule = {
         rid
         for rid in results
-        if str((ctx.entities_by_id.get(rid) or {}).get("reveal_rule") or "").strip()
+        if has_discoverable_reveal_rule((ctx.entities_by_id.get(rid) or {}).get("reveal_rule"))
     }
     return results - revealed - with_rule
 

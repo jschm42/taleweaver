@@ -11,6 +11,7 @@ Two detail levels exist:
 from typing import Any, Optional
 
 from backend.engine.interaction.switch_states import state_label
+from backend.engine.rules.reveal_policy import entity_is_script_only
 
 
 def _format_item_refs(items: Optional[list]) -> list[str]:
@@ -243,7 +244,11 @@ def build_location_context(
 def build_hidden_entities_context(
     hidden_entities: Optional[list] = None, for_narration: bool = False
 ) -> str:
-    """GM-only block for hidden NPCs/objects in the current scene with their reveal rules."""
+    """GM-only block for hidden NPCs/objects in the current scene with their reveal rules.
+
+    Entities with the reveal rule ``script`` are left out: only scripts may reveal them.
+    """
+    hidden_entities = [e for e in hidden_entities or [] if not entity_is_script_only(e)]
     if not hidden_entities:
         return ""
 

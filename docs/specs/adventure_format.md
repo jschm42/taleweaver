@@ -158,6 +158,7 @@ Non-Player Characters inhabiting the world.
 | `hp` / `mana` / `stamina` | `number` | NPC combat and interaction resources. |
 | `inventory` | `array` | Items currently held or dropped by the NPC. |
 | `is_hidden` | `boolean` | If true, NPC is not immediately visible without inspecting/searching. |
+| `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden NPC. Empty: revealed when the protagonist searches the scene or the NPC starts speaking. The reserved value `script` means only scripts reveal it. |
 
 ---
 
@@ -190,6 +191,7 @@ Interactive elements, items, containers, and state machines.
 | `image_url` (recipes) | — | `CONSTRUCTABLE` recipes have no image: exports leave out their `image_url` (and the file), and an imported recipe image is ignored. |
 | `craft_guard_expression` | `string` | `CONSTRUCTABLE` recipes: optional guard expression that must hold for crafting. |
 | `reveals_item_id` | `string` | Item spawned or revealed upon interaction/use. |
+| `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden object. Empty: revealed when the protagonist searches the scene. The reserved value `script` means only scripts, crafting or another item's `reveals_item_id` reveal it. |
 | `damage_dice` | `string` | `WEAPON` items: damage formula, e.g. `1d8` or `1d10+2` (default `1d8`). |
 | `weapon_cost_type` / `weapon_cost_value` | `string` / `integer` | `WEAPON` items: resource (`stamina` or `mana`) and amount paid per attack (default `stamina` 20). |
 | `weapon_category` | `string` | `WEAPON` items: `MELEE` (default), `RANGED` or `MAGIC`. |

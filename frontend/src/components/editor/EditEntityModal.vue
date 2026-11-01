@@ -1262,7 +1262,7 @@ const textLogPreviewClass = computed(() => {
                       class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all resize-none shadow-inner"
                     />
                     <span class="block text-[10px] text-slate-500 leading-normal">
-                      GM narration rule that triggers this NPC to be revealed. Leave empty for default scene search reveal.
+                      GM narration rule that triggers this NPC to be revealed. Leave empty for default scene search reveal. Enter <code class="text-slate-400">script</code> to let only scripts reveal it (the GM never discovers it).
                     </span>
                   </div>
                 </div>
@@ -1360,7 +1360,7 @@ const textLogPreviewClass = computed(() => {
                         class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all resize-none shadow-inner"
                       />
                       <span class="block text-[10px] text-slate-500 leading-normal">
-                        Specific action or event that triggers this item to reveal in the room. Leave empty for default search reveal.
+                        Specific action or event that triggers this item to reveal in the room. Leave empty for default search reveal. Enter <code class="text-slate-400">script</code> to let only scripts (or crafting / another item's reveal) reveal it.
                       </span>
                     </div>
                   </div>

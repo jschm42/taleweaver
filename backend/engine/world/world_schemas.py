@@ -336,6 +336,7 @@ class WorldNPCSchema(WorldBaseSchema):
         description=(
             "If is_hidden=True: the condition that reveals this NPC. "
             "E.g. 'If the prot searches under the table', 'If the prot picks up BRASS_KEY', or 'If the NPC speaks'. "
+            "Use 'script' if only a script may reveal it (the GM never discovers it). "
             "Use empty string if not hidden."
         ),
     )
@@ -575,6 +576,7 @@ class WorldObjectSchema(WorldBaseSchema):
         description=(
             "If is_hidden=True: the condition that reveals this object. "
             "E.g. 'If the prot searches the desk', 'If the prot picks up IRON_KEY'. "
+            "Use 'script' if only a script, crafting or reveals_item_id may reveal it. "
             "Use empty string if not hidden."
         ),
     )
