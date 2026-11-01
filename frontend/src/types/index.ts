@@ -273,6 +273,10 @@ export interface CombatEnemyState extends CombatantState {
   armor_mod?: number
   dexterity_mod?: number
   inventory?: InventoryItem[]
+  /** Combat group tag: NPCs sharing it join each other's fights. */
+  combat_group?: string | null
+  /** When the NPC joins a fight it was not attacked in. */
+  assist_mode?: 'GROUP' | 'ANYONE' | 'NEVER'
   engaged?: boolean
   defeated?: boolean
   fled?: boolean

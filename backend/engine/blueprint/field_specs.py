@@ -161,6 +161,16 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "attack_after_scene": _ref("attack_trigger.required_scene_id"),
     "attack_after_defeat": _ref("attack_trigger.required_defeated_npc_id"),
     "attack_guard": _expr("attack_trigger.guard_expression"),
+    "group": FieldSpec("combat_group", ident),
+    "assist": FieldSpec(
+        "assist_mode",
+        choice(
+            "GROUP",
+            "ANYONE",
+            "NEVER",
+            aliases={"any": "ANYONE", "all": "ANYONE", "none": "NEVER", "bystander": "NEVER"},
+        ),
+    ),
     "special_chance": FieldSpec("special_chance", integer),
 }
 for _alias, _stat in STAT_ALIASES.items():

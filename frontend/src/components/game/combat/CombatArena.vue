@@ -126,7 +126,10 @@ function buildView(pending: CombatLogEntry[]): ArenaView {
       out: null,
       initiative: initiativeOf(PLAYER_ID),
     },
-    enemies: enemies.filter(Boolean).map((e) => enemyCard(e, info)),
+    // Bystanders stay off the stage (they are listed in the dialog) unless picked as target.
+    enemies: enemies
+      .filter((e) => e && (e.engaged || e.defeated || e.fled || e.id === props.selectedTargetId))
+      .map((e) => enemyCard(e, info)),
     selectedId: props.selectedTargetId,
     activeId: props.combat.active ? (props.combat.active_actor ?? null) : null,
   }

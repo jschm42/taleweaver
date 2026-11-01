@@ -24,7 +24,13 @@ export interface NpcCombatSettings {
   attack_mode: 'PASSIVE' | 'ATTACK_ON_SIGHT'
   attack_trigger: NpcAttackTrigger | null
   special_chance: number
+  /** NPCs sharing a group fight together; null for none. */
+  combat_group?: string | null
+  /** When the NPC joins a fight it was not attacked in; null = automatic. */
+  assist_mode?: NpcAssistMode | null
 }
+
+export type NpcAssistMode = 'GROUP' | 'ANYONE' | 'NEVER'
 
 export interface NpcCombatProfile {
   strength: number

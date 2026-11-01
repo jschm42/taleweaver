@@ -169,6 +169,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
 | | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
 | **NPC combat** *(metadata)* | `attack_mode: ATTACK_ON_SIGHT` | The NPC starts turn-based combat as soon as the protagonist enters its scene. |
+| | `combat_group`, `assist_mode` (`GROUP` / `ANYONE` / `NEVER`) | Not a trigger: decide which NPCs in the scene join a fight they were not attacked in. NPCs sharing a `combat_group` fight together; NPCs without one are bystanders by default. See [Combat groups](world-builder-syntax.md#npc-id-name). |
 | | `attack_trigger` *(Hard Rules + Guard)* | `required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`: the NPC attacks once when all are met while the protagonist shares its scene. |
 | **Special attacks** (protagonist & NPC `special_actions` entries) | `on_success_script`, `..._text` | Executes after a successful d20 success roll. A `special` dict (`id`, `name`, `caster`, `target`, `success`, `crit`, `fumble`, `roll`, `dc`) is in scope. |
 | | `on_failure_script`, `..._text` | Executes when the success roll fails. |
@@ -442,6 +443,8 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.set_character(npc_id: str, text: str)`: Replaces the NPC's personality (the `character` field). The GM reads it on every turn, so the NPC talks and acts differently from then on (friendlier, aggressive, funny, frightened, …). An empty text clears it. Whitespace is collapsed to a single line and the text is cut at 1,000 characters.
 - `tw.npcs.set_goal(npc_id: str, text: str)`: Replaces what the NPC wants (the `goal` field), with the same rules.
 - `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
+- `tw.npcs.set_combat_group(npc_id: str, group: str)`: Moves the NPC into another combat group (any tag, normalized to an upper-case ID). NPCs in the same group fight together: when one of them fights, the others in its scene join. An empty text removes the NPC from every group, which makes it a bystander unless its assist mode says otherwise. Example (a bribed guard stops helping his squad): `tw.npcs.set_combat_group('GATE_GUARD', '')`.
+- `tw.npcs.set_assist_mode(npc_id: str, mode: str)`: Sets when the NPC joins a fight it was not attacked in: `'GROUP'` (a member of its group fights), `'ANYONE'` (any fight in its scene) or `'NEVER'` (bystander; it only fights when attacked directly). An empty text restores the automatic mode (`GROUP` with a group, `NEVER` without). Other values raise an error. Both changes apply to the current game only and take effect when the next fight starts.
 - `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. The ID is matched exactly, then case-insensitively, then against the NPC's name. An unknown ID does not raise: it returns a detached proxy whose changes have no effect, and the server log shows `[Script Warning] Unknown entity ID '...'`, so check the log when a change seems to be ignored. Available properties and methods on `NPCProxy`:
   - `.name`, `.hp`, `.mana`, `.stamina`, `.is_defeated`, `.current_scene_id`, `.inventory`
   - `.say(text: str)` / `.say_directed(direction: str)`
@@ -462,6 +465,7 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.consume(item_id: str) -> dict | None` (see `tw.npcs.consume`)
   - `.character`, `.goal` *(read/write)*: assigning (`npc.character = "Gruff, impatient"`) is the same as calling `.set_character()` / `.set_goal()`
   - `.set_character(text)`, `.set_goal(text)`, `.add_trait(trait)`, `.remove_trait(trait)`, `.has_trait(trait) -> bool`
+  - `.combat_group` *(str, `""` without a group)*, `.assist_mode` *(effective mode: `GROUP`, `ANYONE` or `NEVER`)*, `.set_combat_group(group)`, `.set_assist_mode(mode)` (see `tw.npcs.set_combat_group`)
 
   Persona changes apply to the current game only: they are stored on the session's copy of the NPC, and the adventure template keeps its original text. To restore the original later, store it first, e.g. `tw.vars.set('brom_bio', tw.npcs.get('BROM').character)`. A persona change shapes the GM's narration and dialogue from the next turn on; it does not start a fight on its own (use `.attack()` for that). The NPC cards in the in-game Debug dialog show the current character and goal, so you can check that a change was applied.
 

@@ -132,6 +132,10 @@ const availableSnippets = computed(() => {
       code: '# Changes how the GM plays the NPC for the rest of this game:\ntw.npcs.set_character("NPC_ID", "Hostile and suspicious; short, rude answers.")\n# Or add / remove a single trait:\n# tw.npcs.add_trait("NPC_ID", "drunk")\n# tw.npcs.remove_trait("NPC_ID", "drunk")\n',
     },
     {
+      label: 'Change NPC combat allies',
+      code: '# NPCs in the same combat group fight together (applies from the next fight on):\ntw.npcs.set_combat_group("NPC_ID", "GUARDS")\n# Turn an NPC into a bystander who only fights when attacked directly:\n# tw.npcs.set_assist_mode("NPC_ID", "NEVER")\n',
+    },
+    {
       label: 'Defeat / Kill NPC',
       code: 'tw.npcs.kill("NPC_ID", drop_inventory=True)\n',
     },

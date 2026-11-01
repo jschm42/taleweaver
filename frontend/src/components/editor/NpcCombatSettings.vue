@@ -5,7 +5,7 @@ import type { SpecialAttack } from '@/types'
 import HardRuleTriggersEditor, { type HardRule } from '@/components/editor/HardRuleTriggersEditor.vue'
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
 import NpcCombatProfile from '@/components/editor/NpcCombatProfile.vue'
-import { specialAttackService } from '@/services/specialAttackService'
+import { specialAttackService, type NpcAssistMode } from '@/services/specialAttackService'
 
 type NpcLike = {
   id: string
@@ -23,6 +23,8 @@ type NpcLike = {
     attack_mode?: string
     attack_trigger?: HardRule | null
     special_chance?: number
+    combat_group?: string | null
+    assist_mode?: NpcAssistMode | null
     special_actions?: SpecialAttack[]
   } | null
 }
@@ -40,6 +42,15 @@ const emit = defineEmits<{
 const attackOnSight = ref(false)
 const trigger = ref<HardRule>({})
 const specialChance = ref(40)
+const combatGroup = ref('')
+const assistMode = ref<NpcAssistMode | ''>('')
+
+const ASSIST_OPTIONS: Array<{ value: NpcAssistMode | ''; label: string }> = [
+  { value: '', label: 'Automatic (group members if a group is set, otherwise never)' },
+  { value: 'GROUP', label: 'When a member of its group fights' },
+  { value: 'ANYONE', label: 'In every fight in its scene' },
+  { value: 'NEVER', label: 'Never (bystander, only when attacked itself)' },
+]
 const saving = ref(false)
 const note = ref('')
 const error = ref('')
@@ -49,6 +60,8 @@ watch(() => [props.npc.id, JSON.stringify(props.npc.metadata_json ?? {})], () =>
   attackOnSight.value = meta.attack_mode === 'ATTACK_ON_SIGHT'
   trigger.value = { ...(meta.attack_trigger ?? {}) }
   specialChance.value = typeof meta.special_chance === 'number' ? meta.special_chance : 40
+  combatGroup.value = meta.combat_group ?? ''
+  assistMode.value = meta.assist_mode ?? ''
 }, { immediate: true })
 
 async function saveBehaviour(): Promise<void> {
@@ -61,6 +74,8 @@ async function saveBehaviour(): Promise<void> {
       attack_mode: attackOnSight.value ? 'ATTACK_ON_SIGHT' : 'PASSIVE',
       attack_trigger: hasRule ? trigger.value : null,
       special_chance: specialChance.value,
+      combat_group: combatGroup.value.trim() || null,
+      assist_mode: assistMode.value || null,
     })
     note.value = 'Saved.'
     emit('saved')
@@ -106,6 +121,27 @@ async function saveBehaviour(): Promise<void> {
         scene-hint="Protagonist has reached scene X"
         npc-hint="Protagonist has defeated NPC X"
       />
+
+      <div class="grid gap-3 sm:grid-cols-2 p-4 bg-black/30 border border-white/10 rounded-2xl">
+        <label class="block space-y-1.5">
+          <span class="block text-xs font-bold text-slate-300">Combat group</span>
+          <input
+            v-model="combatGroup"
+            type="text"
+            maxlength="64"
+            placeholder="e.g. BANDITS"
+            class="w-full px-3 py-2 rounded-xl bg-slate-950/60 border border-white/10 text-sm text-white font-mono uppercase"
+          />
+          <span class="block text-[10px] text-slate-500">NPCs with the same group fight together: attacking one pulls the others in its scene into the fight.</span>
+        </label>
+        <label class="block space-y-1.5">
+          <span class="block text-xs font-bold text-slate-300">Joins a fight</span>
+          <select v-model="assistMode" class="w-full px-3 py-2 rounded-xl bg-slate-950/60 border border-white/10 text-sm text-white">
+            <option v-for="opt in ASSIST_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+          <span class="block text-[10px] text-slate-500">Bystanders are listed apart in the battle dialog and only fight when the protagonist attacks them.</span>
+        </label>
+      </div>
 
       <label class="block space-y-1.5 p-4 bg-black/30 border border-white/10 rounded-2xl">
         <span class="flex items-center justify-between text-xs font-bold text-slate-300">

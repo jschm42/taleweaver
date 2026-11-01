@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
 import backend.api.routes.adventures.gameplay_logic as gl
+from backend.api.routes.adventures.combat.allies import CombatAlliesMixin
 from backend.api.routes.adventures.combat.banter import CombatBanterMixin
 from backend.api.routes.adventures.combat.combatants import CombatCombatantMixin
 from backend.api.routes.adventures.combat.consumables import CombatConsumableMixin
@@ -46,6 +47,7 @@ class TurnCombatManager(
     CombatRoundMixin,
     CombatBanterMixin,
     CombatCombatantMixin,
+    CombatAlliesMixin,
     CombatConsumableMixin,
     CombatLootMixin,
     CombatNarrationMixin,

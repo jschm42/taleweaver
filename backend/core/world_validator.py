@@ -12,7 +12,14 @@ from collections.abc import Callable
 from typing import Any
 
 from backend.core.script_validator import check_scripts_and_guards
-from backend.core.world_validation import entities, progression, recipes, story, topology
+from backend.core.world_validation import (
+    combat_groups,
+    entities,
+    progression,
+    recipes,
+    story,
+    topology,
+)
 from backend.core.world_validation.context import ValidationContext
 from backend.schemas.validation import ValidationFinding
 
@@ -36,6 +43,7 @@ CHECKS: tuple[Check, ...] = (
     entities.check_npc_stats,
     entities.check_npc_references,
     entities.check_npc_combat_profile,
+    combat_groups.check_lonely_combat_groups,
     entities.check_reveal_targets,
     entities.check_protagonist_items,
     story.check_image_coverage,

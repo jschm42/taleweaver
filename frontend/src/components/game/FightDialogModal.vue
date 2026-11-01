@@ -5,6 +5,7 @@ import type { CharacterSheet, CombatEnemyState, CombatState, InventoryItem } fro
 import { getImageUrl, getItemIcon, getTypeColor, hasRenderableImagePath } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
 import CombatAbilityHand from './combat/CombatAbilityHand.vue'
+import CombatBystanders from './combat/CombatBystanders.vue'
 import CombatItemTray from './combat/CombatItemTray.vue'
 import CombatLogPanel from './combat/CombatLogPanel.vue'
 import InitiativeTrack from './combat/InitiativeTrack.vue'
@@ -109,6 +110,14 @@ function isAlive(enemy: CombatEnemyState | undefined): boolean {
 }
 
 const selectedTarget = computed(() => enemies.value.find((e) => e.id === selectedTargetId.value) ?? null)
+/** NPCs in the scene who have not joined the fight; they are listed apart from the stage. */
+const bystanders = computed(() => enemies.value.filter((e) => !e.engaged && isAlive(e)))
+const fighterCount = computed(() => enemies.value.length - bystanders.value.length)
+
+function onBystanderHover(id: string, event: MouseEvent): void {
+  const entity = tooltipFor(id)
+  if (entity) emit('entityHover', entity, event)
+}
 
 function ensureValidTarget(): void {
   if (isAlive(selectedTarget.value ?? undefined)) return
@@ -290,7 +299,7 @@ onBeforeUnmount(() => {
                 @playing="arenaPlaying = $event"
                 @hover="onArenaHover"
               />
-              <p v-if="combat.active && enemies.length > 1" class="absolute bottom-1 inset-x-0 text-center text-[11px] opacity-70 pointer-events-none">
+              <p v-if="combat.active && fighterCount > 1" class="absolute bottom-1 inset-x-0 text-center text-[11px] opacity-70 pointer-events-none">
                 Click a card in the enemy stack or a portrait in the initiative order to choose your target.
               </p>
             </div>
@@ -311,6 +320,14 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="flex flex-col gap-3 min-h-0 max-h-[40vh] md:max-h-none">
+            <CombatBystanders
+              v-if="combat.active && bystanders.length > 0"
+              :bystanders="bystanders"
+              :selected-target-id="selectedTargetId"
+              @select="selectTarget"
+              @hover="onBystanderHover"
+              @leave="emit('entityLeave')"
+            />
             <CombatLogPanel class="flex-1" :entries="visibleLogs" :total="logs.length" />
 
             <section v-if="isLootPhase && !arenaPlaying" class="tw-combat-panel shrink-0 p-3">

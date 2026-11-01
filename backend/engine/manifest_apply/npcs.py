@@ -39,6 +39,8 @@ _METADATA_FIELDS = (
     "attack_mode",
     "attack_trigger",
     "special_chance",
+    "combat_group",
+    "assist_mode",
     "on_defeat_script",
     "on_defeat_text",
     "on_protagonist_enters_scene_script",

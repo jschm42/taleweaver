@@ -298,6 +298,24 @@ on_defeat: tw.flags.set('INES_STOPPED')
 
 Set the flag `INES_EXPOSED` in a rule, dialog or script when the twist happens. From that moment, Ines attacks.
 
+### A gang that fights together, next to a bystander
+
+```text
+[NPC: VAREK] Varek the Bandit Chief
+in: ROAD
+group: bandits
+attack: on_sight
+
+[NPC: GRIM] Grim
+in: ROAD
+group: bandits
+
+[NPC: MIRA] Mira the Peddler
+in: ROAD
+```
+
+Varek attacks on sight and Grim joins him, because they share the combat group `BANDITS`. Mira has no group, so she is a bystander: the battle dialog lists her apart from the enemies, and she only fights if the player attacks her. Use `assist: anyone` for an NPC who joins every fight in its scene (a guard dog) and `assist: never` for a group member who stays out until attacked. To make the gang turn on one of its own after a twist, move him out of the group in a script: `tw.npcs.set_combat_group('GRIM', '')`.
+
 ### An NPC whose mood changes with the player's behavior
 
 ```text

@@ -389,6 +389,21 @@ class WorldNPCSchema(WorldBaseSchema):
         None,
         description="Percent chance (0-100) per combat turn that the NPC uses one of its special_actions. Default 40.",
     )
+    combat_group: Optional[str] = Field(
+        None,
+        description=(
+            "Optional group tag (e.g. 'BANDITS'). NPCs sharing a group fight together: attacking one "
+            "pulls the others in the same scene into the fight. Use null for none."
+        ),
+    )
+    assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
+        None,
+        description=(
+            "When the NPC joins a fight it was not attacked in: GROUP (a group member fights), "
+            "ANYONE (any fight in its scene) or NEVER (bystander). Null: GROUP with a combat_group, "
+            "otherwise NEVER."
+        ),
+    )
     on_defeat_script: Optional[str] = Field(
         default="",
         description="Optional script executed when the NPC is defeated. Use empty string for none.",

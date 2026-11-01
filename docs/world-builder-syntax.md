@@ -49,7 +49,7 @@ Use `->` for an exit (the AI decides the direction rules) or `<->` to force a tw
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 **Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
 
@@ -65,6 +65,36 @@ main_attack: Halberd | 1d10 | melee | str | cost: stamina 5
 `weapon` and `armor` (equipped item IDs) are **deprecated**. They still work as a fallback (an NPC without `main_attack` fights with its weapon item, and armor bonuses still count), but the parser warns. Use `main_attack` and `ac` instead.
 
 `killable: no` is the editor's **NPC can be damaged** switch turned off: the NPC never loses HP (scripts, Game Master, combat), cannot be defeated and cannot be fought.
+
+**Combat groups.** When a fight starts, every attackable NPC in the scene is part of the encounter, but only some of them fight. `group: BANDITS` puts NPCs into a combat group (any tag; it is normalized to an upper-case ID): when one member fights, the other members in the same scene join right away, and attacking an idle member later pulls its whole group in. `assist` sets when an NPC joins a fight it was not attacked in:
+
+| `assist` | Joins when |
+|---|---|
+| `group` | a member of its group fights (default for NPCs with a `group`) |
+| `anyone` | any fight starts in its scene (guard dog, berserker) |
+| `never` | never; it only fights when the protagonist attacks it directly (default for NPCs without a `group`) |
+
+NPCs that do not fight are **bystanders**: the battle dialog lists them in a collapsed *Bystanders* section, away from the enemy cards. They take no turns, and the fight is won once every engaged enemy is down. `attack: on_sight` NPCs always fight, and their group joins them.
+
+```text
+[NPC: VAREK] Varek the Bandit Chief
+in: ROAD
+group: bandits
+attack: on_sight
+
+[NPC: GRIM] Grim
+in: ROAD
+group: bandits
+
+[NPC: HOUND] Varek's Hound
+in: ROAD
+assist: anyone
+
+[NPC: MIRA] Mira the Peddler
+in: ROAD
+```
+
+Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
 
 ### `[Item: ID] Name`
 Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switch: ...]`/`[Mechanism: ...]`, `[Weapon: ...]`, `[Recipe: ...]` (CONSTRUCTABLE). `portable` defaults to `no` for STATIC items and switches and to `yes` for everything else; a `portable: yes` switch (e.g. a remote) can be taken and flipped from the inventory.
@@ -116,8 +146,9 @@ Award keys of newly generated adventures are stored in upper case (`brass lever`
 engaged enemy, `area: splash` (or `splash 2`) hits the target plus 1 (or 2) neighbours in the
 encounter order, who take half. The cost is paid once and damage is rolled once. Without `save`,
 one success roll is compared against each target's AC (or `dc`). With `save: dex`, every target
-rolls a saving throw against `dc` (default 12) and takes half on a success. Passive NPCs of the
-encounter are hit too and then join the fight; `spare_passive: yes` leaves them out.
+rolls a saving throw against `dc` (default 12) and takes half on a success. Bystanders of the
+encounter (passive NPCs) are hit too and then join the fight, together with their combat group;
+`spare_passive: yes` leaves them out.
 
 ```text
 [Protagonist] Mara Voss

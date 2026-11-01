@@ -20,7 +20,7 @@ Four optional fields on a special action (`SpecialActionSchema`, normalized in
 | `target_scope` | `SINGLE`, `SPLASH`, `ALL_ENEMIES` | `SINGLE` | Which combatants receive the `target` effects. |
 | `splash_radius` | `1`-`2` | `1` | `SPLASH` only: neighbours before and after the primary target in the encounter order. |
 | `save_stat` | `strength` ... `charisma` | none | Optional saving throw for every target (see 3.2). |
-| `spares_passive` | `true` / `false` | `false` | Leaves passive encounter NPCs out. By default an area attack also hits them: attackable NPCs in the scene that are part of the encounter with `engaged: false` (PASSIVE tag on their card, no initiative roll). A hit passive NPC is engaged and joins the fight, exactly like attacking it directly (`_engage` in `player_actions.py`). |
+| `spares_passive` | `true` / `false` | `false` | Leaves passive encounter NPCs out. By default an area attack also hits them: attackable NPCs in the scene that are part of the encounter with `engaged: false` (bystanders: listed in the dialog's collapsed *Bystanders* section, no initiative roll). A hit passive NPC is engaged and joins the fight, exactly like attacking it directly (`_engage` in `player_actions.py`), and its combat group joins with it (`_rally_allies` in `combat/allies.py`). |
 
 `self` effects are applied exactly once, and only when at least one target is affected.
 An area scope only matters for abilities with at least one `target` effect.

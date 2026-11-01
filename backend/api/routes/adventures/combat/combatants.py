@@ -80,6 +80,8 @@ class CombatCombatantMixin:
             "special_actions": normalize_special_actions(meta.get("special_actions")),
             "special_chance": meta.get("special_chance"),
             "inventory": await self._normalize_loot_items(list(npc.inventory or [])),
+            "combat_group": self._npc_combat_group(npc),
+            "assist_mode": self._npc_assist_mode(npc),
             "engaged": engaged,
             "defeated": False,
             "fled": False,
