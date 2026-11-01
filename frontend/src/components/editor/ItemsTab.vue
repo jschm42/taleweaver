@@ -43,6 +43,7 @@ const emit = defineEmits<{
   (e: 'request-move-item-to-scene', itemId: string, name: string, currentSceneId: string): void
   (e: 'request-delete-item', itemId: string, name: string): void
   (e: 'export-entity', kind: 'item', id: string, label: string): void
+  (e: 'duplicate-entity', kind: 'item', id: string): void
   (e: 'import-entity', kind: 'item'): void
 }>()
 
@@ -81,6 +82,7 @@ const tileListeners = {
   'request-move-item-to-scene': (id: string, name: string, scene: string) => emit('request-move-item-to-scene', id, name, scene),
   'request-delete-item': (id: string, name: string) => emit('request-delete-item', id, name),
   'export-entity': (kind: 'item', id: string, label: string) => emit('export-entity', kind, id, label),
+  'duplicate-entity': (kind: 'item', id: string) => emit('duplicate-entity', kind, id),
 }
 
 const LOG_BADGE = [{ label: 'LOG', class: 'border-cyan-500/40 bg-cyan-500/20 text-cyan-200' }]

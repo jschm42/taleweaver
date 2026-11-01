@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from backend.engine.combat.initiative import PLAYER_ID
+from backend.engine.combat.npc_attack import main_attack_profile
 from backend.engine.combat.special_attacks import normalize_special_actions
 from backend.engine.combat.weapons import equipped_weapons, normalize_weapon_config
 from backend.engine.rules.rule_engine import RESOURCE_CAP
@@ -138,7 +139,8 @@ class CombatCombatantMixin:
 
     def _enemy_damage_dice(self, enemy: WorldEntity) -> str:
         meta = enemy.metadata_json if isinstance(enemy.metadata_json, dict) else {}
-        dice = meta.get("damage_dice")
+        configured = main_attack_profile(meta.get("main_attack"))
+        dice = configured["dice"] if configured else meta.get("damage_dice")
         return dice if _valid_dice(dice) else "1d6"
 
     async def _held_weapon_profile(self, slot: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -182,7 +184,12 @@ class CombatCombatantMixin:
         )
 
     async def _enemy_weapon_profile(self, npc: WorldEntity) -> dict[str, Any]:
-        weapon_id = (npc.metadata_json or {}).get("equipped_weapon_id")
+        """Configured main attack, else the deprecated equipped weapon item, else unarmed."""
+        meta = npc.metadata_json if isinstance(npc.metadata_json, dict) else {}
+        configured = main_attack_profile(meta.get("main_attack"))
+        if configured:
+            return configured
+        weapon_id = meta.get("equipped_weapon_id")
         weapon = await self._load_session_entity(weapon_id)
         if not weapon:
             return _weapon_profile("unarmed attack", {}, "1d6")

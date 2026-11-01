@@ -170,6 +170,44 @@ def weapon_effects(raw: str) -> list[dict[str, str]]:
     return effects
 
 
+_ATTACK_CATEGORIES = ("MELEE", "RANGED", "MAGIC")
+_ATTACK_DICE_RX = re.compile(r"\d+d\d+(?:[+-]\d+)?")
+_ROLL_STAT_NAMES = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
+
+
+def _attack_option(attack: dict[str, Any], part: str) -> None:
+    """One ``|`` part of a main attack: dice, category, stat or ``key: value``."""
+    key, sep, value = (p.strip() for p in part.partition(":"))
+    word = part.strip().lower().replace(" ", "")
+    if not sep and _ATTACK_DICE_RX.fullmatch(word):
+        attack["damage_dice"] = word
+    elif not sep and word.upper() in _ATTACK_CATEGORIES:
+        attack["category"] = word.upper()
+    elif not sep and STAT_ALIASES.get(word) in _ROLL_STAT_NAMES:
+        attack["hit_stat"] = STAT_ALIASES[word]
+    elif sep and key.lower() == "cost":
+        attack["cost_type"], attack["cost"] = _resource_cost(value)
+    elif sep and key.lower() in ("effects", "hit_effects"):
+        attack["effects"] = weapon_effects(value)
+    else:
+        raise ValueError(
+            f"unknown main attack part '{part.strip()}' (use dice like 1d8, melee/ranged/magic, "
+            "a stat like str, 'cost: stamina 5' or 'effects: target stamina -1d4')"
+        )
+
+
+def main_attack(raw: str) -> dict[str, Any]:
+    """``Longsword | 1d8+1 | melee | str | cost: stamina 5 | effects: target hp -1``."""
+    name, *parts = [part.strip() for part in raw.split("|")]
+    if not name:
+        raise ValueError("expected an attack name first, e.g. 'Longsword | 1d8 | melee | str'")
+    attack: dict[str, Any] = {"name": name, "damage_dice": "1d6"}
+    for part in parts:
+        if part:
+            _attack_option(attack, part)
+    return attack
+
+
 def ability_cost(raw: str) -> dict[str, Any]:
     kind, amount = _resource_cost(raw)
     return {"cost_type": kind, "cost": amount}

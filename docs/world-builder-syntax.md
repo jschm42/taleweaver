@@ -38,7 +38,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
-Nested `[Ability: ID] Name` blocks define special actions (see below).
+Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: ID] Name` blocks define non-combat talents (see below).
 
 ### `[Scene: ID] Name`
 `decor` (up to 7 decorative objects, comma-separated), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
@@ -49,7 +49,20 @@ Use `->` for an exit (the AI decides the direction rules) or `<->` to force a tw
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor`, `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+
+**Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
+
+```text
+[NPC: GATE_GUARD] Gate Guard
+in: GATE
+str: 14
+dex: 11
+ac: 16
+main_attack: Halberd | 1d10 | melee | str | cost: stamina 5
+```
+
+`weapon` and `armor` (equipped item IDs) are **deprecated**. They still work as a fallback (an NPC without `main_attack` fights with its weapon item, and armor bonuses still count), but the parser warns. Use `main_attack` and `ac` instead.
 
 `killable: no` is the editor's **NPC can be damaged** switch turned off: the NPC never loses HP (scripts, Game Master, combat), cannot be defeated and cannot be fought.
 
@@ -118,6 +131,23 @@ encounter are hit too and then join the fight; `spare_passive: yes` leaves them 
   save: dex
 ```
 
+### `[Talent: ID] Name` (inside the Protagonist)
+Non-combat talents such as *Mind Reading* or an absurd *Gossip Attack*. The player uses them from the Talents menu, the right-click menu of an NPC or item, or by typing `use <talent>` / `cast <talent> on <target>`. The block's text is the description.
+`target` (`none`, `npc`, `item`, `any`; default none), `cost` (`mana 10` / `stamina 5`), `uses` (uses per adventure; default unlimited), `gm` (instruction for the Game Master on what the talent reveals or causes), `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_use` (script, `talent` dict in scope) (+ `on_use_text`).
+
+```text
+[Protagonist] Mira
+  [Talent: MIND_READING] Mind Reading
+  Hear what a person really thinks for a moment.
+  target: npc
+  cost: mana 10
+  uses: 3
+  gm: Reveal the target's true thoughts in one italic sentence.
+  on_use: tw.vars.set('minds_read', tw.vars.get('minds_read', 0) + 1)
+```
+
+Put the readable name after the bracket (`[Talent: MIND_READING] Mind Reading`); players type that name.
+
 ## Builder modes
 
 - **Strict Adherence**: the AI keeps the blueprint's structure and the sequence order, and only adds entities that are needed to make it playable.
@@ -160,6 +190,8 @@ text: Day 212 - the bulkhead code is the year the ship was launched, 47-11.
 in: CORRIDOR
 type: MONSTER
 hp: 40
+ac: 14
+main_attack: Stun Prod | 1d6 | melee | dex
 attack_when_holding: CORE_KEY
   [Ability: TASER] Taser Burst
   kind: ATTACK

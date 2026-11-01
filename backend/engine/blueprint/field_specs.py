@@ -23,6 +23,7 @@ from backend.engine.blueprint.converters import (
     ident,
     ident_list,
     integer,
+    main_attack,
     movement,
     one_way,
     stat_bonus,
@@ -148,6 +149,8 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "hidden": FieldSpec("is_hidden", boolean),
     "reveal": FieldSpec("reveal_rule"),
     "inventory": _refs("inventory"),
+    "main_attack": FieldSpec("main_attack", main_attack),
+    # Deprecated: NPC equipment items (fallback only). Use main_attack and ac instead.
     "weapon": _ref("equipped_weapon_id"),
     "armor": _ref("equipped_armor_id"),
     "attack": FieldSpec(
@@ -160,6 +163,8 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "attack_guard": _expr("attack_trigger.guard_expression"),
     "special_chance": FieldSpec("special_chance", integer),
 }
+for _alias, _stat in STAT_ALIASES.items():
+    NPC_KEYS[_alias] = FieldSpec(_stat, integer)
 _hook(NPC_KEYS, "on_defeat", "on_defeat")
 _hook(NPC_KEYS, "on_meet", "on_protagonist_enters_scene")
 _hook(NPC_KEYS, "on_interact", "on_interact")
@@ -326,6 +331,25 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
 _hook(ABILITY_KEYS, "on_success", "on_success")
 _hook(ABILITY_KEYS, "on_fail", "on_failure")
 
+TALENT_KEYS: dict[str, FieldSpec] = {
+    "target": FieldSpec(
+        "target_type",
+        choice("NONE", "NPC", "ITEM", "ANY", aliases={"object": "ITEM", "character": "NPC"}),
+    ),
+    "cost": FieldSpec("*", ability_cost),
+    "uses": FieldSpec("max_uses", integer),
+    "gm": FieldSpec("gm_hint"),
+    "gm_hint": FieldSpec("gm_hint"),
+    **{key: spec for key, spec in ABILITY_KEYS.items() if key.startswith(("locked", "unlock"))},
+}
+_hook(TALENT_KEYS, "on_use", "on_use")
+
+# (tag kind, key) -> what to use instead; the parser warns but still applies the key.
+DEPRECATED_KEYS: dict[tuple[str, str], str] = {
+    ("npc", "weapon"): "use main_attack (no item needed)",
+    ("npc", "armor"): "use ac",
+}
+
 KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "world": WORLD_KEYS,
     "protagonist": PROTAGONIST_KEYS,
@@ -339,6 +363,7 @@ KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "sidequest": SIDEQUEST_KEYS,
     "award": AWARD_KEYS,
     "ability": ABILITY_KEYS,
+    "talent": TALENT_KEYS,
 }
 
 

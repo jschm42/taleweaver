@@ -313,6 +313,56 @@ character: Grieving, polite, talkative
 
 The GM reads `character` on every turn, so from then on Tobin talks like a bitter man, in this game only. Use `tw.npcs.add_trait('CLERK', 'drunk')` / `remove_trait(...)` for a single trait, or `set_goal(...)` to change what the NPC wants. The change affects dialogue, not combat: pair it with `attack_guard` (see above) if the NPC should also fight.
 
+### A guard with a real weapon and armor (no items needed)
+
+```text
+[NPC: CAPTAIN] Captain Varga
+in: QUAY
+hp: 70
+str: 15
+dex: 12
+ac: 17
+main_attack: Sabre | 1d8+1 | melee | str
+special_chance: 25
+```
+
+`main_attack` replaces the old way of equipping a weapon item on the NPC, and `ac` replaces the armor item. The NPC's stats feed its attack and special rolls; `ac` is what the protagonist must roll to hit it.
+
+### A talent that opens a puzzle
+
+```text
+[Protagonist] Mira
+  [Talent: MIND_READING] Mind Reading
+  Hear what a person really thinks for a moment.
+  target: npc
+  cost: mana 10
+  gm: Reveal the target's true thoughts in one italic sentence.
+  on_use: |
+    if talent['target_id'] == 'CLERK':
+        tw.flags.set('CLERK_SECRET_KNOWN')
+        tw.story.direct('Tobin is thinking about the ledger hidden behind the stove.')
+```
+
+The engine pays the cost and runs `on_use` deterministically; the Game Master then narrates the moment. Gate later content on the flag (`guard: tw.flags.get('CLERK_SECRET_KNOWN')`) so the talent becomes a real solution path.
+
+### An NPC who leaves the story
+
+```text
+[NPC: DOG_BUSTER] Buster
+in: BACKYARD
+type: ANIMAL
+
+[Sequence: 1] The Backyard
+  [Rule: CAT_APPEARS] A cat shows up in the backyard.
+  script: |
+    tw.npcs.hide('DOG_BUSTER')
+    tw.objects.reveal('MEATY_BONE')
+    tw.story.narrate('Buster bolts after the cat and vanishes through the hedge.')
+  max: 1
+```
+
+`tw.npcs.hide(id)` takes the NPC out of the story: it disappears from the scene and cannot be talked to, fought or targeted. `tw.npcs.reveal(id)` brings it back where it stands; move it first with `tw.npcs.move(id, scene_id)` to make it reappear elsewhere.
+
 ### A route that locks when a chapter starts
 
 ```text

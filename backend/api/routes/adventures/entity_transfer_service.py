@@ -80,6 +80,7 @@ _PROTAGONIST_STATS_MANIFEST_KEYS = (
     "on_status_change_script",
     "on_status_change_text",
     "special_actions",
+    "talents",
 )
 
 _ID_MAX_LENGTH = 30

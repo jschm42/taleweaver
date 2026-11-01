@@ -7,6 +7,7 @@ import type { ChatMessage } from '@/types'
 import CommandPopup from '@/components/game/CommandPopup.vue'
 import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import GameActionBar from '@/components/game/GameActionBar.vue'
+import TalentMenu from '@/components/game/TalentMenu.vue'
 import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
@@ -1451,7 +1452,16 @@ onUnmounted(() => {
       @use-suggestion="handleSuggestionSelect"
       @shuffle-suggestions="handleSuggestionShuffle"
       @select-action="emit('selectAction', $event)" 
-    />
+    >
+      <template #leading>
+        <TalentMenu
+          :sheet="props.sheet"
+          :entities="props.entities"
+          :disabled="!!props.inputLocked || isPassRunning || !canSendInput || !!props.sheet?.agent_active"
+          @use="(command) => handleSend(command)"
+        />
+      </template>
+    </GameActionBar>
 
     <!-- Input bar -->
     <div class="border-t border-slate-800 bg-slate-950 p-3 sm:p-4 shrink-0 relative">

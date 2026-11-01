@@ -1,6 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { gameCommandService } from '@/services/gameCommandService'
 import { isConsumableEntity, normalizeHoverEntity } from '@/services/hoverEntityService'
+import { sheetTalents, talentAcceptsEntity, talentCommand, talentCostLabel, talentUsesLeft } from '@/utils/talents'
 
 type ContextMenuState = {
   x: number
@@ -147,6 +148,16 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     mousePos.value = { x: event.clientX, y: event.clientY }
   }
 
+  /** "Use <talent>" entries for every unlocked talent that can target ``entity``. */
+  const talentMenuItems = (entity: any, entityType: string) => {
+    const sheet = playerSheet?.value
+    if (!entity?.id || !sheet) return []
+    return sheetTalents(sheet)
+      .filter((t) => talentAcceptsEntity(t, entityType))
+      .filter((t) => talentUsesLeft(t, sheet.talent_uses) !== 0 && (Number(sheet[t.cost_type]) || 0) >= t.cost)
+      .map((t) => ({ label: `✨ ${t.name} (${talentCostLabel(t)})`, action: talentCommand(t.id, String(entity.id)) }))
+  }
+
   const onTooltipImageError = (): void => {
     tooltipImageFailed.value = true
   }
@@ -157,10 +168,11 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     const menu = gameCommandService.buildContextMenu(entity, ruleMode.value)
     if (!menu) return
 
+    const entityType = String(entity?.entity_type || '').toUpperCase() === 'NPC' ? 'NPC' : 'OBJECT'
     contextMenu.value = {
       x: event.clientX,
       y: event.clientY,
-      items: menu.items,
+      items: [...menu.items, ...talentMenuItems(entity, entityType)],
       title: menu.title,
     }
 
@@ -176,7 +188,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     contextMenu.value = {
       x: event.clientX,
       y: event.clientY,
-      items: menu.items,
+      items: [...menu.items, ...talentMenuItems(item, 'OBJECT')],
       title: menu.title,
     }
 

@@ -2,7 +2,8 @@
 
 The LLM is asked to copy fixed values, but this step is what makes them reliable:
 after generation every fixed field is written back over the LLM output, and small
-entities the LLM dropped (scripts, rules, abilities, exits, quests, awards) are
+entities the LLM dropped (scripts, rules, abilities, talents, exits, quests,
+awards) are
 re-created from the blueprint.
 """
 
@@ -32,6 +33,15 @@ def _default_ability(block: BlueprintBlock) -> dict[str, Any]:
         "description": block.description or block.name or block.ref,
         "action_type": "UTILITY",
         "effects": [],
+    }
+
+
+def _default_talent(block: BlueprintBlock) -> dict[str, Any]:
+    return {
+        "id": block.ref,
+        # Players type the name ("use mind reading"), so an ID-only tag gets a readable one.
+        "name": block.name or block.ref.replace("_", " ").title(),
+        "description": block.description or block.name or block.ref,
     }
 
 
@@ -67,11 +77,17 @@ _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[s
     "script": (_default_script, ("trigger", "code")),
     "rule": (_default_rule, ("condition",)),
     "ability": (_default_ability, ()),
+    "talent": (_default_talent, ()),
     "exit": (_default_exit, ("from_scene_id", "to_scene_id")),
     "sidequest": (_default_quest, ()),
     "award": (_default_award, ()),
 }
-_CHILD_COLLECTIONS = {"rule": "soft_rules", "script": "scripts", "ability": "special_actions"}
+_CHILD_COLLECTIONS = {
+    "rule": "soft_rules",
+    "script": "scripts",
+    "ability": "special_actions",
+    "talent": "talents",
+}
 
 
 def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]:
@@ -83,6 +99,7 @@ def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]
     protagonist = blueprint.first("protagonist")
     if protagonist and isinstance(manifest.get("protagonist"), dict):
         _apply_fixed(manifest["protagonist"], protagonist)
+        _apply_children(manifest["protagonist"], protagonist, violations)
     for kind, collection in COLLECTIONS.items():
         entries = manifest.setdefault(collection, [])
         for block in blueprint.of_kind(kind):

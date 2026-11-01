@@ -12,7 +12,12 @@ import textwrap
 from dataclasses import dataclass, field
 
 from backend.engine.blueprint.converters import normalize_id
-from backend.engine.blueprint.field_specs import KEY_TABLES, FieldSpec, normalize_key
+from backend.engine.blueprint.field_specs import (
+    DEPRECATED_KEYS,
+    KEY_TABLES,
+    FieldSpec,
+    normalize_key,
+)
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock, BlueprintValue
 
 MAX_SEQUENCES = 15
@@ -50,6 +55,7 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "quest": ("sidequest", ""),
     "award": ("award", ""),
     "ability": ("ability", ""),
+    "talent": ("talent", ""),
 }
 _NAME_FIELDS = {
     "protagonist": "name",
@@ -61,10 +67,14 @@ _NAME_FIELDS = {
     "award": "title",
     "script": "name",
     "ability": "name",
+    "talent": "name",
     "rule": "condition",
     "exit": "label",
 }
 _SINGLETON_KINDS = {"world", "protagonist"}
+# Child tags of an entity (abilities, talents) or of the latest sequence (rules).
+_ENTITY_CHILD_KINDS = {"ability", "talent"}
+_CHILD_KINDS = {"rule", *_ENTITY_CHILD_KINDS}
 _INTRODUCED_KINDS = {"scene", "npc", "item", "exit"}
 
 
@@ -177,6 +187,13 @@ def _store_value(
     except ValueError as exc:
         blueprint.add_issue(line_no, f"{block.kind} '{block.ref or block.name}': {raw_key}: {exc}")
         return
+    deprecation = DEPRECATED_KEYS.get((block.kind, normalize_key(raw_key)))
+    if deprecation:
+        blueprint.add_issue(
+            line_no,
+            f"{block.kind} '{block.ref or block.name}': '{raw_key}' is deprecated; {deprecation}.",
+            "warning",
+        )
     if spec.target == "*":
         for target, sub_value in value.items():
             block.fields[target] = BlueprintValue(sub_value, mode, line_no)
@@ -199,7 +216,7 @@ def _open_block(
     indent: int,
 ) -> None:
     blueprint = state.blueprint
-    if kind in {"rule", "ability"} or (kind == "script" and indent > 0):
+    if kind in _CHILD_KINDS or (kind == "script" and indent > 0):
         _open_child(state, line_no, kind, raw_ref, rest)
         return
     state.child = None
@@ -222,9 +239,14 @@ def _open_block(
 
 
 def _open_child(state: _ParseState, line_no: int, kind: str, raw_ref: str, rest: str) -> None:
-    parent_kinds = {"rule": {"sequence"}, "script": {"sequence"}, "ability": {"npc", "protagonist"}}
+    parent_kinds = {
+        "rule": {"sequence"},
+        "script": {"sequence"},
+        "ability": {"npc", "protagonist"},
+        "talent": {"protagonist"},
+    }
     parent = state.current
-    if kind != "ability":
+    if kind not in _ENTITY_CHILD_KINDS:
         # Rules and chapter scripts belong to the latest chapter, even after entity tags.
         sequences = state.blueprint.of_kind("sequence")
         parent = sequences[-1] if sequences else None
@@ -261,7 +283,7 @@ def _new_block(
     if not ref or ref.isdigit():
         ref = name if name and name != "?" else ""
     block.ref = normalize_id(ref)
-    if not block.ref and kind not in {"rule", "script", "ability"}:
+    if not block.ref and kind not in {"script", *_CHILD_KINDS}:
         blueprint.add_issue(line_no, f"[{kind.title()}] needs an ID or a name.")
     return block
 

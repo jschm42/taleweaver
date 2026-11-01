@@ -5,7 +5,7 @@ import NpcCombatSettings from './NpcCombatSettings.vue'
 defineProps<{
   open: boolean
   adventureId: string
-  npc: { id: string; name: string; metadata_json?: Record<string, any> | null } | null
+  npc: { id: string; name: string; metadata_json?: Record<string, any> | null; [key: string]: any } | null
   referenceOptions?: Array<{ id: string; name?: string; type?: string }>
 }>()
 
@@ -27,7 +27,7 @@ const emit = defineEmits<{
     >
       <div class="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-900 border border-white/10 rounded-3xl shadow-2xl p-6 space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Combat & Specials</h3>
+          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Combat Profile & Specials</h3>
           <button type="button" class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10" aria-label="Close" @click="emit('close')">
             <X class="w-4 h-4" />
           </button>

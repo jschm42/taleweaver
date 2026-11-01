@@ -28,6 +28,7 @@ import SpeechControls from './immersive/SpeechControls.vue'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
+import TalentMenu from '@/components/game/TalentMenu.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
 import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
 import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
@@ -503,7 +504,16 @@ defineExpose({
         @send="handleSend"
         @retry-turn="emit('retryTurn')"
         @cancel-turn-error="emit('cancelTurnError')"
-      />
+      >
+        <template #leading>
+          <TalentMenu
+            :sheet="props.sheet"
+            :entities="props.entities"
+            :disabled="!canSendInput"
+            @use="handleSend"
+          />
+        </template>
+      </ImmersiveInputBar>
     </footer>
 
     <!-- 5. CINEMATIC SCENE TRANSITION CURTAIN (covers the whole game view, header and footer included) -->

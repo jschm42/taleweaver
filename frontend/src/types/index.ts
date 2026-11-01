@@ -150,6 +150,40 @@ export interface SpecialAttack {
   on_failure_text?: string | null
 }
 
+/** An NPC's configurable standard attack (`metadata_json.main_attack`); needs no item. */
+export interface NpcMainAttack {
+  name: string
+  category: 'MELEE' | 'RANGED' | 'MAGIC'
+  damage_dice: string
+  hit_stat: SuccessStat
+  cost_type: 'mana' | 'stamina'
+  cost: number
+  effects: SpecialEffect[]
+}
+
+export type TalentTargetType = 'NONE' | 'NPC' | 'ITEM' | 'ANY'
+
+/** A protagonist's non-combat talent (e.g. Mind Reading), used with "use <name>" or the Talents menu. */
+export interface Talent {
+  id: string
+  name: string
+  description: string
+  target_type?: TalentTargetType | null
+  cost_type?: 'mana' | 'stamina' | null
+  cost?: number | null
+  /** Uses per adventure; empty = unlimited. */
+  max_uses?: number | null
+  gm_hint?: string | null
+  on_use_script?: string | null
+  on_use_text?: string | null
+  is_locked?: boolean
+  unlock_required_item_id?: string | null
+  unlock_required_scene_id?: string | null
+  unlock_required_defeated_npc_id?: string | null
+  unlock_guard_expression?: string | null
+  unlock_text?: string | null
+}
+
 /** Special attack as normalized by the combat engine (always has cost, category and effects). */
 export interface NormalizedSpecialAttack extends SpecialAttack {
   category: SpecialCategory

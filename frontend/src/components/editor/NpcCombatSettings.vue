@@ -4,12 +4,22 @@ import { Save, Swords } from 'lucide-vue-next'
 import type { SpecialAttack } from '@/types'
 import HardRuleTriggersEditor, { type HardRule } from '@/components/editor/HardRuleTriggersEditor.vue'
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
+import NpcCombatProfile from '@/components/editor/NpcCombatProfile.vue'
 import { specialAttackService } from '@/services/specialAttackService'
 
 type NpcLike = {
   id: string
   name: string
+  stat_modifier_strength?: number | null
+  stat_modifier_dexterity?: number | null
+  stat_modifier_intelligence?: number | null
+  stat_modifier_wisdom?: number | null
+  stat_modifier_charisma?: number | null
+  stat_modifier_armor_class?: number | null
   metadata_json?: {
+    main_attack?: Record<string, any> | null
+    equipped_weapon_id?: string | null
+    equipped_armor_id?: string | null
     attack_mode?: string
     attack_trigger?: HardRule | null
     special_chance?: number
@@ -118,6 +128,10 @@ async function saveBehaviour(): Promise<void> {
         <span v-if="note" class="text-xs text-emerald-400">{{ note }}</span>
         <span v-if="error" class="text-xs text-rose-400">{{ error }}</span>
       </div>
+    </section>
+
+    <section class="pt-4 border-t border-white/5">
+      <NpcCombatProfile :adventure-id="adventureId" :npc="npc" @saved="emit('saved')" />
     </section>
 
     <section class="pt-4 border-t border-white/5">

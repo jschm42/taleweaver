@@ -1536,7 +1536,7 @@ async function onSpecialAttacksSaved() {
     const refreshed = editorNpcs.value.find((npc: any) => npc.id === specialAttacksNpc.value?.id)
     specialAttacksNpc.value = refreshed ?? null
   }
-  addNotification('Combat settings saved.', 'success')
+  addNotification('Combat & talent settings saved.', 'success')
 }
 
 async function saveProtagonistField(field: string, newValue: any) {
@@ -2837,6 +2837,7 @@ watch(
               @request-move-item-to-scene="requestMoveItemToScene"
               @request-delete-item="requestDeleteItem"
               @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @duplicate-entity="(_kind, id) => handleCloneRouteEntity('object', id)"
               @import-entity="importEntity"
             />
 
@@ -2866,6 +2867,7 @@ watch(
               @open-create-npc="() => openCreateNpc()"
               @open-special-attacks="(npc: any) => (specialAttacksNpc = npc)"
               @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @duplicate-entity="(_kind, id) => handleCloneRouteEntity('npc', id)"
               @import-entity="importEntity"
             />
 

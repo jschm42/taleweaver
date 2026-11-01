@@ -43,6 +43,7 @@ const emit = defineEmits<{
   (e: 'request-move-item-to-scene', itemId: string, name: string, currentSceneId: string): void
   (e: 'request-delete-item', itemId: string, name: string): void
   (e: 'export-entity', kind: 'item', id: string, label: string): void
+  (e: 'duplicate-entity', kind: 'item', id: string): void
 }>()
 
 const hoverPayload = computed(() => props.hoverEntity || {
@@ -115,6 +116,7 @@ const menuItemClass = 'w-full px-3 py-2 text-left text-xs font-bold text-slate-2
         <div class="my-1 border-t border-white/5"></div>
         <button @click="emit('request-change-item-type', obj.id, obj.name, obj.item_type || 'DEFAULT')" :class="[menuItemClass, 'hover:bg-amber-500']">Change Type…</button>
         <button v-if="movable" @click="emit('request-move-item-to-scene', obj.id, obj.name, obj.current_scene_id || '')" :class="[menuItemClass, 'hover:bg-sky-500']">Move to Scene…</button>
+        <button @click="emit('duplicate-entity', 'item', obj.id)" :class="[menuItemClass, 'hover:bg-indigo-500']" title="Create a copy with all settings and scripts">Duplicate</button>
         <button @click="emit('export-entity', 'item', obj.id, obj.name)" :class="[menuItemClass, 'hover:bg-teal-500']">Export (.twe)</button>
         <button @click="emit('request-delete-item', obj.id, obj.name)" :class="[menuItemClass, 'hover:bg-red-500']">Delete</button>
       </div>

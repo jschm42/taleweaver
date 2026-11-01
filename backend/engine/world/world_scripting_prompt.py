@@ -100,6 +100,9 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("on_success", "the special attack's d20 success roll succeeds (`special` dict in scope)"),
         ("on_failure", "the special attack's success roll fails"),
     ),
+    "TALENTS (entries of protagonist talents)": (
+        ("on_use", "the player uses the talent (`talent` dict in scope: id, name, target_id, ...)"),
+    ),
 }
 
 # `tw` API reference. Only members that exist in engine/scripting/context.py.
@@ -124,6 +127,9 @@ TW_API_REFERENCE = (
     "say_directed('BRAM', 'sings a sailor song'))\n"
     "- tw.npcs persona (changes how the GM plays the NPC from then on, this session only): "
     "set_character(npc_id, text), set_goal(npc_id, text), add_trait(npc_id, trait), remove_trait(npc_id, trait)\n"
+    "- tw.npcs.hide(npc_id) / tw.npcs.reveal(npc_id): take an NPC out of the story (gone from its scene, "
+    "no talk, fight or trade) or bring it back where it stands; combine with move(id, scene_id) to make "
+    "it reappear elsewhere. NPC proxies also have hide() and reveal().\n"
     "- entity proxies from get(): id, name, current_scene_id, is_hidden, set_hidden(bool); NPCs also hp, mana, stamina, is_defeated, say(text), attack(), heal(n), damage(n), consume(item_id), "
     "character, goal (read/write), set_character(text), set_goal(text), add_trait(t), remove_trait(t), has_trait(t); "
     "objects also state, switch_state, flip(), toggle(); NPCs and containers also items, item_ids, "

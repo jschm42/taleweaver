@@ -8,44 +8,10 @@ passed to the manifest applier.
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_serializer, model_validator
+from pydantic import Field, model_serializer, model_validator
 
-_EMPTY_VALUES: tuple[Any, ...] = (None, "", [], {})
-
-
-def _drop_empty_unknown_keys(model: type[BaseModel], data: dict[str, Any]) -> dict[str, Any]:
-    """Remove keys the model does not declare when their value carries no content.
-
-    LLMs pattern-complete field names (e.g. ``on_success_script_text`` next to the
-    ``on_*_script`` / ``on_*_text`` pairs) and emit them as null. Under
-    ``extra="forbid"`` one such empty key would fail the whole manifest, so it is
-    dropped here; unknown keys that carry content still fail validation.
-    """
-    known = set(model.model_fields)
-    known.update(f.alias for f in model.model_fields.values() if f.alias)
-    return {k: v for k, v in data.items() if k in known or v not in _EMPTY_VALUES}
-
-
-class WorldBaseSchema(BaseModel):
-    """Base schema for world generation models that normalizes null LLM outputs."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_null_fields(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if cls.model_config.get("extra") == "forbid":
-            data = _drop_empty_unknown_keys(cls, data)
-        for field_name, field_info in cls.model_fields.items():
-            key = field_info.alias if field_info.alias and field_info.alias in data else field_name
-            if key not in data or data[key] is not None:
-                continue
-            if field_info.default == "":
-                data[key] = ""
-                continue
-            if field_info.default_factory is list or field_info.default == []:
-                data[key] = []
-        return data
+from backend.engine.world.combat_profile_schemas import NpcMainAttackSchema, TalentSchema
+from backend.engine.world.schema_base import WorldBaseSchema
 
 
 class WorldSceneSchema(WorldBaseSchema):
@@ -377,13 +343,29 @@ class WorldNPCSchema(WorldBaseSchema):
         default_factory=list,
         description="List of object IDs in this NPC's inventory. Use [] if empty.",
     )
+    strength: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    dexterity: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    intelligence: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    wisdom: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    charisma: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    armor_class: Optional[int] = Field(
+        None, description="Armor class attackers must reach (1-30, default 10)."
+    )
+    main_attack: Optional[NpcMainAttackSchema] = Field(
+        None,
+        description=(
+            "The NPC's standard attack, e.g. a Longsword (MELEE, 1d8, strength), a Bow "
+            "(RANGED, 1d6, dexterity) or Magic Missile (MAGIC, 1d4+1, intelligence). "
+            "Needs no item. Use null for an unarmed 1d6 attack."
+        ),
+    )
     equipped_weapon_id: Optional[str] = Field(
         None,
-        description="Optional ID of the equipped weapon object. Must exist in the objects list.",
+        description="Deprecated, use main_attack. Optional ID of an equipped weapon object.",
     )
     equipped_armor_id: Optional[str] = Field(
         None,
-        description="Optional ID of the equipped armor object. Must exist in the objects list.",
+        description="Deprecated, use armor_class. Optional ID of an equipped armor object.",
     )
     special_actions: list[SpecialActionSchema] = Field(
         default=[],
@@ -1026,6 +1008,13 @@ class ProtagonistSchema(WorldBaseSchema):
     special_actions: list[SpecialActionSchema] = Field(
         default=[],
         description="List of up to 5 special actions the protagonist has at the start. Max 5.",
+    )
+    talents: list[TalentSchema] = Field(
+        default=[],
+        description=(
+            "Up to 8 non-combat talents the player triggers with 'use <name>' or 'cast <name>', "
+            "e.g. Mind Reading or an absurd Gossip Attack. Max 8."
+        ),
     )
     on_hp_change_script: Optional[str] = Field(
         default="",

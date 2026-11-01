@@ -22,6 +22,8 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex items-center w-full p-2 bg-slate-900/80 border-t border-slate-800 backdrop-blur-md no-scrollbar shrink-0">
+    <!-- Extra leading controls, e.g. the Talents menu -->
+    <div v-if="$slots.leading" class="mr-2"><slot name="leading" /></div>
     <button
       :disabled="props.disabled"
       aria-label="Generate ideas"

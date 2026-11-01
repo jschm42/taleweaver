@@ -20,6 +20,7 @@ from backend.api.routes.adventures.agent_commands import (
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
+from backend.api.routes.adventures.talent_use import resolve_talent_request, stream_talent_turn
 from backend.api.routes.adventures.script_llm import make_script_llm_asker
 from backend.api.routes.adventures.session_adventure import SessionAdventure, load_session_adventure
 from backend.core.narration_budget import log_narration_budget
@@ -880,6 +881,15 @@ class GameTurnManager:
         # 2. Fight Trigger / Attack
         if user_msg.lower().startswith("/fight") or user_msg.lower().startswith("/attack"):
             async for chunk in self._handle_fight_start(user_msg):
+                yield chunk
+            return
+
+        # Talents: "/talent X | target" (Talents menu) or typed "use/cast X [on target]".
+        talent_request = resolve_talent_request(self, user_msg)
+        if talent_request:
+            async for chunk in stream_talent_turn(
+                self, actual_user_input, talent_request, language
+            ):
                 yield chunk
             return
 

@@ -21,6 +21,7 @@ from backend.engine.scripting.item_transfer import inventory_entry, take_from_in
 from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
+from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
 from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
@@ -417,7 +418,14 @@ class EntityProxy:
         self._changeset.entity_updates.append({"entity_id": self._id, attr_name: val})
 
 
-class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin, NPCVitalsMixin, ItemHolderMixin):
+class NPCProxy(
+    EntityProxy,
+    NPCPersonaMixin,
+    NPCDirectionMixin,
+    NPCVitalsMixin,
+    NPCVisibilityMixin,
+    ItemHolderMixin,
+):
     """Safe proxy for Non-Player Characters."""
 
     @property
@@ -930,7 +938,11 @@ class EntityManagerProxy:
 
 
 class NPCManagerProxy(
-    NPCPersonaManagerMixin, NPCDirectionManagerMixin, NPCVitalsManagerMixin, EntityManagerProxy
+    NPCPersonaManagerMixin,
+    NPCDirectionManagerMixin,
+    NPCVitalsManagerMixin,
+    NPCVisibilityManagerMixin,
+    EntityManagerProxy,
 ):
     """``tw.npcs``: entity access plus the NPC persona, directed-speech and vitals shortcuts."""
 

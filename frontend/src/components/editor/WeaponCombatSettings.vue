@@ -11,6 +11,8 @@ import {
   type WeaponConfig,
 } from '@/utils/weaponConfig'
 
+const props = withDefaults(defineProps<{ title?: string }>(), { title: 'Combat (Weapon Attack)' })
+
 const config = defineModel<WeaponConfig>({ required: true })
 
 const inputClass = 'w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-white font-bold focus:border-cyan-500/50 outline-none transition-all'
@@ -28,7 +30,7 @@ function validAmount(amount: string): boolean {
 
 <template>
   <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Combat (Weapon Attack)</label>
+    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ props.title }}</label>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <label class="space-y-1">

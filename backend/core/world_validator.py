@@ -35,6 +35,7 @@ CHECKS: tuple[Check, ...] = (
     entities.check_switch_state_ids,
     entities.check_npc_stats,
     entities.check_npc_references,
+    entities.check_npc_combat_profile,
     entities.check_reveal_targets,
     entities.check_protagonist_items,
     story.check_image_coverage,

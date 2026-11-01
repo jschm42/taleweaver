@@ -6,6 +6,7 @@ import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
+import TalentsEditor from '@/components/editor/TalentsEditor.vue'
 import EditorImageLightbox from '@/components/editor/EditorImageLightbox.vue'
 import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
 import type { TtsVoiceList } from '@/types'
@@ -729,6 +730,19 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
           :target-id="debugData.protagonist.id"
           :owner-name="debugData.protagonist.name"
           :attacks="debugData.protagonist.stats?.special_actions ?? []"
+          :reference-options="referenceOptions"
+          @saved="emit('special-attacks-saved')"
+        />
+      </section>
+
+      <section
+        v-if="debugData?.protagonist && adventureId"
+        class="mt-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5"
+      >
+        <TalentsEditor
+          :adventure-id="adventureId"
+          :owner-name="debugData.protagonist.name"
+          :talents="debugData.protagonist.stats?.talents ?? []"
           :reference-options="referenceOptions"
           @saved="emit('special-attacks-saved')"
         />

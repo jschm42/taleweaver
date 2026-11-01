@@ -17,7 +17,12 @@ COLLECTIONS = {
     "sidequest": "quests",
     "award": "awards",
 }
-_CHILD_COLLECTIONS = {"rule": "soft_rules", "script": "scripts", "ability": "special_actions"}
+_CHILD_COLLECTIONS = {
+    "rule": "soft_rules",
+    "script": "scripts",
+    "ability": "special_actions",
+    "talent": "talents",
+}
 
 _RULES = (
     "- Every entity below MUST exist in your JSON output with EXACTLY the given `id` "
