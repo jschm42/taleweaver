@@ -268,8 +268,8 @@ generations are typically 5-15 s for SD 1.5 / SDXL and 10-30 s for FLUX.
   `override_settings.sd_model_checkpoint` (which TaleWeaver does) reloads
   the model. Use the *simple* model for all `item / cover / NPC` jobs and
   the *advanced* model only for `scene` jobs to minimize reloads.
-- **Set `image_format=jpeg` and `image_quality=85`** (TaleWeaver defaults)
-  to keep the on-disk library small.
+- **Keep `image_format=webp` and `image_quality=85`** (TaleWeaver defaults)
+  to keep the on-disk library small. `jpeg` and `png` are optional.
 - **Enable `--xformers`** in `COMMANDLINE_ARGS` if your GPU supports it.
 - **Bump `min_long_edge`** only if you actually need larger images —
   generation time scales roughly with pixel count.

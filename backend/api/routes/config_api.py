@@ -43,6 +43,7 @@ from backend.core.models_config import (
 )
 from backend.core.security import encryption_util
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
+from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
 from backend.services.model_discovery import clear_cache as clear_model_discovery_cache
@@ -557,7 +558,7 @@ class T2ISettingsPayload(BaseModel):
     simple_min_long_edge: Optional[int] = None
     advanced_min_long_edge: Optional[int] = None
     seed: Optional[int] = None
-    image_format: Optional[str] = "jpeg"
+    image_format: Optional[str] = "webp"
     image_quality: Optional[int] = 85
     negative_prompt: Optional[str] = None
     scene_model_quality: Optional[str] = "advanced"
@@ -1234,7 +1235,7 @@ async def generate_catalog_image(
             api_key=api_key,
             provider=provider,
             target_dir=catalog_dir,
-            filename=f"{safe_target_id}_{uuid.uuid4().hex[:8]}",
+            filename=asset_filename(safe_target_id, t2i.get("image_format")),
             provider_options=t2i,
         )
 
