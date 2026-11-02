@@ -33,8 +33,6 @@ import AutoValidateFixToggle from '@/components/create-adventure/AutoValidateFix
 const props = defineProps<{
   open: boolean
   proposal?: any | null
-  // The player already confirmed the blueprint in chat: skip the form and start weaving right away.
-  autoStart?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -245,8 +243,8 @@ watch(
     // Never reset a world that is still being woven.
     if (isGenerating.value) return
 
-    const shouldAutoStart = !!newProposal && !!props.autoStart
-    viewState.value = shouldAutoStart ? 'progress' : 'form'
+    // Always open the review form: weaving starts only from its start button.
+    viewState.value = 'form'
     errorMessage.value = ''
     createdAdventureId.value = null
     currentStatusText.value = 'Initializing world weaving...'
@@ -255,18 +253,13 @@ watch(
     logs.value = []
     isLoadingLogs.value = true
     previewImageUrl.value = null
-    const catalogsLoaded = loadCatalogs()
+    void loadCatalogs()
 
     if (newProposal) {
       populateFromProposal(newProposal)
     } else if (!form.value.title) {
       form.value.title = 'A New Reality'
       form.value.storyIdea = 'A mysterious uncharted realm awaiting its champions.'
-    }
-
-    if (shouldAutoStart) {
-      // Catalogs resolve the full style/tone objects sent with the generation payload.
-      void catalogsLoaded.then(startGeneration)
     }
   },
   { immediate: true }

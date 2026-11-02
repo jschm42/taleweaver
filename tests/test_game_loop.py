@@ -1061,11 +1061,13 @@ async def test_adventure_generator_emits_proposal_event_before_generation(
         assert last_req["title"] == "Neon Foundry"
         assert last_req["selected_tone"] == "mystery"
         proposal_chunk = next(c for c in turn1_chunks if "event: adventure_generator_proposal" in c)
-        assert '"auto_start": false' in proposal_chunk
+        assert "auto_start" not in proposal_chunk
 
 
-async def test_confirmed_adventure_generation_proposal_auto_starts(setup_test_db, monkeypatch):
-    """A blueprint the player confirmed in chat must ask the client to open the progress view directly."""
+async def test_confirmed_adventure_generation_opens_review_without_starting(
+    setup_test_db, monkeypatch
+):
+    """A blueprint confirmed in chat opens the review dialog; weaving waits for the player's start."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -1082,7 +1084,6 @@ async def test_confirmed_adventure_generation_proposal_auto_starts(setup_test_db
                     "title": "Glass Archive",
                     "prompt": "A library that rewrites itself every night.",
                 },
-                generation_confirmed=True,
             )
         )
 
@@ -1091,18 +1092,24 @@ async def test_confirmed_adventure_generation_proposal_auto_starts(setup_test_db
                 yield None
 
         mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
+        generate_adventure_mock = AsyncMock(return_value="adv-should-not-exist")
 
         monkeypatch.setattr(
             "backend.api.routes.adventures.gameplay_logic.GameMasterLLM",
             lambda *args, **kwargs: mock_llm_instance,
+        )
+        monkeypatch.setattr(
+            "backend.engine.adventures.adventure_generator_service.AdventureGeneratorService.generate_adventure",
+            generate_adventure_mock,
         )
 
         manager = GameTurnManager(db, "session-1", user)
         chunks = [chunk async for chunk in manager.process_turn("yes, weave it")]
 
         proposal_chunk = next(c for c in chunks if "event: adventure_generator_proposal" in c)
-        assert '"auto_start": true' in proposal_chunk
         assert "Glass Archive" in proposal_chunk
+        assert "auto_start" not in proposal_chunk
+        generate_adventure_mock.assert_not_awaited()
 
 
 async def test_token_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
@@ -1374,12 +1381,13 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
         async for chunk in manager.process_turn("bitte nochmal erstellen"):
             chunks.append(chunk)
 
-        # A proposal event should be emitted for the client dialog; a retry starts weaving right away.
+        # A retry reopens the review dialog with the last blueprint; weaving waits for the player.
         proposal_chunk = next(
             c for c in chunks if "event: adventure_generator_proposal\ndata:" in c
         )
         assert "Bundy Boulevard" in proposal_chunk
-        assert '"auto_start": true' in proposal_chunk
+        assert "auto_start" not in proposal_chunk
+        generate_adventure_mock.assert_not_awaited()
 
 
 async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(

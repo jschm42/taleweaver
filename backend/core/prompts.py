@@ -453,8 +453,9 @@ ADVENTURE_GENERATOR_INSTRUCTIONS = (
     "   - `selected_image_styles`: (Optional) A list of styles chosen by the player.\n"
     "   - `selected_tone`: (Optional) The tone chosen by the player.\n\n"
     "Before generating, summarize the blueprint in character and ask the player to confirm it.\n"
-    "Once the player confirms, the Loom opens a live progress view and the new adventure is woven into the player's library. "
-    "Narrate that the weaving has begun; never claim the world is already finished.\n"
+    "Once the player confirms, the Loom opens a review dialog with the blueprint. The player can adjust it there "
+    "and starts the weaving with its start button, or cancels. "
+    "Narrate that the blueprint awaits the player's review; never claim the weaving has begun or the world is finished.\n"
 )
 """
 Final formatting instructions for the narration pass.
@@ -464,8 +465,6 @@ GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX = (
     "You are in Adventure-Generator chat mode. Return ONLY tool intent fields for this turn. "
     "Use `request_available_image_styles` or `request_available_tones` when asked. "
     "Use `requested_adventure_generation` only when all generation inputs are present. "
-    "Set `generation_confirmed` to true only when the player explicitly approves starting the generation in this message; "
-    "otherwise leave it false so the player can review the blueprint first. "
     "If the player asks to retry/regenerate after a prior failure, prefer returning `requested_adventure_generation` using the most recent known parameters (with reasonable defaults) instead of asking repeated clarification questions. "
     "If no tool action is needed, leave all tool fields unset/false."
 )

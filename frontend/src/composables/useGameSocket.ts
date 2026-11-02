@@ -75,7 +75,6 @@ export interface UseGameSocket {
   /** Set when a turn ended in another scene without a travel event (script teleport, GM move). */
   sceneArrival: Ref<{ sceneId: string; at: number } | null>
   generatorProposal: Ref<any | null>
-  generatorAutoStart: Ref<boolean>
   showGeneratorModal: Ref<boolean>
   turnError: Ref<TurnErrorState | null>
   openGeneratorModal: (proposal?: any) => void
@@ -152,15 +151,12 @@ export function useGameSocket(): UseGameSocket {
   const sceneArrival = ref<{ sceneId: string; at: number } | null>(null)
   let checkpointPulseTimer: number | null = null
   const generatorProposal = ref<any | null>(null)
-  // True when the player already confirmed the blueprint in chat: the modal skips the form.
-  const generatorAutoStart = ref(false)
   const showGeneratorModal = ref(false)
   const turnError = ref<TurnErrorState | null>(null)
   const lastUserAction = ref<string>('')
 
   function openGeneratorModal(proposal?: any): void {
     if (proposal) generatorProposal.value = proposal
-    generatorAutoStart.value = false
     showGeneratorModal.value = true
   }
 
@@ -702,7 +698,6 @@ export function useGameSocket(): UseGameSocket {
             applySessionSnapshot(data, false, true)
           } else if (event === 'adventure_generator_proposal') {
             generatorProposal.value = data.request || data
-            generatorAutoStart.value = data.auto_start === true
             window.setTimeout(() => {
               showGeneratorModal.value = true
             }, 600)
@@ -1070,7 +1065,6 @@ export function useGameSocket(): UseGameSocket {
     isSceneTransitioning,
     sceneArrival,
     generatorProposal,
-    generatorAutoStart,
     showGeneratorModal,
     turnError,
     openGeneratorModal,

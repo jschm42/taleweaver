@@ -1519,23 +1519,17 @@ class GameTurnManager:
                     if self._get_last_ag_generation_error() == "token_limit":
                         last_request.generate_scene_images = False
                     game_event.requested_adventure_generation = last_request
-                    # An explicit retry request counts as confirmation.
-                    game_event.generation_confirmed = True
                     if not game_event.narrative_description:
                         game_event.narrative_description = (
-                            "Understood. I will retry the last adventure generation now."
+                            "Understood. The last blueprint is ready for your review again."
                         )
 
             if game_event.requested_adventure_generation:
                 req = game_event.requested_adventure_generation
                 self._set_last_ag_generation_request(req)
-                pending_generator_proposal = self.adventure_gen.build_generator_proposal(
-                    req, auto_start=game_event.generation_confirmed
-                )
+                pending_generator_proposal = self.adventure_gen.build_generator_proposal(req)
                 if not game_event.narrative_description:
-                    game_event.narrative_description = self.adventure_gen.proposal_narrative(
-                        auto_start=game_event.generation_confirmed
-                    )
+                    game_event.narrative_description = self.adventure_gen.proposal_narrative()
                 game_event.requested_adventure_generation = None
 
             if (
