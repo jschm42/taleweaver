@@ -69,14 +69,20 @@ _SESSION_SYNC_FIELDS = (
 )
 
 # Applied after NPCs are persisted: (attribute, default; None = keep current value).
+# Template flags keep their stored value when the manifest omits them: the .adz importer
+# passes a reduced world manifest, and a hard default would silently reset the flag.
 _FINAL_FIELDS: tuple[tuple[str, Any], ...] = (
     ("teaser", ""),
     ("rules", ""),
-    ("language", ""),
+    ("language", None),
     ("creator", None),
     ("copyright", None),
     ("license", None),
     ("license_url", None),
+)
+
+# Template flags: (attribute, default used only when the template holds no value yet).
+_FINAL_FLAGS: tuple[tuple[str, bool], ...] = (
     ("is_adventure_generator", False),
     ("can_damage_npcs", True),
     ("npcs_can_damage_protagonist", True),
@@ -243,6 +249,10 @@ def apply_final_adventure_fields(ctx: ApplyContext) -> None:
     for key, default in _FINAL_FIELDS:
         fallback = getattr(adventure, key) if default is None else default
         setattr(adventure, key, adventure_field(ctx.manifest, key, fallback))
+    for key, default in _FINAL_FLAGS:
+        current = getattr(adventure, key)
+        fallback = default if current is None else current
+        setattr(adventure, key, bool(adventure_field(ctx.manifest, key, fallback)))
     adventure.original_prompt = adventure_field(  # type: ignore[assignment]
         ctx.manifest, "original_prompt", adventure.original_prompt or ""
     )

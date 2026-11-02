@@ -470,7 +470,8 @@ defineExpose({
         <SpeechControls />
       </div>
 
-      <!-- Action buttons slide in when the pointer is over the footer (always shown on touch). -->
+      <!-- Action buttons slide in only when the pointer is over the bar's own area, i.e. the
+           footer's top edge (always shown on touch), never while hovering the chat input. -->
       <div class="tw-action-reveal" :class="{ 'is-pinned': actionBarPinned }">
         <ImmersiveActionBar
           :inventory="props.inventory"
@@ -561,22 +562,31 @@ defineExpose({
   overflow: hidden;
 }
 
-.tw-footer:hover .tw-action-reveal,
-.tw-action-reveal:focus-within,
+/* While collapsed, a thin strip along the footer's top edge (inside the input bar's
+   top padding) is the hover target, so the pointer over the chat input does not reveal the bar. */
+.tw-action-reveal::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 12px;
+}
+
+.tw-action-reveal:hover,
+.tw-action-reveal:has(:focus-visible),
 .tw-action-reveal.is-pinned {
   grid-template-rows: 1fr;
   opacity: 1;
 }
 
 /* Revealed: let upward popovers (ideas) overflow the bar. */
-.tw-footer:hover .tw-action-reveal > *,
-.tw-action-reveal:focus-within > *,
+.tw-action-reveal:hover > *,
+.tw-action-reveal:has(:focus-visible) > *,
 .tw-action-reveal.is-pinned > * {
   overflow: visible;
 }
 
 /* Each reveal lets the dock cards rise in one after another. */
-.tw-footer:hover .tw-action-reveal:not(.is-pinned) :deep(.dock-item) {
+.tw-action-reveal:hover:not(.is-pinned) :deep(.dock-item) {
   animation: tw-dock-rise 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   animation-delay: calc(var(--i, 0) * 35ms);
 }
@@ -593,7 +603,7 @@ defineExpose({
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tw-footer:hover .tw-action-reveal:not(.is-pinned) :deep(.dock-item) {
+  .tw-action-reveal:hover:not(.is-pinned) :deep(.dock-item) {
     animation: none;
   }
 }
