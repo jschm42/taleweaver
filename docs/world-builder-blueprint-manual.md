@@ -501,7 +501,7 @@ When you click **Generate**:
 | A chapter completes immediately | Its goal is already true at the start. See the pitfall in Layer 1. |
 | A script does nothing in the game | The **Event Scripts Engine** is off in the generator settings. |
 | The AI invented a different code | The code was written as a hint (`~`) or not at all. Fix it: `code: 4711`. |
-| The Story Idea is rejected as too long | The field holds at most 20,000 characters. Leave descriptions open and fix only what matters. |
+| The Story Idea is rejected as too long | The field holds at most 50,000 characters. Leave descriptions open and fix only what matters. |
 
 ---
 

@@ -6,6 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.base import Base, TimestampMixin
 
+# Maximum length of the Story Idea (original_prompt) a user can submit.
+ORIGINAL_PROMPT_MAX_LENGTH = 50000
+
 
 class GenerationCancelledError(Exception):
     """Raised when the user cancels a background generation task."""
@@ -106,7 +109,9 @@ class AdventureTemplate(Base, TimestampMixin):
     completed_guard_expression: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     gameover_guard_expression: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     tts_director_notes: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
-    original_prompt: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
+    original_prompt: Mapped[Optional[str]] = mapped_column(
+        String(ORIGINAL_PROMPT_MAX_LENGTH), nullable=True
+    )
     starting_timestamp: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )  # Minutes from Day 1, 00:00

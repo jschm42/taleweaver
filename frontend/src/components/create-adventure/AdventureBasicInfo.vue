@@ -2,6 +2,7 @@
 import { Sparkles } from 'lucide-vue-next'
 import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
 import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
+import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 defineProps<{
@@ -71,6 +72,7 @@ defineEmits<{
           placeholder="The Weaver will use this to seed the world's history and current conflicts..."
           class="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white resize-y min-h-[4.5rem] sm:min-h-[5.5rem] focus:border-cyan-400 outline-none transition-all placeholder:text-white/20"
         ></textarea>
+        <StoryIdeaLengthHint :value="modelValue.storyIdea" />
 
         <!-- Builder Mode Strictness -->
         <div class="mt-4">

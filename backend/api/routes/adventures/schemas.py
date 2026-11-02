@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.core.narrator_voices import normalize_voice
 from backend.core.ui_theme import normalize_ui_theme
+from backend.models.adventure_template import ORIGINAL_PROMPT_MAX_LENGTH
 from backend.schemas.adventure import AdventureTemplateDebugResponse
 
 
@@ -128,8 +129,10 @@ class CreateAdventureTemplatePayload(BaseModel):
     def validate_original_prompt_length(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
-        if len(value) > 20000:
-            raise ValueError("original_prompt must be at most 20000 characters")
+        if len(value) > ORIGINAL_PROMPT_MAX_LENGTH:
+            raise ValueError(
+                f"original_prompt must be at most {ORIGINAL_PROMPT_MAX_LENGTH} characters"
+            )
         return value
 
     @field_validator("intro_text")
@@ -738,8 +741,10 @@ class AdventureTemplateUpdate(BaseModel):
     def validate_original_prompt_length(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
-        if len(value) > 20000:
-            raise ValueError("original_prompt must be at most 20000 characters")
+        if len(value) > ORIGINAL_PROMPT_MAX_LENGTH:
+            raise ValueError(
+                f"original_prompt must be at most {ORIGINAL_PROMPT_MAX_LENGTH} characters"
+            )
         return value
 
     @field_validator("plot", "rules", "tts_director_notes")

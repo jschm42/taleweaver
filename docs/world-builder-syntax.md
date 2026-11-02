@@ -29,7 +29,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 - Lists are comma-separated: `inventory: ROPE, LANTERN`.
 - Booleans accept `yes/no`, `true/false`, `on/off`.
 - Scripts use the sandboxed `tw` API (`tw.vars`, `tw.flags`, `tw.player`, `tw.npcs`, `tw.objects`, `tw.exits`, `tw.story`, `tw.game`, `tw.dialog`, ...). See the scripting reference in the editor.
-- The Story Idea is limited to 20,000 characters.
+- The Story Idea is limited to 50,000 characters.
 
 ## Tags and keys
 

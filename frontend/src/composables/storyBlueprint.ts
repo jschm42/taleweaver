@@ -1,13 +1,17 @@
 import { api } from '@/composables/useApi'
+import { STORY_IDEA_MAX_LENGTH } from '@/constants/storyIdeaLimits'
 
 const MAX_LISTED_ERRORS = 3
 
 /**
- * Pre-flight check of the Story Idea blueprint tags.
+ * Pre-flight check of the Story Idea length and blueprint tags.
  * Returns a user-facing error message, or null when generation may start.
  * A failed check request never blocks generation; the backend validates again.
  */
 export async function findStoryBlueprintError(storyIdea: string): Promise<string | null> {
+  if (storyIdea.length > STORY_IDEA_MAX_LENGTH) {
+    return `Story Idea is too long: ${storyIdea.length.toLocaleString('en-US')} of at most ${STORY_IDEA_MAX_LENGTH.toLocaleString('en-US')} characters`
+  }
   if (!storyIdea.includes('[')) {
     return null
   }
