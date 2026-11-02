@@ -360,7 +360,10 @@ Appended to the narration system prompt when the GM is running in 'Chat Mode' (l
 GM_NARRATION_TURN_CONTRACT = (
     "TURN INPUT CONTRACT: The latest user message contains a CURRENT STATE block, a TURN RESOLUTION block "
     "(engine-verified outcome of this turn), and the PLAYER ACTION. Narrate the player action strictly according to "
-    "the TURN RESOLUTION. Never quote, mention, or reproduce these blocks."
+    "the TURN RESOLUTION. Never quote, mention, or reproduce these blocks. "
+    "Lines marked [Already shown to the player this turn: ...] were written by the adventure's scripts and the "
+    "player has already read them: continue from there. Do not repeat, paraphrase, or summarize them, and do not "
+    "let an NPC say the same information again (codes, clues, directions) in other words."
 )
 """
 Explains the per-turn message layout to the narration model (Pass 2).

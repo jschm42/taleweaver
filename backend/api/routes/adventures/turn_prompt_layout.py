@@ -163,6 +163,20 @@ async def _load_memory_window(
     return window[start_idx:]
 
 
+def _current_turn_entry(role: str, content: str) -> str | None:
+    """Annotation for a message saved after the player's action in the current turn.
+
+    Script output (NPC lines from `tw.npcs.say`, `tw.story.narrate`) is stored as an
+    assistant message. Replayed as an assistant turn, it reads as a reply the GM already
+    gave, so the model answers the player action again and repeats the same lines.
+    """
+    if role == "assistant":
+        return f"[Already shown to the player this turn: {content}]"
+    if role == "system" and not _is_debug_message(content):
+        return f"[Game Event: {content}]"
+    return None
+
+
 def _append_message(messages: list[dict[str, str]], role: str, content: str) -> None:
     # Anthropic/Gemini require alternating roles: merge consecutive same-role entries.
     if messages and messages[-1]["role"] == role and len(messages) > 1:
@@ -183,7 +197,8 @@ async def build_narration_messages(
 
     - Previous turns contribute only player/GM messages; their system events (dice rolls,
       stat changes, debug lines) were already narrated and would only cost tokens.
-    - The current turn keeps its system events as `[Game Event: ...]` annotations.
+    - The current turn keeps its system events as `[Game Event: ...]` annotations and its
+      script output as `[Already shown to the player this turn: ...]` annotations.
     - `turn_context` (CURRENT STATE + TURN RESOLUTION) is prepended to the final user message.
     Returns (messages, max_turns_configured).
     """
@@ -194,12 +209,12 @@ async def build_narration_messages(
     messages: list[dict[str, str]] = [{"role": "system", "content": narration_prompt}]
     for idx, message in enumerate(window):
         content = message.content or ""
-        if message.role in ("user", "assistant"):
+        if idx <= current_turn_idx and message.role in ("user", "assistant"):
             _append_message(messages, message.role, content)
             continue
-        if message.role != "system" or idx < current_turn_idx or _is_debug_message(content):
-            continue
-        _append_message(messages, "user", f"[Game Event: {content}]")
+        entry = _current_turn_entry(message.role, content) if idx > current_turn_idx else None
+        if entry:
+            _append_message(messages, "user", entry)
 
     # Ensure the last message is role="user" so the LLM responds as assistant.
     if len(messages) == 1 or messages[-1]["role"] != "user":
