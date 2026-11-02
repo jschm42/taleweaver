@@ -34,6 +34,22 @@ def is_deprecated_version(version: Any) -> bool:
     return is_version_below(version, DEPRECATED_BELOW_VERSION)
 
 
+def is_newer_than_engine(version: Any) -> bool:
+    """True when ``version`` is greater than :data:`CURRENT_VERSION`.
+
+    Such a manifest was written by a newer engine: this build does not know its format
+    additions, so playing it is allowed but only with an explicit warning.
+    Missing or unparsable versions are never "newer".
+    """
+    text = str(version or "").strip()
+    if not text:
+        return False
+    try:
+        return parse_version(text) > parse_version(CURRENT_VERSION)
+    except InvalidVersion:
+        return False
+
+
 def _parse_version(value: str) -> tuple[int, ...]:
     parts = [part.strip() for part in (value or "").split(".")]
     numbers: list[int] = []

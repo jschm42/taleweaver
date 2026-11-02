@@ -37,6 +37,7 @@ import CloneProgressModal from '@/components/portal/CloneProgressModal.vue'
 import ExportProgressModal from '@/components/portal/ExportProgressModal.vue'
 import GenerationProgressModal from '@/components/portal/GenerationProgressModal.vue'
 import MigrateAdventureModal from '@/components/portal/MigrateAdventureModal.vue'
+import EngineOutdatedModal from '@/components/portal/EngineOutdatedModal.vue'
 import AdventureLibraryDialog from '@/components/portal/AdventureLibraryDialog.vue'
 import { useAdventureLibrary } from '@/composables/useAdventureLibrary'
 import type { AdventureTemplateSummary } from '@/types'
@@ -214,8 +215,28 @@ async function playSession(gameId: string) {
   }
 }
 
+// An adventure built for a newer engine is still playable, but only after an explicit warning.
+const showEngineOutdatedModal = ref(false)
+const engineOutdatedTemplate = ref<AdventureTemplateSummary | null>(null)
+
 async function startSession(templateId: string) {
   if (isStartingSession.value) return
+  const template = templates.value.find((t) => t.template_id === templateId)
+  if (template?.engine_outdated && !template.is_legacy_format && template.can_start !== false) {
+    engineOutdatedTemplate.value = template
+    showEngineOutdatedModal.value = true
+    return
+  }
+  await startSessionForTemplate(templateId, playSession)
+}
+
+function closeEngineOutdatedModal() {
+  showEngineOutdatedModal.value = false
+  engineOutdatedTemplate.value = null
+}
+
+async function confirmEngineOutdatedStart(templateId: string) {
+  closeEngineOutdatedModal()
   await startSessionForTemplate(templateId, playSession)
 }
 
@@ -663,6 +684,14 @@ onUnmounted(() => {
         @close="closeMigrateModal"
         @migrate-format="handleMigrateFormat"
         @cover="handleMigrateCover"
+      />
+
+      <EngineOutdatedModal
+        :is-open="showEngineOutdatedModal"
+        :template="engineOutdatedTemplate"
+        :is-starting="isStartingSession"
+        @close="closeEngineOutdatedModal"
+        @confirm="confirmEngineOutdatedStart"
       />
 
       <div

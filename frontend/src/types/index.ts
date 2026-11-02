@@ -450,6 +450,10 @@ export interface AdventureTemplateSummary {
   is_legacy_format?: boolean
   /** Manifest format below 1.3.1: still playable, shown as deprecated. */
   is_deprecated?: boolean
+  /** Manifest format version stored in the adventure (e.g. "1.3.1"). */
+  format_version?: string | null
+  /** Manifest newer than this engine build: playable after an explicit confirmation. */
+  engine_outdated?: boolean
   can_start?: boolean
 }
 
