@@ -30,6 +30,7 @@ from backend.core.narration_styles import (
     narration_style_rules,
 )
 from backend.core.narrator_voices import narrator_voice_rules
+from backend.core.prose_craft import PROSE_CRAFT_RULES
 from backend.core.voice_tags import vocal_tag_reminder
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.debug_script_command import (
@@ -1784,6 +1785,7 @@ class GameTurnManager:
             ctx.narration_static_prompt,
             prompts.GM_NARRATION_TURN_CONTRACT,
             prompts.GM_NARRATION_MANDATORY_FORMATTING,
+            PROSE_CRAFT_RULES,
             narration_style_rules(getattr(self.state, "narration_style", None)),
             narrator_voice_rules(getattr(self.adventure, "narrator_voice", None)),
             prompts.get_vocal_direction_prompt(tts_provider) if use_vocal_tags else "",

@@ -350,7 +350,7 @@ Appended to the static system prompt for Pass 1 of 'Story Mode' adventures.
 
 GM_CHAT_NARRATION_SUFFIX = (
     "CRITICAL: You are in Chat Mode. Focus on snappy dialogue, character interaction, and atmosphere. "
-    "Keep responses conversational and concise, like a Sitcom or pure Roleplay — never monologue or dump excessive exposition. "
+    "Keep responses conversational and concise, like a Sitcom or pure Roleplay. Never monologue or dump excessive exposition. "
     "Never reveal the internal walkthrough directly; when asked for help, give only hints and rough guidance."
 )
 """
@@ -391,7 +391,7 @@ Instruction for the GM when the player asks for more details (look/search/examin
 """
 
 GM_NARRATION_SNAPPY_SUFFIX = (
-    "Keep the response SHORT and punchy — 2-4 sentences MAX for routine actions. "
+    "Keep the response SHORT and punchy, 2-4 sentences MAX for routine actions. "
     "Favor direct NPC dialogue (let characters speak!) over lengthy narrative descriptions. "
     "Move the action forward without flowery prose or unnecessary exposition. "
     "Show, don't tell. More speech, less narration."
@@ -405,7 +405,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Response length, paragraph size and pacing follow the NARRATION STYLE rules.\n\n"
     "COMPACT TEXT BLOCKS (CRITICAL): Keep each prose paragraph within the sentence limit of the NARRATION STYLE. "
     "Split longer passages into separate paragraphs with a blank line. "
-    "Never embed NPC speech inside a prose paragraph — it always goes on its own dialogue line.\n\n"
+    "Never embed NPC speech inside a prose paragraph; it always goes on its own dialogue line.\n\n"
     "NO REPETITION (CRITICAL): Never repeat or paraphrase descriptions from earlier turns or from the CURRENT STATE. "
     "When the player looks at or inspects something already described, give only 1-2 new, telling details "
     "(or let a present NPC react) instead of describing it again.\n\n"
@@ -413,7 +413,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "NPC INITIATIVE RULE: Present NPCs are people with their own agenda, not props waiting to be addressed. "
     "Each present, conscious NPC pursues its listed Goal and acts according to its Character: it volunteers opinions, "
     "asks the player questions, makes offers, complains, jokes or presses its own concern. "
-    "React to what the player just did even if it was passive (looking around, waiting, examining) — someone comments on it. "
+    "React to what the player just did even if it was passive (looking around, waiting, examining); someone comments on it."
     "When several NPCs are present, they talk to each other directly as well: they banter, interrupt, contradict or back each other up. "
     "Keep each line short and in the speaker's own voice; prefer several quick exchanges over one long speech. "
     "Never let an NPC decide or speak for the player, and never let NPCs block the player's action or repeat a question the player ignored word for word.\n\n"
@@ -421,7 +421,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     'Use the format: Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" if an emotion tag is used, e.g. Professor Quark: [excited] "Look here!"). '
     'NEVER put emotion tags inside quotation marks (do NOT write Character Name: "[tag] Dialogue" or "[tag]" "Dialogue"). '
     "Separate narrative prose from speech with a blank line. "
-    'NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: "..."). Use dashes (—), periods, or commas instead.\n\n'
+    'NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: "..."). Use periods or commas instead.\n\n'
     "NO SUMMARIES OR SEPARATORS: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'. Do NOT use horizontal rules or lines like '---' in your output.\n\n"
     "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
 )
@@ -431,7 +431,7 @@ def get_vocal_direction_prompt(provider: str = "google") -> str:
     return (
         "VOICE DIRECTION: Use audio tags to give dialogue and narration life where the mood calls for it. "
         "Tags MUST come from the fixed catalogs below, MUST ALWAYS be in English and lowercase, and are ALWAYS "
-        "written in square brackets — never <...> and never (...). "
+        "written in square brackets, never <...> and never (...). "
         + build_voice_tag_catalog_prompt_block(provider)
         + "1. TONE TAGS: Open a dialogue line or paragraph with at most one tone tag from the Tone Catalog (for example [excited], [whispers]). "
         "It applies to the whole line it opens. Do not nest tags.\n"

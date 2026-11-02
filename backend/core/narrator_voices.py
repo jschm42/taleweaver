@@ -219,7 +219,7 @@ def narrator_voice_rules(voice: Any) -> str:
         else ""
     )
     return (
-        f"NARRATOR VOICE — {clean['name'].upper()}: {clean['instruction']}{sample} "
+        f"NARRATOR VOICE - {clean['name'].upper()}: {clean['instruction']}{sample} "
         "The voice shapes word choice, sentence rhythm and attitude of the narration in the "
         "response language. It never overrides the length rules, the formatting rules or the "
         "facts of the turn, and NPCs keep their own way of speaking in their dialogue lines."

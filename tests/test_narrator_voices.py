@@ -65,7 +65,7 @@ def test_rules_carry_instruction_and_sample_and_keep_length_rules_in_charge():
     rules = narrator_voice_rules(NOIR)
 
     # Assert
-    assert rules.startswith("NARRATOR VOICE — HARDBOILED NOIR DETECTIVE: Narrate dry and cynical.")
+    assert rules.startswith("NARRATOR VOICE - HARDBOILED NOIR DETECTIVE: Narrate dry and cynical.")
     assert '"Rain hit the neon sign like cheap static."' in rules
     assert "never overrides the length rules" in rules
     assert narrator_voice_rules(None) == ""

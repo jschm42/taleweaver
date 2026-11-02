@@ -28,14 +28,14 @@ _STYLE_REMINDERS: Final[dict[str, str]] = {
 
 _STYLE_RULES: Final[dict[str, str]] = {
     "terse": (
-        "NARRATION STYLE — TERSE (CRITICAL): Write sparse, punchy story snippets. "
+        "NARRATION STYLE - TERSE (CRITICAL): Write sparse, punchy story snippets. "
         "Routine actions get 1-2 short sentences in total. A new location or a major event gets at most "
         "3 short sentences. Name only the single most striking detail; never describe a room in full. "
         "NPC dialogue is one short sentence per character per turn. Skip transitions, inner thoughts and "
         "atmosphere padding; move straight to what changed and who reacts."
     ),
     "dialogue": (
-        "NARRATION STYLE — DIALOGUE-FIRST SCRIPT (CRITICAL): Write the turn like a radio play. The "
+        "NARRATION STYLE - DIALOGUE-FIRST SCRIPT (CRITICAL): Write the turn like a radio play. The "
         "characters carry the scene; the narrator only bridges between their lines. Alternate narrator "
         "beats and dialogue lines, each on its own line with a blank line in between. A narrator beat is "
         "exactly ONE short sentence (at most about 20 words) naming an action, a reaction or one sensory "
@@ -47,7 +47,7 @@ _STYLE_RULES: Final[dict[str, str]] = {
         "'Narrator:' or any other speaker name."
     ),
     "balanced": (
-        "NARRATION STYLE — BALANCED (CRITICAL): 1-2 short paragraphs for standard actions. Up to 3 "
+        "NARRATION STYLE - BALANCED (CRITICAL): 1-2 short paragraphs for standard actions. Up to 3 "
         "paragraphs ONLY for new scenes or major events. Every prose paragraph has at most 3 sentences "
         "(roughly 60 words). A new location gets a compact, atmospheric introduction (about 120 words) with "
         "the 2-3 most striking details; leave the rest for the player to discover. "
@@ -56,14 +56,14 @@ _STYLE_RULES: Final[dict[str, str]] = {
         "and focus on the most salient sensory details instead of cataloging every object."
     ),
     "rich": (
-        "NARRATION STYLE — RICH (CRITICAL): Write descriptive, immersive prose. Standard actions get 2-3 "
+        "NARRATION STYLE - RICH (CRITICAL): Write descriptive, immersive prose. Standard actions get 2-3 "
         "paragraphs; new scenes and major events up to 4. Every prose paragraph has at most 4 sentences "
         "(roughly 80 words). Use concrete sensory detail (light, sound, smell, texture) and show how the "
         "world and its characters react. NPC dialogue may run 2-4 sentences per character and reveal "
         "personality. Stay focused on the current moment; never pad with repetition or recaps."
     ),
     "epic": (
-        "NARRATION STYLE — EPIC (CRITICAL): Write like a novel. Standard actions get 3-5 paragraphs; new "
+        "NARRATION STYLE - EPIC (CRITICAL): Write like a novel. Standard actions get 3-5 paragraphs; new "
         "scenes and major events up to 6. Every prose paragraph has at most 5 sentences (roughly 100 words). "
         "Build atmosphere and tension, describe the setting and the characters' body language in depth, and "
         "vary rhythm between long flowing sentences and short beats. NPC dialogue may be expansive and "
