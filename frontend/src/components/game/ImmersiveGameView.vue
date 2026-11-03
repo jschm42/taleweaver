@@ -22,7 +22,6 @@ import ImmersiveCharacterStage from './immersive/ImmersiveCharacterStage.vue'
 import ImmersiveStoryTabs from './immersive/ImmersiveStoryTabs.vue'
 import StoryTabPanel from './immersive/tabs/StoryTabPanel.vue'
 import SceneImageViewer from './immersive/SceneImageViewer.vue'
-import { Image as ImageIcon } from 'lucide-vue-next'
 import HoverRevealHeader from './immersive/HoverRevealHeader.vue'
 import SpeechControls from './immersive/SpeechControls.vue'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
@@ -196,7 +195,7 @@ const { activeSkin, skinStyle } = useSheetSkin(() => props.sheet)
 // --- Story tabs ---
 // Wide screens show passages, discoveries and switches in a right-hand column (unless turned off in
 // the settings); narrower ones keep them in the tab bar.
-const isWideScreen = useMediaQuery('(min-width: 1280px)')
+const isWideScreen = useMediaQuery('(min-width: 1024px)')
 const { sceneSidebarEnabled } = useSceneSidebar()
 const sidebarDocked = computed(() => isWideScreen.value && sceneSidebarEnabled.value)
 const {
@@ -328,6 +327,8 @@ defineExpose({
         :tracked-quest="props.trackedQuest"
         :mode="props.mode"
         :debug-mode="!!props.sheet?.debug_mode"
+        :has-scene-image="Boolean(activeSceneImageUrl)"
+        @view-scene-image="showSceneImage = true"
         @open-chronicles="emit('openChronicles')"
         @open-quests="emit('openQuests')"
         @open-memories="emit('openMemories')"
@@ -338,7 +339,7 @@ defineExpose({
     </HoverRevealHeader>
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->
-    <div class="relative z-10 flex-grow min-h-0 flex flex-row gap-2 sm:gap-4 p-2 sm:p-4 lg:p-6 overflow-hidden">
+    <div class="relative z-10 flex-grow min-h-0 flex flex-row gap-2 sm:gap-3 lg:gap-4 p-2 sm:p-3 lg:p-4 xl:p-6 overflow-hidden">
       <!-- 3A. LEFT / CHARACTER STAGE -->
       <ImmersiveCharacterStage
         :npcs="npcs"
@@ -354,24 +355,8 @@ defineExpose({
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
         <!-- Award earned during play: glowing card at the top of the story area for a few seconds -->
         <AwardUnlockedOverlay :messages="props.messages" :awards="props.awards" />
-        <!-- Full scene artwork (top-right corner of the story area) -->
-        <!-- Wrapper owns the positioning: .tw-tab sets position: relative on the button itself. -->
-        <!-- z-[35]: above the story tabs (z-30, full width, rendered later), below the sequence overlay (z-[70]). -->
-        <div v-if="activeSceneImageUrl" class="absolute right-0 top-0 z-[35]">
-          <button
-            type="button"
-            class="tw-tab tw-scene-image-button"
-            title="View the full scene image"
-            aria-label="View the full scene image"
-            @click="showSceneImage = true"
-          >
-            <ImageIcon class="w-5 h-5" />
-          </button>
-        </div>
-
         <ImmersiveStoryTabs
           v-model="activeStoryTab"
-          :class="{ 'pr-14': activeSceneImageUrl }"
           :exit-count="sceneExits.length"
           :has-locked-exits="hasLockedExits"
           :item-count="sceneItems.length"

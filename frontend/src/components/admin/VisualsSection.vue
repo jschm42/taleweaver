@@ -176,8 +176,7 @@ const testAdvanced = () => {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-          <i class="ra ra-camera text-cyan-400"></i>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">
           Visual Generation (T2I)
         </h1>
         <p class="text-slate-400 text-sm mt-1">
@@ -229,22 +228,16 @@ const testAdvanced = () => {
 
     <!-- QUALITY ROUTING PER CONTENT TYPE -->
     <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-      <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800/80">
-        <div class="w-9 h-9 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center text-sm">
-          <i class="ra ra-gear"></i>
-        </div>
-        <div>
-          <h3 class="text-sm font-bold text-white">Quality Routing by Content Type</h3>
-          <p class="text-xs text-slate-400">Route each asset type to Standard (Fast) or High-Fidelity (Advanced) rendering.</p>
-        </div>
+      <div class="pb-3 border-b border-slate-800/80">
+        <h3 class="text-sm font-bold text-white">Quality Routing by Content Type</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Route each asset type to Standard (Fast) or High-Fidelity (Advanced) rendering.</p>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <!-- Scenes -->
         <div class="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white flex items-center gap-1.5">
-              <i class="ra ra-mountain text-cyan-400 text-xs"></i>
+            <span class="text-xs font-bold text-white">
               Scenes & World
             </span>
             <span class="text-[10px] font-mono text-slate-500">16:9</span>
@@ -270,8 +263,7 @@ const testAdvanced = () => {
         <!-- NPC Profiles -->
         <div class="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white flex items-center gap-1.5">
-              <i class="ra ra-hood text-cyan-400 text-xs"></i>
+            <span class="text-xs font-bold text-white">
               NPC Portraits
             </span>
             <span class="text-[10px] font-mono text-slate-500">4:5</span>
@@ -297,8 +289,7 @@ const testAdvanced = () => {
         <!-- Protagonist -->
         <div class="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white flex items-center gap-1.5">
-              <i class="ra ra-player text-cyan-400 text-xs"></i>
+            <span class="text-xs font-bold text-white">
               Protagonist
             </span>
             <span class="text-[10px] font-mono text-slate-500">4:5</span>
@@ -324,8 +315,7 @@ const testAdvanced = () => {
         <!-- Other Assets -->
         <div class="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white flex items-center gap-1.5">
-              <i class="ra ra-gem text-cyan-400 text-xs"></i>
+            <span class="text-xs font-bold text-white">
               Items & Loot
             </span>
             <span class="text-[10px] font-mono text-slate-500">1:1</span>
@@ -354,8 +344,8 @@ const testAdvanced = () => {
     <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-6 shadow-xl space-y-4 transition-all">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-800/80">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center text-lg">
-            <i class="ra ra-camera"></i>
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center font-mono font-black text-sm">
+            01
           </div>
           <div>
             <div class="flex items-center gap-2">
@@ -508,8 +498,8 @@ const testAdvanced = () => {
     <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-6 shadow-xl space-y-4 transition-all">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-800/80">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center text-lg">
-            <i class="ra ra-brandy-glass"></i>
+          <div class="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center font-mono font-black text-sm">
+            02
           </div>
           <div>
             <div class="flex items-center gap-2">

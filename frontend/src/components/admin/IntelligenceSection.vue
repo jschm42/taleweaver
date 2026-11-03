@@ -10,15 +10,24 @@ const props = defineProps<{
   configuredKeys: Record<string, { masked: string; is_env: boolean }>
   isSubmitting: boolean
   isLoadingOllamaModels: boolean
-  isLoadingMinimaxModels: boolean
   testResults: Record<string, { status: string; message: string }>
 }>()
 
 const emit = defineEmits<{
   (e: 'save', payload: any): void
-  (e: 'test', payload: { key: string; model: string; provider: string; openrouterProvider?: string }): void
+  (
+    e: 'test',
+    payload: {
+      key: string
+      model: string
+      provider: string
+      openrouterProvider?: string
+      customOpenaiUrl?: string
+      customOpenaiResponseFormat?: string
+      customOpenaiTimeout?: number
+    }
+  ): void
   (e: 'refreshOllamaModels', ollamaUrl?: string): void
-  (e: 'refreshMinimaxModels', minimaxUrl?: string): void
   (e: 'switchSection', section: string): void
 }>()
 
@@ -37,6 +46,18 @@ const normalizeLocalForm = (data: any) => ({
   custom_openai_url: data?.custom_openai_url || '',
   custom_openai_timeout: typeof data?.custom_openai_timeout === 'number' ? data.custom_openai_timeout : 300,
   custom_openai_response_format: data?.custom_openai_response_format || 'prompt',
+  small_custom_openai_url: data?.small_custom_openai_url || '',
+  small_custom_openai_timeout: typeof data?.small_custom_openai_timeout === 'number' ? data.small_custom_openai_timeout : (data?.custom_openai_timeout || 300),
+  small_custom_openai_response_format: data?.small_custom_openai_response_format || (data?.custom_openai_response_format || 'prompt'),
+  complex_custom_openai_url: data?.complex_custom_openai_url || '',
+  complex_custom_openai_timeout: typeof data?.complex_custom_openai_timeout === 'number' ? data.complex_custom_openai_timeout : (data?.custom_openai_timeout || 300),
+  generator_custom_openai_url: data?.generator_custom_openai_url || '',
+  generator_custom_openai_timeout: typeof data?.generator_custom_openai_timeout === 'number' ? data.generator_custom_openai_timeout : (data?.custom_openai_timeout || 300),
+  generator_custom_openai_response_format: data?.generator_custom_openai_response_format || (data?.custom_openai_response_format || 'prompt'),
+  play_agent_custom_openai_url: data?.play_agent_custom_openai_url || '',
+  play_agent_custom_openai_timeout: typeof data?.play_agent_custom_openai_timeout === 'number' ? data.play_agent_custom_openai_timeout : (data?.custom_openai_timeout || 300),
+  compression_custom_openai_url: data?.compression_custom_openai_url || '',
+  compression_custom_openai_timeout: typeof data?.compression_custom_openai_timeout === 'number' ? data.compression_custom_openai_timeout : (data?.custom_openai_timeout || 300),
 })
 
 const localForm = ref(normalizeLocalForm(props.llmForm))
@@ -80,10 +101,21 @@ const missingProviders = computed(() => {
   return missing
 })
 
-/** Self-hosted endpoints whose discovered model list depends on the configured URL. */
+type PassKey = 'small' | 'complex' | 'generator' | 'play_agent' | 'compression'
+
+/** Resolves the base URL for a specific pass (per-pass override or global fallback). */
+const passBaseUrl = (passKey: PassKey): string => {
+  const provider = localForm.value[`${passKey}_model_provider`]
+  if (provider === 'ollama') return localForm.value.ollama_url || ''
+  if (provider === 'custom_openai') {
+    return localForm.value[`${passKey}_custom_openai_url`] || localForm.value.custom_openai_url || ''
+  }
+  return ''
+}
+
+/** Fallback modelBaseUrl for general provider lookups. */
 const modelBaseUrl = (provider: string): string => {
   if (provider === 'ollama') return localForm.value.ollama_url || ''
-  if (provider === 'minimax') return localForm.value.minimax_url || ''
   if (provider === 'custom_openai') return localForm.value.custom_openai_url || ''
   return ''
 }
@@ -132,21 +164,8 @@ const hasOllamaProviderSelected = computed(() => (
   || localForm.value.compression_model_provider === 'ollama'
 ))
 
-const hasMinimaxProviderSelected = computed(() => (
-  localForm.value.small_model_provider === 'minimax'
-  || localForm.value.complex_model_provider === 'minimax'
-  || localForm.value.generator_model_provider === 'minimax'
-  || localForm.value.play_agent_model_provider === 'minimax'
-  || localForm.value.compression_model_provider === 'minimax'
-))
-
 const ollamaModelCount = computed(() => {
   const models = props.availableConstants?.predefined_llm_models?.ollama
-  return Array.isArray(models) ? models.length : 0
-})
-
-const minimaxModelCount = computed(() => {
-  const models = props.availableConstants?.predefined_llm_models?.minimax
   return Array.isArray(models) ? models.length : 0
 })
 
@@ -160,27 +179,27 @@ const refreshOllamaModels = () => {
   emit('refreshOllamaModels', localForm.value.ollama_url)
 }
 
-const refreshMinimaxModels = () => {
-  emit('refreshMinimaxModels', localForm.value.minimax_url)
+const isCustomOpenAiLoadingForPass = (passKey: PassKey) => {
+  const url = passBaseUrl(passKey)
+  const key = providerModelsKey('custom_openai', 'llm', url)
+  return getProviderModelsEntry(key)?.status === 'loading'
 }
 
-const customOpenAiDiscoveryKey = computed(() =>
-  providerModelsKey('custom_openai', 'llm', localForm.value.custom_openai_url || '')
-)
+const customOpenAiModelCountForPass = (passKey: PassKey) => {
+  const url = passBaseUrl(passKey)
+  const key = providerModelsKey('custom_openai', 'llm', url)
+  return (
+    getProviderModelsEntry(key)?.list?.models?.length ||
+    props.availableConstants?.predefined_llm_models?.custom_openai?.length ||
+    0
+  )
+}
 
-const isCustomOpenAiLoading = computed(() =>
-  getProviderModelsEntry(customOpenAiDiscoveryKey.value)?.status === 'loading'
-)
-
-const customOpenAiModelCount = computed(() =>
-  getProviderModelsEntry(customOpenAiDiscoveryKey.value)?.list?.models.length
-  || props.availableConstants?.predefined_llm_models?.custom_openai?.length
-  || 0
-)
-
-const refreshCustomOpenAiModels = () => {
+const refreshCustomOpenAiModelsForPass = (passKey: PassKey) => {
+  const url = passBaseUrl(passKey)
+  if (!url) return
   loadProviderModels('custom_openai', 'llm', {
-    baseUrl: localForm.value.custom_openai_url || '',
+    baseUrl: url,
     refresh: true,
   })
 }
@@ -200,14 +219,19 @@ const handleTurnsInput = (e: Event) => {
 const syncFromPass1 = () => {
   const p = localForm.value.small_model_provider
   const m = localForm.value.small_model
+  const customUrl = localForm.value.small_custom_openai_url
   localForm.value.complex_model_provider = p
   localForm.value.complex_model = m
+  localForm.value.complex_custom_openai_url = customUrl
   localForm.value.generator_model_provider = p
   localForm.value.generator_model = m
+  localForm.value.generator_custom_openai_url = customUrl
   localForm.value.play_agent_model_provider = p
   localForm.value.play_agent_model = m
+  localForm.value.play_agent_custom_openai_url = customUrl
   localForm.value.compression_model_provider = p
   localForm.value.compression_model = m
+  localForm.value.compression_custom_openai_url = customUrl
 }
 
 const handleSave = () => {
@@ -215,12 +239,20 @@ const handleSave = () => {
 }
 
 // Trigger test with proper args
-const triggerTest = (passKey: string, model: string, provider: string, openrouterProvider?: string) => {
+const triggerTest = (
+  passKey: PassKey,
+  model: string,
+  provider: string,
+  openrouterProvider?: string
+) => {
   emit('test', {
     key: passKey,
     model,
     provider,
-    openrouterProvider
+    openrouterProvider,
+    customOpenaiUrl: passBaseUrl(passKey),
+    customOpenaiResponseFormat: localForm.value[`${passKey}_custom_openai_response_format`] || localForm.value.custom_openai_response_format,
+    customOpenaiTimeout: localForm.value[`${passKey}_custom_openai_timeout`] || localForm.value.custom_openai_timeout,
   })
 }
 </script>
@@ -414,10 +446,26 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
             input-id="llm-small-model"
             kind="llm"
             :provider="localForm.small_model_provider"
-            :base-url="modelBaseUrl(localForm.small_model_provider)"
+            :base-url="passBaseUrl('small')"
           />
         </div>
       </div>
+
+      <!-- Pass 1 OpenAI-Compatible Custom Endpoint -->
+      <CustomOpenAIEndpoint
+        v-if="localForm.small_model_provider === 'custom_openai'"
+        pass-title="Pass 1: Mechanics"
+        v-model:url="localForm.small_custom_openai_url"
+        :fallback-url="localForm.custom_openai_url"
+        v-model:timeout="localForm.small_custom_openai_timeout"
+        v-model:response-format="localForm.small_custom_openai_response_format"
+        :show-response-format="true"
+        :loading="isCustomOpenAiLoadingForPass('small')"
+        :model-count="customOpenAiModelCountForPass('small')"
+        :has-key="!!configuredKeys?.custom_openai"
+        @detect="refreshCustomOpenAiModelsForPass('small')"
+        @vault="emit('switchSection', 'keys')"
+      />
 
       <!-- Test Result Alert -->
       <div
@@ -566,10 +614,25 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
             input-id="llm-complex-model"
             kind="llm"
             :provider="localForm.complex_model_provider"
-            :base-url="modelBaseUrl(localForm.complex_model_provider)"
+            :base-url="passBaseUrl('complex')"
           />
         </div>
       </div>
+
+      <!-- Pass 2 OpenAI-Compatible Custom Endpoint -->
+      <CustomOpenAIEndpoint
+        v-if="localForm.complex_model_provider === 'custom_openai'"
+        pass-title="Pass 2: Narration"
+        v-model:url="localForm.complex_custom_openai_url"
+        :fallback-url="localForm.custom_openai_url"
+        v-model:timeout="localForm.complex_custom_openai_timeout"
+        :show-response-format="false"
+        :loading="isCustomOpenAiLoadingForPass('complex')"
+        :model-count="customOpenAiModelCountForPass('complex')"
+        :has-key="!!configuredKeys?.custom_openai"
+        @detect="refreshCustomOpenAiModelsForPass('complex')"
+        @vault="emit('switchSection', 'keys')"
+      />
 
       <!-- Test Result Alert -->
       <div
@@ -712,10 +775,26 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
             input-id="llm-generator-model"
             kind="llm"
             :provider="localForm.generator_model_provider"
-            :base-url="modelBaseUrl(localForm.generator_model_provider)"
+            :base-url="passBaseUrl('generator')"
           />
         </div>
       </div>
+
+      <!-- Generator OpenAI-Compatible Custom Endpoint -->
+      <CustomOpenAIEndpoint
+        v-if="localForm.generator_model_provider === 'custom_openai'"
+        pass-title="Worldbuilder"
+        v-model:url="localForm.generator_custom_openai_url"
+        :fallback-url="localForm.custom_openai_url"
+        v-model:timeout="localForm.generator_custom_openai_timeout"
+        v-model:response-format="localForm.generator_custom_openai_response_format"
+        :show-response-format="true"
+        :loading="isCustomOpenAiLoadingForPass('generator')"
+        :model-count="customOpenAiModelCountForPass('generator')"
+        :has-key="!!configuredKeys?.custom_openai"
+        @detect="refreshCustomOpenAiModelsForPass('generator')"
+        @vault="emit('switchSection', 'keys')"
+      />
 
       <div
         v-if="testResults.generator"
@@ -827,10 +906,25 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
               input-id="llm-play-agent-model"
               kind="llm"
               :provider="localForm.play_agent_model_provider"
-              :base-url="modelBaseUrl(localForm.play_agent_model_provider)"
+              :base-url="passBaseUrl('play_agent')"
             />
           </div>
         </div>
+
+        <!-- Play Agent OpenAI-Compatible Custom Endpoint -->
+        <CustomOpenAIEndpoint
+          v-if="localForm.play_agent_model_provider === 'custom_openai'"
+          pass-title="Autonomous Play Agent"
+          v-model:url="localForm.play_agent_custom_openai_url"
+          :fallback-url="localForm.custom_openai_url"
+          v-model:timeout="localForm.play_agent_custom_openai_timeout"
+          :show-response-format="false"
+          :loading="isCustomOpenAiLoadingForPass('play_agent')"
+          :model-count="customOpenAiModelCountForPass('play_agent')"
+          :has-key="!!configuredKeys?.custom_openai"
+          @detect="refreshCustomOpenAiModelsForPass('play_agent')"
+          @vault="emit('switchSection', 'keys')"
+        />
 
         <!-- OpenRouter Provider Routing if openrouter -->
         <div v-if="localForm.play_agent_model_provider === 'openrouter'" class="pt-1">
@@ -1013,10 +1107,25 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
               kind="llm"
               placeholder="Empty: fall back to Pass 1 model"
               :provider="localForm.compression_model_provider"
-              :base-url="modelBaseUrl(localForm.compression_model_provider)"
+              :base-url="passBaseUrl('compression')"
             />
           </div>
         </div>
+
+        <!-- Compression OpenAI-Compatible Custom Endpoint -->
+        <CustomOpenAIEndpoint
+          v-if="localForm.compression_model_provider === 'custom_openai'"
+          pass-title="History Compression"
+          v-model:url="localForm.compression_custom_openai_url"
+          :fallback-url="localForm.custom_openai_url"
+          v-model:timeout="localForm.compression_custom_openai_timeout"
+          :show-response-format="false"
+          :loading="isCustomOpenAiLoadingForPass('compression')"
+          :model-count="customOpenAiModelCountForPass('compression')"
+          :has-key="!!configuredKeys?.custom_openai"
+          @detect="refreshCustomOpenAiModelsForPass('compression')"
+          @vault="emit('switchSection', 'keys')"
+        />
 
         <div v-if="testResults.compression" class="p-3 rounded-xl text-xs font-mono flex items-center gap-2 border bg-slate-950 border-slate-800">
           <i :class="testResults.compression.status === 'success' ? 'ra ra-check text-emerald-400' : 'ra ra-warning text-rose-400'"></i>
@@ -1025,32 +1134,22 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
       </div>
     </div>
 
-    <!-- LOCAL ENDPOINTS & INFRASTRUCTURE (Ollama / MiniMax) -->
+    <!-- LOCAL ENDPOINTS & INFRASTRUCTURE (Ollama) -->
     <div
       v-if="activeTab === 'all' || activeTab === 'endpoints'"
       class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6"
     >
       <div class="flex items-center gap-3 pb-3 border-b border-slate-800/80">
-        <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-lg">
+        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center text-lg">
           <i class="ra ra-reactor"></i>
         </div>
         <div>
-          <h3 class="text-base font-bold text-white">Local & Custom API Endpoints</h3>
-          <p class="text-xs text-slate-400 mt-0.5">Configure API addresses for hosted gateways and self-hosted model backends.</p>
+          <h3 class="text-base font-bold text-white">Local Endpoints & Infrastructure</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Configure host addresses for self-hosted Ollama instances.</p>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <CustomOpenAIEndpoint
-          v-model:url="localForm.custom_openai_url"
-          v-model:timeout="localForm.custom_openai_timeout"
-          v-model:response-format="localForm.custom_openai_response_format"
-          :loading="isCustomOpenAiLoading"
-          :model-count="customOpenAiModelCount"
-          :has-key="!!configuredKeys?.custom_openai"
-          @detect="refreshCustomOpenAiModels"
-          @vault="emit('switchSection', 'keys')"
-        />
+      <div class="grid grid-cols-1 gap-6">
         <!-- Ollama Endpoint -->
         <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
           <div class="flex items-center justify-between">
@@ -1077,35 +1176,6 @@ const triggerTest = (passKey: string, model: string, provider: string, openroute
             <span>Detected: {{ ollamaModelCount }} local models</span>
             <span v-if="ollamaModelCount > 0" class="text-emerald-400">Ready</span>
             <span v-else class="text-amber-400">No models detected</span>
-          </div>
-        </div>
-
-        <!-- MiniMax Endpoint -->
-        <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-purple-400"></span>
-              MiniMax API Endpoint
-            </span>
-            <button
-              type="button"
-              @click="refreshMinimaxModels"
-              class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-[11px] font-bold rounded-lg border border-purple-500/30 transition-all flex items-center gap-1"
-            >
-              <i class="ra ra-recycle" :class="{'animate-spin': isLoadingMinimaxModels}"></i>
-              <span>{{ isLoadingMinimaxModels ? 'Detecting...' : 'Detect Models' }}</span>
-            </button>
-          </div>
-          <input
-            v-model="localForm.minimax_url"
-            type="text"
-            placeholder="https://api.minimax.chat/v1"
-            class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:ring-2 focus:ring-purple-500/50"
-          />
-          <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-            <span>Detected: {{ minimaxModelCount }} models</span>
-            <span v-if="minimaxModelCount > 0" class="text-emerald-400">Ready</span>
-            <span v-else class="text-slate-500">Default endpoints</span>
           </div>
         </div>
       </div>

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
+import logging
+import time
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -11,6 +14,8 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from backend.utils.path_security import _resolve_host_ips, validate_provider_url
+
+logger = logging.getLogger(__name__)
 
 
 def validate_custom_url(url: str) -> str:
@@ -51,18 +56,64 @@ def validate_custom_url(url: str) -> str:
     return normalized
 
 
-def configure_custom_router(router: Any, llm_settings: dict) -> None:
+def configure_custom_router(router: Any, llm_settings: dict, prefix: str = "") -> None:
     """Require an explicit validated base and use the existing encrypted provider vault."""
-    router.api_base = validate_custom_url(llm_settings.get("custom_openai_url") or "")
+    per_pass_url = (llm_settings.get(f"{prefix}custom_openai_url") or "").strip() if prefix else ""
+    base_url = per_pass_url or (llm_settings.get("custom_openai_url") or "").strip()
+    router.api_base = validate_custom_url(base_url)
     router.api_key = None
-    if (router.user.encrypted_api_keys or {}).get("custom_openai"):
+    vault = router.user.encrypted_api_keys or {}
+    if vault.get("custom_openai"):
         router.api_key = router._get_decrypted_key("custom_openai")
-    router.request_timeout = max(
-        1, min(3600, int(llm_settings.get("custom_openai_timeout") or 300))
+    elif "openrouter.ai" in (router.api_base or "") and vault.get("openrouter"):
+        router.api_key = router._get_decrypted_key("openrouter")
+    per_pass_timeout = llm_settings.get(f"{prefix}custom_openai_timeout") if prefix else None
+    timeout_val = per_pass_timeout or llm_settings.get("custom_openai_timeout") or 300
+    router.request_timeout = max(1, min(3600, int(timeout_val)))
+
+    per_pass_format = (
+        (llm_settings.get(f"{prefix}custom_openai_response_format") or "").strip() if prefix else ""
     )
-    router.custom_response_format = llm_settings.get("custom_openai_response_format", "prompt")
+    router.custom_response_format = (
+        per_pass_format or llm_settings.get("custom_openai_response_format") or "prompt"
+    )
     router.stream_initial_timeout = router.request_timeout
     router.stream_chunk_timeout = router.request_timeout
+
+
+def _is_transient_custom_error(exc: Exception) -> bool:
+    """Detect rate limits, upstream quotas, timeouts, or socket drops for custom endpoints."""
+    if getattr(exc, "status_code", None) in {429, 502, 503, 504}:
+        return True
+    err_type = type(exc).__name__.lower()
+    if any(
+        term in err_type
+        for term in (
+            "ratelimit",
+            "timeout",
+            "connecterror",
+            "connecttimeout",
+            "readtimeout",
+            "apiconnectionerror",
+        )
+    ):
+        return True
+    err_msg = str(exc or "").lower()
+    return any(
+        term in err_msg
+        for term in (
+            "rate limit",
+            "ratelimit",
+            "temporarily rate-limited",
+            "too many requests",
+            "quota",
+            "upstream_provider_shared_pool",
+            "connection refused",
+            "connection reset",
+            "remote disconnected",
+            "broken pipe",
+        )
+    )
 
 
 async def discover_models(base: str, api_key: str | None) -> list[str]:
@@ -107,18 +158,35 @@ def complete(router: Any, kwargs: dict) -> Any:
     """Use a bounded SDK client so redirects cannot bypass endpoint policy."""
     from openai import OpenAI
 
-    with (
-        httpx.Client(follow_redirects=False) as transport,
-        OpenAI(
-            api_key=router.api_key or "local-no-key",
-            base_url=validate_custom_url(router.api_base),
-            http_client=transport,
-            max_retries=0,
-        ) as client,
-    ):
-        return router._get_litellm().completion(
-            **kwargs, client=client, request_timeout=router.request_timeout
-        )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            with (
+                httpx.Client(follow_redirects=False) as transport,
+                OpenAI(
+                    api_key=router.api_key or "local-no-key",
+                    base_url=validate_custom_url(router.api_base),
+                    http_client=transport,
+                    max_retries=0,
+                ) as client,
+            ):
+                return router._get_litellm().completion(
+                    **kwargs, client=client, request_timeout=router.request_timeout
+                )
+        except Exception as exc:
+            if attempt < max_retries - 1 and _is_transient_custom_error(exc):
+                backoff = 1.0 * (attempt + 1)
+                logger.warning(
+                    "Custom OpenAI call attempt %d/%d failed with %s: %s. Retrying in %.1fs...",
+                    attempt + 1,
+                    max_retries,
+                    type(exc).__name__,
+                    exc,
+                    backoff,
+                )
+                time.sleep(backoff)
+                continue
+            raise
 
 
 async def acomplete(router: Any, kwargs: dict) -> Any:
@@ -127,40 +195,77 @@ async def acomplete(router: Any, kwargs: dict) -> Any:
         return _stream(router, kwargs)
     from openai import AsyncOpenAI
 
-    async with (
-        httpx.AsyncClient(follow_redirects=False) as transport,
-        AsyncOpenAI(
-            api_key=router.api_key or "local-no-key",
-            base_url=validate_custom_url(router.api_base),
-            http_client=transport,
-            max_retries=0,
-        ) as client,
-    ):
-        return await router._get_litellm().acompletion(
-            **kwargs, client=client, request_timeout=router.request_timeout
-        )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with (
+                httpx.AsyncClient(follow_redirects=False) as transport,
+                AsyncOpenAI(
+                    api_key=router.api_key or "local-no-key",
+                    base_url=validate_custom_url(router.api_base),
+                    http_client=transport,
+                    max_retries=0,
+                ) as client,
+            ):
+                return await router._get_litellm().acompletion(
+                    **kwargs, client=client, request_timeout=router.request_timeout
+                )
+        except Exception as exc:
+            if attempt < max_retries - 1 and _is_transient_custom_error(exc):
+                backoff = 1.0 * (attempt + 1)
+                logger.warning(
+                    "Custom OpenAI call attempt %d/%d failed with %s: %s. Retrying in %.1fs...",
+                    attempt + 1,
+                    max_retries,
+                    type(exc).__name__,
+                    exc,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+                continue
+            raise
 
 
 async def _stream(router: Any, kwargs: dict) -> Any:
     from openai import AsyncOpenAI
 
-    async with (
-        httpx.AsyncClient(follow_redirects=False) as transport,
-        AsyncOpenAI(
-            api_key=router.api_key or "local-no-key",
-            base_url=validate_custom_url(router.api_base),
-            http_client=transport,
-            max_retries=0,
-        ) as client,
-    ):
-        stream = await router._get_litellm().acompletion(
-            **kwargs, client=client, request_timeout=router.request_timeout
-        )
+    max_retries = 3
+    for attempt in range(max_retries):
+        has_yielded = False
         try:
-            async for chunk in stream:
-                yield chunk
-        finally:
-            await stream.aclose()
+            async with (
+                httpx.AsyncClient(follow_redirects=False) as transport,
+                AsyncOpenAI(
+                    api_key=router.api_key or "local-no-key",
+                    base_url=validate_custom_url(router.api_base),
+                    http_client=transport,
+                    max_retries=0,
+                ) as client,
+            ):
+                stream = await router._get_litellm().acompletion(
+                    **kwargs, client=client, request_timeout=router.request_timeout
+                )
+                try:
+                    async for chunk in stream:
+                        has_yielded = True
+                        yield chunk
+                finally:
+                    await stream.aclose()
+                return
+        except Exception as exc:
+            if not has_yielded and attempt < max_retries - 1 and _is_transient_custom_error(exc):
+                backoff = 1.0 * (attempt + 1)
+                logger.warning(
+                    "Custom OpenAI stream attempt %d/%d failed with %s: %s. Retrying in %.1fs...",
+                    attempt + 1,
+                    max_retries,
+                    type(exc).__name__,
+                    exc,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+                continue
+            raise
 
 
 def structured_response_format(router: Any, response_model: type[BaseModel]) -> dict | None:
@@ -185,8 +290,14 @@ class ConnectionTestResult(BaseModel):
     message: str
 
 
-async def test_connection(router: Any, model: str) -> str:
-    """Exercise the same JSON path used for mechanics, rather than text-only connectivity."""
+async def test_connection(router: Any, model: str, structured: bool = True) -> str:
+    """Exercise the JSON path for structured passes, or text connectivity for prose passes."""
+    if not structured:
+        return await router.aexecute_simple_task(
+            system_prompt="You are a helpful RPG assistant.",
+            user_prompt="Say 'TaleWeaver connection test successful!' in a fantasy style.",
+            model=model,
+        )
     result = await router.aexecute_complex_task(
         system_prompt="You are a helpful RPG assistant.",
         user_prompt='Return a JSON object with a message saying "TaleWeaver connection test successful!".',

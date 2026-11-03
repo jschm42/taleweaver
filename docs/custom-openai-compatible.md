@@ -1,22 +1,12 @@
-# Custom OpenAI-compatible APIs
+# Custom OpenAI-Compatible Endpoints
 
-Use **OpenAI-Compatible API** to connect a hosted gateway or a self-hosted inference server that implements the OpenAI Chat Completions API. It is a separate `custom_openai` provider with its own endpoint and optional encrypted API key. The official OpenAI provider keeps its existing configuration.
+Use any hosted OpenAI-compatible provider (e.g. OpenRouter, Groq, Together, DeepInfra) or self-hosted inference server (vLLM, Ollama, llama.cpp, LM Studio, TGI) with an OpenAI-compatible Chat Completions API.
 
-## Configure an endpoint
+Configure OpenAI-compatible endpoints directly within the Intelligence settings cards for Pass 1 (Mechanics), Pass 2 (Narration), Worldbuilder Generator, Autonomous Play Agent, or History Compression. Each pass can either inherit the global base URL or specify its own dedicated endpoint (e.g. `http://localhost:8001/v1` for mechanics and `https://openrouter.ai/api/v1` for narration). Detection is optional: you can detect models from the endpoint's `/models` route or enter any custom model ID manually.
 
-1. Open **Admin → Intelligence → Local Endpoints & Memory → Local & Custom API Endpoints**.
-2. Under **OpenAI-Compatible API**, enter the API's Base URL, including its `/v1` path. Use the URL documented by your provider, not its website or the full `/chat/completions` URL. Examples:
-   - Hosted gateway: `https://your-provider.example/v1`.
-   - A provider with a path prefix: `https://your-provider.example/openai/v1`.
-   - KoboldCpp's usual local address: `http://127.0.0.1:5001/v1`.
-   - llama.cpp's usual local address: `http://127.0.0.1:8080/v1`.
-   - vLLM or LM Studio: the host and port reported by the server, followed by `/v1`.
-3. If the endpoint requires authentication, select **Add optional API key in Provider Vault**, save its key under **OpenAI-Compatible API**, and return to Intelligence. The key is encrypted at rest and sent to the configured endpoint using bearer authentication. Leave it unset for an unauthenticated server; do not put credentials in the URL.
-4. Choose **Detect Models**, or enter the exact **Custom Model ID** in each pass. Detection uses `<base>/models` and is optional. Servers without this endpoint can use manual selection. Preserve the provider's model ID exactly, including vendor prefixes such as `openai/`.
-5. Select **OpenAI-Compatible API** for mechanics, narrative, worldbuilder, play agent, and/or compression. Each role can use a different model ID. The Base URL, API key, timeout and structured-output mode are shared by these roles.
-6. Save the settings before clicking **Test Model**. The test sends a small real structured completion to the saved endpoint using the selected output mode, then validates a JSON object containing a message. A successful test confirms that request, not every model capability or adventure task.
+## Authentication and headers
 
-These addresses illustrate the required URL shape; they are not a record of live-provider verification.
+Store optional API keys in the Provider Vault under **OpenAI-Compatible API Key**. When pointing an OpenAI-compatible endpoint to OpenRouter (`https://openrouter.ai/api/v1`) without a custom OpenAI key, TaleWeaver automatically falls back to your saved OpenRouter vault key. TaleWeaver sends the key as `Authorization: Bearer <key>`. Endpoints that do not require authentication can leave the vault key empty. TaleWeaver sets standard headers for hosted gateways.
 
 ## Local networking
 
@@ -26,10 +16,10 @@ In Docker, `127.0.0.1` refers to the TaleWeaver container. Use `host.docker.inte
 
 ## Structured output and limits
 
-Custom structured requests include the JSON schema in the prompt. **Structured output support** defaults to **Prompt only** for compatibility. If the endpoint and selected model support it, choose **JSON object** to request JSON syntax or **JSON schema** to send the complete schema through `response_format`. No tool-calling support is required. TaleWeaver still parses and validates the response against the requested Pydantic schema.
+Structured passes that return engine state changes (Pass 1 Mechanics, Worldbuilder Generator, and Autonomous Play Agent) include the JSON schema in the prompt. **Structured output support** defaults to **Prompt only** for widest compatibility. If the endpoint and selected model support it, choose **JSON object** to request JSON syntax or **JSON schema** to send the complete schema through `response_format`. No tool-calling support is required. TaleWeaver still parses and repairs (`json_repair`) the response against the requested Pydantic schema.
+
+**Pass 2 (Narrative & Dialogue Storyteller)** and **History Compression** generate streaming creative prose or text summaries. Because they do not output JSON payloads, structured output compatibility modes do not apply to them. Dedicated storytelling or roleplay models (such as MythoMax, Cydonia, or Llama-3-Storywriter) run without JSON schema constraints, and their **Test Model** action validates creative prose generation directly.
 
 The model list does not establish structured-output support. An unsupported selected mode can produce a server error; use **Prompt only** when unsure. Models also need streaming Chat Completions for narrative output. Compatibility depends on the endpoint's API implementation and the model's ability to follow the task schema.
 
-The request timeout defaults to 300 seconds and is editable up to 3600 seconds. It also controls the initial and idle streaming timeouts. Existing per-pass output-token settings remain in effect; the server determines the actual context limit.
-
-Detection errors distinguish authentication failure, missing `/models`, timeout and invalid/unreachable endpoints. Check the Base URL, server log, vault key and network connectivity before retrying. Detection failure does not disable manual IDs. Custom-provider requests do not fall back to official OpenAI or OpenRouter.
+The request timeout defaults to 300 seconds and is editable up to 3600 seconds per pass. It also controls the initial and idle streaming timeouts. Existing per-pass output-token settings remain in effect; the server determines the actual context limit.

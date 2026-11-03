@@ -440,15 +440,21 @@ def _is_llm_configured(user: User, db_keys: dict) -> bool:
     small_model = llm.get("small_model")
     complex_model = llm.get("complex_model")
 
-    def has_key(provider):
+    def has_key(provider, pass_prefix=""):
         if provider == "custom_openai":
-            return bool(llm.get("custom_openai_url"))
+            per_pass = llm.get(f"{pass_prefix}custom_openai_url") if pass_prefix else None
+            return bool(per_pass or llm.get("custom_openai_url"))
         if provider == "ollama":
             return True
         return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
 
     return all(
-        [has_key(small_provider), bool(small_model), has_key(complex_provider), bool(complex_model)]
+        [
+            has_key(small_provider, "small_"),
+            bool(small_model),
+            has_key(complex_provider, "complex_"),
+            bool(complex_model),
+        ]
     )
 
 
@@ -530,6 +536,11 @@ class SettingsPayload(BaseModel):
     ollama_url: Optional[str] = None
     minimax_url: Optional[str] = None
     custom_openai_url: str = ""
+    small_custom_openai_url: Optional[str] = ""
+    complex_custom_openai_url: Optional[str] = ""
+    generator_custom_openai_url: Optional[str] = ""
+    play_agent_custom_openai_url: Optional[str] = ""
+    compression_custom_openai_url: Optional[str] = ""
     custom_openai_timeout: int = Field(default=300, ge=1, le=3600)
     custom_openai_response_format: str = Field(
         default="prompt", pattern="^(prompt|json_object|json_schema)$"
@@ -898,6 +909,11 @@ async def update_llm_settings(
 
     if payload.custom_openai_url:
         payload.custom_openai_url = validate_custom_url(payload.custom_openai_url)
+    for pass_key in ("small", "complex", "generator", "play_agent", "compression"):
+        field = f"{pass_key}_custom_openai_url"
+        val = getattr(payload, field, None)
+        if val:
+            setattr(payload, field, validate_custom_url(val))
     user.llm_settings = _normalize_llm_settings(payload.model_dump())
     await _broadcast_global_settings(db, user)
     await db.commit()
@@ -941,6 +957,59 @@ class TestLLMPayload(BaseModel):
     provider: str
     ollama_url: Optional[str] = None
     openrouter_provider: Optional[str] = None
+    custom_openai_url: Optional[str] = None
+    custom_openai_timeout: Optional[int] = None
+    custom_openai_response_format: Optional[str] = None
+    pass_key: Optional[str] = None
+
+
+def _build_test_llm_settings(old_settings: dict, payload: TestLLMPayload) -> dict:
+    """Inject temporary connection parameters for the test run without mutating original settings."""
+    temp = dict(old_settings)
+    if payload.provider == "ollama" and payload.ollama_url:
+        temp["ollama_url"] = payload.ollama_url
+    if payload.provider == "openrouter" and payload.openrouter_provider is not None:
+        temp["small_openrouter_provider"] = payload.openrouter_provider
+        temp["complex_openrouter_provider"] = payload.openrouter_provider
+        temp["openrouter_provider"] = payload.openrouter_provider
+    if payload.provider == "custom_openai":
+        _apply_custom_openai_test_overrides(temp, payload)
+    return temp
+
+
+def _apply_custom_openai_test_overrides(settings_dict: dict, payload: TestLLMPayload) -> None:
+    """Apply per-pass and global overrides for a custom OpenAI test probe."""
+    if payload.custom_openai_url:
+        settings_dict["custom_openai_url"] = payload.custom_openai_url
+        if payload.pass_key:
+            settings_dict[f"{payload.pass_key}_custom_openai_url"] = payload.custom_openai_url
+    if payload.custom_openai_timeout:
+        settings_dict["custom_openai_timeout"] = payload.custom_openai_timeout
+        if payload.pass_key:
+            settings_dict[f"{payload.pass_key}_custom_openai_timeout"] = (
+                payload.custom_openai_timeout
+            )
+    if payload.custom_openai_response_format:
+        settings_dict["custom_openai_response_format"] = payload.custom_openai_response_format
+        if payload.pass_key:
+            settings_dict[f"{payload.pass_key}_custom_openai_response_format"] = (
+                payload.custom_openai_response_format
+            )
+
+
+async def _execute_test_probe(gm: GameMasterLLM, payload: TestLLMPayload) -> str:
+    """Execute a structured test for mechanics passes or a creative prose test for narration passes."""
+    is_prose_pass = payload.pass_key in ("complex", "compression")
+    if payload.provider == "custom_openai":
+        from backend.core.custom_openai import test_connection
+
+        return await test_connection(gm, payload.model, structured=not is_prose_pass)
+
+    return await gm.aexecute_simple_task(
+        system_prompt="You are a helpful RPG assistant.",
+        user_prompt="Say 'TaleWeaver connection test successful!' in a fantasy style.",
+        model=payload.model,
+    )
 
 
 @router.post("/test-llm")
@@ -951,35 +1020,22 @@ async def test_llm_connection(
 ):
     """Tests the connection to an LLM provider with a simple prompt and measures latency."""
     user = await _resolve_global_settings_owner(db, current_user)
-
-    # Inject temporary ollama_url or openrouter_provider if provided
     old_settings = user.llm_settings or {}
-    temp_settings = dict(old_settings)
-    if payload.provider == "ollama" and payload.ollama_url:
-        temp_settings["ollama_url"] = payload.ollama_url
-    if payload.provider == "openrouter" and payload.openrouter_provider is not None:
-        temp_settings["small_openrouter_provider"] = payload.openrouter_provider
-        temp_settings["complex_openrouter_provider"] = payload.openrouter_provider
-        temp_settings["openrouter_provider"] = payload.openrouter_provider
-    user.llm_settings = temp_settings
+    user.llm_settings = _build_test_llm_settings(old_settings, payload)
 
     import time
 
     test_stage = "configuration"
     try:
-        gm = GameMasterLLM(user, provider=payload.provider)
+        model_cat = (
+            payload.pass_key
+            if payload.pass_key in ("small", "complex", "generator", "play_agent", "compression")
+            else "small"
+        )
+        gm = GameMasterLLM(user, provider=payload.provider, model_category=model_cat)
         test_stage = "request_or_response"
         start_time = time.perf_counter()
-        if payload.provider == "custom_openai":
-            from backend.core.custom_openai import test_connection
-
-            response = await test_connection(gm, payload.model)
-        else:
-            response = await gm.aexecute_simple_task(
-                system_prompt="You are a helpful RPG assistant.",
-                user_prompt="Say 'TaleWeaver connection test successful!' in a fantasy style.",
-                model=payload.model,
-            )
+        response = await _execute_test_probe(gm, payload)
         end_time = time.perf_counter()
         latency = round(end_time - start_time, 2)
         return {"status": "success", "message": response, "response_time": latency}
@@ -991,11 +1047,7 @@ async def test_llm_connection(
                 exc, provider=payload.provider, model=payload.model, context="llm"
             )
         )
-        logger.warning(
-            "LLM connection test failed for provider '%s': %s",
-            payload.provider,
-            exc,
-        )
+        logger.warning("LLM connection test failed for provider '%s': %s", payload.provider, exc)
         return {"status": "error", "message": diag}
     finally:
         user.llm_settings = old_settings

@@ -32,7 +32,7 @@ const emit = defineEmits<{
 <template>
   <aside
     v-if="props.sceneExits.length > 0 || props.items.length > 0 || props.sceneSwitches.length > 0"
-    class="w-72 2xl:w-80 shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto tw-scroll p-1.5"
+    class="w-64 xl:w-72 2xl:w-80 shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto tw-scroll p-1.5"
     aria-label="Scene"
   >
     <section v-if="props.sceneSwitches.length > 0" class="tw-sidebar-group">

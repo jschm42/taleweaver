@@ -147,7 +147,7 @@ const autoDefinition = computed(() => findSkin(props.autoSkin))
     <SettingCard
       title="Scene Sidebar"
       description="On wide screens, show passages, discoveries and switches as tiles in a column next to the story instead of as tabs."
-      hint="Only applies to screens at least 1280 px wide. Smaller screens and phones always use the tabs."
+      hint="Only applies to screens at least 1024 px wide. Smaller screens and phones always use the tabs."
     >
       <template #control>
         <SettingToggle v-model="sceneSidebar" label="Scene sidebar" />

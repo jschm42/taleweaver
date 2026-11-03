@@ -160,11 +160,19 @@ def _friendly_token_limit_message() -> str:
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
+    if getattr(exc, "status_code", None) == 429:
+        return True
+    if "ratelimit" in type(exc).__name__.lower():
+        return True
     text = str(exc or "").lower()
     patterns = (
         "rate limit",
+        "ratelimit",
         "too many requests",
         "quota exceeded",
+        "insufficient_quota",
+        "temporarily rate-limited",
+        "upstream_provider_shared_pool",
         "429",
     )
     return any(p in text for p in patterns)
@@ -214,6 +222,14 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
+        if (
+            "temporarily rate-limited" in lower_text
+            or "upstream_provider_shared_pool" in lower_text
+        ):
+            return (
+                "The selected model is temporarily rate-limited by its upstream provider (e.g. on OpenRouter). "
+                "Please wait a moment and try again, or choose a different model."
+            )
         return "The Game Master is busy right now (rate limit or quota reached). Please check your account credits or try again in a moment."
     if _is_timeout_error(exc):
         return "The Game Master took too long to respond. Please try again."

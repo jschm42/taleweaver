@@ -213,14 +213,14 @@ onBeforeUnmount(() => {
           <div class="p-3 sm:p-5 overflow-y-auto custom-scrollbar flex-1 min-h-0">
             <div
               v-if="filteredItems.length > 0"
-              class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3.5"
+              class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-2.5"
             >
               <button
                 v-for="item in filteredItems"
                 :key="item.id"
                 type="button"
                 @click="handleSelect(item.id)"
-                class="relative h-28 sm:h-32 rounded-xl sm:rounded-2xl overflow-hidden border-2 transition-all duration-300 group text-left p-3 flex flex-col justify-end cursor-pointer active:scale-95"
+                class="relative h-22 sm:h-24 rounded-xl overflow-hidden border-2 transition-all duration-300 group text-left p-2.5 flex flex-col justify-end cursor-pointer active:scale-95"
                 :class="selectedId === item.id ? 'border-cyan-400 ring-4 ring-cyan-400/20 shadow-lg shadow-cyan-950/50' : 'border-white/10 hover:border-white/30 hover:scale-[1.02]'"
               >
                 <!-- Tile Image -->

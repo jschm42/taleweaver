@@ -22,6 +22,7 @@ import {
   VolumeX,
   Sliders,
   LogOut,
+  Image as ImageIcon,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -36,6 +37,7 @@ const props = defineProps<{
   exp?: number
   mode?: 'rpg' | 'story' | 'chat'
   debugMode?: boolean
+  hasSceneImage?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +46,7 @@ const emit = defineEmits<{
   openSettings: [tab?: SettingsTabId]
   openDebug: []
   exitSession: []
+  viewSceneImage: []
 }>()
 
 const { language } = useGameSocket()
@@ -219,6 +222,18 @@ const sequenceOrder = computed(() => {
         aria-label="Stop speech"
       >
         <VolumeX class="w-4 h-4" />
+      </button>
+
+      <!-- Full Scene Artwork Viewer Button -->
+      <button
+        v-if="props.hasSceneImage"
+        type="button"
+        @click="emit('viewSceneImage')"
+        class="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900/80 border border-slate-700/60 text-slate-400 hover:text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/10 transition-all shadow-lg active:scale-95 shrink-0 cursor-pointer"
+        title="View Scene Artwork"
+        aria-label="View scene artwork"
+      >
+        <ImageIcon class="w-4 h-4" />
       </button>
 
       <!-- Settings with active-feature indicators (Auto-Speak, Bable Fish) -->

@@ -432,3 +432,92 @@ def test_explicit_structured_output_capability(local_policy, mode):
         assert (
             request.kwargs["response_format"]["json_schema"]["schema"] == Answer.model_json_schema()
         )
+
+
+def test_per_pass_custom_openai_url_override():
+    user = User(
+        username="custom_multi",
+        llm_settings={
+            "custom_openai_url": "http://127.0.0.1:8000/v1",
+            "small_custom_openai_url": "http://127.0.0.1:8001/v1",
+            "complex_custom_openai_url": "",
+        },
+    )
+    small_router = GameMasterLLM(user, provider="custom_openai", model_category="small")
+    assert small_router.api_base == "http://127.0.0.1:8001/v1"
+
+    complex_router = GameMasterLLM(user, provider="custom_openai", model_category="complex")
+    assert complex_router.api_base == "http://127.0.0.1:8000/v1"
+
+
+def test_custom_openai_falls_back_to_openrouter_vault_key_when_pointing_to_openrouter():
+    user = User(
+        username="openrouter_custom",
+        llm_settings={
+            "complex_custom_openai_url": "https://openrouter.ai/api/v1",
+        },
+        encrypted_api_keys={
+            "openrouter": encryption_util.encrypt_key("sk-or-v1-secret-key"),
+        },
+    )
+    router = GameMasterLLM(user, provider="custom_openai", model_category="complex")
+    assert router.api_base == "https://openrouter.ai/api/v1"
+    assert router.api_key == "sk-or-v1-secret-key"
+
+
+def test_custom_openai_transient_error_detection():
+    from backend.core.custom_openai import _is_transient_custom_error
+
+    err_429 = SimpleNamespace(status_code=429)
+    assert _is_transient_custom_error(err_429) is True
+
+    err_msg = RuntimeError("thedrummer/cydonia-24b-v4.1 is temporarily rate-limited upstream.")
+    assert _is_transient_custom_error(err_msg) is True
+
+    err_auth = RuntimeError("Authentication failed: invalid x-api-key")
+    assert _is_transient_custom_error(err_auth) is False
+
+
+def test_gameplay_logic_rate_limit_detection():
+    from backend.api.routes.adventures.gameplay_logic import (
+        _friendly_llm_error_message,
+        _is_rate_limit_error,
+    )
+
+    exc = RuntimeError(
+        "thedrummer/cydonia-24b-v4.1 is temporarily rate-limited upstream. Please retry shortly."
+    )
+    assert _is_rate_limit_error(exc) is True
+    msg = _friendly_llm_error_message(exc)
+    assert msg is not None
+    assert "upstream provider" in msg
+
+
+@pytest.mark.asyncio
+async def test_custom_openai_test_connection_prose_mode(monkeypatch):
+    from backend.core.custom_openai import test_connection
+
+    class FakeRouter:
+        async def aexecute_simple_task(self, system_prompt, user_prompt, model):
+            return "Connection test successful in fantasy prose!"
+
+        async def aexecute_complex_task(self, *args, **kwargs):
+            raise AssertionError("Should not call structured task for prose pass")
+
+    msg = await test_connection(FakeRouter(), "mythomax-13b", structured=False)
+    assert "fantasy prose" in msg
+
+
+@pytest.mark.asyncio
+async def test_custom_openai_test_connection_structured_mode():
+    from backend.core.custom_openai import ConnectionTestResult, test_connection
+
+    class FakeRouter:
+        async def aexecute_simple_task(self, *args, **kwargs):
+            raise AssertionError("Should not call simple task for structured pass")
+
+        async def aexecute_complex_task(self, system_prompt, user_prompt, response_model, model):
+            return ConnectionTestResult(message="Structured test success!")
+
+    msg = await test_connection(FakeRouter(), "deepseek-v3", structured=True)
+    assert msg == "Structured test success!"

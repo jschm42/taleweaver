@@ -56,11 +56,11 @@ function baseUrlFor(provider: string): string {
   if (provider === 'custom_openai') {
     return llmForm.value.custom_openai_url
   }
-  return provider === 'minimax' ? llmForm.value.minimax_url : ''
+  return ''
 }
 
 function runTest(key: string, role: { provider: string; model: string }): void {
-  testService.testLlm(key, role.model, role.provider, ollamaUrl.value)
+  testService.testLlm(key, role.model, role.provider, ollamaUrl.value, undefined, baseUrlFor(role.provider))
 }
 
 /** The generator follows the story model unless an admin already picked a different one. */

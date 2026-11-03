@@ -67,6 +67,11 @@ class SettingsService {
     custom_openai_url: '',
     custom_openai_timeout: 300,
     custom_openai_response_format: 'prompt',
+    small_custom_openai_url: '',
+    complex_custom_openai_url: '',
+    generator_custom_openai_url: '',
+    play_agent_custom_openai_url: '',
+    compression_custom_openai_url: '',
   })
 
   t2iForm = ref({

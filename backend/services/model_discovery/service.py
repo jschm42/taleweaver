@@ -50,9 +50,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
     ),
     "deepseek": ProviderSpec(fetchers.fetch_openai_compatible, "https://api.deepseek.com/v1"),
     "kimi": ProviderSpec(fetchers.fetch_openai_compatible, "https://api.moonshot.ai/v1"),
-    "minimax": ProviderSpec(
-        fetchers.fetch_openai_compatible, "https://api.minimax.chat/v1", custom_base=True
-    ),
+    "minimax": ProviderSpec(fetchers.fetch_openai_compatible, "https://api.minimax.chat/v1"),
     "ollama": ProviderSpec(
         fetchers.fetch_ollama, "http://localhost:11434", needs_key=False, custom_base=True
     ),

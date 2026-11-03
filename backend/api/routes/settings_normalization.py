@@ -34,6 +34,21 @@ _CUSTOM_OPENAI_DEFAULTS = {
     "custom_openai_url": "",
     "custom_openai_timeout": 300,
     "custom_openai_response_format": "prompt",
+    "small_custom_openai_url": "",
+    "small_custom_openai_timeout": 300,
+    "small_custom_openai_response_format": "prompt",
+    "complex_custom_openai_url": "",
+    "complex_custom_openai_timeout": 300,
+    "complex_custom_openai_response_format": "prompt",
+    "generator_custom_openai_url": "",
+    "generator_custom_openai_timeout": 300,
+    "generator_custom_openai_response_format": "prompt",
+    "play_agent_custom_openai_url": "",
+    "play_agent_custom_openai_timeout": 300,
+    "play_agent_custom_openai_response_format": "prompt",
+    "compression_custom_openai_url": "",
+    "compression_custom_openai_timeout": 300,
+    "compression_custom_openai_response_format": "prompt",
 }
 
 _LLM_FALLBACK: dict[str, Any] = {

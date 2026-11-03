@@ -104,9 +104,13 @@ class GameMasterLLM:
 
     @staticmethod
     def _is_transient_llm_error(exc: Exception) -> bool:
-        """Check if an exception is likely a transient connection drop, socket timeout or stale pool connection."""
+        """Check if an exception is likely a transient connection drop, socket timeout, rate-limit, or stale pool connection."""
+        if getattr(exc, "status_code", None) in {429, 502, 503, 504}:
+            return True
         err_type = type(exc).__name__.lower()
         err_msg = str(exc or "").lower()
+        if "ratelimit" in err_type or "temporarily rate-limited" in err_msg:
+            return True
         return (
             "timeout" in err_type
             or "connection" in err_type
@@ -768,7 +772,7 @@ class GameMasterLLM:
         if self.provider == "custom_openai":
             from backend.core.custom_openai import configure_custom_router
 
-            configure_custom_router(self, llm_settings)
+            configure_custom_router(self, llm_settings, prefix)
         elif self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:

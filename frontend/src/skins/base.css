@@ -481,19 +481,3 @@
     animation: none;
   }
 }
-
-/* ---------- Scene image button (top-right of the story area) ---------- */
-/* Specific enough to beat skin tab padding ([data-skin] .tw-tab), which would squeeze the
-   icon of this square button down to a dot. */
-.tw-skin .tw-tab.tw-scene-image-button {
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  padding: 0;
-  /* Floats above the story; travel and sequence overlays still cover it. */
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
-}
-
-.tw-skin .tw-tab.tw-scene-image-button svg {
-  flex-shrink: 0;
-}

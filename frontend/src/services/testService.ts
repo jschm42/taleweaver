@@ -72,7 +72,16 @@ class TestService {
    * Test an LLM model with the specified provider.
    * Returns response time if successful.
    */
-  async testLlm(key: string, model: string, provider: string, ollamaUrl: string, openrouterProvider?: string) {
+  async testLlm(
+    key: string,
+    model: string,
+    provider: string,
+    ollamaUrl: string,
+    openrouterProvider?: string,
+    customOpenaiUrl?: string,
+    customOpenaiResponseFormat?: string,
+    customOpenaiTimeout?: number
+  ) {
     this.testResults.value[key] = { status: 'loading', message: 'Testing connection...' }
 
     try {
@@ -81,6 +90,10 @@ class TestService {
         provider,
         ollama_url: ollamaUrl,
         openrouter_provider: openrouterProvider || undefined,
+        custom_openai_url: customOpenaiUrl || undefined,
+        custom_openai_response_format: customOpenaiResponseFormat || undefined,
+        custom_openai_timeout: customOpenaiTimeout || undefined,
+        pass_key: key,
       })
 
       this.testResults.value[key] = {

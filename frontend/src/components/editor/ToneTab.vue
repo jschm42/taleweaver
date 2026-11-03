@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 <template>
   <div class="space-y-8">
-  <section v-if="toneCatalog.length" class="space-y-6 bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
+  <section v-if="toneCatalog.length" class="space-y-6 bg-slate-900/40 p-5 sm:p-6 rounded-2xl border border-white/5 backdrop-blur-md shadow-xl">
      <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
@@ -41,12 +41,12 @@ const emit = defineEmits<{
            </button>
         </div>
      </div>
-       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+       <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2.5 sm:gap-3">
             <button 
                v-for="tone in toneCatalog" 
                :key="tone.id" 
                @click="$emit('update:tone', tone.id)"
-               class="relative aspect-4-5 rounded-2xl overflow-hidden border-2 transition-all duration-500 group"
+               class="relative aspect-4-5 rounded-xl overflow-hidden border-2 transition-all duration-500 group"
                :class="form.selected_tone_id === tone.id ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-transparent hover:border-white/10'"
             >
                 <img v-if="tone.image_url" :src="tone.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />

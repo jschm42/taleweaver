@@ -95,8 +95,25 @@ const handleSaveGameSettings = async (payload: any) => {
 
 // ============ TEST HANDLERS ============
 
-const handleTestLlm = async (key: string, model: string, provider: string, openrouterProvider?: string) => {
-  await testService.testLlm(key, model, provider, settingsService.llmForm.value.ollama_url, openrouterProvider)
+const handleTestLlm = async (
+  key: string,
+  model: string,
+  provider: string,
+  openrouterProvider?: string,
+  customOpenaiUrl?: string,
+  customOpenaiResponseFormat?: string,
+  customOpenaiTimeout?: number
+) => {
+  await testService.testLlm(
+    key,
+    model,
+    provider,
+    settingsService.llmForm.value.ollama_url,
+    openrouterProvider,
+    customOpenaiUrl,
+    customOpenaiResponseFormat,
+    customOpenaiTimeout
+  )
 }
 
 const handleTestVision = async (payload: any) => {
@@ -411,12 +428,10 @@ const navCategories: NavCategory[] = [
           :configured-keys="settingsService.configuredKeys.value"
           :is-submitting="settingsService.isSubmitting.value"
           :is-loading-ollama-models="settingsService.isLoadingOllamaModels.value"
-          :is-loading-minimax-models="settingsService.isLoadingMinimaxModels.value"
           :test-results="testService.testResults.value"
           @save="handleSaveLlmSettings"
-          @test="({ key, model, provider, openrouterProvider }) => handleTestLlm(key, model, provider, openrouterProvider)"
+          @test="({ key, model, provider, openrouterProvider, customOpenaiUrl, customOpenaiResponseFormat, customOpenaiTimeout }) => handleTestLlm(key, model, provider, openrouterProvider, customOpenaiUrl, customOpenaiResponseFormat, customOpenaiTimeout)"
           @refresh-ollama-models="handleRefreshOllamaModels"
-          @refresh-minimax-models="handleRefreshMinimaxModels"
           @switch-section="(s) => activeSection = s as Section"
         />
 
