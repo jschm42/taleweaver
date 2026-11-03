@@ -126,6 +126,10 @@ def build_narration_turn_block(
         lines.append(exits_task)
     if reminders:
         lines.append("REMINDERS: " + " ".join(reminders))
+    lines.append(
+        "CRITICAL SPEAKER RESTRICTION: Only NPCs explicitly listed under 'PRESENT NPCs' in the CURRENT LOCATION "
+        "above are physically present and permitted to speak or react. Hidden, absent, or unlisted NPCs must never speak, react, or be mentioned."
+    )
     return "\n".join(line for line in lines if line)
 
 

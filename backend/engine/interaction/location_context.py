@@ -265,7 +265,16 @@ def build_hidden_entities_context(
         if reveal_rule:
             rule_str = f' | Reveal condition: "{reveal_rule}"'
         elif entity_type == "NPC":
-            rule_str = " | Reveal condition: (default) reveal when the protagonist searches the scene OR when this NPC starts speaking"
+            rule_str = (
+                f' | Reveal condition: "{reveal_rule}"'
+                if reveal_rule
+                else " | Reveal condition: (default) reveal when the protagonist searches the scene"
+            )
+            lines.append(
+                f"- [HIDDEN NPC] ID='{e.id}' Name='{e.name}'{pos_str}{rule_str}. "
+                "CRITICAL: This NPC is HIDDEN and NOT present in the room! They MUST NOT speak, react, or be mentioned in dialogue until revealed."
+            )
+            continue
         else:
             rule_str = (
                 " | Reveal condition: (default) reveal when the protagonist searches the scene"

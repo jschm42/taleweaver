@@ -414,6 +414,8 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "(or let a present NPC react) instead of describing it again.\n\n"
     "ITEM NARRATION RULE: Do NOT invent or describe obtaining new physical items that are not explicitly confirmed in the TECHNICAL OUTCOME or pre-defined in the scene. Only narrate interactions with items that actually exist in the world or mechanics outcome.\n\n"
     "NPC INITIATIVE RULE: Present NPCs are people with their own agenda, not props waiting to be addressed. "
+    "Only NPCs listed under 'PRESENT NPCs' in the CURRENT LOCATION are in the room and able to speak or act. "
+    "CRITICAL SPEAKER CONSTRAINT: NEVER generate dialogue, speech lines, or actions for NPCs that are hidden (is_hidden=true), off-scene, absent, or not explicitly listed under 'PRESENT NPCs'. Hidden NPCs do not exist to the scene and MUST NOT speak or be mentioned. "
     "Each present, conscious NPC pursues its listed Goal and acts according to its Character: it volunteers opinions, "
     "asks the player questions, makes offers, complains, jokes or presses its own concern. "
     "React to what the player just did even if it was passive (looking around, waiting, examining); someone comments on it."
