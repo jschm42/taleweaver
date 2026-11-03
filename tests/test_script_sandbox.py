@@ -368,6 +368,13 @@ tw.system("Inventar aktualisiert.")
     assert "Item hinzugefügt: Schokolade" in ctx.changeset.system_messages[0]
     assert "Inventar aktualisiert" in ctx.changeset.system_messages[1]
 
+    # Verify chronological ordering in ordered_messages
+    assert len(ctx.changeset.ordered_messages) == 4
+    assert ctx.changeset.ordered_messages[0].role == "assistant"
+    assert ctx.changeset.ordered_messages[1].role == "assistant"
+    assert ctx.changeset.ordered_messages[2].role == "system"
+    assert ctx.changeset.ordered_messages[3].role == "system"
+
     # Test ScriptMessage helper
     sm_narration = ScriptMessage("Narration text", role="assistant")
     sm_sys = ScriptMessage("System note", role="system")
@@ -659,3 +666,42 @@ def test_unknown_attribute_without_close_match_has_no_hint():
 
     # Assert
     assert "Did you mean" not in str(exc.value)
+
+
+def test_script_interleaved_system_and_narrate_order():
+    ctx = GameContext(
+        avatar_data={"name": "Kaelen", "hp": 100},
+        current_scene_id="LIBRARY",
+        entities={},
+        exit_states={},
+        quests=[],
+        script_vars={},
+        in_game_time=0,
+    )
+    runner = ScriptRunner()
+
+    code = """
+tw.story.system("System step 1")
+tw.story.narrate_raw("Raw narration step 2")
+tw.story.system("System step 3")
+tw.story.narrate("Standard narration step 4")
+"""
+    runner.execute_code(code, {"tw": ctx})
+
+    ordered = ctx.changeset.ordered_messages
+    assert len(ordered) == 4
+    assert ordered[0] == "System step 1"
+    assert ordered[0].role == "system"
+    assert ordered[0].raw is False
+
+    assert ordered[1] == "Raw narration step 2"
+    assert ordered[1].role == "assistant"
+    assert ordered[1].raw is True
+
+    assert ordered[2] == "System step 3"
+    assert ordered[2].role == "system"
+    assert ordered[2].raw is False
+
+    assert ordered[3] == "Standard narration step 4"
+    assert ordered[3].role == "assistant"
+    assert ordered[3].raw is False

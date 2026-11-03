@@ -275,7 +275,8 @@ def _run_init_scripts(
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):
         entity_states[_START_MINUTES_KEY] = clock_start.in_game_time
     _apply_avatar_changes(avatar, changes)
-    messages = [str(message) for message in changes.narrative_messages]
+    ordered = getattr(changes, "ordered_messages", None)
+    messages = [str(message) for message in (ordered if ordered else changes.narrative_messages)]
     if first_seq_text:
         messages.append(first_seq_text)
     return messages

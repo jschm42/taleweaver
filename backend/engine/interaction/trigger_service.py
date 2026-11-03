@@ -154,26 +154,40 @@ class TriggerService:
             scope = {"tw": context, "game": context}
             runner.execute_code(code, scope, script_id=f"trigger_{trigger_name}_{target_id}")
 
-            for narr_msg in context.changeset.narrative_messages:
-                db.add(
-                    ChatMessage(
-                        session_id=state.session_id,
-                        role="assistant",
-                        content=narr_msg,
-                        is_raw=bool(getattr(narr_msg, "raw", False)),
+            if getattr(context.changeset, "ordered_messages", None):
+                for msg in context.changeset.ordered_messages:
+                    role = str(getattr(msg, "role", "system"))
+                    raw = bool(getattr(msg, "raw", False))
+                    db.add(
+                        ChatMessage(
+                            session_id=state.session_id,
+                            role=role,
+                            content=msg,
+                            is_raw=raw,
+                        )
                     )
-                )
-                messages.append(narr_msg)
+                    messages.append(msg)
+            else:
+                for narr_msg in context.changeset.narrative_messages:
+                    db.add(
+                        ChatMessage(
+                            session_id=state.session_id,
+                            role="assistant",
+                            content=narr_msg,
+                            is_raw=bool(getattr(narr_msg, "raw", False)),
+                        )
+                    )
+                    messages.append(narr_msg)
 
-            for sys_msg in context.changeset.system_messages:
-                db.add(
-                    ChatMessage(
-                        session_id=state.session_id,
-                        role="system",
-                        content=sys_msg,
+                for sys_msg in context.changeset.system_messages:
+                    db.add(
+                        ChatMessage(
+                            session_id=state.session_id,
+                            role="system",
+                            content=sys_msg,
+                        )
                     )
-                )
-                messages.append(sys_msg)
+                    messages.append(sys_msg)
 
             await insert_cloned_entities(db, state, context.changeset)
             cls._persist_entity_states(state, context.changeset)

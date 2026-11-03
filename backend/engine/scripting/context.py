@@ -51,6 +51,28 @@ class ScriptMessage(str):
         return obj
 
 
+class _TrackingList(list):
+    """List subclass that mirrors appended messages into the parent changeset's ordered_messages."""
+
+    def __init__(self, role: str, raw: bool, parent: Any):
+        super().__init__()
+        self._role = role
+        self._raw = raw
+        self._parent = parent
+
+    def append(self, item: Any) -> None:
+        super().append(item)
+        parent = self._parent
+        if parent is not None and hasattr(parent, "ordered_messages"):
+            raw = bool(getattr(item, "raw", self._raw))
+            role = str(getattr(item, "role", self._role))
+            parent.ordered_messages.append(ScriptMessage(item, role=role, raw=raw))
+
+    def extend(self, iterable: Any) -> None:
+        for item in iterable:
+            self.append(item)
+
+
 MAX_SAVES_PER_SCRIPT = 3
 
 
@@ -75,6 +97,7 @@ class ScriptChangeset:
 
     narrative_messages: list[str] = field(default_factory=list)
     system_messages: list[str] = field(default_factory=list)
+    ordered_messages: list[ScriptMessage] = field(default_factory=list)
     gm_directions: list[str] = field(default_factory=list)
     rejected_actions: list[str] = field(default_factory=list)
     new_memories: list[dict[str, Any]] = field(default_factory=list)
@@ -99,6 +122,18 @@ class ScriptChangeset:
     # Ordered tw.time operations, replayed by game_clock.apply_clock_ops.
     clock_ops: list[dict[str, Any]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.narrative_messages, _TrackingList):
+            initial_narrative = list(self.narrative_messages)
+            tracking_narrative = _TrackingList("assistant", False, self)
+            self.narrative_messages = tracking_narrative
+            tracking_narrative.extend(initial_narrative)
+        if not isinstance(self.system_messages, _TrackingList):
+            initial_system = list(self.system_messages)
+            tracking_system = _TrackingList("system", False, self)
+            self.system_messages = tracking_system
+            tracking_system.extend(initial_system)
+
     @property
     def has_changes(self) -> bool:
         """Returns True if any mutation or message is present in the changeset."""
@@ -118,6 +153,7 @@ class ScriptChangeset:
             or self.npc_attack_requests
             or self.narrative_messages
             or self.system_messages
+            or self.ordered_messages
             or self.save_requests
             or self.gm_directions
             or self.rejected_actions

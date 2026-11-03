@@ -3085,14 +3085,21 @@ class GameTurnManager:
             self.state.exit_states = exit_states
             flag_modified(self.state, "exit_states")
 
-        for msg in changeset.narrative_messages:
-            raw = bool(getattr(msg, "raw", False))
-            system_messages.append(ScriptMessage(msg, role="assistant", raw=raw))
-            await self._save_chat_message("assistant", msg, raw=raw)
+        if getattr(changeset, "ordered_messages", None):
+            for msg in changeset.ordered_messages:
+                role = str(getattr(msg, "role", "system"))
+                raw = bool(getattr(msg, "raw", False))
+                system_messages.append(ScriptMessage(msg, role=role, raw=raw))
+                await self._save_chat_message(role, msg, raw=raw)
+        else:
+            for msg in changeset.narrative_messages:
+                raw = bool(getattr(msg, "raw", False))
+                system_messages.append(ScriptMessage(msg, role="assistant", raw=raw))
+                await self._save_chat_message("assistant", msg, raw=raw)
 
-        for msg in getattr(changeset, "system_messages", []):
-            system_messages.append(ScriptMessage(msg, role="system"))
-            await self._save_chat_message("system", msg)
+            for msg in getattr(changeset, "system_messages", []):
+                system_messages.append(ScriptMessage(msg, role="system"))
+                await self._save_chat_message("system", msg)
 
         if changeset.new_memories:
             memories = list(self.state.world_memories or [])
