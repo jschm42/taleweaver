@@ -256,6 +256,12 @@ _GATE_KEYS = {
     "guard": "expression",
 }
 _MESSAGE_KEYS = {"fail": "fail_message", "success": "success_message"}
+_TRANSITION_SCRIPT_KEYS = {
+    "script": "on_success_script",
+    "on_success": "on_success_script",
+    "on_fail": "on_failure_script",
+    "on_failure": "on_failure_script",
+}
 
 
 def switch_transition(raw: str) -> dict[str, Any]:
@@ -278,6 +284,8 @@ def switch_transition(raw: str) -> dict[str, Any]:
             gates[_GATE_KEYS[key]] = normalize_id(value) if key == "item" else value.strip()
         elif key in _MESSAGE_KEYS:
             transition[_MESSAGE_KEYS[key]] = value.strip()
+        elif key in _TRANSITION_SCRIPT_KEYS:
+            transition[_TRANSITION_SCRIPT_KEYS[key]] = value.strip()
         else:
             raise ValueError(f"unknown transition option '{key}'")
     if gates:

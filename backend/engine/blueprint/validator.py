@@ -103,6 +103,9 @@ def _check_transitions(
         if gates.get("item"):
             referenced.setdefault(gates["item"], line)
         errors.extend(SafeAstInterpreter.check_expression_syntax(gates.get("expression") or ""))
+        for script_key in ("on_success_script", "on_failure_script"):
+            if transition.get(script_key):
+                errors.extend(SafeAstInterpreter.check_syntax(str(transition[script_key])))
     return errors
 
 

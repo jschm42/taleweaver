@@ -63,6 +63,7 @@ class BlueprintIssue:
 class Blueprint:
     """Parsed Story Idea: free premise text plus structured blocks."""
 
+    title: str = ""
     premise: str = ""
     blocks: list[BlueprintBlock] = field(default_factory=list)
     issues: list[BlueprintIssue] = field(default_factory=list)

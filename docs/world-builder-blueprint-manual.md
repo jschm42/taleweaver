@@ -62,6 +62,7 @@ on_defeat: |                                                 <- multi-line scrip
 - **Free text:** every line that is not a known key. It becomes the entity's description, or the walkthrough for a sequence. The AI reads it as design intent.
 - **`@ID`:** links to another entity inside free text. The link is checked like any other reference.
 - **`key: |`:** a multi-line value. Every following line indented deeper than the key belongs to it. Use this for scripts.
+- **Markdown (`.md`) format:** You can also write (or upload via **Load .md**) blueprints as clean Markdown documents using headings (`## Scene: LAMP_ROOM — Lamp Room`, `## World`, `### Rule: ID — Condition`), bullet/bold keys (`- **in**: \`LAMP_ROOM\``), and fenced ```` ```python ```` code blocks instead of `key: |`. See [Blueprint Syntax Reference](world-builder-syntax.md) for details.
 
 ---
 

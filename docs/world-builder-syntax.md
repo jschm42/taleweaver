@@ -30,6 +30,12 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 - Booleans accept `yes/no`, `true/false`, `on/off`.
 - Scripts use the sandboxed `tw` API (`tw.vars`, `tw.flags`, `tw.player`, `tw.npcs`, `tw.objects`, `tw.exits`, `tw.story`, `tw.game`, `tw.dialog`, ...). See the scripting reference in the editor.
 - The Story Idea is limited to 50,000 characters.
+- **Markdown (`.md`) format is fully supported** alongside bracketed tags (or mixed freely):
+  - **Headings as tags:** `## [Scene: CELL] Brig Cell` or pure Markdown headings like `## World`, `## Protagonist: Mara Voss`, `## Scene: CELL — Brig Cell` (using `—`, `–`, `-` or `:` between ID and name), `## Exit: CELL -> CORRIDOR — a jammed door`, `## Sequence: 1 — Break Out`, `### Rule: BRIBE — The player convinces @WARDEN`.
+  - **Child nesting via sub-headings:** A deeper Markdown heading under a sequence (`### Script: TIMER` under `## Sequence: 1`) attaches the script to that sequence just like two-space indentation does.
+  - **Bullet & bold/code keys:** `- **in**: \`CORRIDOR\``, `- **hp**: \`~80\``, or `` - `code`: 4711 `` work identically to `in: CORRIDOR`.
+  - **Fenced code blocks for scripts:** Write a fenced ```` ```python ... ``` ```` block right after `key:` (or `key: |`), or directly inside a `[Script]` / `## Script:` or `### Rule:` block without needing `code: |` indentation.
+  - **Section headers & dividers:** A top-level `# Adventure Title` sets the blueprint title, and organizational headings (`## Locations`, `## Characters`), horizontal rules (`---`) and HTML comments (`<!-- ... -->`) are ignored so they never pollute entity descriptions. You can also import `.md` files directly via the **Load .md** button in the World-Builder UI.
 
 ## Tags and keys
 
@@ -115,7 +121,8 @@ Hooks: `on_pickup`, `on_drop`, `on_equip`, `on_unequip`, `on_interact`/`on_use`,
 
 Switch keys:
 - `states: OFF, ON` and `initial: OFF`. Each state is an **ID** used by scripts, transitions and gates: 1-15 characters, letters, digits, `_` and `-` (stored upper-case, e.g. `HALF-OPEN`). Add an optional **in-game text** (max. 20 characters) with `=`: `states: OFF=Dark, HALF-OPEN=Half open, ON=Lights on`. States without a text show their ID to the player.
-- `transition: OFF -> ON | item: FUSE | code: 12 | guard: <expr> | rule: <text> | fail: <msg> | success: <msg>` (repeatable; use `*` as the source state for "any")
+- `transition: OFF -> ON | item: FUSE | code: 12 | guard: <expr> | rule: <text> | fail: <msg> | success: <msg> | script: <code> | on_fail: <code>` (repeatable; use `*` as the source state for "any")
+- `on_success` (or `on_success_script` / `on_switch`) and `on_fail` (or `on_failure_script` / `on_switch_fail`): switch-level scripts executed whenever any transition on this switch succeeds or fails (`current_state` in scope).
 - `outcome: ON -> flag: POWER_ON; unlock_container: FUSE_BOX` (repeatable). To unlock an exit, set a flag and give the exit `guard: tw.flags.get('POWER_ON')`, or call `tw.exits.unlock('FROM', 'TO')` in a script.
 
 `text:` implies READABLE, `states:` implies SWITCH, and `combine:` or `results:` implies CONSTRUCTABLE.

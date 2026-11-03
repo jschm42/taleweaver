@@ -246,6 +246,16 @@ for _key, _target in (
     ("on_craft_fail", "on_craft_failure"),
 ):
     _hook(ITEM_KEYS, _key, _target)
+for _switch_key, _switch_target in (
+    ("on_success", "on_success_script"),
+    ("on_success_script", "on_success_script"),
+    ("on_switch", "on_success_script"),
+    ("on_fail", "on_failure_script"),
+    ("on_failure", "on_failure_script"),
+    ("on_failure_script", "on_failure_script"),
+    ("on_switch_fail", "on_failure_script"),
+):
+    ITEM_KEYS[_switch_key] = _script(_switch_target)
 
 _GOAL_KEYS: dict[str, FieldSpec] = {
     "goal_item": _ref("required_item_id"),

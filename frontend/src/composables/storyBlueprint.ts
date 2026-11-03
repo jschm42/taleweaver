@@ -12,7 +12,7 @@ export async function findStoryBlueprintError(storyIdea: string): Promise<string
   if (storyIdea.length > STORY_IDEA_MAX_LENGTH) {
     return `Story Idea is too long: ${storyIdea.length.toLocaleString('en-US')} of at most ${STORY_IDEA_MAX_LENGTH.toLocaleString('en-US')} characters`
   }
-  if (!storyIdea.includes('[')) {
+  if (!storyIdea.includes('[') && !storyIdea.includes('#')) {
     return null
   }
   try {
