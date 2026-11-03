@@ -1,10 +1,9 @@
 """Turn-pass building blocks shared by the strict and chat-mode LLM cycles.
 
 - Guardrail chain (Pass 1.5): validates/reverts Pass 1 state changes, then applies the event.
-- In-game turn clock: base time (`time_per_turn`), status-effect ticks, and the
-  `on_turn_end` / `on_turn_start` scripts only advance when the player's scene or the
-  active sequence changed. Plain chat messages inside one scene stay within the same
-  in-game turn (LLM-requested `extra_time_minutes` still applies on any message).
+- In-game turns: status-effect ticks and the `on_turn_end` / `on_turn_start` scripts only
+  run when the player's scene or the active sequence changed. The clock itself advances
+  once per narrated player message (`game_clock_flow.tick_after_narration`).
 """
 
 from __future__ import annotations
@@ -59,6 +58,7 @@ async def run_guardrail_chain(
     active_sequence = AdventureLogic.resolve_active_sequence(manager.adventure, manager.state)
     for message in await manager.guardrails._enforce_soft_rules(game_event, active_sequence):
         yield sse_system(message)
+    await manager.guardrails._block_script_only_reveals(game_event)
 
     for method_name, takes_user_msg in _GUARDRAIL_STEPS:
         enforce = getattr(manager, method_name)
@@ -129,15 +129,14 @@ async def advance_in_game_turn(
 ) -> AsyncGenerator[str, None]:
     """Closes the current in-game turn and opens the next one.
 
-    Order: `on_turn_end` (old turn) -> base time + status ticks -> `on_turn_start` (new turn).
+    Order: `on_turn_end` (old turn) -> status ticks -> `on_turn_start` (new turn).
+    The in-game time is advanced by the narration tick, not here.
     """
     try:
         if script_runner.scripts:
             async for event in _run_turn_script(manager, script_runner, "on_turn_end"):
                 yield event
 
-        time_per_turn = manager.adventure.time_per_turn
-        manager.state.in_game_time += int(time_per_turn if time_per_turn is not None else 5)
         for tick_message in RuleEngine.apply_ticks(manager.avatar):
             yield sse_system(tick_message)
 

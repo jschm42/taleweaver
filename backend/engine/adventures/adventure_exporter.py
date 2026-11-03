@@ -79,6 +79,8 @@ _OBJECT_ENTITY_KEYS = {
     "on_unlock_success_text",
     "on_unlock_failure_script",
     "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -115,6 +117,8 @@ _NPC_ENTITY_KEYS = {
     "on_protagonist_enters_scene_text",
     "on_interact_script",
     "on_interact_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 }
 
 _SYSTEM_ENTITY_KEYS = {"pk", "session_id", "created_at", "updated_at", "template_id"}
@@ -177,6 +181,8 @@ _INLINE_OBJECT_SCRIPT_KEYS = (
     "on_unlock_success_text",
     "on_unlock_failure_script",
     "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -227,6 +233,34 @@ def _extract_item_switch_metadata(
     metadata.pop("on_failure_script", None)
 
 
+# Metadata keys that only containers keep in an export.
+_CONTAINER_ONLY_KEYS = (
+    "code_to_unlock",
+    "item_to_unlock",
+    "rule_to_unlock",
+    "unlock_expression",
+    "on_unlock_success_script",
+    "on_unlock_success_text",
+    "on_unlock_failure_script",
+    "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
+)
+
+
+def _export_container_metadata(
+    filtered: dict[str, Any], metadata: dict[str, Any], is_container: bool
+) -> None:
+    """Lifts a container's lock fields to the top level; other items drop container keys."""
+    metadata.pop("locked", None)
+    if is_container:
+        for lock_key in ("code_to_unlock", "item_to_unlock", "rule_to_unlock"):
+            filtered[lock_key] = metadata.pop(lock_key, "")
+        return
+    for container_key in _CONTAINER_ONLY_KEYS:
+        metadata.pop(container_key, None)
+
+
 def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
     if not isinstance(filtered.get("metadata_json"), dict):
         return
@@ -252,20 +286,7 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         metadata.pop("on_read_script", None)
         metadata.pop("on_read_text", None)
 
-    if item_type == "CONTAINER":
-        filtered["code_to_unlock"] = metadata.pop("code_to_unlock", "")
-        filtered["item_to_unlock"] = metadata.pop("item_to_unlock", "")
-        filtered["rule_to_unlock"] = metadata.pop("rule_to_unlock", "")
-    else:
-        metadata.pop("code_to_unlock", None)
-        metadata.pop("item_to_unlock", None)
-        metadata.pop("rule_to_unlock", None)
-        metadata.pop("unlock_expression", None)
-        metadata.pop("on_unlock_success_script", None)
-        metadata.pop("on_unlock_success_text", None)
-        metadata.pop("on_unlock_failure_script", None)
-        metadata.pop("on_unlock_failure_text", None)
-    metadata.pop("locked", None)
+    _export_container_metadata(filtered, metadata, item_type == "CONTAINER")
 
     if item_type == "CONSTRUCTABLE":
         for recipe_key in ("result_item_ids", "kept_ingredients"):
@@ -299,6 +320,8 @@ def _normalize_exported_npc_metadata(filtered: dict[str, Any]) -> None:
         "on_protagonist_enters_scene_text",
         "on_interact_script",
         "on_interact_text",
+        "on_receive_item_script",
+        "on_receive_item_text",
     ):
         val = metadata.pop(script_key, None)
         if val:
@@ -334,6 +357,9 @@ def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
 
     if entity_type == "OBJECT":
         _normalize_exported_object_metadata(filtered)
+        # Recipes never appear in the world; older adventures may still carry a placeholder.
+        if str(filtered.get("item_type") or "").upper() == "CONSTRUCTABLE":
+            filtered.pop("image_url", None)
     elif entity_type == "NPC":
         _normalize_exported_npc_metadata(filtered)
 
@@ -436,9 +462,11 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "time_per_turn": adv.time_per_turn,
         "pacing_minutes": adv.pacing_minutes,
         "max_time_per_turn": adv.max_time_per_turn,
+        "gm_time_control": bool(getattr(adv, "gm_time_control", True)),
         "max_memory_turns": getattr(adv, "max_memory_turns", 10) or 10,
         "clock_enabled": adv.clock_enabled,
         "selected_tone": adv.selected_tone,
+        "narrator_voice": adv.narrator_voice,
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
         "generate_scene_images": adv.generate_scene_images,

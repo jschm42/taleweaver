@@ -21,10 +21,17 @@ def unlock_rule(action: dict[str, Any]) -> dict[str, Any]:
     return {rule_key: action.get(field) for field, rule_key in UNLOCK_RULE_FIELDS.items()}
 
 
-def unlock_message(action: dict[str, Any]) -> str:
-    msg = f"✨ Special attack unlocked: {action.get('name') or action.get('id')}!"
+def unlock_message(action: dict[str, Any], label: str = "Special attack") -> str:
+    msg = f"✨ {label} unlocked: {action.get('name') or action.get('id')}!"
     text = str(action.get("unlock_text") or "").strip()
     return f"{msg} {text}" if text else msg
+
+
+# avatar.stats list -> (unlocked-id list, label used in the announcement)
+_UNLOCKABLES = {
+    "special_actions": ("unlocked_actions", "Special attack"),
+    "talents": ("unlocked_talents", "Talent"),
+}
 
 
 class CombatUnlockMixin:
@@ -51,18 +58,23 @@ class CombatUnlockMixin:
                 found.append(action)
         return found
 
-    async def check_special_unlocks(self) -> list[str]:
-        """Unlocks special attacks whose rules are now met. Returns the announcements."""
+    async def _unlock_entries(self, list_key: str) -> list[str]:
+        unlocked_key, label = _UNLOCKABLES[list_key]
         stats = dict(self.avatar.stats or {})
-        unlocked = list(stats.get("unlocked_actions") or [])
-        newly = await self._newly_unlocked(list(stats.get("special_actions") or []), set(unlocked))
+        unlocked = list(stats.get(unlocked_key) or [])
+        newly = await self._newly_unlocked(list(stats.get(list_key) or []), set(unlocked))
         if not newly:
             return []
 
-        stats["unlocked_actions"] = unlocked + [a["id"] for a in newly]
+        stats[unlocked_key] = unlocked + [a["id"] for a in newly]
         self.avatar.stats = stats
         flag_modified(self.avatar, "stats")
-        messages = [unlock_message(action) for action in newly]
+        messages = [unlock_message(action, label) for action in newly]
         for msg in messages:
             await self._save_chat_message("system", msg)
         return messages
+
+    async def check_special_unlocks(self) -> list[str]:
+        """Unlocks special attacks and talents whose rules are now met. Returns the announcements."""
+        messages = await self._unlock_entries("special_actions")
+        return messages + await self._unlock_entries("talents")

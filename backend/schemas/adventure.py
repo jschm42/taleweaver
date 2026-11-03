@@ -2,6 +2,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.models.adventure_template import ORIGINAL_PROMPT_MAX_LENGTH
+
 
 class QuestSchema(BaseModel):
     id: str
@@ -36,6 +38,7 @@ class SequenceScriptSchema(BaseModel):
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     ]
     target_id: Optional[str] = ""
     code: str = ""
@@ -87,12 +90,13 @@ class AdventureTemplateBase(BaseModel):
     copyright: Optional[str] = Field(None, max_length=100)
     license: Optional[str] = Field(None, max_length=100)
     license_url: Optional[str] = Field(None, max_length=500)
-    original_prompt: Optional[str] = Field(None, max_length=20000)
+    original_prompt: Optional[str] = Field(None, max_length=ORIGINAL_PROMPT_MAX_LENGTH)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     generation_strictness: Optional[Literal["strict", "creative"]] = "creative"
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = True
     max_memory_turns: Optional[int] = 10
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
@@ -160,12 +164,13 @@ class AdventureTemplateUpdate(BaseModel):
     copyright: Optional[str] = Field(None, max_length=100)
     license: Optional[str] = Field(None, max_length=100)
     license_url: Optional[str] = Field(None, max_length=500)
-    original_prompt: Optional[str] = Field(None, max_length=20000)
+    original_prompt: Optional[str] = Field(None, max_length=ORIGINAL_PROMPT_MAX_LENGTH)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
     generation_strictness: Optional[Literal["strict", "creative"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = None
     max_memory_turns: Optional[int] = None
     clock_enabled: Optional[bool] = None
     time_system: Optional[str] = None

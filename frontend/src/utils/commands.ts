@@ -8,6 +8,7 @@ export interface GameCommand {
 export const GAME_COMMANDS: GameCommand[] = [
   { id: '/say', label: '/say <text>', description: 'Direct Speech (default)', category: 'game' },
   { id: '/sheet', label: '/sheet', description: 'Open your character sheet', category: 'game' },
+  { id: '/talent', label: '/talent <talent> | <target>', description: 'Use one of your talents (or type "use <talent> on <target>")', category: 'game' },
   { id: '/inventory', label: '/inventory', description: 'View your items and equipment', category: 'game' },
   { id: '/map', label: '/map', description: 'View the world map', category: 'game' },
   { id: '/quests', label: '/quests', description: 'View active and completed quests', category: 'game' },
@@ -44,6 +45,7 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/debug log off', label: '/debug log off', description: 'Disable technical debug logs in chat', category: 'debug' },
   { id: '/debug npc drop_items', label: '/debug npc drop_items', description: 'Force scene NPCs to drop all items', category: 'debug' },
   { id: '/debug delete_item', label: '/debug delete_item <item_key>', description: 'Remove an item from your inventory', category: 'debug' },
+  { id: '/script', label: '/script <code>', description: 'Run script statements (tw API) and show the result as a debug message', category: 'debug' },
   { id: '/debug engine', label: '/debug engine', description: 'Display engine diagnostics and version', category: 'debug' },
   { id: '/debug win_fight', label: '/debug win_fight', description: 'Instantly win the active combat', category: 'debug' },
   { id: '/debug loose_fight', label: '/debug loose_fight', description: 'Instantly lose the active combat', category: 'debug' },

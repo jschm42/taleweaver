@@ -12,6 +12,7 @@ import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpText
 // Components
 import AdventureStatusAlerts from '@/components/create-adventure/AdventureStatusAlerts.vue'
 import AdventureBasicInfo from '@/components/create-adventure/AdventureBasicInfo.vue'
+import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
 import AdventureGameSettings from '@/components/create-adventure/AdventureGameSettings.vue'
 import AutoValidateFixToggle from '@/components/create-adventure/AutoValidateFixToggle.vue'
 import AdventureAssetSettings from '@/components/create-adventure/AdventureAssetSettings.vue'
@@ -611,6 +612,7 @@ onMounted(() => {
             class="w-full bg-slate-950/80 border border-slate-800 focus:border-cyan-500/80 rounded-xl p-3.5 sm:p-4 text-xs sm:text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition-all resize-y custom-scrollbar"
             placeholder="e.g. A forgotten star observatory buried beneath a glacial mountain peak. An ancient mechanical astrolabe has reawakened and started transmitting coordinates across the stars..."
           ></textarea>
+          <StoryIdeaLengthHint :value="form.storyIdea" />
 
           <div class="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-2 border-t border-white/5">
             <label class="text-xs font-bold text-slate-400 whitespace-nowrap">Adventure Title (Optional):</label>

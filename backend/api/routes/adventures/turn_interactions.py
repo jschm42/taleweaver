@@ -4,15 +4,19 @@ import json
 import logging
 import re
 from collections.abc import AsyncGenerator
-from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.container_put import put_items_into_container
+from backend.api.routes.adventures.game_clock_flow import stream_time_events
+from backend.api.routes.adventures.npc_give import give_items_to_npc
+from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
+from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
+from backend.engine.sessions.session_checkpoint_service import REASON_MANUAL_SAVE
 from backend.api.routes.adventures.gameplay_logic import (
-    WALKTHROUGH_REVEAL_COST,
     _friendly_llm_error_message,
     _friendly_llm_unexpected_error_message,
 )
@@ -21,8 +25,8 @@ from backend.api.routes.adventures.sequence_hooks import (
     build_sequence_intro,
     run_sequence_transition_hooks,
 )
-from backend.core.awards import SPOILER_SEEKER_AWARD
 from backend.engine.debug_commands.debug_engine import DebugEngine
+from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
@@ -43,6 +47,7 @@ class TurnInteractionsManager:
         self.manager = manager
         self.pending_pickup_trigger: dict[str, Any] | None = None
         self.pending_sequence_intro: dict[str, Any] | None = None
+        self.pending_reaction_prompt: str | None = None
 
     @property
     def db(self):
@@ -400,13 +405,19 @@ class TurnInteractionsManager:
             await self._finalize_session("completed", debug_info)
             debug_info = "DEBUG: Session forced to COMPLETED."
         elif debug_info.startswith("[TRIGGER_WALKTHROUGH_REVEAL_FREE]"):
-            self.state.is_walkthrough_revealed = True
+            current = walkthrough_status(self.manager.adventure, self.state)["current"]
+            if current:
+                mark_revealed(self.state, current["sequence_id"])
             debug_info = debug_info[33:].strip()
         elif debug_info.startswith("[TRIGGER_GEN_ITEM]"):
             prompt = debug_info.replace("[TRIGGER_GEN_ITEM]", "").strip()
             async for chunk in self._handle_debug_gen_item(prompt):
                 yield chunk
             return
+        elif debug_info.startswith(TIME_CHANGED_MARKER):
+            debug_info = debug_info[len(TIME_CHANGED_MARKER) :].strip()
+            async for chunk in stream_time_events(self.manager):
+                yield chunk
         elif debug_info.startswith("[TRIGGER_NPC_DROP_ITEMS]"):
             dropped_info = await self._debug_drop_npc_items()
             debug_info = f"DEBUG: {dropped_info}"
@@ -891,6 +902,8 @@ class TurnInteractionsManager:
         self.pending_pickup_trigger: dict[str, Any] | None = None
         # Set when the command completed a sequence: the caller narrates the new chapter.
         self.pending_sequence_intro: dict[str, Any] | None = None
+        # Set when the command wants a Game Master reaction (e.g. items given to an NPC).
+        self.pending_reaction_prompt: str | None = None
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_payload = await self._build_map_payload()
@@ -1011,56 +1024,7 @@ class TurnInteractionsManager:
                 response = "You cannot take that."
 
         elif response.startswith("[TRIGGER_WALKTHROUGH_REVEAL]"):
-            self.avatar.exp = (self.avatar.exp or 0) - WALKTHROUGH_REVEAL_COST
-            self.state.is_walkthrough_revealed = True
-            flag_modified(self.avatar, "exp")
-            flag_modified(self.state, "is_walkthrough_revealed")
-
-            # Grant universal negative award
-            award_key = SPOILER_SEEKER_AWARD["key"]
-            now = datetime.now(UTC).isoformat()
-            user_awards = list(self.user.earned_awards or [])
-            adv_id = (
-                self.manager.adventure.id
-                if (hasattr(self.manager, "adventure") and self.manager.adventure)
-                else (getattr(self.avatar, "template_id", None) or self.state.template_id or "")
-            )
-            adv_title = (
-                self.manager.adventure.title
-                if (hasattr(self.manager, "adventure") and self.manager.adventure)
-                else "Adventure"
-            )
-            already_earned = any(
-                ea.get("key") == award_key
-                and (
-                    ea.get("adventure_id") == adv_id
-                    or ea.get("session_id") == self.state.session_id
-                )
-                for ea in user_awards
-            )
-            if not already_earned:
-                user_awards.append(
-                    {
-                        "key": award_key,
-                        "title": SPOILER_SEEKER_AWARD["title"],
-                        "description": SPOILER_SEEKER_AWARD["description"],
-                        "tier": SPOILER_SEEKER_AWARD["tier"],
-                        "requirement": SPOILER_SEEKER_AWARD["requirement"],
-                        "template_id": adv_id,
-                        "adventure_id": adv_id,
-                        "adventure_title": adv_title,
-                        "session_id": self.state.session_id,
-                        "earned_at": now,
-                    }
-                )
-                self.user.earned_awards = user_awards
-                flag_modified(self.user, "earned_awards")
-                await self.manager._save_chat_message(
-                    "system",
-                    f"Negative award received: {SPOILER_SEEKER_AWARD['title']} (-{WALKTHROUGH_REVEAL_COST} XP)",
-                )
-
-            response = f"Walkthrough unlocked! (-{WALKTHROUGH_REVEAL_COST} XP) You can view the walkthrough permanently via the menu."
+            response = await reveal_current_walkthrough(self)
 
         if response.startswith("[TRIGGER_DROP]"):
             item_name = response[14:].strip()
@@ -1201,6 +1165,26 @@ class TurnInteractionsManager:
                                 scene_container, inventory_container, inventory_idx
                             )
                             response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+
+        if response.startswith("[TRIGGER_SAVE]"):
+            # Written by process_turn before the final event, with a system message.
+            label = response.replace("[TRIGGER_SAVE]", "").strip()
+            self._queue_checkpoint(REASON_MANUAL_SAVE, label=label)
+            response = ""
+
+        if response.startswith("[TRIGGER_CONTAINER_PUT_ITEMS]"):
+            put_args = response.replace("[TRIGGER_CONTAINER_PUT_ITEMS]", "").strip()
+            for role, content in await put_items_into_container(self, put_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            response = ""
+
+        if response.startswith("[TRIGGER_GIVE_ITEMS]"):
+            give_args = response.replace("[TRIGGER_GIVE_ITEMS]", "").strip()
+            outcome = await give_items_to_npc(self.manager, give_args)
+            for role, content in outcome.events:
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):
             take_args = response.replace("[TRIGGER_CONTAINER_TAKE_ITEM]", "").strip()
@@ -1347,7 +1331,11 @@ class TurnInteractionsManager:
                 self.pending_sequence_intro = build_sequence_intro(adv, new_seq_id)
 
         await self.db.commit()
-        if self.pending_pickup_trigger or self.pending_sequence_intro:
+        if (
+            self.pending_pickup_trigger
+            or self.pending_sequence_intro
+            or self.pending_reaction_prompt
+        ):
             # Caller chains an LLM pass, which emits the final event itself.
             return
         final_data = jsonable_encoder(

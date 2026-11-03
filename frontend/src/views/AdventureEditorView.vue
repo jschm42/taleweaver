@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { adventureService } from '@/services/adventureService'
 import { visualService } from '@/services/visualService'
 import type { VisualKind } from '@/services/visualService'
+import type { NarratorVoice } from '@/services/narratorVoiceService'
 import { entityService } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
 import { useEntityTransfer } from '@/composables/useEntityTransfer'
@@ -16,6 +17,7 @@ import type { TtsVoiceList } from '@/types'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
 import WorldTab from '@/components/editor/WorldTab.vue'
+import TimeTab from '@/components/editor/TimeTab.vue'
 import SequencesSection from '@/components/editor/SequencesSection.vue'
 import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
@@ -99,6 +101,7 @@ const exitModalForm = ref({
   to_scene_id: '',
   label: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
+  is_revealed: false,
   lock_description: '',
   code_to_unlock: '',
   item_to_unlock: '',
@@ -417,6 +420,7 @@ function closeExitEditModal() {
     to_scene_id: '',
     label: '',
     exit_type: 'one_way',
+    is_revealed: false,
     lock_description: '',
   }
 }
@@ -428,7 +432,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -508,6 +512,7 @@ async function fetchVoiceList() {
 
 const editorTabs = [
   { key: 'world', label: 'World' },
+  { key: 'time', label: 'Time & Pacing' },
   { key: 'sequences', label: 'Sequences' },
   { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
@@ -665,6 +670,7 @@ const form = ref({
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
   max_time_per_turn: null as number | null,
+  gm_time_control: true,
   max_memory_turns: 10,
   clock_enabled: false,
   time_system: 'calendar' as string,
@@ -694,6 +700,7 @@ const form = ref({
   tts_director_notes: '',
   selected_style_id: '',
   selected_tone_id: '',
+  narrator_voice: null as NarratorVoice | null,
   is_adventure_generator: false
 })
 
@@ -837,6 +844,7 @@ async function fetchAdventure() {
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
+    form.value.gm_time_control = data.gm_time_control ?? true
     form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 10
     form.value.clock_enabled = data.clock_enabled ?? false
     form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'
@@ -932,6 +940,7 @@ async function fetchAdventure() {
     } else {
       form.value.selected_tone_id = rawTone || ''
     }
+    form.value.narrator_voice = data.narrator_voice || null
     form.value.is_adventure_generator = !!data.is_adventure_generator
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
@@ -1103,6 +1112,8 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_defeat_text: selectedNpc?.on_defeat_text || metadata?.on_defeat_text || '',
     on_protagonist_enters_scene_script: selectedNpc?.on_protagonist_enters_scene_script || metadata?.on_protagonist_enters_scene_script || '',
     on_protagonist_enters_scene_text: selectedNpc?.on_protagonist_enters_scene_text || metadata?.on_protagonist_enters_scene_text || '',
+    on_receive_item_script: selectedNpc?.on_receive_item_script || metadata?.on_receive_item_script || '',
+    on_receive_item_text: selectedNpc?.on_receive_item_text || metadata?.on_receive_item_text || '',
     on_interact_script: selectedNpc?.on_interact_script || selectedObject?.on_interact_script || metadata?.on_interact_script || '',
     on_interact_text: selectedNpc?.on_interact_text || selectedObject?.on_interact_text || metadata?.on_interact_text || '',
     unlock_expression: selectedObject?.unlock_expression || metadata?.unlock_expression || '',
@@ -1110,6 +1121,8 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_unlock_success_text: selectedObject?.on_unlock_success_text || metadata?.on_unlock_success_text || '',
     on_unlock_failure_script: selectedObject?.on_unlock_failure_script || metadata?.on_unlock_failure_script || '',
     on_unlock_failure_text: selectedObject?.on_unlock_failure_text || metadata?.on_unlock_failure_text || '',
+    on_items_added_script: selectedObject?.on_items_added_script || metadata?.on_items_added_script || '',
+    on_items_added_text: selectedObject?.on_items_added_text || metadata?.on_items_added_text || '',
     craft_guard_expression: selectedObject?.craft_guard_expression || metadata?.craft_guard_expression || '',
     on_craft_success_script: selectedObject?.on_craft_success_script || metadata?.on_craft_success_script || '',
     on_craft_success_text: selectedObject?.on_craft_success_text || metadata?.on_craft_success_text || '',
@@ -1201,6 +1214,8 @@ async function saveEntityText(data: any) {
           on_defeat_text: data.on_defeat_text || undefined,
           on_protagonist_enters_scene_script: data.on_protagonist_enters_scene_script || undefined,
           on_protagonist_enters_scene_text: data.on_protagonist_enters_scene_text || undefined,
+          on_receive_item_script: data.on_receive_item_script || undefined,
+          on_receive_item_text: data.on_receive_item_text || undefined,
           on_interact_script: data.on_interact_script || undefined,
           on_interact_text: data.on_interact_text || undefined,
         })
@@ -1401,6 +1416,8 @@ async function saveEntityText(data: any) {
       on_defeat_text: editEntityContext.value.type === 'npc' ? data.on_defeat_text : undefined,
       on_protagonist_enters_scene_script: editEntityContext.value.type === 'npc' ? data.on_protagonist_enters_scene_script : undefined,
       on_protagonist_enters_scene_text: editEntityContext.value.type === 'npc' ? data.on_protagonist_enters_scene_text : undefined,
+      on_receive_item_script: editEntityContext.value.type === 'npc' ? data.on_receive_item_script : undefined,
+      on_receive_item_text: editEntityContext.value.type === 'npc' ? data.on_receive_item_text : undefined,
       on_interact_script: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_script : undefined,
       on_interact_text: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_text : undefined,
       on_enter_scene_script: editEntityContext.value.type === 'scene' ? data.on_enter_scene_script : undefined,
@@ -1413,6 +1430,8 @@ async function saveEntityText(data: any) {
       on_unlock_success_text: editEntityContext.value.type === 'object' ? data.on_unlock_success_text : undefined,
       on_unlock_failure_script: editEntityContext.value.type === 'object' ? data.on_unlock_failure_script : undefined,
       on_unlock_failure_text: editEntityContext.value.type === 'object' ? data.on_unlock_failure_text : undefined,
+      on_items_added_script: editEntityContext.value.type === 'object' ? data.on_items_added_script : undefined,
+      on_items_added_text: editEntityContext.value.type === 'object' ? data.on_items_added_text : undefined,
       craft_guard_expression: editEntityContext.value.type === 'object' ? data.craft_guard_expression : undefined,
       on_craft_success_script: editEntityContext.value.type === 'object' ? data.on_craft_success_script : undefined,
       on_craft_success_text: editEntityContext.value.type === 'object' ? data.on_craft_success_text : undefined,
@@ -1479,8 +1498,12 @@ async function saveChanges() {
     const teaserOrPlotChanged = (form.value.teaser || '') !== (adventure.value?.teaser || '')
       || (form.value.plot || '') !== (adventure.value?.plot || '')
 
-    const fullStyleObj = imageStylesCatalog.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
-    const fullToneObj = toneCatalog.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
+    const existingStyle = Array.isArray(adventure.value?.selected_image_styles) ? adventure.value.selected_image_styles[0] : null
+    const fullStyleObj = imageStylesCatalog.value.find(s => s.id === form.value.selected_style_id)
+      || (existingStyle && typeof existingStyle === 'object' && existingStyle.id === form.value.selected_style_id ? existingStyle : { id: form.value.selected_style_id, name: form.value.selected_style_id })
+    const existingTone = adventure.value?.selected_tone
+    const fullToneObj = toneCatalog.value.find(t => t.id === form.value.selected_tone_id)
+      || (existingTone && typeof existingTone === 'object' && (existingTone as any).id === form.value.selected_tone_id ? existingTone : { id: form.value.selected_tone_id, name: form.value.selected_tone_id })
     const payload = {
       ...form.value,
       selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
@@ -1519,7 +1542,7 @@ async function onSpecialAttacksSaved() {
     const refreshed = editorNpcs.value.find((npc: any) => npc.id === specialAttacksNpc.value?.id)
     specialAttacksNpc.value = refreshed ?? null
   }
-  addNotification('Combat settings saved.', 'success')
+  addNotification('Combat & talent settings saved.', 'success')
 }
 
 async function saveProtagonistField(field: string, newValue: any) {
@@ -2221,6 +2244,7 @@ function openCreateExitModal() {
     to_scene_id: '',
     label: '',
     exit_type: 'one_way',
+    is_revealed: false,
     lock_description: '',
     code_to_unlock: '',
     item_to_unlock: '',
@@ -2418,6 +2442,7 @@ function openEditExitModal(exitId: string) {
     to_scene_id: String(exit.to_scene_id || ''),
     label: String(exit.label || ''),
     exit_type: (String(exit.exit_type || 'one_way') as 'one_way' | 'bidirectional'),
+    is_revealed: Boolean(exit.is_revealed),
     lock_description: String(exit.lock_description || ''),
     code_to_unlock: String(exit.code_to_unlock || ''),
     item_to_unlock: String(exit.item_to_unlock || ''),
@@ -2467,6 +2492,7 @@ async function saveExitModal(formData: any) {
         to_scene_id: toSceneId,
         label,
         exit_type: formData.exit_type,
+        is_revealed: Boolean(formData.is_revealed),
         lock_description: lockDescription || undefined,
         code_to_unlock: formData.code_to_unlock || undefined,
         item_to_unlock: formData.item_to_unlock || undefined,
@@ -2494,6 +2520,7 @@ async function saveExitModal(formData: any) {
         name: label,
         description: lockDescription,
         exit_type: formData.exit_type,
+        revealed: Boolean(formData.is_revealed),
         code_to_unlock: formData.code_to_unlock,
         item_to_unlock: formData.item_to_unlock,
         rule_to_unlock: formData.rule_to_unlock,
@@ -2727,9 +2754,20 @@ watch(
               @cancel-edit="cancelEditing"
               @generate-field="handleGenerateField"
               @update:temp-value="tempValue = $event"
+              @update:max-memory-turns="form.max_memory_turns = $event"
+              @update:mode="handleUpdateRuleMode"
+              @save-changes="saveChanges"
+              @notify="addNotification"
+            />
+
+            <TimeTab
+              v-else-if="activeTab === 'time'"
+              :form="form"
+              :adventure="adventure"
+              :is-saving="isSaving"
               @update:pacing="form.time_per_turn = $event"
               @update:max-time-per-turn="form.max_time_per_turn = $event"
-              @update:max-memory-turns="form.max_memory_turns = $event"
+              @update:gm-time-control="form.gm_time_control = $event"
               @update:clock-enabled="form.clock_enabled = $event"
               @update:time-system="form.time_system = $event"
               @update:start-date="form.time_config = { ...(form.time_config || {}), start_date: $event }"
@@ -2743,9 +2781,7 @@ watch(
               @update:calendar-pacing-unit="form.time_config = { ...(form.time_config || {}), calendar_pacing_unit: $event }"
               @update:calendar-max-value="form.time_config = { ...(form.time_config || {}), calendar_max_value: $event }"
               @update:calendar-max-unit="form.time_config = { ...(form.time_config || {}), calendar_max_unit: $event }"
-              @update:mode="handleUpdateRuleMode"
               @save-changes="saveChanges"
-              @notify="addNotification"
             />
 
             <div v-else-if="activeTab === 'sequences'" class="space-y-6">
@@ -2811,6 +2847,7 @@ watch(
               @request-move-item-to-scene="requestMoveItemToScene"
               @request-delete-item="requestDeleteItem"
               @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @duplicate-entity="(_kind, id) => handleCloneRouteEntity('object', id)"
               @import-entity="importEntity"
             />
 
@@ -2840,6 +2877,7 @@ watch(
               @open-create-npc="() => openCreateNpc()"
               @open-special-attacks="(npc: any) => (specialAttacksNpc = npc)"
               @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @duplicate-entity="(_kind, id) => handleCloneRouteEntity('npc', id)"
               @import-entity="importEntity"
             />
 
@@ -2909,6 +2947,8 @@ watch(
               @request-delete-exit="requestDeleteRouteExit"
               @request-delete-entity="requestDeleteRouteEntity"
               @clone-entity="handleCloneRouteEntity"
+              @export-entity="(kind, id, label) => { activeMenuId = null; exportEntity(kind, id, label) }"
+              @import-entity="(kind, sceneId) => importEntity(kind, sceneId)"
               @request-move-entity-to-scene="requestMoveEntityToScene"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
@@ -3004,6 +3044,7 @@ watch(
               :tone-catalog="toneCatalog"
               :is-saving="isSaving"
               @update:tone="form.selected_tone_id = $event"
+              @update:narrator-voice="form.narrator_voice = $event"
               @save-changes="saveChanges"
             />
 

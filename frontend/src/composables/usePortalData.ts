@@ -1,5 +1,7 @@
 import { ref, computed, type ComputedRef, type Ref } from 'vue'
 import { api } from '@/composables/useApi'
+import { adventureLibraryService } from '@/services/adventureLibrary'
+import { withLibraryUpdates } from '@/utils/libraryUpdates'
 import { notificationService } from '@/services/notificationService'
 import { usePortalModals, type PortalImportWarningType } from '@/composables/usePortalModals'
 import { usePortalPendingState } from '@/composables/usePortalPendingState'
@@ -215,6 +217,25 @@ export function usePortalData(): UsePortalDataResult {
   const imageStylesCatalog = ref<CatalogTile[]>([])
   const toneCatalog = ref<CatalogTile[]>([])
 
+  // Only the newest check may apply its result; an older one would describe stale templates.
+  let libraryUpdatesRequest = 0
+
+  /**
+   * Marks templates with a newer version in the adventure library, in the background.
+   * The portal never waits for the remote repository; failures leave the cards unchanged.
+   */
+  async function applyLibraryUpdates() {
+    const requestId = ++libraryUpdatesRequest
+    try {
+      const { updates } = await adventureLibraryService.fetchUpdates()
+      if (requestId === libraryUpdatesRequest) {
+        templates.value = withLibraryUpdates(templates.value, updates)
+      }
+    } catch (err) {
+      console.debug('[Portal] Library update check failed', err)
+    }
+  }
+
   /** Loads templates and sessions and synchronizes pending generation state. */
   async function fetchPortalData() {
     try {
@@ -241,6 +262,7 @@ export function usePortalData(): UsePortalDataResult {
             selected_tone: formatToneLabel(entry.selected_tone),
           }))
         : []
+      void applyLibraryUpdates()
       sessions.value = Array.isArray(fetchedSessions)
         ? fetchedSessions.map((entry) => ({
             ...entry,
@@ -259,6 +281,7 @@ export function usePortalData(): UsePortalDataResult {
       }
 
       await syncPendingFromTemplates(fetchPortalData)
+      void checkLibraryUpdates()
     } catch (error) {
       console.error('API Error:', error)
     } finally {
@@ -266,7 +289,30 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Updates an individual adventure template from /adventures. */
+  /**
+   * Loads the Adventure Library index once per page load (in the background) so imported
+   * adventures get an update badge when the library has a newer version. The template list
+   * itself only reads the cached index, so it is reloaded when the check found something new.
+   */
+  let libraryChecked = false
+  async function checkLibraryUpdates() {
+    if (libraryChecked) return
+    libraryChecked = true
+    try {
+      const catalog = await adventureLibraryService.fetchCatalog()
+      const flagged = new Set(
+        templates.value.filter((t) => t.has_update && t.update_source === 'library').map((t) => t.origin_id),
+      )
+      const hasNewUpdate = catalog.items.some((item) => item.update_available && !flagged.has(item.entry.id))
+      if (hasNewUpdate) {
+        await fetchPortalData()
+      }
+    } catch {
+      // Best effort: without the library the badges only reflect local /adventures files.
+    }
+  }
+
+  /** Updates an individual adventure template from /adventures or the Adventure Library. */
   async function updateAdventure(templateId: string) {
     if (updatingTemplateIds.value.has(templateId)) return
     updatingTemplateIds.value.add(templateId)
@@ -298,7 +344,7 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Updates all adventure templates that have newer versions in /adventures. */
+  /** Updates all adventure templates that have newer versions in /adventures or the Adventure Library. */
   async function updateAllAdventures() {
     if (isUpdatingAll.value) return
     isUpdatingAll.value = true

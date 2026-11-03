@@ -56,6 +56,7 @@ _BASE_SCRIPT_FIELDS = (
 )  # fmt: skip
 _CONTAINER_SCRIPT_FIELDS = (
     "on_unlock_success_script", "on_unlock_success_text", "on_unlock_failure_script", "on_unlock_failure_text",
+    "on_items_added_script", "on_items_added_text",
 )  # fmt: skip
 _CONSTRUCTABLE_FIELDS = (
     "result_item_ids", "kept_ingredients",
@@ -278,6 +279,9 @@ async def _object_image(
     cache: dict[str, str],
     position: tuple[int, int],
 ) -> Optional[str]:
+    # Recipes never appear in the world: no image, not even a placeholder (also on import).
+    if _is_recipe_def(obj):
+        return None
     image_url = await pick_existing_image(
         ctx,
         kind="object",
@@ -291,8 +295,7 @@ async def _object_image(
     )
     if not needs_image(image_url):
         return image_url
-    # Recipes never appear in the world, so they get the placeholder instead of an image.
-    if ctx.user and ctx.gen_items and not _is_recipe_def(obj):
+    if ctx.user and ctx.gen_items:
         image_url = await _generate_item_image(ctx, obj, *position)
     if not needs_image(image_url):
         return image_url

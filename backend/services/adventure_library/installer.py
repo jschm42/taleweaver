@@ -133,6 +133,18 @@ def _manifest_title(files: dict[str, bytes]) -> str | None:
     return adventure.get("title") if isinstance(adventure, dict) else None
 
 
+async def _store_bundle(entry: LibraryEntry, data: bytes) -> Path:
+    """Write the bundle to the download dir and rescan it, so the update scanner sees it."""
+    path = bundle_path(entry.slug)
+    await asyncio.to_thread(_write_atomic, path, data)
+
+    # Imported lazily: adventure_updates has an import cycle through the API routers.
+    from backend.engine.adventures.adventure_updates import scan_available_adventure_files
+
+    await asyncio.to_thread(scan_available_adventure_files, True)
+    return path
+
+
 async def install_entry(
     db: AsyncSession,
     entry: LibraryEntry,
@@ -152,12 +164,7 @@ async def install_entry(
     )
     if not imported:
         raise AdventureInstallError(f"the importer rejected {entry.slug} {entry.version}")
-    await asyncio.to_thread(_write_atomic, bundle_path(entry.slug), data)
-
-    # Imported lazily: adventure_updates has an import cycle through the API routers.
-    from backend.engine.adventures.adventure_updates import scan_available_adventure_files
-
-    await asyncio.to_thread(scan_available_adventure_files, True)
+    await _store_bundle(entry, data)
     logger.info("Installed library adventure %s %s", entry.slug, entry.version)
 
     title = _manifest_title(files) or entry.title

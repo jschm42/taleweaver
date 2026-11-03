@@ -1,5 +1,6 @@
 import { API_BASE, authHeaders } from '@/services/http'
 import { isNpcEntity, isObjectEntity, mergeUniqueById } from '@/utils/editor_utils'
+import type { NarratorVoice } from '@/services/narratorVoiceService'
 
 export interface Adventure {
   id: string
@@ -15,6 +16,7 @@ export interface Adventure {
   time_per_turn: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
+  gm_time_control?: boolean
   max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string
@@ -34,6 +36,8 @@ export interface Adventure {
   awards?: any[]
   scripts?: any[]
   init_script?: string | null
+  /** How the GM narrates; null = engine default (see narratorVoiceService). */
+  narrator_voice?: NarratorVoice | null
   allow_dynamic_items: boolean
   can_damage_npcs: boolean
   npcs_can_damage_protagonist: boolean
@@ -71,6 +75,7 @@ export interface AdventureFormData {
   time_per_turn: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
+  gm_time_control?: boolean
   max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string

@@ -6,6 +6,7 @@ import SwitchStatesEditor from '@/components/editor/SwitchStatesEditor.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue'
+import ReceiveItemTriggerFields from '@/components/editor/ReceiveItemTriggerFields.vue'
 import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
@@ -70,6 +71,8 @@ const props = defineProps<{
     on_unlock_success_text?: string
     on_unlock_failure_script?: string
     on_unlock_failure_text?: string
+    on_items_added_script?: string
+    on_items_added_text?: string
     craft_guard_expression?: string
     on_craft_success_script?: string
     on_craft_success_text?: string
@@ -97,7 +100,7 @@ const emit = defineEmits<{
   (e: 'combat-saved'): void
 }>()
 
-const activeTab = ref<'simple' | 'advanced'>('simple')
+const activeTab = ref<'simple' | 'combat' | 'advanced'>('simple')
 const editingTransitionIndex = ref<number | null>(null)
 const showTransitionGuards = ref<boolean>(false)
 const showTransitionScripts = ref<boolean>(false)
@@ -138,6 +141,8 @@ const localForm = ref({
   on_unlock_success_text: '',
   on_unlock_failure_script: '',
   on_unlock_failure_text: '',
+  on_items_added_script: '',
+  on_items_added_text: '',
   craft_guard_expression: '',
   on_craft_success_script: '',
   on_craft_success_text: '',
@@ -164,6 +169,8 @@ const localForm = ref({
   on_defeat_text: '',
   on_protagonist_enters_scene_script: '',
   on_protagonist_enters_scene_text: '',
+  on_receive_item_script: '',
+  on_receive_item_text: '',
   on_interact_script: '',
   on_interact_text: '',
   on_success_script: '',
@@ -497,6 +504,8 @@ watch(() => props.initialForm, (newVal) => {
     on_defeat_text: '',
     on_protagonist_enters_scene_script: '',
     on_protagonist_enters_scene_text: '',
+    on_receive_item_script: '',
+    on_receive_item_text: '',
     on_interact_script: '',
     on_interact_text: '',
     ...newVal
@@ -532,6 +541,8 @@ watch(() => props.show, (newVal) => {
       on_defeat_text: '',
       on_protagonist_enters_scene_script: '',
       on_protagonist_enters_scene_text: '',
+      on_receive_item_script: '',
+      on_receive_item_text: '',
       on_interact_script: '',
       on_interact_text: '',
       ...props.initialForm
@@ -736,6 +747,8 @@ function handleSave() {
     on_unlock_success_text: String(localForm.value.on_unlock_success_text || '').trim(),
     on_unlock_failure_script: String(localForm.value.on_unlock_failure_script || '').trim(),
     on_unlock_failure_text: String(localForm.value.on_unlock_failure_text || '').trim(),
+    on_items_added_script: String(localForm.value.on_items_added_script || '').trim(),
+    on_items_added_text: String(localForm.value.on_items_added_text || '').trim(),
     craft_guard_expression: String(localForm.value.craft_guard_expression || '').trim(),
     on_craft_success_script: String(localForm.value.on_craft_success_script || '').trim(),
     on_craft_success_text: String(localForm.value.on_craft_success_text || '').trim(),
@@ -762,6 +775,8 @@ function handleSave() {
     on_defeat_text: localForm.value.on_defeat_text,
     on_protagonist_enters_scene_script: localForm.value.on_protagonist_enters_scene_script,
     on_protagonist_enters_scene_text: localForm.value.on_protagonist_enters_scene_text,
+    on_receive_item_script: localForm.value.on_receive_item_script,
+    on_receive_item_text: localForm.value.on_receive_item_text,
     on_interact_script: localForm.value.on_interact_script,
     on_interact_text: localForm.value.on_interact_text,
   })
@@ -886,6 +901,13 @@ const textLogPreviewClass = computed(() => {
               :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'simple' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
             >
               General
+            </button>
+            <button
+              v-if="context.type === 'npc'"
+              @click="activeTab = 'combat'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'combat' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              Combat
             </button>
             <button
               @click="activeTab = 'advanced'"
@@ -1081,22 +1103,6 @@ const textLogPreviewClass = computed(() => {
                 </div>
               </div>
 
-              <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
-                <div class="flex items-center justify-between">
-                  <div class="space-y-1 pr-4">
-                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Killed</p>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC can still fight but is never permanently defeated.</p>
-                  </div>
-                  <button
-                    type="button"
-                    @click="localForm.is_killable = !localForm.is_killable"
-                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_killable ? 'bg-emerald-600' : 'bg-slate-700']"
-                  >
-                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
-                  </button>
-                </div>
-              </div>
-
               <!-- NPC Movement Configuration (Moveable & Allowed Scenes) -->
               <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl space-y-4">
                 <div class="flex items-center justify-between">
@@ -1256,7 +1262,7 @@ const textLogPreviewClass = computed(() => {
                       class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all resize-none shadow-inner"
                     />
                     <span class="block text-[10px] text-slate-500 leading-normal">
-                      GM narration rule that triggers this NPC to be revealed. Leave empty for default scene search reveal.
+                      GM narration rule that triggers this NPC to be revealed. Leave empty for default scene search reveal. Enter <code class="text-slate-400">script</code> to let only scripts reveal it (the GM never discovers it).
                     </span>
                   </div>
                 </div>
@@ -1354,7 +1360,7 @@ const textLogPreviewClass = computed(() => {
                         class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all resize-none shadow-inner"
                       />
                       <span class="block text-[10px] text-slate-500 leading-normal">
-                        Specific action or event that triggers this item to reveal in the room. Leave empty for default search reveal.
+                        Specific action or event that triggers this item to reveal in the room. Leave empty for default search reveal. Enter <code class="text-slate-400">script</code> to let only scripts (or crafting / another item's reveal) reveal it.
                       </span>
                     </div>
                   </div>
@@ -1998,7 +2004,7 @@ const textLogPreviewClass = computed(() => {
                         <span class="text-[11px] font-black text-slate-300 uppercase tracking-wider">
                           Unlocking Transition Rules
                         </span>
-                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
+                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script || localForm.on_items_added_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
                           Configured
                         </span>
                       </div>
@@ -2036,6 +2042,23 @@ const textLogPreviewClass = computed(() => {
                           v-model="localForm.on_unlock_failure_text"
                           rows="2"
                           placeholder="e.g. A small jolt zaps your fingers! The container remains shut."
+                          class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
+                        ></textarea>
+                      </div>
+
+                      <ScriptEditor
+                        v-model="localForm.on_items_added_script"
+                        label="On Items Added Script"
+                        help-text="Executed once after the player put one or more items into this container. added_items (list of dicts) and added_item_ids (list of IDs) are in scope."
+                        context="container_items_added"
+                        min-height="100px"
+                      />
+                      <div class="space-y-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Items Added Text</label>
+                        <textarea
+                          v-model="localForm.on_items_added_text"
+                          rows="2"
+                          placeholder="e.g. The offering bowl glows faintly as the items settle inside."
                           class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
                         ></textarea>
                       </div>
@@ -2122,6 +2145,44 @@ const textLogPreviewClass = computed(() => {
                 :target-type="context.type"
               />
             </div> <!-- End simple tab -->
+
+            <div v-if="context.type === 'npc'" v-show="activeTab === 'combat'" class="space-y-6">
+              <div class="space-y-2">
+                <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Combat</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                  How this NPC fights: damage, aggression, combat group, attributes, main attack and special attacks.
+                  The damage switch is saved with Apply Changes; the sections below have their own Save buttons.
+                </p>
+              </div>
+
+              <div class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1 pr-4">
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Damaged</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC never loses HP (scripts, Game Master, combat) and cannot be fought.</p>
+                  </div>
+                  <button
+                    type="button"
+                    @click="localForm.is_killable = !localForm.is_killable"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_killable ? 'bg-emerald-600' : 'bg-slate-700']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- NPC combat behaviour & special attacks (shared with the NPC combat modal) -->
+              <div class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <NpcCombatSettings
+                  v-if="adventureId && npcData && !isCreateEntityMode"
+                  :adventure-id="adventureId"
+                  :npc="npcData"
+                  :reference-options="referenceOptions"
+                  @saved="emit('combat-saved')"
+                />
+                <p v-else class="text-[11px] text-slate-400">Save the NPC first to configure attack behaviour, combat group and special attacks.</p>
+              </div>
+            </div> <!-- End combat tab -->
 
             <div v-show="activeTab === 'advanced'" class="space-y-6">
               <div class="space-y-2">
@@ -2363,22 +2424,15 @@ const textLogPreviewClass = computed(() => {
               </div>
 
               <div v-else-if="context.type === 'npc'" class="space-y-6">
-                <!-- NPC combat behaviour & special attacks (shared with the NPC combat modal) -->
-                <div class="p-4 bg-black/30 border border-white/10 rounded-2xl">
-                  <NpcCombatSettings
-                    v-if="adventureId && npcData && !isCreateEntityMode"
-                    :adventure-id="adventureId"
-                    :npc="npcData"
-                    :reference-options="referenceOptions"
-                    @saved="emit('combat-saved')"
-                  />
-                  <p v-else class="text-[11px] text-slate-400">Save the NPC first to configure attack behaviour and special attacks.</p>
-                </div>
-
                 <InteractTriggerFields
                   v-model:script="localForm.on_interact_script"
                   v-model:text="localForm.on_interact_text"
                   entity-label="NPC"
+                />
+
+                <ReceiveItemTriggerFields
+                  v-model:script="localForm.on_receive_item_script"
+                  v-model:text="localForm.on_receive_item_text"
                 />
 
                 <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">

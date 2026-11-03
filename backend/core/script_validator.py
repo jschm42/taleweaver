@@ -276,6 +276,7 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                 "on_protagonist_enters_scene_script",
                 "on_talk_script",
                 "on_interact_script",
+                "on_receive_item_script",
             ):
                 code = ent.get(field) or meta_dict.get(field)
                 findings.extend(
@@ -296,6 +297,7 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                 "on_read_script",
                 "on_unlock_success_script",
                 "on_unlock_failure_script",
+                "on_items_added_script",
                 "on_craft_success_script",
                 "on_craft_failure_script",
                 "on_success_script",

@@ -18,6 +18,8 @@ import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerPanel from '@/components/game/prompts/ContainerPanel.vue'
+import GivePanel from '@/components/game/prompts/GivePanel.vue'
+import { useGivePanel } from '@/composables/useGivePanel'
 import LockUnlockPanel from '@/components/game/prompts/LockUnlockPanel.vue'
 import SwitchStatePanel from '@/components/game/prompts/SwitchStatePanel.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
@@ -56,9 +58,10 @@ import { useGameProgressState } from '@/composables/useGameProgressState'
 import { useSceneArrivalCurtain } from '@/composables/useSceneArrivalCurtain'
 import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
+import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
-import { gameCommandService } from '@/services/gameCommandService'
+import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 import type { SheetTabId } from '@/components/game/sheet/types'
@@ -116,6 +119,8 @@ const activeContainer = ref<{
   name: string
   items: any[]
   imageUrl?: string | null
+  /** Containers standing in the scene accept items from the inventory. */
+  canPut?: boolean
 } | null>(null)
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
 const awaitingContainerCodeInput = ref(false)
@@ -249,7 +254,6 @@ const {
   isSceneTransitioning: socketIsSceneTransitioning,
   sceneArrival,
   generatorProposal,
-  generatorAutoStart,
   showGeneratorModal,
   openGeneratorModal,
   closeGeneratorModal,
@@ -382,12 +386,21 @@ const isChoicePanelOpen = computed(() => isDialogOpen.value && !isPassRunning.va
 // Inline prompts (containers, locks, switches, readables) at the end of the story feed: one at a time.
 const showCombinePanel = ref(false)
 const combineSeedItem = ref<any>(null)
+const { showGivePanel, giveTarget, giveBusy, openGivePanel, closeGivePanel, submitGive } = useGivePanel({
+  npcs: () => npcs.value,
+  sendMessage,
+  beforeOpen: () => {
+    closeInlinePrompts()
+    closeSheetForInlinePrompt()
+  },
+})
 const isInlinePromptOpen = computed(() => showUnlockModal.value || showExitUnlockModal.value
   || showSwitchStateModal.value || showSwitchUnlockModal.value || showTextLogModal.value
-  || showContainerModal.value || showCombinePanel.value)
+  || showContainerModal.value || showCombinePanel.value || showGivePanel.value)
 const closeInlinePrompts = (): void => {
   showContainerModal.value = false
   showCombinePanel.value = false
+  closeGivePanel()
   showUnlockModal.value = false
   showExitUnlockModal.value = false
   showSwitchStateModal.value = false
@@ -731,12 +744,13 @@ const isReadableEntity = (entity: any): boolean => {
 
 const extractTextLogPayload = (entity: any) => {
   const metadata = (entity?.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  // No cut here: the editor and backend already cap readable texts at 1000 characters.
   const content = String(
     entity?.text_log_content ||
     metadata.text_log_content ||
     entity?.description ||
     ''
-  ).trim().slice(0, 500)
+  ).trim()
   const format = String(entity?.text_log_format || metadata.text_log_format || 'DOCUMENT').trim().toUpperCase()
   return {
     id: String(entity?.id || ''),
@@ -817,6 +831,7 @@ const openContainerFromEntity = (entity: any): boolean => {
     name: String(entity.name || entity.id || 'Container'),
     items: normalizeContainerItems(entity.inventory || []),
     imageUrl: entity.image_url || null,
+    canPut: true,
   }
   showContainerModal.value = true
   return true
@@ -961,7 +976,7 @@ const handleExitClick = async (exit: any) => {
 
   if (isExitLocked(exit)) {
     closeInlinePrompts()
-    exitUnlockModalTarget.value = { ...exit, id: exitRef, name: exit.label || 'Exit' }
+    exitUnlockModalTarget.value = { ...exit, id: exitRef, name: exitDisplayName(exit) }
     exitUnlockError.value = ''
     showExitUnlockModal.value = true
     return
@@ -1291,6 +1306,11 @@ const handleContainerDropToScene = async () => {
   await runContainerAction((id) => `/container_drop_scene ${id}`)
 }
 
+const handleContainerPutItems = async (itemIds: string[]) => {
+  if (!itemIds.length) return
+  await runContainerAction((id) => `/container_put_items ${id} | ${itemIds.join(', ')}`)
+}
+
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
 const npcs = computed(() => {
   const worldNpcs = entities.value.filter(e => e.entity_type === 'NPC')
@@ -1375,13 +1395,10 @@ const isExitLocked = (exit: any): boolean => {
   return Boolean(exit.is_locked)
 }
 
+/** The exit's label, else its target scene (labels are optional; see utils/exitLabel.ts). */
 const exitDisplayName = (exit: any): string => {
   if (!exit) return 'Exit'
-  const raw = String(exit.label || '').trim()
-  if (!raw) return 'Exit'
-  const arrowMatch = raw.match(/^(.+?)\s*(?:->|→)\s*.+$/)
-  if (arrowMatch) return arrowMatch[1].trim()
-  return raw
+  return exitNameOf(exit.label, exit.target_scene_name || resolveSceneName(String(exit.target_scene_id || exit.to || '')))
 }
 
 interface ExitLockBadge {
@@ -1549,8 +1566,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   sessionId: computed(() => props.id),
   autoSpeakNarration,
   autoSpeakDialogues,
-  // Speech stays silent while the player answers a choice dialog.
-  speechSuppressed: isDialogOpen,
+  // A choice dialog no longer silences speech: it usually opens at the end of the turn whose
+  // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
   speechDeferred: isSceneTransitioning,
 })
@@ -1625,6 +1642,10 @@ const {
 
     if (action.startsWith(COMBINE_WITH_PREFIX)) {
       return openCombinePanel(action.replace(COMBINE_WITH_PREFIX, '').trim())
+    }
+
+    if (action.startsWith(GIVE_TO_PREFIX)) {
+      return openGivePanel(action.replace(GIVE_TO_PREFIX, '').trim())
     }
 
     if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
@@ -1728,7 +1749,7 @@ const handleLootLeave = async (item: any) => {
   await gameActionService.runLootCommand(combatActionInFlight, sendMessage, 'leave', item)
 }
 
-const handleLootDone = async () => {
+const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
   await gameActionService.runLootDone(
     combatActionInFlight,
     sendMessage,
@@ -1741,7 +1762,8 @@ const handleLootDone = async () => {
       if (!combat.value) {
         isClosingCombat.value = false
       }
-    }
+    },
+    action,
   )
 }
 
@@ -1792,6 +1814,7 @@ usePlayAgentAutoLoop()
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
+      :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"
       :entities="entities"
@@ -1895,10 +1918,25 @@ usePlayAgentAutoLoop()
           :items="activeContainer?.items || []"
           :image-url="activeContainer?.imageUrl || null"
           :busy="containerBusy"
+          :container-id="activeContainer?.id || ''"
+          :inventory-items="inventoryItems"
+          :can-put="!!activeContainer?.canPut"
           @close="closeContainerModal"
           @take-all="handleContainerTakeAll"
           @take-item="handleContainerTakeItem"
           @drop-to-scene="handleContainerDropToScene"
+          @put-items="handleContainerPutItems"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
+        />
+        <GivePanel
+          :open="showGivePanel"
+          :npc-name="giveTarget?.name || ''"
+          :npc-image-url="giveTarget?.imageUrl || null"
+          :inventory-items="inventoryItems"
+          :busy="giveBusy || isActionInputBlocked"
+          @close="closeGivePanel"
+          @give="submitGive"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />
@@ -2083,7 +2121,8 @@ usePlayAgentAutoLoop()
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
-      @loot-done="handleLootDone"
+      @loot-done="handleLootDone('done')"
+      @loot-take-all="handleLootDone('take_all')"
       @debug-win="handleCombatDebugWin"
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
@@ -2095,7 +2134,10 @@ usePlayAgentAutoLoop()
       :items="lootPopupItems"
       :busy="combatActionInFlight"
       @close="closeLootPopup"
-      @confirm="handleLootDone"
+      @confirm="handleLootDone('done')"
+      @take-all="handleLootDone('take_all')"
+      @take="handleLootTake"
+      @drop="handleLootLeave"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
       @item-leave="hoveredEntity = null"
     />
@@ -2103,7 +2145,6 @@ usePlayAgentAutoLoop()
     <AdventureGeneratorModal
       :open="showGeneratorModal"
       :proposal="generatorProposal"
-      :auto-start="generatorAutoStart"
       @close="closeGeneratorModal"
       @completed="(advId, title) => {
         emitSystemMessage(`SYSTEM: Adventure '${title}' successfully created and added to your archives.`)

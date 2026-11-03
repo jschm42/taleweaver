@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from backend.core.style_catalog import build_blueprint_image_styles, build_blueprint_tone
 from backend.engine.blueprint.converters import (
     STAT_ALIASES,
     ability_area,
@@ -23,6 +24,7 @@ from backend.engine.blueprint.converters import (
     ident,
     ident_list,
     integer,
+    main_attack,
     movement,
     one_way,
     stat_bonus,
@@ -31,6 +33,7 @@ from backend.engine.blueprint.converters import (
     switch_transition,
     text,
     text_list,
+    time_amount,
     weapon_cost,
     weapon_effects,
 )
@@ -74,6 +77,11 @@ def _hook(table: dict[str, FieldSpec], key: str, target: str) -> None:
 
 WORLD_KEYS: dict[str, FieldSpec] = {
     "language": FieldSpec("language"),
+    "image_style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
+    "style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
+    "visual_style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
+    "tone": FieldSpec("selected_tone", build_blueprint_tone),
+    "narrative_tone": FieldSpec("selected_tone", build_blueprint_tone),
     "plot": FieldSpec("plot"),
     "rules": FieldSpec("rules"),
     "intro": FieldSpec("intro_text"),
@@ -116,6 +124,8 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "via": FieldSpec("label"),
     "label": FieldSpec("label"),
     "locked": FieldSpec("is_locked", boolean),
+    # The target scene is known from the start (name and image on the exit tile and map).
+    "revealed": FieldSpec("is_revealed", boolean),
     "lock": FieldSpec("lock_description"),
     "code": FieldSpec("code_to_unlock"),
     "key_item": _ref("item_to_unlock"),
@@ -147,6 +157,8 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "hidden": FieldSpec("is_hidden", boolean),
     "reveal": FieldSpec("reveal_rule"),
     "inventory": _refs("inventory"),
+    "main_attack": FieldSpec("main_attack", main_attack),
+    # Deprecated: NPC equipment items (fallback only). Use main_attack and ac instead.
     "weapon": _ref("equipped_weapon_id"),
     "armor": _ref("equipped_armor_id"),
     "attack": FieldSpec(
@@ -157,11 +169,24 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "attack_after_scene": _ref("attack_trigger.required_scene_id"),
     "attack_after_defeat": _ref("attack_trigger.required_defeated_npc_id"),
     "attack_guard": _expr("attack_trigger.guard_expression"),
+    "group": FieldSpec("combat_group", ident),
+    "assist": FieldSpec(
+        "assist_mode",
+        choice(
+            "GROUP",
+            "ANYONE",
+            "NEVER",
+            aliases={"any": "ANYONE", "all": "ANYONE", "none": "NEVER", "bystander": "NEVER"},
+        ),
+    ),
     "special_chance": FieldSpec("special_chance", integer),
 }
+for _alias, _stat in STAT_ALIASES.items():
+    NPC_KEYS[_alias] = FieldSpec(_stat, integer)
 _hook(NPC_KEYS, "on_defeat", "on_defeat")
 _hook(NPC_KEYS, "on_meet", "on_protagonist_enters_scene")
 _hook(NPC_KEYS, "on_interact", "on_interact")
+_hook(NPC_KEYS, "on_receive_item", "on_receive_item")
 
 ITEM_TYPES = (
     "CONSUMABLE",
@@ -221,11 +246,22 @@ for _key, _target in (
     ("on_use", "on_interact"),
     ("on_unlock", "on_unlock_success"),
     ("on_unlock_fail", "on_unlock_failure"),
+    ("on_items_added", "on_items_added"),
     ("on_read", "on_read"),
     ("on_craft", "on_craft_success"),
     ("on_craft_fail", "on_craft_failure"),
 ):
     _hook(ITEM_KEYS, _key, _target)
+for _switch_key, _switch_target in (
+    ("on_success", "on_success_script"),
+    ("on_success_script", "on_success_script"),
+    ("on_switch", "on_success_script"),
+    ("on_fail", "on_failure_script"),
+    ("on_failure", "on_failure_script"),
+    ("on_failure_script", "on_failure_script"),
+    ("on_switch_fail", "on_failure_script"),
+):
+    ITEM_KEYS[_switch_key] = _script(_switch_target)
 
 _GOAL_KEYS: dict[str, FieldSpec] = {
     "goal_item": _ref("required_item_id"),
@@ -278,10 +314,13 @@ SCRIPT_TRIGGERS = (
     "on_turn_end",
     "on_logic_pass_done",
     "on_narration_done",
+    "on_time_reached",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),
     "target": _ref("target_id"),
+    # on_time_reached: elapsed in-game time ("90", "2h 30m", "1d"), stored as minutes.
+    "at": FieldSpec("target_id", time_amount),
     "code": _script("code"),
 }
 
@@ -320,6 +359,25 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
 _hook(ABILITY_KEYS, "on_success", "on_success")
 _hook(ABILITY_KEYS, "on_fail", "on_failure")
 
+TALENT_KEYS: dict[str, FieldSpec] = {
+    "target": FieldSpec(
+        "target_type",
+        choice("NONE", "NPC", "ITEM", "ANY", aliases={"object": "ITEM", "character": "NPC"}),
+    ),
+    "cost": FieldSpec("*", ability_cost),
+    "uses": FieldSpec("max_uses", integer),
+    "gm": FieldSpec("gm_hint"),
+    "gm_hint": FieldSpec("gm_hint"),
+    **{key: spec for key, spec in ABILITY_KEYS.items() if key.startswith(("locked", "unlock"))},
+}
+_hook(TALENT_KEYS, "on_use", "on_use")
+
+# (tag kind, key) -> what to use instead; the parser warns but still applies the key.
+DEPRECATED_KEYS: dict[tuple[str, str], str] = {
+    ("npc", "weapon"): "use main_attack (no item needed)",
+    ("npc", "armor"): "use ac",
+}
+
 KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "world": WORLD_KEYS,
     "protagonist": PROTAGONIST_KEYS,
@@ -333,6 +391,7 @@ KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "sidequest": SIDEQUEST_KEYS,
     "award": AWARD_KEYS,
     "ability": ABILITY_KEYS,
+    "talent": TALENT_KEYS,
 }
 
 

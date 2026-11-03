@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.routes.adventures.editing.entity_update.loadout import resolve_loadout
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.session_assets import copy_data_asset_to_session
+from backend.api.routes.adventures.session_cloning import clone_entity
 from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
@@ -56,42 +57,11 @@ _EXIT_COPY_FIELDS = (
     "label",
     "exit_type",
     "is_locked",
+    "is_revealed",
     "lock_description",
     "code_to_unlock",
     "item_to_unlock",
     "rule_to_unlock",
-)
-_ENTITY_COPY_FIELDS = (
-    "id",
-    "entity_type",
-    "name",
-    "description",
-    "appearance",
-    "current_scene_id",
-    "spatial_position",
-    "item_type",
-    "wearable_slots",
-    "is_in_inventory",
-    "is_hidden",
-    "is_portable",
-    "combination_ingredients",
-    "reveals_item_id",
-    "is_final_state",
-    "state_comment",
-    "npc_type",
-    "movement_type",
-    "hp",
-    "max_hp",
-    "mana",
-    "max_mana",
-    "stamina",
-    "max_stamina",
-    "stat_modifier_strength",
-    "stat_modifier_dexterity",
-    "stat_modifier_intelligence",
-    "stat_modifier_wisdom",
-    "stat_modifier_charisma",
-    "stat_modifier_armor_class",
 )
 
 
@@ -160,17 +130,6 @@ async def _clone_session_avatar(
     return session_avatar
 
 
-def _copy_entity(entity: WorldEntity, session_id: str, image_url: Optional[str]) -> WorldEntity:
-    return WorldEntity(
-        **{field: getattr(entity, field) for field in _ENTITY_COPY_FIELDS},
-        session_id=session_id,
-        template_id=None,
-        image_url=image_url or entity.image_url,
-        inventory=deepcopy(entity.inventory),
-        metadata_json=deepcopy(entity.metadata_json),
-    )
-
-
 async def _copy_world_to_session(
     db: AsyncSession, template_id: str, session_id: str, asset_cache: dict[str, str]
 ) -> None:
@@ -203,7 +162,15 @@ async def _copy_world_to_session(
 
     for entity in await _template_rows(db, WorldEntity, template_id):
         image = copy_data_asset_to_session(session_id, "entities", entity.image_url, asset_cache)
-        db.add(_copy_entity(entity, session_id, image))
+        db.add(
+            clone_entity(
+                entity,
+                session_id,
+                image,
+                is_in_inventory=entity.is_in_inventory,
+                unlock_rule=entity.unlock_rule,
+            )
+        )
 
 
 async def _store_asset_snapshot(

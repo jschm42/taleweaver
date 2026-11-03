@@ -24,9 +24,11 @@ from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
+from backend.core.style_catalog import resolve_tone_instruction
 from backend.engine.blueprint import Blueprint, apply_blueprint, prepare_blueprint
 
 # --- Re-exports so existing imports stay valid ---
+from backend.engine.rules.award_keys import normalize_new_award_keys
 from backend.engine.world.world_schemas import (  # noqa: F401
     AwardTemplateSchema,
     EquipmentSchema,
@@ -552,7 +554,8 @@ def _replace_ids_in_text(text: Any, object_ids: list[str]) -> Any:
         return text
     for obj_id in object_ids:
         pattern = rf"(?<!##)\b{re.escape(obj_id)}\b"
-        text = re.sub(pattern, f"##{obj_id}", text, flags=re.IGNORECASE)
+        flags = re.IGNORECASE if "_" in obj_id else 0
+        text = re.sub(pattern, f"##{obj_id}", text, flags=flags)
     return text
 
 
@@ -589,6 +592,26 @@ def _clean_sequence_item(seq: Any, object_ids: list[str]) -> None:
 # ---------------------------------------------------------------------------
 # WorldGenerator (public API facade)
 # ---------------------------------------------------------------------------
+
+
+def _resolve_blueprint_world_overrides(
+    blueprint: Any,
+    user: Optional[User],
+    language: Optional[str],
+    selected_tone: Optional[str],
+    selected_image_styles: Optional[list[str]],
+) -> tuple[Optional[str], Optional[str], Optional[list[Any]]]:
+    if not blueprint:
+        return language, selected_tone, selected_image_styles
+    world_vals = blueprint.world_values()
+    lang = world_vals.get("language") or language
+    styles = world_vals.get("selected_image_styles") or selected_image_styles
+    tone = selected_tone
+    if world_vals.get("selected_tone"):
+        tone = resolve_tone_instruction(
+            world_vals["selected_tone"], (user.tone_catalog if user else None) or []
+        )
+    return lang, tone, styles
 
 
 def _apply_blueprint_to_manifest(
@@ -834,6 +857,9 @@ class WorldGenerator:
         if blueprint:
             llm_prompt = blueprint.premise or title
             sequences = sequences or blueprint.sequences or None
+        language, selected_tone, selected_image_styles = _resolve_blueprint_world_overrides(
+            blueprint, user, language, selected_tone, selected_image_styles
+        )
 
         system_prompt, user_prompt = build_world_generation_prompts(
             title=title,
@@ -941,6 +967,7 @@ class WorldGenerator:
 
         if not scripts_generation_enabled:
             manifest_dict["scripts"] = []
+        normalize_new_award_keys(manifest_dict.get("awards"))
 
         objects = manifest_dict.get("objects") or []
         _postprocess_containers(objects, container_generation_enabled, max_containers)

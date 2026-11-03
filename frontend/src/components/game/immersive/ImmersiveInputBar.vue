@@ -290,6 +290,8 @@ defineExpose({
 
     <!-- Input Box & Actions -->
     <div class="relative flex items-center gap-2">
+      <!-- Extra leading controls, e.g. the Talents menu -->
+      <slot name="leading" />
       <!-- Command auto-completion popup -->
       <CommandPopup
         v-if="showCommandPopup && filteredCommands.length"

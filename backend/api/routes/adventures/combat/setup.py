@@ -7,11 +7,14 @@ from typing import Any
 
 from sqlalchemy import select
 
+from backend.api.routes.adventures.combat.context import engaged_enemies
+from backend.engine.combat.groups import is_ally_of
 from backend.engine.combat.initiative import PLAYER_ID
 from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
-MAX_ENCOUNTER_ENEMIES = 6
+# Combatants per fight besides the protagonist (engaged enemies plus bystanders of the scene).
+MAX_ENCOUNTER_ENEMIES = 20
 
 
 class CombatSetupMixin:
@@ -86,7 +89,16 @@ class CombatSetupMixin:
             and self._is_npc_attackable(npc)
             and self._entity_stat(npc, "hp", 50) > 0
         ]
+        # Allies of the target get a slot first when the scene holds more NPCs than fit.
+        others.sort(key=lambda npc: not self._helps_in_fight(npc, target))
         return [target, *others][:MAX_ENCOUNTER_ENEMIES]
+
+    def _helps_in_fight(self, npc: WorldEntity, target: WorldEntity) -> bool:
+        helper = {
+            "combat_group": self._npc_combat_group(npc),
+            "assist_mode": self._npc_assist_mode(npc),
+        }
+        return is_ally_of(helper, {"combat_group": self._npc_combat_group(target)})
 
     @staticmethod
     def _starts_engaged(npc: WorldEntity, target: WorldEntity) -> bool:
@@ -117,6 +129,7 @@ class CombatSetupMixin:
             "log": [],
         }
         self._sync_combat_player_snapshot(combat)
+        self._rally_allies(combat, enemies[0])
         self._roll_round_initiative(combat)
         first = combat["initiative"][0]
         starts = (
@@ -146,14 +159,25 @@ class CombatSetupMixin:
         async for chunk in self._advance_until_player(combat, skip_current=False):
             yield chunk
 
-        others = len(combat["enemies"]) - 1
-        crowd = f" {others} other combatant(s) are watching closely." if others else ""
+        crowd = self._encounter_crowd_note(combat, target.id)
         if initiated_by_enemy:
             msg = f"{target.name} attacks as you enter the scene. Combat starts immediately.{crowd}"
         else:
             msg = f"Combat started against {target.name}.{crowd}"
         async for chunk in self._reply(msg):
             yield chunk
+
+    @staticmethod
+    def _encounter_crowd_note(combat: dict[str, Any], target_id: str) -> str:
+        allies = [e["name"] for e in engaged_enemies(combat) if e["id"] != target_id]
+        bystanders = len(combat["enemies"]) - len(allies) - 1
+        parts = []
+        if allies:
+            verb = "joins" if len(allies) == 1 else "join"
+            parts.append(f" {', '.join(allies)} {verb} the fight.")
+        if bystanders > 0:
+            parts.append(f" {bystanders} bystander(s) are watching closely.")
+        return "".join(parts)
 
     @staticmethod
     def _gm_attack_target(game_event: GameEvent) -> tuple[str, bool]:

@@ -22,23 +22,35 @@ cinematic voice acting, comic-style narrative feeds, and deterministic Python ev
 
 <br />
 
-![Adventure Gameplay](docs/screenshots/gameplay.jpg)
-
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/generator.jpg" alt="World Generator" /></a></td>
-    <td width="50%"><a href="docs/screenshots/editor-map.jpg"><img src="docs/screenshots/editor-map.jpg" alt="Interactive Directed Map" /></a></td>
+    <td width="33%"><a href="docs/screenshots/gameplay.jpg"><img src="docs/screenshots/small/gameplay.jpg" alt="Comic Story Feed" /></a></td>
+    <td width="33%"><a href="docs/screenshots/combat-dialog.jpg"><img src="docs/screenshots/small/combat-dialog.jpg" alt="Tactical Combat" /></a></td>
+    <td width="33%"><a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/small/generator.jpg" alt="AI World Generator" /></a></td>
   </tr>
   <tr>
+    <td align="center"><sub><b>Comic Story Feed</b> – dynamic AI narration with speaker portraits & comic speech bubbles</sub></td>
+    <td align="center"><sub><b>Tactical Combat</b> – card-based combat with turn initiative and enemy target deck</sub></td>
     <td align="center"><sub><b>World Generator</b> – synthesize complete adventures, lore, and Python scripts from a prompt</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/character-sheet.jpg"><img src="docs/screenshots/small/character-sheet.jpg" alt="Character Sheet & Backpack" /></a></td>
+    <td width="33%"><a href="docs/screenshots/loot-dialog.jpg"><img src="docs/screenshots/small/loot-dialog.jpg" alt="Containers & Spoils" /></a></td>
+    <td width="33%"><a href="docs/screenshots/editor-map.jpg"><img src="docs/screenshots/small/editor-map.jpg" alt="Directed Cartography" /></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Character Sheet & Gear</b> – real-time gauges, equipment slots, and 24-slot backpack</sub></td>
+    <td align="center"><sub><b>Containers & Spoils</b> – search chests and adversaries with item inspection and rarity tiers</sub></td>
     <td align="center"><sub><b>Directed Cartography</b> – interactive topological maps with real-time pathfinding</sub></td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/screenshots/editor-scenes.jpg"><img src="docs/screenshots/editor-scenes.jpg" alt="World Workbench" /></a></td>
-    <td width="50%"><a href="docs/screenshots/editor-validation.jpg"><img src="docs/screenshots/editor-validation.jpg" alt="Dual-Tier AI Validation" /></a></td>
+    <td width="33%"><a href="docs/screenshots/library-catalog.jpg"><img src="docs/screenshots/small/library-catalog.jpg" alt="Adventure Library & Catalog" /></a></td>
+    <td width="33%"><a href="docs/screenshots/editor-script-engine.jpg"><img src="docs/screenshots/small/editor-script-engine.jpg" alt="Python Event Scripting" /></a></td>
+    <td width="33%"><a href="docs/screenshots/editor-validation.jpg"><img src="docs/screenshots/small/editor-validation.jpg" alt="Dual-Tier AI Validation" /></a></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>Adventure Workbench</b> – full visual CRUD for scenes, NPCs, items, containers, and switches</sub></td>
+    <td align="center"><sub><b>Adventure Catalog</b> – browse and download curated community campaigns and modules</sub></td>
+    <td align="center"><sub><b>Python Event Scripting</b> – deterministic game logic running in a sandboxed AST interpreter</sub></td>
     <td align="center"><sub><b>Dual-Tier Validation</b> – structural graph audits paired with semantic AI story critiques</sub></td>
   </tr>
 </table>
@@ -56,18 +68,20 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### 🧠 The Omniscient AI Gamemaster
 * **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
 * **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
+* **Narrator Voices:** Give each adventure its own Game Master voice: a hardboiled noir detective, a cozy fireside storyteller, a cold sci-fi chronicler and more. Admins curate the voice catalog (Admin → Narrator Voices); authors pick a voice or write their own in the editor's Tone tab. The voice changes how the narration is worded, not how long it is, and travels with the adventure's manifest.
 * **Cover Mode (Sequels & Variations):** Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets.
 
 ### 🎭 Immersive In-Game Interface & Comic Turn Feed
 * **Comic-Style Turn Presentation:** Dynamic turn rendering that separates narrator exposition from character dialogue using expressive comic speech bubbles, speaker avatars, and action markers.
-* **Dynamic Character Stage:** Visual character staging area led by the protagonist's portrait (click it to open the hero dialog), followed by the active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback.
-* **Streamlined In-Game HUD:** Modernized HUD featuring a real-time In-Game Clock, contextual action quickbar, expandable Character Sheet, skin-styled inline prompts in the story feed for opened and locked containers, locked exits, switches, readables and a combine workbench for crafting, plus a dedicated combat modal.
+* **Dynamic Character Stage:** Visual character staging area led by the protagonist's portrait (click it to open the hero dialog), followed by the active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback. An award earned during play (from the Game Master, a hard rule or a script) appears for a few seconds as a glowing card at the top of the story area, with its title, tier and description; click it to dismiss it. When a character's HP, Mana, Stamina or an attribute (STR, DEX, INT, WIS, CHA, AC) changes, the value floats up on its card (red `−5 HP` for losses, green `+15 HP` for gains), and an HP loss briefly flashes and shakes the card. In crowded scenes the stage stays readable: defeated characters move to the bottom, and all cards shrink to fit the column height — first to a compact card with the name only, then to a short strip with a skull badge for defeated characters. The column only scrolls when even the smallest cards no longer fit.
+* **Streamlined In-Game HUD:** Modernized HUD featuring a quickbar styled as a fanned hand of illustrated playing cards (Quests, Map, Hero, Log, Hints, Memories, Ideas), flanked on wide screens by an ornamental day/night In-Game Clock (sun and moon turn with the in-game time) and a gilded experience counter that counts up and announces gained XP, expandable Character Sheet, skin-styled inline prompts in the story feed for opened and locked containers, locked exits, switches, readables and a combine workbench for crafting, a Give dialog for handing inventory items to NPCs (NPC context menu → **Give**, or type `give <item> to <npc>`; the NPC's `on_receive_item` trigger fires and the Game Master narrates the reaction), a Talents menu (sparkle button next to the input) for the protagonist's non-combat talents such as Mind Reading (also in the NPC/item context menu, or type `use <talent> on <target>` / `cast <talent>`; the engine pays the Mana/Stamina cost, counts optional uses per adventure and runs the talent's script, then the Game Master narrates the effect), plus a dedicated combat modal.
 
 ### 🛠️ Fully-Featured Adventure Editor & AI Validation
-* **Complete World Customization:** The Adventure Editor provides dedicated tabs to edit, refine, and build adventure templates: Scenes, Directed Map Routing, NPCs, Items, Switches, Containers, Quests, Awards, Tone, Visuals, and Scripts.
+* **Complete World Customization:** The Adventure Editor provides dedicated tabs to edit, refine, and build adventure templates: Scenes, Directed Map Routing, NPCs, Items, Switches, Containers, Quests, Awards, Tone, Visuals, and Scripts. NPCs get a configurable combat profile (STR/DEX/INT/WIS/CHA, armor class and a main attack such as a Longsword, Bow or Magic Missile, with no weapon item needed) next to their special attacks; NPCs and items can be duplicated, and exported/imported as `.twe` bundles.
 * **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, switch outcomes, and event scripts directly from the UI with reference autocomplete.
 * **Bidirectional Route Mapping:** Visual route editor for bidirectional and one-way paths with lock descriptions, passcodes, and item unlock conditions.
 * **Sandboxed Python Event Scripts:** Author deterministic, reactive game logic directly in the World-Editor or via AI World-Builder generation. Safely queries and modifies scenes, exits, items, NPCs, avatar stats, variables, and victory conditions without host escapes. See the [Scripting Engine Guide](docs/scripting_engine.md).
+* **In-Game Time Management:** The clock advances after every narrated player message by a configurable pacing. The editor's **Time & Pacing** tab sets the time system, start time, pacing and whether the Game Master may change the time ("the search took 20 minutes"); scripts read, set, pause and resume the clock with `tw.time`, change the pacing in-game, and react to time with `on_time_reached` scripts and `tw.time.at/after/every` timers. `/debug time` changes the clock by hand for testing.
 * **Dual-Tier AI & Structural Validation:** Built-in world validation engine that checks graph connectivity, reachable scenes, valid exit endpoints, proper container contents, and crafting ingredient completeness, alongside deep LLM story critiques that detect plot holes, logic inconsistencies, and puzzle dead-ends.
 * **One-Click AI Fix Proposals:** Automatically generate and apply intelligent AI repairs for broken exits, missing keys, or narrative inconsistencies directly from the editor's Validation Tab.
 
@@ -87,6 +101,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth. With ElevenLabs, speech streams as it is generated and every character speaks with their own voice (see [Character Voices](#️-character-voices-elevenlabs-voice-list)).
 * **Speech-to-Text & Push-to-Talk (PTT):** True hands-free roleplaying! Hold down the interactive microphone UI button or hotkeys (`V`, `B`, or `T`) to record and speak directly to NPCs and the GM. Releases auto-transcribe and submit immediately. A voice activity filter trims silence before transcription, so the spoken language is detected from your speech rather than from microphone noise.
 * **In-Character Speech Shortcuts:** Hold down `B`, `T`, or `Shift` to automatically prepend `/say ` to your transcription, allowing seamless in-character dialogue.
+* **Skip Lines with `Space`:** While a line is read aloud in the immersive view, `Space` skips to the next line (like the **Skip** button); otherwise it jumps to the latest message. It does nothing while you type, while a button has focus, or while a dialog is open.
 * **Background Whisper Model Loading:** The configurable local [faster-whisper](https://github.com/SYSTRAN/faster-whisper) model preloads in a background thread as soon as the game screen opens. The first run downloads the model from Hugging Face; while it loads, the microphone button shows a spinner, and a recording made in the meantime waits with a visible "Loading speech model… (Ns)" status instead of appearing frozen.
 
 ### 🗺️ Visuals & Sensory Immersion
@@ -101,13 +116,16 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### Persistent Game Progress & Memory
 * **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
 * **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
-* **Continuous Auto-Save Milestones:** TaleWeaver now creates automatic checkpoints at major story milestones (scene changes, quest milestones, award events).
+* **Continuous Auto-Save Milestones:** TaleWeaver now creates automatic checkpoints at major story milestones (scene changes, sequence changes, quest milestones, award events).
+* **Save States:** Type `/save [name]` to save at any time; adventure scripts can save before important decisions with `tw.save("label")`. A checkpoint is a full dump of the session (protagonist, world rows, variables, quests, sequence).
 * **Chronicles Timeline + Rollback:** Open the new Chronicles timeline in-game and restore to any recent checkpoint. Rollback performs a hard timeline rewind by restoring stored state and removing future messages after that checkpoint.
-* **Retention Policy:** To keep sessions fast and compact, only the five most recent checkpoints are retained per game session.
+* **Retention Policy:** To keep sessions fast and compact, each game session keeps its five most recent automatic checkpoints and, separately, its ten most recent saves (`/save`, `tw.save()`).
+* **Walkthrough per Chapter:** The in-game walkthrough (`/walkthrough`) only ever unlocks the guide of the current sequence, for 150 XP each time (`/walkthrough reveal`). Unlocked chapters stay readable; later chapters stay hidden until you reach them.
 
 ### Media & Immersion
 * Optional AI-generated images to enhance the aesthetic.
 * **Import/Export:** Adventures can be backed up or shared.
+* **Update Badges:** Installed adventures show an **Update** badge when a newer version is available, either as a file in `/adventures` or in the Adventure Library (matched by the adventure's stable ID). Updating keeps existing game sessions.
 * **Offline Image Generation:** Local providers are supported, including **Ollama**, **Stable Diffusion via Automatic1111/Forge API**, and [**ComfyUI (Experimental)**](docs/comfyui/README.md) with selectable checkpoints and standard SD 1.5/SDXL workflows.
 
 ### Recent Feature Highlights
@@ -154,6 +172,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 - **Infinite Generative Worlds** – plots, quests, puzzles, and explorable scenes generated dynamically on the fly
 - **Dynamic Living NPCs** – expressive multi-turn dialogue, autonomous scene movements, and individual motives
 - **Strict 2-Pass Rulebook** – decoupled game loop running mathematical mechanics first, followed by atmospheric narrative prose
+- **Narrator Voices** – pick how the Game Master speaks per adventure (noir, fireside, gothic, epic historian, ...) or write your own
 - **Cover Mode** – generate sequels, alternate timelines, or spinoffs from existing adventure blueprints
 - **Tactical Encounters & Loot** – dedicated combat modal, locked container mechanics, item passcodes, and consumable handling
 
@@ -332,6 +351,8 @@ Core server and security settings are configured in `.env` (refer to [`.env.exam
 ### 🎙️ Character Voices (ElevenLabs Voice List)
 
 With **ElevenLabs** as speech provider, every NPC and the protagonist speak with their own voice (Gemini TTS reads everything in the narrator voice). The voices come from a curated list, **`backend/core/elevenlabs_voices.json`**. The world builder assigns voices only from this list, automatic casting picks from it (matching gender, never repeating the narrator's or another character's voice), and the editor's voice picker offers it.
+
+A dialogue line (`Name: "..."`, from the Game Master or a script) gets the voice of the NPC it names: by ID, by full name, or by a shortened name made of the leading words of exactly one NPC's name ("Grimsby" for "Grimsby the Gargoyle"). A short name that fits several NPCs falls back to the narrator voice. Each game copies the NPCs' voices when it starts, so a voice changed in the editor is heard in games started afterwards.
 
 **Change the list** by editing the JSON file; the app reloads it automatically when the file changes:
 

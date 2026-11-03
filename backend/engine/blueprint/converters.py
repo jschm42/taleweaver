@@ -14,6 +14,7 @@ from backend.engine.interaction.switch_states import (
     STATE_LABEL_MAX,
     is_valid_state_id,
 )
+from backend.engine.rules.game_clock import to_minutes
 
 _TRUE_WORDS = {"yes", "true", "on", "1", "y"}
 _FALSE_WORDS = {"no", "false", "off", "0", "n"}
@@ -62,6 +63,12 @@ def boolean(raw: str) -> bool:
 
 def ident(raw: str) -> str:
     return normalize_id(raw)
+
+
+def time_amount(raw: str) -> str:
+    """``2h 30m`` / ``1d`` / ``1:30`` / ``90`` -> elapsed minutes as text (kept when unparsable)."""
+    minutes = to_minutes(raw)
+    return str(minutes) if minutes is not None else raw.strip()
 
 
 def ident_list(raw: str) -> list[str]:
@@ -163,6 +170,44 @@ def weapon_effects(raw: str) -> list[dict[str, str]]:
     return effects
 
 
+_ATTACK_CATEGORIES = ("MELEE", "RANGED", "MAGIC")
+_ATTACK_DICE_RX = re.compile(r"\d+d\d+(?:[+-]\d+)?")
+_ROLL_STAT_NAMES = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
+
+
+def _attack_option(attack: dict[str, Any], part: str) -> None:
+    """One ``|`` part of a main attack: dice, category, stat or ``key: value``."""
+    key, sep, value = (p.strip() for p in part.partition(":"))
+    word = part.strip().lower().replace(" ", "")
+    if not sep and _ATTACK_DICE_RX.fullmatch(word):
+        attack["damage_dice"] = word
+    elif not sep and word.upper() in _ATTACK_CATEGORIES:
+        attack["category"] = word.upper()
+    elif not sep and STAT_ALIASES.get(word) in _ROLL_STAT_NAMES:
+        attack["hit_stat"] = STAT_ALIASES[word]
+    elif sep and key.lower() == "cost":
+        attack["cost_type"], attack["cost"] = _resource_cost(value)
+    elif sep and key.lower() in ("effects", "hit_effects"):
+        attack["effects"] = weapon_effects(value)
+    else:
+        raise ValueError(
+            f"unknown main attack part '{part.strip()}' (use dice like 1d8, melee/ranged/magic, "
+            "a stat like str, 'cost: stamina 5' or 'effects: target stamina -1d4')"
+        )
+
+
+def main_attack(raw: str) -> dict[str, Any]:
+    """``Longsword | 1d8+1 | melee | str | cost: stamina 5 | effects: target hp -1``."""
+    name, *parts = [part.strip() for part in raw.split("|")]
+    if not name:
+        raise ValueError("expected an attack name first, e.g. 'Longsword | 1d8 | melee | str'")
+    attack: dict[str, Any] = {"name": name, "damage_dice": "1d6"}
+    for part in parts:
+        if part:
+            _attack_option(attack, part)
+    return attack
+
+
 def ability_cost(raw: str) -> dict[str, Any]:
     kind, amount = _resource_cost(raw)
     return {"cost_type": kind, "cost": amount}
@@ -211,6 +256,12 @@ _GATE_KEYS = {
     "guard": "expression",
 }
 _MESSAGE_KEYS = {"fail": "fail_message", "success": "success_message"}
+_TRANSITION_SCRIPT_KEYS = {
+    "script": "on_success_script",
+    "on_success": "on_success_script",
+    "on_fail": "on_failure_script",
+    "on_failure": "on_failure_script",
+}
 
 
 def switch_transition(raw: str) -> dict[str, Any]:
@@ -233,6 +284,8 @@ def switch_transition(raw: str) -> dict[str, Any]:
             gates[_GATE_KEYS[key]] = normalize_id(value) if key == "item" else value.strip()
         elif key in _MESSAGE_KEYS:
             transition[_MESSAGE_KEYS[key]] = value.strip()
+        elif key in _TRANSITION_SCRIPT_KEYS:
+            transition[_TRANSITION_SCRIPT_KEYS[key]] = value.strip()
         else:
             raise ValueError(f"unknown transition option '{key}'")
     if gates:

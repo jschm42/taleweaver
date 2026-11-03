@@ -3,7 +3,8 @@
  * ImmersiveHeader — Atmospheric top bar for the immersive RPG view
  *
  * Displays scene and adventure metadata, active sequence with description tooltip,
- * tracked quest badge, in-game clock, experience counter, and a settings button that
+ * tracked quest badge, in-game clock and experience counter (narrow screens only; wide screens
+ * show them ornamented beside the dock cards), and a settings button that
  * shows indicators while Auto-Speak or the Bable Fish translation is active.
  */
 import { ref, computed } from 'vue'
@@ -196,16 +197,16 @@ const sequenceOrder = computed(() => {
         <span>DEBUG</span>
       </button>
 
-      <!-- In-Game Clock -->
-      <GameClockWidget :game-time="props.gameTime || null" :clock-tick="props.clockTick || false" />
-
-      <!-- Experience XP -->
-      <div
-        class="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black tracking-wider shadow-sm shrink-0"
-        title="Experience Points (XP)"
-      >
-        <i class="ra ra-laurels text-sm text-amber-400"></i>
-        <span class="tabular-nums">{{ props.exp ?? 0 }} XP</span>
+      <!-- Clock and XP: on wide screens they sit beside the dock cards (FooterClock, FooterXp). -->
+      <div class="flex items-center gap-2 sm:gap-3 lg:hidden">
+        <GameClockWidget :game-time="props.gameTime || null" :clock-tick="props.clockTick || false" />
+        <div
+          class="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black tracking-wider shadow-sm shrink-0"
+          title="Experience Points (XP)"
+        >
+          <i class="ra ra-trophy text-sm text-amber-400"></i>
+          <span class="tabular-nums">{{ props.exp ?? 0 }} XP</span>
+        </div>
       </div>
 
       <!-- Stop Speech (only while audio is playing) -->

@@ -96,6 +96,12 @@ def starting_stats(prot: dict[str, Any]) -> dict[str, Any]:
     stats["unlocked_actions"] = [
         act.get("id") for act in specials if isinstance(act, dict) and not act.get("is_locked")
     ]
+    talents = prot.get("talents") or stats.get("talents") or []
+    stats["talents"] = talents
+    stats["unlocked_talents"] = [
+        t.get("id") for t in talents if isinstance(t, dict) and not t.get("is_locked")
+    ]
+    stats["talent_uses"] = {}
     return stats
 
 

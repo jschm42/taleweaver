@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.dialog_tree_service import DialogTreeStep
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks
@@ -26,6 +27,7 @@ from backend.engine.scripting.dialog import (
     find_option,
     pending_dialog,
 )
+from backend.engine.scripting.dialog_tree import is_tree
 from backend.engine.scripting.gm_directions import pending_gm_directions, take_gm_directions
 from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
 from backend.models.chat import ChatMessage
@@ -75,8 +77,14 @@ class DialogChoiceResolver:
             raise HTTPException(status_code=400, detail="Unknown choice.")
 
         self._clear_dialog()
+        tree_step = DialogTreeStep(self.manager) if is_tree(dialog) else None
+        npc_line = await tree_step.save_npc_line(dialog) if tree_step else ""
         await self.manager._save_chat_message("user", f"{CHOICE_MESSAGE_PREFIX} {option['label']}")
-        messages, ended = await self._run_handler(dialog, option)
+        if tree_step:
+            messages, ended = await tree_step.run(dialog, option)
+            messages = [npc_line, *messages] if npc_line else messages
+        else:
+            messages, ended = await self._run_handler(dialog, option)
         if not ended:
             ended = await self._apply_follow_ups(messages)
         if ended:

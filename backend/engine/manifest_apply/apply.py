@@ -112,7 +112,7 @@ async def _prepare_context(
     wg = generator_module()
     wg.preprocess_manifest_object_ids(manifest_dict)
     adventure = await db.get(AdventureTemplate, template_id)
-    styles = options.pop("selected_image_styles")
+    styles = manifest_dict.get("selected_image_styles") or options.pop("selected_image_styles")
     if styles is None and adventure:
         styles = adventure.selected_image_styles
     ctx = ApplyContext(

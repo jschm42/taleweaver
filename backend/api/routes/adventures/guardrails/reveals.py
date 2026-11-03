@@ -14,6 +14,7 @@ from backend.engine.rules.crafting_recipes import (
     is_recipe,
     used_up_ingredient_ids,
 )
+from backend.engine.rules.reveal_policy import entity_is_script_only
 from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
 
@@ -82,9 +83,38 @@ class RevealGuardMixin:
             and not getattr(e, "is_in_inventory", False)
             and str(e.id) not in contained
             and not is_recipe(e)
+            and not entity_is_script_only(e)
             and e.id.upper() not in never
             and self._is_entity_hidden_now(e)
         ]
+
+    async def _block_script_only_reveals(self, event: GameEvent) -> list[str]:
+        """Drops Game Master reveals of entities whose reveal rule is ``script``.
+
+        Runs before the deterministic guardrails (crafting, ``reveals_item_id``), so only
+        reveals the Game Master proposed are affected; scripts apply their changes directly.
+        """
+        if not event.updated_entities and not event.discovered_entity_ids:
+            return []
+        script_only = {
+            e.id.upper()
+            for e in await self._session_entities()
+            if e.id and entity_is_script_only(e)
+        }
+        if not script_only:
+            return []
+        event.discovered_entity_ids = [
+            eid for eid in event.discovered_entity_ids or [] if str(eid).upper() not in script_only
+        ] or None
+        for update in event.updated_entities or []:
+            if update.is_hidden is False and (update.entity_id or "").upper() in script_only:
+                update.is_hidden = None
+                logger.info(
+                    "[Turn %s] Blocked GM reveal of script-only entity '%s'",
+                    self.game_id,
+                    update.entity_id,
+                )
+        return []
 
     async def _llm_says_discovered(self, ent: WorldEntity, user_msg: str, narration: str) -> bool:
         """Language-agnostic fallback: asks the small model whether the turn discovered the entity."""

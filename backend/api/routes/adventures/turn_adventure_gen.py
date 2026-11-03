@@ -320,27 +320,17 @@ class TurnAdventureGenManager:
         return self.contains_transition_movement_cue(text)
 
     @staticmethod
-    def build_generator_proposal(
-        request: AdventureGenerationRequest, *, auto_start: bool
-    ) -> dict[str, Any]:
+    def build_generator_proposal(request: AdventureGenerationRequest) -> dict[str, Any]:
         """Build the `adventure_generator_proposal` SSE payload.
 
-        With `auto_start`, the client skips the review form and opens the live progress view.
+        The client always opens the review form first; generation starts only when the player
+        launches it there, so the blueprint can be checked, edited or discarded.
         """
-        message = (
-            "The Architect begins weaving your confirmed world."
-            if auto_start
-            else "The Architect has prepared a world proposal based on your vision."
-        )
-        return {"request": request.model_dump(), "message": message, "auto_start": auto_start}
+        message = "The Architect has prepared a world proposal based on your vision."
+        return {"request": request.model_dump(), "message": message}
 
     @staticmethod
-    def proposal_narrative(*, auto_start: bool) -> str:
-        if auto_start:
-            return (
-                "The Architect inclines his head and sets the Loom in motion. "
-                "Threads of light begin weaving the world you envisioned."
-            )
+    def proposal_narrative() -> str:
         return (
             "The Architect inclines his head and gestures toward the Loom. "
             "The blueprint of your vision has materialized for your review."
@@ -393,7 +383,7 @@ class TurnAdventureGenManager:
             try:
                 msg = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if tool_task.done():
                     break
 

@@ -22,6 +22,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   traverseExit: [exit: any]
+  exitHover: [entity: any, event: MouseEvent]
+  exitLeave: []
   itemClick: [item: any]
   itemHover: [item: any, event: MouseEvent]
   itemLeave: []
@@ -38,6 +40,8 @@ const emit = defineEmits<{
       :current-scene-name="props.currentSceneName"
       :is-evaluating="props.isEvaluating"
       @traverse-exit="(exit) => emit('traverseExit', exit)"
+      @exit-hover="(entity, event) => emit('exitHover', entity, event)"
+      @exit-leave="emit('exitLeave')"
     />
     <DiscoveriesPanel
       v-else-if="props.tab === 'discoveries'"

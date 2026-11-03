@@ -361,7 +361,34 @@ def check_template_update(
     }
 
 
-async def _delete_replaced_template(db: AsyncSession, template_id: str) -> None:
+async def linked_session_ids(db: AsyncSession, template_id: str) -> list[str]:
+    """Ids of the game sessions started from ``template_id``."""
+    result = await db.execute(select(GameSession.id).where(GameSession.template_id == template_id))
+    return list(result.scalars().all())
+
+
+async def relink_sessions(
+    db: AsyncSession, session_ids: list[str], new_template_id: Optional[str]
+) -> None:
+    """Points existing sessions at the updated template without touching their state."""
+    from sqlalchemy import update
+
+    if not session_ids or not new_template_id:
+        return
+    await db.execute(
+        update(GameSession)
+        .where(GameSession.id.in_(session_ids))
+        .values(template_id=new_template_id)
+    )
+    await db.execute(
+        update(SessionState)
+        .where(SessionState.session_id.in_(session_ids))
+        .values(template_id=new_template_id)
+    )
+    await db.commit()
+
+
+async def delete_replaced_template(db: AsyncSession, template_id: str) -> None:
     """Deletes the outdated template if the import did not already overwrite it."""
     still_exists = await db.execute(
         select(AdventureTemplate.id).where(AdventureTemplate.id == template_id)
@@ -382,11 +409,6 @@ async def update_single_adventure(
     NOTE: Existing game sessions are NOT updated. Their narrative snapshot and state
     remain preserved as-is.
     """
-    from sqlalchemy import update
-
-    from backend.models.game_session import GameSession
-    from backend.models.session_state import SessionState
-
     result = await db.execute(
         select(AdventureTemplate).where(
             AdventureTemplate.id == template_id,
@@ -405,10 +427,7 @@ async def update_single_adventure(
     file_path = matching["file_path"]
 
     # Capture linked sessions so they remain preserved and linked to the updated template
-    session_res = await db.execute(
-        select(GameSession.id).where(GameSession.template_id == template_id)
-    )
-    linked_session_ids = session_res.scalars().all()
+    session_ids = await linked_session_ids(db, template_id)
 
     # Re-import template with overwrite=True; allow_session=False ensures sessions are never touched/imported
     success = await AdventureTemplateImporter.import_file(
@@ -438,21 +457,10 @@ async def update_single_adventure(
     # The importer only overwrites origin_id/exact-title matches; a legacy template matched by
     # filename stem (e.g. a renamed title) would otherwise remain as a duplicate.
     if updated_template and updated_template.id != template_id:
-        await _delete_replaced_template(db, template_id)
+        await delete_replaced_template(db, template_id)
 
     # Re-link existing session records to the new template without modifying their state
-    if linked_session_ids and updated_template:
-        await db.execute(
-            update(GameSession)
-            .where(GameSession.id.in_(linked_session_ids))
-            .values(template_id=updated_template.id)
-        )
-        await db.execute(
-            update(SessionState)
-            .where(SessionState.session_id.in_(linked_session_ids))
-            .values(template_id=updated_template.id)
-        )
-        await db.commit()
+    await relink_sessions(db, session_ids, updated_template.id if updated_template else None)
 
     return {
         "status": "success",

@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'create'): void
   (e: 'toggle-menu', id: string, event: MouseEvent): void
   (e: 'clone', id: string): void
+  (e: 'export', id: string, label: string): void
   (e: 'edit', obj: any): void
   (e: 'delete', id: string): void
 }>()
@@ -75,6 +76,7 @@ const menuItemClass = 'w-full px-3.5 py-2 text-left text-xs font-bold text-slate
           <div v-if="activeMenuId === menuId(obj)" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
             <button @click="emit('clone', obj.id)" :class="[menuItemClass, 'hover:bg-sky-500']">Clone</button>
             <button @click="emit('edit', obj)" :class="[menuItemClass, 'hover:bg-blue-500']">Edit</button>
+            <button @click="emit('export', obj.id, obj.name || obj.id)" :class="[menuItemClass, 'hover:bg-teal-500']">Export (.twe)</button>
             <button @click="emit('delete', obj.id)" :class="[menuItemClass, 'hover:bg-red-500']">Delete</button>
           </div>
         </div>

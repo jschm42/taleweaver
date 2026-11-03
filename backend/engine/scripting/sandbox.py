@@ -20,6 +20,7 @@ from backend.engine.scripting.sandbox_errors import (
     ScriptExecutionError,
     ScriptSecurityError,
     ScriptTimeoutError,
+    attribute_error_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,7 @@ ALLOWED_AST_NODES: set[type[ast.AST]] = {
     ast.List,
     ast.Tuple,
     ast.Dict,
+    ast.Set,
     ast.FormattedValue,
     ast.JoinedStr,
     ast.Lambda,
@@ -156,7 +158,7 @@ def _reject_method_overwrite(obj: Any, target: ast.Attribute) -> None:
 
 
 def _check_sequence_size(value: Any) -> Any:
-    if isinstance(value, (*_SIZE_SENSITIVE_TYPES, dict)) and len(value) > MAX_SEQUENCE_LENGTH:
+    if isinstance(value, (*_SIZE_SENSITIVE_TYPES, dict, set)) and len(value) > MAX_SEQUENCE_LENGTH:
         raise ScriptSecurityError(
             f"Value exceeds safe size limit of {MAX_SEQUENCE_LENGTH} elements/characters."
         )
@@ -189,6 +191,7 @@ SAFE_BUILTINS: dict[str, Any] = {
     "any": any,
     "bool": bool,
     "dict": dict,
+    "enumerate": enumerate,
     "float": float,
     "int": int,
     "len": len,
@@ -197,10 +200,14 @@ SAFE_BUILTINS: dict[str, Any] = {
     "min": min,
     "print": _safe_print,
     "range": _safe_range,
+    "reversed": reversed,
     "round": round,
+    "set": set,
+    "sorted": sorted,
     "str": str,
     "sum": sum,
     "tuple": tuple,
+    "zip": zip,
 }
 
 
@@ -575,6 +582,8 @@ class SafeAstInterpreter(ComprehensionMixin):
 
         # Lets APIs that store a callback by name (e.g. tw.dialog on_choice) accept the function.
         sandbox_function.__name__ = func_name
+        # Lets callers decide whether to pass an event argument (e.g. tw.time handlers).
+        sandbox_function.param_count = len(param_names)  # type: ignore[attr-defined]
         self.env[func_name] = sandbox_function
 
     # -------------------------------------------------------------------------
@@ -583,7 +592,8 @@ class SafeAstInterpreter(ComprehensionMixin):
 
     def _assign_target(self, target: ast.AST, val: Any) -> None:
         if isinstance(target, ast.Name):
-            if target.id.startswith("_"):
+            # A bare "_" is Python's throwaway name (`for key, _ in pairs`); it reaches nothing.
+            if target.id.startswith("_") and target.id != "_":
                 raise ScriptSecurityError(f"Cannot assign to private variable '{target.id}'")
             self.env[target.id] = val
         elif isinstance(target, ast.Attribute):
@@ -728,7 +738,7 @@ class SafeAstInterpreter(ComprehensionMixin):
         try:
             return getattr(obj, expr.attr)
         except AttributeError as exc:
-            raise ScriptExecutionError(f"AttributeError: {exc}") from exc
+            raise ScriptExecutionError(attribute_error_message(obj, expr.attr, exc)) from exc
 
     def _eval_Subscript(self, expr: ast.Subscript) -> Any:
         val = self._eval_expr(expr.value)
@@ -756,6 +766,9 @@ class SafeAstInterpreter(ComprehensionMixin):
             for k, v in zip(expr.keys, expr.values, strict=False)
             if k is not None
         }
+
+    def _eval_Set(self, expr: ast.Set) -> set[Any]:
+        return {self._eval_expr(elt) for elt in expr.elts}
 
     def _eval_Lambda(self, expr: ast.Lambda) -> Any:
         self._tick()

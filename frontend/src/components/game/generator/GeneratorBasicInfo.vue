@@ -2,6 +2,7 @@
 import { Sparkles } from 'lucide-vue-next'
 import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
 import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
+import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
 
 const props = defineProps<{
   title: string
@@ -59,6 +60,7 @@ const emit = defineEmits<{
         placeholder="Describe the atmosphere, mystery, factions, and world setting..."
         class="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-white text-xs sm:text-sm placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all resize-none custom-scrollbar"
       ></textarea>
+      <StoryIdeaLengthHint :value="props.storyIdea" />
     </div>
 
     <!-- World-Builder Strictness -->

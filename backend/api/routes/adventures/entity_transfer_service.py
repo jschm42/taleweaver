@@ -80,6 +80,7 @@ _PROTAGONIST_STATS_MANIFEST_KEYS = (
     "on_status_change_script",
     "on_status_change_text",
     "special_actions",
+    "talents",
 )
 
 _ID_MAX_LENGTH = 30
@@ -149,9 +150,16 @@ def _read_local_image(url: Optional[str]) -> tuple[Optional[bytes], Optional[str
 
 
 async def import_entity_bundle(
-    db: AsyncSession, adv: AdventureTemplate, bundle: EntityBundle
+    db: AsyncSession,
+    adv: AdventureTemplate,
+    bundle: EntityBundle,
+    target_scene_id: Optional[str] = None,
 ) -> ImportResult:
-    """Create a new NPC or item from the bundle inside ``adv``."""
+    """Create a new NPC or item from the bundle inside ``adv``.
+
+    ``target_scene_id`` places it in that scene (e.g. when imported from the scene editor);
+    without it the bundle's own scene is used if it exists, else the start scene.
+    """
     entity_type = ENTITY_TYPE_BY_KIND.get(bundle.kind)
     if not entity_type:
         raise EntityBundleError(f"Bundle kind '{bundle.kind}' is not an NPC or item.")
@@ -161,6 +169,10 @@ async def import_entity_bundle(
         raise EntityBundleError("Create at least one scene before importing NPCs or items.")
 
     values = _coerce_values(bundle.entity, _ENTITY_IMPORT_COLUMNS)
+    if target_scene_id:
+        if target_scene_id not in ids.scenes:
+            raise EntityBundleError(f"Scene '{target_scene_id}' does not exist in this adventure.")
+        values["current_scene_id"] = target_scene_id
     warnings: list[str] = []
     name = str(values.get("name") or "").strip() or f"Imported {bundle.kind.upper()}"
     new_id = _unique_id(bundle.entity.get("id") or name, set(ids.entities) | ids.scenes)

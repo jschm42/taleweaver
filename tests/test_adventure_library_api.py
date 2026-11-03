@@ -257,3 +257,92 @@ async def test_legacy_flag_restores_example_import(auth_client, monkeypatch):
     # Assert
     assert response.status_code == 200
     assert imported_dirs[0].replace("\\", "/") == "adventures/samples"
+
+
+async def test_updates_lists_installed_adventures_with_a_newer_library_version(
+    auth_client, db_session, library
+):
+    # Arrange
+    library(
+        _entry("dark-forest", "Dark Forest", version="1.2.0"),
+        _entry("sunken-city", "Sunken City", version="1.0.0"),
+        _entry("not-installed", "Not Installed", version="2.0.0"),
+    )
+    owner_id = await _current_user_id(db_session)
+    outdated = AdventureTemplate(
+        title="Dark Forest", owner_id=owner_id, origin_id="origin-dark-forest", version="1.0.0"
+    )
+    current = AdventureTemplate(
+        title="Sunken City", owner_id=owner_id, origin_id="origin-sunken-city", version="1.0.0"
+    )
+    db_session.add_all([outdated, current])
+    await db_session.commit()
+
+    # Act
+    response = await auth_client.get(f"{LIBRARY}/updates")
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == {
+        "updates": [
+            {"template_id": outdated.id, "library_id": "origin-dark-forest", "version": "1.2.0"}
+        ],
+        "stale": False,
+    }
+
+
+async def test_updates_without_a_catalog_is_an_empty_list(auth_client, library):
+    # Arrange
+    library(error=LibraryError("unexpected HTTP status 503"))
+
+    # Act
+    response = await auth_client.get(f"{LIBRARY}/updates")
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == {"updates": [], "stale": True}
+
+
+async def test_template_update_reports_a_failed_library_download(
+    auth_client, db_session, monkeypatch
+):
+    # Arrange
+    from backend.engine.adventures import adventure_updates
+    from backend.services.adventure_library import updates
+
+    template = AdventureTemplate(
+        title="Dark Forest",
+        owner_id=await _current_user_id(db_session),
+        origin_id="origin-dark-forest",
+        version="1.0.0",
+    )
+    db_session.add(template)
+    await db_session.commit()
+
+    newer = LibraryEntry(
+        id="origin-dark-forest",
+        slug="dark-forest",
+        title="Dark Forest",
+        version="1.2.0",
+        files=["adventure.adv"],
+    )
+
+    async def library(self, *, force_refresh=False):
+        return AdventureLibrary(schema=1, adventures=[newer])
+
+    async def failing_install(db, entry, *, owner_id):
+        raise LibraryError("unexpected HTTP status 503")
+
+    for module in (updates, adventure_updates):
+        monkeypatch.setattr(
+            module, "scan_available_adventure_files", lambda force_refresh=False: []
+        )
+    monkeypatch.setattr(LibraryService, "get_library", library)
+    monkeypatch.setattr(updates, "install_entry", failing_install)
+
+    # Act
+    response = await auth_client.post(f"/api/adventures/templates/{template.id}/update")
+
+    # Assert
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Download failed: unexpected HTTP status 503"

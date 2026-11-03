@@ -171,6 +171,7 @@ def _create_cloned_template_entity(
         time_per_turn=original.time_per_turn,
         pacing_minutes=original.pacing_minutes,
         max_time_per_turn=original.max_time_per_turn,
+        gm_time_control=original.gm_time_control,
         clock_enabled=original.clock_enabled,
         max_memory_turns=original.max_memory_turns,
         time_system=original.time_system,
@@ -182,6 +183,7 @@ def _create_cloned_template_entity(
             deepcopy(original.selected_image_styles) if original.selected_image_styles else None
         ),
         selected_tone=(deepcopy(original.selected_tone) if original.selected_tone else None),
+        narrator_voice=deepcopy(original.narrator_voice),
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
         quests=deepcopy(original.quests) if original.quests else None,
@@ -307,6 +309,7 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             label=e.label,
             exit_type=e.exit_type,
             is_locked=e.is_locked,
+            is_revealed=bool(e.is_revealed),
             lock_description=e.lock_description,
             code_to_unlock=e.code_to_unlock,
             item_to_unlock=e.item_to_unlock,

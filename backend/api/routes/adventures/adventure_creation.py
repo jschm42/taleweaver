@@ -137,6 +137,7 @@ def build_template(
         time_per_turn=payload.time_per_turn,
         pacing_minutes=_pacing_minutes(payload),
         max_time_per_turn=payload.max_time_per_turn,
+        gm_time_control=payload.gm_time_control,
         max_memory_turns=payload.max_memory_turns if payload.max_memory_turns is not None else 10,
         clock_enabled=payload.clock_enabled or False,
         time_system=payload.time_system or "calendar",

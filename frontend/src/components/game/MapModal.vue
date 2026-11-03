@@ -196,7 +196,9 @@ function updateLayout() {
     const sessionNode = props.mapData!.nodes[id]
     const isUnknown = !!sessionNode?.is_unknown
     const isCurrent = id === currentId
-    const isVisited = !!sessionNode && !isUnknown
+    // Revealed scenes (a revealed exit leads there) are known, but not visited yet.
+    const isRevealed = !!sessionNode?.is_revealed
+    const isVisited = !!sessionNode && !isUnknown && !isRevealed
     const dbNode = props.nodes[id] || {}
 
     return {
@@ -764,7 +766,7 @@ onMounted(() => {
                         >
                           {{ node.label }}
                         </span>
-                        <span v-if="!node.isUnknown && !node.isCurrent" class="text-[9px] text-slate-500 uppercase font-bold">Visited</span>
+                        <span v-if="node.isVisited && !node.isCurrent" class="text-[9px] text-slate-500 uppercase font-bold">Visited</span>
                       </div>
                     </div>
                   </div>

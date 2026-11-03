@@ -171,9 +171,12 @@ async def create_editor_exit(
     await _ensure_template_scene_exists(db, template_id, from_scene_id)
     await _ensure_template_scene_exists(db, template_id, to_scene_id)
 
+    # The label names the passage itself ("an old rusty gate"), the same from both sides.
     label = str(payload.label or "").strip()
     if not label:
         raise HTTPException(status_code=400, detail="label is required")
+    if len(label) > 100:
+        raise HTTPException(status_code=400, detail="label must be at most 100 characters")
 
     code, item, rule = _normalize_lock_fields(
         code_to_unlock=payload.code_to_unlock,
@@ -196,12 +199,14 @@ async def create_editor_exit(
         label=label,
         exit_type=payload.exit_type,
         is_locked=bool(payload.is_locked or code or item or rule),
+        is_revealed=bool(payload.is_revealed),
         lock_description=lock_description or None,
         code_to_unlock=code or None,
         item_to_unlock=item or None,
         rule_to_unlock=rule or None,
     )
     db.add(world_exit)
+    await db.flush()  # assigns the generated id before it is mirrored into the manifest
     if isinstance(adv.original_manifest, dict) and isinstance(
         adv.original_manifest.get("exits"), list
     ):
@@ -215,6 +220,7 @@ async def create_editor_exit(
                 "exit_type": world_exit.exit_type,
                 "is_bidirectional": (world_exit.exit_type == "bidirectional"),
                 "is_locked": world_exit.is_locked,
+                "is_revealed": world_exit.is_revealed,
                 "lock_description": world_exit.lock_description,
                 "code_to_unlock": world_exit.code_to_unlock,
                 "item_to_unlock": world_exit.item_to_unlock,

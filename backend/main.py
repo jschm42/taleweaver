@@ -33,6 +33,7 @@ from backend.api.routes import (
     data,
     map_api,
     model_discovery_api,
+    narrator_voices_api,
     setup_wizard_api,
     stt_api,
     tts_api,
@@ -190,6 +191,7 @@ async def add_security_headers(request, call_next):
     return response
 
 
+app.include_router(narrator_voices_api.router, prefix="/api")
 app.include_router(config_api.router, prefix="/api")
 app.include_router(setup_wizard_api.router, prefix="/api")
 app.include_router(model_discovery_api.router, prefix="/api")

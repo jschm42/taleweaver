@@ -98,7 +98,7 @@ async function takeAll() {
       <div
         v-for="item in props.items"
         :key="item.id"
-        class="tw-card tw-card--interactive group relative flex flex-col items-center text-center"
+        class="tw-card tw-card--interactive tw-discovery-card group relative flex flex-col items-center text-center"
         :class="props.compact ? 'gap-1 p-1.5 pt-2' : 'gap-2 p-3 pt-4'"
         role="button"
         tabindex="0"
@@ -148,6 +148,16 @@ async function takeAll() {
 </template>
 
 <style scoped>
+/* Item cards let the scene shine through; the blur keeps the name readable in every skin. */
+.tw-discovery-card {
+  background: color-mix(in srgb, var(--tw-card-bg) 55%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.tw-discovery-card:hover {
+  background: color-mix(in srgb, var(--tw-card-bg) 75%, transparent);
+}
+
 .ra {
   font-family: 'rpgawesome' !important;
   display: inline-block;

@@ -63,6 +63,9 @@ class WorldExit(Base, TimestampMixin):
     label = Column(String(100), nullable=False)  # e.g. "a heavy oak door"
     exit_type = Column(String(20), default="one_way", nullable=False)
     is_locked = Column(Boolean, default=False, nullable=False)
+    # The target scene is known from the start (name and image on the exit tile and map),
+    # without the player having visited it.
+    is_revealed = Column(Boolean, default=False, nullable=False, server_default="0")
     lock_description = Column(
         String(255), nullable=True
     )  # e.g. "The door is bolted from the other side."

@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.config import settings
+from backend.engine.interaction.script_item_apply import (
+    apply_player_inventory,
+    insert_cloned_entities,
+    sync_entity_rows,
+)
 from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
@@ -16,6 +22,7 @@ from backend.engine.scripting.llm_proxy import LlmAsker
 from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
 from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.scripting.scene_helpers import runner_for_manifest
+from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
@@ -40,8 +47,7 @@ class TriggerService:
         cls, db: AsyncSession, state: SessionState, llm_asker: Optional[LlmAsker] = None
     ) -> GameContext:
         """Builds a GameContext instance from session database state."""
-        av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
-        avatar = av_res.scalars().first()
+        avatar = await cls._load_avatar(db, state)
         avatar_dict = {
             "name": avatar.name if avatar else "Protagonist",
             "hp": avatar.hp if avatar else 100,
@@ -61,20 +67,14 @@ class TriggerService:
         for ent in entities_list:
             if not ent.id:
                 continue
-            ent_dict: dict[str, Any] = {
-                "id": ent.id,
-                "name": ent.name,
-                "entity_type": ent.entity_type,
-                "item_type": ent.item_type,
-                "current_scene_id": ent.current_scene_id,
-                "is_hidden": ent.is_hidden,
-                "is_in_inventory": ent.is_in_inventory,
-                "hp": getattr(ent, "hp", 0) or 0,
-                "is_defeated": bool(session_overrides.get(ent.id, {}).get("is_defeated", False)),
-                "metadata_json": dict(ent.metadata_json or {}),
-                "character": ent.character,
-                "goal": ent.goal,
-            }
+            # All columns, like a turn's context: item transfers need inventories and item data.
+            ent_dict: dict[str, Any] = {c.name: getattr(ent, c.name) for c in ent.__table__.columns}
+            ent_dict.update(
+                hp=getattr(ent, "hp", 0) or 0,
+                is_defeated=bool(session_overrides.get(ent.id, {}).get("is_defeated", False)),
+                metadata_json=dict(ent.metadata_json or {}),
+                inventory=list(ent.inventory or []),
+            )
             if ent.id in session_overrides:
                 ent_dict.update(session_overrides[ent.id])
             entities_map[ent.id] = ent_dict
@@ -90,6 +90,7 @@ class TriggerService:
             quests=state.quests or [],
             script_vars=script_vars,
             in_game_time=state.in_game_time,
+            clock=clock_view(state),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -153,33 +154,59 @@ class TriggerService:
             scope = {"tw": context, "game": context}
             runner.execute_code(code, scope, script_id=f"trigger_{trigger_name}_{target_id}")
 
-            for narr_msg in context.changeset.narrative_messages:
-                db.add(
-                    ChatMessage(
-                        session_id=state.session_id,
-                        role="assistant",
-                        content=narr_msg,
-                        is_raw=bool(getattr(narr_msg, "raw", False)),
+            if getattr(context.changeset, "ordered_messages", None):
+                for msg in context.changeset.ordered_messages:
+                    role = str(getattr(msg, "role", "system"))
+                    raw = bool(getattr(msg, "raw", False))
+                    db.add(
+                        ChatMessage(
+                            session_id=state.session_id,
+                            role=role,
+                            content=msg,
+                            is_raw=raw,
+                        )
                     )
-                )
-                messages.append(narr_msg)
-
-            for sys_msg in context.changeset.system_messages:
-                db.add(
-                    ChatMessage(
-                        session_id=state.session_id,
-                        role="system",
-                        content=sys_msg,
+                    messages.append(msg)
+            else:
+                for narr_msg in context.changeset.narrative_messages:
+                    db.add(
+                        ChatMessage(
+                            session_id=state.session_id,
+                            role="assistant",
+                            content=narr_msg,
+                            is_raw=bool(getattr(narr_msg, "raw", False)),
+                        )
                     )
-                )
-                messages.append(sys_msg)
+                    messages.append(narr_msg)
 
+                for sys_msg in context.changeset.system_messages:
+                    db.add(
+                        ChatMessage(
+                            session_id=state.session_id,
+                            role="system",
+                            content=sys_msg,
+                        )
+                    )
+                    messages.append(sys_msg)
+
+            await insert_cloned_entities(db, state, context.changeset)
             cls._persist_entity_states(state, context.changeset)
             cls._persist_exit_states(state, context.changeset)
+            apply_player_inventory(await cls._load_avatar(db, state), context.changeset)
             await cls._sync_npc_personas(db, state, context.changeset)
-            await cls._sync_moved_entities(db, state, context.changeset)
+            await sync_entity_rows(db, state, context.changeset)
+            messages.extend(
+                await SessionCheckpointService.save_from_script(
+                    db, state.session_id, context.changeset.save_requests
+                )
+            )
 
         return messages
+
+    @staticmethod
+    async def _load_avatar(db: AsyncSession, state: SessionState) -> Optional[Avatar]:
+        res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+        return res.scalars().first()
 
     @staticmethod
     async def _session_runner(db: AsyncSession, state: SessionState) -> ScriptRunner:
@@ -207,6 +234,7 @@ class TriggerService:
             or changeset.exit_updates
             or changeset.pending_dialog
             or changeset.gm_directions
+            or changeset.clock_ops
         ):
             return
         cur_states = dict(state.entity_states or {})
@@ -230,6 +258,7 @@ class TriggerService:
             cur_states[upd["entity_id"]] = st
         store_pending_dialog(cur_states, changeset.pending_dialog)
         store_gm_directions(cur_states, changeset.gm_directions)
+        apply_changeset_clock(state, cur_states, changeset.clock_ops)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
 
@@ -253,25 +282,6 @@ class TriggerService:
         states: dict[str, Any] = dict(state.entity_states or {})
         for ent in res.scalars().all():
             apply_persona(ent, states.get(str(ent.id), {}))
-
-    @staticmethod
-    async def _sync_moved_entities(
-        db: AsyncSession, state: SessionState, changeset: ScriptChangeset
-    ) -> None:
-        """Scene queries read the entity rows, so script movements are written to them too."""
-        moved = {m["entity_id"] for m in changeset.entity_movements if m.get("entity_id")}
-        if not moved:
-            return
-        res = await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.session_id == state.session_id, WorldEntity.id.in_(moved)
-            )
-        )
-        states: dict[str, Any] = dict(state.entity_states or {})
-        for ent in res.scalars().all():
-            st = states.get(str(ent.id), {})
-            ent.current_scene_id = st.get("current_scene_id", ent.current_scene_id)
-            ent.spatial_position = st.get("spatial_position", ent.spatial_position)
 
     @staticmethod
     def _persist_exit_states(state: SessionState, changeset: ScriptChangeset) -> None:

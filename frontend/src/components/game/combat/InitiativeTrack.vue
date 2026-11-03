@@ -18,10 +18,10 @@ function portrait(raw: string | null | undefined): string | null {
   return hasRenderableImagePath(raw) ? getImageUrl(raw as string) : null
 }
 
-/** Portraits in acting order for the current round. */
+/** Portraits in acting order for the current round; defeated enemies drop out of the order. */
 const slots = computed(() => {
   const enemies = new Map((props.combat.enemies ?? []).map((e) => [e.id, e]))
-  return (props.combat.initiative ?? []).map((entry, idx) => {
+  const allSlots = (props.combat.initiative ?? []).map((entry, idx) => {
     const enemy = enemies.get(entry.id)
     const isPlayer = entry.id === 'PLAYER'
     const isOut = !!(enemy && (enemy.defeated || enemy.fled))
@@ -34,8 +34,10 @@ const slots = computed(() => {
       isActive: props.combat.active && props.combat.active_actor === entry.id,
       isDone: idx < (props.combat.turn_index ?? 0),
       isTarget: entry.id === props.selectedTargetId,
+      isDefeated: !!enemy?.defeated,
     }
   })
+  return allSlots.filter((slot) => !slot.isDefeated)
 })
 
 function slotTitle(slot: (typeof slots.value)[number]): string {

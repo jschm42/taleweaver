@@ -79,6 +79,7 @@ const TRIGGER_OPTIONS = [
   { value: 'on_logic_pass_done', label: 'On Logic Pass Done', desc: 'Runs after game mechanics and state mutations finish, before narration' },
   { value: 'on_narration_done', label: 'On Narration Done', desc: 'Runs after narration generation completes' },
   { value: 'on_turn_end', label: 'On Turn End', desc: 'Runs after scene narrative and entity mutations' },
+  { value: 'on_time_reached', label: 'On Time Reached', desc: 'Runs once when the in-game clock passes the target time (e.g. 90, 2h 30m, 1d)' },
 ] as const
 
 function getTriggerBadgeClass(trigger: string): string {
@@ -97,6 +98,8 @@ function getTriggerBadgeClass(trigger: string): string {
       return 'bg-pink-500/15 text-pink-300 border-pink-500/30'
     case 'on_turn_end':
       return 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+    case 'on_time_reached':
+      return 'bg-orange-500/15 text-orange-300 border-orange-500/30'
     default:
       return 'bg-slate-500/15 text-slate-300 border-slate-500/30'
   }
@@ -133,6 +136,9 @@ const modalScript = ref({
   priority: 100,
   is_active: true,
 })
+
+// on_time_reached uses the target field for the elapsed in-game time instead of an ID.
+const isTimeTrigger = computed(() => modalScript.value.trigger === 'on_time_reached')
 
 function openAddModal() {
   isNewScript.value = true
@@ -654,14 +660,18 @@ function handleTabKey(e: KeyboardEvent) {
           <!-- Second Row: Target, Priority, Active Toggle -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
-              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label v-if="isTimeTrigger" class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                Elapsed In-Game Time <span class="text-orange-400 font-normal">(required)</span>
+              </label>
+              <label v-else class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Target Entity / Scene <span class="text-slate-500 font-normal">(optional)</span>
               </label>
               <input
                 v-model="modalScript.target"
                 type="text"
-                placeholder="e.g. SCENE_DUNGEON, CHEST_01, *"
-                list="target-reference-options"
+                :placeholder="isTimeTrigger ? 'e.g. 90, 2h 30m, 1d 4h' : 'e.g. SCENE_DUNGEON, CHEST_01, *'"
+                :title="isTimeTrigger ? 'Minutes since the adventure started (or units for the units time system). Fires once when the clock reaches it; re-arms if the time is set back below it.' : undefined"
+                :list="isTimeTrigger ? undefined : 'target-reference-options'"
                 class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500 transition-colors"
               />
               <datalist id="target-reference-options">
@@ -788,7 +798,7 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.npcs</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.npcs.move(npc_id, target_scene_id)</code>, <code>tw.npcs.get(npc_id)</code>, <code>tw.npcs.say(npc_id, text)</code>, <code>tw.npcs.say_directed(npc_id, direction)</code>
+                    <code>tw.npcs.move(npc_id, target_scene_id)</code>, <code>tw.npcs.get(npc_id)</code>, <code>tw.npcs.say(npc_id, text)</code>, <code>tw.npcs.say_directed(npc_id, direction)</code>, <code>tw.npcs.consume(npc_id, item_id)</code>
                   </p>
                 </div>
 
@@ -816,7 +826,23 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.dialog</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False)</code> &mdash; handler lives in the init script
+                    <code>tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False)</code> &mdash; handler lives in the init script<br />
+                    <code>tw.dialog.tree(tree, on_end=None, on_action=None, speaker=None)</code> &mdash; nested NPC dialogue; handlers live in the init script
+                  </p>
+                </div>
+
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span class="font-bold text-emerald-400">Items &amp; containers</span>
+                  <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    <code>tw.objects.clone(id)</code>, <code>tw.objects.destroy(id)</code>, <code>tw.objects.hide(id)</code> / <code>reveal(id)</code>, <code>tw.objects.move_item(id, target)</code>, <code>tw.objects.contents(holder)</code>, <code>tw.player.inventory</code>, <code>tw.player.take_item(id)</code>, <code>npc.items</code> / <code>container.items</code>
+                  </p>
+                </div>
+
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span class="font-bold text-emerald-400">tw.time</span>
+                  <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    <code>tw.time.now</code>, <code>tw.time.format()</code>, <code>tw.time.day</code> / <code>hour</code> / <code>minute</code>, <code>tw.time.set(t)</code>, <code>tw.time.advance(t)</code>, <code>tw.time.rewind(t)</code>, <code>tw.time.pause()</code> / <code>resume()</code>, <code>tw.time.set_minutes_per_tick(n)</code>, <code>tw.time.allow_gm_time(bool)</code><br />
+                    <code>tw.time.at(t, handler)</code>, <code>tw.time.after(t, handler)</code>, <code>tw.time.every(t, handler)</code>, <code>tw.time.cancel(id)</code> &mdash; handlers live in the init script and receive <code>time_event</code>
                   </p>
                 </div>
 

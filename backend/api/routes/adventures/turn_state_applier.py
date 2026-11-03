@@ -2,17 +2,24 @@ from __future__ import annotations
 
 import logging
 import re
-from copy import deepcopy
 from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.quest_completion import (
+    announce_completed_quests,
+    hard_rule_quest_ids,
+    mark_quests_completed,
+)
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
-from backend.engine.rules.quest_manager import QuestManager
+from backend.engine.rules.game_clock import apply_gm_time_request
+from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
+from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
 from backend.engine.rules.rule_engine import (
     EntityMovement,
     GameEvent,
@@ -20,7 +27,6 @@ from backend.engine.rules.rule_engine import (
     WorldEntityUpdate,
 )
 from backend.models.adventure_template import AdventureTemplate
-from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.path_security import ensure_within_data_dir as _ensure_within_data_dir
 from backend.utils.path_security import sanitize_path_component as _sanitize_path_component
@@ -31,7 +37,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CHECKPOINT_REASON_SCENE_CHANGE = "SCENE_CHANGE"
-CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
 CHECKPOINT_REASON_AWARD_GRANTED = "AWARD_GRANTED"
 
 
@@ -433,9 +438,9 @@ class TurnStateApplier:
                 system_messages.append(prot_meta["on_status_change_text"])
 
         if event.new_scene_id and getattr(self.manager, "arrival_narration", False) is True:
-            # Narrating an arrival through an exit: the player did not ask to move on.
+            # Narrating an arrival through an exit or the opening prologue: the player did not ask to move on.
             logger.info(
-                "[Turn %s] Ignored GM scene change to '%s' during arrival narration",
+                "[Turn %s] Ignored GM scene change to '%s' during arrival/opening narration",
                 self.game_id,
                 event.new_scene_id,
             )
@@ -649,6 +654,7 @@ class TurnStateApplier:
             )
             canonical_ents = session_ents_res.scalars().all()
             ent_lookup_by_id = {e.id.upper(): e.id for e in canonical_ents if e.id}
+            ent_rows = {e.id: e for e in canonical_ents if e.id}
             ent_lookup_by_name = {
                 (e.name or "").strip().lower(): e.id for e in canonical_ents if e.name
             }
@@ -672,7 +678,9 @@ class TurnStateApplier:
                     states[eid]["spatial_position"] = update.spatial_position
                 if update.is_hidden is not None:
                     states[eid]["is_hidden"] = update.is_hidden
-                if update.hp is not None:
+                if update.hp is not None and not blocks_hp_loss(
+                    self.state.entity_states.get(eid), ent_rows.get(eid), update.hp
+                ):
                     states[eid]["hp"] = update.hp
                 if update.mana is not None:
                     states[eid]["mana"] = update.mana
@@ -690,6 +698,11 @@ class TurnStateApplier:
                     states[eid]["moveable"] = update.moveable
                 if update.allowed_scenes is not None:
                     states[eid]["allowed_scenes"] = update.allowed_scenes
+                if update.is_defeated is True and not can_be_damaged(
+                    self.state.entity_states.get(eid), ent_rows.get(eid)
+                ):
+                    # "NPC can be damaged" is off: the GM cannot defeat this NPC either.
+                    update.is_defeated = None
                 if update.is_defeated is not None:
                     was_defeated = self.state.entity_states.get(eid, {}).get("is_defeated", False)
                     if not was_defeated and update.is_defeated is True:
@@ -882,72 +895,14 @@ class TurnStateApplier:
             )
 
         # Quest Updates
-        newly_completed_quests: list[dict] = []
-        if event.completed_quest_ids:
-            new_quests = deepcopy(self.state.quests or [])
-            modified = False
-            for qid in event.completed_quest_ids:
-                for q in new_quests:
-                    if q.get("id") == qid and q.get("status") != "completed":
-                        q["status"] = "completed"
-                        newly_completed_quests.append(q)
-                        modified = True
-
-            if modified:
-                self.state.quests = new_quests
-                state_dirty = True
+        newly_completed_quests = mark_quests_completed(
+            self.state, list(event.completed_quest_ids or [])
+        )
+        if newly_completed_quests:
+            state_dirty = True
 
         if event.earned_award_keys:
-            now = datetime.now(UTC).isoformat()
-            award_defs = {
-                (aw.get("key") or ""): aw for aw in (self.adventure.awards or []) if aw.get("key")
-            }
-            user_awards = list(self.user.earned_awards or [])
-            modified = False
-            for key in event.earned_award_keys:
-                if not key:
-                    continue
-                already_earned = any(
-                    ea.get("key") == key
-                    and (
-                        ea.get("template_id") == self.adventure.id
-                        or ea.get("adventure_id") == self.adventure.id
-                    )
-                    for ea in user_awards
-                )
-                if already_earned:
-                    continue
-
-                aw = award_defs.get(key)
-                if not aw:
-                    logger.warning(
-                        "[Turn %s] GM tried to grant non-existent award: %s", self.game_id, key
-                    )
-                    continue
-
-                user_awards.append(
-                    {
-                        "key": key,
-                        "title": aw.get("title") or key,
-                        "description": aw.get("description"),
-                        "tier": aw.get("tier"),
-                        "template_id": self.adventure.id,
-                        "adventure_id": self.adventure.id,
-                        "adventure_title": self.adventure.title,
-                        "session_id": self.state.session_id,
-                        "earned_at": now,
-                    }
-                )
-                award_title = aw.get("title") or key
-                msg = f"Award Achievement: {award_title}"
-                await self._save_chat_message("system", msg)
-                system_messages.append(msg)
-                modified = True
-
-            if modified:
-                self.user.earned_awards = user_awards
-                flag_modified(self.user, "earned_awards")
-                self._queue_checkpoint(CHECKPOINT_REASON_AWARD_GRANTED)
+            system_messages.extend(await grant_awards(self, event.earned_award_keys))
 
         script_context = None
         if hasattr(self, "manager") and hasattr(self.manager, "_build_script_context"):
@@ -961,50 +916,17 @@ class TurnStateApplier:
         system_messages.extend(det_award_msgs)
 
         # Deterministic Quest Sync (Post-LLM check)
-        det_completed = QuestManager.evaluate_quests(
-            self.avatar,
+        det_completed = mark_quests_completed(
             self.state,
-            new_inventory_items=event.new_inventory_items,
-            new_scene_id=event.new_scene_id,
-            updated_entities=event.updated_entities,
-            script_context=script_context,
+            hard_rule_quest_ids(self.avatar, self.state, script_context, event),
+            game_id=self.game_id,
         )
         if det_completed:
-            new_quests = deepcopy(self.state.quests or [])
-            modified = False
-            for qid in det_completed:
-                for q in new_quests:
-                    if q.get("id") == qid and q.get("status") != "completed":
-                        q["status"] = "completed"
-                        if not any(nq.get("id") == qid for nq in newly_completed_quests):
-                            newly_completed_quests.append(q)
-                        logger.info(
-                            "[Turn %s] Deterministic Quest Completion: %s", self.game_id, qid
-                        )
-                        modified = True
-            if modified:
-                self.state.quests = new_quests
-                state_dirty = True
+            state_dirty = True
+            newly_completed_quests.extend(det_completed)
 
-        if newly_completed_quests:
-            self._queue_checkpoint(CHECKPOINT_REASON_QUEST_UPDATE)
-            # Emit one system entry per newly completed quest so players get explicit feedback.
-            for q in newly_completed_quests:
-                quest_title = q.get("title") or q.get("id")
-                xp_reward = int(q.get("exp_reward") or 0)
-                if xp_reward > 0:
-                    self.avatar.exp = (self.avatar.exp or 0) + xp_reward
-                    msg = f"Side-quest completed: {quest_title} (+{xp_reward} XP)"
-                else:
-                    msg = f"Side-quest completed: {quest_title}"
-                self.db.add(
-                    ChatMessage(
-                        session_id=self.state.session_id,
-                        role="system",
-                        content=msg,
-                    )
-                )
-                system_messages.append(msg)
+        # One system entry per newly completed quest so players get explicit feedback.
+        system_messages.extend(announce_completed_quests(self, newly_completed_quests))
 
         # Sequence Completion Logic
         old_seq_id = self.state.active_sequence_id
@@ -1130,12 +1052,13 @@ class TurnStateApplier:
         all_objs = obj_res.scalars().all()
         spawned_or_player_ids = set(player_item_ids)
         for obj in all_objs:
-            is_in_inv = states.get(obj.id, {}).get("is_in_inventory", obj.is_in_inventory)
-            if not is_in_inv:
-                # Only add objects that are in the scene (not in any inventory).
-                # Objects with is_in_inventory=True may belong to NPC inventories and
-                # must NOT be added here, otherwise the cleanup loop below would
-                # incorrectly strip them from every NPC's inventory.
+            # Only objects that lie in a scene count. Items held by an NPC are stored with
+            # current_scene_id INVENTORY (given by the player, scripts or the manifest), and
+            # adding them here would strip them from that NPC's inventory again.
+            obj_state = states.get(obj.id, {})
+            is_in_inv = obj_state.get("is_in_inventory", obj.is_in_inventory)
+            scene_id = str(obj_state.get("current_scene_id", obj.current_scene_id) or "")
+            if not is_in_inv and scene_id.upper() != INVENTORY_SCENE_ID:
                 spawned_or_player_ids.add(obj.id)
 
         npc_res = await self.db.execute(
@@ -1220,33 +1143,9 @@ class TurnStateApplier:
             self._queue_checkpoint("world_memories_updated")
             event.new_world_memories = None
 
-        # Time Management
-        if event.start_datetime_override:
-            self.state.start_datetime = event.start_datetime_override
+        # Time Management: GM time requests, unless GM time control is off or time is paused.
+        if apply_gm_time_request(self.state, self.adventure, event):
             state_dirty = True
-
-        if event.time_override_minutes is not None:
-            self.state.in_game_time = max(0, int(event.time_override_minutes))
-            state_dirty = True
-        elif event.extra_time_minutes != 0:
-            base_turn = int(
-                self.adventure.time_per_turn if self.adventure.time_per_turn is not None else 5
-            )
-            max_turn = getattr(self.adventure, "max_time_per_turn", None)
-            if max_turn is None and self.adventure.time_config:
-                max_turn = self.adventure.time_config.get("max_time_per_turn")
-
-            extra = int(event.extra_time_minutes)
-            if max_turn is not None and max_turn > 0:
-                total_turn_time = max(0, min(base_turn + extra, max_turn))
-                delta_to_add = total_turn_time - base_turn
-            else:
-                total_turn_time = max(0, base_turn + extra)
-                delta_to_add = total_turn_time - base_turn
-
-            if delta_to_add != 0:
-                self.state.in_game_time = max(0, self.state.in_game_time + delta_to_add)
-                state_dirty = True
 
         if state_dirty:
             self.state.entity_states = states

@@ -54,6 +54,10 @@ class User(Base, TimestampMixin):
         JSON, nullable=True
     )
     tone_catalog: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Narrator voices adventures can pick (see core/narrator_voices.py).
+    narrator_voice_catalog: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # General game preferences: {"clock_24h": false}
     game_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)

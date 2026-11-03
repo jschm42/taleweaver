@@ -55,6 +55,8 @@ const emit = defineEmits<{
   (e: 'request-delete-exit', exitId: string): void
   (e: 'request-delete-entity', entityId: string): void
   (e: 'clone-entity', entityType: 'npc' | 'object', entityId: string): void
+  (e: 'export-entity', kind: 'npc' | 'item', entityId: string, label: string): void
+  (e: 'import-entity', kind: 'npc' | 'item', sceneId: string): void
   (e: 'request-move-entity-to-scene', entityType: 'npc' | 'object', entityId: string, name: string, currentSceneId: string): void
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'regen-all', kind: string, missingOnly?: boolean): void
@@ -766,6 +768,12 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               :title="availableNpcsForType.length === 0 ? 'No other NPCs exist in the adventure' : 'Place an existing NPC from another scene into this scene'"
               @click="emit('open-add-existing', 'npc')"
             >+ Add Existing</button>
+            <button
+              class="text-xs font-bold text-sky-500 hover:text-sky-400 uppercase tracking-widest transition-colors"
+              :disabled="!props.sceneId"
+              title="Import an NPC from a .twe file into this scene"
+              @click="emit('import-entity', 'npc', props.sceneId || '')"
+            >Import</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -818,6 +826,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button @click="emit('clone-entity', 'npc', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
                 <button @click="emit('request-move-entity-to-scene', 'npc', npc.id, npc.name || npc.id, npc.current_scene_id || props.sceneId || '')" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
                 <button @click="editRouteEntity('npc', npc)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('export-entity', 'npc', npc.id, npc.name || npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
                 <button @click="emit('request-delete-entity', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
@@ -843,6 +852,12 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               :title="availableItemsForType.length === 0 ? 'No other items of this type exist in the adventure' : 'Place an existing item from another scene or inventory into this scene'"
               @click="emit('open-add-existing', 'items')"
             >+ Add Existing</button>
+            <button
+              class="text-xs font-bold text-sky-500 hover:text-sky-400 uppercase tracking-widest transition-colors"
+              :disabled="!props.sceneId"
+              title="Import an item from a .twe file into this scene"
+              @click="emit('import-entity', 'item', props.sceneId || '')"
+            >Import</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -895,6 +910,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
                 <button @click="emit('request-move-entity-to-scene', 'object', obj.id, obj.name || obj.id, obj.current_scene_id || props.sceneId || '')" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
                 <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('export-entity', 'item', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
                 <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
@@ -912,6 +928,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         @create="emit('open-create-item', 'CONSTRUCTABLE')"
         @toggle-menu="(id, event) => emit('toggle-menu', id, event)"
         @clone="(id) => emit('clone-entity', 'object', id)"
+        @export="(id, label) => emit('export-entity', 'item', id, label)"
         @edit="(obj) => editRouteEntity('object', obj)"
         @delete="(id) => emit('request-delete-entity', id)"
       />
@@ -984,6 +1001,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'switch'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                 <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
                 <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('export-entity', 'item', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
                 <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
@@ -1060,6 +1078,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'container'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                 <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
                 <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('export-entity', 'item', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
                 <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
@@ -1127,6 +1146,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'text-log'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                 <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
                 <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('export-entity', 'item', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
                 <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
@@ -1164,7 +1184,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <span class="w-full text-xs font-bold leading-tight line-clamp-2" :class="worldExit.to_scene_id === props.sceneId ? 'text-emerald-300' : 'text-white'">{{ exitRoute(worldExit, editorScenes).to }}</span>
             </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-slate-300 uppercase tracking-wider truncate" :title="worldExit.label || worldExit.id">{{ worldExit.label || 'Exit' }}</div>
+              <div class="text-[10px] font-black text-slate-300 uppercase tracking-wider truncate" :title="worldExit.label || worldExit.id">{{ worldExit.label || `→ ${worldExit.to_scene_id || 'Exit'}` }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button

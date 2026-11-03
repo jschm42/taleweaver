@@ -13,7 +13,13 @@ from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)
 
-LOOT_HELP = "Loot commands: /loot take <item>, /loot leave <item>, /loot done"
+LOOT_HELP = (
+    "Loot commands: /loot take <item>, /loot leave <item>, "
+    "/loot take_all (everything into the inventory, ends the loot phase), "
+    "/loot done (drops what is left into the scene)"
+)
+# Loot commands that end the loot phase (and trigger the aftermath narration).
+LOOT_FINISH_ACTIONS = ("done", "take_all")
 
 
 def _find_loot_index(loot_items: list[dict[str, Any]], ref: str) -> int:
@@ -179,6 +185,19 @@ class CombatLootMixin:
         ]
         return "Loot dropped to the scene:\n" + "\n".join(f"- {name}" for name in names)
 
+    async def _loot_take_all(self, combat: dict[str, Any]) -> str:
+        """Moves every remaining loot item into the inventory and ends the loot phase."""
+        taken = list(combat.get("loot_items") or [])
+        names = [str(item.get("name") or item.get("id") or "Unknown Item") for item in taken]
+        if taken:
+            self.avatar.inventory = [*list(self.avatar.inventory or []), *taken]
+            combat["loot_items"] = []
+            self._append_combat_log(combat, f"Loot taken: {', '.join(names)}", "loot")
+        await self._loot_done(combat)
+        if not taken:
+            return "Combat finished. No loot remained to take."
+        return "Added to your inventory:\n" + "\n".join(f"- {name}" for name in names)
+
     async def _resolve_loot_command(self, user_msg: str, combat: dict[str, Any]) -> str | None:
         if not user_msg.lower().strip().startswith("/loot"):
             return None
@@ -187,8 +206,9 @@ class CombatLootMixin:
         action = parts[1].lower() if len(parts) > 1 else ""
         arg = parts[2].strip() if len(parts) > 2 else ""
 
-        if action == "done":
-            return await self._loot_done(combat)
+        finishers = {"done": self._loot_done, "take_all": self._loot_take_all}
+        if action in finishers:
+            return await finishers[action](combat)
         if action not in {"take", "leave", "drop"}:
             return LOOT_HELP
         if not arg:

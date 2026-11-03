@@ -6,6 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.base import Base, TimestampMixin
 
+# Maximum length of the Story Idea (original_prompt) a user can submit.
+ORIGINAL_PROMPT_MAX_LENGTH = 50000
+
 
 class GenerationCancelledError(Exception):
     """Raised when the user cancels a background generation task."""
@@ -48,6 +51,10 @@ class AdventureTemplate(Base, TimestampMixin):
     time_per_turn: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     pacing_minutes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     max_time_per_turn: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    # Whether the GM (Pass 1) may change the in-game time, e.g. "the search took 20 minutes".
+    gm_time_control: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
     clock_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_memory_turns: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     time_system: Mapped[str] = mapped_column(String(20), default="calendar", nullable=False)
@@ -60,6 +67,8 @@ class AdventureTemplate(Base, TimestampMixin):
         JSON, nullable=True
     )
     selected_tone: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # How the GM narrates: {id, name, instruction, sample} (see core/narrator_voices.py)
+    narrator_voice: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # Dialog skin chosen by the author: {"skin": <id>, "accent": "#rrggbb"} (see core/ui_theme.py)
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
@@ -100,7 +109,9 @@ class AdventureTemplate(Base, TimestampMixin):
     completed_guard_expression: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     gameover_guard_expression: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     tts_director_notes: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
-    original_prompt: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
+    original_prompt: Mapped[Optional[str]] = mapped_column(
+        String(ORIGINAL_PROMPT_MAX_LENGTH), nullable=True
+    )
     starting_timestamp: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )  # Minutes from Day 1, 00:00

@@ -106,6 +106,15 @@ function enemyCard(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>
   }
 }
 
+/**
+ * Who has a card on the stage. Defeated enemies leave once their knock-out has played (their
+ * loot is still collected on the server); bystanders stay off it unless picked as target.
+ */
+function isOnStage(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>): boolean {
+  if (enemy.defeated) return info.outIds.has(enemy.id)
+  return !!enemy.engaged || !!enemy.fled || enemy.id === props.selectedTargetId
+}
+
 function buildView(pending: CombatLogEntry[]): ArenaView {
   const info = pendingInfo(pending)
   const p = props.combat.player
@@ -126,7 +135,7 @@ function buildView(pending: CombatLogEntry[]): ArenaView {
       out: null,
       initiative: initiativeOf(PLAYER_ID),
     },
-    enemies: enemies.filter(Boolean).map((e) => enemyCard(e, info)),
+    enemies: enemies.filter((e) => e && isOnStage(e, info)).map((e) => enemyCard(e, info)),
     selectedId: props.selectedTargetId,
     activeId: props.combat.active ? (props.combat.active_actor ?? null) : null,
   }

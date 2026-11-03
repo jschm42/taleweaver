@@ -1,6 +1,6 @@
-"""Static check for choice dialogs: every ``on_choice`` handler must be a definition.
+"""Static check for dialogs: every ``on_choice`` / ``on_end`` / ``on_action`` handler must exist.
 
-``tw.dialog.choose(..., on_choice=handler)`` resolves the handler in a later request, where only
+``tw.dialog.choose(..., on_choice=handler)`` (and ``tw.dialog.tree``) resolve the handler in a later request, where only
 functions from the global ``init_script`` and the sequence/scene helper blocks are in scope. A handler
 defined in the opening script itself (or nowhere) would silently do nothing, so the editor
 validation flags it.
@@ -15,8 +15,13 @@ from typing import Any
 from backend.schemas.validation import ValidationFinding
 
 _DIALOG_MARKER = "dialog."
-_DIALOG_METHODS = {"choose", "ask"}
-_HANDLER_ARG_POSITION = 2
+# Dialog method -> (handler keyword, its position) pairs: choose(prompt, options, on_choice),
+# tree(tree, on_end, on_action).
+_HANDLER_PARAMS = {
+    "choose": (("on_choice", 2),),
+    "ask": (("on_choice", 2),),
+    "tree": (("on_end", 1), ("on_action", 2)),
+}
 
 
 def _strings(value: Any) -> Iterator[str]:
@@ -29,13 +34,19 @@ def _strings(value: Any) -> Iterator[str]:
         yield from (code for child in value for code in _strings(child))
 
 
-def _handler_name(call: ast.Call) -> str | None:
-    node = next((kw.value for kw in call.keywords if kw.arg == "on_choice"), None)
-    if node is None and len(call.args) > _HANDLER_ARG_POSITION:
-        node = call.args[_HANDLER_ARG_POSITION]
+def _handler_name(call: ast.Call, keyword: str, position: int) -> str | None:
+    node = next((kw.value for kw in call.keywords if kw.arg == keyword), None)
+    if node is None and len(call.args) > position:
+        node = call.args[position]
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
+        return node.value or None
     return node.id if isinstance(node, ast.Name) else None
+
+
+def _handler_names(call: ast.Call) -> Iterator[str]:
+    params = _HANDLER_PARAMS[call.func.attr]  # type: ignore[attr-defined]
+    names = (_handler_name(call, keyword, position) for keyword, position in params)
+    yield from (name for name in names if name)
 
 
 def _is_dialog_call(node: ast.AST) -> bool:
@@ -43,20 +54,20 @@ def _is_dialog_call(node: ast.AST) -> bool:
         return False
     owner = node.func.value
     return (
-        node.func.attr in _DIALOG_METHODS
+        node.func.attr in _HANDLER_PARAMS
         and isinstance(owner, ast.Attribute)
         and owner.attr == "dialog"
     )
 
 
 def dialog_handlers(code: str) -> set[str]:
-    """Returns the handler names referenced by tw.dialog.choose/ask calls in ``code``."""
+    """Returns the handler names referenced by tw.dialog.choose/ask/tree calls in ``code``."""
     try:
         tree = ast.parse(code)
     except SyntaxError:
         return set()
     calls = (node for node in ast.walk(tree) if _is_dialog_call(node))
-    return {name for call in calls if (name := _handler_name(call))}
+    return {name for call in calls for name in _handler_names(call)}
 
 
 def init_functions(init_script: Any) -> set[str]:

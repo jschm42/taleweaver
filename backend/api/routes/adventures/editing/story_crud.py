@@ -21,6 +21,8 @@ from backend.api.routes.adventures.schemas import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.rules.award_keys import normalize_award_key
+from backend.engine.rules.game_clock import TIME_TRIGGER, to_minutes
 from backend.engine.scripting import SafeAstInterpreter
 from backend.models.user import User
 
@@ -90,9 +92,9 @@ async def create_editor_award(
 ) -> dict:
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
-    award_key = _sanitize_editor_id(payload.key, "key")
+    award_key = normalize_award_key(_sanitize_editor_id(payload.key, "key"))
     awards = list(adv.awards or [])
-    if any(str(a.get("key") or "") == award_key for a in awards):
+    if any(str(a.get("key") or "").upper() == award_key for a in awards):
         raise HTTPException(status_code=409, detail="award key already exists")
 
     award = {
@@ -152,10 +154,15 @@ async def validate_editor_script(
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     }
     if payload.trigger and payload.trigger not in valid_triggers:
         errors.append(
             f"Invalid trigger '{payload.trigger}'. Must be one of: {', '.join(sorted(valid_triggers))}."
+        )
+    if payload.trigger == TIME_TRIGGER and to_minutes(payload.target) is None:
+        errors.append(
+            "on_time_reached needs the elapsed in-game time as target, e.g. '90', '2h 30m' or '1d'."
         )
 
     return ScriptValidateResponse(

@@ -14,6 +14,9 @@ export interface WalkthroughData {
   message: string
   current_xp: number
   reveal_cost: number
+  /** True when the current chapter's walkthrough is sealed and can be unlocked. */
+  can_reveal?: boolean
+  current_chapter_title?: string | null
   [key: string]: any
 }
 

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { Sparkles } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { FileUp, Sparkles } from 'lucide-vue-next'
 import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
 import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
+import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
-defineProps<{
+const props = defineProps<{
   modelValue: {
     title: string
     storyIdea: string
@@ -15,10 +17,41 @@ defineProps<{
   canSuggestStoryIdea?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
   (e: 'suggest-story-idea'): void
 }>()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerFileLoad() {
+  fileInputRef.value?.click()
+}
+
+async function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) {
+    return
+  }
+  try {
+    const content = await file.text()
+    let nextTitle = props.modelValue.title
+    if (!nextTitle.trim()) {
+      const headingMatch = content.match(/^\s*#\s+([^\n#]+)$/m)
+      if (headingMatch && !headingMatch[1].includes(':')) {
+        nextTitle = headingMatch[1].trim().slice(0, 50)
+      }
+    }
+    emit('update:modelValue', {
+      ...props.modelValue,
+      title: nextTitle,
+      storyIdea: content,
+    })
+  } finally {
+    input.value = ''
+  }
+}
 </script>
 
 <template>
@@ -54,15 +87,33 @@ defineEmits<{
               <BlueprintSyntaxHelp />
             </InfoPopoverButton>
           </div>
-          <button
-            type="button"
-            :disabled="isSuggestingStoryIdea || canSuggestStoryIdea === false"
-            @click="$emit('suggest-story-idea')"
-            class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border border-cyan-400/20 bg-cyan-500/10 text-cyan-300 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap active:scale-95"
-          >
-            <Sparkles :class="['w-3 h-3', isSuggestingStoryIdea ? 'animate-spin' : '']" />
-            {{ isSuggestingStoryIdea ? 'Generating...' : 'Auto Generate' }}
-          </button>
+          <div class="flex items-center gap-1.5">
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept=".md,.markdown,.txt"
+              class="hidden"
+              @change="handleFileChange"
+            />
+            <button
+              type="button"
+              title="Load a Markdown (.md) or text (.txt) concept file"
+              @click="triggerFileLoad"
+              class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border border-white/15 bg-white/5 text-white/75 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all hover:bg-white/10 hover:text-white whitespace-nowrap active:scale-95"
+            >
+              <FileUp class="w-3 h-3" />
+              Load .md
+            </button>
+            <button
+              type="button"
+              :disabled="isSuggestingStoryIdea || canSuggestStoryIdea === false"
+              @click="$emit('suggest-story-idea')"
+              class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border border-cyan-400/20 bg-cyan-500/10 text-cyan-300 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap active:scale-95"
+            >
+              <Sparkles :class="['w-3 h-3', isSuggestingStoryIdea ? 'animate-spin' : '']" />
+              {{ isSuggestingStoryIdea ? 'Generating...' : 'Auto Generate' }}
+            </button>
+          </div>
         </div>
         <textarea
           :value="modelValue.storyIdea"
@@ -71,6 +122,7 @@ defineEmits<{
           placeholder="The Weaver will use this to seed the world's history and current conflicts..."
           class="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white resize-y min-h-[4.5rem] sm:min-h-[5.5rem] focus:border-cyan-400 outline-none transition-all placeholder:text-white/20"
         ></textarea>
+        <StoryIdeaLengthHint :value="modelValue.storyIdea" />
 
         <!-- Builder Mode Strictness -->
         <div class="mt-4">
@@ -103,7 +155,10 @@ defineEmits<{
           </div>
           <p class="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
             <template v-if="modelValue.generation_strictness === 'strict'">
-              The Architect strictly implements your structural blueprint tags like <span class="font-mono text-cyan-400">[Sequence: ...]</span> or <span class="font-mono text-cyan-400">[Scene: ...]</span>.
+              The Architect strictly follows your blueprint sections (e.g.
+              <code class="px-1 py-0.5 rounded bg-cyan-500/10 font-mono text-cyan-300">## Sequence: 1 — Title</code>,
+              <code class="px-1 py-0.5 rounded bg-cyan-500/10 font-mono text-cyan-300">## Scene: ID — Name</code>, or
+              <code class="px-1 py-0.5 rounded bg-cyan-500/10 font-mono text-cyan-300">[Scene: ID] Name</code>) without inventing extra locations.
             </template>
             <template v-else>
               The Architect expands creatively on your blueprint and fills in the gaps freely.

@@ -1,8 +1,9 @@
 """Deterministic parser for the World-Builder blueprint syntax.
 
-The Story Idea text is split into tags (``[Scene: CELL] Brig Cell``). Each tag body
-holds ``key: value`` lines (mapped onto manifest fields), ``key: |`` script blocks
-and free prose. Anything that is not a recognized key stays prose for the LLM.
+The Story Idea text is split into tags (``[Scene: CELL] Brig Cell`` or Markdown headings
+such as ``## Scene: CELL — Brig Cell``). Each tag body holds ``key: value`` lines
+(mapped onto manifest fields), ``key: |`` or fenced code blocks, and free prose.
+Anything that is not a recognized key stays prose for the LLM.
 """
 
 from __future__ import annotations
@@ -12,13 +13,30 @@ import textwrap
 from dataclasses import dataclass, field
 
 from backend.engine.blueprint.converters import normalize_id
-from backend.engine.blueprint.field_specs import KEY_TABLES, FieldSpec, normalize_key
+from backend.engine.blueprint.field_specs import (
+    DEPRECATED_KEYS,
+    KEY_TABLES,
+    FieldSpec,
+    normalize_key,
+)
+from backend.engine.blueprint.markdown import (
+    is_fence_open,
+    is_markdown_noise,
+    match_markdown_heading_tag,
+    match_markdown_section_heading,
+    read_fenced_block,
+    strip_inline_code,
+)
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock, BlueprintValue
 
 MAX_SEQUENCES = 15
 
-_TAG_RE = re.compile(r"^(\s*)\[\s*([A-Za-z][A-Za-z_ ]*?)\s*(?::\s*([^\]]*))?\]\s*(.*)$")
-_KEY_RE = re.compile(r"^(\s*)([A-Za-z][A-Za-z0-9_ \-]{0,40}?)\s*:\s*(.*)$")
+_TAG_RE = re.compile(
+    r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[\s*([A-Za-z][A-Za-z_ ]*?)\s*(?::\s*([^\]]*))?\]\s*(.*)$"
+)
+_KEY_RE = re.compile(
+    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_ \-]{0,40}?)(?:\*\*|__|`)?\s*:\s*(?:\*\*|__)?\s*(.*)$"
+)
 _TRAILING_ID_RE = re.compile(r"^(.*?)\s*\(([A-Za-z][A-Za-z0-9_]*)\)\s*$")
 _EXIT_REF_RE = re.compile(r"^\s*([^<>\-]+?)\s*(<->|->)\s*([^<>\-]+?)\s*$")
 
@@ -50,6 +68,7 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "quest": ("sidequest", ""),
     "award": ("award", ""),
     "ability": ("ability", ""),
+    "talent": ("talent", ""),
 }
 _NAME_FIELDS = {
     "protagonist": "name",
@@ -61,11 +80,16 @@ _NAME_FIELDS = {
     "award": "title",
     "script": "name",
     "ability": "name",
+    "talent": "name",
     "rule": "condition",
     "exit": "label",
 }
 _SINGLETON_KINDS = {"world", "protagonist"}
+# Child tags of an entity (abilities, talents) or of the latest sequence (rules).
+_ENTITY_CHILD_KINDS = {"ability", "talent"}
+_CHILD_KINDS = {"rule", *_ENTITY_CHILD_KINDS}
 _INTRODUCED_KINDS = {"scene", "npc", "item", "exit"}
+_IMPLICIT_FENCE_KEYS = {"script": "code", "rule": "script"}
 
 
 @dataclass
@@ -75,6 +99,7 @@ class _ParseState:
     child: BlueprintBlock | None = None
     premise: list[str] = field(default_factory=list)
     sequence_count: int = 0
+    parent_heading_level: int = 0
 
     @property
     def target(self) -> BlueprintBlock | None:
@@ -92,22 +117,34 @@ def parse_blueprint(text: str) -> Blueprint:
     index = 0
     while index < len(lines):
         index = _consume_line(state, lines, index)
-    state.blueprint.premise = "\n".join(state.premise).strip()
+    state.blueprint.premise = "\n".join(state.premise).strip() or state.blueprint.title
     for block in state.blueprint.blocks:
         _derive_implied_fields(block)
     return state.blueprint
 
 
-def _match_tag(line: str) -> tuple[str, str, str, str, int] | None:
+def _match_tag(
+    line: str, *, allow_md_heading: bool = True
+) -> tuple[str, str, str, str, int, int] | None:
     match = _TAG_RE.match(line)
-    if not match:
+    if match:
+        word = normalize_key(match.group(3))
+        if word not in _KIND_ALIASES:
+            return None
+        kind, preset_type = _KIND_ALIASES[word]
+        indent = len(match.group(1).expandtabs(4))
+        heading_level = len(match.group(2)) if match.group(2) else 0
+        return (
+            kind,
+            preset_type,
+            (match.group(4) or "").strip(),
+            match.group(5).strip(),
+            indent,
+            heading_level,
+        )
+    if not allow_md_heading:
         return None
-    word = normalize_key(match.group(2))
-    if word not in _KIND_ALIASES:
-        return None
-    kind, preset_type = _KIND_ALIASES[word]
-    indent = len(match.group(1).expandtabs(4))
-    return kind, preset_type, (match.group(3) or "").strip(), match.group(4).strip(), indent
+    return match_markdown_heading_tag(line, _KIND_ALIASES, _SINGLETON_KINDS)
 
 
 def _consume_line(state: _ParseState, lines: list[str], index: int) -> int:
@@ -118,21 +155,70 @@ def _consume_line(state: _ParseState, lines: list[str], index: int) -> int:
         return index + 1
     target = state.target
     if target is None:
-        state.premise.append(line)
+        _consume_premise_line(state, line)
         return index + 1
+    key_next = _try_consume_key(state, target, lines, index)
+    if key_next is not None:
+        return key_next
+    return _consume_body_line(state, target, lines, index)
+
+
+def _consume_premise_line(state: _ParseState, line: str) -> None:
+    if is_markdown_noise(line):
+        return
+    heading = match_markdown_section_heading(line)
+    if heading is not None:
+        level, title_text = heading
+        if level == 1 and not state.blueprint.title and not any(s.strip() for s in state.premise):
+            state.blueprint.title = title_text
+        return
+    state.premise.append(line)
+
+
+def _try_consume_key(
+    state: _ParseState, target: BlueprintBlock, lines: list[str], index: int
+) -> int | None:
+    line = lines[index]
     key_match = _KEY_RE.match(line)
     spec = _lookup_spec(target.kind, key_match.group(2)) if key_match else None
-    if not key_match or spec is None or not key_match.group(3).strip():
-        if line.strip():
-            target.prose.append(line.strip())
-        return index + 1
-    key_indent = len(key_match.group(1).expandtabs(4))
-    raw_value = key_match.group(3).strip()
-    if raw_value == "|":
-        block_text, next_index = _read_block_scalar(lines, index + 1, key_indent)
-        _store_value(state.blueprint, target, key_match.group(2), spec, block_text, index + 1)
+    if not key_match or spec is None:
+        return None
+    raw_key = key_match.group(2)
+    raw_value = strip_inline_code(key_match.group(3).strip())
+    next_has_fence = index + 1 < len(lines) and is_fence_open(lines[index + 1])
+    if raw_value in ("|", "") and next_has_fence:
+        block_text, next_index = read_fenced_block(lines, index + 2)
+        _store_value(state.blueprint, target, raw_key, spec, block_text, index + 1)
         return next_index
-    _store_value(state.blueprint, target, key_match.group(2), spec, raw_value, index + 1)
+    if raw_value == "|":
+        key_indent = len(key_match.group(1).expandtabs(4))
+        block_text, next_index = _read_block_scalar(lines, index + 1, key_indent)
+        _store_value(state.blueprint, target, raw_key, spec, block_text, index + 1)
+        return next_index
+    if not raw_value:
+        return None
+    _store_value(state.blueprint, target, raw_key, spec, raw_value, index + 1)
+    return index + 1
+
+
+def _consume_body_line(
+    state: _ParseState, target: BlueprintBlock, lines: list[str], index: int
+) -> int:
+    line = lines[index]
+    implicit_key = _IMPLICIT_FENCE_KEYS.get(target.kind)
+    if implicit_key and is_fence_open(line) and implicit_key not in target.fields:
+        spec = _lookup_spec(target.kind, implicit_key)
+        block_text, next_index = read_fenced_block(lines, index + 1)
+        if spec is not None:
+            _store_value(state.blueprint, target, implicit_key, spec, block_text, index + 1)
+        return next_index
+    if is_markdown_noise(line):
+        return index + 1
+    if match_markdown_section_heading(line) is not None:
+        state.child = None
+        return index + 1
+    if line.strip():
+        target.prose.append(line.strip())
     return index + 1
 
 
@@ -143,15 +229,15 @@ def _lookup_spec(kind: str, raw_key: str) -> FieldSpec | None:
 def _read_block_scalar(lines: list[str], start: int, key_indent: int) -> tuple[str, int]:
     """Reads a ``key: |`` block: the lines indented deeper than the key.
 
-    A blueprint tag line also ends the block, so an indented ``[Rule: ...]`` right after a
-    sequence's multi-line ``helpers``/``on_start`` value becomes a child, not script code.
+    A bracketed blueprint tag line also ends the block, so an indented ``[Rule: ...]`` right
+    after a sequence's multi-line ``helpers``/``on_start`` value becomes a child, not script code.
     """
     collected: list[str] = []
     index = start
     while index < len(lines):
         line = lines[index]
         indent = len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip())
-        if line.strip() and (indent <= key_indent or _match_tag(line)):
+        if line.strip() and (indent <= key_indent or _match_tag(line, allow_md_heading=False)):
             break
         collected.append(line.expandtabs(4))
         index += 1
@@ -171,12 +257,19 @@ def _store_value(
         return
     mode = "fixed"
     if raw_value.startswith("~"):
-        mode, raw_value = "hint", raw_value[1:].strip()
+        mode, raw_value = "hint", strip_inline_code(raw_value[1:].strip())
     try:
         value = spec.convert(raw_value)
     except ValueError as exc:
         blueprint.add_issue(line_no, f"{block.kind} '{block.ref or block.name}': {raw_key}: {exc}")
         return
+    deprecation = DEPRECATED_KEYS.get((block.kind, normalize_key(raw_key)))
+    if deprecation:
+        blueprint.add_issue(
+            line_no,
+            f"{block.kind} '{block.ref or block.name}': '{raw_key}' is deprecated; {deprecation}.",
+            "warning",
+        )
     if spec.target == "*":
         for target, sub_value in value.items():
             block.fields[target] = BlueprintValue(sub_value, mode, line_no)
@@ -189,6 +282,14 @@ def _store_value(
     block.fields[spec.target] = BlueprintValue(value, mode, line_no)
 
 
+def _is_child_script(state: _ParseState, indent: int, heading_level: int) -> bool:
+    if indent > 0:
+        return True
+    if state.current is None or state.current.kind != "sequence":
+        return False
+    return heading_level > state.parent_heading_level > 0
+
+
 def _open_block(
     state: _ParseState,
     line_no: int,
@@ -197,12 +298,16 @@ def _open_block(
     raw_ref: str,
     rest: str,
     indent: int,
+    heading_level: int = 0,
 ) -> None:
     blueprint = state.blueprint
-    if kind in {"rule", "ability"} or (kind == "script" and indent > 0):
+    if kind in _CHILD_KINDS or (
+        kind == "script" and _is_child_script(state, indent, heading_level)
+    ):
         _open_child(state, line_no, kind, raw_ref, rest)
         return
     state.child = None
+    state.parent_heading_level = heading_level
     if kind in _SINGLETON_KINDS and blueprint.first(kind):
         blueprint.add_issue(line_no, f"[{kind.title()}] may only appear once.")
     if kind == "sequence":
@@ -222,9 +327,14 @@ def _open_block(
 
 
 def _open_child(state: _ParseState, line_no: int, kind: str, raw_ref: str, rest: str) -> None:
-    parent_kinds = {"rule": {"sequence"}, "script": {"sequence"}, "ability": {"npc", "protagonist"}}
+    parent_kinds = {
+        "rule": {"sequence"},
+        "script": {"sequence"},
+        "ability": {"npc", "protagonist"},
+        "talent": {"protagonist"},
+    }
     parent = state.current
-    if kind != "ability":
+    if kind not in _ENTITY_CHILD_KINDS:
         # Rules and chapter scripts belong to the latest chapter, even after entity tags.
         sequences = state.blueprint.of_kind("sequence")
         parent = sequences[-1] if sequences else None
@@ -243,25 +353,26 @@ def _open_child(state: _ParseState, line_no: int, kind: str, raw_ref: str, rest:
 def _new_block(
     blueprint: Blueprint, line_no: int, kind: str, raw_ref: str, rest: str, sequence_no: int
 ) -> BlueprintBlock:
-    name, explicit_id = rest, ""
-    trailing = _TRAILING_ID_RE.match(rest)
+    cleaned_rest = strip_inline_code(rest)
+    name, explicit_id = cleaned_rest, ""
+    trailing = _TRAILING_ID_RE.match(cleaned_rest)
     if trailing:
-        name, explicit_id = trailing.group(1).strip(), trailing.group(2)
+        name, explicit_id = strip_inline_code(trailing.group(1)), trailing.group(2)
     block = BlueprintBlock(kind=kind, ref="", name=name, line=line_no)
     _store_header_name(block, name)
     if kind == "exit":
-        _apply_exit_ref(blueprint, block, raw_ref)
+        _apply_exit_ref(blueprint, block, strip_inline_code(raw_ref))
         return block
     if kind == "sequence":
         block.ref = str(sequence_no)
         return block
     if kind in _SINGLETON_KINDS:
         return block
-    ref = explicit_id or raw_ref
+    ref = explicit_id or strip_inline_code(raw_ref)
     if not ref or ref.isdigit():
-        ref = name if name and name != "?" else ""
+        ref = block.name if block.name and block.name != "?" else ""
     block.ref = normalize_id(ref)
-    if not block.ref and kind not in {"rule", "script", "ability"}:
+    if not block.ref and kind not in {"script", *_CHILD_KINDS}:
         blueprint.add_issue(line_no, f"[{kind.title()}] needs an ID or a name.")
     return block
 
@@ -276,7 +387,7 @@ def _store_header_name(block: BlueprintBlock, name: str) -> None:
         block.open_fields.append(target)
         return
     mode = "hint" if name.startswith("~") else "fixed"
-    block.name = name.lstrip("~").strip()
+    block.name = strip_inline_code(name.lstrip("~").strip())
     block.fields[target] = BlueprintValue(block.name, mode, block.line)
 
 

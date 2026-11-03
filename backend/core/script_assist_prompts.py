@@ -19,11 +19,16 @@ SCRIPT_CONTEXTS: dict[str, str] = {
     "on_read": "runs when the READABLE item is read",
     "on_defeat": "runs when the NPC is defeated",
     "on_protagonist_enters_scene": "runs when the protagonist enters the NPC's scene",
+    "on_receive_item": (
+        "runs once when the protagonist gives the NPC items; `received_items` (list of dicts) "
+        "and `received_item_ids` (list of IDs) are in scope"
+    ),
     "on_open_exit": "runs when the exit is opened",
     "exit_used": "runs when the protagonist goes through the exit",
     "exit_unlock_success": "runs when the exit is unlocked",
     "exit_unlock_failure": "runs when unlocking the exit fails or its guard blocks it",
     "container_unlock_success": "runs when the container is unlocked",
+    "container_items_added": "runs after the player put items into the container; added_items (list of dicts) and added_item_ids (list of IDs) are in scope",
     "container_unlock_failure": "runs when unlocking the container fails or its guard blocks it",
     "constructable_success": "runs when the recipe is crafted",
     "constructable_failure": "runs when crafting fails or its guard blocks it",

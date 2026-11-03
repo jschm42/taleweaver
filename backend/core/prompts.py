@@ -81,6 +81,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "Similarly, for locked exits, you can specify one of `code_to_unlock`, `item_to_unlock`, or a soft narrative `rule_to_unlock` in the exit object. For open exits, keep all three empty. These three fields are mutually exclusive: if you set one, do not set the other two.\n"
     "CONTAINER LOCK INVARIANT (CRITICAL): The engine sets `metadata_json.locked = true` if and only if at least one of `code_to_unlock`, `item_to_unlock`, or `rule_to_unlock` is non-empty. Therefore: (1) If the container's `description` says it is locked, requires a code/key/password/combination, or otherwise cannot be opened as-is, you MUST set exactly one of those three unlock fields — never leave all three empty while describing a lock. (2) If the container is open and freely searchable, you MUST keep all three unlock fields empty. Never describe a lock in prose without binding it to a deterministic unlock field. The same invariant applies to exits with `is_locked: true`.\n"
     "Every exit object represents ONE defined path. Use `is_bidirectional: true` (the default) for all normal passages (doors, corridors, hallways, staircases) — the engine will automatically create the return path so you do NOT have to list it twice. Set `is_bidirectional: false` ONLY for intentionally one-way transitions such as a collapsing bridge, a drop, or a gate that permanently closes behind the player.\n"
+    "EXIT LABELS: An exit's `label` names the physical passage itself, as seen from either side (e.g. 'an old rusty gate', 'a narrow spiral staircase', 'a heavy oak door'). It must NOT name a destination or a direction ('To the Combat Lab', 'Way to the cellar', 'Back to the hall', 'North exit'), because a bidirectional exit shows the same label in both scenes and the game already shows the target scene next to it. Every exit MUST have a label; even a plain opening gets one (e.g. 'a low archway', 'a gap in the hedge').\n"
     "For every locked container, place at least one discoverable hint or puzzle clue in the world that explains how to unlock it (code clue, key location clue, or explicit riddle).\n"
     "For NPCs, assign an 'npc_type': HUMANOID, ANIMAL, MONSTER, BEING.\n"
     "Every NPC MUST also have a 'goal' and a 'character' description (both strings).\n\n"
@@ -96,7 +97,8 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "Keep appearance consistent with the description, the plot and the world's era. No names, IDs, story events or text/lettering.\n\n"
     "STATS & RESOURCES:\n"
     "For NPCs, always assign 'hp' (range 40-100) and 'stamina' (range 50-100). Default to 0 if not relevant.\n"
-    "For NPCs, include both booleans: 'is_attackable' and 'is_killable'.\n"
+    "For NPCs, include both booleans: 'is_attackable' and 'is_killable' "
+    "('is_killable': false makes the NPC immune to all damage: it never loses HP and cannot be fought).\n"
     "For Protagonist, hp range is 60-120, stamina range is 60-100.\n\n"
     "MULTIPLE ENEMY/ITEM DUPLICATION:\n"
     "You are allowed and encouraged to generate multiple similar or identical NPC enemies (e.g. multiple rats in a rat-infested cellar) or multiple consumable items (e.g. multiple health potions) when it makes sense for the narrative.\n"
@@ -104,7 +106,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "You can slightly vary their spatial_positions and stats (hp, stamina, mana, items) if needed. You do not need to request different visuals for duplicates; the engine will automatically reuse/copy the generated image from the first occurrence.\n\n"
     "EVENT SCRIPTS (`scripts`):\n"
     "The `scripts` array contains deterministic Python event scripts reacting to game hooks ('on_turn_start', 'on_enter_scene', 'on_interact', 'on_turn_end'). If scripting is enabled in the prompt, you MUST populate `scripts` with 1-3 event scripts containing valid safe Python using `tw.*` (e.g. `tw.player.damage(15)`, `tw.exits.lock(from_scene_id, to_scene_id, reason)`, `tw.story.narrate(...)`, `tw.vars.set(...)`). If scripting is disabled, keep `scripts: []`.\n"
-    "Additionally, scenes, exits, NPCs, objects, protagonist and sequences carry inline trigger fields (`on_enter_scene_*`, `on_leave_scene_*`, `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`, `on_defeat_*`, `on_protagonist_enters_scene_*`, `on_pickup_*`, `on_drop_*`, `on_equip_*`, `on_unequip_*`, `on_read_*`, `on_craft_success_*`, `on_craft_failure_*`, `on_hp_change_*`, `on_status_change_*`, `on_start_sequence_*`, `on_end_sequence_*`, each as `_script` and `_text`). When scripting is enabled, fill them where they fit the story; otherwise leave them as empty strings.\n\n"
+    "Additionally, scenes, exits, NPCs, objects, protagonist and sequences carry inline trigger fields (`on_enter_scene_*`, `on_leave_scene_*`, `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`, `on_defeat_*`, `on_protagonist_enters_scene_*`, `on_pickup_*`, `on_drop_*`, `on_equip_*`, `on_unequip_*`, `on_read_*`, `on_craft_success_*`, `on_craft_failure_*`, `on_hp_change_*`, `on_status_change_*`, `on_receive_item_*`, `on_start_sequence_*`, `on_end_sequence_*`, each as `_script` and `_text`). When scripting is enabled, fill them where they fit the story; otherwise leave them as empty strings.\n\n"
     "STORY SEQUENCES (LINEAR CHAPTERS & DEDICATED WALKTHROUGHS):\n"
     "The adventure's main storyline MUST be divided into chronological, linear sequences (chapters) in `sequences` (between 3 and 10 sequences, max 15).\n"
     "Each sequence represents a distinct narrative phase or chapter of the adventure (e.g. Chapter 1: The Awakening/Escape, Chapter 2: Navigating the Sewers, Chapter 3: The Inner Sanctum).\n"
@@ -151,7 +153,8 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "{scene_requirement}\n"
     "- Set top-level combat flags exactly as requested: can_damage_npcs={can_damage_npcs}, npcs_can_damage_protagonist={npcs_can_damage_protagonist}.\n"
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
-    "- Use `is_bidirectional: true` (default) for every normal passage — the engine automatically creates the return path. Only set `is_bidirectional: false` for genuinely one-way transitions.\n\n"
+    "- Use `is_bidirectional: true` (default) for every normal passage — the engine automatically creates the return path. Only set `is_bidirectional: false` for genuinely one-way transitions.\n"
+    "- Exit `label`s describe the passage itself (e.g. 'an old rusty gate'), never the destination ('Way to the Combat Lab'): the same label is shown on both sides. Every exit needs a label.\n\n"
     "{cover_guidance}"
     "{voice_assignment_requirement}"
     "{quest_requirement}"
@@ -312,7 +315,7 @@ _GM_MECHANICS_SHARED_RULES = (
     "NPCS: Use `updated_entities` for NPC stats, `spatial_position` within the scene, and condition `notes` (e.g. 'is badly hurt'). "
     "Move movable NPCs (respecting `allowed_scenes`) with `moved_entities` (`to_scene_id`, `to_spatial_position`); stationary NPCs never leave. "
     "`new_status_effects` is strictly for the PROTAGONIST's condition (e.g. 'Poisoned').\n"
-    "TIME: The engine advances base time when the scene or sequence changes. Use `extra_time_minutes` for prolonged actions (thorough search, crafting, resting); use `time_override_minutes` or `start_datetime_override` only for calendar jumps.\n"
+    "TIME: The engine advances a base amount of time after every narrated player message. Use `extra_time_minutes` for prolonged actions (thorough search, crafting, resting); use `time_override_minutes` or `start_datetime_override` only for calendar jumps. Never set time fields when the CURRENT STATE says TIME CONTROL: LOCKED.\n"
     "AWARDS: If an award from AVAILABLE AWARDS is earned, return its key in `earned_award_keys` (once per session; only provided keys).\n"
     "NOTES & WORLD MEMORIES: Use `remember_notes`, `forget_notes`, or `clear_notes: true` for persistent facts. "
     "Record lasting consequences in `new_world_memories` (`description` in English, optional `npc_id`, `emotion`, `scope`: 'local' or 'global').\n"
@@ -347,7 +350,7 @@ Appended to the static system prompt for Pass 1 of 'Story Mode' adventures.
 
 GM_CHAT_NARRATION_SUFFIX = (
     "CRITICAL: You are in Chat Mode. Focus on snappy dialogue, character interaction, and atmosphere. "
-    "Keep responses conversational and concise, like a Sitcom or pure Roleplay — never monologue or dump excessive exposition. "
+    "Keep responses conversational and concise, like a Sitcom or pure Roleplay. Never monologue or dump excessive exposition. "
     "Never reveal the internal walkthrough directly; when asked for help, give only hints and rough guidance."
 )
 """
@@ -357,7 +360,10 @@ Appended to the narration system prompt when the GM is running in 'Chat Mode' (l
 GM_NARRATION_TURN_CONTRACT = (
     "TURN INPUT CONTRACT: The latest user message contains a CURRENT STATE block, a TURN RESOLUTION block "
     "(engine-verified outcome of this turn), and the PLAYER ACTION. Narrate the player action strictly according to "
-    "the TURN RESOLUTION. Never quote, mention, or reproduce these blocks."
+    "the TURN RESOLUTION. Never quote, mention, or reproduce these blocks. "
+    "Lines marked [Already shown to the player this turn: ...] were written by the adventure's scripts and the "
+    "player has already read them: continue from there. Do not repeat, paraphrase, or summarize them, and do not "
+    "let an NPC say the same information again (codes, clues, directions) in other words."
 )
 """
 Explains the per-turn message layout to the narration model (Pass 2).
@@ -388,7 +394,7 @@ Instruction for the GM when the player asks for more details (look/search/examin
 """
 
 GM_NARRATION_SNAPPY_SUFFIX = (
-    "Keep the response SHORT and punchy — 2-4 sentences MAX for routine actions. "
+    "Keep the response SHORT and punchy, 2-4 sentences MAX for routine actions. "
     "Favor direct NPC dialogue (let characters speak!) over lengthy narrative descriptions. "
     "Move the action forward without flowery prose or unnecessary exposition. "
     "Show, don't tell. More speech, less narration."
@@ -402,15 +408,17 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Response length, paragraph size and pacing follow the NARRATION STYLE rules.\n\n"
     "COMPACT TEXT BLOCKS (CRITICAL): Keep each prose paragraph within the sentence limit of the NARRATION STYLE. "
     "Split longer passages into separate paragraphs with a blank line. "
-    "Never embed NPC speech inside a prose paragraph — it always goes on its own dialogue line.\n\n"
+    "Never embed NPC speech inside a prose paragraph; it always goes on its own dialogue line.\n\n"
     "NO REPETITION (CRITICAL): Never repeat or paraphrase descriptions from earlier turns or from the CURRENT STATE. "
     "When the player looks at or inspects something already described, give only 1-2 new, telling details "
     "(or let a present NPC react) instead of describing it again.\n\n"
     "ITEM NARRATION RULE: Do NOT invent or describe obtaining new physical items that are not explicitly confirmed in the TECHNICAL OUTCOME or pre-defined in the scene. Only narrate interactions with items that actually exist in the world or mechanics outcome.\n\n"
     "NPC INITIATIVE RULE: Present NPCs are people with their own agenda, not props waiting to be addressed. "
+    "Only NPCs listed under 'PRESENT NPCs' in the CURRENT LOCATION are in the room and able to speak or act. "
+    "CRITICAL SPEAKER CONSTRAINT: NEVER generate dialogue, speech lines, or actions for NPCs that are hidden (is_hidden=true), off-scene, absent, or not explicitly listed under 'PRESENT NPCs'. Hidden NPCs do not exist to the scene and MUST NOT speak or be mentioned. "
     "Each present, conscious NPC pursues its listed Goal and acts according to its Character: it volunteers opinions, "
     "asks the player questions, makes offers, complains, jokes or presses its own concern. "
-    "React to what the player just did even if it was passive (looking around, waiting, examining) — someone comments on it. "
+    "React to what the player just did even if it was passive (looking around, waiting, examining); someone comments on it."
     "When several NPCs are present, they talk to each other directly as well: they banter, interrupt, contradict or back each other up. "
     "Keep each line short and in the speaker's own voice; prefer several quick exchanges over one long speech. "
     "Never let an NPC decide or speak for the player, and never let NPCs block the player's action or repeat a question the player ignored word for word.\n\n"
@@ -418,7 +426,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     'Use the format: Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" if an emotion tag is used, e.g. Professor Quark: [excited] "Look here!"). '
     'NEVER put emotion tags inside quotation marks (do NOT write Character Name: "[tag] Dialogue" or "[tag]" "Dialogue"). '
     "Separate narrative prose from speech with a blank line. "
-    'NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: "..."). Use dashes (—), periods, or commas instead.\n\n'
+    'NO COLONS IN NARRATION: NEVER use colons (:) in descriptive or narrative prose. Colons are strictly reserved for speaker dialogue attribution (Character Name: "..."). Use periods or commas instead.\n\n'
     "NO SUMMARIES OR SEPARATORS: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'. Do NOT use horizontal rules or lines like '---' in your output.\n\n"
     "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
 )
@@ -428,7 +436,7 @@ def get_vocal_direction_prompt(provider: str = "google") -> str:
     return (
         "VOICE DIRECTION: Use audio tags to give dialogue and narration life where the mood calls for it. "
         "Tags MUST come from the fixed catalogs below, MUST ALWAYS be in English and lowercase, and are ALWAYS "
-        "written in square brackets — never <...> and never (...). "
+        "written in square brackets, never <...> and never (...). "
         + build_voice_tag_catalog_prompt_block(provider)
         + "1. TONE TAGS: Open a dialogue line or paragraph with at most one tone tag from the Tone Catalog (for example [excited], [whispers]). "
         "It applies to the whole line it opens. Do not nest tags.\n"
@@ -450,8 +458,9 @@ ADVENTURE_GENERATOR_INSTRUCTIONS = (
     "   - `selected_image_styles`: (Optional) A list of styles chosen by the player.\n"
     "   - `selected_tone`: (Optional) The tone chosen by the player.\n\n"
     "Before generating, summarize the blueprint in character and ask the player to confirm it.\n"
-    "Once the player confirms, the Loom opens a live progress view and the new adventure is woven into the player's library. "
-    "Narrate that the weaving has begun; never claim the world is already finished.\n"
+    "Once the player confirms, the Loom opens a review dialog with the blueprint. The player can adjust it there "
+    "and starts the weaving with its start button, or cancels. "
+    "Narrate that the blueprint awaits the player's review; never claim the weaving has begun or the world is finished.\n"
 )
 """
 Final formatting instructions for the narration pass.
@@ -461,8 +470,6 @@ GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX = (
     "You are in Adventure-Generator chat mode. Return ONLY tool intent fields for this turn. "
     "Use `request_available_image_styles` or `request_available_tones` when asked. "
     "Use `requested_adventure_generation` only when all generation inputs are present. "
-    "Set `generation_confirmed` to true only when the player explicitly approves starting the generation in this message; "
-    "otherwise leave it false so the player can review the blueprint first. "
     "If the player asks to retry/regenerate after a prior failure, prefer returning `requested_adventure_generation` using the most recent known parameters (with reasonable defaults) instead of asking repeated clarification questions. "
     "If no tool action is needed, leave all tool fields unset/false."
 )
@@ -501,7 +508,7 @@ GM_CHAT_PROGRESSION_RULES_PROMPT = (
     "If the player moves to a different room, set `new_scene_id` (from available exits) and optionally `exit_label`.\n"
     "Set `new_scene_id` ONLY when the movement is actually executed this turn (explicit traversal/action), not for plans, intentions, hypotheticals, or future goals.\n"
     "If an NPC clearly moves to another room or changes their physical spot, reflect this in `moved_entities` (fields: `entity_id`, `to_scene_id`, `to_spatial_position`) or `updated_entities` (fields: `entity_id`, `spatial_position`). "
-    "Use `extra_time_minutes` for actions that take significant time.\n"
+    "Use `extra_time_minutes` for actions that take significant time (never when the CURRENT STATE says TIME CONTROL: LOCKED).\n"
     "Do not request complex dice rolls or detailed combat attacks. "
     "Do NOT set `game_completed` for intermediate sequence transitions (handled automatically by the engine). Use `game_completed` only when the overarching adventure is fully complete. "
     "If uncertain, leave fields empty/false.\n"
@@ -1014,3 +1021,10 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
 System prompt for the autonomous play agent (incl. Monkey Mode robustness tests).
 Output is expected to be a strict JSON action object. Variables are pre-formatted by the caller.
 """
+
+# Appended to the mechanics CURRENT STATE block while the GM may not change the in-game time
+# (adventure gm_time_control off, tw.time.allow_gm_time(False) or a paused clock).
+GM_TIME_LOCKED_NOTE = (
+    "\nTIME CONTROL: LOCKED. The in-game time is managed by the engine only: leave "
+    "`extra_time_minutes`, `time_override_minutes` and `start_datetime_override` empty."
+)

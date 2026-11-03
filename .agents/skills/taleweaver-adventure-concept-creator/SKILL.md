@@ -1,5 +1,5 @@
 ---
-name: taleweaver-adventure-creator
+name: taleweaver-adventure-concept-creator
 description: Generates TaleWeaver adventure concepts (Story Idea text for the World-Builder) with a gripping story, a planted twist and non-trivial puzzles that the engine can actually enforce. Writes them in the World-Builder blueprint syntax (World, Protagonist, Scene, Exit, NPC, Item, Switch, Sequence, Rule, Script, Sidequest, Award tags with fixed/hint/open keys) and knows the parser's and engine's limits.
 ---
 
@@ -28,6 +28,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
   - `key: ?` or leaving the key out means the builder decides.
   - Names after a tag follow the same modes: `[Scene: X] ?` and `[NPC: X] ~Name`.
 - `key: |` starts a multi-line value. The following lines, indented deeper than the key, belong to it. Use this for every script with more than one statement.
+- **Markdown (`.md`) format is also supported:** Tags may be written with `#` prefixes (`## [Scene: ID] Name`) or as pure Markdown headings (`## World`, `## Protagonist: Name`, `## Scene: ID — Name`, `## Exit: A -> B — label`, `## Sequence: 1 — Title`, `### Rule: ID — condition`), keys may use bullets/bold/backticks (`- **in**: \`CELL\``), and scripts may use fenced ```` ```python ... ``` ```` code blocks (after `key:` or directly inside `Script`/`Rule` blocks). Organizational headings (`## Locations`), `---` dividers and `<!-- comments -->` are ignored.
 - IDs are normalized to `UPPER_SNAKE_CASE`. Always give explicit IDs (`[NPC: TOBIN] Tobin`) so other blocks can reference them. Write `@ID` in free text to link entities; those references are checked too.
 
 ### Nesting
@@ -40,22 +41,23 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 
 | Block | Most useful keys |
 | :--- | :--- |
-| `[World]` | `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script` |
+| `[World]` | `language`, `image_style`/`style`, `tone`, `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script` |
 | `[Protagonist] Name` | `role`, `goal`, `hp`, `str`…`ac`, `inventory`, `weapon`, `armor` |
 | `[Scene: ID] Name` | `decor`, `on_enter`, `on_enter_text`, `on_leave`, `helpers` (only `def`s and constants; callable from every script, e.g. the scene's dialog handlers) |
-| `[Exit: A -> B] label` | `code`, `key_item`, `rule`, `guard`, `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |
-| `[NPC: ID] Name` | `in`, `type`, `hp`, `hidden`, `reveal`, `inventory`, `attack` (`passive`/`on_sight`), `attack_when_holding`, `attack_guard`, `killable`, `on_defeat`, `on_meet`, `on_interact` |
+| `[Exit: A -> B] label` (name the passage, e.g. `an old rusty gate`, never the way like `To the lab`; without one the AI writes it) | `code`, `key_item`, `rule`, `guard`, `revealed` (target known from the start), `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |
+| `[NPC: ID] Name` | `in`, `type`, `hp`, `str`…`cha`, `ac`, `main_attack` (`Sabre \| 1d8 \| melee \| str`; no weapon item needed, `weapon`/`armor` are deprecated), `hidden`, `reveal`, `inventory`, `attack` (`passive`/`on_sight`), `attack_when_holding`, `attack_guard`, `group` (combat group: members fight together), `assist` (`group`/`anyone`/`never`), `killable`, `on_defeat`, `on_meet`, `on_interact`, `on_receive_item` |
 | `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `code`, `unlock_item`, `unlock_guard`, `contains`, `reveals`, `bonus` (`str+2`), `damage`, `cost`, weapons: `category` (melee/ranged/magic), `hit` (`str`), `hit_effects` (`target sta -1d4, self hp +2`), `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read` |
 | `[Recipe: ID] Name` | `combine` (`A + B`), `results` (crafted item IDs), `keep` (ingredients not consumed), `craft_guard`, `on_craft`, `on_craft_fail_text` |
-| `[Switch: ID] Name` | `states` (IDs ≤15 chars, `A-Z 0-9 _ -`; optional in-game text ≤20 chars: `OFF=Dark, ON=Lights on`), `initial`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: …`, `outcome: B -> flag: KEY; unlock_container: ID`, `portable: yes` (carried switch, e.g. a remote; flippable from the inventory, usable as `item:` gate) |
+| `[Switch: ID] Name` | `states` (IDs ≤15 chars, `A-Z 0-9 _ -`; optional in-game text ≤20 chars: `OFF=Dark, ON=Lights on`), `initial`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: … \| script: …`, `outcome: B -> flag: KEY; unlock_container: ID`, `on_success` / `on_fail` (or `on_success_script` / `on_failure_script`), `portable: yes` (carried switch, e.g. a remote; flippable from the inventory, usable as `item:` gate) |
 | `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `on_start`, `on_end`, `helpers` (only `def`s and constants, e.g. the chapter's dialog handlers; callable from every script) |
 | `[Rule: ID] condition` | `guard`, `script`, `text`, `max` |
 | `[Script: ID] Name` | `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, …), `target`, `code` |
 | `[Sidequest: ID] Title` | `goal`, `goal_item`, `guard`, `xp` |
 | `[Award: KEY] Title` | `tier`, `requires`, `guard` |
+| `[Talent: ID] Name` (inside the Protagonist) | `target` (`none`/`npc`/`item`/`any`), `cost` (`mana 10`), `uses`, `gm` (what the GM reveals/narrates), `locked`, `unlock_*`, `on_use` (`talent` dict in scope). Non-combat; the player types `use <talent>` / `cast <talent> on <target>` |
 | `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item`, `area` (`splash 1` / `all`, protagonist only), `save` (`dex`), `spare_passive` |
 
-All `on_*` hooks take a script, and each has a matching `on_*_text` key for a fixed message. Scripts use only the sandboxed `tw` API: `tw.vars.get/set`, `tw.flags.get/set`, `tw.player.has_item/give_item/damage/heal`, `tw.npcs.get(ID)`, `tw.npcs.set_character(ID, text)`/`add_trait(ID, trait)`/`remove_trait(ID, trait)`/`set_goal(ID, text)` (changes how the GM plays the NPC for the rest of the game), `tw.npcs.say_directed(ID, direction)` (the GM words the NPC's line in the next narration), `tw.objects.get(ID)`, `tw.exits.unlock('A', 'B')`/`lock(...)`, `tw.story.narrate(...)` (or `narrate_raw(...)` for verbatim text), `tw.story.direct(...)` (soft hint the GM works into its next narration, e.g. "Let BRAM sing a sailor song"), `tw.game.win()`/`game_over()`, `tw.quests.complete(ID)`, `tw.awards.grant(KEY)`, `tw.dialog`. No imports, no dunder access.
+All `on_*` hooks take a script, and each has a matching `on_*_text` key for a fixed message. Scripts use only the sandboxed `tw` API: `tw.vars.get/set`, `tw.flags.get/set`, `tw.player.has_item/take_item/damage/heal` (`take_item(ID)` moves an existing world item into the inventory), `tw.objects.clone(ID)` / `destroy(ID)` / `hide(ID)` / `reveal(ID)` / `move_item(ID, target)` / `contents(holder)`, `tw.npcs.get(ID)`, `tw.npcs.hide(ID)` / `reveal(ID)` (take an NPC out of the story or bring it back), `tw.npcs.set_character(ID, text)`/`add_trait(ID, trait)`/`remove_trait(ID, trait)`/`set_goal(ID, text)` (changes how the GM plays the NPC for the rest of the game), `tw.npcs.say_directed(ID, direction)` (the GM words the NPC's line in the next narration), `tw.npcs.consume(ID, ITEM)` (the NPC uses a consumable it carries; its HP/Mana/Stamina effects apply to the NPC), `tw.objects.get(ID)`, `tw.exits.unlock('A', 'B')`/`lock(...)`, `tw.story.narrate(...)` (or `narrate_raw(...)` for verbatim text), `tw.story.direct(...)` (soft hint the GM works into its next narration, e.g. "Let BRAM sing a sailor song"), `tw.game.win()`/`game_over()`, `tw.quests.complete(ID)`, `tw.awards.grant(KEY)`, `tw.dialog`, `tw.llm.ask` / `tw.llm.ask_json`, `tw.json`. No imports, no dunder access.
 
 ### Sequences
 - Sequences are numbered 1..N in order of appearance. At most 15.
@@ -108,12 +110,18 @@ Leave descriptions, scene details, minor NPCs and stats as **hints or open**, so
 | **READABLE** objects | Notes, books, scrolls, signs. `text:` holds at most **500 characters**. This is where clues live. |
 | **SWITCH** objects | Levers, dials, lenses, valves: 2+ named states. Transitions can need a code, item or guard. Outcomes set story flags or unlock containers. To open an exit, guard it on the flag or call `tw.exits.unlock('A', 'B')` in the transition's script. |
 | **CONSTRUCTABLE** recipes | A recipe is a meta item that never appears in the game: `[Recipe: ID]` with `combine: A + B`, `results: X` (one or more regular items of any type, hidden automatically) and optional `keep: A` (tools that are not consumed) and `craft_guard`. Players craft deterministically on the in-game Combine workbench (exact ingredient set) or via chat (GM-judged). |
-| **Hidden** NPCs and objects | `hidden: yes` + `reveal:` (searching, an event, a script). Good for secret rooms and late reveals. |
-| **Combat** | d20 turn-based fights, NPC abilities, protagonist area abilities (`area: all` + `save: dex` for a fireball), `attack: on_sight`, NPCs that attack once a condition holds (`attack_when_holding`, `attack_after_scene`, `attack_guard`). |
+| **Hidden** NPCs and objects | `hidden: yes` + `reveal:` (searching, an event). `reveal: script` = only a script brings it in (the GM never discovers it). Without `reveal:` searching the scene reveals it. Good for secret rooms and late reveals. |
+| **Combat** | d20 turn-based fights, NPC abilities, protagonist area abilities (`area: all` + `save: dex` for a fireball), `attack: on_sight`, NPCs that attack once a condition holds (`attack_when_holding`, `attack_after_scene`, `attack_guard`), gangs that fight together (`group: bandits`; NPCs without a group stay bystanders, `assist: anyone` joins every fight in the scene). |
 | **Scripts** (Event Scripts setting ON) | Hooks on enter/leave scene, pickup, read, equip, unlock, defeat, sequence start/end, every turn, and **interaction** with any object or NPC (also fixed objects). They can set variables, move NPCs, lock or unlock exits, hand over items, damage, win or lose. |
 | **Sequence scripts** (scripts ON) | An indented `[Script]` under a chapter only runs while that chapter is active, e.g. "inspecting the bomb opens the wire dialog, but only in chapter 3" (`trigger: on_interact`, `target: BOMB`). |
 | **Soft rules** (scripts ON) | `[Rule: ID] <condition the GM judges>` + `script:` the engine runs, with optional `guard:` and `max:`. This is how social solutions get real effects. |
 | **Choice dialogs** (scripts ON) | A script shows up to 8 fixed answers (NPC conversation, riddle, confession, dilemma). Each answer runs deterministic code; answers can be hidden until a condition holds, and dialogs can chain. Describe them in prose (`Choice Dialog: ...`) unless you know the `tw.dialog` API. |
+| **Save before a decision** (scripts ON) | `tw.save("label")` creates a save state the player can return to (Chronicles Timeline). Use it right before irreversible choices; describe it in prose (`Save point: before ...`). |
+| **Dialogue trees** (scripts ON) | RPG-style NPC conversation (`tw.dialog.tree`): nodes with the NPC's line and up to 8 responses that lead to other nodes; responses can need a condition, disappear after one use, run a script or an action, and the end handler gets the visited path. Describe them in prose (`Dialogue Tree: ...`) with the topics and what each branch unlocks. |
+| **Offerings / storing items** (scripts ON) | The player can put inventory items into an unlocked CONTAINER; its `on_items_added` hook sees `added_item_ids` (altar that wants a specific relic, scale that needs the right weight, mailbox). The hook may reject an offering by moving the items back to the player. |
+| **Gifts / handing items to NPCs** (scripts ON) | The player can give inventory items to an NPC in the scene (context menu **Give** or `give <item> to <npc>`); the NPC's `on_receive_item` hook sees `received_item_ids` (return a lost heirloom, bribe a guard, deliver a letter). The hook may hand items back with `tw.npcs.give_to_player`; the GM then narrates the NPC's reaction. |
+| **Talents** | Non-combat protagonist powers (Mind Reading, Animal Whisperer, an absurd Gossip Attack) used with `use <talent> on <target>`. The `on_use` hook can set flags (`tw.flags.set`) and steer the GM (`tw.story.direct`), so a talent can be a real alternative solution to a puzzle. |
+| **Cloned items** (scripts ON) | `tw.objects.clone(ID)` copies a (hidden) template item with a new ID: dispensers, vending machines, refilling wells, a shop with unlimited stock. |
 | **Variables & flags** | Remember trust, lies told, evidence found, earlier choices, and use them later in guards. |
 | **Win / loss** | `[World] win`/`lose` plus optional exact `win_guard`/`lose_guard`; scripts can trigger either directly. |
 

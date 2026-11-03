@@ -33,6 +33,7 @@ from backend.core.prompts import (
     USER_BIO_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.core.security import encryption_util
+from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
 from backend.utils.path_security import (
@@ -345,8 +346,7 @@ async def generate_my_profile_image(
     safe_user_id = _sanitize_path_component(current_user.id)
     if not safe_user_id:
         raise HTTPException(status_code=400, detail="Invalid user identifier")
-    ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-    filename = f"{safe_user_id}_{uuid4().hex[:8]}.{ext}"
+    filename = asset_filename("avatar", t2i.get("image_format"))
 
     try:
         logger.info(

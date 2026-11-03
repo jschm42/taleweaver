@@ -34,6 +34,7 @@ const emit = defineEmits<{
   (e: 'open-create-npc'): void
   (e: 'open-special-attacks', npc: any): void
   (e: 'export-entity', kind: 'npc', id: string, label: string): void
+  (e: 'duplicate-entity', kind: 'npc', id: string): void
   (e: 'import-entity', kind: 'npc'): void
 }>()
 
@@ -146,7 +147,8 @@ function getSceneLabel(sceneId?: string | null): string {
               <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
               <button @click="emit('request-move-npc-to-scene', npc.id, npc.name, npc.current_scene_id || '')" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-sky-500 hover:text-white transition-all">Move to Scene…</button>
               <button @click="emit('open-text-edit', 'npc', npc.id, npc.name, npc.description, '', npc.hp, npc.stamina, npc.mana, npc.goal, npc.character, npc.is_killable)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
-              <button v-if="ruleEnforcementMode !== 'chat'" @click="emit('open-special-attacks', npc)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-rose-500 hover:text-white transition-all">Combat & Specials…</button>
+              <button v-if="ruleEnforcementMode !== 'chat'" @click="emit('open-special-attacks', npc)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-rose-500 hover:text-white transition-all">Combat Profile & Specials…</button>
+              <button @click="emit('duplicate-entity', 'npc', npc.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-indigo-500 hover:text-white transition-all" title="Create a copy with all settings, stats, attacks and scripts">Duplicate</button>
               <button @click="emit('export-entity', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-teal-500 hover:text-white transition-all">Export (.twe)</button>
             </div>
           </div>

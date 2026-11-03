@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -141,6 +142,23 @@ async def _normalize_session_ids(
     return session.template_id or adventure_id, session.id
 
 
+_URL_PATTERN = re.compile(r"https?://\S+")
+# Long unbroken letter/digit runs look like keys, tokens or request ids.
+_TOKEN_PATTERN = re.compile(r"\b[A-Za-z0-9_\-]{24,}\b")
+_MAX_REASON_CHARS = 240
+
+
+def _safe_provider_reason(exc: Exception) -> str:
+    """The provider's error text for the user, without URLs or token-like strings.
+
+    The full exception stays in the server log only.
+    """
+    reason = _TOKEN_PATTERN.sub("[redacted]", _URL_PATTERN.sub("[url]", str(exc))).strip()
+    if len(reason) > _MAX_REASON_CHARS:
+        reason = reason[: _MAX_REASON_CHARS - 1].rstrip() + "…"
+    return reason or "unknown provider error"
+
+
 def _rate_limit_http_exception(exc: TTSRateLimitError) -> HTTPException:
     retry_after = exc.retry_after_seconds
     if not retry_after:
@@ -276,7 +294,10 @@ async def generate_tts(
     except TTSRateLimitError as exc:
         raise _rate_limit_http_exception(exc) from exc
     except TTSProviderError as exc:
-        raise HTTPException(status_code=502, detail=f"TTS Provider error: {exc}") from exc
+        logger.warning("TTS generation failed (provider=%s): %s", config.provider, exc)
+        raise HTTPException(
+            status_code=502, detail=f"TTS Provider error: {_safe_provider_reason(exc)}"
+        ) from exc
 
     if not audio_url:
         raise HTTPException(status_code=500, detail="Failed to generate speech.")
@@ -321,9 +342,13 @@ async def test_tts_connection_v2(
             config.model,
             exc,
         )
+        # The provider's own reason (e.g. ElevenLabs "quota_exceeded") tells the admin what to fix.
         return {
             "status": "error",
-            "message": "TTS provider error. Please verify your TTS settings and API key.",
+            "message": (
+                f"TTS provider error: {_safe_provider_reason(exc)}. "
+                "Please verify your TTS settings and API key."
+            ),
         }
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}

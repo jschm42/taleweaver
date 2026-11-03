@@ -38,7 +38,7 @@ const isPaused = computed(() => audioService.isPaused.value)
       <button
         type="button"
         class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-200 hover:bg-white/10 transition-colors"
-        title="Skip to the next line"
+        title="Skip to the next line (Space)"
         @click="audioService.skip()"
       >
         <SkipForward class="h-3.5 w-3.5" />

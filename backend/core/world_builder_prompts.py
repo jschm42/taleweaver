@@ -29,17 +29,20 @@ of the allowlist below.
   it for pure flavour and a script for mechanics (damage, items, locks, flags).
 - Object hooks depend on the item type: on_pickup, on_drop and on_interact work for every
   item; on_equip/on_unequip only for WEAPON and WEARABLE; on_read only for READABLE;
-  unlock_expression and on_unlock_success/on_unlock_failure only for CONTAINER;
+  unlock_expression, on_unlock_success/on_unlock_failure and on_items_added (the player puts
+  inventory items in; `added_item_ids` is in scope) only for CONTAINER;
   craft_guard_expression and on_craft_* only for CONSTRUCTABLE recipes.
 - NPC hooks: on_defeat (the NPC is defeated), on_protagonist_enters_scene (the protagonist
-  enters the NPC's scene), on_interact (the protagonist talks to or interacts with it).
+  enters the NPC's scene), on_interact (the protagonist talks to or interacts with it),
+  on_receive_item (the protagonist gives it items; `received_item_ids` is in scope).
 - To give a NEW object or NPC hooks, create it first, then add a regular "object"/"npc"
   patch with the same id that sets the hook fields, in the same proposal.
 - Each entity in the context lists its existing hooks under "scripts". Reuse their
   `tw.vars` keys and helper functions instead of inventing parallel flags, and make sure
   every flag a guard reads is set by some script.
-- A `tw.dialog.choose` handler must be defined in the `helpers_script` of a scene or a
-  sequence; include that patch in the same proposal.
+- A `tw.dialog.choose` handler (and the `on_end` / `on_action` handlers of a
+  `tw.dialog.tree`, together with the tree dict) must be defined in the `helpers_script`
+  of a scene or a sequence; include that patch in the same proposal.
 - Only reference ids that exist in the context or are created in the same proposal.
 - Scripts and guards must never make the adventure unwinnable.
 
@@ -52,6 +55,8 @@ _SCRIPT_EXAMPLES = """SCRIPT PATCH EXAMPLES (field_updates)
   "The lid will not budge.", "on_unlock_success_script": "tw.player.give_item('SILVER_RING')"}
 - The lever sets that flag (any object): {"on_interact_script": "tw.vars.set('lever_pulled', True)\\ntw.story.narrate('Somewhere a latch clicks.')"}
 - Boss drops a key (NPC): {"on_defeat_script": "tw.player.give_item('IRON_KEY')"}
+- Offering altar that opens a gate (CONTAINER object): {"on_items_added_script": "if 'SILVER_MOON' in added_item_ids:\\n    tw.objects.destroy('SILVER_MOON')\\n    tw.exits.unlock('SHRINE', 'MOON_GATE')"}
+- Potion dispenser (any object): {"on_interact_script": "p = tw.objects.clone('HEALING_POTION')\\np.reveal()\\np.give_to_player()"}
 
 """
 

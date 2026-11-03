@@ -15,6 +15,7 @@ from backend.engine.audio.voice_casting import (
     cast_npc_voices,
     resolve_voice_setup,
 )
+from backend.engine.combat.npc_attack import npc_stat_columns
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
 from backend.engine.manifest_apply.visuals import (
@@ -30,18 +31,24 @@ from backend.models.world_entity import WorldEntity
 # NPC settings that may appear at the top level (generated manifests) or inside
 # `metadata_json` (exported manifests). The top-level value wins.
 _METADATA_FIELDS = (
+    "main_attack",
+    # Deprecated: NPC equipment items. Kept as fallback; use `main_attack` and stats instead.
     "equipped_weapon_id",
     "equipped_armor_id",
     "special_actions",
     "attack_mode",
     "attack_trigger",
     "special_chance",
+    "combat_group",
+    "assist_mode",
     "on_defeat_script",
     "on_defeat_text",
     "on_protagonist_enters_scene_script",
     "on_protagonist_enters_scene_text",
     "on_interact_script",
     "on_interact_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 )
 _METADATA_DEFAULTS: dict[str, Any] = {"special_actions": [], "attack_mode": "PASSIVE"}
 
@@ -202,6 +209,7 @@ def _npc_entity(
         is_attackable=npc.get("is_attackable", True),
         is_killable=npc.get("is_killable", True),
         metadata_json=npc_metadata(npc),
+        **npc_stat_columns(npc),
     )
 
 

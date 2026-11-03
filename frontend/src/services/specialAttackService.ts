@@ -1,5 +1,5 @@
 import { API_BASE, authHeaders } from '@/services/http'
-import type { SpecialAttack } from '@/types'
+import type { NpcMainAttack, SpecialAttack, Talent } from '@/types'
 
 export type SpecialAttackOwner = 'protagonist' | 'npc'
 
@@ -24,9 +24,40 @@ export interface NpcCombatSettings {
   attack_mode: 'PASSIVE' | 'ATTACK_ON_SIGHT'
   attack_trigger: NpcAttackTrigger | null
   special_chance: number
+  /** NPCs sharing a group fight together; null for none. */
+  combat_group?: string | null
+  /** When the NPC joins a fight it was not attacked in; null = automatic. */
+  assist_mode?: NpcAssistMode | null
+}
+
+export type NpcAssistMode = 'GROUP' | 'ANYONE' | 'NEVER'
+
+export interface NpcCombatProfile {
+  strength: number
+  dexterity: number
+  intelligence: number
+  wisdom: number
+  charisma: number
+  armor_class: number
+  main_attack: NpcMainAttack | null
 }
 
 export const specialAttackService = {
+  /** Stores an NPC's attributes, armor class and configurable main attack. */
+  async saveNpcProfile(adventureId: string, npcId: string, profile: NpcCombatProfile): Promise<NpcCombatProfile> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/npc-profile`, {
+      method: 'PUT',
+      headers: authHeaders(true),
+      body: JSON.stringify({ npc_id: npcId, ...profile }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(formatError(data?.detail))
+    }
+    return data as NpcCombatProfile
+  },
+
+
   async saveNpcCombat(adventureId: string, npcId: string, settings: NpcCombatSettings): Promise<NpcCombatSettings> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/npc-combat`, {
       method: 'PUT',
@@ -38,6 +69,20 @@ export const specialAttackService = {
       throw new Error(formatError(data?.detail))
     }
     return data as NpcCombatSettings
+  },
+
+  /** Replaces the protagonist's non-combat talents. */
+  async saveTalents(adventureId: string, talents: Talent[]): Promise<Talent[]> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/talents`, {
+      method: 'PUT',
+      headers: authHeaders(true),
+      body: JSON.stringify({ talents }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(formatError(data?.detail))
+    }
+    return (data.talents ?? []) as Talent[]
   },
 
   async save(

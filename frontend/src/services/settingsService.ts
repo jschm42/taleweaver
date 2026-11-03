@@ -96,7 +96,7 @@ class SettingsService {
     simple_min_long_edge: null as number | null,
     advanced_min_long_edge: null as number | null,
     seed: null as number | null,
-    image_format: 'jpeg',
+    image_format: 'webp',
     image_quality: 85,
     negative_prompt: '',
     scene_model_quality: 'advanced' as string,

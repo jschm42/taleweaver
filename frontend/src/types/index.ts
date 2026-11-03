@@ -49,6 +49,7 @@ export interface CharacterSheet {
   time_config?: Record<string, any> | null
   time_per_turn?: number
   max_time_per_turn?: number | null
+  gm_time_control?: boolean
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
@@ -149,6 +150,40 @@ export interface SpecialAttack {
   on_failure_text?: string | null
 }
 
+/** An NPC's configurable standard attack (`metadata_json.main_attack`); needs no item. */
+export interface NpcMainAttack {
+  name: string
+  category: 'MELEE' | 'RANGED' | 'MAGIC'
+  damage_dice: string
+  hit_stat: SuccessStat
+  cost_type: 'mana' | 'stamina'
+  cost: number
+  effects: SpecialEffect[]
+}
+
+export type TalentTargetType = 'NONE' | 'NPC' | 'ITEM' | 'ANY'
+
+/** A protagonist's non-combat talent (e.g. Mind Reading), used with "use <name>" or the Talents menu. */
+export interface Talent {
+  id: string
+  name: string
+  description: string
+  target_type?: TalentTargetType | null
+  cost_type?: 'mana' | 'stamina' | null
+  cost?: number | null
+  /** Uses per adventure; empty = unlimited. */
+  max_uses?: number | null
+  gm_hint?: string | null
+  on_use_script?: string | null
+  on_use_text?: string | null
+  is_locked?: boolean
+  unlock_required_item_id?: string | null
+  unlock_required_scene_id?: string | null
+  unlock_required_defeated_npc_id?: string | null
+  unlock_guard_expression?: string | null
+  unlock_text?: string | null
+}
+
 /** Special attack as normalized by the combat engine (always has cost, category and effects). */
 export interface NormalizedSpecialAttack extends SpecialAttack {
   category: SpecialCategory
@@ -238,6 +273,10 @@ export interface CombatEnemyState extends CombatantState {
   armor_mod?: number
   dexterity_mod?: number
   inventory?: InventoryItem[]
+  /** Combat group tag: NPCs sharing it join each other's fights. */
+  combat_group?: string | null
+  /** When the NPC joins a fight it was not attacked in. */
+  assist_mode?: 'GROUP' | 'ANYONE' | 'NEVER'
   engaged?: boolean
   defeated?: boolean
   fled?: boolean
@@ -356,7 +395,13 @@ export interface SessionCheckpoint {
   id: string
   session_id: string
   message_index: number
-  trigger_reason: 'SCENE_CHANGE' | 'QUEST_UPDATE' | 'AWARD_GRANTED'
+  trigger_reason:
+    | 'SCENE_CHANGE'
+    | 'SEQUENCE_CHANGE'
+    | 'QUEST_UPDATE'
+    | 'AWARD_GRANTED'
+    | 'MANUAL_SAVE'
+    | 'SCRIPT_SAVE'
   title: string
   created_at: string
 }
@@ -395,8 +440,12 @@ export interface AdventureTemplateSummary {
   current_scene_name?: string | null
   cover_source_adventure_id?: string | null
   cover_source_adventure_name?: string | null
+  /** Stable adventure id (manifest origin_id); matches the Adventure Library entry id. */
+  origin_id?: string | null
   has_update?: boolean
   available_version?: string | null
+  /** Where the update comes from: a local /adventures file or the Adventure Library. */
+  update_source?: 'local' | 'library' | null
   has_sequences?: boolean
   is_legacy_format?: boolean
   /** Manifest format below 1.3.1: still playable, shown as deprecated. */
@@ -441,6 +490,7 @@ export interface CreateAdventurePayload {
   time_per_turn?: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
+  gm_time_control?: boolean
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean

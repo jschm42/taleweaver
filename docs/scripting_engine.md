@@ -20,13 +20,16 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.switches](#twswitches)
    - [tw.vars](#twvars-persistent-state)
    - [tw.story](#twstory)
+   - [tw.save (Save States)](#twsave-save-states)
    - [tw.memories](#twmemories)
    - [tw.game](#twgame)
+   - [tw.time (In-Game Clock)](#twtime-in-game-clock)
    - [tw.quests](#twquests)
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
-   - [tw.llm (Ask the LLM)](#twllm-ask-the-llm)
+   - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
+   - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -40,6 +43,10 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [Example 11: Bomb Defusal Choice Dialog](#example-11-bomb-defusal-choice-dialog)
    - [Example 12: Sphinx Riddle Conversation (Soft Rule + Dialog)](#example-12-sphinx-riddle-conversation-soft-rule--dialog)
    - [Example 13: The Player's Words Change an NPC's Mood](#example-13-the-players-words-change-an-npcs-mood)
+   - [Example 14: Potion Dispenser (Cloning a Hidden Item)](#example-14-potion-dispenser-cloning-a-hidden-item)
+   - [Example 15: Offering Altar (Player Puts Items into a Container)](#example-15-offering-altar-player-puts-items-into-a-container)
+   - [Example 16: Blacksmith Conversation (Dialogue Tree)](#example-16-blacksmith-conversation-dialogue-tree)
+   - [Example 18: Ticking Bomb and Nightfall (Time Events)](#example-18-ticking-bomb-and-nightfall-time-events)
 7. [Authoring in the World-Editor](#authoring-in-the-world-editor)
 
 ---
@@ -73,10 +80,14 @@ While TaleWeaver's generative LLM master creates rich, adaptive prose and rolepl
                      scene or sequence changed this message?
                                        |  yes
                                        v
-               [on_turn_end] -> time + status ticks -> [on_turn_start]
+               [on_turn_end] -> status ticks -> [on_turn_start]
                                        |
                                        v
                       LLM narration --> [on_narration_done scripts]
+                                       |
+                                       v
+               clock tick (minutes per tick) --> [time events:
+                     on_time_reached scripts, tw.time timers]
                                        |
                                        v
                            +-----------+------------+
@@ -95,11 +106,11 @@ To ensure player safety and server reliability:
 - **Pure AST Interpretation**: Scripts are evaluated node-by-node against a strict AST whitelist without calling unrestricted `eval()`, `exec()`, or invoking CPython bytecode.
 - **Custom Functions & Lambdas**: Scripts can declare custom helper functions (`def func_name(arg1, arg2=default): ...`) and lambda expressions (`lambda x: ...`). Return values are safely handled via internal signal exceptions.
 - **No System Calls or Imports**: Statements like `import`, `from ... import`, `open()`, `eval()`, or `exec()` are rejected at parse time.
-- **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden.
+- **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden. Variables starting with an underscore cannot be assigned either; the only exception is the bare throwaway name `_` (e.g. `for item_id, _ in ITEMS:` or `first, _ = pair`).
 - **No Introspection Escapes**: `str.format`, `format_map` and `mro` are blocked (format strings could otherwise walk `{0.__globals__}`), as are frame/generator/code attributes (`f_*`, `gi_*`, `cr_*`, `ag_*`, `tb_*`, `co_*`). Use f-strings or `+` for text.
-- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` does not count against the 2 seconds.
+- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` does not count against the 2 seconds. Loading the definitions of `init_script` and all helper blocks before a run has its own budget of the same size, so large helper blocks (e.g. dialogue-tree constants) do not eat into the script's steps.
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
-- **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `round`, `str`, `sum`, `tuple`.
+- **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `print`, `range`, `reversed`, `round`, `set`, `sorted`, `str`, `sum`, `tuple`, `zip`. Set literals (`{1, 2, 3}`) and set comprehensions are supported.
 - **Inline conditionals**: `a if condition else b` is supported.
 - **Comprehensions**: list, set and dict comprehensions and generator expressions are supported, including filters and nested `for` clauses (`[n.id for n in tw.scene.npcs if not n.is_hidden]`, `any(n.id == "GUARD" for n in tw.scene.npcs)`). They are evaluated eagerly: every element counts against the step budget and the result against the size limit, and a generator expression yields a list (so `any()` does not stop at the first match). Loop variables stay inside the comprehension. Async comprehensions are not supported.
 - **Not supported**: `while` loops, `try`/`except`, `with` and `class`.
@@ -115,12 +126,13 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_init` | When a new game session starts, immediately after initial world manifest and entity state setup. | Global (`*` or empty). |
 | `on_turn_start` | When a new in-game turn begins, i.e. right after the player's scene or the active sequence changed (after `on_turn_end` of the previous turn, before narration). | Global (`*` or empty). |
 | `on_enter_scene` | When the player enters a new scene. | Specific `scene_id` or empty for any scene. |
-| `on_interact` | When the player examines, attacks, talks to, or manipulates an entity: the GM reported a state change on it, or the player's message names an entity in the current scene or inventory (all context-menu actions such as *Inspect*, *Use*, *Push* do). | Specific `entity_id` (NPC or object) or empty for all. |
+| `on_interact` | When the player examines, attacks, talks to, or manipulates an entity: the GM reported a state change on it, or the player's message names an entity in the current scene or inventory (all context-menu actions such as *Inspect*, *Use*, *Push* do). Naming means the full name, the ID, or a single word of the name (at least 4 letters) that no other entity's name in the scene or inventory contains: "talk to Grimsby" reaches *Grimsby the Gargoyle*, while "open the casket" reaches none of several caskets. It does not fire during the opening narration of a new session or the arrival narration after walking through an exit: those only describe the scene. | Specific `entity_id` (NPC or object) or empty for all. |
 | `on_logic_pass_done` | After game mechanics and state mutations finish, before narration is generated. | Global (`*` or empty). |
 | `on_narration_done` | After narration generation completes, before final turn persistence. | Global (`*` or empty). |
 | `on_turn_end` | When the current in-game turn ends, i.e. when the player's scene or the active sequence changed (before `on_turn_start` of the next turn). | Global (`*` or empty). |
+| `on_time_reached` | Once, when the in-game clock reaches the target time (elapsed time since the adventure started). It fires again only after the time was set back below the target. See [tw.time](#twtime-in-game-clock). | **Required**: the elapsed time, e.g. `90`, `2h 30m`, `1d 4h`, `1:30`. |
 
-> **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Base time (`time_per_turn`), status-effect ticks, and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
+> **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Status-effect ticks and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. The **clock** is different: it advances once per narrated player message (see [tw.time](#twtime-in-game-clock)). Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
 
 ### Inline Entity Triggers
 
@@ -137,12 +149,14 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **Container Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
+| | `on_items_added_script`, `..._text` | Executes once after the player put one or more items into this container (container panel → **Put In**, or `/container_put_items`). `added_items` (list of dicts) and `added_item_ids` (list of IDs) are in scope. |
 | **Constructable Recipes** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
 | | `on_craft_success_script`, `..._text` | Executes when this recipe is successfully crafted (its `result_item_ids` are revealed). The script runs with the recipe as its entity. The text replaces the default craft message. |
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
 | | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
+| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction. |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
 | | `helpers_script` *(definitions)* | Not a trigger: functions and constants every script can call. See [Scene Helpers](#scene-helpers-helpers_script). |
@@ -155,10 +169,13 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
 | | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
 | **NPC combat** *(metadata)* | `attack_mode: ATTACK_ON_SIGHT` | The NPC starts turn-based combat as soon as the protagonist enters its scene. |
+| | `combat_group`, `assist_mode` (`GROUP` / `ANYONE` / `NEVER`) | Not a trigger: decide which NPCs in the scene join a fight they were not attacked in. NPCs sharing a `combat_group` fight together; NPCs without one are bystanders by default. See [Combat groups](world-builder-syntax.md#npc-id-name). |
 | | `attack_trigger` *(Hard Rules + Guard)* | `required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`: the NPC attacks once when all are met while the protagonist shares its scene. |
 | **Special attacks** (protagonist & NPC `special_actions` entries) | `on_success_script`, `..._text` | Executes after a successful d20 success roll. A `special` dict (`id`, `name`, `caster`, `target`, `success`, `crit`, `fumble`, `roll`, `dc`) is in scope. |
 | | `on_failure_script`, `..._text` | Executes when the success roll fails. |
 | | `unlock_required_item_id`, `unlock_required_scene_id`, `unlock_required_defeated_npc_id`, `unlock_guard_expression` *(Hard Rules + Guard, protagonist only)* | A locked special unlocks after the turn in which all configured conditions are met; a system message (plus optional `unlock_text`) announces it. |
+| **Talents** (protagonist `talents` entries) | `on_use_script`, `on_use_text` | Executes on every successful use of the talent (menu, right-click menu, `/talent` or typed `use <talent>` / `cast <talent> on <target>`), after the engine paid the cost and before the Game Master narrates the effect. A `talent` dict (`id`, `name`, `target_id`, `target_name`, `target_type` (`NPC`/`ITEM`/`None`), `uses`, `uses_left`) is in scope. Example: `if talent['target_id'] == 'CLERK': tw.flags.set('CLERK_SECRET_KNOWN')`. |
+| | `unlock_required_item_id`, `unlock_required_scene_id`, `unlock_required_defeated_npc_id`, `unlock_guard_expression` *(Hard Rules + Guard)* | A locked talent unlocks after the turn in which all configured conditions are met; a system message (plus optional `unlock_text`) announces it. |
 | **Protagonist** | `on_hp_change_script`, `..._text` | Executes when protagonist HP changes (e.g. taking damage or healing). |
 | | `on_status_change_script`, `..._text` | Executes when protagonist status effects or conditions change. |
 | **Sequences** | `on_start_sequence_script`, `..._text` | Executes immediately when a sequence chapter becomes active. |
@@ -212,6 +229,8 @@ Deterministic guards (`unlock_expression` on containers and exits, `craft_guard_
 - `tw.vars.get('countdown') <= 0 or tw.vars.get('cover_blown') == True`
 
 If the expression evaluates to truthy, the guard passes; otherwise, the action or completion is blocked deterministically.
+
+**When progress guards are checked.** The hard rules and `guard_expression` of sidequests, awards and sequences (and the adventure's win/loss guards) are checked when the logic pass is applied, and **again after the scripts that run later in the same message**: `on_interact` triggers (top-level, sequence and inline) and `on_logic_pass_done` scripts. A dialog choice (`tw.dialog.choose` handler) runs the same check. So a console script that sets `tw.vars.set('teleport_attempt', 3)` completes a sidequest guarded by `tw.vars.get('teleport_attempt', 0) >= 3` in the same message, not one message later.
 
 ### Priority Execution
 Scripts carry an integer `priority` (default: `100`). Scripts with **lower** priority numbers execute before scripts with higher numbers.
@@ -360,10 +379,18 @@ The global `tw` object is injected into every script execution environment.
 Inspects and modifies the avatar's state:
 - `tw.player.hp` *(int)*: Current avatar health points.
 - `tw.player.name` *(str)*: Protagonist's name.
-- `tw.player.inventory` *(list[dict])*: List of items currently held by the avatar.
+- `tw.player.inventory` *(list[dict])*: The items the avatar carries right now (`id`, `name`, ...), including changes made earlier in the same script.
+- `tw.player.item_ids` *(list[str])*: IDs of the carried items.
 - `tw.player.heal(amount: int)`: Restores `amount` HP (up to avatar maximum).
 - `tw.player.damage(amount: int)`: Inflicts `amount` direct damage to the avatar.
-- `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory.
+- `tw.player.xp` *(int)*: The protagonist's experience points, including changes made earlier in the same script.
+- `tw.player.add_xp(amount: int)` (also `modify_xp(delta)`): Gives the protagonist `amount` XP; a negative amount takes XP away (never below 0). The player sees `You gain 25 XP (Script).`
+- `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory (case-insensitive).
+- `tw.player.take_item(item_id: str) -> bool`: Moves an existing world item into the inventory, wherever it is (scene, container, NPC inventory). The entry keeps the item's world data (name, description, image, effects). Returns `False` for an unknown ID.
+- `tw.player.drop_item(item_id: str, scene_id: str = None) -> bool`: Drops a carried item into a scene (default: the protagonist's scene).
+- `tw.player.transfer_item(item_id: str, target_id: str) -> bool`: Hands a carried item to an NPC or puts it into a container.
+- `tw.player.remove_item(item_id: str)`: Takes an item out of the inventory without placing it anywhere.
+- `tw.player.give_item(item_id: str, name: str = None, description: str = None)`: Adds a *new* inventory entry that is not a world item (no image, no effects). To hand over an item that exists in the world, use `take_item` instead.
 - To move the protagonist to another scene, use `tw.scene.teleport(scene_id)` (see [`tw.scene`](#twscene)).
 
 ### `tw.scene`
@@ -404,20 +431,25 @@ Queries and manipulates passage exits:
 
 ### `tw.npcs`
 Inspects, dialogues with, moves, and manages Non-Player Characters:
-- `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. Also available as `tw.npcs.get(npc_id).say(text)`.
+- `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. The GM's narration of the same turn treats the line as already shown to the player: it continues from it and does not repeat or paraphrase it, so a clue spoken here is said once. Also available as `tw.npcs.get(npc_id).say(text)`.
 - `tw.npcs.say_directed(npc_id: str, direction: str)`: Lets the NPC speak in the next GM narration, worded by the GM instead of a fixed text: the direction says *what* the NPC says or does with their voice (`tw.npcs.say_directed("BRAM", "sings Yellow Submarine")`), and the GM writes the actual line in character and in the scene's language. It works like [`tw.story.direct`](#twstory): a soft direction, used once by the next narration (max. 500 characters, at most the 5 newest directions are kept). The GM is asked to write the line as a separate `Name: "..."` dialogue line, so it shows up as the NPC's own speech bubble (also in the narration of a choice dialog with `narrate=True`); as with every direction, the GM may still word it freely. Also available as `tw.npcs.get(npc_id).say_directed(direction)`.
 - `tw.npcs.move(npc_id: str, target_scene_id: str, spatial_position: str = "")`: Moves an NPC to another scene. Accepts `"current"`, `"here"`, or `"player"` to move them into the protagonist's current location.
 - `tw.npcs.move_to_player(npc_id: str, spatial_position: str = "")`: Convenience shortcut to move an NPC directly into the player's current scene.
 - `tw.npcs.drop_item(npc_id: str, item_id: str, scene_id: str = None, spatial_position: str = "")`: Transfers an item from an NPC's inventory into a scene. If `scene_id` is omitted, it drops into the NPC's current scene; passing `"current"` drops it into the player's scene.
 - `tw.npcs.give_item(npc_id: str, item_id: str)`: Transfers an item from a scene into an NPC's inventory and conceals it from the scene view.
 - `tw.npcs.give_to_player(npc_id: str, item_id: str) -> dict | None`: Hands an item the NPC carries directly to the protagonist. The item leaves the NPC's inventory and keeps its world entity data (name, description, image, stats). Returns the new inventory entry, or `None` (and changes nothing) if the NPC doesn't hold the item, so scripts can't conjure items.
-- `tw.npcs.kill(npc_id: str, drop_inventory: bool = True)`: Kills the NPC, setting HP to 0 and marking `is_defeated: True`. When `drop_inventory=True` (default), all items held by the NPC are dropped into their scene.
+- `tw.npcs.consume(npc_id: str, item_id: str) -> dict | None`: Lets the NPC use a consumable it carries (`item_type` `CONSUMABLE`). The item is destroyed and its HP, Mana and Stamina effects apply to the NPC, read the same way as for the protagonist's `/consume` (fields such as `hp_change`, `mana_change`, `stamina_change`, else amounts named in the description). Values stay between 0 and the NPC's maximum; HP reaching 0 defeats the NPC. Returns the applied effects, e.g. `{"hp": 25, "stamina": -4}`, or `None` (and changes nothing) if the NPC does not carry the item or it is not a consumable. To let an NPC drink a potion from the scene or from the player, move it first: `tw.npcs.get('BRAM').put_item('POTION')`. The GM sees the new values from the next narration on; describe the moment yourself if needed (e.g. with `tw.npcs.say_directed`).
+- `tw.npcs.kill(npc_id: str, drop_inventory: bool = True)`: Kills the NPC, setting HP to 0 and marking `is_defeated: True`. When `drop_inventory=True` (default), all items held by the NPC are dropped into their scene. An NPC whose **NPC can be damaged** is off is not killed; the chat shows a script error that the kill was ignored.
 - `tw.npcs.attack(npc_id: str)`: Makes an NPC attack the protagonist. Turn-based combat starts right after the current turn if the NPC is in the protagonist's scene, alive and attackable (ignored while a fight is already running). Example (`on_turn_end`): `if tw.player.has_item('IDOL') and not tw.vars.get('alarm'): tw.vars.set('alarm', True); tw.npcs.attack('TEMPLE_GUARD')`.
+- `tw.npcs.hide(npc_id: str) -> bool` / `tw.npcs.reveal(npc_id: str) -> bool`: Takes an NPC out of the story or brings it back. A hidden NPC disappears from its scene: it is not listed, cannot be talked to, attacked, given items or targeted by talents, and the Game Master no longer sees it as present. Unless its reveal rule is `script`, the Game Master still knows it as a *hidden* NPC and may reveal it again when the player searches the scene (or by its reveal condition); set the reveal rule to `script` (`reveal: script` in a blueprint) when only scripts may bring it back. `reveal` brings it back where it stands; call `tw.npcs.move(npc_id, scene_id)` first to make it reappear somewhere else. Returns `False` (and changes nothing) for an unknown NPC ID. Also available as `tw.npcs.get(npc_id).hide()` / `.reveal()`; `.is_hidden` reads the current state.
 - `tw.npcs.set_character(npc_id: str, text: str)`: Replaces the NPC's personality (the `character` field). The GM reads it on every turn, so the NPC talks and acts differently from then on (friendlier, aggressive, funny, frightened, …). An empty text clears it. Whitespace is collapsed to a single line and the text is cut at 1,000 characters.
 - `tw.npcs.set_goal(npc_id: str, text: str)`: Replaces what the NPC wants (the `goal` field), with the same rules.
 - `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
+- `tw.npcs.clone(npc_id: str, scene_id: str = None, hidden: bool = None) -> NPCProxy | None`: Creates a copy of the NPC with a new ID (`<ID>_1`, `<ID>_2`, ...; cloning a clone counts on from the original). The copy has the original's name, description, portrait, combat profile, combat group, special attacks and scripts, but starts fresh: full HP (`max_hp`), not defeated, empty inventory (so loot is not duplicated). Without `scene_id` it stands in the original's scene; `"current"` puts it in the protagonist's scene. It keeps the original's hidden flag unless `hidden` is given, so a hidden template NPC can spawn visible copies: `for i in range(10): tw.npcs.clone('ARENA_RAT', hidden=False)`. Clones of the same template share its `combat_group`, so attacking one pulls the whole pack into the fight. At most 20 clones (NPCs and items together) per script run; returns `None` for an unknown ID or past the limit. The copy exists in the current game only and is usable right away in the same script (`.get_attribute('cloned_from')` names the original). A fight holds at most 20 NPCs besides the protagonist; allies of the attacked NPC get the slots first.
+- `tw.npcs.set_combat_group(npc_id: str, group: str)`: Moves the NPC into another combat group (any tag, normalized to an upper-case ID). NPCs in the same group fight together: when one of them fights, the others in its scene join. An empty text removes the NPC from every group, which makes it a bystander unless its assist mode says otherwise. Example (a bribed guard stops helping his squad): `tw.npcs.set_combat_group('GATE_GUARD', '')`.
+- `tw.npcs.set_assist_mode(npc_id: str, mode: str)`: Sets when the NPC joins a fight it was not attacked in: `'GROUP'` (a member of its group fights), `'ANYONE'` (any fight in its scene) or `'NEVER'` (bystander; it only fights when attacked directly). An empty text restores the automatic mode (`GROUP` with a group, `NEVER` without). Other values raise an error. Both changes apply to the current game only and take effect when the next fight starts.
 - `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. The ID is matched exactly, then case-insensitively, then against the NPC's name. An unknown ID does not raise: it returns a detached proxy whose changes have no effect, and the server log shows `[Script Warning] Unknown entity ID '...'`, so check the log when a change seems to be ignored. Available properties and methods on `NPCProxy`:
-  - `.name`, `.hp`, `.is_defeated`, `.current_scene_id`, `.inventory`
+  - `.name`, `.hp`, `.mana`, `.stamina`, `.is_defeated`, `.current_scene_id`, `.inventory`
   - `.say(text: str)` / `.say_directed(direction: str)`
   - `.move_to(target_scene_id: str, spatial_position: str = "")` (supports `"current"`)
   - `.move_to_player(spatial_position: str = "")`
@@ -425,24 +457,60 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.give_item(item_id: str)`
   - `.give_to_player(item_id: str) -> dict | None`
   - `.has_item(item_id: str) -> bool`
+  - `.items` *(list[ObjectProxy])* / `.item_ids` *(list[str])*: The items the NPC carries.
+  - `.put_item(item_id: str) -> bool`: Moves a world item from anywhere (scene, container, the protagonist) into the NPC's inventory.
+  - `.take_item(item_id: str, to: str = "player") -> bool`: Moves a carried item out, to `"player"`, `"current"` (the protagonist's scene), a scene ID, another NPC or a container.
   - `.kill(drop_inventory: bool = True)` / `.die()`
   - `.attack()` (see `tw.npcs.attack`)
-  - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)`
+  - `.hide()` / `.reveal()` / `.is_hidden` (see `tw.npcs.hide`)
+  - `.modify_hp(delta: int)` / `.damage(amount: int)` / `.heal(amount: int)` (healing stops at the NPC's maximum HP). Damage that brings HP to 0 defeats the NPC. When **NPC can be damaged** is off, every HP loss is blocked (also when assigning `.hp` a lower value); healing still works.
+  - `.is_killable` *(bool)*: `False` when **NPC can be damaged** is off in the editor (or the game switched it off). The field keeps its historical name `is_killable`.
+  - `.consume(item_id: str) -> dict | None` (see `tw.npcs.consume`)
   - `.character`, `.goal` *(read/write)*: assigning (`npc.character = "Gruff, impatient"`) is the same as calling `.set_character()` / `.set_goal()`
   - `.set_character(text)`, `.set_goal(text)`, `.add_trait(trait)`, `.remove_trait(trait)`, `.has_trait(trait) -> bool`
+  - `.clone(scene_id=None, hidden=None) -> NPCProxy | None` (see `tw.npcs.clone`)
+  - `.combat_group` *(str, `""` without a group)*, `.assist_mode` *(effective mode: `GROUP`, `ANYONE` or `NEVER`)*, `.set_combat_group(group)`, `.set_assist_mode(mode)` (see `tw.npcs.set_combat_group`)
 
   Persona changes apply to the current game only: they are stored on the session's copy of the NPC, and the adventure template keeps its original text. To restore the original later, store it first, e.g. `tw.vars.set('brom_bio', tw.npcs.get('BROM').character)`. A persona change shapes the GM's narration and dialogue from the next turn on; it does not start a fight on its own (use `.attack()` for that). The NPC cards in the in-game Debug dialog show the current character and goal, so you can check that a change was applied.
 
 ### `tw.objects` (or `tw.items`)
-Manages world objects and inventory items:
-- `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")`: Moves an object/item into a scene. Accepts `"current"` for protagonist's scene.
-- `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Transfers an item into an NPC's inventory.
-- `tw.objects.add_to_scene(item_id: str, scene_id: str)`: Spawns or moves an item into a scene.
-- `tw.objects.add_to_player(item_id: str)`: Directly places an item into the avatar's inventory.
-- `tw.objects.remove_from_player(item_id: str)`: Removes an item from the player's inventory.
-- `tw.objects.hide(item_id: str)`: Hides an object in the scene until uncovered.
-- `tw.objects.reveal(item_id: str)`: Reveals a previously hidden object.
-- `tw.objects.get(item_id: str) -> ObjectProxy`: Returns an `ObjectProxy` with `.move_to_scene(scene_id)` and `.give_to_npc(npc_id)`. For switch items, `ObjectProxy` also exposes `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+Manages world objects and inventory items. Every world item is held by exactly **one** place: the protagonist's inventory, an NPC's inventory, a container (its contents) or a scene. A move always takes the item away from its current holder first, so items never exist twice and never vanish. Item IDs are matched case-insensitively.
+
+**Moving items**
+- `tw.objects.move_item(item_id: str, target: str) -> bool`: Moves an item to `"player"`, an NPC ID, a container ID, `"current"`/`"here"` (the protagonist's scene) or a scene ID.
+- `tw.objects.add_to_player(item_id: str) -> bool`: Same as `tw.player.take_item(item_id)`.
+- `tw.objects.remove_from_player(item_id: str) -> bool`: Same as `tw.player.remove_item(item_id)`; `False` if the protagonist does not carry it.
+- `tw.objects.add_to_scene(item_id: str, scene_id: str = None) -> bool`: Moves an item into a scene (default: the protagonist's scene).
+- `tw.objects.put_in_container(item_id: str, container_id: str) -> bool`: Moves an item into a container. Only containers that stand in a scene accept items (not one the protagonist carries), and a container never goes into itself.
+- `tw.objects.take_from_container(container_id: str, item_id: str, to: str = "player") -> bool`: Moves an item out of a container; `False` if the container does not hold it. `to` accepts the same targets as `move_item`.
+- `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")` and `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Older shortcuts, kept for existing adventures.
+
+**Querying items**
+- `tw.objects.contents(holder_id: str) -> list[ObjectProxy]`: The items held by `"player"`, an NPC or a container.
+- `tw.objects.location(item_id: str) -> dict`: Where an item is: `{"type": "player"|"npc"|"container"|"scene"|"destroyed"|"unknown", "id": "<holder or scene ID>"}`.
+
+**Creating, destroying and hiding items**
+- `tw.objects.clone(item_id: str, scene_id: str = None, hidden: bool = None) -> ObjectProxy | None`: Creates a copy of the item with a new ID (`<ID>_1`, `<ID>_2`, ...; cloning a clone counts on from the original). The copy has the original's name, description, image, type, effects and scripts. Without `scene_id` it lies where the original lies when that is a scene, otherwise in the protagonist's scene; `"current"` puts it in the protagonist's scene. It keeps the original's hidden flag unless `hidden` is given. A cloned container starts empty. At most 20 clones per script run; returns `None` for an unknown ID. The copy is a new entity of the current game only (the adventure template is not changed) and is usable right away in the same script.
+- `tw.objects.destroy(item_id: str) -> bool`: Removes the item from the game for good: it leaves its holder and is moved to the internal scene `__DESTROYED__`.
+- `tw.objects.hide(item_id: str)` / `tw.objects.reveal(item_id: str)`: Hides an item until revealed again, or reveals it. A hidden item can also be discovered by searching or by its reveal condition, unless its reveal rule is `script`.
+
+**`ObjectProxy`** (`tw.objects.get(item_id)`):
+- `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.location`
+- `.move_to(target)`, `.give_to_player()`, `.put_into(container_id)`, `.move_to_scene(scene_id)`, `.give_to_npc(npc_id)`
+- For containers: `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
+- For switch items: `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+
+```python
+# Potion dispenser: copy a hidden template potion and hand the copy over
+potion = tw.objects.get('HEALING_POTION').clone()
+if potion:
+    potion.reveal()
+    potion.move_to('player')
+
+# Which coins lie in the offering bowl? Move them to the priest.
+for coin in tw.objects.get('OFFERING_BOWL').items:
+    tw.objects.take_from_container('OFFERING_BOWL', coin.id, to='PRIEST')
+```
 
 ### `tw.switches`
 Inspects and manipulates interactive switches, levers, buttons, and puzzle mechanisms across the adventure:
@@ -481,8 +549,25 @@ Injects narrative messages or system notifications into the turn stream:
 - `tw.story.narrate_raw(text: str)` (shortcut `tw.narrate_raw(text)`): Emits Game Master narration that is shown **verbatim**, as one Game Master block: no speaker detection, no voice tags, no bold or `##ID` formatting. Line breaks are kept. Use it for text that must not be interpreted, e.g. LLM output from `tw.llm.ask(...)` that may contain colons or quotes (`tw.story.narrate_raw(news or "Just static noise.")`).
 - `tw.story.direct(instruction: str)` (shortcut `tw.direct(instruction)`): Gives the Game Master a **soft stage direction** instead of fixed text, e.g. `tw.story.direct("Let BRAM sing a sailor song")`. Nothing is shown right away. The direction is stored in the session (`entity_states["__gm_directions__"]`) and handed to the **next GM narration**: the narration of the current turn when the script runs during a turn (e.g. a soft rule in Pass 1.5), otherwise the next turn's narration, or the outcome narration of a choice dialog opened with `narrate=True`. That narration works it in naturally and drops it afterwards, so every direction is used once. The GM treats it as a wish, not as a fact: it never overrides game rules or the technical outcome, and it does not change any state (use the other `tw.*` calls for that). Whitespace is collapsed to a single line, each direction is cut at 500 characters, and at most the 5 newest directions wait at a time.
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
-- `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`).
+- `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`). System messages and narration calls (`narrate`, `narrate_raw`) are rendered in the exact chronological order in which the script executed them.
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
+
+### `tw.save` (Save States)
+- `tw.save(label: str = "")`: Saves the game as a checkpoint, for example right before an important decision. The player can return to it from the **Chronicles Timeline** in the game.
+  - The save is written when the script's changes are applied, so it already contains everything the same script changed before.
+  - The system message `Game saved: <label>` (or `Game saved.`) is shown and stored before the save, so it is still there after a restore.
+  - The label is the checkpoint's title in the timeline (`Save: <label>`), collapsed to one line and cut at 80 characters.
+  - At most 3 saves per script run. A session keeps its 10 newest saves; they are counted apart from the automatic checkpoints, so scene changes never push them out.
+
+```python
+# Before the player chooses a side, keep a way back.
+tw.save("Before the duel")
+tw.dialog.choose("Draw your sword?", ["Fight", "Walk away"], on_choice="on_duel_choice")
+```
+
+A save holds the full session state: the protagonist (vitals, stats, inventory, equipment, status effects), scene, in-game time, script variables and entity overrides, exits, quests, the active sequence, world memories and rumours, and every session-scoped world entity and exit row (positions, container contents, clones). Restoring a save rewinds all of it and deletes the chat messages written after it. Player preferences (narration style, skin, debug mode) are not part of a save.
+
+Besides `tw.save()`, checkpoints are created automatically when a turn changes the **scene** (any way: exit, map, script teleport, Game Master) or the **active sequence**, on quest updates and awards, and when the player types `/save [name]`.
 
 ### `tw.memories`
 Directly writes into the avatar's episodic memory bank:
@@ -492,6 +577,39 @@ Directly writes into the avatar's episodic memory bank:
 Controls session outcome conditions:
 - `tw.game.win(message: str)`: Ends the adventure in victory and displays `message`.
 - `tw.game.game_over(reason: str)`: Ends the adventure in defeat with `reason`.
+- `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
+
+### `tw.time` (In-Game Clock)
+The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
+
+**How time passes**
+- **Narration tick**: after every narrated player message the clock advances by the *minutes per tick* (the adventure's **Round Pacing** in the editor's **Time & Pacing** tab, `time_per_turn`, default 5). One player message is one tick, even when it chains a follow-up narration. The opening prologue, choice dialogs and script output (`tw.narrate`, dialog narration) do not tick.
+- **Game Master**: when **GM May Change Time** is enabled in the editor's **Time & Pacing** tab (`gm_time_control`, default on), the GM may add extra time for long actions ("the search took 20 minutes", `extra_time_minutes`) or jump the clock (`time_override_minutes`, `start_datetime_override`). Tick plus extra time of one message is capped by **Max Time per Turn (GM Limit)**. With the flag off, while the clock is paused, or after `tw.time.allow_gm_time(False)`, GM time requests are ignored and Pass 1 is told `TIME CONTROL: LOCKED`.
+- **Scripts and debug commands** can set or move the time at any moment, also while the clock is paused.
+
+**Reading**
+- `tw.time.now` / `tw.time.minutes`: elapsed minutes (includes changes made earlier in the same script).
+- `tw.time.day`, `tw.time.hour`, `tw.time.minute`: the clock of day (from the adventure's start time, default `08:00`, and its initial day).
+- `tw.time.format()`: the time as the player sees it, e.g. `"Day 2, 14:30"`.
+- `tw.time.ticks`: how many narration ticks advanced the clock.
+- `tw.time.is_paused`, `tw.time.minutes_per_tick`, `tw.time.default_minutes_per_tick`, `tw.time.gm_can_change_time`.
+- `tw.time.parse(value)`: converts `"1h 30m"`, `"2d"`, `"1:30"` or `90` to minutes (`None` if it is no time amount).
+
+**Changing** (every time amount accepts minutes or text like `"2h 30m"`, `"1d"`, `"1w"`, `"1:30"`)
+- `tw.time.set(t)`: sets the elapsed time. `tw.time.advance(t)` / `tw.time.rewind(t)`: moves it forward / back (never below 0).
+- `tw.time.set_minutes_per_tick(t)` / `tw.time.reset_minutes_per_tick()`: changes the time per narration tick for the rest of the session (e.g. `0` in a frozen dream world) / goes back to the adventure's pacing.
+- `tw.time.pause()` / `tw.time.resume()`: stops and restarts the narration ticks; GM time requests are ignored while paused.
+- `tw.time.allow_gm_time(allowed=True)` / `tw.time.reset_gm_time()`: overrides the editor's **GM May Change Time** flag for this session / goes back to it.
+
+**Timers (time event handlers)**
+- `tw.time.at(t, handler, timer_id=None, data=None)`: runs `handler` once when the clock reaches the elapsed time `t`.
+- `tw.time.after(t, handler, timer_id=None, data=None)`: runs `handler` once when `t` has passed from now.
+- `tw.time.every(t, handler, timer_id=None, data=None, start=None)`: runs `handler` each time `t` has passed (first at `start`, default now + `t`). A big jump runs it once, not once per missed interval.
+- `tw.time.cancel(timer_id)`, `tw.time.has_timer(timer_id)`, `tw.time.timers` (list of `{id, at, handler, every, data}`).
+- `handler` is a function of the init script, or its name (like `tw.dialog` handlers). Each call returns the timer id (`None` if it was rejected); registering an existing `timer_id` again replaces that timer. `data` must be plain values (text, numbers, lists, dicts). At most 50 timers can be active.
+- A handler with one parameter receives `time_event`: `{"id", "at", "now", "data", "repeats"}`. `on_time_reached` scripts can read the same `time_event` variable.
+
+**When time events fire**: after the narration tick of a player message (after `on_narration_done`), after `/debug time` commands that move the clock, and after `/script` commands that changed the time. A time change inside other scripts (e.g. a dialog choice handler) fires its events at the next of these points. Due events run oldest first; a handler may change the time or register timers again (at most 5 rounds per check). The runtime state (pause, overrides, timers, fired `on_time_reached` scripts) is stored in the session and is part of every save.
 
 ### `tw.quests`
 Directly manipulates adventure quest entries:
@@ -501,7 +619,7 @@ Directly manipulates adventure quest entries:
 
 ### `tw.awards`
 Awards achievements to the player's profile:
-- `tw.awards.grant(award_key: str)`: Immediately grants the specified trophy/badge.
+- `tw.awards.grant(award_key: str)`: Grants the award, exactly like an award the Game Master grants: it is added to the player's earned awards (once per adventure), the chat shows `Award Achievement: <title>`, a checkpoint is saved, and the game shows the award in a short overlay. The key is matched case-insensitively against the adventure's award keys; an unknown key is ignored (see the server log).
 
 ### `tw.dice`
 Provides deterministic, seeded random number generation:
@@ -514,8 +632,8 @@ Provides deterministic, seeded random number generation:
 Shows the player a multiple-choice dialog for NPC conversations, riddles and dilemmas. Only scripts (including soft rule scripts) can open a dialog; the LLM never sees this API.
 
 - `tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False) -> bool` (alias `tw.dialog.ask`)
-  - `prompt`: the question or situation shown above the options.
-  - `options`: up to 8 entries, each a label string or `{"label": "...", "visible_if": "<guard expression>"}`. Hidden options keep their position, so indices stay stable.
+  - `prompt`: the question or situation shown above the options (up to 2,000 characters). Supports fenced code blocks (` ```python ... ``` `), inline code (`` `...` ``), `**bold**`, and preserves line breaks and leading indentation.
+  - `options`: up to 8 entries, each a label string (up to 500 characters) or `{"label": "...", "visible_if": "<guard expression>"}`. Supports fenced code blocks, inline code, `**bold**`, and multi-line indentation. Hidden options keep their position, so indices stay stable.
   - `on_choice`: name of the handler function (a string, or the function itself). **The handler must be defined in the global `init_script` or in a [scene](#scene-helpers-helpers_script) or [sequence](#sequence-helpers) helper block.**
   - `speaker`: optional NPC name shown as the dialog title.
   - `narrate`: when `True`, the small model narrates the outcome after the handler ran (it is told the handler's messages are binding facts). It also receives the current character and goal of the visible NPCs in the player's scene (including changes the handler just made, e.g. `npc.character = "Very angry"`) and any pending `tw.story.direct(...)` directions, which this narration then uses up. Default `False`: only the handler's own messages appear, which is instant and deterministic; directions then wait for the next turn's narration.
@@ -525,22 +643,64 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
 
 1. records the choice in the chat as `[Choice] <label>` (so the GM keeps continuity),
 2. calls `<on_choice>(index)` with the **position of the chosen option in `options`**, plus a `dialog_choice` dict (`index`, `label`, `dialog_id`) in scope,
-3. applies the handler's changeset (variables, items, HP, game over, sequence advance, …) and runs the post-turn checks (special unlocks, NPC attacks),
+3. applies the handler's changeset (variables, items, HP, game over, sequence advance, …), completes sidequests, awards and sequences whose hard rules now hold, checks the win/loss guards and runs the post-turn checks (special unlocks, NPC attacks),
 4. optionally narrates the outcome (`narrate=True`).
 
 A handler may call `tw.dialog.choose()` again, which is how multi-step conversations and dialog trees are built. The editor validation warns (`dialog_handler_missing`) when a dialog references a handler that neither the init script nor any sequence or scene helper block defines.
 
-### `tw.llm` (Ask the LLM)
+### `tw.dialog.tree` (Nested NPC Dialogues)
+RPG-style conversations as a tree of nodes. The NPC says a node's `npc_text`; each player response leads to another node, back to an earlier one, or ends the conversation. At the end the adventure gets the list of visited steps.
+
+- `tw.dialog.tree(tree, on_end=None, on_action=None, speaker=None, start_node=None) -> bool`
+  - `tree`: a dict (best defined as a constant in the `init_script`, a scene or a sequence helper block):
+    - `nodes` *(required)*: node ID → `{"npc_text": "...", "responses": [...], "speaker": "..." (optional)}`. At most 100 nodes and 8 responses per node.
+    - `initial_node`: ID of the first node (default: the first node in `nodes`).
+    - `npc_id`: the speaking NPC; its name is the dialog title unless `speaker` is given.
+    - `dialogue_id`: optional name for your own bookkeeping.
+  - A **response** is `{"text": "...", "next_node": "<node ID>" | None, ...}` with the optional keys:
+    - `condition`: a [guard expression](#deterministic-guard-expressions) (e.g. `"tw.vars.get('gold', 0) >= 250"`). The response is only shown while it is true. Guards are evaluated anew for every node, so they see changes made earlier in the conversation.
+    - `once`: `True` hides the response after it was picked once in this conversation (e.g. a question that is answered).
+    - `script`: inline code that runs when the response is picked, e.g. `"tw.vars.set('knows_about_mine', True)"`.
+    - `action`: a string passed to the `on_action` handler, e.g. `"START_QUEST_STAR_SILVER"`. Use it to keep the logic of many responses in one function.
+    - `next_node: None` (or a missing `next_node`) ends the conversation.
+  - `on_end`: handler called as `on_end(path)` when the conversation ends. `path` is the list of visited steps, each `{"node": "<node ID>", "response": <index>, "text": "<response text>", "action": "..." (if any)}`.
+  - `on_action`: handler called as `on_action(action)` after the response's `script`.
+  - **Both handlers must be defined in the global `init_script` or in a scene or sequence helper block** (like `on_choice` handlers; the editor validation warns with `dialog_handler_missing`).
+  - `speaker`: dialog title; `start_node`: start somewhere else than `initial_node` (e.g. to resume a conversation).
+  - Returns `False` (and emits a debug note) when no dialog was opened: another dialog is already open, the tree is invalid (a response points to an unknown node, the start node does not exist), a handler name is invalid, or the start node has no visible response.
+
+**How it works.** The whole tree is stored with the pending dialog, and the client shows one node at a time in the same dialog panel as `tw.dialog.choose` (the player cannot type until the conversation is over). Each answer goes to `POST /adventures/{game_id}/dialog/choice`, which:
+
+1. writes the NPC's line to the story feed as `Speaker: "npc_text"` and the answer as `[Choice] <text>`,
+2. runs the response's `script`, then `on_action(action)`; both get `dialog_choice` (`index`, `label`, `node`, `action`, `dialog_id`) and `dialog_path` in scope,
+3. shows `next_node` with the responses whose `condition` holds,
+4. ends the conversation when `next_node` is `None` or the next node has no visible response, and then calls `on_end(path)`.
+
+A response script that opens another dialog (`tw.dialog.choose` or `tw.dialog.tree`) or ends the adventure (`tw.game.win`, `tw.game.game_over`) stops the conversation; `on_end` is not called then. The tree's text is shown as written: there is no LLM narration of tree steps.
+
+See [Example 16](#example-16-blacksmith-conversation-dialogue-tree) for a complete conversation.
+
+### `tw.llm` & `tw.json` (Ask the LLM & Structured JSON)
 
 - `tw.llm.ask(prompt, model="simple", system="") -> str`: Sends `prompt` to the language model configured in the player's LLM settings and returns the answer as a string.
   - `model="simple"` uses the **small model** (`small_model` / `small_model_provider`), `model="advanced"` the **complex model** (`complex_model` / `complex_model_provider`). Any other value is a script error.
   - `system` optionally replaces the default system prompt ("answer briefly, return only the requested text"). The session language is appended automatically.
+- `tw.llm.ask_json(prompt, schema=None, model="simple", system="") -> dict | list | Any | None`: Asks the model for structured JSON, strips `<think>` tags and markdown ` ```json ` fences, repairs minor JSON formatting errors, and validates the result against `schema`.
+  - Returns the parsed Python `dict` / `list` (or primitive when matched by `schema`), or `None` when the LLM is unavailable, fails, returns invalid JSON, or fails schema validation.
+  - `schema` is an optional sandbox-friendly schema descriptor:
+    - Type names or Python types: `"str"` (`str`), `"int"` (`int`), `"float"` (`float`), `"bool"` (`bool`), `"list"` (`list`), `"dict"` (`dict`), `"any"`.
+    - Object mapping: `{"question": "str", "correct_index": {"type": "int", "min": 0, "max": 3}, "hint": {"type": "str", "optional": True}}` — every key is required unless `"optional": True` is set.
+    - Constraint dict: `{"type": "list", "items": {"type": "str", "min_len": 1}, "min_len": 4, "max_len": 4}` (supported constraints: `min`, `max` for numbers; `min_len`, `max_len` for strings/lists/dicts; `enum` for allowed values; `items` for list elements; `fields` for nested object dicts).
 - `tw.llm.available -> bool`: `False` where the LLM cannot be used (see below).
+- `tw.json` (sandbox-safe JSON utilities, no `import json` needed):
+  - `tw.json.loads(text, schema=None, default=None)`: Safely parses a JSON string (with fence stripping and repair) and validates against `schema` if given; returns `default` (`None`) on any error.
+  - `tw.json.validate(data, schema) -> bool`: Returns `True` if `data` satisfies `schema`.
+  - `tw.json.dumps(value) -> str`: Serializes `value` to a JSON string (or `""` on error).
 
 Rules and limits:
 
 - **Never raises for provider problems**: when the LLM is not configured, fails, or takes longer than **20 seconds**, `ask()` returns `""`. Always keep a fallback: `line = tw.llm.ask(...) or "The raven stays silent."`
-- **At most 3 calls** per script context (one trigger pass); further calls return `""`. Prompts and system prompts are cut at 4,000 characters, answers at 2,000. Answers are capped at about 600 tokens.
+- **At most 3 calls** per script context (one trigger pass, shared across `ask` and `ask_json`); further calls return `""` / `None`. Prompts and system prompts are cut at 4,000 characters, `ask()` answers at 2,000, and `ask_json()` answers at 8,000. Answers are capped at about 1,200 tokens.
 - **Not available in guard expressions** (`guard`, `visible_if`, unlock and lock guards, soft-rule guards) or in the session's `init_script` run: guards must stay deterministic and cheap. There `ask()` returns `""` without calling the model.
 - **The call blocks**: the turn waits until the model answers. Use it for occasional flavour text, not on every turn.
 - In debug mode, skipped or failed calls show a `[DEBUG]` system message. Calls are logged with the operation `script.llm_ask`.
@@ -552,9 +712,27 @@ riddle = tw.llm.ask(
     model="simple",
 )
 tw.npcs.say("TROLL", riddle or "What has roots nobody sees and is taller than trees?")
+
+# Dynamic Python PCEP multiple-choice question with schema validation and code formatting
+QUIZ_SCHEMA = {
+    "question": {"type": "str", "min_len": 10},
+    "options": {"type": "list", "items": {"type": "str", "min_len": 1}, "min_len": 4, "max_len": 4},
+    "correct_index": {"type": "int", "min": 0, "max": 3},
+    "explanation": {"type": "str", "optional": True},
+}
+quiz = tw.llm.ask_json(
+    "Create one PCEP multiple-choice question about Python loops with a ```python code block.",
+    schema=QUIZ_SCHEMA,
+    model="simple",
+)
+if quiz:
+    tw.vars.set("current_quiz", quiz)
+    tw.dialog.choose(quiz["question"], quiz["options"], on_choice="on_quiz_answer", speaker="Examiner")
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)
+
+To try a script line in a running game, turn on debug mode and use `/script <code>` (see [In-Game Debugging](in_game_debugging.md)): `/script tw.npcs.get('BRAM').hp` answers with the value as a debug message.
 Provides simple, clean logging methods to inspect state during development and playtesting:
 
 #### 1. Server Console Logging
@@ -677,7 +855,7 @@ else:
 Trigger: `on_turn_end`  
 Target: `*`
 
-The countdown advances once per in-game turn (scene or sequence change). For a per-message countdown use `on_narration_done` instead.
+The countdown advances once per in-game turn (scene or sequence change). For a per-message countdown use `on_narration_done`; for a countdown in in-game time use `tw.time` (see [Example 18](#example-18-ticking-bomb-and-nightfall-time-events)).
 
 ```python
 # Increment turn counter
@@ -878,7 +1056,150 @@ def on_brom_mood(answ):
     brom.remove_trait('talkative')
 ```
 
+### Example 14: Potion Dispenser (Cloning a Hidden Item)
+A hidden template item `HEALING_POTION` (type `CONSUMABLE`, `is_hidden: true`) lies in the scene `ALCHEMY_LAB`. The switch `POTION_DISPENSER` produces a fresh copy each time it is pulled, three times at most. `on_success_script` of the switch:
+```python
+dispensed = tw.vars.get('potions_dispensed', 0)
+if dispensed >= 3:
+    tw.narrate("The dispenser only coughs up a puff of green dust.")
+else:
+    potion = tw.objects.get('HEALING_POTION').clone(scene_id='current', hidden=False)
+    if potion:
+        tw.vars.set('potions_dispensed', dispensed + 1)
+        tw.narrate("With a gurgle, a fresh healing potion drops into the tray.")
+```
+The copies (`HEALING_POTION_1`, `HEALING_POTION_2`, ...) lie visibly in the scene and can be picked up like any item; use `potion.move_to('player')` instead to put them straight into the inventory. The template itself stays hidden.
+
+### Example 15: Offering Altar (Player Puts Items into a Container)
+The container `MOON_ALTAR` stands unlocked in the shrine. In the container panel the player presses **Put In**, selects items from the inventory and confirms. `on_items_added_script` of the altar:
+```python
+if 'SILVER_MOON' in added_item_ids:
+    tw.objects.destroy('SILVER_MOON')
+    tw.exits.unlock('SHRINE', 'MOON_GATE')
+    tw.narrate("The silver moon melts into the altar. Somewhere, a gate grinds open.")
+else:
+    # Not what the altar wants: it spits the offering back out.
+    for item_id in added_item_ids:
+        tw.objects.take_from_container('MOON_ALTAR', item_id, to='player')
+    tw.narrate("The altar stays cold. Your offering rolls back into your hands.")
+```
+
+### Example 16: Blacksmith Conversation (Dialogue Tree)
+In the global init script:
+```python
+GORAN_TALK = {
+    "dialogue_id": "goran_intro",
+    "npc_id": "NPC_GORAN",
+    "initial_node": "root",
+    "nodes": {
+        "root": {
+            "npc_text": "What do you want? I have no time for idle talk.",
+            "responses": [
+                {"text": "I need decent gear for the wilds.", "next_node": "equipment"},
+                {"text": "I heard rumours about the abandoned mine.", "next_node": "mine"},
+                {"text": "Never mind, I'm leaving.", "next_node": None},
+            ],
+        },
+        "equipment": {
+            "npc_text": "Good iron costs good gold. A dwarf-steel broadsword: 250 gold pieces.",
+            "responses": [
+                {"text": "I'll take the sword. [250 Gold]",
+                 "condition": "tw.vars.get('gold', 0) >= 250",
+                 "action": "BUY_DWARF_SWORD", "next_node": "equipment"},
+                {"text": "Too expensive.", "next_node": "root"},
+            ],
+        },
+        "mine": {
+            "npc_text": "The baron sealed the tunnel two months ago. Things crawl down there.",
+            "responses": [
+                {"text": "Is there still ore to find?", "once": True,
+                 "script": "tw.vars.set('knows_star_silver', True)", "next_node": "mine_ore"},
+                {"text": "Enough about mines.", "next_node": "root"},
+            ],
+        },
+        "mine_ore": {
+            "npc_text": "Veins of star silver. Bring me five chunks and I'll forge you a king-slayer.",
+            "responses": [
+                {"text": "Deal. [Accept quest]", "action": "START_QUEST_STAR_SILVER", "next_node": "mine"},
+                {"text": "Too risky.", "next_node": "mine"},
+            ],
+        },
+    },
+}
+
+def on_goran_action(action):
+    if action == "BUY_DWARF_SWORD":
+        tw.vars.set('gold', tw.vars.get('gold', 0) - 250)
+        tw.player.take_item('DWARF_SWORD')
+        return
+    if action == "START_QUEST_STAR_SILVER":
+        tw.vars.set('quest_star_silver', 'active')
+
+def on_goran_end(path):
+    tw.vars.set('goran_topics', [step['node'] for step in path])
+```
+Inline `on_interact_script` of `NPC_GORAN`:
+```python
+tw.dialog.tree(GORAN_TALK, on_end="on_goran_end", on_action="on_goran_action")
+```
+
 From the next turn on, the GM plays Brom with the new personality, in this game only.
+
+### Example 17: Returning a Lost Ring (Giving an NPC Items)
+The widow `NPC_MARTA` lost her ring. The player opens her context menu, chooses **Give**, selects items from the inventory and confirms (typing `give the silver ring to Marta` does the same). `on_receive_item_script` of Marta:
+```python
+if 'SILVER_RING' in received_item_ids:
+    tw.vars.set('ring_returned', True)
+    tw.npcs.give_to_player('NPC_MARTA', 'CELLAR_KEY')
+    tw.story.direct('Marta is moved to tears, thanks the player and hands over the cellar key.')
+else:
+    # Not her ring: she gives everything back.
+    for item_id in received_item_ids:
+        tw.npcs.give_to_player('NPC_MARTA', item_id)
+    tw.story.direct('Marta politely returns the gift; it is not what she is looking for.')
+```
+The handover itself is deterministic; the Game Master then narrates Marta's reaction and follows the direction. Giving is refused for defeated NPCs and for items the player does not carry.
+
+---
+
+### Example 18: Ticking Bomb and Nightfall (Time Events)
+The init script defines the handlers, an `on_interact` script arms the bomb, and an `on_time_reached` script with target `10h` makes it night after ten hours of play.
+
+`init_script`:
+```python
+def bomb_explodes(event):
+    if tw.vars.get("bomb_defused"):
+        return
+    tw.game.game_over("The bomb detonates " + str(event["data"]["room"]) + ".")
+
+def bomb_warning(event):
+    left = tw.vars.get("bomb_at", 0) - tw.time.now
+    if left > 0:
+        tw.system(str(left) + " minutes left on the bomb timer.")
+```
+
+Script `ARM_BOMB` (trigger `on_interact`, target `BOMB`):
+```python
+if not tw.time.has_timer("BOMB"):
+    tw.time.after("30m", bomb_explodes, timer_id="BOMB", data={"room": "in the cellar"})
+    tw.time.every(10, bomb_warning, timer_id="BOMB_WARNING")
+    tw.vars.set("bomb_at", tw.time.now + 30)
+    tw.narrate("A red display lights up: 00:30:00.")
+```
+
+Script `DEFUSE` (trigger `on_interact`, target `BOMB_WIRES`):
+```python
+tw.vars.set("bomb_defused", True)
+tw.time.cancel("BOMB")
+tw.time.cancel("BOMB_WARNING")
+tw.narrate("The display flickers and dies.")
+```
+
+Script `NIGHTFALL` (trigger `on_time_reached`, target `10h`):
+```python
+tw.direct("Night has fallen: describe darkness, cold and the sounds of the night.")
+tw.time.set_minutes_per_tick(15)  # the night passes faster
+```
 
 ---
 
@@ -895,8 +1216,8 @@ All scripts are managed directly in the **Scripts** tab:
 
 - Click **New Script** to open the script authoring modal:
   - Enter a human-readable **Name** and unique **Script ID**.
-  - Select the desired **Trigger** (`on_init`, `on_turn_start`, `on_enter_scene`, `on_interact`, `on_logic_pass_done`, `on_narration_done`, `on_turn_end`).
-  - Optionally pick a **Target** scene or entity using the autocomplete selector.
+  - Select the desired **Trigger** (`on_init`, `on_turn_start`, `on_enter_scene`, `on_interact`, `on_logic_pass_done`, `on_narration_done`, `on_turn_end`, `on_time_reached`).
+  - Optionally pick a **Target** scene or entity using the autocomplete selector. For `on_time_reached` the target field holds the elapsed in-game time instead (e.g. `90`, `2h 30m`, `1d`); **Check Syntax** rejects other values.
   - Adjust **Priority** (lower numbers execute first).
   - Use the **Insert Snippet** dropdown to paste starter code.
 - Click **Check Syntax** to verify Python syntax, AST safety, and trigger parameters before saving.
@@ -914,7 +1235,7 @@ Nothing changes until you decide: the proposal opens as a line diff (removed lin
 ### Scripts from World-Builder Instructions
 The **World-Builder** prompt at the top of the Adventure Editor can also write inline triggers and guards. Describe the behaviour in plain words, for example *"The chest only opens after the lever in the cellar was pulled"* or *"The amulet hurts the player when it is equipped"*, and pick one of up to three proposals.
 
-- **Supported fields**: the inline `..._script` / `..._text` triggers of scenes (`on_enter_scene`, `on_leave_scene`, `helpers_script`), exits (`on_open_exit`, `on_exit_used`, `on_unlock_success`, `on_unlock_failure`, `unlock_expression`), NPCs (`on_defeat`, `on_protagonist_enters_scene`, `on_interact`), objects (`on_pickup`, `on_drop`, `on_interact` for every item; `on_equip` / `on_unequip` for weapons and wearables; `on_read` for readables; `unlock_expression` and the unlock hooks for containers; `craft_guard_expression` and the craft hooks for recipes), the protagonist (`on_hp_change`, `on_status_change`) and sequences (`on_start_sequence`, `on_end_sequence`, `helpers_script`, soft rules).
+- **Supported fields**: the inline `..._script` / `..._text` triggers of scenes (`on_enter_scene`, `on_leave_scene`, `helpers_script`), exits (`on_open_exit`, `on_exit_used`, `on_unlock_success`, `on_unlock_failure`, `unlock_expression`), NPCs (`on_defeat`, `on_protagonist_enters_scene`, `on_interact`, `on_receive_item`), objects (`on_pickup`, `on_drop`, `on_interact` for every item; `on_equip` / `on_unequip` for weapons and wearables; `on_read` for readables; `unlock_expression` and the unlock hooks for containers; `craft_guard_expression` and the craft hooks for recipes), the protagonist (`on_hp_change`, `on_status_change`) and sequences (`on_start_sequence`, `on_end_sequence`, `helpers_script`, soft rules).
 - **New entities**: a newly created NPC or item gets its hooks from a second patch in the same proposal.
 - **Not supported**: top-level `scripts`, sequence `scripts` and `init_script`. Write those in the **Scripts** tab.
 - **Syntax check**: every proposed script and guard runs through the sandbox syntax check. Proposals with invalid code are discarded and the reason is shown instead.

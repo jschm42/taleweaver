@@ -12,6 +12,7 @@ from backend.core.adventure_format import validate_manifest_version
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
+from backend.core.narrator_voices import normalize_voice
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.adventures.adventure_import_support import (
     check_adz_limits,
@@ -73,6 +74,15 @@ def _resolve_license_url(explicit_url: Optional[str], license_name: Optional[str
     if not license_name:
         return None
     return _LICENSE_URL_DEFAULTS.get(license_name.strip().lower())
+
+
+def _gm_time_control(*sources: Optional[dict[str, Any]]) -> bool:
+    """The first explicit ``gm_time_control`` of the sources; older files default to True."""
+    for source in sources:
+        value = (source or {}).get("gm_time_control")
+        if value is not None:
+            return bool(value)
+    return True
 
 
 class AdventureConflictError(Exception):
@@ -242,6 +252,7 @@ class AdventureTemplateImporter:
                     pacing_minutes=adv_data.get("pacing_minutes", 5),
                     max_time_per_turn=adv_data.get("max_time_per_turn")
                     or manifest_data.get("max_time_per_turn"),
+                    gm_time_control=_gm_time_control(adv_data, manifest_data),
                     max_memory_turns=adv_data.get("max_memory_turns")
                     or manifest_data.get("max_memory_turns")
                     or 10,
@@ -256,6 +267,9 @@ class AdventureTemplateImporter:
                     or manifest_data.get("selected_image_styles", []),
                     selected_tone=adv_data.get("selected_tone")
                     or manifest_data.get("selected_tone"),
+                    narrator_voice=normalize_voice(
+                        adv_data.get("narrator_voice") or manifest_data.get("narrator_voice")
+                    ),
                     quests=adv_data.get("quests") or manifest_data.get("quests", []),
                     awards=adv_data.get("awards") or manifest_data.get("awards", []),
                     min_scenes=(
@@ -655,6 +669,7 @@ class AdventureTemplateImporter:
             time_per_turn=old_adv.get("time_per_turn", 10),
             pacing_minutes=old_adv.get("pacing_minutes", 5),
             max_time_per_turn=old_adv.get("max_time_per_turn"),
+            gm_time_control=_gm_time_control(old_adv),
             max_memory_turns=old_adv.get("max_memory_turns") or 10,
             clock_enabled=old_adv.get("clock_enabled", False),
             ui_theme=normalize_ui_theme(old_adv.get("ui_theme")),
@@ -812,6 +827,7 @@ class AdventureTemplateImporter:
                         "time_system": new_template.time_system,
                         "time_config": deepcopy(new_template.time_config or {}),
                         "selected_tone": deepcopy(new_template.selected_tone or {}),
+                        "narrator_voice": deepcopy(new_template.narrator_voice),
                         "ui_theme": deepcopy(new_template.ui_theme),
                         "selected_image_styles": deepcopy(new_template.selected_image_styles or []),
                         "quests": deepcopy(new_template.quests or []),
@@ -903,6 +919,7 @@ class AdventureTemplateImporter:
             pacing_minutes=adv_meta.get("pacing_minutes", 5),
             max_time_per_turn=adv_meta.get("max_time_per_turn")
             or manifest.get("max_time_per_turn"),
+            gm_time_control=_gm_time_control(adv_meta, manifest),
             max_memory_turns=adv_meta.get("max_memory_turns")
             or manifest.get("max_memory_turns")
             or 10,
@@ -911,6 +928,9 @@ class AdventureTemplateImporter:
             selected_image_styles=adv_meta.get("selected_image_styles")
             or manifest.get("selected_image_styles", []),
             selected_tone=adv_meta.get("selected_tone") or manifest.get("selected_tone"),
+            narrator_voice=normalize_voice(
+                adv_meta.get("narrator_voice") or manifest.get("narrator_voice")
+            ),
             quests=adv_meta.get("quests") or manifest.get("quests") or [],
             awards=adv_meta.get("awards") or manifest.get("awards") or [],
             original_manifest=manifest,

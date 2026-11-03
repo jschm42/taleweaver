@@ -24,11 +24,13 @@ EXIT_SCRIPT_FIELDS = (
     "unlock_expression",
     *_hooks("on_open_exit", "on_exit_used", "on_unlock_success", "on_unlock_failure"),
 )
-NPC_SCRIPT_FIELDS = _hooks("on_defeat", "on_protagonist_enters_scene", "on_interact")
+NPC_SCRIPT_FIELDS = _hooks(
+    "on_defeat", "on_protagonist_enters_scene", "on_interact", "on_receive_item"
+)
 ITEM_EVENT_FIELDS = _hooks("on_pickup", "on_drop", "on_equip", "on_unequip", "on_interact")
 OBJECT_SCRIPT_FIELDS = (
     "unlock_expression",
-    *_hooks("on_unlock_success", "on_unlock_failure", "on_read"),
+    *_hooks("on_unlock_success", "on_unlock_failure", "on_items_added", "on_read"),
     "craft_guard_expression",
     *_hooks("on_craft_success", "on_craft_failure"),
     *ITEM_EVENT_FIELDS,

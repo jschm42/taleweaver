@@ -21,6 +21,8 @@ export interface EntityEditData {
   item_type?: string
   is_portable?: boolean
   locked?: boolean
+  /** Exits: the target scene is known from the start. */
+  revealed?: boolean
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
@@ -75,6 +77,8 @@ export interface EntityEditData {
   on_defeat_text?: string | null
   on_protagonist_enters_scene_script?: string | null
   on_protagonist_enters_scene_text?: string | null
+  on_receive_item_script?: string | null
+  on_receive_item_text?: string | null
   on_interact_script?: string | null
   on_interact_text?: string | null
 }
@@ -93,6 +97,7 @@ export interface ExitCreateData {
   label: string
   exit_type?: 'one_way' | 'bidirectional'
   is_locked?: boolean
+  is_revealed?: boolean
   lock_description?: string
   code_to_unlock?: string
   item_to_unlock?: string
@@ -137,6 +142,8 @@ export interface EntityCreateData {
   on_defeat_text?: string
   on_protagonist_enters_scene_script?: string
   on_protagonist_enters_scene_text?: string
+  on_receive_item_script?: string
+  on_receive_item_text?: string
   on_interact_script?: string
   on_interact_text?: string
 }
@@ -214,11 +221,15 @@ export const entityService = {
     return await res.blob()
   },
 
-  /** Imports a .twe bundle. NPCs/items are added; a protagonist replaces the current one. */
-  async importEntityBundle(adventureId: string, file: File, expectedKind: EntityBundleKind): Promise<EntityBundleImportResult> {
+  /**
+   * Imports a .twe bundle. NPCs/items are added; a protagonist replaces the current one.
+   * `targetSceneId` places an NPC or item in that scene instead of its original one.
+   */
+  async importEntityBundle(adventureId: string, file: File, expectedKind: EntityBundleKind, targetSceneId?: string): Promise<EntityBundleImportResult> {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('expected_kind', expectedKind)
+    if (targetSceneId) formData.append('target_scene_id', targetSceneId)
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/transfer/import`, {
       method: 'POST',
       headers: authHeaders(),

@@ -301,6 +301,9 @@ def _avatar_fields(avatar: Avatar, total_stats: dict[str, Any]) -> dict[str, Any
         "status_effects": avatar.status_effects or [],
         "special_actions": avatar.stats.get("special_actions") or [],
         "unlocked_actions": avatar.stats.get("unlocked_actions") or [],
+        "talents": avatar.stats.get("talents") or [],
+        "unlocked_talents": avatar.stats.get("unlocked_talents") or [],
+        "talent_uses": avatar.stats.get("talent_uses") or {},
         "exp": avatar.exp,
     }
 

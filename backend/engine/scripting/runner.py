@@ -67,6 +67,9 @@ class ScriptRunner:
         helper blocks into the target scope (later blocks shadow earlier names).
         Top-level expressions and mutable API calls are skipped to prevent state resets.
         """
+        # Definitions get their own step/time budget: without it the step counter and the
+        # deadline of the interpreter's previous run (or the initial 0.0) would apply here.
+        self.interpreter._start_budget()
         for source_id, code in [("init_script", self.init_script), *self.helpers]:
             if code:
                 self._load_definitions(code, source_id, scope)
@@ -134,13 +137,14 @@ class ScriptRunner:
         trigger: str,
         target_id: Optional[str],
         context: GameContext,
+        extra_scope: Optional[dict[str, Any]] = None,
     ) -> None:
         code = script.get("code", "").strip()
         script_id = script.get("id", "UNKNOWN_SCRIPT")
         logger.info(
             f"[ScriptRunner] Executing script '{script_id}' on trigger '{trigger}' (target={target_id})"
         )
-        scope = {"tw": context, "game": context}
+        scope = {**(extra_scope or {}), "tw": context, "game": context}
         self.load_init_definitions(scope)
         try:
             self.interpreter.execute(code, scope)
@@ -176,6 +180,18 @@ class ScriptRunner:
                 continue
             self._run_single_script(script, trigger, target_id, context)
 
+        return context.changeset
+
+    def run_script(
+        self,
+        script: dict[str, Any],
+        context: GameContext,
+        extra_scope: Optional[dict[str, Any]] = None,
+    ) -> ScriptChangeset:
+        """Runs one script definition regardless of its trigger (e.g. a due on_time_reached)."""
+        if script.get("code", "").strip():
+            trigger = str(script.get("trigger") or "")
+            self._run_single_script(script, trigger, None, context, extra_scope)
         return context.changeset
 
     def execute_code(self, code: str, scope: dict[str, Any], script_id: str = "INLINE") -> None:

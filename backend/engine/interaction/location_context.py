@@ -11,6 +11,8 @@ Two detail levels exist:
 from typing import Any, Optional
 
 from backend.engine.interaction.switch_states import state_label
+from backend.engine.rules.reveal_policy import entity_is_script_only
+from backend.engine.world.exit_labels import exit_display_name
 
 
 def _format_item_refs(items: Optional[list]) -> list[str]:
@@ -178,14 +180,16 @@ def _describe_exits(exits: list, detail: str) -> str:
                 if getattr(e, "rule_to_unlock", None):
                     status_parts.append(f"rule:{e.rule_to_unlock}")
             status_req = f"({','.join(status_parts)})" if status_parts else ""
-            exit_list.append(f"{e.label}->{e.to_scene_id}{status}{status_req}")
+            name = exit_display_name(e.label, target_scene_id=e.to_scene_id)
+            exit_list.append(f"{name}->{e.to_scene_id}{status}{status_req}")
         return "EXITS: " + "; ".join(exit_list) + "\n"
 
     exit_list = []
     for e in exits:
         status = "[LOCKED]" if e.is_locked else "[OPEN]"
         lock_desc = f" ({e.lock_description})" if (e.is_locked and e.lock_description) else ""
-        exit_list.append(f"- {e.label} to {e.to_scene_id} {status}{lock_desc}")
+        name = exit_display_name(e.label, target_scene_id=e.to_scene_id)
+        exit_list.append(f"- {name} to {e.to_scene_id} {status}{lock_desc}")
     return "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
 
 
@@ -243,7 +247,11 @@ def build_location_context(
 def build_hidden_entities_context(
     hidden_entities: Optional[list] = None, for_narration: bool = False
 ) -> str:
-    """GM-only block for hidden NPCs/objects in the current scene with their reveal rules."""
+    """GM-only block for hidden NPCs/objects in the current scene with their reveal rules.
+
+    Entities with the reveal rule ``script`` are left out: only scripts may reveal them.
+    """
+    hidden_entities = [e for e in hidden_entities or [] if not entity_is_script_only(e)]
     if not hidden_entities:
         return ""
 
@@ -257,7 +265,16 @@ def build_hidden_entities_context(
         if reveal_rule:
             rule_str = f' | Reveal condition: "{reveal_rule}"'
         elif entity_type == "NPC":
-            rule_str = " | Reveal condition: (default) reveal when the protagonist searches the scene OR when this NPC starts speaking"
+            rule_str = (
+                f' | Reveal condition: "{reveal_rule}"'
+                if reveal_rule
+                else " | Reveal condition: (default) reveal when the protagonist searches the scene"
+            )
+            lines.append(
+                f"- [HIDDEN NPC] ID='{e.id}' Name='{e.name}'{pos_str}{rule_str}. "
+                "CRITICAL: This NPC is HIDDEN and NOT present in the room! They MUST NOT speak, react, or be mentioned in dialogue until revealed."
+            )
+            continue
         else:
             rule_str = (
                 " | Reveal condition: (default) reveal when the protagonist searches the scene"

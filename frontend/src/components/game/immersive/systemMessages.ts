@@ -15,6 +15,14 @@ export function isDebugMessage(msg: SystemMessage | null | undefined): boolean {
   return content.startsWith('[DEBUG') || content.startsWith('DEBUG:') || content.startsWith('--- DEBUG')
 }
 
+/**
+ * Answer of the debug command `/script <code>` (backend debug_script_command.py). Unlike other
+ * debug output it stays inline in the story: it is the direct reply to what the player typed.
+ */
+export function isScriptReport(msg: SystemMessage | null | undefined): boolean {
+  return String(msg?.content || '').trim().startsWith('[DEBUG SCRIPT]')
+}
+
 /** Failed-turn announcements stay inline in the story because they carry Retry/Cancel actions. */
 export function isTurnErrorMessage(msg: SystemMessage | null | undefined, turnError: TurnError): boolean {
   return Boolean(turnError?.message && String(msg?.content || '').includes(turnError.message))

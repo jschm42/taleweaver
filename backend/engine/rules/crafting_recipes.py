@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any
 
+from backend.engine.rules.reveal_policy import has_discoverable_reveal_rule
+
 RECIPE_TYPE = "CONSTRUCTABLE"
 RESULT_FIELD = "result_item_ids"
 KEPT_FIELD = "kept_ingredients"
@@ -69,7 +71,7 @@ def craft_only_result_ids(entities: Iterable[Any]) -> set[str]:
     with_rule = {
         str(ent.id).upper()
         for ent in entities
-        if ent.id and str(getattr(ent, "reveal_rule", "") or "").strip()
+        if ent.id and has_discoverable_reveal_rule(getattr(ent, "reveal_rule", None))
     }
     return results - revealed_elsewhere - with_rule
 

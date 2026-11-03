@@ -100,6 +100,8 @@ class CombatPlayerMixin:
             "turn",
             {"kind": "engage", "entity": enemy["id"]},
         )
+        # Attacking a bystander pulls its group (and anyone who helps everybody) in too.
+        self._rally_allies(combat, enemy)
 
     def _pay_player_cost(self, cost_type: str, cost: int, label: str) -> str | None:
         current = int(getattr(self.avatar, cost_type) or 0)

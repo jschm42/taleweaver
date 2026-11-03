@@ -313,7 +313,7 @@ _T2I_FALLBACK: dict[str, Any] = {
     "simple_min_long_edge": None,
     "advanced_min_long_edge": None,
     "seed": None,
-    "image_format": "jpeg",
+    "image_format": "webp",
     "image_quality": 85,
     "negative_prompt": None,
     # Model usage quality per content type

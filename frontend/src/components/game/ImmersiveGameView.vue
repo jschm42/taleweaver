@@ -28,6 +28,7 @@ import SpeechControls from './immersive/SpeechControls.vue'
 import ImmersiveStoryFeed from './immersive/ImmersiveStoryFeed.vue'
 import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
+import TalentMenu from '@/components/game/TalentMenu.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
 import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
 import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
@@ -41,9 +42,12 @@ import { useGameShortcuts } from './immersive/useGameShortcuts'
 import { useTextDensity } from '@/skins/useTextDensity'
 import { useTextScale } from '@/skins/useTextScale'
 import { useSheetSkin } from '@/skins/useSheetSkin'
+import AwardUnlockedOverlay from './immersive/AwardUnlockedOverlay.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
+  /** The adventure's awards (title, tier, description) for the award-unlocked overlay. */
+  awards?: any[]
   status: ConnectionStatus
   npcMetadata: Record<string, any>
   entities: any[]
@@ -305,7 +309,7 @@ defineExpose({
 
       <!-- Atmospheric overlays -->
       <div class="absolute inset-0 bg-black/20"></div>
-      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-slate-950/40"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-slate-950/40"></div>
       <div class="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-slate-950/40"></div>
       <div class="tw-scene-tint"></div>
     </div>
@@ -313,15 +317,15 @@ defineExpose({
     <!-- 2. TOP ATMOSPHERIC HEADER BAR (shown on hover unless pinned) -->
     <HoverRevealHeader>
       <ImmersiveHeader
+        :game-time="props.gameTime"
+        :clock-tick="props.clockTick"
+        :exp="props.exp"
         :scene-name="props.currentSceneName || props.sheet?.current_scene"
         :active-sequence="props.activeSequence"
         :adventure-title="props.sheet?.adventure_title"
         :creator="props.sheet?.creator"
         :copyright="props.sheet?.copyright"
         :tracked-quest="props.trackedQuest"
-        :game-time="props.gameTime"
-        :clock-tick="props.clockTick"
-        :exp="props.exp"
         :mode="props.mode"
         :debug-mode="!!props.sheet?.debug_mode"
         @open-chronicles="emit('openChronicles')"
@@ -348,6 +352,8 @@ defineExpose({
 
       <!-- 3B. CENTER / STORY AREA WITH SCENE HOTSPOTS & COMIC FEED -->
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
+        <!-- Award earned during play: glowing card at the top of the story area for a few seconds -->
+        <AwardUnlockedOverlay :messages="props.messages" :awards="props.awards" />
         <!-- Full scene artwork (top-right corner of the story area) -->
         <!-- Wrapper owns the positioning: .tw-tab sets position: relative on the button itself. -->
         <!-- z-[35]: above the story tabs (z-30, full width, rendered later), below the sequence overlay (z-[70]). -->
@@ -390,6 +396,8 @@ defineExpose({
           :is-evaluating="isEvaluating"
           :turn-error="props.turnError"
           @traverse-exit="handleTraverseExit"
+          @exit-hover="(entity, event) => emit('npcHover', entity, event)"
+          @exit-leave="emit('npcLeave')"
           @item-click="(item) => emit('itemClick', item)"
           @item-hover="(item, event) => emit('itemHover', item, event)"
           @item-leave="emit('itemLeave')"
@@ -441,6 +449,8 @@ defineExpose({
         @switch-flip="(sw) => emit('switchFlip', sw)"
         @switch-contextmenu="(sw, event) => emit('itemContextmenu', sw, event)"
         @traverse-exit="handleTraverseExit"
+        @exit-hover="(entity, event) => emit('npcHover', entity, event)"
+        @exit-leave="emit('npcLeave')"
         @item-click="(item) => emit('itemClick', item)"
         @item-hover="(item, event) => emit('itemHover', item, event)"
         @item-leave="emit('itemLeave')"
@@ -453,14 +463,15 @@ defineExpose({
     </div>
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->
-    <footer class="tw-footer relative z-20 flex flex-col bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
+    <footer class="tw-footer relative z-20 flex flex-col bg-slate-950/55 backdrop-blur-xl border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] shrink-0">
       <!-- Speech playback controls float centered above the footer while something is read aloud
            (the right corner belongs to the story feed's "scroll to latest" button). -->
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-30 max-w-[calc(100%-1.5rem)]">
         <SpeechControls />
       </div>
 
-      <!-- Action buttons slide in when the pointer is over the footer (always shown on touch). -->
+      <!-- Action buttons slide in only when the pointer is over the bar's own area, i.e. the
+           footer's top edge (always shown on touch), never while hovering the chat input. -->
       <div class="tw-action-reveal" :class="{ 'is-pinned': actionBarPinned }">
         <ImmersiveActionBar
           :inventory="props.inventory"
@@ -472,6 +483,10 @@ defineExpose({
           :world-memories="props.worldMemories"
           :can-send-input="canSendInput"
           :debug-mode="!!props.sheet?.debug_mode"
+          :game-time="props.gameTime"
+          :clock-tick="props.clockTick"
+          :exp="props.exp"
+          :hero-image="props.sheet?.profile_image"
           @open-quests="emit('openQuests')"
           @open-map="emit('openMap')"
           @open-sheet="emit('openSheet')"
@@ -495,7 +510,16 @@ defineExpose({
         @send="handleSend"
         @retry-turn="emit('retryTurn')"
         @cancel-turn-error="emit('cancelTurnError')"
-      />
+      >
+        <template #leading>
+          <TalentMenu
+            :sheet="props.sheet"
+            :entities="props.entities"
+            :disabled="!canSendInput"
+            @use="handleSend"
+          />
+        </template>
+      </ImmersiveInputBar>
     </footer>
 
     <!-- 5. CINEMATIC SCENE TRANSITION CURTAIN (covers the whole game view, header and footer included) -->
@@ -523,7 +547,10 @@ defineExpose({
 </template>
 
 <style scoped>
+/* Above the speech controls (z-30): a magnified card rises past the footer's top edge. */
 .tw-action-reveal {
+  position: relative;
+  z-index: 40;
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
@@ -535,22 +562,31 @@ defineExpose({
   overflow: hidden;
 }
 
-.tw-footer:hover .tw-action-reveal,
-.tw-action-reveal:focus-within,
+/* While collapsed, a thin strip along the footer's top edge (inside the input bar's
+   top padding) is the hover target, so the pointer over the chat input does not reveal the bar. */
+.tw-action-reveal::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 12px;
+}
+
+.tw-action-reveal:hover,
+.tw-action-reveal:has(:focus-visible),
 .tw-action-reveal.is-pinned {
   grid-template-rows: 1fr;
   opacity: 1;
 }
 
 /* Revealed: let upward popovers (ideas) overflow the bar. */
-.tw-footer:hover .tw-action-reveal > *,
-.tw-action-reveal:focus-within > *,
+.tw-action-reveal:hover > *,
+.tw-action-reveal:has(:focus-visible) > *,
 .tw-action-reveal.is-pinned > * {
   overflow: visible;
 }
 
 /* Each reveal lets the dock cards rise in one after another. */
-.tw-footer:hover .tw-action-reveal:not(.is-pinned) :deep(.dock-item) {
+.tw-action-reveal:hover:not(.is-pinned) :deep(.dock-item) {
   animation: tw-dock-rise 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   animation-delay: calc(var(--i, 0) * 35ms);
 }
@@ -567,7 +603,7 @@ defineExpose({
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tw-footer:hover .tw-action-reveal:not(.is-pinned) :deep(.dock-item) {
+  .tw-action-reveal:hover:not(.is-pinned) :deep(.dock-item) {
     animation: none;
   }
 }

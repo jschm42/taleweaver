@@ -16,7 +16,7 @@ TaleWeaver adventures are represented as self-contained blueprints following spe
 * **`.adz`**: ZIP archive containing `adventure.adv` plus localized media in `assets/` (scene backgrounds, entity portraits, audio).
 
 ### Key Manifest Components
-* **`adventure`**: World metadata, title, teaser, lore context, plot overview, tone, time pacing (`time_per_turn`, default: 5 min), rule mode (`"rpg"`, `"story"`, `"chat"`), and win/loss conditions (`completed_condition`, `gameover_condition`).
+* **`adventure`**: World metadata, title, teaser, lore context, plot overview, tone, time pacing (`time_per_turn`: minutes per narration tick, default 5; `gm_time_control`: whether the GM may change time), rule mode (`"rpg"`, `"story"`, `"chat"`), and win/loss conditions (`completed_condition`, `gameover_condition`).
 * **`protagonist`**: Avatar baseline: name, class role, HP/max HP, stamina/mana, RPG stats (`strength`, `dexterity`, `intelligence`, `wisdom`, `charisma`, `armor_class`), starting inventory, and equipped items.
 * **`scenes`**: Graph nodes representing spatial locations (`id`, `label`, `description`, `image_url`).
 * **`exits`**: Graph edges between scenes (`from_scene_id`, `to_scene_id`, `exit_type`, `is_locked`, `code_to_unlock`, `item_to_unlock`, `rule_to_unlock`).
@@ -24,7 +24,7 @@ TaleWeaver adventures are represented as self-contained blueprints following spe
 * **`objects`**: Interactive scene items or inventory objects (`CONTAINER`, `SWITCH`, `WEAPON`, `WEARABLE`, `CONSUMABLE`, `KEY`, `READABLE`, `CONSTRUCTABLE`). Containers support locks and nested items; switches hold finite state machines (`switch_states`, `switch_actions`).
 * **`quests`**: Main and side quests with clear objectives and EXP rewards.
 * **`awards`**: Achievements (`bronze`, `silver`, `gold`) evaluated during turn execution.
-* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message.
+* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`, `on_time_reached`, ...) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message.
 
 ---
 
@@ -41,16 +41,23 @@ graph TD
     E -->|Violations gathered| G["Override Narrative with rule_violations"]
     F --> T{"Scene or sequence changed?"}
     G --> T
-    T -->|yes| U["In-game turn: on_turn_end -> time_per_turn + status ticks -> on_turn_start"]
+    T -->|yes| U["In-game turn: on_turn_end -> status ticks -> on_turn_start"]
     T -->|no| H
     U --> H["Pass 2: Narration Generation (Creative/Complex Model)"]
-    H --> I["Post-Message (Checkpoints, Telemetry, Persistence)"]
+    H --> K["Narration tick (once per player message) -> due time events"]
+    K --> I["Post-Message (Checkpoints, Telemetry, Persistence)"]
 ```
 
 ### In-Game Turns (Turn Clock)
 * An **in-game turn** spans all player messages within one scene and active sequence. It is NOT the same as a player message.
-* Only when the scene or the active sequence changes (`turn_pass_flow.crossed_turn_boundary`), the engine runs `on_turn_end` (old turn), advances `time_per_turn` and status-effect ticks, then runs `on_turn_start` (new turn).
-* LLM-requested `extra_time_minutes` still applies on any message. Per-message script logic belongs in `on_logic_pass_done` / `on_narration_done`.
+* Only when the scene or the active sequence changes (`turn_pass_flow.crossed_turn_boundary`), the engine runs `on_turn_end` (old turn), status-effect ticks, then `on_turn_start` (new turn). Per-message script logic belongs in `on_logic_pass_done` / `on_narration_done`.
+
+### In-Game Clock (`engine/rules/game_clock.py`, `api/routes/adventures/game_clock_flow.py`)
+* The clock (`SessionState.in_game_time`, minutes) advances by one **narration tick** after Pass 2 of a player message (`GameTurnManager.clock_tick_pending`, set in `_process_turn_inner` for non-empty input, consumed once by `tick_after_narration`). The opening prologue, dialog choices and script output never tick.
+* Minutes per tick = `time_per_turn`, unless a script override is set. Runtime clock state lives in `entity_states["__game_clock__"]` (pause, tick override, GM-control override, tick count, timers, fired `on_time_reached` keys), so it is part of every checkpoint.
+* GM time fields of Pass 1 (`extra_time_minutes`, `time_override_minutes`, `start_datetime_override`) go through `apply_gm_time_request`: ignored when `gm_time_control` is off (template column, script override) or the clock is paused; extra time is capped by `max_time_per_turn`. While locked, the mechanics CURRENT STATE block carries `prompts.GM_TIME_LOCKED_NOTE`.
+* `tw.time` (`engine/scripting/time_proxy.py`) records ordered `ScriptChangeset.clock_ops`; every changeset applier (`_apply_script_changeset`, `TriggerService._persist_entity_states`, session start) replays them with `apply_changeset_clock`.
+* Time events (`on_time_reached` scripts with the threshold in `target_id`, and `tw.time.at/after/every` timers whose handlers live in the init script) fire in `run_due_time_events`: after the narration tick, after `/debug time` commands (`debug_commands/time_commands.py`, `TIME_CHANGED_MARKER`) and after `/script` clock changes.
 
 ### Prompt Layout (Token Efficiency)
 * System prompts are **static** (persona, adventure frame, rules, formatting, voice direction) so providers can cache them across messages; Anthropic models get explicit `cache_control` breakpoints (`backend/core/llm_request_tuning.py`).
@@ -77,14 +84,17 @@ graph TD
 * Instead, systematically inspect any state updates requested by the LLM in Pass 1:
   * **Sequence Soft Rules** (`guardrails/soft_rules.py`, `engine/rules/soft_rules.py`): sequences may declare `soft_rules` (`id`, natural-language `condition`, `script`, `text`, `guard_expression`, `max_triggers`). Pass 1 only sees `{id, condition}` of the active sequence's open rules and reports fulfilled ones in `triggered_soft_rule_ids`; Pass 1.5 runs first in the chain, checks sequence scope, trigger limit (`entity_states["__soft_rule_counts__"]`) and guard, then executes the script. Rejected rules are dropped silently (not violations).
   * **Choice Dialogs** (`engine/scripting/dialog.py`, `dialog_service.py`, `dialog_routes.py`): scripts call `tw.dialog.choose(prompt, options, on_choice=...)`; the call only records `changeset.pending_dialog`, which every changeset applier stores in `entity_states["__pending_dialog__"]` (first dialog wins). `GET /chat` exposes it as `pending_dialog` (handler name stripped), `POST /chat` returns 409 while it is open, and `POST /{game_id}/dialog/choice` clears it, saves a `[Choice] <label>` user message, runs the init-script handler with the option index, applies its changeset and optionally narrates (`narrate=True`, small model).
+  * **Dialogue Trees** (`engine/scripting/dialog_tree.py`, `dialog_tree_service.py`): `tw.dialog.tree(tree, on_end, on_action)` stores the whole normalized tree in the pending dialog (`kind: "tree"`, current `node`, visited `path`). The choice endpoint saves the NPC line and the `[Choice]`, runs the response's `script` and `action` (via `on_action`), then stores the next node as a new pending dialog; when the conversation ends, `on_end(path)` runs.
+  * **Item Operations** (`engine/scripting/item_ops.py`, `item_proxies.py`, `player_inventory.py`, `engine/interaction/script_item_apply.py`): `ItemMover` keeps every world item in exactly one holder (player inventory, NPC inventory, container `inventory`, or a scene) and detaches it before each move. `tw.objects.clone()` records `changeset.cloned_entities`; both changeset appliers insert the new `WorldEntity` rows before applying entity updates. Destroyed items move to the scene `__DESTROYED__`. The player puts items into a scene container with `/container_put_items <container> | A, B` (`container_put.py`), which then fires the container's `on_items_added_script` / `_text`. The player gives items to a scene NPC with `/give_items <npc> | A, B` or by typing `give <item> to <npc>` (`npc_give.py`; the typed form only becomes the command when the NPC is in the scene and at least one named item is carried). The items go into the NPC's inventory (item rows: `INVENTORY`, hidden), the NPC's `on_receive_item_script` / `_text` fires with `received_items` / `received_item_ids`, and `TurnInteractionsManager.pending_reaction_prompt` makes `process_turn` chain a Game Master turn for the NPC's reaction.
   * **Interaction Triggers** (`engine/interaction/interaction_targets.py`, `interaction_hooks.py`): an entity counts as interacted with when Pass 1 reports it in `updated_entities` or the player's message names a reachable entity (current scene or inventory; all context-menu commands do). For each, top-level and active-sequence `on_interact` scripts run, then the entity's inline `on_interact_script` / `on_interact_text` (`metadata_json`, objects and NPCs).
+  * **Progress Re-check** (`out_of_turn_progress.apply_out_of_turn_progress`, `quest_completion.py`): interaction triggers and `on_logic_pass_done` run after `_apply_game_event` evaluated quests, awards and sequences, so the turn re-checks sidequests, awards, sequences and win/loss guards afterwards. Dialog choices use the same function.
   * **Sequence Scripts** (`engine/rules/sequence_scripts.py`): `sequence.scripts` (same shape as top-level scripts, no `on_init`) are appended to the top-level scripts in `GameTurnManager._get_script_runner()` only while that sequence is active.
   * **Containers & Exits (Deterministic Unlock Guard)**: Validate if `item_to_unlock` is in inventory, `unlock_code` matches, or if deterministic guard `unlock_expression` evaluates to truthy. Execute `on_unlock_success` or `on_unlock_failure` scripts accordingly.
   * **Exits & Movement**: Validate exit locks, destination scene graph connectivity, and fire transition hooks (`on_leave_scene`, `on_open_exit`, `on_exit_used`, `on_enter_scene`) while preventing accidental teleports from hypothetical chat.
   * **Switches**: Verify state transitions match allowed `switch_states`.
   * **Constructables**: A `CONSTRUCTABLE` is a recipe (meta item, never visible). Validate that all `combination_ingredients` are reachable and verify `craft_guard_expression`; then consume the ingredients (except `kept_ingredients`) and reveal the hidden `result_item_ids`. Hidden craft-only results (no `reveal_rule`, not another item's `reveals_item_id`) may not be spawned or revealed by the GM.
   * **Quests & Awards (Deterministic Hard Rules & Scripting Guards)**: Validate LLM-proposed quest completions and award grants against defined hard rules (`required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`). If any configured hard rule is unmet, the completion/grant is reverted and recorded as a rule violation, forcing Pass 2 to narrate the unmet condition.
-  * **Hidden Entities**: Require explicit search/inspection actions before revealing hidden NPCs or items.
+  * **Hidden Entities**: Require explicit search/inspection actions before revealing hidden NPCs or items. Entities whose `reveal_rule` is `script` are never shown to the GM as hidden and never auto-discovered; only scripts and deterministic mechanics (crafting, `reveals_item_id`) reveal them (`backend/engine/rules/reveal_policy.py`).
 * **Reversion Mechanism**: Any invalid state change is immediately **reverted** back to its pre-turn database state.
 * Violations are recorded into the `rule_violations` list.
 
@@ -95,12 +105,14 @@ graph TD
   2. Draft narration from Pass 1.
   3. **Critical Violation Overrides**: If `rule_violations` contains entries, `game_event.narrative_description` is replaced with the failure reason.
   4. Vocal/TTS style tags (`[excited]`, `<sigh>`, `<whisper>`) for atmospheric speech.
+* The static system prompt combines the player's narration style (`core/narration_styles.py`: how *much* is written) with the adventure's narrator voice (`core/narrator_voices.py`, `AdventureTemplate.narrator_voice`: *how* it is worded). The admin curates the voice catalog (`User.narrator_voice_catalog`, `/api/settings/narrator-voices`); adventures store a full copy of their voice.
+* Arrival narrations (after an exit) and the empty opening prologue run with `manager.arrival_narration = True`: GM scene changes are ignored and no `on_interact` trigger fires, because those turns only describe the scene.
 * The narration view of the location never contains lock secrets (codes, key items, unlock rules); unlocks are resolved by Pass 1 and the guardrails.
 * **Enforcement**: This forces the creative model to narrate failure accurately rather than hallucinating success.
 
 ### Post-Message: Persistence & Checkpoints
 * Updates committed to SQLite `SessionState`.
-* Checkpoints created on milestones (`SCENE_CHANGE`, `QUEST_UPDATE`, `AWARD_GRANTED`).
+* Checkpoints are full save states (`engine/sessions/session_snapshot.py`: avatar, session state, session world rows). `TurnCheckpoints` (`turn_checkpoints.py`) writes them at the end of every turn when the scene or active sequence changed (`SCENE_CHANGE`, `SEQUENCE_CHANGE`), plus queued milestones (`QUEST_UPDATE`, `AWARD_GRANTED`) and `/save` (`MANUAL_SAVE`). `tw.save()` (`SCRIPT_SAVE`) is written immediately by both script apply paths. 5 automatic checkpoints and 10 saves are kept per session.
 * Performance metrics logged via `log_structured_event` (p50/p90 latency monitoring); narration token usage (incl. cached prompt tokens) as `gm.turn.pipeline.tokens`.
 
 ---

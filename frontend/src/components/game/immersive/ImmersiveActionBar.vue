@@ -2,16 +2,17 @@
 /**
  * ImmersiveActionBar — the dock under the story feed.
  *
- * Quick access to Quests, World Map, Hero Sheet, Chronicles, Hints, Memories (and Debug) as
- * theme-styled cards with macOS-style magnification, plus the Action Ideas popup.
+ * Quick access to Quests, World Map, Hero Sheet, Chronicles, Hints, Memories (and Debug) as a
+ * fanned hand of playing cards: each card shows its artwork (src/assets/menu-cards).
+ * macOS-style magnification, plus the Action Ideas popup. The ornamental in-game clock sits
+ * left of the cards and the experience counter right of them (wide screens only).
  */
-import { computed, onBeforeUnmount, ref, type Component } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import {
   Scroll,
   Map as MapIcon,
   User,
   History,
-  Lightbulb,
   BrainCircuit,
   Terminal,
   Sparkles,
@@ -20,6 +21,17 @@ import {
   HelpCircle,
 } from 'lucide-vue-next'
 import { useDockMagnification } from '@/composables/useDockMagnification'
+import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
+import FooterClock from './FooterClock.vue'
+import FooterXp from './FooterXp.vue'
+import type { GameTimeView } from './gameClockTime'
+import heroArt from '@/assets/menu-cards/hero.webp'
+import hintsArt from '@/assets/menu-cards/hints.webp'
+import ideasArt from '@/assets/menu-cards/ideas.webp'
+import logArt from '@/assets/menu-cards/log.webp'
+import mapArt from '@/assets/menu-cards/map.webp'
+import memoriesArt from '@/assets/menu-cards/memories.webp'
+import questsArt from '@/assets/menu-cards/quests.webp'
 
 const props = defineProps<{
   inventory?: any[]
@@ -31,6 +43,11 @@ const props = defineProps<{
   promptSuggestions?: string[]
   canSendInput?: boolean
   debugMode?: boolean
+  gameTime?: GameTimeView | null
+  clockTick?: boolean
+  exp?: number
+  /** The protagonist's portrait; the Hero card shows it instead of the generic artwork. */
+  heroImage?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -45,11 +62,35 @@ const emit = defineEmits<{
   selectSuggestion: [suggestion: string]
 }>()
 
+// --- Hero card: the protagonist's portrait (thumbnail -> full image -> generic artwork) ---
+const heroArtStage = ref<'thumb' | 'full' | 'generic'>('thumb')
+watch(
+  () => props.heroImage,
+  () => {
+    heroArtStage.value = 'thumb'
+  },
+)
+
+const heroCardArt = computed(() => {
+  const path = props.heroImage
+  if (!path || heroArtStage.value === 'generic') return heroArt
+  if (heroArtStage.value === 'full') return getOriginalImageUrl(path) || heroArt
+  return getImageUrl(path, { thumbnail: true }) || heroArt
+})
+
+function onHeroArtError() {
+  heroArtStage.value = heroArtStage.value === 'thumb' ? 'full' : 'generic'
+}
+
 interface DockItem {
   id: string
   label: string
   title: string
   icon: Component
+  /** Card artwork; without it the card shows the icon large (e.g. Debug). */
+  art?: string
+  /** The artwork is a character portrait: keep the head in view when cropping. */
+  portrait?: boolean
   /** Signature hue of the card, blended with the theme's ink. */
   tint: string
   badge?: number
@@ -62,6 +103,7 @@ const dockItems = computed<DockItem[]>(() => {
   const items: DockItem[] = [
     {
       id: 'quests',
+      art: questsArt,
       label: 'Quests',
       title: 'Open Quest Log',
       icon: Scroll,
@@ -72,6 +114,7 @@ const dockItems = computed<DockItem[]>(() => {
     },
     {
       id: 'map',
+      art: mapArt,
       label: 'Map',
       title: 'Open World Map',
       icon: MapIcon,
@@ -81,6 +124,8 @@ const dockItems = computed<DockItem[]>(() => {
     },
     {
       id: 'hero',
+      art: heroCardArt.value,
+      portrait: heroCardArt.value !== heroArt,
       label: 'Hero',
       title: 'Open Character Sheet & Inventory',
       icon: User,
@@ -91,6 +136,7 @@ const dockItems = computed<DockItem[]>(() => {
     },
     {
       id: 'log',
+      art: logArt,
       label: 'Log',
       title: 'Open Chronicles Timeline',
       icon: History,
@@ -99,6 +145,7 @@ const dockItems = computed<DockItem[]>(() => {
     },
     {
       id: 'hints',
+      art: hintsArt,
       label: 'Hints',
       title: 'Adventure Hints & Walkthrough',
       icon: HelpCircle,
@@ -107,6 +154,7 @@ const dockItems = computed<DockItem[]>(() => {
     },
     {
       id: 'memories',
+      art: memoriesArt,
       label: 'Memories',
       title: 'World Memories & Chronicle',
       icon: BrainCircuit,
@@ -127,6 +175,13 @@ const dockItems = computed<DockItem[]>(() => {
   }
   return items
 })
+
+/** Fan of the hand: cards tilt away from the middle and sink slightly towards the edges. */
+function fanStyle(idx: number): Record<string, string> {
+  const total = dockItems.value.length + 1
+  const offset = idx - (total - 1) / 2
+  return { '--rot': `${offset * 2.4}deg`, '--drop': `${Math.abs(offset) * 1.6}px` }
+}
 
 const ideasCount = computed(() => Math.min(props.promptSuggestions?.length || 0, 5))
 
@@ -211,7 +266,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative flex justify-center px-4 pt-4 pb-2">
+  <div class="dock-row relative px-4 pt-4 pb-2">
+    <FooterClock :game-time="props.gameTime || null" :clock-tick="props.clockTick" class="dock-side dock-side--left" />
     <div
       ref="dockRef"
       class="dock-shelf"
@@ -224,7 +280,7 @@ onBeforeUnmount(() => {
         :key="item.id"
         data-dock-item
         class="dock-item"
-        :style="{ '--i': idx, '--s': dock.scaleOf(idx), '--tint': item.tint }"
+        :style="{ '--i': idx, '--s': dock.scaleOf(idx), '--tint': item.tint, ...fanStyle(idx) }"
       >
         <button
           type="button"
@@ -234,7 +290,18 @@ onBeforeUnmount(() => {
           :aria-label="item.title"
           @click="activate(item)"
         >
-          <component :is="item.icon" class="dock-icon" />
+          <span class="dock-face">
+            <img
+              v-if="item.art"
+              :src="item.art"
+              class="dock-art"
+              :class="{ 'is-portrait': item.portrait }"
+              alt=""
+              draggable="false"
+              @error="item.id === 'hero' && onHeroArtError()"
+            />
+            <component :is="item.icon" v-else class="dock-icon" />
+          </span>
           <span v-if="item.badge" class="dock-badge">{{ item.badge }}</span>
         </button>
         <span class="dock-label" aria-hidden="true">{{ item.label }}</span>
@@ -248,7 +315,7 @@ onBeforeUnmount(() => {
         ref="ideasWrapperRef"
         data-dock-item
         class="dock-item"
-        :style="{ '--i': dockItems.length, '--s': dock.scaleOf(dockItems.length), '--tint': '#fbbf24' }"
+        :style="{ '--i': dockItems.length, '--s': dock.scaleOf(dockItems.length), '--tint': '#fbbf24', ...fanStyle(dockItems.length) }"
       >
         <button
           type="button"
@@ -259,7 +326,9 @@ onBeforeUnmount(() => {
           :aria-expanded="showIdeasPopup"
           @click="toggleIdeasPopup"
         >
-          <Lightbulb class="dock-icon" />
+          <span class="dock-face">
+            <img :src="ideasArt" class="dock-art" alt="" draggable="false" />
+          </span>
           <span v-if="ideasCount" class="dock-badge">{{ ideasCount }}</span>
         </button>
         <span v-if="!showIdeasPopup" class="dock-label" aria-hidden="true">Ideas</span>
@@ -319,32 +388,60 @@ onBeforeUnmount(() => {
         </Transition>
       </div>
     </div>
+    <FooterXp :exp="props.exp || 0" class="dock-side dock-side--right" />
   </div>
 </template>
 
 <style scoped>
+/* ── Row: clock | cards | XP ───────────────────────────────────────────── */
+.dock-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 2.5rem;
+}
+
+.dock-row > .dock-shelf {
+  grid-column: 2;
+}
+
+.dock-side--left {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.dock-side--right {
+  grid-column: 3;
+  justify-self: start;
+}
+
+/* Narrow screens: the cards need the whole width. */
+@media (max-width: 1023px) {
+  .dock-side {
+    display: none;
+  }
+}
+
 /* ── Shelf ─────────────────────────────────────────────────────────────── */
 .dock-shelf {
-  --dock-base: 46px;
+  /* Card width; cards are 2:3 playing cards, so their height is 1.5x. */
+  --dock-base: 58px;
   display: inline-flex;
   align-items: flex-end;
-  gap: 0.55rem;
-  height: calc(var(--dock-base) + 14px);
-  padding: 7px 12px;
+  gap: 0.5rem;
+  height: calc(var(--dock-base) * 1.5 + 16px);
+  padding: 8px 14px;
   border-radius: calc(var(--tw-card-radius, 0.875rem) + 6px);
-  border: 1px solid var(--tw-panel-border, rgba(51, 65, 85, 0.9));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--tw-panel-ink, #e2e8f0) 6%, transparent), transparent 60%),
-    color-mix(in srgb, var(--tw-panel-bg, #0f172a) 72%, transparent);
-  box-shadow:
-    0 18px 40px -18px rgba(0, 0, 0, 0.75),
-    inset 0 1px 0 color-mix(in srgb, var(--tw-panel-ink, #e2e8f0) 10%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
+  /* No frame; a lightly see-through panel so the scene shows behind the cards. */
+  border: none;
+  background: color-mix(in srgb, var(--tw-panel-bg, #0f172a) 45%, transparent);
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px) saturate(1.15);
 }
 
 @media (max-width: 640px) {
   .dock-shelf {
-    --dock-base: 38px;
+    --dock-base: 40px;
     gap: 0.35rem;
     padding: 6px 8px;
   }
@@ -355,129 +452,6 @@ onBeforeUnmount(() => {
   width: 1px;
   height: 60%;
   background: color-mix(in srgb, var(--tw-panel-ink, #e2e8f0) 18%, transparent);
-}
-
-/* ── Card ──────────────────────────────────────────────────────────────── */
-.dock-item {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.dock-card {
-  --card-size: calc(var(--dock-base) * var(--s, 1));
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--card-size);
-  height: var(--card-size);
-  border-radius: var(--tw-card-radius, 0.875rem);
-  border: 1px solid var(--tw-card-border, rgba(51, 65, 85, 0.9));
-  background:
-    radial-gradient(120% 90% at 30% 15%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 65%),
-    var(--tw-card-bg, rgba(15, 23, 42, 0.85));
-  color: color-mix(in srgb, var(--tint) 72%, var(--tw-card-ink, #e2e8f0));
-  box-shadow:
-    0 8px 18px -10px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 color-mix(in srgb, var(--tw-card-ink, #e2e8f0) 12%, transparent);
-  cursor: pointer;
-  transition:
-    width 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-color 0.2s ease,
-    box-shadow 0.25s ease;
-}
-
-.dock-card:hover,
-.dock-card:focus-visible {
-  transform: translateY(-5px);
-  border-color: color-mix(in srgb, var(--tw-accent, #f59e0b) 65%, var(--tw-card-border, #334155));
-  box-shadow:
-    0 14px 28px -12px color-mix(in srgb, var(--tint) 70%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 30%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--tw-card-ink, #e2e8f0) 18%, transparent);
-  outline: none;
-}
-
-.dock-card:active {
-  transform: translateY(-2px) scale(0.94);
-}
-
-.dock-card--ideas.is-active {
-  border-color: var(--tw-accent, #f59e0b);
-  box-shadow:
-    0 0 22px -4px color-mix(in srgb, var(--tw-accent, #f59e0b) 70%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 35%, transparent);
-}
-
-.dock-icon {
-  width: 46%;
-  height: 46%;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.dock-card:hover .dock-icon {
-  transform: rotate(-6deg) scale(1.06);
-}
-
-.dock-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9999px;
-  font: 800 10px/18px var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
-  text-align: center;
-  color: #0b1120;
-  background: color-mix(in srgb, var(--tint) 85%, #ffffff);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-}
-
-/* Label bubble above the hovered card. */
-.dock-label {
-  position: absolute;
-  bottom: calc(var(--dock-base) * var(--s, 1) + 14px);
-  left: 50%;
-  padding: 3px 9px;
-  border-radius: 8px;
-  white-space: nowrap;
-  pointer-events: none;
-  font: 700 10px/1.4 var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--tw-panel-ink, #e2e8f0);
-  background: var(--tw-panel-bg, #0f172a);
-  border: 1px solid var(--tw-panel-border, rgba(51, 65, 85, 0.9));
-  box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.7);
-  opacity: 0;
-  transform: translate(-50%, 6px) scale(0.9);
-  transition:
-    opacity 0.15s ease,
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-    bottom 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.dock-item:hover .dock-label,
-.dock-item:focus-within .dock-label {
-  opacity: 1;
-  transform: translate(-50%, 0) scale(1);
-}
-
-/* "Running app" dot: the tracked quest. */
-.dock-dot {
-  position: absolute;
-  bottom: -6px;
-  width: 4px;
-  height: 4px;
-  border-radius: 9999px;
-  background: var(--tint);
-  box-shadow: 0 0 6px var(--tint);
 }
 
 /* ── Animations ────────────────────────────────────────────────────────── */
@@ -500,23 +474,11 @@ onBeforeUnmount(() => {
 }
 
 @keyframes dock-bounce {
-  0% { transform: translateY(0); }
-  30% { transform: translateY(-14px) scale(1.04); }
-  55% { transform: translateY(0) scale(0.97, 1.03); }
-  75% { transform: translateY(-5px); }
-  100% { transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dock-card,
-  .dock-label,
-  .dock-icon {
-    transition: none;
-  }
-  .dock-card.is-glowing,
-  .dock-card.is-bouncing {
-    animation: none;
-  }
+  0% { transform: translateY(var(--drop, 0)) rotate(var(--rot, 0deg)); }
+  30% { transform: translateY(-16px) rotate(0deg) scale(1.04); }
+  55% { transform: translateY(0) rotate(0deg) scale(0.97, 1.03); }
+  75% { transform: translateY(-6px) rotate(0deg); }
+  100% { transform: translateY(var(--drop, 0)) rotate(var(--rot, 0deg)); }
 }
 
 /* ── Ideas popup ───────────────────────────────────────────────────────── */
@@ -539,3 +501,5 @@ onBeforeUnmount(() => {
   border-radius: 4px;
 }
 </style>
+
+<style scoped src="./dockCards.css"></style>

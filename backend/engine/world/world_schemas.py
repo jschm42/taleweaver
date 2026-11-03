@@ -8,44 +8,10 @@ passed to the manifest applier.
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_serializer, model_validator
+from pydantic import Field, model_serializer, model_validator
 
-_EMPTY_VALUES: tuple[Any, ...] = (None, "", [], {})
-
-
-def _drop_empty_unknown_keys(model: type[BaseModel], data: dict[str, Any]) -> dict[str, Any]:
-    """Remove keys the model does not declare when their value carries no content.
-
-    LLMs pattern-complete field names (e.g. ``on_success_script_text`` next to the
-    ``on_*_script`` / ``on_*_text`` pairs) and emit them as null. Under
-    ``extra="forbid"`` one such empty key would fail the whole manifest, so it is
-    dropped here; unknown keys that carry content still fail validation.
-    """
-    known = set(model.model_fields)
-    known.update(f.alias for f in model.model_fields.values() if f.alias)
-    return {k: v for k, v in data.items() if k in known or v not in _EMPTY_VALUES}
-
-
-class WorldBaseSchema(BaseModel):
-    """Base schema for world generation models that normalizes null LLM outputs."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_null_fields(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if cls.model_config.get("extra") == "forbid":
-            data = _drop_empty_unknown_keys(cls, data)
-        for field_name, field_info in cls.model_fields.items():
-            key = field_info.alias if field_info.alias and field_info.alias in data else field_name
-            if key not in data or data[key] is not None:
-                continue
-            if field_info.default == "":
-                data[key] = ""
-                continue
-            if field_info.default_factory is list or field_info.default == []:
-                data[key] = []
-        return data
+from backend.engine.world.combat_profile_schemas import NpcMainAttackSchema, TalentSchema
+from backend.engine.world.schema_base import WorldBaseSchema
 
 
 class WorldSceneSchema(WorldBaseSchema):
@@ -94,7 +60,13 @@ class WorldExitSchema(WorldBaseSchema):
     from_scene_id: str = Field(..., description="The ID of the source scene.")
     to_scene_id: str = Field(..., description="The ID of the destination scene.")
     label: str = Field(
-        ..., description="How to describe the transition, e.g., 'a narrow stone staircase'"
+        ...,
+        description=(
+            "The physical passage itself, as seen from either side, e.g. 'an old rusty gate' or "
+            "'a narrow stone staircase'. Never a destination or direction ('Way to the Combat "
+            "Lab', 'Back to the hall'): both sides show the same label and the game shows the "
+            "target scene next to it. Required, even for a plain opening ('a low archway')."
+        ),
     )
     is_bidirectional: bool = Field(
         True,
@@ -106,6 +78,14 @@ class WorldExitSchema(WorldBaseSchema):
         ),
     )
     is_locked: bool = Field(..., description="Whether the path is initially blocked.")
+    is_revealed: bool = Field(
+        False,
+        description=(
+            "True when the player already knows where this exit leads before using it "
+            "(a signposted door, a gate with a view into the courtyard): the target scene's "
+            "name and image are shown from the start. Usually False."
+        ),
+    )
     lock_description: Optional[str] = Field(
         default="",
         description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.",
@@ -370,6 +350,7 @@ class WorldNPCSchema(WorldBaseSchema):
         description=(
             "If is_hidden=True: the condition that reveals this NPC. "
             "E.g. 'If the prot searches under the table', 'If the prot picks up BRASS_KEY', or 'If the NPC speaks'. "
+            "Use 'script' if only a script may reveal it (the GM never discovers it). "
             "Use empty string if not hidden."
         ),
     )
@@ -377,13 +358,29 @@ class WorldNPCSchema(WorldBaseSchema):
         default_factory=list,
         description="List of object IDs in this NPC's inventory. Use [] if empty.",
     )
+    strength: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    dexterity: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    intelligence: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    wisdom: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    charisma: Optional[int] = Field(None, description="Combat stat (1-30, default 10).")
+    armor_class: Optional[int] = Field(
+        None, description="Armor class attackers must reach (1-30, default 10)."
+    )
+    main_attack: Optional[NpcMainAttackSchema] = Field(
+        None,
+        description=(
+            "The NPC's standard attack, e.g. a Longsword (MELEE, 1d8, strength), a Bow "
+            "(RANGED, 1d6, dexterity) or Magic Missile (MAGIC, 1d4+1, intelligence). "
+            "Needs no item. Use null for an unarmed 1d6 attack."
+        ),
+    )
     equipped_weapon_id: Optional[str] = Field(
         None,
-        description="Optional ID of the equipped weapon object. Must exist in the objects list.",
+        description="Deprecated, use main_attack. Optional ID of an equipped weapon object.",
     )
     equipped_armor_id: Optional[str] = Field(
         None,
-        description="Optional ID of the equipped armor object. Must exist in the objects list.",
+        description="Deprecated, use armor_class. Optional ID of an equipped armor object.",
     )
     special_actions: list[SpecialActionSchema] = Field(
         default=[],
@@ -406,6 +403,21 @@ class WorldNPCSchema(WorldBaseSchema):
     special_chance: Optional[int] = Field(
         None,
         description="Percent chance (0-100) per combat turn that the NPC uses one of its special_actions. Default 40.",
+    )
+    combat_group: Optional[str] = Field(
+        None,
+        description=(
+            "Optional group tag (e.g. 'BANDITS'). NPCs sharing a group fight together: attacking one "
+            "pulls the others in the same scene into the fight. Use null for none."
+        ),
+    )
+    assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
+        None,
+        description=(
+            "When the NPC joins a fight it was not attacked in: GROUP (a group member fights), "
+            "ANYONE (any fight in its scene) or NEVER (bystander). Null: GROUP with a combat_group, "
+            "otherwise NEVER."
+        ),
     )
     on_defeat_script: Optional[str] = Field(
         default="",
@@ -430,6 +442,14 @@ class WorldNPCSchema(WorldBaseSchema):
     on_interact_text: Optional[str] = Field(
         default="",
         description="Optional text output whenever the protagonist interacts with this NPC. Use empty string for none.",
+    )
+    on_receive_item_script: Optional[str] = Field(
+        default="",
+        description="Optional script executed once when the protagonist gives this NPC one or more items; `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Use empty string for none.",
+    )
+    on_receive_item_text: Optional[str] = Field(
+        default="",
+        description="Optional text output when the protagonist gives this NPC items. Use empty string for none.",
     )
 
     model_config = {"extra": "forbid"}
@@ -570,6 +590,7 @@ class WorldObjectSchema(WorldBaseSchema):
         description=(
             "If is_hidden=True: the condition that reveals this object. "
             "E.g. 'If the prot searches the desk', 'If the prot picks up IRON_KEY'. "
+            "Use 'script' if only a script, crafting or reveals_item_id may reveal it. "
             "Use empty string if not hidden."
         ),
     )
@@ -744,6 +765,14 @@ class WorldObjectSchema(WorldBaseSchema):
         default="",
         description="Optional text output when container unlocking fails. Use empty string for none.",
     )
+    on_items_added_script: Optional[str] = Field(
+        default="",
+        description="Optional script executed after the player put items into this container (added_items, added_item_ids in scope). Use empty string for none.",
+    )
+    on_items_added_text: Optional[str] = Field(
+        default="",
+        description="Optional text output after the player put items into this container. Use empty string for none.",
+    )
     on_read_script: Optional[str] = Field(
         default="",
         description="Only for READABLE objects: optional script executed when read. Use empty string for none.",
@@ -812,6 +841,7 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -1010,6 +1040,13 @@ class ProtagonistSchema(WorldBaseSchema):
         default=[],
         description="List of up to 5 special actions the protagonist has at the start. Max 5.",
     )
+    talents: list[TalentSchema] = Field(
+        default=[],
+        description=(
+            "Up to 8 non-combat talents the player triggers with 'use <name>' or 'cast <name>', "
+            "e.g. Mind Reading or an absurd Gossip Attack. Max 8."
+        ),
+    )
     on_hp_change_script: Optional[str] = Field(
         default="",
         description="Optional script executed when protagonist HP changes. Use empty string for none.",
@@ -1041,9 +1078,10 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_turn_end",
         "on_logic_pass_done",
         "on_narration_done",
+        "on_time_reached",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m')",
     )
     target_id: Optional[str] = Field(
         None,

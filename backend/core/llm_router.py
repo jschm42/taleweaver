@@ -62,6 +62,40 @@ UNBRACKETED_RE = re.compile(
 )
 
 
+def _clean_dialogue_voice_body(raw_body: str) -> str:
+    return (
+        raw_body.rstrip('"')
+        .rstrip("”")
+        .rstrip("»")
+        .lstrip('"')
+        .lstrip("“")
+        .lstrip("„")
+        .lstrip("«")
+        .strip()
+    )
+
+
+def _normalize_dialogue_line(
+    line: str,
+    speaker_re: re.Pattern,
+    tag_extract_re: re.Pattern,
+) -> str | None:
+    sp_match = speaker_re.match(line)
+    if not sp_match:
+        return None
+    speaker_part = sp_match.group("speaker")
+    speech_part = sp_match.group("speech").strip()
+    tag_match = tag_extract_re.match(speech_part)
+    if not tag_match:
+        return line
+    raw_tag = tag_match.group("tag").strip()
+    canon_tag = GameMasterLLM._to_canonical_voice_tag(raw_tag)
+    if canon_tag not in VOICE_TAG_SET:
+        return line
+    body = _clean_dialogue_voice_body(tag_match.group("body").strip())
+    return f'{speaker_part}[{canon_tag}] "{body}"'
+
+
 class GameMasterLLM:
     DEFAULT_SMALL_MAX_TOKENS = 4096
     DEFAULT_COMPLEX_MAX_TOKENS = 8192
@@ -423,27 +457,9 @@ class GameMasterLLM:
                 normalized_lines.append(line)
                 continue
 
-            sp_match = speaker_re.match(line)
-            if sp_match:
-                speaker_part = sp_match.group("speaker")
-                speech_part = sp_match.group("speech").strip()
-                tag_match = tag_extract_re.match(speech_part)
-                if tag_match:
-                    canon_tag = GameMasterLLM._to_canonical_voice_tag(tag_match.group("tag"))
-                    body = tag_match.group("body").strip()
-                    body = (
-                        body.rstrip('"')
-                        .rstrip("”")
-                        .rstrip("»")
-                        .lstrip('"')
-                        .lstrip("“")
-                        .lstrip("„")
-                        .lstrip("«")
-                        .strip()
-                    )
-                    normalized_lines.append(f'{speaker_part}[{canon_tag}] "{body}"')
-                    continue
-                normalized_lines.append(line)
+            diag_line = _normalize_dialogue_line(line, speaker_re, tag_extract_re)
+            if diag_line is not None:
+                normalized_lines.append(diag_line)
                 continue
 
             # Paragraph leading tag normalization (e.g. German tag [neugierig] -> [curious])
@@ -919,7 +935,8 @@ class GameMasterLLM:
 
         result = response.choices[0].message.content or ""
         result = self.clean_thinking_tags(result)
-        result = self.normalize_voice_tags(result)
+        if operation != "script.llm_ask":
+            result = self.normalize_voice_tags(result)
 
         log_llm_interaction(
             model=model,
@@ -996,7 +1013,8 @@ class GameMasterLLM:
 
         result = response.choices[0].message.content or ""
         result = self.clean_thinking_tags(result)
-        result = self.normalize_voice_tags(result)
+        if operation != "script.llm_ask":
+            result = self.normalize_voice_tags(result)
 
         log_llm_interaction(
             model=model,

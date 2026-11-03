@@ -61,6 +61,8 @@ _OBJECT_METADATA_FIELDS = (
     "on_unlock_success_text",
     "on_unlock_failure_script",
     "on_unlock_failure_text",
+    "on_items_added_script",
+    "on_items_added_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -72,6 +74,18 @@ _OBJECT_METADATA_FIELDS = (
     "on_equip_text",
     "on_unequip_script",
     "on_unequip_text",
+)
+# NPC trigger fields live in metadata_json; the editor form reads them flat. Without them the
+# form opened empty and saving the NPC wiped its scripts.
+_NPC_METADATA_FIELDS = (
+    "on_interact_script",
+    "on_interact_text",
+    "on_defeat_script",
+    "on_defeat_text",
+    "on_protagonist_enters_scene_script",
+    "on_protagonist_enters_scene_text",
+    "on_receive_item_script",
+    "on_receive_item_text",
 )
 _OBJECT_STAT_LABELS = (
     ("stat_modifier_strength", "STR"),
@@ -149,7 +163,10 @@ def _object_extras(entity: WorldEntity) -> dict[str, Any]:
 def _entity_extras(entity: WorldEntity, _data: dict[str, Any]) -> dict[str, Any]:
     """Group stats for easier frontend access."""
     if entity.entity_type == "NPC":
-        return {"stats": {"hp": entity.hp, "mana": entity.mana, "stamina": entity.stamina}}
+        return {
+            "stats": {"hp": entity.hp, "mana": entity.mana, "stamina": entity.stamina},
+            **_text_fields(dict(entity.metadata_json or {}), _NPC_METADATA_FIELDS),
+        }
     if entity.entity_type == "OBJECT":
         return _object_extras(entity)
     return {}

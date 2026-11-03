@@ -5,7 +5,6 @@ Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imag
 
 import asyncio
 import base64
-import io
 import logging
 import os
 import re
@@ -21,6 +20,12 @@ from PIL import Image
 from backend.core import prompts
 from backend.core.config import settings
 from backend.core.security import encryption_util
+from backend.engine.media.asset_naming import (
+    DEFAULT_IMAGE_FORMAT,
+    asset_filename,
+    encode_image,
+    image_extension,
+)
 from backend.engine.media.bfl_payloads import build_bfl_payload, resolve_bfl_model_alias
 from backend.engine.media.comfyui import generate_image as generate_comfyui_image
 from backend.engine.media.image_generation_support import (
@@ -63,7 +68,6 @@ from backend.utils.path_security import (
     sanitize_path_component as sanitize_path_component_shared,
 )
 from backend.utils.svg_generator import SVGPlaceholderGenerator
-from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +408,7 @@ class MediaEngine:
         if not os.path.exists(target_dir):
             return
 
-        image_extensions = {".jpg", ".jpeg", ".png"}
+        image_extensions = {".jpg", ".jpeg", ".png", ".webp"}
         tasks = []
         for root, _, files in os.walk(target_dir):
             for file in files:
@@ -513,7 +517,7 @@ class MediaEngine:
     ) -> Optional[str]:
         """Generates an image via OpenRouter's dedicated /api/v1/images endpoint."""
         provider_options = provider_options or {}
-        image_format = provider_options.get("image_format", "jpeg")
+        image_format = provider_options.get("image_format", DEFAULT_IMAGE_FORMAT)
         image_quality = provider_options.get("image_quality", 85)
 
         clean_model = model.removeprefix("openrouter/")
@@ -573,7 +577,7 @@ class MediaEngine:
 
         image_url, b64_data = extract_chat_image_payload(response.choices[0].message)
 
-        image_format = provider_options.get("image_format", "jpeg")
+        image_format = provider_options.get("image_format", DEFAULT_IMAGE_FORMAT)
         image_quality = provider_options.get("image_quality", 85)
 
         if image_url:
@@ -723,7 +727,7 @@ class MediaEngine:
         )
         image_url, b64_json = MediaEngine._extract_image_payload(response)
 
-        image_format = provider_options.get("image_format", "jpeg")
+        image_format = provider_options.get("image_format", DEFAULT_IMAGE_FORMAT)
         image_quality = provider_options.get("image_quality", 85)
 
         if image_url:
@@ -795,7 +799,7 @@ class MediaEngine:
             else 1.0,
             seed=provider_options.get("seed"),
             negative_prompt=provider_options.get("negative_prompt"),
-            image_format=provider_options.get("image_format", "jpeg"),
+            image_format=provider_options.get("image_format", DEFAULT_IMAGE_FORMAT),
             image_quality=provider_options.get("image_quality", 85),
             sampler_name=provider_options.get("sampler_name") or "Euler",
             scheduler=provider_options.get("scheduler") or "Normal",
@@ -843,7 +847,7 @@ class MediaEngine:
             body = response.json()
             image_url, b64_json = MediaEngine._extract_image_payload(body)
 
-            image_format = "jpeg"
+            image_format = DEFAULT_IMAGE_FORMAT
             image_quality = 85
 
             if image_url:
@@ -874,7 +878,7 @@ class MediaEngine:
         cfg_scale: Optional[float] = None,
         seed: Optional[int] = None,
         negative_prompt: Optional[str] = None,
-        image_format: str = "jpeg",
+        image_format: str = DEFAULT_IMAGE_FORMAT,
         image_quality: int = 85,
         sampler_name: Optional[str] = None,
         scheduler: Optional[str] = None,
@@ -926,13 +930,13 @@ class MediaEngine:
         b64_data: str,
         target_dir: str,
         filename: Optional[str] = None,
-        image_format: str = "jpeg",
+        image_format: str = DEFAULT_IMAGE_FORMAT,
         quality: int = 85,
     ) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         try:
             safe_target_dir = _resolve_output_dir(target_dir)
-            ext = "jpg" if image_format.lower() == "jpeg" else "png"
+            ext = image_extension(image_format)
             filepath = _build_output_filepath(safe_target_dir, filename, ext)
 
             if b64_data.startswith("data:image/"):
@@ -950,14 +954,9 @@ class MediaEngine:
             logger.info("Decoding base64 image payload (length=%d)", len(b64_data))
             image_bytes = base64.b64decode(b64_data)
 
-            if image_format.lower() == "jpeg":
-                img = Image.open(io.BytesIO(image_bytes))
-                if img.mode in ("RGBA", "P"):
-                    img = img.convert("RGB")
-                # Image.save is CPU bound, wrap in to_thread
-                await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
-            else:
-                _write_binary_file(filepath, image_bytes)
+            # Re-encoding is CPU bound, wrap in to_thread
+            encoded = await asyncio.to_thread(encode_image, image_bytes, image_format, quality)
+            _write_binary_file(filepath, encoded)
 
             # Generate thumbnail
             await MediaEngine._generate_thumbnail(filepath)
@@ -972,7 +971,7 @@ class MediaEngine:
         url: str,
         target_dir: str,
         filename: Optional[str] = None,
-        image_format: str = "jpeg",
+        image_format: str = DEFAULT_IMAGE_FORMAT,
         quality: int = 85,
     ) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
@@ -980,19 +979,14 @@ class MediaEngine:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
             if response.status_code == 200:
                 safe_target_dir = _resolve_output_dir(target_dir)
-                ext = "jpg" if image_format.lower() == "jpeg" else "png"
+                ext = image_extension(image_format)
                 filepath = _build_output_filepath(safe_target_dir, filename, ext)
 
-                if image_format.lower() == "jpeg":
-                    img = Image.open(io.BytesIO(response.content))
-                    if img.mode in ("RGBA", "P"):
-                        img = img.convert("RGB")
-                    # Image.save is CPU bound, wrap in to_thread
-                    await asyncio.to_thread(
-                        img.save, filepath, "JPEG", quality=quality, optimize=True
-                    )
-                else:
-                    _write_binary_file(filepath, response.content)
+                # Re-encoding is CPU bound, wrap in to_thread
+                encoded = await asyncio.to_thread(
+                    encode_image, response.content, image_format, quality
+                )
+                _write_binary_file(filepath, encoded)
 
                 # Generate thumbnail
                 await MediaEngine._generate_thumbnail(filepath)
@@ -1046,11 +1040,8 @@ class MediaEngine:
             )
 
         target_dir = _safe_data_path("adventures", "library", adventure_id, "scenes")
-        ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-
-        # Use adventure_id as prefix for clarity
-        safe_id = slugify(adventure_id)
-        filename = f"{safe_id}_scene_{uuid.uuid4().hex[:8]}.{ext}"
+        # The folder already identifies the adventure: short ID prefix + label only.
+        filename = asset_filename("scene", t2i.get("image_format"))
 
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
@@ -1125,12 +1116,8 @@ class MediaEngine:
             )
 
         target_dir = _safe_data_path("adventures", "library", adventure_id, "entities")
-        ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-
-        # Use adventure_id and entity_id as prefix for clarity
-        safe_adv_id = slugify(adventure_id)
-        safe_ent_id = slugify(entity_id)
-        filename = f"{safe_adv_id}_{safe_ent_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        # The folder already identifies the adventure: short ID prefix + entity label only.
+        filename = asset_filename(entity_id, t2i.get("image_format"))
 
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
@@ -1207,11 +1194,8 @@ class MediaEngine:
             raise ValueError("Invalid adventure identifier.")
 
         target_dir = _safe_data_path("adventures", "library", safe_adventure_id)
-        ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-
-        # Use sanitized adventure_id as prefix for clarity
-        safe_id = safe_adventure_id
-        filename = f"{safe_id}_cover_{uuid.uuid4().hex[:8]}.{ext}"
+        # The folder already identifies the adventure: short ID prefix + label only.
+        filename = asset_filename("cover", t2i.get("image_format"))
 
         # Clean original_prompt for cover generation:
         # Strip out structured [Sequence: ...], [Scene: ...], [NPC: ...] blocks to prevent multi-panel storyboarding

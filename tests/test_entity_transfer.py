@@ -221,3 +221,46 @@ async def test_import_rejects_invalid_files(auth_client, setup_test_db, data_dir
     assert not_zip.status_code == 400
     assert wrong_zip.status_code == 400
     assert "entity.json" in wrong_zip.json()["detail"]
+
+
+async def test_import_with_target_scene_places_npc_there(auth_client, setup_test_db, data_dir):
+    # Arrange: the NPC's own scene CAVE exists, but the scene editor imports into CRYPT.
+    template_id = await _seed_template("Source", "CAVE", with_entities=True)
+    async with TestSessionLocal() as db:
+        db.add(WorldScene(id="CRYPT", template_id=template_id, label="Crypt", description="x"))
+        await db.commit()
+    export = await auth_client.get(f"/api/adventures/{template_id}/editor/transfer/entity/TROLL")
+
+    # Act
+    resp = await auth_client.post(
+        f"/api/adventures/{template_id}/editor/transfer/import",
+        data={"expected_kind": "npc", "target_scene_id": "CRYPT"},
+        files={"file": ("bundle.twe", export.content, "application/zip")},
+    )
+
+    # Assert
+    assert resp.status_code == 200, resp.text
+    async with TestSessionLocal() as db:
+        res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template_id, WorldEntity.id == resp.json()["entity_id"]
+            )
+        )
+        assert res.scalars().one().current_scene_id == "CRYPT"
+
+
+async def test_import_rejects_unknown_target_scene(auth_client, setup_test_db, data_dir):
+    # Arrange
+    template_id = await _seed_template("Source", "CAVE", with_entities=True)
+    export = await auth_client.get(f"/api/adventures/{template_id}/editor/transfer/entity/SWORD")
+
+    # Act
+    resp = await auth_client.post(
+        f"/api/adventures/{template_id}/editor/transfer/import",
+        data={"expected_kind": "item", "target_scene_id": "NOWHERE"},
+        files={"file": ("bundle.twe", export.content, "application/zip")},
+    )
+
+    # Assert
+    assert resp.status_code == 400
+    assert "NOWHERE" in resp.json()["detail"]

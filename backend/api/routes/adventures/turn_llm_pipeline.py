@@ -18,8 +18,10 @@ from backend.api.routes.adventures.turn_context_helpers import (
     resolve_model_settings,
     resolve_sequence_guidance,
 )
+from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
 from backend.engine.rules.crafting_recipes import is_recipe
+from backend.engine.rules.game_clock import gm_time_allowed, read_clock
 from backend.engine.rules.soft_rules import (
     build_soft_rules_prompt_block,
     fired_counts,
@@ -308,6 +310,8 @@ class TurnLlmContextBuilder:
             other_npcs=self._remembered_off_scene_npcs(world.all_entities),
             **state_kwargs,
         )
+        if not gm_time_allowed(read_clock(state.entity_states), adventure):
+            mechanics_state_block += prompts.GM_TIME_LOCKED_NOTE
         # Keep off-scene NPC metadata out of narration context to avoid
         # unintended dialogue from NPCs that are not physically present.
         narration_state_block = MemoryManager.build_state_block(

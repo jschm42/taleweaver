@@ -31,7 +31,7 @@ def test_each_style_has_its_own_length_rules(style, marker):
     rules = narration_style_rules(style)
 
     # Assert
-    assert f"NARRATION STYLE — {marker}" in rules
+    assert f"NARRATION STYLE - {marker}" in rules
 
 
 @pytest.mark.parametrize("value", [None, "", "verbose", 3])

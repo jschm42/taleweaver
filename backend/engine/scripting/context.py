@@ -15,11 +15,22 @@ from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.gm_directions import clean_direction
+from backend.engine.scripting.item_ops import ItemMover
+from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
-from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
+from backend.engine.scripting.llm_proxy import JsonProxy, LlmAsker, LlmProxy
+from backend.engine.scripting.npc_clone import NPCCloneManagerMixin, NPCCloneMixin
+from backend.engine.scripting.npc_combat_group import (
+    NPCCombatGroupManagerMixin,
+    NPCCombatGroupMixin,
+)
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
+from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
+from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
+from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
+from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +49,31 @@ class ScriptMessage(str):
         obj.role = role
         obj.raw = raw
         return obj
+
+
+class _TrackingList(list):
+    """List subclass that mirrors appended messages into the parent changeset's ordered_messages."""
+
+    def __init__(self, role: str, raw: bool, parent: Any):
+        super().__init__()
+        self._role = role
+        self._raw = raw
+        self._parent = parent
+
+    def append(self, item: Any) -> None:
+        super().append(item)
+        parent = self._parent
+        if parent is not None and hasattr(parent, "ordered_messages"):
+            raw = bool(getattr(item, "raw", self._raw))
+            role = str(getattr(item, "role", self._role))
+            parent.ordered_messages.append(ScriptMessage(item, role=role, raw=raw))
+
+    def extend(self, iterable: Any) -> None:
+        for item in iterable:
+            self.append(item)
+
+
+MAX_SAVES_PER_SCRIPT = 3
 
 
 @dataclass
@@ -61,6 +97,7 @@ class ScriptChangeset:
 
     narrative_messages: list[str] = field(default_factory=list)
     system_messages: list[str] = field(default_factory=list)
+    ordered_messages: list[ScriptMessage] = field(default_factory=list)
     gm_directions: list[str] = field(default_factory=list)
     rejected_actions: list[str] = field(default_factory=list)
     new_memories: list[dict[str, Any]] = field(default_factory=list)
@@ -80,6 +117,22 @@ class ScriptChangeset:
     completed_guard_expression_override: Optional[str] = None
     gameover_guard_expression_override: Optional[str] = None
     pending_dialog: Optional[dict[str, Any]] = None
+    cloned_entities: list[dict[str, Any]] = field(default_factory=list)
+    save_requests: list[str] = field(default_factory=list)
+    # Ordered tw.time operations, replayed by game_clock.apply_clock_ops.
+    clock_ops: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.narrative_messages, _TrackingList):
+            initial_narrative = list(self.narrative_messages)
+            tracking_narrative = _TrackingList("assistant", False, self)
+            self.narrative_messages = tracking_narrative
+            tracking_narrative.extend(initial_narrative)
+        if not isinstance(self.system_messages, _TrackingList):
+            initial_system = list(self.system_messages)
+            tracking_system = _TrackingList("system", False, self)
+            self.system_messages = tracking_system
+            tracking_system.extend(initial_system)
 
     @property
     def has_changes(self) -> bool:
@@ -100,6 +153,8 @@ class ScriptChangeset:
             or self.npc_attack_requests
             or self.narrative_messages
             or self.system_messages
+            or self.ordered_messages
+            or self.save_requests
             or self.gm_directions
             or self.rejected_actions
             or self.new_memories
@@ -116,10 +171,12 @@ class ScriptChangeset:
             or self.completed_guard_expression_override
             or self.gameover_guard_expression_override
             or self.pending_dialog
+            or self.cloned_entities
+            or self.clock_ops
         )
 
 
-class PlayerProxy:
+class PlayerProxy(PlayerInventoryMixin):
     """Safe proxy for inspecting and mutating the player character."""
 
     def __init__(self, avatar_data: dict[str, Any], changeset: ScriptChangeset):
@@ -190,6 +247,10 @@ class PlayerProxy:
     def modify_xp(self, delta: int) -> None:
         self._changeset.player_xp_change += int(delta)
 
+    def add_xp(self, amount: int) -> None:
+        """Gives the protagonist XP (a negative amount takes XP away)."""
+        self.modify_xp(amount)
+
     def give_item(
         self, item_id: str, name: Optional[str] = None, description: Optional[str] = None
     ) -> None:
@@ -206,27 +267,6 @@ class PlayerProxy:
     ) -> None:
         """Alias for give_item()."""
         self.give_item(item_id, name, description)
-
-    def remove_item(self, item_id: str) -> None:
-        if item_id not in self._changeset.player_removed_item_ids:
-            self._changeset.player_removed_item_ids.append(item_id)
-
-    def has_item(self, item_id: str) -> bool:
-        if item_id in self._changeset.player_removed_item_ids:
-            return False
-        for item in self._changeset.player_new_items:
-            if item.get("id") == item_id:
-                return True
-        current_inv = self._avatar.get("inventory") or []
-        for it in current_inv:
-            if (
-                isinstance(it, dict)
-                and it.get("id") == item_id
-                or isinstance(it, str)
-                and it == item_id
-            ):
-                return True
-        return False
 
     def add_status_effect(self, effect_name: str) -> None:
         if effect_name not in self._changeset.player_status_effects_add:
@@ -419,7 +459,16 @@ class EntityProxy:
         self._changeset.entity_updates.append({"entity_id": self._id, attr_name: val})
 
 
-class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
+class NPCProxy(
+    EntityProxy,
+    NPCPersonaMixin,
+    NPCCombatGroupMixin,
+    NPCCloneMixin,
+    NPCDirectionMixin,
+    NPCVitalsMixin,
+    NPCVisibilityMixin,
+    ItemHolderMixin,
+):
     """Safe proxy for Non-Player Characters."""
 
     @property
@@ -431,6 +480,9 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
 
     @hp.setter
     def hp(self, val: int) -> None:
+        if self._data.get("is_killable") is False and int(val) < self.hp:
+            # "NPC can be damaged" is off: assigning a lower HP is ignored too.
+            return
         self._changeset.entity_updates.append({"entity_id": self._id, "hp": max(0, int(val))})
 
     @property
@@ -593,8 +645,24 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
                 return True
         return False
 
+    @property
+    def is_killable(self) -> bool:
+        """False when the editor's "NPC can be damaged" is off (or the game switched it off)."""
+        return self._data.get("is_killable") is not False
+
     def kill(self, drop_inventory: bool = True) -> None:
-        """Kills this NPC, setting HP to 0 and marking them defeated."""
+        """Kills this NPC, setting HP to 0 and marking them defeated.
+
+        An NPC that cannot be damaged stays alive; the chat reports the ignored kill.
+        """
+        if not self.is_killable:
+            from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
+
+            self._changeset.system_messages.append(
+                f"{SCRIPT_ERROR_PREFIX} in 'tw.npcs.kill': {self.name} cannot be damaged "
+                "('NPC can be damaged' is off), so the kill was ignored."
+            )
+            return
         self.hp = 0
         self.is_defeated = True
         self._changeset.entity_updates.append({"entity_id": self._id, "hp": 0, "is_defeated": True})
@@ -614,13 +682,16 @@ class NPCProxy(EntityProxy, NPCPersonaMixin, NPCDirectionMixin):
             self._changeset.npc_attack_requests.append(self._id)
 
     def modify_hp(self, delta: int) -> None:
+        if not self.is_killable and int(delta) < 0:
+            # "NPC can be damaged" is off: every HP loss is blocked.
+            return
         new_hp = max(0, self.hp + int(delta))
         self.hp = new_hp
-        if new_hp == 0 and not self.is_defeated:
+        if new_hp == 0 and not self.is_defeated and self.is_killable:
             self.kill()
 
 
-class ObjectProxy(EntityProxy):
+class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
     """Safe proxy for world objects, switches, and containers."""
 
     @property
@@ -736,6 +807,10 @@ class ObjectProxy(EntityProxy):
             target_scene = (
                 self._changeset.teleport_scene_id or self._current_player_scene_id or "START"
             )
+        mover = self._item_mover()
+        if mover and mover.item_id(self._id):
+            # Leaving the inventory, an NPC or a container: the old holder must let go.
+            mover.detach(self._id)
         self._changeset.entity_movements.append(
             {
                 "entity_id": self._id,
@@ -754,6 +829,9 @@ class ObjectProxy(EntityProxy):
 
     def give_to_npc(self, npc_id: str) -> None:
         """Transfers this item into an NPC's inventory."""
+        mover = self._item_mover()
+        if mover and mover.to_npc(self._id, npc_id):
+            return
         if self._entity_mgr:
             self._entity_mgr.give_item(npc_id, self._data or {"id": self._id, "name": self.name})
 
@@ -902,8 +980,22 @@ class EntityManagerProxy:
             ent.attack()
 
 
-class NPCManagerProxy(NPCPersonaManagerMixin, NPCDirectionManagerMixin, EntityManagerProxy):
-    """``tw.npcs``: entity access plus the NPC persona and directed-speech shortcuts."""
+class NPCManagerProxy(
+    NPCPersonaManagerMixin,
+    NPCCombatGroupManagerMixin,
+    NPCCloneManagerMixin,
+    NPCDirectionManagerMixin,
+    NPCVitalsManagerMixin,
+    NPCVisibilityManagerMixin,
+    EntityManagerProxy,
+):
+    """``tw.npcs``: entity access plus the NPC persona, directed-speech and vitals shortcuts."""
+
+    mover: Optional[ItemMover] = None
+
+
+class ObjectManagerProxy(ItemManagerMixin, EntityManagerProxy):
+    """``tw.objects`` / ``tw.items``: entity access plus clone, destroy and item transfers."""
 
 
 class StoryFlagsProxy:
@@ -1093,13 +1185,20 @@ class MemoriesProxy:
 class GameProxy:
     """Safe proxy for game outcome and victory/defeat criteria."""
 
-    def __init__(self, changeset: ScriptChangeset, in_game_time: int = 0):
+    def __init__(
+        self,
+        changeset: ScriptChangeset,
+        in_game_time: int = 0,
+        clock: Optional[TimeProxy] = None,
+    ):
         self._changeset = changeset
         self.in_game_time = in_game_time
+        self._clock = clock
 
     @property
     def time(self) -> int:
-        return self.in_game_time
+        """Elapsed in-game minutes; same as tw.time.now (includes this script's changes)."""
+        return self._clock.now if self._clock is not None else self.in_game_time
 
     def win(self, reason: Optional[str] = None) -> None:
         self._changeset.game_completed = True
@@ -1208,6 +1307,7 @@ class GameContext:
         variables: Optional[dict[str, Any]] = None,
         is_debug_enabled: bool = False,
         llm_asker: Optional[LlmAsker] = None,
+        clock: Optional[dict[str, Any]] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1229,13 +1329,15 @@ class GameContext:
             current_player_scene_id=current_scene_id,
             item_entities=object_entities,
         )
-        self.objects = EntityManagerProxy(
+        self.objects = ObjectManagerProxy(
             object_entities,
             self.changeset,
             ObjectProxy,
             current_player_scene_id=current_scene_id,
         )
         self.items = self.objects
+        mover = ItemMover(self.changeset, self.player, self.npcs, self.objects, current_scene_id)
+        self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)
         self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
         self.exits = ExitProxy(exit_states or {}, self.changeset)
@@ -1245,7 +1347,9 @@ class GameContext:
         self.log = LogProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.console = self.log
         self.memories = MemoriesProxy(self.changeset)
-        self.game = GameProxy(self.changeset, in_game_time)
+        # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
+        self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
+        self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
         self.sequences = SequencesProxy(self.changeset)
@@ -1253,6 +1357,7 @@ class GameContext:
         self.dialog = DialogProxy(self.changeset, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
+        self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
 
     def switch(self, switch_id_or_name: str) -> SwitchProxy:
         """Shortcut for tw.switches.get(switch_id_or_name)."""
@@ -1273,6 +1378,11 @@ class GameContext:
     def system(self, message: str) -> None:
         """Shortcut for tw.story.system_message(). Emits system notification."""
         self.story.system_message(message)
+
+    def save(self, label: str = "") -> None:
+        """Creates a save state (checkpoint) of the game, e.g. before an important decision."""
+        if len(self.changeset.save_requests) < MAX_SAVES_PER_SCRIPT:
+            self.changeset.save_requests.append(str(label or "").strip())
 
     def direct(self, instruction: str) -> None:
         """Shortcut for tw.story.direct(). Gives the GM a soft direction."""

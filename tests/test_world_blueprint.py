@@ -353,3 +353,184 @@ def test_indented_tag_ends_a_multiline_value():
     assert sequence.fixed()["helpers_script"] == "def trial_answer(correct):\n    return correct"
     assert [(c.kind, c.ref) for c in sequence.children] == [("rule", "RIGHT_ANSWER")]
     assert sequence.children[0].fixed()["script"] == "trial_answer(True)"
+
+
+MARKDOWN_SAMPLE = """# Derelict Salvage
+
+A salvage tech wakes in the brig of a derelict ship.
+
+---
+<!-- World and Protagonist -->
+
+## World
+- **language**: English
+- **lose_guard**: `tw.vars.get('radiation', 0) >= 100`
+- **init_script**:
+```python
+tw.vars.set('radiation', 0)
+```
+
+## Protagonist: Mara Voss
+- **hp**: `~80`
+- `inventory`: `MULTITOOL`
+
+## Locations
+
+### Scene: CELL — Brig Cell
+Rusted and cramped.
+- **on_enter_text**: The hatch slams shut behind you.
+
+### [Scene: CORRIDOR] ?
+
+### Exit: CELL -> CORRIDOR — a jammed bulkhead door
+- **code:** `4711`
+- **on_unlock**:
+```python
+tw.vars.set('alarm', True)
+tw.story.narrate("Klaxons howl.")
+```
+
+## Characters & Objects
+
+### NPC: WARDEN - Unit 7 Security Drone
+- **in**: `CORRIDOR`
+- **hp**: 40
+- **attack_when_holding**: `CORE_KEY`
+
+#### Ability: TASER — Taser Burst
+- **kind**: ATTACK
+- **damage**: 2d6
+
+### Switch: BREAKER — Breaker Panel
+- **states**: OFF, ON
+- **transition**: OFF -> ON | item: FUSE | fail: It sparks.
+- **outcome**: ON -> flag: POWER_ON
+
+## Story Chapters
+
+## Sequence: 1 — Break Out
+Mara must leave the cell.
+- **goal_scene**: `CORRIDOR`
+- **xp**: 150
+
+### Rule: BRIBE — The player convinces @WARDEN to open the door.
+- **max**: 1
+```python
+tw.exits.unlock('CELL', 'CORRIDOR')
+```
+
+### Script: ALARM_CHECK
+- **trigger**: on_turn_end
+```python
+if tw.vars.get('alarm'):
+    tw.story.narrate("Sirens echo.")
+```
+
+## Sequence: 2 — Into the Reactor
+- **Required Item**: `CORE_KEY`
+
+## Script: RADIATION_TICK
+- **trigger**: on_turn_end
+- **code**: |
+  ```python
+  tw.vars.set('radiation', tw.vars.get('radiation', 0) + 10)
+  ```
+"""
+
+
+def test_markdown_blueprint_parses_identically_to_tag_syntax():
+    # Act
+    blueprint, missing = analyze_blueprint(MARKDOWN_SAMPLE)
+    manifest = _generated_manifest()
+    violations = apply_blueprint(manifest, blueprint)
+
+    # Assert
+    assert blueprint.errors == []
+    assert violations == []
+    assert blueprint.title == "Derelict Salvage"
+    assert blueprint.premise == "A salvage tech wakes in the brig of a derelict ship."
+    assert sorted(missing) == ["CORE_KEY", "FUSE", "MULTITOOL"]
+
+    world = blueprint.first("world")
+    assert world.fixed()["init_script"] == "tw.vars.set('radiation', 0)"
+
+    cell = blueprint.of_kind("scene")[0]
+    assert cell.description == "Rusted and cramped."
+
+    corridor = blueprint.of_kind("scene")[1]
+    assert corridor.open_fields == ["name"]
+
+    warden = blueprint.first("npc")
+    assert [child.ref for child in warden.children] == ["TASER"]
+
+    first_seq = blueprint.of_kind("sequence")[0]
+    assert [(c.kind, c.ref) for c in first_seq.children] == [
+        ("rule", "BRIBE"),
+        ("script", "ALARM_CHECK"),
+    ]
+    assert first_seq.children[0].fixed()["script"] == "tw.exits.unlock('CELL', 'CORRIDOR')"
+    assert [b.ref for b in blueprint.of_kind("script")] == ["RADIATION_TICK"]
+    assert manifest["exits"][0]["code_to_unlock"] == "4711"
+    assert manifest["protagonist"]["name"] == "Mara Voss"
+    assert manifest["protagonist"]["hp"] == 95
+
+
+def test_switch_script_hooks_and_transition_scripts_are_parsed_and_validated():
+    # Arrange
+    text = (
+        "## Switch: DIFFICULTY_SELECTOR — Difficulty Selector\n"
+        "- **states**: EASY=Easy, MEDIUM=Medium, HARD=Hard\n"
+        "- **initial**: EASY\n"
+        "- **transition**: EASY -> MEDIUM | script: sync_active_teacher()\n"
+        "- **on_success_script**:\n"
+        "```python\n"
+        "sync_active_teacher()\n"
+        "```\n"
+        "- **on_fail**: tw.story.narrate('Locked.')\n"
+    )
+
+    # Act
+    blueprint, _missing = analyze_blueprint(text)
+
+    # Assert
+    assert blueprint.errors == []
+    switch = blueprint.first("item")
+    fixed = switch.fixed()
+    assert fixed["item_type"] == "SWITCH"
+    assert fixed["on_success_script"] == "sync_active_teacher()"
+    assert fixed["on_failure_script"] == "tw.story.narrate('Locked.')"
+    assert fixed["switch_transitions"][0]["on_success_script"] == "sync_active_teacher()"
+
+    bad_bp, _ = analyze_blueprint(
+        "[Switch: S] S\nstates: OFF, ON\ntransition: OFF -> ON | script: if True\n"
+    )
+    assert any("Syntax error" in err.message for err in bad_bp.errors)
+
+
+def test_world_custom_and_catalog_image_style_and_tone():
+    # Arrange: custom style + custom tone in Markdown
+    custom_bp = prepare_blueprint(
+        "## World\n"
+        "- **image_style**: Isometric 16-bit pixel art, warm CRT amber glow\n"
+        "- **tone**: Friendly, encouraging Python mentor with dry geek humor\n"
+    )
+    manifest: dict = {}
+    apply_blueprint(manifest, custom_bp.blueprint)
+
+    # Assert custom style and tone
+    assert manifest["selected_image_styles"][0]["instruction"] == (
+        "Isometric 16-bit pixel art, warm CRT amber glow"
+    )
+    assert manifest["selected_tone"]["instruction"] == (
+        "Friendly, encouraging Python mentor with dry geek humor"
+    )
+
+    # Arrange: catalog style + catalog tone (hint mode)
+    catalog_bp = prepare_blueprint("## World\n- **style**: ~Pixelart\n- **tone**: ~Sci-Fi\n")
+    manifest_hint: dict = {}
+    apply_blueprint(manifest_hint, catalog_bp.blueprint)
+
+    # Assert catalog resolution and hint fallback
+    assert manifest_hint["selected_image_styles"][0]["id"] == "pixelart"
+    assert "pixel" in manifest_hint["selected_image_styles"][0]["instruction"].lower()
+    assert manifest_hint["selected_tone"]["id"] == "sci-fi"

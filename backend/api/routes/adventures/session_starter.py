@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -28,6 +29,7 @@ from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
 from backend.core.config import settings
+from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -47,6 +49,8 @@ _DEFAULT_PROTAGONIST_POOL = 200
 _DEFAULT_PROTAGONIST_STAT = 10
 _DEFAULT_MEMORY_TURNS = 10
 _LOCK_KEYS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
+# Start time set by the init script (tw.time.set); moved into SessionState.in_game_time.
+_START_MINUTES_KEY = "__init_start_minutes__"
 
 
 async def _template_rows(db: AsyncSession, model: Any, template_id: str) -> list[Any]:
@@ -177,6 +181,33 @@ def _apply_avatar_changes(avatar: Avatar, changes: Any) -> None:
         avatar.stamina = _clamp(avatar.stamina, changes.player_stamina_change, avatar.max_stamina)
 
 
+def _persist_init_entity_updates(
+    entity_states: dict[str, Any],
+    changes: Any,
+) -> None:
+    """Applies entity_updates and entity_movements from init scripts to entity_states."""
+    for upd in (
+        u
+        for u in getattr(changes, "entity_updates", [])
+        if isinstance(u, dict) and u.get("entity_id")
+    ):
+        entity_id = upd["entity_id"]
+        entry = dict(entity_states.get(entity_id) or {})
+        entry.update({k: v for k, v in upd.items() if k != "entity_id"})
+        entity_states[entity_id] = entry
+    for move in (
+        m
+        for m in getattr(changes, "entity_movements", [])
+        if isinstance(m, dict) and m.get("entity_id")
+    ):
+        entity_id = move["entity_id"]
+        entry = dict(entity_states.get(entity_id) or {})
+        entry["current_scene_id"] = move["to_scene_id"]
+        if move.get("to_spatial_position"):
+            entry["spatial_position"] = move["to_spatial_position"]
+        entity_states[entity_id] = entry
+
+
 def _run_init_scripts(
     adventure: AdventureTemplate,
     avatar: Avatar,
@@ -187,7 +218,14 @@ def _run_init_scripts(
     """Runs init_script / on_init triggers once; returns narrative messages for the chat."""
     scripts, init_script = _init_scripts(adventure)
     has_on_init = any(isinstance(s, dict) and s.get("trigger") == "on_init" for s in scripts)
-    if not init_script and not has_on_init:
+    sequences = getattr(adventure, "sequences", None) or []
+    first_seq = sequences[0] if sequences and isinstance(sequences[0], dict) else None
+    first_seq_script = (
+        str(first_seq.get("on_start_sequence_script") or "").strip() if first_seq else ""
+    )
+    first_seq_text = str(first_seq.get("on_start_sequence_text") or "").strip() if first_seq else ""
+
+    if not init_script and not has_on_init and not first_seq_script and not first_seq_text:
         return []
 
     init_context = GameContext(
@@ -205,6 +243,7 @@ def _run_init_scripts(
         quests=deepcopy(adventure.quests or []),
         script_vars={},
         in_game_time=0,
+        clock=clock_view(SimpleNamespace(in_game_time=0, entity_states={}), adventure),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
     )
@@ -216,13 +255,31 @@ def _run_init_scripts(
     )
     changes = runner.run_init_script(init_context)
 
+    if first_seq_script:
+        scope = {"tw": init_context, "game": init_context}
+        runner.execute_code(
+            first_seq_script,
+            scope,
+            script_id=f"on_start_sequence_{first_seq.get('id') or '1'}",
+        )
+        changes = init_context.changeset
+
     entity_states["__script_vars__"] = {**changes.var_updates, "__init_script_executed__": True}
     if getattr(changes, "story_flag_updates", None):
         entity_states["__switch_story_flags__"] = dict(changes.story_flag_updates)
+    _persist_init_entity_updates(entity_states, changes)
     store_pending_dialog(entity_states, changes.pending_dialog)
     store_gm_directions(entity_states, changes.gm_directions)
+    # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
+    clock_start = SimpleNamespace(in_game_time=0)
+    if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):
+        entity_states[_START_MINUTES_KEY] = clock_start.in_game_time
     _apply_avatar_changes(avatar, changes)
-    return [str(message) for message in changes.narrative_messages]
+    ordered = getattr(changes, "ordered_messages", None)
+    messages = [str(message) for message in (ordered if ordered else changes.narrative_messages)]
+    if first_seq_text:
+        messages.append(first_seq_text)
+    return messages
 
 
 def _memory_settings(user: User, adventure: AdventureTemplate) -> tuple[int, bool]:
@@ -245,13 +302,18 @@ def _build_session_state(
     entity_states: dict[str, Any],
 ) -> SessionState:
     memory_turns, compression = _memory_settings(user, adventure)
+    sequences = getattr(adventure, "sequences", None) or []
+    first_seq = sequences[0] if sequences and isinstance(sequences[0], dict) else None
+    active_seq_id = str(first_seq.get("id") or "") if first_seq else None
+    active_seq_order = int(first_seq.get("order") or 1) if first_seq else 1
+
     return SessionState(
         session_id=session_id,
         user_id=user.id,
         template_id=adventure.id,
         avatar_id=avatar.id,
         current_scene_id=first_scene_id,
-        in_game_time=0,
+        in_game_time=int(entity_states.pop(_START_MINUTES_KEY, 0) or 0),
         max_memory_turns=memory_turns,
         enable_history_compression=compression,
         quests=deepcopy(adventure.quests or []),
@@ -267,6 +329,8 @@ def _build_session_state(
         gameover_condition=adventure.gameover_condition,
         completed_guard_expression=adventure.completed_guard_expression,
         gameover_guard_expression=adventure.gameover_guard_expression,
+        active_sequence_id=active_seq_id,
+        active_sequence_order=active_seq_order,
         tts_director_notes=adventure.tts_director_notes,
         selected_image_styles=deepcopy(adventure.selected_image_styles),
         selected_tone=deepcopy(adventure.selected_tone),

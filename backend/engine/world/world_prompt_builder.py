@@ -367,7 +367,27 @@ def _build_special_attack_requirement(
         "Set `attack_mode: ATTACK_ON_SIGHT` only for NPCs that should attack the moment the protagonist "
         "enters their scene. Use an NPC `attack_trigger` (e.g. {required_item_id: 'ITEM_IDOL'}) for guards "
         "that turn hostile when the protagonist takes something, and `special_chance` (0-100, default 40) "
-        "for how often an NPC uses its specials."
+        "for how often an NPC uses its specials. Give NPCs that fight together (a gang, a guard "
+        "squad) the same `combat_group` tag, e.g. 'BANDITS'; set `assist_mode: ANYONE` for NPCs who "
+        "join every fight in their scene. NPCs without a group stay bystanders.\n"
+        "NPC COMBAT PROFILE: give every NPC that may fight `strength`, `dexterity`, `intelligence`, "
+        "`wisdom`, `charisma` (1-30, 10 = average) and `armor_class` (10 = unarmored, 14 = leather, "
+        "18 = plate) plus a `main_attack` {name, category MELEE|RANGED|MAGIC, damage_dice, hit_stat}, "
+        "e.g. {name: 'Longsword', category: 'MELEE', damage_dice: '1d8', hit_stat: 'strength'}. "
+        "Do not give NPCs weapon or armor items for this; `equipped_weapon_id`/`equipped_armor_id` "
+        "are deprecated."
+    )
+
+
+def _build_talent_requirement() -> str:
+    """Explains the protagonist's non-combat talents (used with 'use <name>' / 'cast <name>')."""
+    return (
+        "\n\nPROTAGONIST TALENTS (non-combat): optionally give the protagonist 1-3 `talents` that "
+        "fit the character, e.g. Mind Reading, Animal Whisperer or an absurd Gossip Attack. The player "
+        "triggers them with 'use <name>' or 'cast <name> on <target>'. For each entry: `id`, `name`, "
+        "`description`, `target_type` (NONE, NPC, ITEM or ANY), `cost_type` ('mana'|'stamina') and "
+        "`cost`, optional `max_uses` per adventure, and a `gm_hint` telling the Game Master what the "
+        "talent reveals or causes. Talents can be `is_locked` with the same unlock_* fields as specials."
     )
 
 
@@ -524,6 +544,7 @@ def build_world_generation_prompts(
         container_generation_enabled, min_containers, max_containers
     )
     user_prompt += _build_special_attack_requirement(can_damage_npcs, npcs_can_damage_protagonist)
+    user_prompt += _build_talent_requirement()
     user_prompt += build_scripts_requirement(scripts_generation_enabled)
     user_prompt += _build_item_requirement(min_items, max_items)
     user_prompt += _build_switch_requirement(original_prompt)

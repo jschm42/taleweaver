@@ -13,11 +13,62 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.rules.game_clock import clock_view
 from backend.engine.scripting.context import GameContext
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 
 logger = logging.getLogger(__name__)
+
+
+def _add_item_keys(item: Any, ids: set[str], names: set[str]) -> None:
+    """Collects the upper-cased id/name of one inventory entry (dict, plain id or object)."""
+    if isinstance(item, dict):
+        if item.get("id"):
+            ids.add(str(item["id"]).strip().upper())
+        if item.get("name"):
+            names.add(str(item["name"]).strip().upper())
+        return
+    if isinstance(item, str):
+        if item.strip():
+            ids.add(item.strip().upper())
+        return
+    if getattr(item, "id", None):
+        ids.add(str(item.id).strip().upper())
+    elif getattr(item, "name", None):
+        names.add(str(item.name).strip().upper())
+
+
+def _npc_state(states: dict[str, Any], npc_id: str, npc_norm: str) -> Any:
+    found = states.get(npc_id) or {}
+    if found:
+        return found
+    return next(
+        (
+            v
+            for k, v in states.items()
+            if str(k).strip().upper() == npc_norm and isinstance(v, dict)
+        ),
+        {},
+    )
+
+
+def _state_defeated(npc_state: Any) -> bool:
+    if not isinstance(npc_state, dict):
+        return False
+    hp = npc_state.get("hp")
+    return npc_state.get("is_defeated") is True or (hp is not None and hp <= 0)
+
+
+def _field(update: Any, name: str) -> Any:
+    return update.get(name) if isinstance(update, dict) else getattr(update, name, None)
+
+
+def _update_defeats(update: Any, npc_norm: str) -> bool:
+    if str(_field(update, "entity_id") or "").strip().upper() != npc_norm:
+        return False
+    hp = _field(update, "hp")
+    return _field(update, "is_defeated") is True or (hp is not None and hp <= 0)
 
 
 @dataclass
@@ -68,32 +119,8 @@ class HardRuleEvaluator:
         req_item_norm = req_item.upper()
         inv_ids: set[str] = set()
         inv_names: set[str] = set()
-
-        for item in getattr(avatar, "inventory", None) or []:
-            if isinstance(item, dict):
-                if item.get("id"):
-                    inv_ids.add(str(item["id"]).strip().upper())
-                if item.get("name"):
-                    inv_names.add(str(item["name"]).strip().upper())
-            elif isinstance(item, str) and item.strip():
-                inv_ids.add(item.strip().upper())
-            elif getattr(item, "id", None):
-                inv_ids.add(str(item.id).strip().upper())
-            elif getattr(item, "name", None):
-                inv_names.add(str(item.name).strip().upper())
-
-        for item in new_inventory_items or []:
-            if isinstance(item, dict):
-                if item.get("id"):
-                    inv_ids.add(str(item["id"]).strip().upper())
-                if item.get("name"):
-                    inv_names.add(str(item["name"]).strip().upper())
-            elif isinstance(item, str) and item.strip():
-                inv_ids.add(item.strip().upper())
-            elif getattr(item, "id", None):
-                inv_ids.add(str(item.id).strip().upper())
-            elif getattr(item, "name", None):
-                inv_names.add(str(item.name).strip().upper())
+        for item in [*(getattr(avatar, "inventory", None) or []), *(new_inventory_items or [])]:
+            _add_item_keys(item, inv_ids, inv_names)
 
         states = getattr(state, "entity_states", None) or {}
         in_inv_states = {
@@ -102,9 +129,7 @@ class HardRuleEvaluator:
             if isinstance(st, dict) and st.get("is_in_inventory")
         }
 
-        return (
-            req_item_norm in inv_ids or req_item_norm in inv_names or req_item_norm in in_inv_states
-        )
+        return req_item_norm in inv_ids | inv_names | in_inv_states
 
     @classmethod
     def check_scene_rule(
@@ -120,7 +145,7 @@ class HardRuleEvaluator:
         req_scene_norm = req_scene.upper()
         curr_scene = str(getattr(state, "current_scene_id", "") or "").strip().upper()
         new_scene = str(new_scene_id or "").strip().upper()
-        return curr_scene == req_scene_norm or new_scene == req_scene_norm
+        return req_scene_norm in {curr_scene, new_scene}
 
     @classmethod
     def check_defeated_npc_rule(
@@ -136,37 +161,9 @@ class HardRuleEvaluator:
 
         req_npc_norm = req_npc.upper()
         states = getattr(state, "entity_states", None) or {}
-        npc_st = states.get(req_npc) or {}
-        if not npc_st:
-            for k, v in states.items():
-                if str(k).strip().upper() == req_npc_norm and isinstance(v, dict):
-                    npc_st = v
-                    break
-
-        if isinstance(npc_st, dict):
-            if npc_st.get("is_defeated") is True:
-                return True
-            if npc_st.get("hp") is not None and npc_st.get("hp") <= 0:
-                return True
-
-        for upd in updated_entities or []:
-            ent_id = (
-                getattr(upd, "entity_id", None)
-                if not isinstance(upd, dict)
-                else upd.get("entity_id")
-            )
-            if str(ent_id or "").strip().upper() != req_npc_norm:
-                continue
-            upd_def = (
-                getattr(upd, "is_defeated", None)
-                if not isinstance(upd, dict)
-                else upd.get("is_defeated")
-            )
-            upd_hp = getattr(upd, "hp", None) if not isinstance(upd, dict) else upd.get("hp")
-            if upd_def is True or (upd_hp is not None and upd_hp <= 0):
-                return True
-
-        return False
+        if _state_defeated(_npc_state(states, req_npc, req_npc_norm)):
+            return True
+        return any(_update_defeats(upd, req_npc_norm) for upd in updated_entities or [])
 
     @classmethod
     def check_guard_expression(
@@ -205,6 +202,7 @@ class HardRuleEvaluator:
                 quests=list(getattr(state, "quests", None) or []),
                 script_vars=script_vars,
                 in_game_time=getattr(state, "in_game_time", 0) or 0,
+                clock=clock_view(state),
                 story_flags=story_flags,
             )
 

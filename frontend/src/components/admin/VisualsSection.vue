@@ -678,16 +678,17 @@ const testAdvanced = () => {
             v-model="localForm.image_format" 
             class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
           >
-            <option value="jpeg">JPEG (Fast, Optimized Disk Usage)</option>
+            <option value="webp">WEBP (Default, Smallest Files)</option>
+            <option value="jpeg">JPEG (Widely Compatible)</option>
             <option value="png">PNG (Lossless, Larger Disk Usage)</option>
           </select>
-          <p class="text-[11px] text-slate-500">JPEG saves up to 80% disk space per generated portrait/scene.</p>
+          <p class="text-[11px] text-slate-500">WEBP gives the smallest files at the same visual quality. JPEG and PNG are optional.</p>
         </div>
 
-        <!-- JPEG Quality Slider -->
-        <div v-if="localForm.image_format === 'jpeg'" class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+        <!-- Lossy Quality Slider (WEBP / JPEG) -->
+        <div v-if="localForm.image_format !== 'png'" class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">JPEG Quality</label>
+            <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">Image Quality</label>
             <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded">{{ localForm.image_quality }}%</span>
           </div>
           <input 

@@ -17,7 +17,8 @@ const PROTAGONIST_IMPORT_CONFIRM =
 export interface UseEntityTransferResult {
   isTransferring: Ref<boolean>
   exportEntity: (kind: EntityBundleKind, entityId: string | null, label: string) => Promise<void>
-  importEntity: (kind: EntityBundleKind) => void
+  /** ``sceneId`` places an imported NPC or item in that scene (scene editor). */
+  importEntity: (kind: EntityBundleKind, sceneId?: string) => void
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -55,10 +56,10 @@ export function useEntityTransfer(
     }
   }
 
-  async function runImport(kind: EntityBundleKind, file: File): Promise<void> {
+  async function runImport(kind: EntityBundleKind, file: File, sceneId?: string): Promise<void> {
     isTransferring.value = true
     try {
-      const result = await entityService.importEntityBundle(adventureId(), file, kind)
+      const result = await entityService.importEntityBundle(adventureId(), file, kind, sceneId)
       await onImported()
       const idSuffix = kind === 'protagonist' ? '' : ` as ${result.entity_id}`
       notificationService.add(`${KIND_LABELS[kind]} "${result.name}" imported${idSuffix}.`, 'success')
@@ -70,7 +71,7 @@ export function useEntityTransfer(
     }
   }
 
-  function importEntity(kind: EntityBundleKind): void {
+  function importEntity(kind: EntityBundleKind, sceneId?: string): void {
     if (kind === 'protagonist' && !confirm(PROTAGONIST_IMPORT_CONFIRM)) {
       return
     }
@@ -82,7 +83,7 @@ export function useEntityTransfer(
       if (!file) {
         return
       }
-      void runImport(kind, file)
+      void runImport(kind, file, sceneId)
     }
     input.click()
   }

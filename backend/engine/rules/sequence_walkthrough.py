@@ -10,14 +10,30 @@ def _ordered_sequences(sequences: Optional[list[dict[str, Any]]]) -> list[dict[s
     return sorted(valid, key=lambda seq: seq.get("order") or 0)
 
 
+def _step_name(seq: dict[str, Any], index: int) -> str:
+    return str(seq.get("title") or "").strip() or f"Sequence {index + 1}"
+
+
 def _step_title(seq: dict[str, Any], index: int, is_active: bool) -> str:
-    title = str(seq.get("title") or "").strip() or f"Sequence {index + 1}"
-    return f"{title} (current)" if is_active else title
+    name = _step_name(seq, index)
+    return f"{name} (current)" if is_active else name
+
+
+def current_chapter(
+    sequences: Optional[list[dict[str, Any]]], active_sequence_id: Optional[str] = None
+) -> int:
+    """1-based position of the active sequence (the first one when none is active yet)."""
+    ordered = _ordered_sequences(sequences)
+    current_id = active_sequence_id or (ordered[0].get("id") if ordered else None)
+    for index, seq in enumerate(ordered):
+        if seq.get("id") == current_id:
+            return index + 1
+    return len(ordered)
 
 
 def sequence_walkthrough_steps(
     sequences: Optional[list[dict[str, Any]]], active_sequence_id: Optional[str] = None
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """One step per sequence that has a walkthrough, in story order."""
     ordered = _ordered_sequences(sequences)
     current_id = active_sequence_id or (ordered[0].get("id") if ordered else None)
@@ -27,7 +43,16 @@ def sequence_walkthrough_steps(
         if not content:
             continue
         is_active = bool(current_id) and seq.get("id") == current_id
-        steps.append({"title": _step_title(seq, index, is_active), "content": content})
+        steps.append(
+            {
+                "title": _step_title(seq, index, is_active),
+                "name": _step_name(seq, index),
+                "content": content,
+                "sequence_id": str(seq.get("id") or ""),
+                "chapter": index + 1,
+                "is_current": is_active,
+            }
+        )
     return steps
 
 
@@ -55,6 +80,6 @@ def apply_legacy_walkthrough(template: Any, walkthrough: Optional[str]) -> None:
     ]
 
 
-def format_walkthrough_steps(steps: list[dict[str, str]]) -> str:
+def format_walkthrough_steps(steps: list[dict[str, Any]]) -> str:
     """Plain-text rendering of the steps (used by the debug command and raw view)."""
     return "\n\n".join(f"## {step['title']}\n{step['content']}" for step in steps)

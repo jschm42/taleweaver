@@ -1,10 +1,19 @@
 /*
- * Passage tiles (Passages tab): target scene image or a "?" for unexplored places.
+ * Passage tiles (Passages tab): the target scene image (or a "?" for unexplored places)
+ * fills the tile under a gradient that darkens towards the shadowed text at the bottom.
  * Built from the skin tokens, so every skin styles them without extra rules.
  */
 
 .tw-passage {
   position: relative;
+  /* The image is the tile's background, so the tile itself carries the shape. */
+  aspect-ratio: 16 / 11;
+  isolation: isolate;
+}
+
+/* Narrow sidebar column: a little taller so two text lines fit over the picture. */
+.tw-passage.is-compact {
+  aspect-ratio: 4 / 3;
 }
 
 .tw-passage:hover .tw-passage-image {
@@ -13,11 +22,11 @@
 }
 
 .tw-passage-media {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  z-index: -2;
   display: block;
-  aspect-ratio: 16 / 10;
   overflow: hidden;
-  border-bottom: 1px solid var(--tw-card-border);
   background: color-mix(in srgb, var(--tw-card-bg) 70%, #000000);
 }
 
@@ -35,6 +44,36 @@
   inset: 0;
   pointer-events: none;
   background: var(--tw-scene-tint, none);
+}
+
+/* Darkens the picture towards the bottom so the text stays readable on any image. */
+.tw-passage-shade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 25%,
+    rgba(0, 0, 0, 0.45) 55%,
+    rgba(0, 0, 0, 0.88) 100%
+  );
+}
+
+/* The text always sits on the dark gradient, so it is light in every skin. */
+.tw-passage-text {
+  color: #f8f4ea;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+.tw-passage-target {
+  color: rgba(248, 244, 234, 0.78);
+}
+
+.tw-passage-text svg {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
 }
 
 /* Unexplored: a large glyph on a faint wash of the accent color. */

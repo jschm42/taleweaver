@@ -65,11 +65,14 @@ General configuration, narrative constraints, and gameplay settings.
 | `original_prompt` | `string` | The original prompt used during generation (for documentation purposes). |
 | `image_url` | `string` | Relative path (`assets/...`) or canonical URL (`/data/...`) to the cover visual. |
 | `rule_enforcement_mode` | `string` | `"rpg"` (strict mechanics & dice checks), `"story"` (streamlined mechanics), or `"chat"` (pure narrative). |
-| `time_per_turn` | `number` | In-game minutes elapsed per in-game turn (default: 5). An in-game turn ends when the player changes scene or the active sequence changes; messages within one scene do not advance the base time. |
+| `time_per_turn` | `number` | In-game minutes that pass after every narrated player message (the narration tick, default: 5). Scripts can override it per session with `tw.time.set_minutes_per_tick()`. |
+| `max_time_per_turn` | `number \| null` | Optional cap for the narration tick plus the GM's extra time of one message. |
+| `gm_time_control` | `boolean` | Whether the Game Master may change the in-game time (`extra_time_minutes`, time overrides). Default: `true`; missing in older files means `true`. Scripts can override it per session with `tw.time.allow_gm_time()`. |
 | `pacing_minutes` | `number` | Frequency of world background heartbeats / scheduled events. |
 | `clock_enabled` | `boolean` | Whether to track and display in-game time / calendar. |
 | `ingame_timestamp` | `string` | Formatted starting in-game timestamp (e.g. `"Day 1, 08:00"`). |
 | `selected_tone` | `string` | Narrative tone identifier or description (e.g. `"Dark Fantasy"`, `"Cyberpunk"`). |
+| `narrator_voice` | `object` \| `null` | Optional voice of the Game Master: how the narration is worded (diction, sentence rhythm, attitude), not how long it is. `{"id": "noir-detective", "name": "Hardboiled Noir Detective", "description": "...", "instruction": "Narrate like ...", "sample": "Rain hit the neon sign ..."}`. `instruction` is required (max. 1500 characters); `sample` is an optional style sample (max. 500). `id` is the catalog voice the author picked, or `"custom"` for a voice written in the editor. The full voice is stored, so an import works without the admin's voice catalog. Without it, the GM narrates in the neutral default voice. |
 | `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. The skin also styles the combat dialog (ability cards, item tiles, chronicle, and the arena's player/accent colors). |
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
 | `min_scenes` / `max_scenes` | `number` | Constraints defining world generation scope. |
@@ -127,10 +130,11 @@ Connections and passageways between scenes.
 | :--- | :--- | :--- |
 | `from_scene_id` | `string` | Origin scene ID. |
 | `to_scene_id` | `string` | Destination scene ID. |
-| `label` | `string` | Descriptive name of the exit (e.g., `"Heavy Iron Portcullis"`). |
+| `label` | `string` | Required. Names the passage itself, the same from both sides (e.g., `"Heavy Iron Portcullis"`, not `"Way to the Crypt"`); the game adds `→ Target` below it once the target was visited. Older files without a label still load; such exits are shown under their target scene's name. |
 | `exit_type` | `string` | `"one_way"` or `"bidirectional"` (default: `"bidirectional"` for normal passages). |
 | `is_bidirectional` | `boolean` | Whether the passage can be traversed in both directions (convenience boolean, matches `exit_type == "bidirectional"`). |
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
+| `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
@@ -155,6 +159,7 @@ Non-Player Characters inhabiting the world.
 | `hp` / `mana` / `stamina` | `number` | NPC combat and interaction resources. |
 | `inventory` | `array` | Items currently held or dropped by the NPC. |
 | `is_hidden` | `boolean` | If true, NPC is not immediately visible without inspecting/searching. |
+| `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden NPC. Empty: revealed when the protagonist searches the scene or the NPC starts speaking. The reserved value `script` means only scripts reveal it. |
 
 ---
 
@@ -184,8 +189,10 @@ Interactive elements, items, containers, and state machines.
 | `combination_ingredients`| `array` | `CONSTRUCTABLE` recipes: all item IDs that must be combined (at least 2). |
 | `result_item_ids` | `array` | `CONSTRUCTABLE` recipes: IDs of the regular items that crafting reveals (at least 1, any item type except `CONSTRUCTABLE`). Results always start hidden. *(since 1.3.1)* |
 | `kept_ingredients` | `array` | `CONSTRUCTABLE` recipes: ingredient IDs that are not consumed by crafting. *(since 1.3.1)* |
+| `image_url` (recipes) | — | `CONSTRUCTABLE` recipes have no image: exports leave out their `image_url` (and the file), and an imported recipe image is ignored. |
 | `craft_guard_expression` | `string` | `CONSTRUCTABLE` recipes: optional guard expression that must hold for crafting. |
 | `reveals_item_id` | `string` | Item spawned or revealed upon interaction/use. |
+| `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden object. Empty: revealed when the protagonist searches the scene. The reserved value `script` means only scripts, crafting or another item's `reveals_item_id` reveal it. |
 | `damage_dice` | `string` | `WEAPON` items: damage formula, e.g. `1d8` or `1d10+2` (default `1d8`). |
 | `weapon_cost_type` / `weapon_cost_value` | `string` / `integer` | `WEAPON` items: resource (`stamina` or `mana`) and amount paid per attack (default `stamina` 20). |
 | `weapon_category` | `string` | `WEAPON` items: `MELEE` (default), `RANGED` or `MAGIC`. |
@@ -230,7 +237,7 @@ Custom sandboxed event scripts reacting to game hooks and global initialization 
 | :--- | :--- | :--- |
 | `id` | `string` | Unique uppercase slug (e.g., `"SCRIPT_LEVER_PUZZLE"`). |
 | `name` | `string` | Human-readable title for the script. |
-| `trigger` | `string` | Event hook: `"on_init"`, `"on_turn_start"`, `"on_enter_scene"`, `"on_interact"`, `"on_logic_pass_done"`, `"on_narration_done"`, or `"on_turn_end"`. |
+| `trigger` | `string` | Event hook: `"on_init"`, `"on_turn_start"`, `"on_enter_scene"`, `"on_interact"`, `"on_logic_pass_done"`, `"on_narration_done"`, `"on_turn_end"`, or `"on_time_reached"` (its `target_id` is the elapsed in-game time, e.g. `"90"` or `"2h 30m"`). |
 | `target_id` | `string \| null` | Optional target scene ID or entity ID that filters when this script fires. |
 | `code` | `string` | Safe Python script utilizing the sandboxed `tw` GameContext API. |
 | `description` | `string \| null` | Optional narrative/technical description of the script logic. |

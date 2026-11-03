@@ -265,3 +265,27 @@ async def test_debug_win_fight_defeats_all_engaged_enemies(setup_test_db, monkey
         assert combat["loot_pending"] is True
         assert all(e["defeated"] for e in combat["enemies"] if e["engaged"])
         assert {i["id"] for i in combat["loot_items"]} == {"DAGGER", "AXE"}
+
+
+async def test_loot_take_all_moves_everything_to_inventory_and_ends_combat(
+    setup_test_db, monkeypatch
+):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        user, _avatar, _state = await _seed(db)
+        _patch_dice(monkeypatch)
+        manager = GameTurnManager(db, SESSION_ID, user)
+        await _play(manager, "/fight GOBLIN")
+        await _play(manager, "/attack ORC")
+        await _play(manager, "/debug win_fight")
+
+        # Act
+        chunks = await _play(manager, "/loot take_all")
+
+        # Assert
+        inventory_ids = {i["id"] for i in manager.avatar.inventory}
+        assert {"DAGGER", "AXE"} <= inventory_ids
+        assert not (manager._read_combat_state() or {}).get("loot_pending")
+        assert any("Added to your inventory" in c for c in chunks)

@@ -15,6 +15,11 @@ const SILENT_COMMANDS = new Set([
   '/container_take_all',
   '/container_take_item',
   '/container_drop_scene',
+  '/container_put_items',
+  // Giving items to an NPC (the "You give ..." line and the GM's reaction are shown)
+  '/give_items',
+  // Talents from the menu (the "You use ..." line and the GM's narration are shown)
+  '/talent',
   // Equipment and consumables
   '/equip',
   '/unequip',
@@ -23,6 +28,8 @@ const SILENT_COMMANDS = new Set([
   '/switch',
   '/traverse_exit',
   '/rule-pass',
+  // Save state (only the "Game saved" system line is shown)
+  '/save',
   // Combat start (the fight dialog takes over)
   '/fight',
   '/attack',

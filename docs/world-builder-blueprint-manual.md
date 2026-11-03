@@ -62,6 +62,7 @@ on_defeat: |                                                 <- multi-line scrip
 - **Free text:** every line that is not a known key. It becomes the entity's description, or the walkthrough for a sequence. The AI reads it as design intent.
 - **`@ID`:** links to another entity inside free text. The link is checked like any other reference.
 - **`key: |`:** a multi-line value. Every following line indented deeper than the key belongs to it. Use this for scripts.
+- **Markdown (`.md`) format:** You can also write (or upload via **Load .md**) blueprints as clean Markdown documents using headings (`## Scene: LAMP_ROOM — Lamp Room`, `## World`, `### Rule: ID — Condition`), bullet/bold keys (`- **in**: \`LAMP_ROOM\``), and fenced ```` ```python ```` code blocks instead of `key: |`. See [Blueprint Syntax Reference](world-builder-syntax.md) for details.
 
 ---
 
@@ -286,6 +287,28 @@ hidden: yes
 reveal: The player searches the keeper's coat.
 ```
 
+### Something only a script may reveal
+
+```text
+[Scene: PAD_ROOM] Teleporter Room
+A raised metal platform hums next to a control console.
+
+[NPC: STOWAWAY] Bewildered Stowaway
+in: PAD_ROOM
+position: standing on the raised metal platform
+hidden: yes
+reveal: script
+
+[Item: PAD_CONSOLE] Teleporter Console
+in: PAD_ROOM
+type: STATIC
+on_use: |
+  tw.npcs.reveal('STOWAWAY')
+  tw.story.narrate('With a pop, a bewildered stowaway materializes on the platform.')
+```
+
+Without `reveal: script`, the hidden stowaway could already turn up when the player looks at the platform, because a hidden entity without a reveal condition is revealed by searching. With `reveal: script` the Game Master is not told about it, and only the console script brings it in.
+
 ### An ally who turns hostile after the twist
 
 ```text
@@ -297,6 +320,24 @@ on_defeat: tw.flags.set('INES_STOPPED')
 ```
 
 Set the flag `INES_EXPOSED` in a rule, dialog or script when the twist happens. From that moment, Ines attacks.
+
+### A gang that fights together, next to a bystander
+
+```text
+[NPC: VAREK] Varek the Bandit Chief
+in: ROAD
+group: bandits
+attack: on_sight
+
+[NPC: GRIM] Grim
+in: ROAD
+group: bandits
+
+[NPC: MIRA] Mira the Peddler
+in: ROAD
+```
+
+Varek attacks on sight and Grim joins him, because they share the combat group `BANDITS`. Mira has no group, so she is a bystander: the battle dialog lists her apart from the enemies, and she only fights if the player attacks her. Use `assist: anyone` for an NPC who joins every fight in its scene (a guard dog) and `assist: never` for a group member who stays out until attacked. To make the gang turn on one of its own after a twist, move him out of the group in a script: `tw.npcs.set_combat_group('GRIM', '')`.
 
 ### An NPC whose mood changes with the player's behavior
 
@@ -312,6 +353,56 @@ character: Grieving, polite, talkative
 ```
 
 The GM reads `character` on every turn, so from then on Tobin talks like a bitter man, in this game only. Use `tw.npcs.add_trait('CLERK', 'drunk')` / `remove_trait(...)` for a single trait, or `set_goal(...)` to change what the NPC wants. The change affects dialogue, not combat: pair it with `attack_guard` (see above) if the NPC should also fight.
+
+### A guard with a real weapon and armor (no items needed)
+
+```text
+[NPC: CAPTAIN] Captain Varga
+in: QUAY
+hp: 70
+str: 15
+dex: 12
+ac: 17
+main_attack: Sabre | 1d8+1 | melee | str
+special_chance: 25
+```
+
+`main_attack` replaces the old way of equipping a weapon item on the NPC, and `ac` replaces the armor item. The NPC's stats feed its attack and special rolls; `ac` is what the protagonist must roll to hit it.
+
+### A talent that opens a puzzle
+
+```text
+[Protagonist] Mira
+  [Talent: MIND_READING] Mind Reading
+  Hear what a person really thinks for a moment.
+  target: npc
+  cost: mana 10
+  gm: Reveal the target's true thoughts in one italic sentence.
+  on_use: |
+    if talent['target_id'] == 'CLERK':
+        tw.flags.set('CLERK_SECRET_KNOWN')
+        tw.story.direct('Tobin is thinking about the ledger hidden behind the stove.')
+```
+
+The engine pays the cost and runs `on_use` deterministically; the Game Master then narrates the moment. Gate later content on the flag (`guard: tw.flags.get('CLERK_SECRET_KNOWN')`) so the talent becomes a real solution path.
+
+### An NPC who leaves the story
+
+```text
+[NPC: DOG_BUSTER] Buster
+in: BACKYARD
+type: ANIMAL
+
+[Sequence: 1] The Backyard
+  [Rule: CAT_APPEARS] A cat shows up in the backyard.
+  script: |
+    tw.npcs.hide('DOG_BUSTER')
+    tw.objects.reveal('MEATY_BONE')
+    tw.story.narrate('Buster bolts after the cat and vanishes through the hedge.')
+  max: 1
+```
+
+`tw.npcs.hide(id)` takes the NPC out of the story: it disappears from the scene and cannot be talked to, fought or targeted. `tw.npcs.reveal(id)` brings it back where it stands; move it first with `tw.npcs.move(id, scene_id)` to make it reappear elsewhere. A hidden NPC without a `reveal:` condition can still be found again when the player searches its scene; add `reveal: script` if only a script may bring it back.
 
 ### A route that locks when a chapter starts
 
@@ -411,7 +502,7 @@ When you click **Generate**:
 | A chapter completes immediately | Its goal is already true at the start. See the pitfall in Layer 1. |
 | A script does nothing in the game | The **Event Scripts Engine** is off in the generator settings. |
 | The AI invented a different code | The code was written as a hint (`~`) or not at all. Fix it: `code: 4711`. |
-| The Story Idea is rejected as too long | The field holds at most 20,000 characters. Leave descriptions open and fix only what matters. |
+| The Story Idea is rejected as too long | The field holds at most 50,000 characters. Leave descriptions open and fix only what matters. |
 
 ---
 
@@ -422,4 +513,4 @@ When you click **Generate**:
 - **One fact per readable.** Put clues in different scenes, so the player has to combine them.
 - **Write the solution into the chapter text.** It becomes the Game Master's walkthrough and keeps hints consistent.
 - **Let the AI write the atmosphere.** Your free text should say *what matters*; the AI is good at *how it looks*.
-- **Use the adventure-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.
+- **Use the adventure-concept-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-concept-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.

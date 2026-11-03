@@ -125,7 +125,7 @@ function primaryAction(event: MouseEvent): void {
           @click.stop="emit('updateAdventure', props.template.template_id)"
           :disabled="props.isUpdating"
           class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-950/80 hover:bg-cyan-950/90 text-cyan-200 text-[9px] sm:text-[11px] font-bold border border-cyan-400/50 flex items-center gap-1.5 backdrop-blur-md transition-all disabled:opacity-50"
-          :title="`Update available${props.template.available_version ? ': v' + props.template.available_version : ''}. Click to update this adventure.`"
+          :title="`Update available${props.template.available_version ? ': v' + props.template.available_version : ''}${props.template.update_source === 'library' ? ' in the Adventure Library' : ''}. Click to update this adventure.`"
         >
           <i :class="props.isUpdating ? 'ra ra-cycle animate-spin' : 'ra ra-recycle'" class="text-[10px] sm:text-xs"></i>
           <span>{{ props.isUpdating ? 'Updating...' : (props.template.available_version ? `Update v${props.template.available_version}` : 'Update') }}</span>

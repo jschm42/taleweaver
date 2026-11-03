@@ -22,6 +22,8 @@ const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
 const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
+/** Context menu action that opens the Give dialog for an NPC (handled in GameView). */
+export const GIVE_TO_PREFIX = '[GIVE_TO] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -54,6 +56,14 @@ const isSwitchEntity = (entity: any): boolean => {
 const isStationaryEntity = (entity: any): boolean => {
   if (!entity) return false
   return String(entity.movement_type || '').toUpperCase() === 'STATIONARY'
+}
+
+/**
+ * Whether the player may start a fight with this target. An NPC whose "NPC can be damaged" is
+ * off (stored as is_killable) cannot be fought, like one that is not attackable.
+ */
+function canBeAttacked(entity: any): boolean {
+  return entity?.is_attackable !== false && entity?.is_killable !== false
 }
 
 export const gameCommandService = {
@@ -129,7 +139,7 @@ export const gameCommandService = {
       case 'take':
         return { command: `/take ${targetName}`, errorMessage: null }
       case 'attack':
-        if (entity?.is_attackable === false) {
+        if (!canBeAttacked(entity)) {
           return { command: null, errorMessage: 'You cannot attack this target.' }
         }
         return { command: `/attack ${targetName}`, errorMessage: null }
@@ -158,7 +168,10 @@ export const gameCommandService = {
       items.push({ label: 'Talk', action: `${PREFILL_SAY_TO_PREFIX}${entity.name || ''}` })
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
-      if (!isDefeatedNpc && entity?.is_attackable !== false) {
+      if (!isDefeatedNpc) {
+        items.push({ label: 'Give', action: `${GIVE_TO_PREFIX}${entity.id || entity.name}` })
+      }
+      if (!isDefeatedNpc && canBeAttacked(entity)) {
         items.push({ label: 'Attack', action: `/attack ${entity.name}` })
       }
     } else if (entity?.entity_type === 'SCENE') {

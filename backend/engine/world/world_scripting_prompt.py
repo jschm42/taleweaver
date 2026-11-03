@@ -4,7 +4,7 @@ The trigger catalogue below mirrors what the gameplay engine actually executes:
 
 * Top-level ``scripts`` (see ``WorldScriptSchema``) are dispatched by the script runner
   for ``on_turn_start``, ``on_enter_scene``, ``on_interact``, ``on_logic_pass_done``,
-  ``on_narration_done``, and ``on_turn_end``.
+  ``on_narration_done``, ``on_turn_end`` and ``on_time_reached`` (target = elapsed time).
 * Inline ``on_*_script`` / ``on_*_text`` fields on entities are executed by the turn
   state applier (``turn_state_applier.py`` / ``turn_interactions.py``).
 * Sequence ``soft_rules`` are judged by the GM and run by the soft rule guard
@@ -32,6 +32,11 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     ),
     ("on_narration_done", "after narrative generation completes", "None (global)"),
     ("on_turn_end", "after narration and state changes of every turn", "None (global)"),
+    (
+        "on_time_reached",
+        "once, when the in-game clock reaches the target time (elapsed since the start)",
+        "Elapsed in-game time, e.g. '90' or '2h 30m' (required)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a
@@ -51,6 +56,11 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "on_unlock_failure",
             "container unlock fails or is blocked by guard (only CONTAINER items)",
+        ),
+        (
+            "on_items_added",
+            "the player puts items from the inventory into this container (only CONTAINER items; "
+            "`added_items` and `added_item_ids` are in scope)",
         ),
         ("on_craft_success", "the recipe is crafted (only CONSTRUCTABLE recipes)"),
         (
@@ -72,6 +82,11 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("on_defeat", "the NPC is defeated"),
         ("on_protagonist_enters_scene", "the protagonist enters the scene containing this NPC"),
         ("on_interact", "the protagonist talks to, inspects or otherwise interacts with this NPC"),
+        (
+            "on_receive_item",
+            "the protagonist gives this NPC one or more items; `received_items` and "
+            "`received_item_ids` are in scope",
+        ),
     ),
     "PROTAGONIST": (
         ("on_hp_change", "the protagonist HP changes (e.g. damaged or healed)"),
@@ -85,6 +100,9 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("on_success", "the special attack's d20 success roll succeeds (`special` dict in scope)"),
         ("on_failure", "the special attack's success roll fails"),
     ),
+    "TALENTS (entries of protagonist talents)": (
+        ("on_use", "the player uses the talent (`talent` dict in scope: id, name, target_id, ...)"),
+    ),
 }
 
 # `tw` API reference. Only members that exist in engine/scripting/context.py.
@@ -92,7 +110,10 @@ TW_API_REFERENCE = (
     "AVAILABLE `tw` API (use ONLY these members, scripts run in a sandbox):\n"
     "- tw.player: hp, mana, stamina, xp, name | damage(n), heal(n), modify_hp/mana/stamina/xp(delta), "
     "give_item(item_id, name=None, description=None), remove_item(item_id), has_item(item_id), "
-    "add_status_effect(name), remove_status_effect(name), has_status_effect(name)\n"
+    "add_status_effect(name), remove_status_effect(name), has_status_effect(name) | "
+    "inventory (list of item dicts), item_ids, take_item(item_id) (moves an existing item from "
+    "wherever it is into the inventory), drop_item(item_id, scene_id=None), "
+    "transfer_item(item_id, target_id) (to an NPC or a container in the scene)\n"
     "- tw.scene: id, npcs, items | teleport(scene_id)\n"
     "- tw.exits: is_locked(from_scene_id, to_scene_id), lock(from_scene_id, to_scene_id, reason), "
     "unlock(from_scene_id, to_scene_id)  (ALWAYS pass the two scene IDs of the exit)\n"
@@ -100,13 +121,37 @@ TW_API_REFERENCE = (
     "move_to_player(id), kill(id), give_item(npc_id, item_id), drop_item(npc_id, item_id, scene_id=None), "
     "give_to_player(npc_id, item_id) (NPC hands an item it carries to the protagonist; None if it lacks it), "
     "attack(npc_id) (an NPC in the current scene starts turn-based combat after the turn), "
+    "consume(npc_id, item_id) (the NPC uses a CONSUMABLE it carries: the item is destroyed and its "
+    "HP/Mana/Stamina effects apply to the NPC; None if it lacks the item), "
     "say_directed(npc_id, direction) (the GM words the NPC's line in the next narration, e.g. "
     "say_directed('BRAM', 'sings a sailor song'))\n"
     "- tw.npcs persona (changes how the GM plays the NPC from then on, this session only): "
     "set_character(npc_id, text), set_goal(npc_id, text), add_trait(npc_id, trait), remove_trait(npc_id, trait)\n"
-    "- entity proxies from get(): id, name, current_scene_id, is_hidden, set_hidden(bool); NPCs also hp, is_defeated, say(text), attack(), "
-    "character, goal (read/write), set_character(text), set_goal(text), add_trait(t), remove_trait(t), has_trait(t); "
-    "objects also state, switch_state, flip(), toggle()\n"
+    "- tw.npcs combat allies: set_combat_group(npc_id, group) (NPCs sharing a group fight together; "
+    "'' removes the group), set_assist_mode(npc_id, 'GROUP'|'ANYONE'|'NEVER') (when the NPC joins a "
+    "fight it was not attacked in; '' = automatic)\n"
+    "- tw.npcs.clone(npc_id, scene_id=None, hidden=None) -> NPC proxy or None: a fresh copy (full HP, "
+    "empty inventory, same combat group) with a new ID, e.g. spawn a pack from a hidden template: "
+    "for i in range(5): tw.npcs.clone('WOLF', hidden=False). Max 20 clones per script run.\n"
+    "- tw.npcs.hide(npc_id) / tw.npcs.reveal(npc_id): take an NPC out of the story (gone from its scene, "
+    "no talk, fight or trade) or bring it back where it stands; combine with move(id, scene_id) to make "
+    "it reappear elsewhere. NPC proxies also have hide() and reveal().\n"
+    "- entity proxies from get(): id, name, current_scene_id, is_hidden, set_hidden(bool); NPCs also hp, mana, stamina, is_defeated, say(text), attack(), heal(n), damage(n), consume(item_id), "
+    "character, goal (read/write), set_character(text), set_goal(text), add_trait(t), remove_trait(t), has_trait(t), "
+    "combat_group, assist_mode, set_combat_group(group), set_assist_mode(mode), clone(scene_id=None, hidden=None); "
+    "objects also state, switch_state, flip(), toggle(); NPCs and containers also items, item_ids, "
+    "contains(item_id), put_item(item_id), take_item(item_id, to='player'|NPC id|container id); "
+    "objects also clone(scene_id=None, hidden=None), destroy(), is_destroyed, hide(), reveal(), "
+    "location(), move_to(target), give_to_player(), put_into(container_id)\n"
+    "- item operations on tw.objects (every item has exactly one holder: player, NPC, container "
+    "or scene; moves take it from the old holder): clone(item_id, scene_id=None, hidden=None) -> "
+    "proxy of a new copy with id <ITEM>_<n> for this game only (e.g. a dispenser: "
+    "p = tw.objects.clone('POTION'); p.reveal(); p.give_to_player()), destroy(item_id), hide(item_id), "
+    "reveal(item_id), location(item_id) -> {'type': 'player'|'npc'|'container'|'scene'|'destroyed', 'id': ...}, "
+    "contents(holder_id) (items of a container or NPC; 'player' for the inventory), "
+    "move_item(item_id, target) (target: 'player', NPC id, container id, scene id or 'current'), "
+    "add_to_player(item_id), remove_from_player(item_id), add_to_scene(item_id, scene_id=None), "
+    "put_in_container(item_id, container_id), take_from_container(container_id, item_id, to='player')\n"
     "- tw.switches: get(id), get_state(id, default), set_state(id, new_state, apply_outcomes=True), "
     "is_state(id, state), flip(id, apply_outcomes=True), toggle(id, apply_outcomes=True) | switch proxies from get() or tw.switch(id): id, state, switch_state, states, initial_state, flip(), toggle()\n"
     "- tw.vars: get(key, default), set(key, value)  (persistent story flags)\n"
@@ -117,7 +162,16 @@ TW_API_REFERENCE = (
     "- tw.llm.ask(prompt, model='simple'|'advanced', system='') -> str: asks the LLM for a short "
     "text (max 3 calls per trigger, returns '' on failure, not usable in guards). Use sparingly for "
     "flavour text and always provide a fallback: tw.llm.ask(...) or 'fixed text'.\n"
+    "- tw.llm.ask_json(prompt, schema=None, model='simple'|'advanced', system='') -> dict|list|None: "
+    "asks the LLM for JSON, repairs fences/formatting, and validates against `schema` (e.g. "
+    "{'question': 'str', 'options': {'type': 'list', 'items': 'str', 'min_len': 4, 'max_len': 4}, "
+    "'correct_index': {'type': 'int', 'min': 0, 'max': 3}}). Returns None on error or invalid JSON.\n"
+    "- tw.json: loads(text, schema=None, default=None), dumps(value) -> str, validate(data, schema) -> bool\n"
     "- tw.game: time | win(reason), game_over(reason)\n"
+    "- tw.time: now, day, hour, minute, format() | set(t), advance(t), rewind(t), pause(), resume(), "
+    "set_minutes_per_tick(t), allow_gm_time(bool) | at(t, handler), after(t, handler), "
+    "every(t, handler), cancel(timer_id). t is minutes or text like '2h 30m'; the clock advances "
+    "after every narrated player message; handlers live in init_script and receive time_event.\n"
     "- tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False): shows the player a "
     "multiple-choice dialog (NPC conversation, riddle, dilemma). `options` is a list of labels or "
     "{'label': ..., 'visible_if': '<guard expression>'} dicts (max 8). The call does NOT wait: once "
@@ -126,6 +180,15 @@ TW_API_REFERENCE = (
     "or sequence's `helpers_script`; "
     "it may call tw.dialog.choose again for multi-step conversations. narrate=True lets the GM "
     "narrate the outcome.\n"
+    "- tw.dialog.tree(tree, on_end=None, on_action=None, speaker=None, start_node=None): RPG-style "
+    "nested NPC conversation. tree = {'npc_id': ..., 'initial_node': 'root', 'nodes': {node_id: "
+    "{'npc_text': ..., 'responses': [{'text': ..., 'next_node': node_id or None (ends), "
+    "'condition': '<guard expression>', 'once': True, 'script': '<tw code>', 'action': 'NAME'}]}}} "
+    "(max 100 nodes, 8 responses each). on_action(action, dialog_choice) runs for responses with "
+    "an 'action'; on_end(path) gets the visited steps [{node, response, text, action}]. The tree "
+    "dict and both handlers MUST be defined in `init_script` or a scene's/sequence's `helpers_script`.\n"
+    "- tw.save(label=''): creates a save state the player can return to (e.g. right before an "
+    "irreversible decision); shows 'Game saved: <label>'.\n"
     "- tw.log / tw.debug: tw.log(msg), tw.log.info/warn/error(msg) or print(msg) (outputs to server console); "
     "tw.debug(msg) (emits in-game [DEBUG: Script] notification when debug mode is ON)\n"
 )

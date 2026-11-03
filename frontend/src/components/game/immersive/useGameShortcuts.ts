@@ -1,7 +1,8 @@
 import { onBeforeUnmount, onMounted } from 'vue'
+import { audioService } from '@/services/audioService'
 
 interface GameShortcutHandlers {
-  /** SPACE: jump to the latest message in the story feed. */
+  /** SPACE (while nothing is read aloud): jump to the latest message in the story feed. */
   scrollToLatestMessage: () => void
   /** ENTER: put the caret into the command input. */
   focusInput: () => void
@@ -28,6 +29,11 @@ export function useGameShortcuts(handlers: GameShortcutHandlers) {
     e.preventDefault()
     if (e.repeat) return
     if (e.key === ' ') {
+      // While a line is read aloud, SPACE skips to the next line instead.
+      if (audioService.isPlaying.value) {
+        audioService.skip()
+        return
+      }
       handlers.scrollToLatestMessage()
       return
     }

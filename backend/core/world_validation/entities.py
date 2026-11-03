@@ -15,6 +15,7 @@ from backend.core.world_validation.context import (
     ref_id,
     ref_ids,
 )
+from backend.engine.combat.npc_attack import ATTACK_DICE_RX, normalize_main_attack
 from backend.engine.interaction.switch_states import (
     STATE_ID_MAX,
     STATE_LABEL_MAX,
@@ -249,6 +250,58 @@ def check_npc_stats(ctx: ValidationContext) -> list[ValidationFinding]:
                     armor_class=ac,
                 )
             )
+    return findings
+
+
+def _main_attack_findings(eid: str, meta: dict[str, Any]) -> list[ValidationFinding]:
+    raw = meta.get("main_attack")
+    if not isinstance(raw, dict):
+        return []
+    dice = str(raw.get("damage_dice") or "").replace(" ", "").lower()
+    if ATTACK_DICE_RX.match(dice):
+        return []
+    return [
+        finding(
+            "warn",
+            "npc_main_attack_invalid",
+            f"NPC '{eid}' main attack '{raw.get('name') or '?'}' has invalid damage dice "
+            f"'{raw.get('damage_dice')}'; the engine falls back to 1d6.",
+            location=f"entity:{eid}",
+            entity_id=eid,
+        )
+    ]
+
+
+def _deprecated_equipment_findings(eid: str, meta: dict[str, Any]) -> list[ValidationFinding]:
+    used = [field for field in _NPC_EQUIPMENT_FIELDS if meta.get(field)]
+    if not used:
+        return []
+    configured = normalize_main_attack(meta.get("main_attack")) is not None
+    weapon_note = (
+        "its weapon item is ignored because a main attack is configured"
+        if configured
+        else "configure a main attack instead of a weapon item"
+    )
+    return [
+        finding(
+            "warn",
+            "npc_deprecated_equipment",
+            f"NPC '{eid}' uses deprecated equipment ({', '.join(used)}): {weapon_note}, "
+            "and set its armor class in the combat profile.",
+            location=f"entity:{eid}",
+            entity_id=eid,
+        )
+    ]
+
+
+def check_npc_combat_profile(ctx: ValidationContext) -> list[ValidationFinding]:
+    """Main attack sanity and hints for the deprecated NPC weapon/armor items."""
+    findings: list[ValidationFinding] = []
+    for npc in ctx.entities_of("NPC"):
+        eid = entity_id(npc) or "?"
+        meta = metadata(npc)
+        findings += _main_attack_findings(eid, meta)
+        findings += _deprecated_equipment_findings(eid, meta)
     return findings
 
 

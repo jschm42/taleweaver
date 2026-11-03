@@ -131,8 +131,8 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
 
         # Check if state was updated (time)
         await db.refresh(state)
-        # No scene/sequence change: the message stays within the current in-game turn.
-        assert state.in_game_time == 0
+        # Every narrated player message advances the clock by one tick (time_per_turn=5).
+        assert state.in_game_time == 5
 
         # Check if chat message was recorded
         res = await db.execute(
@@ -277,7 +277,7 @@ async def test_off_scene_name_mention_without_inspect_intent_is_not_blocked(
 
         all_output = "".join(chunks).lower()
         assert "cannot inspect or search" not in all_output
-        assert state.in_game_time == 0  # same scene -> same in-game turn
+        assert state.in_game_time == 5  # one narration tick per player message
         assert mock_llm_instance.aexecute_simple_task.await_count == 1
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
         assert mock_llm_instance.stream_simple_task.await_count == 1
@@ -587,7 +587,7 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         # Assert
         await db.refresh(state)
         assert state.current_scene_id == "CELLAR"
-        # A scene change closes the in-game turn: base time advances exactly once.
+        # The narration tick advances the clock exactly once, also across a scene change.
         assert state.in_game_time == adv.time_per_turn
         # Narration is built from the new location, not the pre-turn snapshot.
         narration_text = _llm_call_text(mock_llm_instance.stream_simple_task.await_args_list[0])
@@ -1061,11 +1061,13 @@ async def test_adventure_generator_emits_proposal_event_before_generation(
         assert last_req["title"] == "Neon Foundry"
         assert last_req["selected_tone"] == "mystery"
         proposal_chunk = next(c for c in turn1_chunks if "event: adventure_generator_proposal" in c)
-        assert '"auto_start": false' in proposal_chunk
+        assert "auto_start" not in proposal_chunk
 
 
-async def test_confirmed_adventure_generation_proposal_auto_starts(setup_test_db, monkeypatch):
-    """A blueprint the player confirmed in chat must ask the client to open the progress view directly."""
+async def test_confirmed_adventure_generation_opens_review_without_starting(
+    setup_test_db, monkeypatch
+):
+    """A blueprint confirmed in chat opens the review dialog; weaving waits for the player's start."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -1082,7 +1084,6 @@ async def test_confirmed_adventure_generation_proposal_auto_starts(setup_test_db
                     "title": "Glass Archive",
                     "prompt": "A library that rewrites itself every night.",
                 },
-                generation_confirmed=True,
             )
         )
 
@@ -1091,18 +1092,24 @@ async def test_confirmed_adventure_generation_proposal_auto_starts(setup_test_db
                 yield None
 
         mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
+        generate_adventure_mock = AsyncMock(return_value="adv-should-not-exist")
 
         monkeypatch.setattr(
             "backend.api.routes.adventures.gameplay_logic.GameMasterLLM",
             lambda *args, **kwargs: mock_llm_instance,
+        )
+        monkeypatch.setattr(
+            "backend.engine.adventures.adventure_generator_service.AdventureGeneratorService.generate_adventure",
+            generate_adventure_mock,
         )
 
         manager = GameTurnManager(db, "session-1", user)
         chunks = [chunk async for chunk in manager.process_turn("yes, weave it")]
 
         proposal_chunk = next(c for c in chunks if "event: adventure_generator_proposal" in c)
-        assert '"auto_start": true' in proposal_chunk
         assert "Glass Archive" in proposal_chunk
+        assert "auto_start" not in proposal_chunk
+        generate_adventure_mock.assert_not_awaited()
 
 
 async def test_token_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
@@ -1374,12 +1381,13 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
         async for chunk in manager.process_turn("bitte nochmal erstellen"):
             chunks.append(chunk)
 
-        # A proposal event should be emitted for the client dialog; a retry starts weaving right away.
+        # A retry reopens the review dialog with the last blueprint; weaving waits for the player.
         proposal_chunk = next(
             c for c in chunks if "event: adventure_generator_proposal\ndata:" in c
         )
         assert "Bundy Boulevard" in proposal_chunk
-        assert '"auto_start": true' in proposal_chunk
+        assert "auto_start" not in proposal_chunk
+        generate_adventure_mock.assert_not_awaited()
 
 
 async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(
@@ -3580,6 +3588,65 @@ async def test_game_loop_adjacent_only_scene_transitions(setup_test_db, monkeypa
         assert any(
             "Movement blocked: The destination 'VAULT' is not adjacent" in msg for msg in sys_msgs
         )
+
+
+async def test_opening_prologue_ignores_gm_scene_change(setup_test_db, monkeypatch):
+    """The empty opening turn only describes the start scene: no GM move, no on_interact."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        db.add_all(
+            [
+                WorldExit(
+                    session_id="session-1",
+                    template_id=adv.id,
+                    from_scene_id="START",
+                    to_scene_id="CELLAR",
+                    label="cellar door",
+                    is_locked=False,
+                ),
+                WorldEntity(
+                    id="TELEPORTER",
+                    session_id=state.session_id,
+                    entity_type="OBJECT",
+                    name="A teleporter",
+                    description="A glowing pad.",
+                    current_scene_id=state.current_scene_id,
+                    is_portable=False,
+                    is_hidden=False,
+                    is_in_inventory=False,
+                    metadata_json={"on_interact_script": 'tw.scene.teleport("CELLAR")'},
+                ),
+            ]
+        )
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(
+            return_value=GameEvent(
+                narrative_description="You look around.",
+                new_scene_id="CELLAR",
+                updated_entities=[WorldEntityUpdate(entity_id="TELEPORTER", is_hidden=False)],
+            )
+        )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The hall is quiet."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.GameMasterLLM",
+            lambda *args, **kwargs: mock_llm_instance,
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = [chunk async for chunk in manager.process_turn("")]
+
+        await db.refresh(state)
+        assert state.current_scene_id == "START"
+        assert "You have entered" not in "".join(chunks)
+        assert manager.arrival_narration is False
 
 
 async def test_game_loop_lookaround_exits(setup_test_db, monkeypatch):

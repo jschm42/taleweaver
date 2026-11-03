@@ -133,22 +133,44 @@ export function buildSafeRetryText(text: string): string {
     .trim()
 }
 
-export function resolveNpcVoice(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): string | undefined {
+/**
+ * The metadata entry (NPC or protagonist) a dialogue line's speaker refers to: by id, by full
+ * name, or by a short name. Keys are NPC ids, but lines name the speaker ("Waitress Betty").
+ */
+function findSpeakerEntry(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): Record<string, any> | undefined {
   if (!speaker || !npcMetadata) return undefined
-
   const exact = npcMetadata[speaker]
-  if (exact?.voice) return String(exact.voice)
+  if (exact && typeof exact === 'object') return exact
 
-  // Keys are NPC ids, but dialogue lines name the speaker ("Waitress Betty"): match both. The
-  // protagonist is in the map too, so the player's own lines get their voice.
   const loweredSpeaker = speaker.trim().toLowerCase()
+  const shortNameMatches: Record<string, any>[] = []
   for (const [key, value] of Object.entries(npcMetadata)) {
-    if (!value || typeof value !== 'object' || !value.voice) continue
+    if (!value || typeof value !== 'object') continue
     const name = String(value.name || '').trim().toLowerCase()
-    if (key.toLowerCase() === loweredSpeaker || name === loweredSpeaker) return String(value.voice)
+    if (key.toLowerCase() === loweredSpeaker || name === loweredSpeaker) return value
+    if (isShortNameOf(loweredSpeaker, name)) shortNameMatches.push(value)
   }
 
-  return undefined
+  // The narrator often shortens names ("Grimsby" for "Grimsby the Gargoyle"); only an
+  // unambiguous match is used, so two "Captain ..." NPCs never swap voices.
+  return shortNameMatches.length === 1 ? shortNameMatches[0] : undefined
+}
+
+/** True when one name is the other's leading whole words ("grimsby" / "grimsby the gargoyle"). */
+function isShortNameOf(speaker: string, name: string): boolean {
+  if (!speaker || !name) return false
+  return name.startsWith(`${speaker} `) || speaker.startsWith(`${name} `)
+}
+
+export function resolveNpcVoice(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): string | undefined {
+  const voice = findSpeakerEntry(speaker, npcMetadata)?.voice
+  return voice ? String(voice) : undefined
+}
+
+/** The speaker's full name ("Grimsby" -> "Grimsby the Gargoyle"), so the speaking NPC's card lights up. */
+export function resolveSpeakerName(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): string | undefined {
+  const name = findSpeakerEntry(speaker, npcMetadata)?.name
+  return name ? String(name) : speaker
 }
 
 export function buildSegmentRequests(
@@ -163,7 +185,11 @@ export function buildSegmentRequests(
     // speaker names out loud.
     const requestText = sanitizeSegmentForTts(segment.text)
     if (!isSpeakableSegment(requestText)) continue
-    requests.push({ requestText, voiceOverride: resolveNpcVoice(speaker, npcMetadata), speaker })
+    requests.push({
+      requestText,
+      voiceOverride: resolveNpcVoice(speaker, npcMetadata),
+      speaker: resolveSpeakerName(speaker, npcMetadata),
+    })
   }
 
   return requests

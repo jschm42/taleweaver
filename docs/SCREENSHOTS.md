@@ -70,7 +70,7 @@ This document provides concise overviews and explanations for each screenshot lo
 * **Filename**: [`docs/screenshots/combat-dialog.jpg`](screenshots/combat-dialog.jpg)
 * **View**: Turn-Based Tactical Combat System
 * **Description**:
-  The full-screen battle view engaged when entering combat with hostile entities. It shows the protagonist next to a stack of enemy cards (click a card, or a portrait in the initiative order shown at the top of the arena, to bring that target to the front), a hand of trading-card style cards below the combatants (one attack card per equipped weapon, then specials such as spells or a defense stance), consumables as item tiles in the bottom bar next to rest and flee, occasional NPC taunts shown as comic speech bubbles above the speaker, and a transparent combat chronicle logging turn-by-turn dice roll outcomes, hit modifiers, and applied status damage.
+  The full-screen battle view engaged when entering combat with hostile entities. It shows the protagonist next to a stack of enemy cards (click a card, or a portrait in the initiative order shown at the top of the arena, to bring that target to the front; defeated enemies leave the stack and the initiative order after their knock-out animation, while their loot still shows up in the spoils), a hand of trading-card style cards below the combatants (one attack card per equipped weapon, then specials such as spells or a defense stance), consumables as item tiles in the bottom bar next to rest and flee, occasional NPC taunts shown as comic speech bubbles above the speaker, and a transparent combat chronicle logging turn-by-turn dice roll outcomes, hit modifiers, and applied status damage.
 
 ---
 
@@ -81,7 +81,7 @@ This document provides concise overviews and explanations for each screenshot lo
 * **Filename**: [`docs/screenshots/loot-dialog.jpg`](screenshots/loot-dialog.jpg)
 * **View**: Container Inspection & Spoils Modal
 * **Description**:
-  An interaction modal displayed when searching environmental containers, chests, or fallen adversaries. Features rich item cards with rarity tiers, descriptive lore, and quick-action buttons allowing players to inspect specific items, retrieve individual relics, or transfer all contents into their backpack.
+  An interaction modal displayed when searching environmental containers, chests, or fallen adversaries. Features rich item cards with rarity tiers, descriptive lore, and quick-action buttons allowing players to inspect specific items, retrieve individual relics, or transfer all contents into their backpack. After a won fight, the combat reward dialog lets the player decide per item: **Take** puts it into the inventory, **Drop** leaves it lying in the scene. **Take All & Close** keeps everything that is left (`/loot take_all`), **Drop All & Close** drops it into the scene (`/loot done`); both end the fight. The battle dialog's *Spoils of Battle* panel offers the same choices.
 
 ---
 

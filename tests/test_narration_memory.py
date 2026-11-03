@@ -1,4 +1,3 @@
-
 import pytest
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
@@ -43,7 +42,9 @@ async def _seed_context(db, max_memory_turns_adv=30, max_memory_turns_state=None
         user_id=user.id,
         current_scene_id="START",
         in_game_time=0,
-        max_memory_turns=max_memory_turns_state if max_memory_turns_state is not None else max_memory_turns_adv,
+        max_memory_turns=max_memory_turns_state
+        if max_memory_turns_state is not None
+        else max_memory_turns_adv,
     )
     db.add(state)
     await db.commit()
@@ -53,6 +54,7 @@ async def _seed_context(db, max_memory_turns_adv=30, max_memory_turns_state=None
 async def test_build_narration_messages_default_30(setup_test_db):
     """Verifies that up to 30 past turns are included in narration messages."""
     from tests.conftest import TestSessionLocal
+
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_context(db, max_memory_turns_adv=30)
         manager = GameTurnManager(db, "session-mem-1", user)
@@ -63,12 +65,18 @@ async def test_build_narration_messages_default_30(setup_test_db):
         # Seed 5 completed turns (user + assistant)
         for i in range(1, 6):
             db.add(ChatMessage(session_id="session-mem-1", role="user", content=f"User action {i}"))
-            db.add(ChatMessage(session_id="session-mem-1", role="assistant", content=f"Narrator response {i}"))
+            db.add(
+                ChatMessage(
+                    session_id="session-mem-1", role="assistant", content=f"Narrator response {i}"
+                )
+            )
         # Seed current turn user message
         db.add(ChatMessage(session_id="session-mem-1", role="user", content="Current user action"))
         await db.commit()
 
-        messages, turns = await manager._build_narration_messages("System instruction", "Current user action")
+        messages, turns = await manager._build_narration_messages(
+            "System instruction", "Current user action"
+        )
         assert turns == 30
         assert messages[0] == {"role": "system", "content": "System instruction"}
         # Should include all 5 past turns (user + assistant) + current turn user action = 1 + 10 + 1 = 12
@@ -81,6 +89,7 @@ async def test_build_narration_messages_default_30(setup_test_db):
 async def test_build_narration_messages_default_10(setup_test_db):
     """Verifies that the default memory turns is now 10 when unset."""
     from tests.conftest import TestSessionLocal
+
     async with TestSessionLocal() as db:
         user = User(username="defaultplayer", hashed_password="pw", role="user")
         adv = AdventureTemplate(
@@ -125,16 +134,21 @@ async def test_build_narration_messages_default_10(setup_test_db):
         manager.adventure = adv
         manager.avatar = avatar
 
-        messages, turns = await manager._build_narration_messages("System instruction", "Current user action")
+        messages, turns = await manager._build_narration_messages(
+            "System instruction", "Current user action"
+        )
         assert turns == 10
 
 
 async def test_build_narration_messages_limits_to_configured_turns(setup_test_db):
     """Verifies that only the last N turns are included when max_memory_turns is set."""
     from tests.conftest import TestSessionLocal
+
     async with TestSessionLocal() as db:
         # Configure session for only 2 memory turns
-        user, adv, avatar, state = await _seed_context(db, max_memory_turns_adv=30, max_memory_turns_state=2)
+        user, adv, avatar, state = await _seed_context(
+            db, max_memory_turns_adv=30, max_memory_turns_state=2
+        )
         manager = GameTurnManager(db, "session-mem-1", user)
         manager.state = state
         manager.adventure = adv
@@ -143,7 +157,11 @@ async def test_build_narration_messages_limits_to_configured_turns(setup_test_db
         # Seed 5 completed turns
         for i in range(1, 6):
             db.add(ChatMessage(session_id="session-mem-1", role="user", content=f"User action {i}"))
-            db.add(ChatMessage(session_id="session-mem-1", role="assistant", content=f"Narrator response {i}"))
+            db.add(
+                ChatMessage(
+                    session_id="session-mem-1", role="assistant", content=f"Narrator response {i}"
+                )
+            )
         # Seed current turn user action
         db.add(ChatMessage(session_id="session-mem-1", role="user", content="Turn 6 action"))
         await db.commit()
@@ -169,8 +187,11 @@ async def test_build_narration_messages_limits_to_configured_turns(setup_test_db
 async def test_build_narration_messages_zero_memory(setup_test_db):
     """Verifies that setting max_memory_turns=0 yields only system prompt and current action."""
     from tests.conftest import TestSessionLocal
+
     async with TestSessionLocal() as db:
-        user, adv, avatar, state = await _seed_context(db, max_memory_turns_adv=30, max_memory_turns_state=0)
+        user, adv, avatar, state = await _seed_context(
+            db, max_memory_turns_adv=30, max_memory_turns_state=0
+        )
         manager = GameTurnManager(db, "session-mem-1", user)
         manager.state = state
         manager.adventure = adv
@@ -179,7 +200,9 @@ async def test_build_narration_messages_zero_memory(setup_test_db):
         # Seed 3 completed turns
         for i in range(1, 4):
             db.add(ChatMessage(session_id="session-mem-1", role="user", content=f"Action {i}"))
-            db.add(ChatMessage(session_id="session-mem-1", role="assistant", content=f"Response {i}"))
+            db.add(
+                ChatMessage(session_id="session-mem-1", role="assistant", content=f"Response {i}")
+            )
         db.add(ChatMessage(session_id="session-mem-1", role="user", content="Latest action"))
         await db.commit()
 
@@ -196,6 +219,7 @@ async def test_build_narration_messages_system_events_merged_cleanly(setup_test_
     Past events were already narrated, so repeating them only costs tokens.
     """
     from tests.conftest import TestSessionLocal
+
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_context(db, max_memory_turns_state=5)
         manager = GameTurnManager(db, "session-mem-1", user)
@@ -205,12 +229,30 @@ async def test_build_narration_messages_system_events_merged_cleanly(setup_test_
 
         # Turn 1 with a system roll
         db.add(ChatMessage(session_id="session-mem-1", role="user", content="I kick the door"))
-        db.add(ChatMessage(session_id="session-mem-1", role="system", content="Strength DC 15: Rolled 12 (Fail)"))
-        db.add(ChatMessage(session_id="session-mem-1", role="assistant", content="The door rattles but stays shut."))
+        db.add(
+            ChatMessage(
+                session_id="session-mem-1",
+                role="system",
+                content="Strength DC 15: Rolled 12 (Fail)",
+            )
+        )
+        db.add(
+            ChatMessage(
+                session_id="session-mem-1",
+                role="assistant",
+                content="The door rattles but stays shut.",
+            )
+        )
 
         # Turn 2 with a system roll before narration
         db.add(ChatMessage(session_id="session-mem-1", role="user", content="I pick the lock"))
-        db.add(ChatMessage(session_id="session-mem-1", role="system", content="Agility DC 10: Rolled 18 (Success)"))
+        db.add(
+            ChatMessage(
+                session_id="session-mem-1",
+                role="system",
+                content="Agility DC 10: Rolled 18 (Success)",
+            )
+        )
         await db.commit()
 
         messages, turns = await manager._build_narration_messages("Sys", "I pick the lock")
@@ -228,6 +270,7 @@ async def test_build_narration_messages_system_events_merged_cleanly(setup_test_
 async def test_build_narration_messages_prepends_turn_context_and_skips_debug(setup_test_db):
     """Per-turn context goes into the final user message; debug lines never reach the LLM."""
     from tests.conftest import TestSessionLocal
+
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_context(db, max_memory_turns_state=5)
         manager = GameTurnManager(db, "session-mem-1", user)
@@ -236,12 +279,22 @@ async def test_build_narration_messages_prepends_turn_context_and_skips_debug(se
         manager.avatar = avatar
 
         db.add(ChatMessage(session_id="session-mem-1", role="user", content="I open the chest"))
-        db.add(ChatMessage(session_id="session-mem-1", role="system", content="[DEBUG LOG] Turn completed"))
-        db.add(ChatMessage(session_id="session-mem-1", role="system", content="Added Gold to your inventory."))
+        db.add(
+            ChatMessage(
+                session_id="session-mem-1", role="system", content="[DEBUG LOG] Turn completed"
+            )
+        )
+        db.add(
+            ChatMessage(
+                session_id="session-mem-1", role="system", content="Added Gold to your inventory."
+            )
+        )
         await db.commit()
 
         messages, _ = await manager._build_narration_messages(
-            "Static system prompt", "I open the chest", turn_context="CURRENT STATE:\nTURN RESOLUTION:"
+            "Static system prompt",
+            "I open the chest",
+            turn_context="CURRENT STATE:\nTURN RESOLUTION:",
         )
 
         # Assert
@@ -251,3 +304,46 @@ async def test_build_narration_messages_prepends_turn_context_and_skips_debug(se
         assert "PLAYER ACTION:\nI open the chest" in final
         assert "[Game Event: Added Gold to your inventory.]" in final
         assert "[DEBUG LOG]" not in final
+
+
+async def test_build_narration_messages_marks_current_turn_script_lines(setup_test_db):
+    """A scripted NPC line from this turn is an annotation, not a finished GM reply.
+
+    Replayed as an assistant turn, the model answered the player action a second time
+    and let the NPC repeat the scripted clue in other words.
+    """
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        user, adv, avatar, state = await _seed_context(db, max_memory_turns_state=5)
+        manager = GameTurnManager(db, "session-mem-1", user)
+        manager.state = state
+        manager.adventure = adv
+        manager.avatar = avatar
+        db.add(ChatMessage(session_id="session-mem-1", role="user", content="I wave at Dad"))
+        db.add(ChatMessage(session_id="session-mem-1", role="assistant", content="Dad waves back."))
+        db.add(ChatMessage(session_id="session-mem-1", role="user", content="calm down, I got you"))
+        db.add(
+            ChatMessage(
+                session_id="session-mem-1",
+                role="assistant",
+                content='Dad: "The locker code is on my poster!"',
+            )
+        )
+        await db.commit()
+
+        # Act
+        messages, _ = await manager._build_narration_messages(
+            "Sys", "calm down, I got you", turn_context="TURN RESOLUTION:"
+        )
+
+        # Assert
+        assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+        assert messages[2] == {"role": "assistant", "content": "Dad waves back."}
+        final = messages[-1]["content"]
+        assert final.count("calm down, I got you") == 1
+        assert (
+            '[Already shown to the player this turn: Dad: "The locker code is on my poster!"]'
+            in final
+        )

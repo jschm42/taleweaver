@@ -1,4 +1,4 @@
-"""Tests for tw.llm.ask in the scripting sandbox."""
+"""Tests for tw.llm.ask, tw.llm.ask_json and tw.json in the scripting sandbox."""
 
 from types import SimpleNamespace
 
@@ -21,8 +21,8 @@ class FakeAsker:
         return self.answer
 
 
-def _run(code: str, asker=None) -> GameContext:
-    context = GameContext(llm_asker=asker)
+def _run(code: str, asker=None, debug: bool = False) -> GameContext:
+    context = GameContext(llm_asker=asker, is_debug_enabled=debug)
     SafeAstInterpreter().execute(code, {"tw": context})
     return context
 
@@ -104,7 +104,8 @@ def test_guard_expressions_never_call_the_llm():
 
     # Act
     result = SafeAstInterpreter().evaluate_expression(
-        "tw.llm.ask('Should the door open?') == '' and not tw.llm.available", {"tw": context}
+        "tw.llm.ask('Should the door open?') == '' and tw.llm.ask_json('Q') is None and not tw.llm.available",
+        {"tw": context},
     )
 
     # Assert
@@ -149,3 +150,90 @@ def test_model_for_maps_tiers_to_small_and_complex_settings():
     assert _model_for(user, "simple") == ("anthropic", "claude-haiku-5-5", "small")
     assert _model_for(user, "advanced") == ("openrouter", "claude-opus-5-5", "complex")
     assert _model_for(SimpleNamespace(llm_settings={}), "simple")[1] == "gpt-4o-mini"
+
+
+def test_ask_json_parses_markdown_fences_and_validates_schema():
+    # Arrange
+    raw_json = (
+        "<think>Generating PCEP question...</think>\n"
+        "```json\n"
+        "{\n"
+        '  "question": "What is the output of:\\n```python\\nfor i in range(2):\\n    print(i)\\n```",\n'
+        '  "options": ["0\\n1", "1\\n2", "0 1", "Error"],\n'
+        '  "correct_index": 0,\n'
+        '  "explanation": "range(2) yields 0 and 1."\n'
+        "}\n"
+        "```"
+    )
+    asker = FakeAsker(answer=raw_json)
+    code = """
+schema = {
+    "question": {"type": "str", "min_len": 5},
+    "options": {"type": "list", "items": {"type": "str", "min_len": 1}, "min_len": 4, "max_len": 4},
+    "correct_index": {"type": "int", "min": 0, "max": 3},
+    "explanation": {"type": "str", "optional": True},
+}
+quiz = tw.llm.ask_json("Generate a PCEP question", schema=schema)
+tw.vars.set("quiz", quiz)
+"""
+
+    # Act
+    context = _run(code, asker)
+
+    # Assert
+    quiz = context.changeset.var_updates["quiz"]
+    assert isinstance(quiz, dict)
+    assert quiz["correct_index"] == 0
+    assert len(quiz["options"]) == 4
+    assert "    print(i)" in quiz["question"]
+    assert "Return ONLY valid JSON matching this schema" in asker.calls[0][1]
+
+
+def test_ask_json_returns_none_when_schema_fails_or_json_invalid():
+    # Arrange
+    bad_schema_asker = FakeAsker(
+        answer='{"question": "x?", "options": ["a", "b"], "correct_index": 5}'
+    )
+    broken_json_asker = FakeAsker(answer="Not JSON at all!")
+    code = """
+schema = {
+    "question": "str",
+    "options": {"type": "list", "items": "str", "min_len": 4, "max_len": 4},
+    "correct_index": {"type": "int", "min": 0, "max": 3},
+}
+tw.vars.set("res", tw.llm.ask_json("Q", schema=schema))
+"""
+
+    # Act
+    bad_schema_ctx = _run(code, bad_schema_asker, debug=True)
+    broken_json_ctx = _run(code, broken_json_asker, debug=True)
+
+    # Assert
+    assert bad_schema_ctx.changeset.var_updates["res"] is None
+    assert any("schema validation failed" in m for m in bad_schema_ctx.changeset.system_messages)
+    assert broken_json_ctx.changeset.var_updates["res"] is None
+    assert any("invalid JSON syntax" in m for m in broken_json_ctx.changeset.system_messages)
+
+
+def test_tw_json_loads_validate_and_dumps():
+    # Arrange
+    code = """
+schema = {"name": str, "score": {"type": int, "min": 0, "max": 100}}
+parsed = tw.json.loads('{"name": "Ada", "score": 95,}', schema=schema)
+invalid = tw.json.loads('{"name": "Ada", "score": 200}', schema=schema, default={"fallback": True})
+dumped = tw.json.dumps(parsed)
+is_ok = tw.json.validate(parsed, schema)
+tw.vars.set("parsed", parsed)
+tw.vars.set("invalid", invalid)
+tw.vars.set("dumped", dumped)
+tw.vars.set("is_ok", is_ok)
+"""
+
+    # Act
+    context = _run(code)
+
+    # Assert
+    assert context.changeset.var_updates["parsed"] == {"name": "Ada", "score": 95}
+    assert context.changeset.var_updates["invalid"] == {"fallback": True}
+    assert '"Ada"' in context.changeset.var_updates["dumped"]
+    assert context.changeset.var_updates["is_ok"] is True

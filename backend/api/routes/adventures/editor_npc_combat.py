@@ -1,4 +1,5 @@
-"""Editor endpoint for NPC combat behaviour: attack on sight, attack trigger rules, special chance."""
+"""Editor endpoint for NPC combat behaviour: attack on sight, attack trigger rules, special chance
+and the combat group / assist mode that decide who joins a fight."""
 
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.api.routes.adventures.editor import _get_owned_adventure_or_404, _sanitize_editor_id
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.combat.groups import normalize_group
 from backend.engine.scripting.sandbox import SafeAstInterpreter
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -36,6 +38,8 @@ class NpcCombatUpdateRequest(BaseModel):
     attack_mode: Literal["PASSIVE", "ATTACK_ON_SIGHT"] = "PASSIVE"
     attack_trigger: Optional[AttackTrigger] = None
     special_chance: int = Field(default=40, ge=0, le=100)
+    combat_group: Optional[str] = Field(default=None, max_length=64)
+    assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = None
 
 
 def _clean_trigger(trigger: Optional[AttackTrigger]) -> dict[str, Any] | None:
@@ -93,6 +97,8 @@ async def update_npc_combat(
         "attack_mode": payload.attack_mode,
         "attack_trigger": _clean_trigger(payload.attack_trigger),
         "special_chance": payload.special_chance,
+        "combat_group": normalize_group(payload.combat_group),
+        "assist_mode": payload.assist_mode,
     }
     npc.metadata_json = {**(npc.metadata_json or {}), **values}
     flag_modified(npc, "metadata_json")

@@ -84,6 +84,10 @@ const availableSnippets = computed(() => {
       code: 'tw.system("System notification message.")\n',
     },
     {
+      label: 'Save game (checkpoint)',
+      code: 'tw.save("Before the duel")\n',
+    },
+    {
       label: 'Modify player stat',
       code: 'hp = tw.player.get_stat("hp", 100)\ntw.player.set_stat("hp", max(0, hp - 10))\n',
     },
@@ -108,12 +112,32 @@ const availableSnippets = computed(() => {
       code: '# NPC hands an item it carries to the player:\ntw.npcs.give_to_player("NPC_ID", "ITEM_ID")\n# Or drop from NPC into scene:\n# tw.npcs.drop_item("NPC_ID", "ITEM_ID")\n# Or give item to NPC:\n# tw.npcs.give_item("NPC_ID", "ITEM_ID")\n',
     },
     {
+      label: 'Clone item (dispenser)',
+      code: '# Copies a (hidden) template item and hands the copy to the player:\npotion = tw.objects.get("HEALING_POTION").clone()\nif potion:\n    potion.reveal()\n    potion.move_to("player")\n',
+    },
+    {
+      label: 'Container contents',
+      code: '# List, put into and take out of a container:\nids = tw.objects.get("CHEST_ID").item_ids\ntw.objects.put_in_container("ITEM_ID", "CHEST_ID")\n# tw.objects.take_from_container("CHEST_ID", "ITEM_ID", to="player")\n',
+    },
+    {
+      label: 'Destroy / hide item',
+      code: 'tw.objects.destroy("ITEM_ID")\n# Or keep it, but out of sight:\n# tw.objects.hide("ITEM_ID")\n# tw.objects.reveal("ITEM_ID")\n',
+    },
+    {
       label: 'NPC speaks (GM-worded)',
       code: '# The GM writes the line in the next narration, in character:\ntw.npcs.say_directed("NPC_ID", "sings an old sailor song")\n# Fixed wording instead:\n# tw.npcs.say("NPC_ID", "Ahoy!")\n',
     },
     {
       label: 'Change NPC personality',
       code: '# Changes how the GM plays the NPC for the rest of this game:\ntw.npcs.set_character("NPC_ID", "Hostile and suspicious; short, rude answers.")\n# Or add / remove a single trait:\n# tw.npcs.add_trait("NPC_ID", "drunk")\n# tw.npcs.remove_trait("NPC_ID", "drunk")\n',
+    },
+    {
+      label: 'Change NPC combat allies',
+      code: '# NPCs in the same combat group fight together (applies from the next fight on):\ntw.npcs.set_combat_group("NPC_ID", "GUARDS")\n# Turn an NPC into a bystander who only fights when attacked directly:\n# tw.npcs.set_assist_mode("NPC_ID", "NEVER")\n',
+    },
+    {
+      label: 'Spawn NPC pack (clone)',
+      code: '# Spawns fresh copies of a (hidden) template NPC; clones share its combat group:\nfor i in range(5):\n    tw.npcs.clone("NPC_ID", scene_id="current", hidden=False)\n',
     },
     {
       label: 'Defeat / Kill NPC',
@@ -130,6 +154,10 @@ const availableSnippets = computed(() => {
       {
         label: 'Choice dialog handler',
         code: '# Called with the index of the chosen option (its position in the options list).\ndef on_wire_choice(answ):\n    if answ == 0:\n        tw.vars.set("bomb_disarmed", True)\n        tw.narrate("The ticking stops.")\n        return\n    tw.game.game_over("The bomb exploded.")\n',
+      },
+      {
+        label: 'Dialogue tree',
+        code: '# Start it from any script: tw.dialog.tree(SMITH_TALK, on_end="on_smith_end", on_action="on_smith_action")\nSMITH_TALK = {\n    "npc_id": "SMITH",\n    "initial_node": "root",\n    "nodes": {\n        "root": {\n            "npc_text": "What do you want?",\n            "responses": [\n                {"text": "A sword. [50 Gold]", "condition": "tw.vars.get(\'gold\', 0) >= 50", "action": "BUY_SWORD", "next_node": "root"},\n                {"text": "Any rumours?", "once": True, "script": "tw.vars.set(\'heard_rumour\', True)", "next_node": "root"},\n                {"text": "Bye.", "next_node": None},\n            ],\n        },\n    },\n}\n\ndef on_smith_action(action, choice):\n    if action == "BUY_SWORD":\n        tw.vars.set("gold", tw.vars.get("gold", 0) - 50)\n        tw.player.take_item("SWORD")\n\ndef on_smith_end(path):\n    tw.vars.set("smith_talked", True)\n',
       },
       {
         label: 'Shared helper function',
@@ -158,6 +186,16 @@ const availableSnippets = computed(() => {
       {
         label: 'Change NPC trust',
         code: 'tw.vars.set("NPC_TRUST", tw.vars.get("NPC_TRUST", 0) - 1)\n',
+      },
+      ...common,
+    ]
+  }
+
+  if (props.context === 'on_receive_item') {
+    return [
+      {
+        label: 'Accept the right item, return the rest',
+        code: "if 'SILVER_RING' in received_item_ids:\n    tw.vars.set('ring_returned', True)\n    tw.story.direct('The NPC is deeply moved and thanks the player warmly.')\nelse:\n    for item_id in received_item_ids:\n        tw.npcs.give_to_player('NPC_ID', item_id)\n    tw.story.direct('The NPC politely hands the gift back.')\n",
       },
       ...common,
     ]
@@ -743,7 +781,7 @@ onBeforeUnmount(() => {
             <button type="button" @click="insertNamedSnippet('npcs')" class="text-[10px] text-slate-500 hover:text-amber-300 font-sans">Insert</button>
           </div>
           <p class="text-[10px] text-slate-400 font-sans">
-            <code>.get(id)</code>, <code>.say(id, text)</code>, <code>.say_directed(id, direction)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
+            <code>.get(id)</code>, <code>.say(id, text)</code>, <code>.say_directed(id, direction)</code>, <code>.consume(id, item_id)</code>, <code>.move(id, target_scene)</code>, <code>.set_character(id, text)</code>, <code>.add_trait(id, t)</code>
           </p>
         </div>
 
@@ -764,8 +802,8 @@ onBeforeUnmount(() => {
       class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
       :style="{
         '--cm-min-height': isFullscreen ? '400px' : minHeight,
+        '--cm-max-height': maxHeight,
         minHeight: isFullscreen ? '400px' : minHeight,
-        maxHeight: isFullscreen ? 'none' : maxHeight,
       }"
     >
       <!-- Loading CDN Spinner / Notice -->
@@ -781,7 +819,7 @@ onBeforeUnmount(() => {
       <div
         ref="editorEl"
         v-show="isCmReady"
-        class="codemirror-wrapper w-full h-full text-slate-200"
+        :class="['codemirror-wrapper w-full h-full text-slate-200', { 'codemirror-fill': isFullscreen }]"
       ></div>
 
       <!-- Fallback Textarea if CDN is offline or unavailable -->
@@ -870,9 +908,11 @@ onBeforeUnmount(() => {
 }
 
 /* CodeMirror overrides to integrate with TaleWeaver dark theme */
+/* Inline: the editor grows with its content up to --cm-max-height, then scrolls. */
 .codemirror-wrapper .CodeMirror {
-  height: 100% !important;
+  height: auto !important;
   min-height: var(--cm-min-height, 120px);
+  max-height: var(--cm-max-height, none);
   background-color: transparent !important;
   color: #e2e8f0 !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
@@ -882,8 +922,16 @@ onBeforeUnmount(() => {
 }
 
 .codemirror-wrapper .CodeMirror-scroll {
-  height: 100% !important;
+  height: auto !important;
   min-height: var(--cm-min-height, 120px);
+  max-height: var(--cm-max-height, none);
+}
+
+/* Fullscreen: the canvas has a fixed height, so the editor fills it and scrolls inside. */
+.codemirror-wrapper.codemirror-fill .CodeMirror,
+.codemirror-wrapper.codemirror-fill .CodeMirror-scroll {
+  height: 100% !important;
+  max-height: none;
 }
 
 .codemirror-wrapper .CodeMirror-gutters {

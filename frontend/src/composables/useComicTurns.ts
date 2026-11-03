@@ -3,6 +3,8 @@ import DOMPurify from 'dompurify'
 import type { ChatMessage } from '@/types'
 import { buildComicPages, type ComicTurn, type DialogueSegment } from './comicPages'
 import { renderEntityRefsHtml } from '@/utils/entityRefs'
+import { extractCodePlaceholders } from '@/utils/codeMarkup'
+import { attachCueToSpeech } from './comicTagOnlyLines'
 
 export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
 
@@ -231,7 +233,17 @@ export function parseAssistantContent(
   if (!content) return { narration: '', dialogues: [] }
 
   const dialogues: DialogueSegment[] = []
-  let cleanContent = repairStrayQuotes(normalizeTagSyntax(content.replace(/\\n/g, '\n')).trim())
+  const fencedBlocks: string[] = []
+  const protectedContent = content
+    .replace(/\\n/g, '\n')
+    .replace(/```[\s\S]*?```/g, (block) => {
+      const idx = fencedBlocks.length
+      fencedBlocks.push(block)
+      return `\uE001FENCE_${idx}\uE001`
+    })
+  const restoreFences = (text: string): string =>
+    text.replace(/\uE001FENCE_(\d+)\uE001/g, (_m, i: string) => fencedBlocks[Number(i)] ?? '')
+  let cleanContent = repairStrayQuotes(normalizeTagSyntax(protectedContent).trim())
 
   // 1) Pre-split embedded/inline dialogues onto separate lines:
   // Detects: (Sentence end, voice tag, or line boundary) -> Speaker: "Dialogue"
@@ -253,6 +265,8 @@ export function parseAssistantContent(
   // - Character Name: "[tag] "Dialogue"
   // - Character Name: "Dialogue"
   const speechRegex = /^(?:\[([^\]\n]+)\]\s*)?(?:(\*\*([^*:\n]+?):\*\*)|(\*\*([^*:\n]+?)\*\*:)|([\p{L}\p{N}_\s'’\-,.()]{2,60}):)\s*(.*)$/u
+  // Voice tag of a tag-only line ("[calm]"), kept for the narration paragraph that follows it.
+  let pendingVoiceTag: string | undefined
 
   for (const rawLine of lines) {
     // "Narrator: ..." is a format leak, not a character; keep only the prose.
@@ -261,6 +275,7 @@ export function parseAssistantContent(
 
     const match = line.match(speechRegex)
     if (match) {
+      pendingVoiceTag = undefined
       const isBold = Boolean(match[2] || match[4])
       let speakerName = (match[3] || match[5] || match[6] || '').trim()
       const rawSpeech = (match[7] || '').trim()
@@ -341,9 +356,16 @@ export function parseAssistantContent(
         narrationText = tagMatch[2].trim()
       }
 
+      // A tag-only line never becomes an empty Game Master block (see comicTagOnlyLines.ts).
+      if (!narrationText) {
+        pendingVoiceTag = attachCueToSpeech(dialogues, line) ? undefined : pendingVoiceTag || voiceTag
+        continue
+      }
+      voiceTag = voiceTag || pendingVoiceTag
+      pendingVoiceTag = undefined
+
       const last = dialogues[dialogues.length - 1]
       if (last && last.isNarration) {
-        // A lone voice tag line ("[calm]") leaves an empty narration to continue from.
         last.text = last.text ? `${last.text}\n\n${narrationText}` : narrationText
         // Use the voice tag from the first paragraph if the new one doesn't have one
         if (voiceTag && !last.voiceTag) {
@@ -357,6 +379,9 @@ export function parseAssistantContent(
 
   // To keep compatibility, extract the first narration block as .narration
   // though the UI should iterate dialogues.
+  for (const d of dialogues) {
+    d.text = restoreFences(d.text)
+  }
   const firstNarration = dialogues.find(d => d.isNarration)
   return {
     narration: firstNarration ? firstNarration.text : '',
@@ -371,7 +396,8 @@ const QUOTE_CHARS = /["„“”«»]/
 export function renderFormattedHtml(text: string): string {
   if (!text) return ''
   // Pauses only shape the speech output and are not shown.
-  const displayText = normalizeTagSyntax(text).replace(PAUSE_TAG, ' ').trim()
+  const { tokenized, restore } = extractCodePlaceholders(text)
+  const displayText = normalizeTagSyntax(tokenized).replace(PAUSE_TAG, ' ').trim()
   const escaped = displayText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const withVoiceTags = escaped.replace(/(\[[^\]\n]+\])/g, (match, tag) => {
     const raw = tag.slice(1, -1).trim()
@@ -386,8 +412,8 @@ export function renderFormattedHtml(text: string): string {
     .replace(/\n{2,}/g, '<span class="tw-para-break"></span>')
     .replace(/\n/g, '<br>')
 
-  return DOMPurify.sanitize(withObjectIds, {
-    ALLOWED_TAGS: ['span', 'strong', 'em', 'br', 'div'],
+  return DOMPurify.sanitize(restore(withObjectIds), {
+    ALLOWED_TAGS: ['span', 'strong', 'em', 'br', 'div', 'pre', 'code'],
     ALLOWED_ATTR: ['class'],
   })
 }
@@ -491,14 +517,11 @@ export function useComicTurns(options: UseComicTurnsOptions) {
         }
       })
 
-    const sortedWorldNpcs = [...worldNpcs].sort((a, b) => {
-      const aSpeaking = isNpcSpeaking(a) ? 1 : 0
-      const bSpeaking = isNpcSpeaking(b) ? 1 : 0
-      return bSpeaking - aSpeaking
-    })
+    // Scene order stays as the server sends it: cards must not jump when someone speaks
+    // (the stage only moves defeated characters last, see stageCastOrder.ts).
     // The hero always leads the stage (top-left); its card opens the character sheet's Hero tab.
-    if (!sheet.value?.name) return sortedWorldNpcs
-    return [buildPlayerEntity(), ...sortedWorldNpcs]
+    if (!sheet.value?.name) return worldNpcs
+    return [buildPlayerEntity(), ...worldNpcs]
   })
 
   function buildPlayerEntity() {

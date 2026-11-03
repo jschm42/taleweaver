@@ -7,6 +7,7 @@ import type { ChatMessage } from '@/types'
 import CommandPopup from '@/components/game/CommandPopup.vue'
 import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import GameActionBar from '@/components/game/GameActionBar.vue'
+import TalentMenu from '@/components/game/TalentMenu.vue'
 import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
@@ -1040,7 +1041,7 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-slate-950/50 backdrop-blur-md shrink-0">
       <div v-if="props.exp !== undefined && props.mode !== 'chat'" class="flex items-center gap-2 select-none animate-fade-in cursor-help" title="Experience Points">
-        <i class="ra ra-laurels text-xl text-amber-400"></i>
+        <i class="ra ra-trophy text-xl text-amber-400"></i>
         <span class="text-amber-400 text-sm font-black uppercase tracking-[0.12em] tabular-nums">
           {{ props.exp }} XP
         </span>
@@ -1451,7 +1452,16 @@ onUnmounted(() => {
       @use-suggestion="handleSuggestionSelect"
       @shuffle-suggestions="handleSuggestionShuffle"
       @select-action="emit('selectAction', $event)" 
-    />
+    >
+      <template #leading>
+        <TalentMenu
+          :sheet="props.sheet"
+          :entities="props.entities"
+          :disabled="!!props.inputLocked || isPassRunning || !canSendInput || !!props.sheet?.agent_active"
+          @use="(command) => handleSend(command)"
+        />
+      </template>
+    </GameActionBar>
 
     <!-- Input bar -->
     <div class="border-t border-slate-800 bg-slate-950 p-3 sm:p-4 shrink-0 relative">

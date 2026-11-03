@@ -173,7 +173,8 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
       on_drop_text, on_interact_script, on_interact_text
     - object (CONTAINER only): locked, code_to_unlock, item_to_unlock, rule_to_unlock,
       unlock_expression, on_unlock_success_script, on_unlock_success_text,
-      on_unlock_failure_script, on_unlock_failure_text
+      on_unlock_failure_script, on_unlock_failure_text, on_items_added_script,
+      on_items_added_text
     - object (READABLE only): text_log_content, text_log_format, on_read_script, on_read_text
     - object (WEAPON/WEARABLE only): on_equip_script, on_equip_text, on_unequip_script,
       on_unequip_text
@@ -182,7 +183,7 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - npc: name, description, goal, character, is_killable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_defeat_script, on_defeat_text,
       on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
-      on_interact_script, on_interact_text
+      on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
       rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
       on_exit_used_script, on_exit_used_text, on_unlock_success_script,

@@ -3,7 +3,9 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.core.narrator_voices import normalize_voice
 from backend.core.ui_theme import normalize_ui_theme
+from backend.models.adventure_template import ORIGINAL_PROMPT_MAX_LENGTH
 from backend.schemas.adventure import AdventureTemplateDebugResponse
 
 
@@ -31,6 +33,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     time_per_turn: int = 5
     pacing_minutes: Optional[int] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: bool = True
     max_memory_turns: int = 10
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
@@ -126,8 +129,10 @@ class CreateAdventureTemplatePayload(BaseModel):
     def validate_original_prompt_length(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
-        if len(value) > 20000:
-            raise ValueError("original_prompt must be at most 20000 characters")
+        if len(value) > ORIGINAL_PROMPT_MAX_LENGTH:
+            raise ValueError(
+                f"original_prompt must be at most {ORIGINAL_PROMPT_MAX_LENGTH} characters"
+            )
         return value
 
     @field_validator("intro_text")
@@ -312,6 +317,7 @@ class AdventureTemplateResponse(BaseModel):
     time_per_turn: int
     pacing_minutes: int
     max_time_per_turn: Optional[int] = None
+    gm_time_control: bool = True
     max_memory_turns: int = 10
     clock_enabled: bool
     time_system: str = "calendar"
@@ -320,6 +326,7 @@ class AdventureTemplateResponse(BaseModel):
     game_over_rules: Optional[dict[str, Any]]
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
+    narrator_voice: Optional[dict[str, Any]] = None
     ui_theme: Optional[dict[str, Any]] = None
     original_prompt: Optional[str] = None
     sequences: Optional[list[dict[str, Any]]] = None
@@ -477,6 +484,8 @@ class AdventureTemplateSummaryResponse(BaseModel):
     cover_source_adventure_name: Optional[str] = None
     has_update: bool = False
     available_version: Optional[str] = None
+    # Where the update comes from: "local" (/adventures file) or "library" (adventure browser).
+    update_source: Optional[str] = None
     has_sequences: bool = True
     is_legacy_format: bool = False
     # Manifest version below DEPRECATED_BELOW_VERSION: still playable, shown as deprecated.
@@ -639,6 +648,7 @@ class AdventureTemplateUpdate(BaseModel):
     generate_item_images: Optional[bool] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
+    narrator_voice: Optional[dict[str, Any]] = None
     ui_theme: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
@@ -671,6 +681,7 @@ class AdventureTemplateUpdate(BaseModel):
     time_system: Optional[str] = None
     time_config: Optional[dict[str, Any]] = None
     max_time_per_turn: Optional[int] = None
+    gm_time_control: Optional[bool] = None
     max_memory_turns: Optional[int] = None
     allow_dynamic_items: Optional[bool] = None
     can_damage_npcs: Optional[bool] = None
@@ -730,8 +741,10 @@ class AdventureTemplateUpdate(BaseModel):
     def validate_original_prompt_length(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
-        if len(value) > 20000:
-            raise ValueError("original_prompt must be at most 20000 characters")
+        if len(value) > ORIGINAL_PROMPT_MAX_LENGTH:
+            raise ValueError(
+                f"original_prompt must be at most {ORIGINAL_PROMPT_MAX_LENGTH} characters"
+            )
         return value
 
     @field_validator("plot", "rules", "tts_director_notes")
@@ -784,6 +797,11 @@ class AdventureTemplateUpdate(BaseModel):
         if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
             return [{"id": s, "name": s.capitalize()} for s in v]
         return v
+
+    @field_validator("narrator_voice", mode="before")
+    @classmethod
+    def clean_narrator_voice(cls, v):
+        return normalize_voice(v)
 
 
 class TraitGenerationRequest(BaseModel):

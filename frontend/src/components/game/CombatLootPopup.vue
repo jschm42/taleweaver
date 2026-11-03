@@ -7,6 +7,7 @@ type LootItem = {
   name?: string
   description?: string
   item_type?: string
+  image_url?: string | null
 }
 
 const props = defineProps<{
@@ -16,7 +17,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  /** Drops every remaining item into the scene and ends the fight. */
   confirm: []
+  /** Moves every remaining item into the inventory and ends the fight. */
+  takeAll: []
+  take: [item: LootItem]
+  drop: [item: LootItem]
   close: []
   itemHover: [item: LootItem, event: MouseEvent]
   itemLeave: []
@@ -87,15 +93,31 @@ const title = computed(() => {
                   >
                   <i v-else :class="['ra text-3xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
                 </div>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                   <div class="text-sm font-bold text-slate-100 truncate">{{ item.name || 'Unknown Item' }}</div>
                   <div class="text-xs text-slate-400 leading-relaxed mt-1">{{ item.description || 'The item is within reach.' }}</div>
+                </div>
+                <div class="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    class="px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.1em] bg-cyan-500/90 hover:bg-cyan-400 text-slate-950 disabled:opacity-50"
+                    :disabled="busy"
+                    :title="`Put ${item.name || 'this item'} into your inventory`"
+                    @click="emit('take', item)"
+                  >Take</button>
+                  <button
+                    type="button"
+                    class="px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.1em] border border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white disabled:opacity-50"
+                    :disabled="busy"
+                    :title="`Leave ${item.name || 'this item'} lying in the scene`"
+                    @click="emit('drop', item)"
+                  >Drop</button>
                 </div>
               </article>
             </div>
           </div>
 
-          <footer class="px-6 pb-6 pt-2 flex items-center justify-between gap-3">
+          <footer class="px-6 pb-6 pt-2 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               class="px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-[0.12em] border border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white transition-colors"
@@ -104,14 +126,27 @@ const title = computed(() => {
             >
               Manage In Combat Dialog
             </button>
-            <button
-              type="button"
-              class="px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-[0.12em] bg-cyan-500/90 hover:bg-cyan-400 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.45)] transition-all disabled:opacity-50"
-              :disabled="busy"
-              @click="emit('confirm')"
-            >
-              Drop Loot & Close Combat
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-[0.12em] border border-cyan-400/50 text-cyan-100 hover:border-cyan-300 hover:text-white transition-colors disabled:opacity-50"
+                :disabled="busy"
+                :title="items.length ? 'Leave the remaining loot lying in the scene and end the fight' : 'End the fight'"
+                @click="emit('confirm')"
+              >
+                {{ items.length ? 'Drop All & Close' : 'Close Combat' }}
+              </button>
+              <button
+                v-if="items.length"
+                type="button"
+                class="px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-[0.12em] bg-cyan-500/90 hover:bg-cyan-400 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.45)] transition-all disabled:opacity-50"
+                :disabled="busy"
+                title="Put all remaining loot into your inventory and end the fight"
+                @click="emit('takeAll')"
+              >
+                Take All & Close
+              </button>
+            </div>
           </footer>
         </section>
       </div>

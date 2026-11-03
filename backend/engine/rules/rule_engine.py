@@ -189,14 +189,6 @@ class AdventureGeneratorToolIntent(BaseModel):
     request_available_image_styles: bool = False
     request_available_tones: bool = False
     requested_adventure_generation: Optional[AdventureGenerationRequest] = None
-    generation_confirmed: bool = Field(
-        False,
-        description=(
-            "True only when the player explicitly approves starting the generation of the final "
-            "blueprint in this message (e.g. 'yes, weave it', 'start'). Generation then begins "
-            "immediately with a live progress view."
-        ),
-    )
 
     # Chat-mode progression intent (lightweight technical signals)
     hp_change: int = 0

@@ -5,6 +5,7 @@ import type { CharacterSheet, CombatEnemyState, CombatState, InventoryItem } fro
 import { getImageUrl, getItemIcon, getTypeColor, hasRenderableImagePath } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
 import CombatAbilityHand from './combat/CombatAbilityHand.vue'
+import CombatBystanders from './combat/CombatBystanders.vue'
 import CombatItemTray from './combat/CombatItemTray.vue'
 import CombatLogPanel from './combat/CombatLogPanel.vue'
 import InitiativeTrack from './combat/InitiativeTrack.vue'
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   lootTake: [item: InventoryItem]
   lootLeave: [item: InventoryItem]
   lootDone: []
+  lootTakeAll: []
   entityHover: [entity: any, event: MouseEvent]
   entityLeave: []
   debugWin: []
@@ -109,6 +111,14 @@ function isAlive(enemy: CombatEnemyState | undefined): boolean {
 }
 
 const selectedTarget = computed(() => enemies.value.find((e) => e.id === selectedTargetId.value) ?? null)
+/** NPCs in the scene who have not joined the fight; they are listed apart from the stage. */
+const bystanders = computed(() => enemies.value.filter((e) => !e.engaged && isAlive(e)))
+const fighterCount = computed(() => enemies.value.length - bystanders.value.length)
+
+function onBystanderHover(id: string, event: MouseEvent): void {
+  const entity = tooltipFor(id)
+  if (entity) emit('entityHover', entity, event)
+}
 
 function ensureValidTarget(): void {
   if (isAlive(selectedTarget.value ?? undefined)) return
@@ -290,7 +300,7 @@ onBeforeUnmount(() => {
                 @playing="arenaPlaying = $event"
                 @hover="onArenaHover"
               />
-              <p v-if="combat.active && enemies.length > 1" class="absolute bottom-1 inset-x-0 text-center text-[11px] opacity-70 pointer-events-none">
+              <p v-if="combat.active && fighterCount > 1" class="absolute bottom-1 inset-x-0 text-center text-[11px] opacity-70 pointer-events-none">
                 Click a card in the enemy stack or a portrait in the initiative order to choose your target.
               </p>
             </div>
@@ -311,6 +321,14 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="flex flex-col gap-3 min-h-0 max-h-[40vh] md:max-h-none">
+            <CombatBystanders
+              v-if="combat.active && bystanders.length > 0"
+              :bystanders="bystanders"
+              :selected-target-id="selectedTargetId"
+              @select="selectTarget"
+              @hover="onBystanderHover"
+              @leave="emit('entityLeave')"
+            />
             <CombatLogPanel class="flex-1" :entries="visibleLogs" :total="logs.length" />
 
             <section v-if="isLootPhase && !arenaPlaying" class="tw-combat-panel shrink-0 p-3">
@@ -328,9 +346,22 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
               </div>
-              <button class="tw-dialog-button mt-2.5 w-full" :disabled="evaluating" @click="emit('lootDone')">
-                Finish &amp; Continue
-              </button>
+              <div class="mt-2.5 flex gap-2">
+                <button
+                  v-if="lootItems.length"
+                  class="tw-dialog-button flex-1"
+                  :disabled="evaluating"
+                  title="Put all remaining loot into your inventory and end the fight"
+                  @click="emit('lootTakeAll')"
+                >Take All &amp; Finish</button>
+                <button
+                  class="tw-dialog-button flex-1"
+                  :class="{ 'tw-dialog-button--ghost': lootItems.length }"
+                  :disabled="evaluating"
+                  :title="lootItems.length ? 'Leave the remaining loot lying in the scene' : 'End the fight'"
+                  @click="emit('lootDone')"
+                >{{ lootItems.length ? 'Drop Rest &amp; Finish' : 'Finish &amp; Continue' }}</button>
+              </div>
             </section>
           </div>
         </div>

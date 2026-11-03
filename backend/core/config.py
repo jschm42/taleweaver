@@ -39,6 +39,7 @@ _ENV_API_KEY_ATTRS: dict[str, tuple[str, ...]] = {
     "groq": ("GROQ_API_KEY",),
     "black_forest_labs": ("BLACK_FOREST_LABS_API_KEY",),
     "minimax": ("MINIMAX_API_KEY",),
+    "elevenlabs": ("ELEVENLABS_API_KEY",),
 }
 
 
@@ -117,8 +118,10 @@ class Settings(BaseSettings):
     ADVENTURE_LIBRARY_URL: str = (
         "https://raw.githubusercontent.com/jschm42/taleweaver-adventures/main"
     )
-    # Seconds a fetched library.json is reused before it is fetched again.
-    ADVENTURE_LIBRARY_TTL: int = 3600
+    # Seconds a fetched library.json is reused before it is fetched again. Every fetch is
+    # pinned to the current commit of the branch, so a push is visible after at most this
+    # long (plus up to a minute of GitHub API caching); the dialog's refresh skips the wait.
+    ADVENTURE_LIBRARY_TTL: int = 600
     # Directory installed bundles are stored in; empty means DATA_DIR/adventures.
     ADVENTURE_DOWNLOAD_DIR: str = ""
     # Hard cap on the bytes downloaded for one adventure.
@@ -242,6 +245,7 @@ class Settings(BaseSettings):
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
     MINIMAX_API_KEY: Optional[str] = None
     MINIMAX_API_BASE: str = "https://api.minimax.io/v1"
+    ELEVENLABS_API_KEY: Optional[str] = None
 
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
