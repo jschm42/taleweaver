@@ -88,10 +88,24 @@ const handleSave = () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in">
-    <div>
-      <h1 class="text-4xl font-extrabold text-white mb-2">Speech Generation (TTS)</h1>
-      <p class="text-slate-400">Configure high-quality narration using Gemini models.</p>
+  <div class="space-y-6 animate-fade-in max-w-5xl">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Speech Generation (TTS)</h1>
+        <p class="text-slate-400 text-sm mt-1">Configure high-quality narration using Gemini models.</p>
+      </div>
+
+      <button 
+        type="button" 
+        @click="handleSave" 
+        :disabled="isSubmitting" 
+        class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-blue-900/30 disabled:opacity-50 flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+      >
+        <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
+        <i v-else class="ra ra-save"></i>
+        <span>{{ isSubmitting ? 'Tuning...' : 'Save Speech Settings' }}</span>
+      </button>
     </div>
 
     <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
@@ -266,9 +280,7 @@ const handleSave = () => {
         </div>
       </div>
 
-      <button type="button" @click="handleSave" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
-         {{ isSubmitting ? 'Tuning...' : 'Update Speech Settings' }}
-      </button>
+
     </div>
   </div>
 </template>

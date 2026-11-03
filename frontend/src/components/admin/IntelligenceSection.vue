@@ -286,11 +286,11 @@ const triggerTest = (
           type="button"
           @click="handleSave"
           :disabled="isSubmitting"
-          class="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-purple-900/30 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+          class="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-purple-900/30 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
         >
           <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
           <i v-else class="ra ra-save"></i>
-          <span>{{ isSubmitting ? 'Saving...' : 'Save Routing' }}</span>
+          <span>{{ isSubmitting ? 'Saving...' : 'Save Intelligence Settings' }}</span>
         </button>
       </div>
     </div>
@@ -1179,24 +1179,6 @@ const triggerTest = (
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Sticky Bottom Save Bar -->
-    <div class="sticky bottom-6 z-30 p-4 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl flex items-center justify-between gap-4">
-      <div class="flex items-center gap-2 text-xs text-slate-400">
-        <i class="ra ra-brain text-purple-400"></i>
-        <span>Intelligence Pipeline Configured</span>
-      </div>
-      <button
-        type="button"
-        @click="handleSave"
-        :disabled="isSubmitting"
-        class="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-purple-900/30 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-      >
-        <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
-        <i v-else class="ra ra-save"></i>
-        <span>{{ isSubmitting ? 'Saving...' : 'Save Intelligence Settings' }}</span>
-      </button>
     </div>
   </div>
 </template>

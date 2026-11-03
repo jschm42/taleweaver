@@ -18,10 +18,24 @@ watch(() => props.gameForm, (newVal) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in">
-    <div>
-      <h1 class="text-4xl font-extrabold text-white mb-2">Game Preferences</h1>
-      <p class="text-slate-400">Configure global interface and gameplay options.</p>
+  <div class="space-y-6 animate-fade-in max-w-5xl">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Game Preferences</h1>
+        <p class="text-slate-400 text-sm mt-1">Configure global interface and gameplay options.</p>
+      </div>
+
+      <button 
+        type="button" 
+        @click="emit('save', localForm)" 
+        :disabled="isSubmitting" 
+        class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-900/30 disabled:opacity-50 flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+      >
+        <i v-if="isSubmitting" class="ra ra-recycle animate-spin"></i>
+        <i v-else class="ra ra-save"></i>
+        <span>{{ isSubmitting ? 'Saving...' : 'Save Game Settings' }}</span>
+      </button>
     </div>
 
     <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
@@ -56,9 +70,7 @@ watch(() => props.gameForm, (newVal) => {
 
       </div>
 
-      <button type="button" @click="emit('save', localForm)" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-blue-500/20">
-        {{ isSubmitting ? 'Saving...' : 'Update Configuration' }}
-      </button>
+
     </div>
   </div>
 </template>

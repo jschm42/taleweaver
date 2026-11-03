@@ -56,14 +56,28 @@ const save = async () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in">
-    <div>
-      <h1 class="text-4xl font-extrabold text-white mb-2">Narrator Voices</h1>
-      <p class="text-slate-400">
-        How the Game Master narrates: word choice, sentence rhythm and attitude. Authors pick a voice
-        per adventure in the editor (Tone tab) or write their own. The narration length stays with the
-        player's narration style.
-      </p>
+  <div class="space-y-6 animate-fade-in max-w-5xl">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Narrator Voices</h1>
+        <p class="text-slate-400 text-sm mt-1">
+          How the Game Master narrates: word choice, sentence rhythm and attitude. Authors pick a voice
+          per adventure in the editor (Tone tab) or write their own. The narration length stays with the
+          player's narration style.
+        </p>
+      </div>
+
+      <button 
+        type="button" 
+        @click="save" 
+        :disabled="isSaving" 
+        class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-900/30 disabled:opacity-50 flex items-center gap-2 self-start sm:self-auto cursor-pointer shrink-0"
+      >
+        <i v-if="isSaving" class="ra ra-recycle animate-spin"></i>
+        <i v-else class="ra ra-save"></i>
+        <span>{{ isSaving ? 'Saving...' : 'Save Narrator Voices' }}</span>
+      </button>
     </div>
 
     <div v-if="isLoading" class="text-slate-500 text-sm">Loading voices...</div>
@@ -156,14 +170,7 @@ const save = async () => {
         {{ status.text }}
       </p>
 
-      <button
-        type="button"
-        @click="save"
-        :disabled="isSaving"
-        class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-blue-500/20"
-      >
-        {{ isSaving ? 'Saving...' : 'Save narrator voices' }}
-      </button>
+
     </div>
   </div>
 </template>
