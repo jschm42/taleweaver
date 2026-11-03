@@ -181,6 +181,21 @@ def _apply_avatar_changes(avatar: Avatar, changes: Any) -> None:
         avatar.stamina = _clamp(avatar.stamina, changes.player_stamina_change, avatar.max_stamina)
 
 
+def _persist_init_entity_updates(
+    entity_states: dict[str, Any],
+    changes: Any,
+) -> None:
+    """Applies entity_updates and entity_movements from init scripts to entity_states."""
+    for entity_id, updates in getattr(changes, "entity_updates", {}).items():
+        entry = dict(entity_states.get(entity_id) or {})
+        entry.update(updates)
+        entity_states[entity_id] = entry
+    for entity_id, new_scene_id in getattr(changes, "entity_movements", {}).items():
+        entry = dict(entity_states.get(entity_id) or {})
+        entry["current_scene_id"] = new_scene_id
+        entity_states[entity_id] = entry
+
+
 def _run_init_scripts(
     adventure: AdventureTemplate,
     avatar: Avatar,
@@ -191,7 +206,14 @@ def _run_init_scripts(
     """Runs init_script / on_init triggers once; returns narrative messages for the chat."""
     scripts, init_script = _init_scripts(adventure)
     has_on_init = any(isinstance(s, dict) and s.get("trigger") == "on_init" for s in scripts)
-    if not init_script and not has_on_init:
+    sequences = getattr(adventure, "sequences", None) or []
+    first_seq = sequences[0] if sequences and isinstance(sequences[0], dict) else None
+    first_seq_script = (
+        str(first_seq.get("on_start_sequence_script") or "").strip() if first_seq else ""
+    )
+    first_seq_text = str(first_seq.get("on_start_sequence_text") or "").strip() if first_seq else ""
+
+    if not init_script and not has_on_init and not first_seq_script and not first_seq_text:
         return []
 
     init_context = GameContext(
@@ -221,9 +243,26 @@ def _run_init_scripts(
     )
     changes = runner.run_init_script(init_context)
 
+    if first_seq_script:
+        seq_changes = runner.execute_inline_script(
+            first_seq_script,
+            init_context,
+            hook="on_start_sequence",
+            target_id=str(first_seq.get("id") or ""),
+        )
+        changes.var_updates.update(seq_changes.var_updates)
+        if getattr(seq_changes, "story_flag_updates", None):
+            changes.story_flag_updates.update(seq_changes.story_flag_updates)
+        for ent_id, updates in getattr(seq_changes, "entity_updates", {}).items():
+            changes.entity_updates.setdefault(ent_id, {}).update(updates)
+        for ent_id, loc in getattr(seq_changes, "entity_movements", {}).items():
+            changes.entity_movements[ent_id] = loc
+        changes.narrative_messages.extend(seq_changes.narrative_messages)
+
     entity_states["__script_vars__"] = {**changes.var_updates, "__init_script_executed__": True}
     if getattr(changes, "story_flag_updates", None):
         entity_states["__switch_story_flags__"] = dict(changes.story_flag_updates)
+    _persist_init_entity_updates(entity_states, changes)
     store_pending_dialog(entity_states, changes.pending_dialog)
     store_gm_directions(entity_states, changes.gm_directions)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
@@ -231,7 +270,10 @@ def _run_init_scripts(
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):
         entity_states[_START_MINUTES_KEY] = clock_start.in_game_time
     _apply_avatar_changes(avatar, changes)
-    return [str(message) for message in changes.narrative_messages]
+    messages = [str(message) for message in changes.narrative_messages]
+    if first_seq_text:
+        messages.append(first_seq_text)
+    return messages
 
 
 def _memory_settings(user: User, adventure: AdventureTemplate) -> tuple[int, bool]:
@@ -254,6 +296,11 @@ def _build_session_state(
     entity_states: dict[str, Any],
 ) -> SessionState:
     memory_turns, compression = _memory_settings(user, adventure)
+    sequences = getattr(adventure, "sequences", None) or []
+    first_seq = sequences[0] if sequences and isinstance(sequences[0], dict) else None
+    active_seq_id = str(first_seq.get("id") or "") if first_seq else None
+    active_seq_order = int(first_seq.get("order") or 1) if first_seq else 1
+
     return SessionState(
         session_id=session_id,
         user_id=user.id,
@@ -276,6 +323,8 @@ def _build_session_state(
         gameover_condition=adventure.gameover_condition,
         completed_guard_expression=adventure.completed_guard_expression,
         gameover_guard_expression=adventure.gameover_guard_expression,
+        active_sequence_id=active_seq_id,
+        active_sequence_order=active_seq_order,
         tts_director_notes=adventure.tts_director_notes,
         selected_image_styles=deepcopy(adventure.selected_image_styles),
         selected_tone=deepcopy(adventure.selected_tone),

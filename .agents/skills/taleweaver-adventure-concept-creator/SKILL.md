@@ -41,7 +41,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 
 | Block | Most useful keys |
 | :--- | :--- |
-| `[World]` | `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script` |
+| `[World]` | `language`, `image_style`/`style`, `tone`, `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script` |
 | `[Protagonist] Name` | `role`, `goal`, `hp`, `str`…`ac`, `inventory`, `weapon`, `armor` |
 | `[Scene: ID] Name` | `decor`, `on_enter`, `on_enter_text`, `on_leave`, `helpers` (only `def`s and constants; callable from every script, e.g. the scene's dialog handlers) |
 | `[Exit: A -> B] label` (name the passage, e.g. `an old rusty gate`, never the way like `To the lab`; without one the AI writes it) | `code`, `key_item`, `rule`, `guard`, `revealed` (target known from the start), `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |

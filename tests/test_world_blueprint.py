@@ -505,3 +505,32 @@ def test_switch_script_hooks_and_transition_scripts_are_parsed_and_validated():
         "[Switch: S] S\nstates: OFF, ON\ntransition: OFF -> ON | script: if True\n"
     )
     assert any("Syntax error" in err.message for err in bad_bp.errors)
+
+
+def test_world_custom_and_catalog_image_style_and_tone():
+    # Arrange: custom style + custom tone in Markdown
+    custom_bp = prepare_blueprint(
+        "## World\n"
+        "- **image_style**: Isometric 16-bit pixel art, warm CRT amber glow\n"
+        "- **tone**: Friendly, encouraging Python mentor with dry geek humor\n"
+    )
+    manifest: dict = {}
+    apply_blueprint(manifest, custom_bp.blueprint)
+
+    # Assert custom style and tone
+    assert manifest["selected_image_styles"][0]["instruction"] == (
+        "Isometric 16-bit pixel art, warm CRT amber glow"
+    )
+    assert manifest["selected_tone"]["instruction"] == (
+        "Friendly, encouraging Python mentor with dry geek humor"
+    )
+
+    # Arrange: catalog style + catalog tone (hint mode)
+    catalog_bp = prepare_blueprint("## World\n- **style**: ~Pixelart\n- **tone**: ~Sci-Fi\n")
+    manifest_hint: dict = {}
+    apply_blueprint(manifest_hint, catalog_bp.blueprint)
+
+    # Assert catalog resolution and hint fallback
+    assert manifest_hint["selected_image_styles"][0]["id"] == "pixelart"
+    assert "pixel" in manifest_hint["selected_image_styles"][0]["instruction"].lower()
+    assert manifest_hint["selected_tone"]["id"] == "sci-fi"

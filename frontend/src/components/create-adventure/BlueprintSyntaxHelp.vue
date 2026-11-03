@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const tags = [
-  '## World  win: / lose_guard: / init_script:',
+  '## World  style: / tone: / win: / init_script:',
   '## Protagonist: Name  hp: / inventory:',
   '## Scene: CELL — Name  decor: / on_enter:',
   '## Exit: CELL -> HALL — label  code: / key_item:',

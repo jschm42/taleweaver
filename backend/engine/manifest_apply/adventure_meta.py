@@ -54,6 +54,8 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("can_damage_npcs", None, False),
     ("npcs_can_damage_protagonist", None, False),
     ("game_over_rules", None, False),
+    ("selected_image_styles", None, True),
+    ("selected_tone", None, True),
 )
 
 _SESSION_SYNC_FIELDS = (
@@ -66,6 +68,8 @@ _SESSION_SYNC_FIELDS = (
     "tts_director_notes",
     "time_system",
     "time_config",
+    "selected_image_styles",
+    "selected_tone",
 )
 
 # Applied after NPCs are persisted: (attribute, default; None = keep current value).

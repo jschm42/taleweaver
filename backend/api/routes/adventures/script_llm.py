@@ -16,8 +16,8 @@ from backend.engine.scripting.llm_proxy import LlmAsker
 
 logger = logging.getLogger(__name__)
 
-SCRIPT_LLM_TIMEOUT_SECONDS = 20
-SCRIPT_LLM_MAX_TOKENS = 1200
+SCRIPT_LLM_TIMEOUT_SECONDS = 45
+SCRIPT_LLM_MAX_TOKENS = 2048
 DEFAULT_SYSTEM_PROMPT = (
     "You help run an interactive text adventure. Answer briefly and return only the "
     "requested text, without explanations or formatting."

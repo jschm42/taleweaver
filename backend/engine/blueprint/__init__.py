@@ -36,6 +36,10 @@ class PreparedBlueprint:
     def prompt_section(self, generation_strictness: str) -> str:
         return render_blueprint_prompt(self.blueprint, self.missing_ids, generation_strictness)
 
+    def world_values(self) -> dict[str, Any]:
+        world = self.blueprint.first("world")
+        return {**world.hints(), **world.fixed()} if world else {}
+
 
 def analyze_blueprint(text: str) -> tuple[Blueprint, list[str]]:
     """Parse and validate ``text``. Returns the blueprint and undeclared referenced IDs."""

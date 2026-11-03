@@ -1498,8 +1498,12 @@ async function saveChanges() {
     const teaserOrPlotChanged = (form.value.teaser || '') !== (adventure.value?.teaser || '')
       || (form.value.plot || '') !== (adventure.value?.plot || '')
 
-    const fullStyleObj = imageStylesCatalog.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
-    const fullToneObj = toneCatalog.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
+    const existingStyle = Array.isArray(adventure.value?.selected_image_styles) ? adventure.value.selected_image_styles[0] : null
+    const fullStyleObj = imageStylesCatalog.value.find(s => s.id === form.value.selected_style_id)
+      || (existingStyle && typeof existingStyle === 'object' && existingStyle.id === form.value.selected_style_id ? existingStyle : { id: form.value.selected_style_id, name: form.value.selected_style_id })
+    const existingTone = adventure.value?.selected_tone
+    const fullToneObj = toneCatalog.value.find(t => t.id === form.value.selected_tone_id)
+      || (existingTone && typeof existingTone === 'object' && (existingTone as any).id === form.value.selected_tone_id ? existingTone : { id: form.value.selected_tone_id, name: form.value.selected_tone_id })
     const payload = {
       ...form.value,
       selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],

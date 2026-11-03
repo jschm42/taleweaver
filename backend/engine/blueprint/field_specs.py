@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from backend.core.style_catalog import build_blueprint_image_styles, build_blueprint_tone
 from backend.engine.blueprint.converters import (
     STAT_ALIASES,
     ability_area,
@@ -76,6 +77,11 @@ def _hook(table: dict[str, FieldSpec], key: str, target: str) -> None:
 
 WORLD_KEYS: dict[str, FieldSpec] = {
     "language": FieldSpec("language"),
+    "image_style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
+    "style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
+    "visual_style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
+    "tone": FieldSpec("selected_tone", build_blueprint_tone),
+    "narrative_tone": FieldSpec("selected_tone", build_blueprint_tone),
     "plot": FieldSpec("plot"),
     "rules": FieldSpec("rules"),
     "intro": FieldSpec("intro_text"),

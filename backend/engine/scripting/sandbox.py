@@ -108,6 +108,7 @@ ALLOWED_AST_NODES: set[type[ast.AST]] = {
     ast.List,
     ast.Tuple,
     ast.Dict,
+    ast.Set,
     ast.FormattedValue,
     ast.JoinedStr,
     ast.Lambda,
@@ -157,7 +158,7 @@ def _reject_method_overwrite(obj: Any, target: ast.Attribute) -> None:
 
 
 def _check_sequence_size(value: Any) -> Any:
-    if isinstance(value, (*_SIZE_SENSITIVE_TYPES, dict)) and len(value) > MAX_SEQUENCE_LENGTH:
+    if isinstance(value, (*_SIZE_SENSITIVE_TYPES, dict, set)) and len(value) > MAX_SEQUENCE_LENGTH:
         raise ScriptSecurityError(
             f"Value exceeds safe size limit of {MAX_SEQUENCE_LENGTH} elements/characters."
         )
@@ -190,6 +191,7 @@ SAFE_BUILTINS: dict[str, Any] = {
     "any": any,
     "bool": bool,
     "dict": dict,
+    "enumerate": enumerate,
     "float": float,
     "int": int,
     "len": len,
@@ -198,10 +200,14 @@ SAFE_BUILTINS: dict[str, Any] = {
     "min": min,
     "print": _safe_print,
     "range": _safe_range,
+    "reversed": reversed,
     "round": round,
+    "set": set,
+    "sorted": sorted,
     "str": str,
     "sum": sum,
     "tuple": tuple,
+    "zip": zip,
 }
 
 
@@ -760,6 +766,9 @@ class SafeAstInterpreter(ComprehensionMixin):
             for k, v in zip(expr.keys, expr.values, strict=False)
             if k is not None
         }
+
+    def _eval_Set(self, expr: ast.Set) -> set[Any]:
+        return {self._eval_expr(elt) for elt in expr.elts}
 
     def _eval_Lambda(self, expr: ast.Lambda) -> Any:
         self._tick()

@@ -194,6 +194,7 @@ class SwitchService:
 
         if success:
             # Transition-level on_success
+            t_script = ""
             if transition:
                 t_script = str(transition.get("on_success_script") or "").strip()
                 if t_script:
@@ -201,19 +202,22 @@ class SwitchService:
                         t_script, scope, script_id=f"switch_{switch_id}_trans_success"
                     )
 
-            # Switch-level on_success
+            # Switch-level on_success (avoid re-running if identical to transition script)
             s_script = str(config.get("on_success_script") or "").strip()
-            if s_script:
+            if s_script and s_script != t_script:
                 runner.execute_code(s_script, scope, script_id=f"switch_{switch_id}_on_success")
             return
 
         # Transition-level on_failure
+        t_fail_script = ""
         if transition:
-            t_script = str(transition.get("on_failure_script") or "").strip()
-            if t_script:
-                runner.execute_code(t_script, scope, script_id=f"switch_{switch_id}_trans_failure")
+            t_fail_script = str(transition.get("on_failure_script") or "").strip()
+            if t_fail_script:
+                runner.execute_code(
+                    t_fail_script, scope, script_id=f"switch_{switch_id}_trans_failure"
+                )
 
-        # Switch-level on_failure
-        s_script = str(config.get("on_failure_script") or "").strip()
-        if s_script:
-            runner.execute_code(s_script, scope, script_id=f"switch_{switch_id}_on_failure")
+        # Switch-level on_failure (avoid re-running if identical to transition script)
+        s_fail_script = str(config.get("on_failure_script") or "").strip()
+        if s_fail_script and s_fail_script != t_fail_script:
+            runner.execute_code(s_fail_script, scope, script_id=f"switch_{switch_id}_on_failure")

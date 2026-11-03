@@ -97,6 +97,7 @@ def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]
     world = blueprint.first("world")
     if world:
         _apply_fixed(manifest, world)
+        _apply_world_hints(manifest, world)
     protagonist = blueprint.first("protagonist")
     if protagonist and isinstance(manifest.get("protagonist"), dict):
         _apply_fixed(manifest["protagonist"], protagonist)
@@ -176,9 +177,18 @@ def _insert_entry(entries: list[Any], block: BlueprintBlock) -> dict[str, Any] |
     return entry
 
 
+def _apply_world_hints(manifest: dict[str, Any], world: BlueprintBlock) -> None:
+    hints = world.hints()
+    for key in ("selected_image_styles", "selected_tone"):
+        if key in hints:
+            manifest.setdefault(key, hints[key])
+
+
 def _apply_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
     for path, value in block.fixed().items():
         _set_path(entry, path, value)
+    if block.kind == "sequence" and "guard_expression" in block.fixed():
+        entry["completion_guard_expression"] = block.fixed()["guard_expression"]
 
 
 def _set_path(target: dict[str, Any], path: str, value: Any) -> None:
