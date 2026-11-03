@@ -4,6 +4,7 @@ import { settingsService } from '@/services/settingsService'
 import { testService } from '@/services/testService'
 import { configState } from '@/store/config'
 import { setVisualsOptOut, setupWizardState } from '@/store/setupWizard'
+import ComfyUISettings from '@/components/admin/ComfyUISettings.vue'
 import WizardModelPicker from './WizardModelPicker.vue'
 import { IMAGE_PRESETS, needsKey, resolvePreset, wizardStyles, type SetupMode } from './wizardPresets'
 
@@ -20,6 +21,10 @@ const scene = reactive({ provider: '', model: '' })
 const asset = reactive({ provider: '', model: '' })
 const ollamaUrl = ref(t2iForm.value.ollama_url || 'http://localhost:11434')
 const stableDiffusionUrl = ref(t2iForm.value.stable_diffusion_url || 'http://127.0.0.1:7860')
+const comfyuiUrl = ref(t2iForm.value.comfyui_url || 'http://127.0.0.1:8188')
+const comfyuiTimeout = ref(t2iForm.value.comfyui_timeout || 600)
+const simpleWorkflow = ref<'sd15' | 'sdxl'>(t2iForm.value.simple_comfyui_workflow === 'sd15' ? 'sd15' : 'sdxl')
+const advancedWorkflow = ref<'sd15' | 'sdxl'>(t2iForm.value.advanced_comfyui_workflow === 'sd15' ? 'sd15' : 'sdxl')
 const errorMessage = ref('')
 
 const usesProvider = (id: string): boolean => scene.provider === id || asset.provider === id
@@ -53,6 +58,7 @@ function hydrate(): void {
 
 /** Self-hosted endpoints whose model list depends on the configured URL. */
 function baseUrlFor(provider: string): string {
+  if (provider === 'comfyui') return comfyuiUrl.value
   if (provider === 'ollama') {
     return ollamaUrl.value
   }
@@ -60,7 +66,15 @@ function baseUrlFor(provider: string): string {
 }
 
 function runTest(key: string, role: { provider: string; model: string }): void {
-  testService.testVision(key, role.model, role.provider, ollamaUrl.value, stableDiffusionUrl.value)
+  const profile = role === asset ? 'simple' : 'advanced'
+  testService.testVision(
+    key, role.model, role.provider, ollamaUrl.value, stableDiffusionUrl.value,
+    t2iForm.value[`${profile}_steps`], t2iForm.value[`${profile}_cfg_scale`],
+    undefined, undefined, t2iForm.value[`${profile}_sampler_name`],
+    t2iForm.value[`${profile}_scheduler`], t2iForm.value[`${profile}_min_long_edge`],
+    comfyuiUrl.value, comfyuiTimeout.value,
+    profile === 'simple' ? simpleWorkflow.value : advancedWorkflow.value,
+  )
 }
 
 async function save(): Promise<boolean> {
@@ -82,6 +96,10 @@ async function save(): Promise<boolean> {
     provider: scene.provider,
     ollama_url: ollamaUrl.value,
     stable_diffusion_url: stableDiffusionUrl.value,
+    comfyui_url: comfyuiUrl.value,
+    comfyui_timeout: comfyuiTimeout.value,
+    simple_comfyui_workflow: simpleWorkflow.value,
+    advanced_comfyui_workflow: advancedWorkflow.value,
   })
   if (settingsService.statusMessage.value?.type === 'error') {
     errorMessage.value = settingsService.statusMessage.value.text
@@ -149,6 +167,16 @@ defineExpose({ save })
         test-key="wizard-t2i-asset"
         test-label="Generate test image"
         @test="runTest('wizard-t2i-asset', asset)"
+      />
+
+      <ComfyUISettings
+        v-if="usesProvider('comfyui')"
+        v-model:url="comfyuiUrl"
+        v-model:timeout="comfyuiTimeout"
+        v-model:simple-workflow="simpleWorkflow"
+        v-model:advanced-workflow="advancedWorkflow"
+        :simple="asset.provider === 'comfyui'"
+        :advanced="scene.provider === 'comfyui'"
       />
 
       <div v-if="usesProvider('ollama')">

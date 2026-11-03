@@ -76,7 +76,7 @@ async def list_provider_models(
 ):
     """List a provider's models for a role, live when possible.
 
-    `base_url` only applies to Ollama, Stable Diffusion and MiniMax and is ignored
+    `base_url` only applies to Ollama, Stable Diffusion, ComfyUI and MiniMax and is ignored
     otherwise. `refresh` bypasses the 10-minute cache.
     """
     provider_id = provider.lower()

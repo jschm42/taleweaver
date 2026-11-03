@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from backend.core.comfyui import ComfySettings
 from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
 
 DEFAULT_SMALL_MAX_TOKENS = 12288
@@ -289,6 +290,7 @@ def normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
 
 
 _T2I_FALLBACK: dict[str, Any] = {
+    **ComfySettings().model_dump(),
     "simple_model": "",
     "simple_model_provider": "openai",
     "advanced_model": "",
@@ -328,6 +330,7 @@ _T2I_DERIVED_DEFAULTS: tuple[tuple[str, tuple[str, ...], Any], ...] = (
 
 # Keys filled with their fallback value when missing from stored settings.
 _T2I_STATIC_DEFAULT_KEYS = (
+    *ComfySettings.model_fields,
     "stable_diffusion_url",
     "ollama_url",
     "cfg_scale",

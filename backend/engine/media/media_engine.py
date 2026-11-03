@@ -27,6 +27,7 @@ from backend.engine.media.asset_naming import (
     image_extension,
 )
 from backend.engine.media.bfl_payloads import build_bfl_payload, resolve_bfl_model_alias
+from backend.engine.media.comfyui import generate_image as generate_comfyui_image
 from backend.engine.media.image_generation_support import (
     build_litellm_image_kwargs,
     build_ollama_request,
@@ -41,6 +42,7 @@ from backend.engine.media.image_generation_support import (
     is_chat_only_model_error,
     is_moderation_error,
     is_static_only_placeholder_category,
+    local_image_edge,
     openrouter_headers,
     placeholder_extension,
     poll_bfl_sample_url,
@@ -650,6 +652,7 @@ class MediaEngine:
 
         provider_options = provider_options or {}
         direct_generators = {
+            "comfyui": generate_comfyui_image,
             "openrouter": MediaEngine._generate_image_openrouter_direct,
             "black_forest_labs": MediaEngine._generate_image_black_forest_labs_direct,
             "stable_diffusion": MediaEngine._generate_image_stable_diffusion_from_options,
@@ -1028,7 +1031,7 @@ class MediaEngine:
             raise ValueError("Missing image model configuration for scenes.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
-        if provider not in ("ollama", "stable_diffusion") and not api_key:
+        if provider not in ("ollama", "stable_diffusion", "comfyui") and not api_key:
             logger.error(
                 "API key resolution failed for provider: %s (Advanced Model/Scenes)", provider
             )
@@ -1042,6 +1045,7 @@ class MediaEngine:
 
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
+        options["comfyui_profile"] = "advanced" if use_advanced_model else "simple"
         if use_advanced_model:
             options["steps"] = t2i.get("advanced_steps")
             options["cfg_scale"] = t2i.get("advanced_cfg_scale")
@@ -1055,7 +1059,8 @@ class MediaEngine:
             options["scheduler"] = t2i.get("simple_scheduler")
             min_long_edge = t2i.get("simple_min_long_edge")
 
-        if provider in ("stable_diffusion", "ollama"):
+        if provider in ("stable_diffusion", "ollama", "comfyui"):
+            min_long_edge = local_image_edge(provider, options, min_long_edge)
             width, height = MediaEngine._resolve_sd_dimensions("SCENE", min_long_edge)
             options["width"] = width
             options["height"] = height
@@ -1102,7 +1107,7 @@ class MediaEngine:
             raise ValueError("Missing image model configuration for entities.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
-        if provider not in ("ollama", "stable_diffusion") and not api_key:
+        if provider not in ("ollama", "stable_diffusion", "comfyui") and not api_key:
             logger.error(
                 "API key resolution failed for provider: %s (Simple Model/Entities)", provider
             )
@@ -1116,6 +1121,7 @@ class MediaEngine:
 
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
+        options["comfyui_profile"] = "advanced" if use_advanced_model else "simple"
         if use_advanced_model:
             options["steps"] = t2i.get("advanced_steps")
             options["cfg_scale"] = t2i.get("advanced_cfg_scale")
@@ -1132,7 +1138,8 @@ class MediaEngine:
         if (entity_type or "").upper() in PORTRAIT_ENTITY_TYPES:
             options["aspect_ratio"] = PORTRAIT_ASPECT_RATIO
 
-        if provider in ("stable_diffusion", "ollama"):
+        if provider in ("stable_diffusion", "ollama", "comfyui"):
+            min_long_edge = local_image_edge(provider, options, min_long_edge)
             width, height = MediaEngine._resolve_sd_dimensions(entity_type, min_long_edge)
             options["width"] = width
             options["height"] = height
@@ -1174,7 +1181,7 @@ class MediaEngine:
             raise ValueError("Missing image model configuration for adventure cover.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
-        if provider not in ("ollama", "stable_diffusion") and not api_key:
+        if provider not in ("ollama", "stable_diffusion", "comfyui") and not api_key:
             logger.error(
                 "API key resolution failed for provider: %s (Advanced Model/Cover)", provider
             )
@@ -1213,6 +1220,7 @@ class MediaEngine:
 
         # Resolve steps and cfg_scale for advanced model
         options = dict(t2i)
+        options["comfyui_profile"] = "advanced"
         # Covers are portrait so they fill the 3:4 tale cards; the portal hero fades them in.
         options["aspect_ratio"] = COVER_ASPECT_RATIO
         existing_neg = options.get("negative_prompt") or ""
@@ -1226,7 +1234,8 @@ class MediaEngine:
         options["scheduler"] = t2i.get("advanced_scheduler")
         min_long_edge = t2i.get("advanced_min_long_edge")
 
-        if provider in ("stable_diffusion", "ollama"):
+        if provider in ("stable_diffusion", "ollama", "comfyui"):
+            min_long_edge = local_image_edge(provider, options, min_long_edge)
             width, height = MediaEngine._resolve_sd_dimensions("COVER", min_long_edge)
             options["width"] = width
             options["height"] = height

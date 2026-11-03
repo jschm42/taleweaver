@@ -800,7 +800,10 @@ export const api = {
   },
 
   testVision(payload: any): Promise<any> {
-    return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 180000 })
+    const timeoutMs = payload.provider === 'comfyui'
+      ? (Math.min(3600, Math.max(1, Number(payload.comfyui_timeout) || 600)) + 30) * 1000
+      : 180000
+    return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload), timeoutMs })
   },
 
   /** Catalog */

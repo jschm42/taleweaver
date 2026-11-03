@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 import requests
 
+from backend.core.comfyui import default_edge
 from backend.core.config import settings
 from backend.utils.image_generator import ColorTheme
 
@@ -32,12 +33,19 @@ _REMOTE_MODEL_PREFIXES = (
     "bedrock/",
     "cohere/",
 )
-_LOCAL_PROVIDERS = ("ollama", "stable_diffusion")
+_LOCAL_PROVIDERS = ("ollama", "stable_diffusion", "comfyui")
 _BFL_FAILED_STATUSES = {"error", "failed", "expired", "task not found", "tasknotfound"}
 _MODERATION_MARKERS = ("content moderated", "safety filter", "moderated")
 
 
 # --- Prompt / request preparation -----------------------------------------------------
+
+
+def local_image_edge(provider: str, options: dict[str, Any], configured: int | None) -> int | None:
+    """Keep existing provider defaults; select a family-specific ComfyUI resolution."""
+    if provider == "comfyui" and configured is None:
+        return default_edge(options)
+    return configured
 
 
 def inject_style_instruction(prompt: str, style_instruction: Optional[str]) -> str:
