@@ -490,6 +490,10 @@ class AdventureTemplateSummaryResponse(BaseModel):
     is_legacy_format: bool = False
     # Manifest version below DEPRECATED_BELOW_VERSION: still playable, shown as deprecated.
     is_deprecated: bool = False
+    # Manifest format version as stored in the adventure (e.g. "1.3.1").
+    format_version: Optional[str] = None
+    # Manifest newer than this engine's CURRENT_VERSION: playable after an explicit warning.
+    engine_outdated: bool = False
     can_start: bool = True
     rule_enforcement_mode: Optional[str] = "rpg"
     selected_image_styles: Optional[list[dict[str, Any]]] = None

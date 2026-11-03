@@ -561,6 +561,8 @@ async def list_templates(
                 has_sequences=update_info["has_sequences"],
                 is_legacy_format=update_info["is_legacy_format"],
                 is_deprecated=update_info["is_deprecated"],
+                format_version=update_info.get("format_version"),
+                engine_outdated=update_info["engine_outdated"],
                 can_start=update_info["can_start"],
                 rule_enforcement_mode=template.rule_enforcement_mode or "rpg",
                 selected_image_styles=template.selected_image_styles,

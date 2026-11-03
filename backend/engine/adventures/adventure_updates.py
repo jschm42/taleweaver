@@ -16,6 +16,7 @@ from backend.core.adventure_format import (
     CURRENT_VERSION,
     PLAYABLE_MIN_VERSION,
     is_deprecated_version,
+    is_newer_than_engine,
     is_version_below,
 )
 from backend.core.adventure_identity import manifest_origin_id
@@ -357,6 +358,9 @@ def check_template_update(
         "has_sequences": db_has_sequences,
         "is_legacy_format": is_legacy,
         "is_deprecated": is_deprecated_version(db_format_version),
+        # Manifest written by a newer engine: playable, but the client must warn first.
+        "engine_outdated": is_newer_than_engine(db_format_version),
+        "format_version": db_format_version,
         "can_start": can_start,
     }
 

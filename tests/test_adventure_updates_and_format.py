@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.core.adventure_format import CURRENT_VERSION
+from backend.core.adventure_format import CURRENT_VERSION, is_newer_than_engine
 from backend.engine.adventures.adventure_updates import (
     check_template_update,
     is_legacy_session,
@@ -94,6 +94,77 @@ def test_legacy_format_detection():
     assert status["is_legacy_format"] is False
     assert status["is_deprecated"] is False
     assert status["can_start"] is True
+
+
+def test_is_newer_than_engine():
+    """Only manifests above CURRENT_VERSION count as "built for a newer engine"."""
+    assert is_newer_than_engine("1.4.0") is True
+    assert is_newer_than_engine("2.0") is True
+    assert is_newer_than_engine(CURRENT_VERSION) is False
+    assert is_newer_than_engine("1.3") is False
+    assert is_newer_than_engine(None) is False
+    assert is_newer_than_engine("") is False
+    assert is_newer_than_engine("not-a-version") is False
+
+
+def test_engine_outdated_flag_keeps_adventure_playable():
+    """A future manifest sets ``engine_outdated`` without blocking the start."""
+    future_tpl = AdventureTemplate(
+        id="future-1",
+        title="Future Quest",
+        version="1.4.0",
+        original_manifest={"version": "1.4.0", "sequences": [{"id": "seq1", "name": "Act 1"}]},
+        sequences=[{"id": "seq1", "name": "Act 1"}],
+    )
+    status = check_template_update(future_tpl, [])
+    assert status["engine_outdated"] is True
+    assert status["format_version"] == "1.4.0"
+    assert status["is_legacy_format"] is False
+    assert status["can_start"] is True
+
+    current_tpl = AdventureTemplate(
+        id="current-1",
+        title="Current Quest",
+        version="1.0.0",
+        original_manifest={"version": CURRENT_VERSION, "sequences": [{"id": "seq1", "name": "Act 1"}]},
+        sequences=[{"id": "seq1", "name": "Act 1"}],
+    )
+    assert check_template_update(current_tpl, [])["engine_outdated"] is False
+
+
+@pytest.mark.asyncio
+async def test_future_format_template_can_still_start(
+    auth_client: AsyncClient, db_session
+):
+    """GET /api/adventures/templates flags the template, but starting it still works."""
+    user_res = await db_session.execute(select(User).where(User.username == "test_user"))
+    user = user_res.scalars().first()
+
+    tpl = AdventureTemplate(
+        id="future-format-tpl",
+        title="From Tomorrow",
+        version="1.0.0",
+        is_ready=True,
+        owner_id=user.id if user else None,
+        original_manifest={
+            "version": "1.4.0",
+            "sequences": [{"id": "seq1", "name": "Act 1"}],
+        },
+        sequences=[{"id": "seq1", "name": "Act 1"}],
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+
+    resp = await auth_client.get("/api/adventures/templates")
+    assert resp.status_code == 200
+    found = next(item for item in resp.json() if item["template_id"] == tpl.id)
+    assert found["engine_outdated"] is True
+    assert found["format_version"] == "1.4.0"
+    assert found["can_start"] is True
+    assert found["is_legacy_format"] is False
+
+    start = await auth_client.post(f"/api/adventures/{tpl.id}/sessions/start")
+    assert start.status_code == 201
 
 
 @pytest.mark.asyncio

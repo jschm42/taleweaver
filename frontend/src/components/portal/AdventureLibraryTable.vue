@@ -16,7 +16,8 @@ import {
   Plus,
   Library,
   Loader2,
-  Copy
+  Copy,
+  AlertTriangle
 } from 'lucide-vue-next'
 import { formatCatalogLabel } from '@/composables/usePortalFilters'
 import PendingAdventureCard from './PendingAdventureCard.vue'
@@ -247,6 +248,14 @@ function getModeBadge(mode?: string): { label: string; class: string; icon: any 
                     title="Made with an older adventure format (below 1.3.1). It can still be played; crafting recipes from older versions may not work."
                   >
                     Deprecated
+                  </span>
+                  <span
+                    v-if="template.engine_outdated && !template.is_legacy_format && template.can_start !== false"
+                    class="text-[10px] px-1.5 py-0.5 rounded border border-amber-400/50 bg-amber-500/10 text-amber-200 font-black uppercase tracking-widest flex items-center gap-1"
+                    :title="`Made with a newer adventure format than this engine build supports${template.format_version ? ' (v' + template.format_version + ')' : ''}. It can still be started, but unexpected behaviour is possible.`"
+                  >
+                    <AlertTriangle class="w-3 h-3" />
+                    Engine outdated
                   </span>
                 </div>
                 <p v-if="template.teaser" class="text-xs text-slate-400 line-clamp-1 mt-0.5 max-w-md">

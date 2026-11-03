@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
-import { X, Play } from 'lucide-vue-next'
+import { X, Play, AlertTriangle } from 'lucide-vue-next'
 import LicenseInfoPopup from '@/components/common/LicenseInfoPopup.vue'
 import AdventureCardMenu, { type AdventureCardAction } from './AdventureCardMenu.vue'
 import TaleCardArtwork from './TaleCardArtwork.vue'
@@ -45,6 +45,10 @@ const accent = computed(() => resolveGenreAccent(toneLabel.value))
 const needsMigration = computed(() => !!(props.template.is_legacy_format || !props.template.can_start))
 const DEPRECATED_HINT = 'Made with an older adventure format (below 1.3.1). It can still be played; '
   + 'crafting recipes from older versions may not work.'
+const engineOutdated = computed(() => !!props.template.engine_outdated)
+const engineOutdatedHint = computed(() => 'Made with a newer adventure format than this engine build supports'
+  + (props.template.format_version ? ` (v${props.template.format_version})` : '')
+  + '. It can still be started, but unexpected behaviour is possible.')
 const hasLicenseInfo = computed(() =>
   !!(props.template.license || props.template.creator || props.template.copyright || props.template.license_url)
 )
@@ -136,6 +140,14 @@ function primaryAction(event: MouseEvent): void {
           :title="DEPRECATED_HINT"
         >
           Deprecated
+        </span>
+        <span
+          v-if="engineOutdated && !needsMigration"
+          class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-950/80 text-amber-200 text-[9px] sm:text-[11px] font-black uppercase tracking-widest border border-amber-400/50 flex items-center gap-1 backdrop-blur-md"
+          :title="engineOutdatedHint"
+        >
+          <AlertTriangle class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span>Engine outdated</span>
         </span>
         <div
           v-if="props.template.creation_error"
