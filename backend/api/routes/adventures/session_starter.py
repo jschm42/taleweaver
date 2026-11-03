@@ -186,13 +186,25 @@ def _persist_init_entity_updates(
     changes: Any,
 ) -> None:
     """Applies entity_updates and entity_movements from init scripts to entity_states."""
-    for entity_id, updates in getattr(changes, "entity_updates", {}).items():
+    for upd in (
+        u
+        for u in getattr(changes, "entity_updates", [])
+        if isinstance(u, dict) and u.get("entity_id")
+    ):
+        entity_id = upd["entity_id"]
         entry = dict(entity_states.get(entity_id) or {})
-        entry.update(updates)
+        entry.update({k: v for k, v in upd.items() if k != "entity_id"})
         entity_states[entity_id] = entry
-    for entity_id, new_scene_id in getattr(changes, "entity_movements", {}).items():
+    for move in (
+        m
+        for m in getattr(changes, "entity_movements", [])
+        if isinstance(m, dict) and m.get("entity_id")
+    ):
+        entity_id = move["entity_id"]
         entry = dict(entity_states.get(entity_id) or {})
-        entry["current_scene_id"] = new_scene_id
+        entry["current_scene_id"] = move["to_scene_id"]
+        if move.get("to_spatial_position"):
+            entry["spatial_position"] = move["to_spatial_position"]
         entity_states[entity_id] = entry
 
 
@@ -244,20 +256,13 @@ def _run_init_scripts(
     changes = runner.run_init_script(init_context)
 
     if first_seq_script:
-        seq_changes = runner.execute_inline_script(
+        scope = {"tw": init_context, "game": init_context}
+        runner.execute_code(
             first_seq_script,
-            init_context,
-            hook="on_start_sequence",
-            target_id=str(first_seq.get("id") or ""),
+            scope,
+            script_id=f"on_start_sequence_{first_seq.get('id') or '1'}",
         )
-        changes.var_updates.update(seq_changes.var_updates)
-        if getattr(seq_changes, "story_flag_updates", None):
-            changes.story_flag_updates.update(seq_changes.story_flag_updates)
-        for ent_id, updates in getattr(seq_changes, "entity_updates", {}).items():
-            changes.entity_updates.setdefault(ent_id, {}).update(updates)
-        for ent_id, loc in getattr(seq_changes, "entity_movements", {}).items():
-            changes.entity_movements[ent_id] = loc
-        changes.narrative_messages.extend(seq_changes.narrative_messages)
+        changes = init_context.changeset
 
     entity_states["__script_vars__"] = {**changes.var_updates, "__init_script_executed__": True}
     if getattr(changes, "story_flag_updates", None):
