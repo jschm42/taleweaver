@@ -303,12 +303,32 @@ class _MockSwitches:
     def is_state(self, switch_id, s):
         return self.get(switch_id).is_state(s)
 
+class _MockLlm:
+    available = True
+    def ask(self, prompt, model="simple", system=""):
+        print(f"[tw.llm.ask] ({model}) {prompt}")
+        return ""
+    def ask_json(self, prompt, schema=None, model="simple", system=""):
+        print(f"[tw.llm.ask_json] ({model}) {prompt}")
+        return None
+
+class _MockJson:
+    def loads(self, text, schema=None, default=None):
+        return default
+    def dumps(self, value):
+        return str(value)
+    def validate(self, data, schema):
+        return True
+
 class _MockTW:
     def __init__(self):
         self.player = _MockPlayer()
         self.scene = _MockScene()
         self.story = _MockStory()
         self.switches = _MockSwitches()
+        self.llm = _MockLlm()
+        self.json = _MockJson()
+        self.vars = {}
         self.vars = {}
     def get_npc(self, npc_id): 
         return _MockNPC(npc_id)

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Session-state key (inside ``entity_states``) holding the dialog awaiting the player's choice.
 PENDING_DIALOG_KEY = "__pending_dialog__"
 MAX_DIALOG_OPTIONS = 8
-MAX_LABEL_LENGTH = 200
+MAX_LABEL_LENGTH = 500
 MAX_PROMPT_LENGTH = 2000
 _HANDLER_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
@@ -65,7 +65,7 @@ class DialogProxy:
             return False
         self._changeset.pending_dialog = {
             "id": uuid4().hex,
-            "prompt": str(prompt or "").strip()[:MAX_PROMPT_LENGTH],
+            "prompt": _dialog_text(prompt, MAX_PROMPT_LENGTH),
             "speaker": str(speaker or "").strip() or None,
             "handler": handler,
             "narrate": bool(narrate),
@@ -124,7 +124,13 @@ class DialogProxy:
 
 def _option_label(raw: Any) -> str:
     label = raw.get("label") if isinstance(raw, dict) else raw
-    return str(label or "").strip()[:MAX_LABEL_LENGTH]
+    return _dialog_text(label, MAX_LABEL_LENGTH)
+
+
+def _dialog_text(raw: Any, limit: int) -> str:
+    """Trims surrounding blank lines while keeping leading indentation on the first line."""
+    text = str(raw or "").strip("\r\n").rstrip()
+    return text[:limit] if text.strip() else ""
 
 
 def pending_dialog(entity_states: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:

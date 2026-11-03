@@ -414,3 +414,23 @@ async def test_snapshot_completing_final_sequence_ends_adventure():
         # Assert
         assert (first, second) == (True, False)
         assert manager.state.session.status == "completed"
+
+
+def test_dialog_preserves_multiline_code_indentation_in_prompt_and_options():
+    # Arrange
+    context = GameContext()
+    code = (
+        "tw.dialog.choose("
+        "'What does this print?\\n```python\\nfor i in range(2):\\n    print(i)\\n```', "
+        "['    Indented option', '```python\\ndef f():\\n    return 42\\n```'], "
+        "on_choice='on_bomb_wire')"
+    )
+
+    # Act
+    _run(code, context)
+
+    # Assert
+    dialog = context.changeset.pending_dialog
+    assert "    print(i)" in dialog["prompt"]
+    assert dialog["options"][0]["label"] == "    Indented option"
+    assert "    return 42" in dialog["options"][1]["label"]

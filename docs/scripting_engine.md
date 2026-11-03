@@ -29,7 +29,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dice](#twdice)
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
-   - [tw.llm (Ask the LLM)](#twllm-ask-the-llm)
+   - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -632,8 +632,8 @@ Provides deterministic, seeded random number generation:
 Shows the player a multiple-choice dialog for NPC conversations, riddles and dilemmas. Only scripts (including soft rule scripts) can open a dialog; the LLM never sees this API.
 
 - `tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False) -> bool` (alias `tw.dialog.ask`)
-  - `prompt`: the question or situation shown above the options.
-  - `options`: up to 8 entries, each a label string or `{"label": "...", "visible_if": "<guard expression>"}`. Hidden options keep their position, so indices stay stable.
+  - `prompt`: the question or situation shown above the options (up to 2,000 characters). Supports fenced code blocks (` ```python ... ``` `), inline code (`` `...` ``), `**bold**`, and preserves line breaks and leading indentation.
+  - `options`: up to 8 entries, each a label string (up to 500 characters) or `{"label": "...", "visible_if": "<guard expression>"}`. Supports fenced code blocks, inline code, `**bold**`, and multi-line indentation. Hidden options keep their position, so indices stay stable.
   - `on_choice`: name of the handler function (a string, or the function itself). **The handler must be defined in the global `init_script` or in a [scene](#scene-helpers-helpers_script) or [sequence](#sequence-helpers) helper block.**
   - `speaker`: optional NPC name shown as the dialog title.
   - `narrate`: when `True`, the small model narrates the outcome after the handler ran (it is told the handler's messages are binding facts). It also receives the current character and goal of the visible NPCs in the player's scene (including changes the handler just made, e.g. `npc.character = "Very angry"`) and any pending `tw.story.direct(...)` directions, which this narration then uses up. Default `False`: only the handler's own messages appear, which is instant and deterministic; directions then wait for the next turn's narration.
@@ -680,17 +680,27 @@ A response script that opens another dialog (`tw.dialog.choose` or `tw.dialog.tr
 
 See [Example 16](#example-16-blacksmith-conversation-dialogue-tree) for a complete conversation.
 
-### `tw.llm` (Ask the LLM)
+### `tw.llm` & `tw.json` (Ask the LLM & Structured JSON)
 
 - `tw.llm.ask(prompt, model="simple", system="") -> str`: Sends `prompt` to the language model configured in the player's LLM settings and returns the answer as a string.
   - `model="simple"` uses the **small model** (`small_model` / `small_model_provider`), `model="advanced"` the **complex model** (`complex_model` / `complex_model_provider`). Any other value is a script error.
   - `system` optionally replaces the default system prompt ("answer briefly, return only the requested text"). The session language is appended automatically.
+- `tw.llm.ask_json(prompt, schema=None, model="simple", system="") -> dict | list | Any | None`: Asks the model for structured JSON, strips `<think>` tags and markdown ` ```json ` fences, repairs minor JSON formatting errors, and validates the result against `schema`.
+  - Returns the parsed Python `dict` / `list` (or primitive when matched by `schema`), or `None` when the LLM is unavailable, fails, returns invalid JSON, or fails schema validation.
+  - `schema` is an optional sandbox-friendly schema descriptor:
+    - Type names or Python types: `"str"` (`str`), `"int"` (`int`), `"float"` (`float`), `"bool"` (`bool`), `"list"` (`list`), `"dict"` (`dict`), `"any"`.
+    - Object mapping: `{"question": "str", "correct_index": {"type": "int", "min": 0, "max": 3}, "hint": {"type": "str", "optional": True}}` — every key is required unless `"optional": True` is set.
+    - Constraint dict: `{"type": "list", "items": {"type": "str", "min_len": 1}, "min_len": 4, "max_len": 4}` (supported constraints: `min`, `max` for numbers; `min_len`, `max_len` for strings/lists/dicts; `enum` for allowed values; `items` for list elements; `fields` for nested object dicts).
 - `tw.llm.available -> bool`: `False` where the LLM cannot be used (see below).
+- `tw.json` (sandbox-safe JSON utilities, no `import json` needed):
+  - `tw.json.loads(text, schema=None, default=None)`: Safely parses a JSON string (with fence stripping and repair) and validates against `schema` if given; returns `default` (`None`) on any error.
+  - `tw.json.validate(data, schema) -> bool`: Returns `True` if `data` satisfies `schema`.
+  - `tw.json.dumps(value) -> str`: Serializes `value` to a JSON string (or `""` on error).
 
 Rules and limits:
 
 - **Never raises for provider problems**: when the LLM is not configured, fails, or takes longer than **20 seconds**, `ask()` returns `""`. Always keep a fallback: `line = tw.llm.ask(...) or "The raven stays silent."`
-- **At most 3 calls** per script context (one trigger pass); further calls return `""`. Prompts and system prompts are cut at 4,000 characters, answers at 2,000. Answers are capped at about 600 tokens.
+- **At most 3 calls** per script context (one trigger pass, shared across `ask` and `ask_json`); further calls return `""` / `None`. Prompts and system prompts are cut at 4,000 characters, `ask()` answers at 2,000, and `ask_json()` answers at 8,000. Answers are capped at about 1,200 tokens.
 - **Not available in guard expressions** (`guard`, `visible_if`, unlock and lock guards, soft-rule guards) or in the session's `init_script` run: guards must stay deterministic and cheap. There `ask()` returns `""` without calling the model.
 - **The call blocks**: the turn waits until the model answers. Use it for occasional flavour text, not on every turn.
 - In debug mode, skipped or failed calls show a `[DEBUG]` system message. Calls are logged with the operation `script.llm_ask`.
@@ -702,6 +712,22 @@ riddle = tw.llm.ask(
     model="simple",
 )
 tw.npcs.say("TROLL", riddle or "What has roots nobody sees and is taller than trees?")
+
+# Dynamic Python PCEP multiple-choice question with schema validation and code formatting
+QUIZ_SCHEMA = {
+    "question": {"type": "str", "min_len": 10},
+    "options": {"type": "list", "items": {"type": "str", "min_len": 1}, "min_len": 4, "max_len": 4},
+    "correct_index": {"type": "int", "min": 0, "max": 3},
+    "explanation": {"type": "str", "optional": True},
+}
+quiz = tw.llm.ask_json(
+    "Create one PCEP multiple-choice question about Python loops with a ```python code block.",
+    schema=QUIZ_SCHEMA,
+    model="simple",
+)
+if quiz:
+    tw.vars.set("current_quiz", quiz)
+    tw.dialog.choose(quiz["question"], quiz["options"], on_choice="on_quiz_answer", speaker="Examiner")
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)

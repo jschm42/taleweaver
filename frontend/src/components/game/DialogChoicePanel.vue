@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { PendingDialog } from '@/types'
+import { renderChoiceHtml } from '@/utils/codeMarkup'
 
 /**
  * Choice dialog opened by an adventure script (tw.dialog.choose), shown inline at the end of
@@ -84,7 +85,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
       <section class="tw-narration space-y-3">
         <span class="tw-narration-label">{{ dialog.speaker || 'Your choice' }}</span>
 
-        <p class="tw-choice-prompt">{{ dialog.prompt || 'What do you do?' }}</p>
+        <div class="tw-choice-prompt" v-html="renderChoiceHtml(dialog.prompt || 'What do you do?')"></div>
 
         <div class="space-y-2">
           <button
@@ -98,7 +99,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
             @mouseenter="focusedIndex = idx"
           >
             <span class="tw-choice-number">{{ idx + 1 }}</span>
-            <span class="flex-1">{{ option.label }}</span>
+            <span class="tw-choice-label flex-1 min-w-0" v-html="renderChoiceHtml(option.label)"></span>
             <i v-if="busy && focusedIndex === idx" class="ra ra-hourglass text-xs animate-spin opacity-60"></i>
           </button>
         </div>

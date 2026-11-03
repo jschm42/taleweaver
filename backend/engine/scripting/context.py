@@ -18,7 +18,7 @@ from backend.engine.scripting.gm_directions import clean_direction
 from backend.engine.scripting.item_ops import ItemMover
 from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
-from backend.engine.scripting.llm_proxy import LlmAsker, LlmProxy
+from backend.engine.scripting.llm_proxy import JsonProxy, LlmAsker, LlmProxy
 from backend.engine.scripting.npc_clone import NPCCloneManagerMixin, NPCCloneMixin
 from backend.engine.scripting.npc_combat_group import (
     NPCCombatGroupManagerMixin,
@@ -1321,6 +1321,7 @@ class GameContext:
         self.dialog = DialogProxy(self.changeset, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
+        self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
 
     def switch(self, switch_id_or_name: str) -> SwitchProxy:
         """Shortcut for tw.switches.get(switch_id_or_name)."""

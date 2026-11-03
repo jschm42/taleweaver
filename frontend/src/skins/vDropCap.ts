@@ -22,6 +22,9 @@ function lineHeightOf(style: CSSStyleDeclaration): number {
  */
 function updateDropCap(el: HTMLElement) {
   el.classList.add(NO_DROPCAP_CLASS)
+  if (el.firstElementChild?.classList.contains('tw-code-block')) {
+    return
+  }
   const lineHeight = lineHeightOf(getComputedStyle(el))
   if (!lineHeight) {
     return
