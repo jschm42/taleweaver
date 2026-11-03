@@ -35,7 +35,7 @@ const isItemGenerating = (index: number): boolean => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in pb-16">
+  <div class="space-y-8 animate-fade-in">
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-4xl font-extrabold text-white mb-2">
@@ -54,17 +54,9 @@ const isItemGenerating = (index: number): boolean => {
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5">
-      <div
-        v-for="(item, index) in catalog"
-        :key="item.id + '-' + index"
-        :class="[
-          'group relative bg-slate-900 border border-slate-800 rounded-xl transition-all shadow-md',
-          openMenuId === type + '-' + index ? 'z-30' : 'z-0',
-          type === 'styles' ? 'hover:border-amber-500/50' : 'hover:border-indigo-500/50'
-        ]"
-      >
+      <div v-for="(item, index) in catalog" :key="item.id + '-' + index" :class="['group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden transition-all shadow-md', type === 'styles' ? 'hover:border-amber-500/50' : 'hover:border-indigo-500/50']">
         <!-- Image Section -->
-        <div class="relative aspect-[16/10] bg-slate-950 overflow-hidden rounded-t-xl">
+        <div class="relative aspect-[16/10] bg-slate-950 overflow-hidden">
           <img v-if="item.image_url" :src="item.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-700">
             <svg v-if="type === 'styles'" class="w-8 h-8 opacity-30 mb-1 animate-pulse-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -78,15 +70,18 @@ const isItemGenerating = (index: number): boolean => {
             </svg>
             <span class="text-[9px] uppercase tracking-widest font-bold opacity-30">No {{ type === 'styles' ? 'Style' : 'Tone' }} Image</span>
           </div>
-
-          <!-- Hidden Upload Input -->
-          <input
-            :id="type + '-upload-' + index"
-            type="file"
-            class="hidden"
-            accept="image/*"
-            @change="(e) => emit('uploadImage', { event: e, item, index })"
-          />
+          
+          <!-- Overlay Buttons -->
+          <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+            <button @click="emit('generateImage', { item, index })" :disabled="isItemGenerating(index)" class="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md shadow-md text-xs disabled:opacity-50 cursor-pointer" :title="'Quick Generate using ' + simpleModel">
+              <i v-if="isItemGenerating(index)" class="ra ra-cycle animate-spin"></i>
+              <i v-else class="ra ra-cycle"></i>
+            </button>
+            <button @click="emit('openPrompt', { item, index })" class="p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md shadow-md text-xs cursor-pointer">
+              <i class="ra ra-quill-ink" title="Custom Prompt"></i>
+            </button>
+            <input :id="type + '-upload-' + index" type="file" class="hidden" accept="image/*" @change="(e) => emit('uploadImage', { event: e, item, index })" />
+          </div>
 
           <!-- Loading Overlay -->
           <div v-if="isItemGenerating(index)" class="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -102,72 +97,26 @@ const isItemGenerating = (index: number): boolean => {
               <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ item.id }}</p>
             </div>
             <div class="relative">
-              <button
-                type="button"
-                @click.stop="emit('updateMenuId', openMenuId === type + '-' + index ? null : type + '-' + index)"
-                class="w-6 h-6 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors text-sm font-bold flex items-center justify-center cursor-pointer"
-                title="Options"
-              >
+              <button @click.stop="emit('updateMenuId', openMenuId === type + '-' + index ? null : type + '-' + index)" class="w-6 h-6 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors text-sm font-bold flex items-center justify-center cursor-pointer" title="Options">
                 <span>…</span>
               </button>
-
-              <div
-                v-if="openMenuId === type + '-' + index"
-                class="fixed inset-0 z-[90]"
-                @click="emit('updateMenuId', null)"
-              ></div>
-
-              <div
-                v-if="openMenuId === type + '-' + index"
-                class="absolute right-0 top-full mt-1.5 w-44 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[100] py-1.5 overflow-hidden animate-fade-in ring-1 ring-white/10"
-              >
-                <button
-                  type="button"
-                  @click="emit('generateImage', { item, index }); emit('updateMenuId', null)"
-                  :disabled="isItemGenerating(index)"
-                  class="group/btn w-full text-left px-3.5 py-2 text-xs font-bold text-slate-300 hover:bg-emerald-600 hover:text-white flex items-center gap-2.5 transition-colors disabled:opacity-50 cursor-pointer"
-                  :title="'Quick Generate using ' + simpleModel"
-                >
-                  <i :class="['ra ra-cycle text-emerald-400 group-hover/btn:text-white shrink-0 text-xs', isItemGenerating(index) ? 'animate-spin' : '']"></i>
-                  <span class="truncate">Quick Generate</span>
+              <div v-if="openMenuId === type + '-' + index" class="fixed inset-0 z-[90]" @click="emit('updateMenuId', null)"></div>
+              <div v-if="openMenuId === type + '-' + index" class="absolute right-0 bottom-full mb-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[100] py-1 overflow-hidden">
+                <button @click="emit('editItem', { item, index }); emit('updateMenuId', null)" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                  Rename
                 </button>
-
-                <button
-                  type="button"
-                  @click="emit('openPrompt', { item, index }); emit('updateMenuId', null)"
-                  class="group/btn w-full text-left px-3.5 py-2 text-xs font-bold text-slate-300 hover:bg-cyan-600 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <i class="ra ra-quill-ink text-cyan-400 group-hover/btn:text-white shrink-0 text-xs"></i>
-                  <span class="truncate">Custom Prompt</span>
+                <button @click="emit('editItem', { item, index }); emit('updateMenuId', null)" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                  Edit
                 </button>
-
-                <button
-                  type="button"
-                  @click="triggerFileUpload(index); emit('updateMenuId', null)"
-                  class="group/btn w-full text-left px-3.5 py-2 text-xs font-bold text-slate-300 hover:bg-amber-600 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <i class="ra ra-camera text-amber-400 group-hover/btn:text-white shrink-0 text-xs"></i>
-                  <span class="truncate">Upload Image</span>
+                <button @click="emit('openPrompt', { item, index }); emit('updateMenuId', null)" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                  Custom Prompt
                 </button>
-
-                <button
-                  type="button"
-                  @click="emit('editItem', { item, index }); emit('updateMenuId', null)"
-                  class="group/btn w-full text-left px-3.5 py-2 text-xs font-bold text-slate-300 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <i class="ra ra-quill text-blue-400 group-hover/btn:text-white shrink-0 text-xs"></i>
-                  <span class="truncate">Edit</span>
+                <button @click="triggerFileUpload(index); emit('updateMenuId', null)" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                  Upload Image
                 </button>
-
-                <div class="h-px bg-slate-700/60 my-1"></div>
-
-                <button
-                  type="button"
-                  @click="emit('removeItem', index); emit('updateMenuId', null)"
-                  class="group/btn w-full text-left px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-600 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <i class="ra ra-burning-embers text-red-400 group-hover/btn:text-white shrink-0 text-xs"></i>
-                  <span class="truncate">Delete</span>
+                <div class="h-px bg-slate-700 my-1"></div>
+                <button @click="emit('removeItem', index); emit('updateMenuId', null)" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20">
+                  Delete
                 </button>
               </div>
             </div>
