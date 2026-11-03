@@ -1716,10 +1716,10 @@ class GameTurnManager:
             async for turn_event in advance_in_game_turn(self, script_runner, game_event):
                 yield turn_event
             self._turn_anchor = turn_anchor(self.state)
-            # Narrate from the new location/sequence instead of the pre-turn snapshot.
-            ctx = await self._llm_context_builder.build_context(
-                user_msg=user_msg, language=language
-            )
+
+        # Rebuild narration context so any entity state mutations (such as revealing or hiding NPCs)
+        # produced during the logic pass, interact triggers, or turn scripts take effect in Pass 2.
+        ctx = await self._llm_context_builder.build_context(user_msg=user_msg, language=language)
 
         # Push a state snapshot before narration so scene/entity images can update immediately on scene changes.
         await self.db.flush()
