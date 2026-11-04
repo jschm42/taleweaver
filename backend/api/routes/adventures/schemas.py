@@ -602,10 +602,23 @@ class AdventureTemplateImportPayload(BaseModel):
 class SuggestPromptRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
+    apply_appearance: bool = True
 
 
 class SuggestPromptResponse(BaseModel):
     suggested_prompt: str
+
+
+class EnhancePromptRequest(BaseModel):
+    prompt: str
+    target_type: Optional[Literal["cover", "scene", "npc", "object", "protagonist"]] = None
+    target_id: Optional[str] = None
+    apply_appearance: bool = True
+    appearance: Optional[str] = None
+
+
+class EnhancePromptResponse(BaseModel):
+    enhanced_prompt: str
 
 
 class StoryIdeaSuggestionRequest(BaseModel):

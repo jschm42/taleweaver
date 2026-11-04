@@ -24,33 +24,33 @@ export const visualService = {
   UPLOAD_LIMITS: {
     cover: {
       maxWidth: 2048,
-      maxHeight: 1024,
-      maxBytes: 4 * 1024 * 1024,
-      hint: 'Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.',
+      maxHeight: 2048,
+      maxBytes: 8 * 1024 * 1024,
+      hint: 'Optimal: portrait 2:3 (1024x1536) or landscape 16:9, max 2048x2048. PNG, JPEG, or WEBP.',
     },
     protagonist: {
-      maxWidth: 1024,
-      maxHeight: 1280,
-      maxBytes: 2 * 1024 * 1024,
-      hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.',
+      maxWidth: 1536,
+      maxHeight: 2048,
+      maxBytes: 8 * 1024 * 1024,
+      hint: 'Optimal: portrait 2:3 (1024x1536), max 1536x2048. PNG, JPEG, or WEBP.',
     },
     scene: {
-      maxWidth: 1600,
-      maxHeight: 900,
-      maxBytes: 3 * 1024 * 1024,
-      hint: 'Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.',
+      maxWidth: 2048,
+      maxHeight: 1536,
+      maxBytes: 8 * 1024 * 1024,
+      hint: 'Optimal: landscape 16:9 / 3:2 (1536x1024), max 2048x1536. PNG, JPEG, or WEBP.',
     },
     npc: {
-      maxWidth: 1024,
-      maxHeight: 1280,
-      maxBytes: 2 * 1024 * 1024,
-      hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.',
+      maxWidth: 1536,
+      maxHeight: 2048,
+      maxBytes: 8 * 1024 * 1024,
+      hint: 'Optimal: portrait 2:3 (1024x1536), max 1536x2048. PNG, JPEG, or WEBP.',
     },
     object: {
-      maxWidth: 1024,
-      maxHeight: 1024,
-      maxBytes: 2 * 1024 * 1024,
-      hint: 'Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.',
+      maxWidth: 1536,
+      maxHeight: 1536,
+      maxBytes: 8 * 1024 * 1024,
+      hint: 'Optimal: square 1:1 (1024x1024), max 1536x1536. PNG, JPEG, or WEBP.',
     },
   } as const,
 
@@ -81,7 +81,9 @@ export const visualService = {
     id: string,
     prompt: string | null,
     useAdvancedModel: boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    applyStyle: boolean = true,
+    applyAppearance: boolean = true
   ): Promise<void> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/visuals/regenerate`, {
       method: 'POST',
@@ -91,6 +93,8 @@ export const visualService = {
         target_id: id,
         prompt: prompt?.trim() || null,
         use_advanced_model: useAdvancedModel,
+        apply_style: applyStyle,
+        apply_appearance: applyAppearance,
       }),
       signal,
     })
@@ -100,7 +104,12 @@ export const visualService = {
     }
   },
 
-  async suggestPrompt(adventureId: string, kind: VisualKind, id: string): Promise<string> {
+  async suggestPrompt(
+    adventureId: string,
+    kind: VisualKind,
+    id: string,
+    applyAppearance: boolean = true
+  ): Promise<string> {
     const res = await fetch(
       `${API_BASE}/adventures/${adventureId}/visuals/suggest-prompt`,
       {
@@ -109,6 +118,7 @@ export const visualService = {
         body: JSON.stringify({
           target_type: kind,
           target_id: id,
+          apply_appearance: applyAppearance,
         }),
       }
     )
@@ -118,6 +128,36 @@ export const visualService = {
     }
     const data = await res.json()
     return data?.suggested_prompt || ''
+  },
+
+  async enhancePrompt(
+    adventureId: string,
+    prompt: string,
+    kind?: VisualKind,
+    id?: string,
+    applyAppearance: boolean = true,
+    appearance?: string
+  ): Promise<string> {
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/visuals/enhance-prompt`,
+      {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          prompt,
+          target_type: kind || null,
+          target_id: id || null,
+          apply_appearance: applyAppearance,
+          appearance: applyAppearance ? (appearance || null) : null,
+        }),
+      }
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || 'Failed to enhance prompt')
+    }
+    const data = await res.json()
+    return data?.enhanced_prompt || ''
   },
 
   async uploadVisual(

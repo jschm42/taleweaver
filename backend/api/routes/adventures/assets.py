@@ -13,7 +13,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.routes.adventures.schemas import SuggestPromptRequest, SuggestPromptResponse
+from backend.api.routes.adventures.prompt_enhancer import enhance_image_prompt
+from backend.api.routes.adventures.schemas import (
+    EnhancePromptRequest,
+    EnhancePromptResponse,
+    SuggestPromptRequest,
+    SuggestPromptResponse,
+)
 from backend.core import prompts
 from backend.core.auth import get_current_user
 from backend.core.config import settings
@@ -40,11 +46,11 @@ from backend.utils.path_security import (
 
 # Mirror frontend visual limits here so server-side validation matches client hints
 _VISUAL_UPLOAD_LIMITS = {
-    "cover": {"maxWidth": 2048, "maxHeight": 1024, "maxBytes": 4 * 1024 * 1024},
-    "protagonist": {"maxWidth": 1024, "maxHeight": 1280, "maxBytes": 2 * 1024 * 1024},
-    "scene": {"maxWidth": 1600, "maxHeight": 900, "maxBytes": 3 * 1024 * 1024},
-    "npc": {"maxWidth": 1024, "maxHeight": 1280, "maxBytes": 2 * 1024 * 1024},
-    "object": {"maxWidth": 1024, "maxHeight": 1024, "maxBytes": 2 * 1024 * 1024},
+    "cover": {"maxWidth": 2048, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
+    "protagonist": {"maxWidth": 1536, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
+    "scene": {"maxWidth": 2048, "maxHeight": 1536, "maxBytes": 8 * 1024 * 1024},
+    "npc": {"maxWidth": 1536, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
+    "object": {"maxWidth": 1536, "maxHeight": 1536, "maxBytes": 8 * 1024 * 1024},
 }
 
 _ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
@@ -55,6 +61,51 @@ _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_VISUAL_TARGET_TYPES = {"cover", "scene", "npc", "object", "protagonist"}
 
 
+def _append_appearance_keywords(prompt: str, appearance: Optional[str]) -> str:
+    clean_app = (appearance or "").strip().rstrip(".")
+    if not clean_app or clean_app.lower() in prompt.lower():
+        return prompt
+    return f"{prompt}. Visual keywords: {clean_app}."
+
+
+def _build_default_visual_body(target_type: str, target_obj: Any) -> str:
+    def get_attr(obj, attr, default=""):
+        if isinstance(obj, dict):
+            return obj.get(attr) or default
+        return getattr(obj, attr, None) or default
+
+    match target_type:
+        case "protagonist":
+            name = get_attr(target_obj, "name", "The protagonist")
+            role = get_attr(target_obj, "role", "adventurer")
+            desc = get_attr(target_obj, "description", "A distinctive fantasy hero.")
+            return f"Portrait of character {name}, {role}. {desc}."
+        case "scene":
+            label = get_attr(target_obj, "label") or get_attr(target_obj, "name") or "Scene"
+            desc = get_attr(target_obj, "description")
+            return f"Atmospheric background: {label}. {desc}."
+        case "npc":
+            name = get_attr(target_obj, "name", "NPC")
+            desc = get_attr(target_obj, "description", "A distinctive non-player character.")
+            return f"Portrait of NPC {name}. {desc}."
+        case "object":
+            name = get_attr(target_obj, "name", "Object")
+            desc = get_attr(target_obj, "description", "A detailed fantasy object.")
+            return f"Detailed illustration of object {name}. {desc}."
+        case _:
+            raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+
+
+def _target_type_style_tag(target_type: str) -> str:
+    tags = {
+        "protagonist": " Game character art style.",
+        "scene": " RPG visual novel style, high detail.",
+        "npc": " Character portrait, high detail.",
+        "object": " Fantasy item concept art, isolated and clearly readable.",
+    }
+    return tags.get(target_type, "")
+
+
 def _build_visual_prompt(
     target_type: str,
     target_obj: Any,
@@ -63,44 +114,21 @@ def _build_visual_prompt(
     style_instruction: Optional[str] = None,
     tone_instruction: Optional[str] = None,
     context: str = "",
+    appearance: Optional[str] = None,
 ) -> str:
     if custom_prompt and custom_prompt.strip():
-        return custom_prompt.strip()
+        return _append_appearance_keywords(custom_prompt.strip(), appearance)
 
+    body = _build_default_visual_body(target_type, target_obj)
     prompt_suffix = ""
     if style_instruction:
         prompt_suffix += f" Style constraints: {style_instruction}."
     if tone_instruction:
         prompt_suffix += f" Narrative tone reference: {tone_instruction}."
     context_text = f" {context}" if context else ""
+    style_tag = _target_type_style_tag(target_type)
 
-    def get_attr(obj, attr, default=""):
-        if isinstance(obj, dict):
-            return obj.get(attr) or default
-        return getattr(obj, attr, None) or default
-
-    if target_type == "protagonist":
-        name = get_attr(target_obj, "name", "The protagonist")
-        role = get_attr(target_obj, "role", "adventurer")
-        description = get_attr(target_obj, "description", "A distinctive fantasy hero.")
-        return f"Portrait of character {name}, {role}. {description}.{context_text} Game character art style.{prompt_suffix}"
-
-    if target_type == "scene":
-        label = get_attr(target_obj, "label") or get_attr(target_obj, "name") or "Scene"
-        description = get_attr(target_obj, "description")
-        return f"Atmospheric background: {label}. {description}.{context_text} RPG visual novel style, high detail.{prompt_suffix}"
-
-    if target_type == "npc":
-        name = get_attr(target_obj, "name", "NPC")
-        description = get_attr(target_obj, "description", "A distinctive non-player character.")
-        return f"Portrait of NPC {name}. {description}.{context_text} Character portrait, high detail.{prompt_suffix}"
-
-    if target_type == "object":
-        name = get_attr(target_obj, "name", "Object")
-        description = get_attr(target_obj, "description", "A detailed fantasy object.")
-        return f"Detailed illustration of object {name}. {description}.{context_text} Fantasy item concept art, isolated and clearly readable.{prompt_suffix}"
-
-    raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+    return f"{body}{context_text}{style_tag}{prompt_suffix}"
 
 
 def _sanitize_image_extension(filename: Optional[str]) -> str:
@@ -171,6 +199,8 @@ class RegenerateVisualRequest(BaseModel):
     target_id: str
     prompt: Optional[str] = None
     use_advanced_model: bool = False
+    apply_style: bool = True
+    apply_appearance: bool = True
 
 
 @dataclass
@@ -212,7 +242,11 @@ async def _regenerate_cover(db: AsyncSession, ctx: _RegenerateContext) -> Option
             user_config=ctx.user_config,
             api_keys=ctx.api_keys,
             style_instruction=ctx.style_instruction,
-            appearance=None if ctx.payload.prompt else adv.cover_appearance,
+            appearance=(
+                (None if ctx.payload.prompt else adv.cover_appearance)
+                if ctx.payload.apply_appearance
+                else None
+            ),
         ),
         timeout=float(settings.VISUAL_TIMEOUT),
     )
@@ -226,13 +260,15 @@ async def _regenerate_protagonist(db: AsyncSession, ctx: _RegenerateContext) -> 
     if not avatar:
         raise HTTPException(status_code=404, detail="Protagonist not found")
 
+    appearance = avatar.appearance if ctx.payload.apply_appearance else None
     prompt = _build_visual_prompt(
         ctx.payload.target_type,
         avatar,
         ctx.payload.prompt,
         style_instruction=ctx.style_instruction,
         tone_instruction=ctx.tone_instruction,
-        context=protagonist_context(ctx.adv.plot, avatar.appearance),
+        context=protagonist_context(ctx.adv.plot, appearance),
+        appearance=appearance,
     )
     image_url = await asyncio.wait_for(
         MediaEngine.generate_entity_image(
@@ -305,13 +341,15 @@ async def _regenerate_entity(db: AsyncSession, ctx: _RegenerateContext) -> Optio
     if str(entity.item_type or "").upper() == "CONSTRUCTABLE":
         raise HTTPException(status_code=400, detail="Recipes (CONSTRUCTABLE) have no image.")
 
+    appearance = entity.appearance if ctx.payload.apply_appearance else None
     prompt = _build_visual_prompt(
         target_type,
         entity,
         ctx.payload.prompt,
         style_instruction=ctx.style_instruction,
         tone_instruction=ctx.tone_instruction,
-        context=appearance_context(entity.appearance),
+        context=appearance_context(appearance),
+        appearance=appearance,
     )
     use_advanced_model = (
         ctx.is_advanced("profile_model_quality")
@@ -357,6 +395,15 @@ async def regenerate_visual(
     if not adv or adv.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Adventure template not found")
 
+    style_instruction = (
+        resolve_style_instruction(
+            adv.selected_image_styles,
+            current_user.image_styles_catalog,
+        )
+        if payload.apply_style
+        else None
+    )
+
     ctx = _RegenerateContext(
         adv=adv,
         template_id=template_id,
@@ -364,10 +411,7 @@ async def regenerate_visual(
         user_config={"t2i_settings": current_user.t2i_settings},
         api_keys=current_user.encrypted_api_keys,
         t2i=current_user.t2i_settings or {},
-        style_instruction=resolve_style_instruction(
-            adv.selected_image_styles,
-            current_user.image_styles_catalog,
-        ),
+        style_instruction=style_instruction,
         tone_instruction=resolve_tone_instruction(
             adv.selected_tone,
             current_user.tone_catalog,
@@ -426,7 +470,7 @@ async def suggest_prompt(
     if payload.target_type == "cover":
         name = adv.title
         description = adv.teaser or adv.original_prompt or ""
-        context = appearance_context(adv.cover_appearance)
+        context = appearance_context(adv.cover_appearance) if payload.apply_appearance else ""
     elif payload.target_type == "protagonist":
         av_res = await db.execute(
             select(Avatar)
@@ -438,7 +482,8 @@ async def suggest_prompt(
         if avatar:
             name = avatar.name
             description = avatar.description
-            context = protagonist_context(adv.plot, avatar.appearance)
+            appearance = avatar.appearance if payload.apply_appearance else None
+            context = protagonist_context(adv.plot, appearance)
     elif payload.target_type == "scene":
         res = await db.execute(
             select(WorldScene).where(
@@ -460,7 +505,8 @@ async def suggest_prompt(
         if entity:
             name = entity.name
             description = entity.description
-            context = appearance_context(entity.appearance)
+            appearance = entity.appearance if payload.apply_appearance else None
+            context = appearance_context(appearance)
 
     logger.info(
         "Resolved name '%s', description length: %d", name, len(description) if description else 0
@@ -494,6 +540,33 @@ async def suggest_prompt(
         model=model,
     )
     return SuggestPromptResponse(suggested_prompt=suggested.strip())
+
+
+@router.post("/enhance-prompt", response_model=EnhancePromptResponse)
+async def enhance_prompt(
+    template_id: str,
+    payload: EnhancePromptRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Enhance and optimize a user-provided image prompt using LLM."""
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Adventure template not found")
+
+    raw_prompt = (payload.prompt or "").strip()
+    if not raw_prompt:
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+    logger.info("Enhancing prompt for adventure %s (%s)", template_id, payload.target_type)
+    appearance_val = payload.appearance if payload.apply_appearance else None
+    enhanced = await enhance_image_prompt(
+        current_user=current_user,
+        prompt=raw_prompt,
+        target_type=payload.target_type,
+        appearance=appearance_val,
+    )
+    return EnhancePromptResponse(enhanced_prompt=enhanced)
 
 
 def _validate_upload_content(content: bytes, content_type: Optional[str], target_type: str) -> None:

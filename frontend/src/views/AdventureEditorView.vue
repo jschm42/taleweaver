@@ -437,13 +437,16 @@ const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
 
-const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
+const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string; appearance?: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
 const visualPrompt = ref('')
 const showPromptDialog = ref(false)
 const isRegenerating = ref(false)
 const isSuggestingPrompt = ref(false)
+const isEnhancingPrompt = ref(false)
 const useAdvancedModel = ref(false)
+const applyStyle = ref(true)
+const applyAppearance = ref(true)
 const showRegenerateAllConfirmDialog = ref(false)
 const pendingBatchRegeneration = ref<{ kind: string; missingOnly: boolean } | null>(null)
 type PendingDeleteTarget = {
@@ -497,6 +500,12 @@ if (typeof window !== 'undefined') {
 }
 
 const imageStylesCatalog = ref<any[]>([])
+const configuredStyleName = computed(() => {
+  const styleId = form.value.selected_style_id
+  if (!styleId) return ''
+  const found = imageStylesCatalog.value.find((s: any) => s.id === styleId)
+  return found?.name || styleId
+})
 const toneCatalog = ref<any[]>([])
 // Voice list for NPC voices (ElevenLabs only; Gemini speaks everything in the narrator voice).
 const voiceList = ref<TtsVoiceList | null>(null)
@@ -1619,12 +1628,24 @@ function downloadVisualAsset(imagePath: string | null | undefined, filenameLabel
   activeMenuId.value = null
 }
 
+function getVisualAppearance(kind: any, id: string): string {
+  if (!debugData.value) return ''
+  if (kind === 'protagonist') return debugData.value.protagonist?.appearance || ''
+  if (kind === 'npc') return (debugData.value.npcs || []).find((n: any) => n.id === id)?.appearance || ''
+  if (kind === 'cover') return debugData.value.adventure?.cover_appearance || ''
+  if (kind === 'object') return (debugData.value.objects || []).find((o: any) => o.id === id)?.appearance || ''
+  return ''
+}
+
 function openRegenerateDialog(kind: any, id: string, label: string) {
   const description = getVisualDescription(kind, id)
+  const appearance = getVisualAppearance(kind, id)
   const hint = visualService.UPLOAD_LIMITS[kind as VisualKind].hint
-  selectedVisual.value = { kind, id, label, description, hint }
+  selectedVisual.value = { kind, id, label, description, hint, appearance }
   visualPrompt.value = ''
   useAdvancedModel.value = kind === 'scene' || kind === 'cover'
+  applyStyle.value = true
+  applyAppearance.value = true
   promptError.value = ''
   showPromptDialog.value = true
 }
@@ -1790,7 +1811,9 @@ async function regenerateVisual() {
        selectedVisual.value.id,
        visualPrompt.value,
        useAdvancedModel.value,
-       controller.signal
+       controller.signal,
+       applyStyle.value,
+       applyAppearance.value
      )
      showPromptDialog.value = false
      await fetchDebugInfo()
@@ -1808,6 +1831,35 @@ async function regenerateVisual() {
   }
 }
 
+async function enhancePrompt() {
+  if (!selectedVisual.value || isEnhancingPrompt.value) return
+  const currentPrompt = visualPrompt.value.trim()
+  if (!currentPrompt) return
+  isEnhancingPrompt.value = true
+  promptError.value = ''
+  try {
+    const enhanced = await visualService.enhancePrompt(
+      props.adventureId,
+      currentPrompt,
+      selectedVisual.value.kind,
+      selectedVisual.value.id,
+      applyAppearance.value,
+      selectedVisual.value.appearance
+    )
+    if (enhanced) {
+      visualPrompt.value = enhanced
+      addNotification('Prompt enhanced with AI.', 'success')
+    } else {
+      addNotification('AI returned an empty enhanced prompt.', 'info')
+    }
+  } catch (error: any) {
+    promptError.value = error.message
+    addNotification(error.message, 'error')
+  } finally {
+    isEnhancingPrompt.value = false
+  }
+}
+
 async function suggestPrompt() {
   if (!selectedVisual.value || isSuggestingPrompt.value) return
   isSuggestingPrompt.value = true
@@ -1816,7 +1868,8 @@ async function suggestPrompt() {
      const suggested = await visualService.suggestPrompt(
        props.adventureId,
        selectedVisual.value.kind,
-       selectedVisual.value.id
+       selectedVisual.value.id,
+       applyAppearance.value
      )
      if (suggested) {
        visualPrompt.value = suggested
@@ -3087,13 +3140,18 @@ watch(
       :selected-visual="selectedVisual"
       v-model:visual-prompt="visualPrompt"
       v-model:use-advanced-model="useAdvancedModel"
+      v-model:apply-style="applyStyle"
+      v-model:apply-appearance="applyAppearance"
+      :configured-style-name="configuredStyleName"
       :is-suggesting-prompt="isSuggestingPrompt"
+      :is-enhancing-prompt="isEnhancingPrompt"
       :is-regenerating="isRegenerating"
       :upload-limits="visualService.UPLOAD_LIMITS"
       :format-bytes="formatBytes"
       :fix-newlines="fixNewlines"
       @close="showPromptDialog = false"
       @suggest="suggestPrompt"
+      @enhance="enhancePrompt"
       @regenerate="regenerateVisual"
       @cancel-regen="cancelRegeneration"
     />

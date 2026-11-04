@@ -558,6 +558,23 @@ IMAGE_PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
     "Please generate a detailed, safe, and atmospheric image generation prompt for this asset."
 )
 
+IMAGE_PROMPT_ENHANCEMENT_SYSTEM_PROMPT = (
+    "You are an expert AI prompt engineer for image generation models (Text-to-Image / T2I).\n"
+    "Your goal is to enhance, refine, and optimize a user-provided image generation prompt.\n\n"
+    "CRITICAL GUIDELINES:\n"
+    "- PRESERVE INTENT: Keep the core subject, composition, and essence of what the user wants to see.\n"
+    "- SENSORY & ATMOSPHERIC DETAIL: Enrich the prompt with vivid lighting, perspective, depth, atmosphere, materials, and textures.\n"
+    "- COMPACT & CLEAR: Keep the enhanced prompt concise, evocative, and strictly under 50 words. Avoid generic filler, quality buzzwords ('photorealistic', 'masterpiece', '8k'), and technical engine parameters.\n"
+    "- SAFETY: Ensure the prompt is safe and compliant with standard AI safety filters.\n"
+    "- LANGUAGE: Output the enhanced prompt in English for optimal text-to-image generator comprehension.\n"
+    "- NO META-TALK: Return strictly the enhanced image prompt as plain text without quotation marks, introductions, explanations, or conversational filler."
+)
+
+IMAGE_PROMPT_ENHANCEMENT_USER_PROMPT_TEMPLATE = (
+    "{context_block}Original User Prompt: {prompt}\n\n"
+    "Enhance and optimize this prompt for text-to-image generation while preserving the user's creative intent."
+)
+
 PROMPT_SUGGESTION_SYSTEM_PROMPT = (
     "You are a UI assistant generating up to five short action suggestions for a text adventure player.\n"
     "CONSTRAINT 1: You must ONLY suggest interactions with objects, persons, or exits that were explicitly named in the provided immediate context.\n"

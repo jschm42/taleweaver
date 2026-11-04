@@ -1174,7 +1174,7 @@ async def test_upload_visual_updates_npc_in_current_adventure_only(client: Async
 async def test_upload_visual_rejects_oversized_image(client: AsyncClient):
     """Oversized uploads should fail validation before persisting anything."""
     ids = await _create_adventure(client, "Upload Validation Quest")
-    image_bytes = _make_png_bytes(1600, 1600)
+    image_bytes = _make_png_bytes(2400, 2400)
 
     resp = await client.post(
         f"/api/adventures/{ids['adventure_id']}/visuals/upload",
@@ -1189,8 +1189,8 @@ async def test_upload_visual_rejects_oversized_image(client: AsyncClient):
 async def test_upload_visual_rejects_oversized_file_bytes(client: AsyncClient):
     """Uploads that exceed file byte limits should fail before persisting anything."""
     ids = await _create_adventure(client, "Upload File Size Validation Quest")
-    image_bytes = _make_noisy_png_bytes(1024, 1280)
-    assert len(image_bytes) > 2 * 1024 * 1024
+    image_bytes = _make_noisy_png_bytes(1536, 2048)
+    assert len(image_bytes) > 8 * 1024 * 1024
 
     resp = await client.post(
         f"/api/adventures/{ids['adventure_id']}/visuals/upload",
@@ -1200,6 +1200,21 @@ async def test_upload_visual_rejects_oversized_file_bytes(client: AsyncClient):
 
     assert resp.status_code == 400
     assert "Max file size for this asset" in resp.text
+
+
+async def test_upload_visual_accepts_standard_generated_portrait_dimensions(client: AsyncClient):
+    """Generated portrait dimensions (1024x1536) should be accepted for NPCs and Protagonists."""
+    ids = await _create_adventure(client, "Portrait Upload Quest")
+    image_bytes = _make_png_bytes(1024, 1536)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/upload",
+        data={"target_type": "protagonist", "target_id": ids["avatar_id"]},
+        files={"file": ("portrait.png", image_bytes, "image/png")},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "uploaded"
 
 
 async def test_upload_visual_updates_cover_image(client: AsyncClient):
