@@ -101,7 +101,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
 <template>
   <InlinePromptPanel
     :open="open && !!switchEntity"
-    label="Switch"
+
     :title="switchEntity?.name || 'Switch'"
     :description="switchEntity?.description || ''"
     :image-url="imageUrl"
@@ -110,11 +110,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
     @close="emit('close')"
     @revealed="onRevealed"
   >
-    <template #label-icon><i class="ra ra-lever"></i></template>
+
 
     <p
       v-if="switchStatusText"
-      class="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2 mb-3 leading-snug"
+      class="text-sm italic text-amber-100/90 leading-snug mb-3"
     >
       {{ switchStatusText }}
     </p>

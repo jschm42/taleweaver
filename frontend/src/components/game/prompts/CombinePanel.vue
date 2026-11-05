@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Combine, X } from 'lucide-vue-next'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 import PromptItemTile from './PromptItemTile.vue'
@@ -80,12 +80,15 @@ watch(candidatesById, (candidates) => {
   emit('itemLeave')
   emit('close')
 })
+onBeforeUnmount(() => {
+  emit('itemLeave')
+})
 </script>
 
 <template>
   <InlinePromptPanel
     :open="open"
-    label="Combine"
+
     title="Workbench"
     description="Put items from your inventory or your surroundings together and try to combine them."
     :busy="busy"
@@ -93,7 +96,7 @@ watch(candidatesById, (candidates) => {
     @close="emit('close')"
     @revealed="onRevealed"
   >
-    <template #label-icon><Combine class="w-3 h-3" /></template>
+
 
     <!-- Workbench slots -->
     <div class="tw-prompt-bench">

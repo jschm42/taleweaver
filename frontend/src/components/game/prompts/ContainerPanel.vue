@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Backpack, PackageOpen, PackagePlus, ArrowDownToLine, Lock, Check, ChevronRight } from 'lucide-vue-next'
+import { Backpack, PackagePlus, ArrowDownToLine, Lock, Check, ChevronRight } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 import InventoryPicker from './InventoryPicker.vue'
@@ -42,11 +42,44 @@ const isItemLocked = (item: any): boolean => {
   return Boolean(item.metadata_json?.locked === true)
 }
 
+const lockedItems = computed(() => (props.items || []).filter((item: any) => isItemLocked(item)))
+const unlockedItems = computed(() => (props.items || []).filter((item: any) => !isItemLocked(item)))
+const hasLockedItems = computed(() => lockedItems.value.length > 0)
+const hasUnlockedItems = computed(() => unlockedItems.value.length > 0)
 const hasItems = computed(() => (props.items || []).length > 0)
 const currentCount = computed(() => (props.items || []).length)
-const unlockedItems = computed(() => (props.items || []).filter((item: any) => !isItemLocked(item)))
-const hasUnlockedItems = computed(() => unlockedItems.value.length > 0)
 const putMode = ref(false)
+
+// Tracks item IDs that are or were locked in this container to preserve their slot assignments
+const assignedLockedItemIds = ref<Set<string>>(new Set())
+
+watch(
+  () => props.items,
+  (newItems) => {
+    for (const item of newItems || []) {
+      if (isItemLocked(item)) {
+        const id = String(item.id || item.name || '').trim()
+        if (id) assignedLockedItemIds.value.add(id)
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
+
+watch(
+  () => props.containerId,
+  () => {
+    assignedLockedItemIds.value.clear()
+    for (const item of props.items || []) {
+      if (isItemLocked(item)) {
+        const id = String(item.id || item.name || '').trim()
+        if (id) assignedLockedItemIds.value.add(id)
+      }
+    }
+  }
+)
+
+const lockedSlotCount = computed(() => Math.max(lockedItems.value.length, assignedLockedItemIds.value.size))
 
 const containerMeta = computed(() => parseMetadata(props.containerEntity?.metadata_json))
 
@@ -62,15 +95,33 @@ const maxItems = computed<number | null>(() => {
   return Number.isFinite(num) && num > 0 ? Math.floor(num) : null
 })
 
-const remainingCapacity = computed<number | null>(() => {
+// Input slot capacity only covers slots not assigned to locked items
+const inputSlotCapacity = computed<number | null>(() => {
   if (maxItems.value === null) return null
-  return Math.max(0, maxItems.value - currentCount.value)
+  return Math.max(0, maxItems.value - lockedSlotCount.value)
+})
+
+const emptyInputSlotCount = computed<number>(() => {
+  if (inputSlotCapacity.value === null) {
+    if (minItems.value !== null) {
+      return Math.max(0, (minItems.value - lockedSlotCount.value) - unlockedItems.value.length)
+    }
+    return 0
+  }
+  return Math.max(0, inputSlotCapacity.value - unlockedItems.value.length)
+})
+
+const remainingCapacity = computed<number | null>(() => {
+  if (inputSlotCapacity.value === null) return null
+  return Math.max(0, inputSlotCapacity.value - unlockedItems.value.length)
 })
 
 const isContainerFull = computed(() => remainingCapacity.value !== null && remainingCapacity.value <= 0)
 const belowMinItems = computed(() => minItems.value !== null && currentCount.value < minItems.value)
-const slotCount = computed<number>(() => maxItems.value ?? minItems.value ?? 0)
-const emptySlotCount = computed<number>(() => Math.max(0, slotCount.value - currentCount.value))
+
+const inputSlotNumber = (slotIdx: number): number => {
+  return lockedSlotCount.value + unlockedItems.value.length + slotIdx
+}
 
 const switchStatusText = computed<string>(() => {
   return String(
@@ -78,22 +129,6 @@ const switchStatusText = computed<string>(() => {
     switchConfig.value.status_text ??
     ''
   ).trim()
-})
-
-const capacityBadgeText = computed(() => {
-  if (minItems.value !== null && maxItems.value !== null) {
-    if (minItems.value === maxItems.value) {
-      return `${currentCount.value} / ${maxItems.value} required`
-    }
-    return `${currentCount.value} / ${maxItems.value} (min ${minItems.value})`
-  }
-  if (maxItems.value !== null) {
-    return `${currentCount.value} / ${maxItems.value} slots`
-  }
-  if (minItems.value !== null) {
-    return `${currentCount.value} items (min ${minItems.value})`
-  }
-  return ''
 })
 
 const isContainerSwitch = computed(() => {
@@ -192,14 +227,12 @@ function takeItem(item: any): void {
 <template>
   <InlinePromptPanel
     :open="open"
-    label="Container"
     :title="title"
     :image-url="resolvedImageUrl"
     :busy="busy"
     :reveal-key="title"
     @close="emit('close')"
   >
-    <template #label-icon><PackageOpen class="w-3 h-3" /></template>
 
     <InventoryPicker
       v-if="putMode"
@@ -216,47 +249,30 @@ function takeItem(item: any): void {
     <template v-else>
       <p
         v-if="switchStatusText"
-        class="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2 mb-3 leading-snug"
+        class="text-sm italic text-amber-100/90 leading-snug mb-3"
       >
         {{ switchStatusText }}
       </p>
       <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex flex-col md:flex-row gap-4 items-start' : 'space-y-3'">
         <!-- Container Items Area -->
-        <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex-1 min-w-0 w-full space-y-2' : 'space-y-2'">
-          <div class="flex items-center justify-between gap-2">
-            <p class="tw-prompt-hint">
-              <template v-if="hasItems">
-                {{ hasUnlockedItems ? 'Click an unlocked item to take it.' : 'Items inside are currently locked.' }}
-              </template>
-              <template v-else-if="emptySlotCount > 0">
-                Click an empty slot or Put In to insert items.
-              </template>
-              <template v-else>This container is empty.</template>
-            </p>
-            <span
-              v-if="capacityBadgeText"
-              class="shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border"
-              :class="belowMinItems ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-white/10 bg-white/5 opacity-75'"
-            >
-              {{ capacityBadgeText }}
+        <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex-1 min-w-0 w-full space-y-3' : 'space-y-3'">
+          <!-- Locked Items Row -->
+          <div v-if="hasLockedItems" class="space-y-1.5 pb-1">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-amber-500/80">
+              Locked Items
             </span>
-          </div>
-          <template v-if="hasItems || emptySlotCount > 0">
-            <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-56 overflow-y-auto p-0.5">
+            <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-40 overflow-y-auto p-0.5">
               <button
-                v-for="item in items"
+                v-for="item in lockedItems"
                 :key="itemKey(item)"
                 type="button"
-                :disabled="busy || isItemLocked(item)"
-                class="tw-prompt-tile relative"
-                :class="isItemLocked(item) ? 'border-amber-500/40 opacity-80 cursor-not-allowed' : ''"
-                :title="isItemLocked(item) ? `${item.name || item.id} (Locked — cannot be taken right now)` : `Take ${item.name || item.id}`"
-                @click="takeItem(item)"
+                :disabled="busy || true"
+                class="tw-prompt-tile relative border-amber-500/40 opacity-80 cursor-not-allowed"
+                :title="`${item.name || item.id} (Locked — cannot be taken right now)`"
                 @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"
                 @mouseleave="emit('itemLeave')"
               >
                 <span
-                  v-if="isItemLocked(item)"
                   class="absolute top-1 right-1 z-10 p-1 rounded-md bg-amber-500/25 border border-amber-500/50 text-amber-300 shadow"
                   title="Locked"
                 >
@@ -272,23 +288,63 @@ function takeItem(item: any): void {
                 <i v-else :class="['ra text-2xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
                 <span class="tw-prompt-tile-caption">{{ item.name || item.id }}</span>
               </button>
-              <button
-                v-for="slotIdx in emptySlotCount"
-                :key="`empty-slot-${slotIdx}`"
-                type="button"
-                :disabled="busy || !canPut || isContainerFull"
-                class="tw-prompt-tile border-dashed border-amber-500/30 bg-black/20 hover:border-amber-500/60 hover:bg-amber-500/5 transition-all"
-                :class="(!canPut || isContainerFull) ? 'opacity-50 cursor-default' : 'cursor-pointer'"
-                :title="canPut && !isContainerFull ? `Empty Slot ${currentCount + slotIdx} — Click to insert item` : `Empty Slot ${currentCount + slotIdx}`"
-                @click="canPut && !busy && !isContainerFull ? (putMode = true) : undefined"
-                @mouseenter="emit('itemLeave')"
-                @mouseleave="emit('itemLeave')"
-              >
-                <PackagePlus class="w-5 h-5 text-amber-400/45" />
-                <span class="tw-prompt-tile-caption opacity-55">Slot {{ currentCount + slotIdx }}</span>
-              </button>
             </div>
-          </template>
+          </div>
+
+          <!-- Interactive Slots Row (Unlocked Items & Input Slots) -->
+          <div class="space-y-1.5">
+            <p class="tw-prompt-hint">
+              <template v-if="hasUnlockedItems">
+                Click an unlocked item to take it.
+              </template>
+              <template v-else-if="emptyInputSlotCount > 0">
+                Click an empty slot or Put In to insert items.
+              </template>
+              <template v-else-if="!hasLockedItems">
+                This container is empty.
+              </template>
+            </p>
+            <template v-if="hasUnlockedItems || emptyInputSlotCount > 0">
+              <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-56 overflow-y-auto p-0.5">
+                <button
+                  v-for="item in unlockedItems"
+                  :key="itemKey(item)"
+                  type="button"
+                  :disabled="busy"
+                  class="tw-prompt-tile relative"
+                  :title="`Take ${item.name || item.id}`"
+                  @click="takeItem(item)"
+                  @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"
+                  @mouseleave="emit('itemLeave')"
+                >
+                  <img
+                    v-if="canShowImage(item)"
+                    :src="getImageUrl(item.image_url)"
+                    class="w-full h-full object-cover object-top"
+                    :alt="item.name || 'container item'"
+                    @error="onItemImageError(item)"
+                  />
+                  <i v-else :class="['ra text-2xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+                  <span class="tw-prompt-tile-caption">{{ item.name || item.id }}</span>
+                </button>
+                <button
+                  v-for="slotIdx in emptyInputSlotCount"
+                  :key="`empty-slot-${slotIdx}`"
+                  type="button"
+                  :disabled="busy || !canPut || isContainerFull"
+                  class="tw-prompt-tile border-dashed border-amber-500/30 bg-black/20 hover:border-amber-500/60 hover:bg-amber-500/5 transition-all"
+                  :class="(!canPut || isContainerFull) ? 'opacity-50 cursor-default' : 'cursor-pointer'"
+                  :title="canPut && !isContainerFull ? `Empty Slot ${inputSlotNumber(slotIdx)} — Click to insert item` : `Empty Slot ${inputSlotNumber(slotIdx)}`"
+                  @click="canPut && !busy && !isContainerFull ? (putMode = true) : undefined"
+                  @mouseenter="emit('itemLeave')"
+                  @mouseleave="emit('itemLeave')"
+                >
+                  <PackagePlus class="w-5 h-5 text-amber-400/45" />
+                  <span class="tw-prompt-tile-caption opacity-55">Slot {{ inputSlotNumber(slotIdx) }}</span>
+                </button>
+              </div>
+            </template>
+          </div>
         </div>
 
         <!-- Integrated Switch Control (for CONTAINER_SWITCH) -->
@@ -319,38 +375,42 @@ function takeItem(item: any): void {
         </div>
       </div>
 
-      <div class="flex flex-wrap justify-end gap-2 pt-1">
-        <button
-          v-if="canPut"
-          type="button"
-          class="tw-prompt-action tw-prompt-action--ghost"
-          :disabled="busy || isContainerFull"
-          :title="isContainerFull ? 'Container is full' : 'Put items inside'"
-          @click="putMode = true"
-        >
-          <PackagePlus class="w-4 h-4" />
-          <span>Put In</span>
-        </button>
-        <button
-          v-if="hasUnlockedItems"
-          type="button"
-          class="tw-prompt-action tw-prompt-action--ghost"
-          :disabled="busy"
-          @click="emit('dropToScene')"
-        >
-          <ArrowDownToLine class="w-4 h-4" />
-          <span>Drop To Scene</span>
-        </button>
-        <button
-          v-if="hasUnlockedItems"
-          type="button"
-          class="tw-prompt-action"
-          :disabled="busy"
-          @click="emit('takeAll')"
-        >
-          <Backpack class="w-4 h-4" />
-          <span>Take All</span>
-        </button>
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <div>
+          <button
+            v-if="canPut"
+            type="button"
+            class="tw-prompt-action tw-prompt-action--ghost !text-xs sm:!text-sm !py-2.5 !px-5 font-bold tracking-wider"
+            :disabled="busy || isContainerFull"
+            :title="isContainerFull ? 'Container is full' : 'Put items inside'"
+            @click="putMode = true"
+          >
+            <span>Put In</span>
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            v-if="hasUnlockedItems"
+            type="button"
+            class="tw-prompt-action tw-prompt-action--ghost"
+            :disabled="busy"
+            @click="emit('dropToScene')"
+          >
+            <ArrowDownToLine class="w-4 h-4" />
+            <span>Drop To Scene</span>
+          </button>
+          <button
+            v-if="hasUnlockedItems"
+            type="button"
+            class="tw-prompt-action"
+            :disabled="busy"
+            @click="emit('takeAll')"
+          >
+            <Backpack class="w-4 h-4" />
+            <span>Take All</span>
+          </button>
+        </div>
       </div>
     </template>
   </InlinePromptPanel>

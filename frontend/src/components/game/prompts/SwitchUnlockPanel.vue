@@ -121,7 +121,7 @@ watch(() => props.errorMessage, (message) => {
 <template>
   <InlinePromptPanel
     :open="open && !!switchEntity"
-    label="Locked Transition"
+
     :title="switchEntity?.name || 'Switch'"
     :description="switchEntity?.description || ''"
     :image-url="imageUrl"
@@ -130,7 +130,7 @@ watch(() => props.errorMessage, (message) => {
     @close="emit('close')"
     @revealed="onRevealed"
   >
-    <template #label-icon><Lock class="w-3 h-3" /></template>
+
     <template #aside>
       <p class="tw-prompt-hint">Flipping to <span class="tw-prompt-chip">{{ stateLabel(switchEntity, targetState) }}</span></p>
     </template>

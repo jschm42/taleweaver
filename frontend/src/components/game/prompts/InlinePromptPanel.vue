@@ -10,7 +10,7 @@ import { formatEntityRefs } from '@/utils/entityRefs'
  */
 const props = withDefaults(defineProps<{
   open: boolean
-  label: string
+  label?: string
   title: string
   description?: string
   imageUrl?: string | null
@@ -20,6 +20,7 @@ const props = withDefaults(defineProps<{
   /** Long content (readables) is scrolled to its start instead of its end. */
   scrollBlock?: ScrollLogicalPosition
 }>(), {
+  label: '',
   description: '',
   imageUrl: null,
   revealKey: '',
@@ -71,22 +72,25 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
   <Transition name="prompt-slide">
     <div v-if="open" ref="panelRef" class="tw-prompt relative w-full max-w-2xl shrink-0" aria-live="polite">
       <section class="tw-narration space-y-3">
-        <div class="flex items-start justify-between gap-3">
-          <span class="tw-narration-label gap-1.5">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2 min-w-0">
+          <span v-if="Boolean(label && label.trim())" class="tw-narration-label gap-1.5">
             <slot name="label-icon" />
             {{ label }}
           </span>
-          <button type="button" class="tw-prompt-close" :disabled="busy" title="Close (Esc)" @click="close">
+            <h3 class="tw-prompt-title truncate">{{ title }}</h3>
+          </div>
+          <button type="button" class="tw-prompt-close ml-auto shrink-0" :disabled="busy" title="Close (Esc)" @click="close">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="flex items-start gap-4">
+        <div v-if="(imageUrl && !imageFailed) || description || $slots.aside" class="flex items-start gap-4">
           <div v-if="imageUrl && !imageFailed" class="tw-prompt-portrait">
             <img :src="imageUrl" :alt="title" class="w-full h-full object-cover object-top" @error="imageFailed = true" />
           </div>
-          <div class="flex-1 min-w-0 space-y-2">
-            <h3 class="tw-prompt-title">{{ title }}</h3>
+          <div v-if="description || $slots.aside" class="flex-1 min-w-0 space-y-2">
+
             <p v-if="description" class="tw-prompt-description" v-html="formatEntityRefs(description)"></p>
             <slot name="aside" />
           </div>
