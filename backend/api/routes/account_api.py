@@ -1,12 +1,13 @@
 """Self-service account endpoints: credentials, recovery codes, preferences, session history."""
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.auth_api import UserResponse
 from backend.core.account_recovery import issue_recovery_codes, set_new_password
@@ -18,6 +19,7 @@ from backend.core.auth import (
     validate_username,
 )
 from backend.core.database import get_db
+from backend.core.tts_preferences import DEFAULT_TTS_PREFERENCES, TTS_PREFERENCES_KEY
 from backend.crud.crud_profile import (
     PlayerSessionSummary,
     build_user_profile_data,
@@ -54,6 +56,12 @@ class RecoveryCodesResponse(BaseModel):
 
 class PreferencesUpdateRequest(BaseModel):
     default_language: Optional[str] = Field(default=None, max_length=20)
+    tts_preferences: Optional[dict[str, Any]] = None
+
+
+def _clean_tts_preferences(raw: dict[str, Any]) -> dict[str, bool]:
+    """Keep only known Auto-Speak flags; missing flags fall back to their defaults."""
+    return {key: bool(raw.get(key, default)) for key, default in DEFAULT_TTS_PREFERENCES.items()}
 
 
 async def _require_current_password(user: User, current_password: str) -> None:
@@ -143,8 +151,18 @@ async def update_my_preferences(
     current_user: User = USER_DEP,
     db: AsyncSession = DB_DEP,
 ):
-    """Players may update their own preferences (the generic user update is admin-only)."""
-    current_user.default_language = (request.default_language or "").strip() or None
+    """Players may update their own preferences (the generic user update is admin-only).
+
+    Only the fields present in the request change, so each profile section saves on its own.
+    """
+    if "default_language" in request.model_fields_set:
+        current_user.default_language = (request.default_language or "").strip() or None
+    if request.tts_preferences is not None:
+        current_user.game_settings = {
+            **(current_user.game_settings or {}),
+            TTS_PREFERENCES_KEY: _clean_tts_preferences(request.tts_preferences),
+        }
+        flag_modified(current_user, "game_settings")
     await db.commit()
     await db.refresh(current_user)
     return await build_user_profile_data(db, current_user)

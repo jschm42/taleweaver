@@ -43,6 +43,8 @@ from backend.core.models_config import (
     TTS_PROVIDERS,
 )
 from backend.core.security import encryption_util
+from backend.core.tts_preferences import with_user_scoped_settings
+from backend.crud.crud_game_settings import broadcast_game_settings
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
@@ -91,11 +93,11 @@ async def _broadcast_global_settings(db: AsyncSession, source_user: User) -> Non
             t2i_settings=dict(source_user.t2i_settings or {}),
             image_styles_catalog=list(source_user.image_styles_catalog or []),
             tone_catalog=list(source_user.tone_catalog or []),
-            game_settings=dict(source_user.game_settings or {}),
             tts_settings=dict(source_user.tts_settings or {}),
         )
     )
-    # No need to loop and modify objects manually
+    # game_settings also holds player-owned keys (Auto-Speak preferences) that must survive.
+    await broadcast_game_settings(db, source_user.game_settings)
 
 
 def _slugify(value: str) -> str:
@@ -1360,7 +1362,7 @@ async def update_game_settings(
     """Updates the general game preferences."""
     user = await _resolve_global_settings_owner(db, current_user)
 
-    user.game_settings = payload.model_dump()
+    user.game_settings = with_user_scoped_settings(payload.model_dump(), user.game_settings)
     await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Game settings updated."}

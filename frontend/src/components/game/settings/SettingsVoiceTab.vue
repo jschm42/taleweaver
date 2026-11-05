@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { VolumeX } from 'lucide-vue-next'
+import type { AutoSpeakSettings } from '@/types/tts'
+import AutoSpeakChannelTable from './AutoSpeakChannelTable.vue'
 import SettingCard from './SettingCard.vue'
 import SettingToggle from './SettingToggle.vue'
 
 const autoSpeech = defineModel<boolean>('autoSpeech', { required: true })
-const autoSpeakNarration = defineModel<boolean>('autoSpeakNarration', { required: true })
-const autoSpeakDialogues = defineModel<boolean>('autoSpeakDialogues', { required: true })
+const autoSpeakSettings = defineModel<AutoSpeakSettings>('autoSpeakSettings', { required: true })
 
 const props = defineProps<{
   ttsAvailable: boolean
@@ -35,34 +36,18 @@ const props = defineProps<{
         title="Auto-Speak"
         badge="Audio"
         badge-tone="blue"
-        description="Master switch: automatically read new narration and dialogue aloud."
-        hint="Only passages that arrive after you enable this are spoken, so your existing log is not replayed. Some browsers block audio until you have interacted with the page once."
+        description="Master switch: automatically read new story passages aloud."
+        hint="Only passages that arrive after you enable this are spoken, so your existing log is not replayed. Some browsers block audio until you have interacted with the page once. Speech pauses automatically during combat."
       >
         <template #control>
           <SettingToggle v-model="autoSpeech" label="Auto-Speak" />
         </template>
       </SettingCard>
 
-      <SettingCard
-        title="Game Master Voice"
-        description="Speak the narrator's descriptions of scenes, events and outcomes."
-        :disabled="!autoSpeech"
-      >
-        <template #control>
-          <SettingToggle v-model="autoSpeakNarration" label="Auto-speak Game Master" :disabled="!autoSpeech" />
-        </template>
-      </SettingCard>
-
-      <SettingCard
-        title="Character Voices"
-        description="Speak dialogue bubbles of NPCs and your own character, each with their assigned voice."
-        hint="Disable this if you prefer to read dialogue yourself while keeping the narration audible. Speech pauses automatically during combat."
-        :disabled="!autoSpeech"
-      >
-        <template #control>
-          <SettingToggle v-model="autoSpeakDialogues" label="Auto-speak characters" :disabled="!autoSpeech" />
-        </template>
-      </SettingCard>
+      <div v-if="autoSpeech" class="flex flex-col gap-2">
+        <p class="px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Read aloud</p>
+        <AutoSpeakChannelTable v-model="autoSpeakSettings" />
+      </div>
     </template>
   </div>
 </template>

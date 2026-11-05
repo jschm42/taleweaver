@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
 import ChangeCredentialsModal from '@/components/portal/ChangeCredentialsModal.vue'
+import AutoSpeakPreferencesCard from './AutoSpeakPreferencesCard.vue'
 import RecoveryCodesCard from './RecoveryCodesCard.vue'
 
 const emit = defineEmits<{ (e: 'notify', message: string, type: 'success' | 'error'): void }>()
@@ -93,6 +94,8 @@ async function saveLanguage() {
         </div>
       </div>
     </section>
+
+    <AutoSpeakPreferencesCard class="lg:col-span-2" @notify="(message, type) => emit('notify', message, type)" />
 
     <RecoveryCodesCard class="lg:col-span-2" @notify="(message, type) => emit('notify', message, type)" />
 
