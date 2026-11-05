@@ -1328,15 +1328,23 @@ const handlePlayerInput = async (content: string) => {
   await handlePlayerInputBase(content)
 }
 
-const runContainerAction = async (commandBuilder: (containerIdOrName: string) => string) => {
+const runContainerAction = async (
+  commandBuilder: (containerIdOrName: string) => string,
+  keepOpen = false
+) => {
   if (!activeContainer.value || containerBusy.value) return
   const identifier = activeContainer.value.id || activeContainer.value.name
   if (!identifier) return
 
   containerBusy.value = true
+  if (keepOpen) {
+    keepPromptOnTurn.value = 'container'
+  }
   try {
     await sendMessage(commandBuilder(identifier))
-    closeContainerModal()
+    if (!keepOpen) {
+      closeContainerModal()
+    }
   } finally {
     containerBusy.value = false
   }
@@ -1358,7 +1366,7 @@ const handleContainerDropToScene = async () => {
 
 const handleContainerPutItems = async (itemIds: string[]) => {
   if (!itemIds.length) return
-  await runContainerAction((id) => `/container_put_items ${id} | ${itemIds.join(', ')}`)
+  await runContainerAction((id) => `/container_put_items ${id} | ${itemIds.join(', ')}`, true)
 }
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC

@@ -107,7 +107,7 @@ function takeItem(item: any): void {
 <template>
   <InlinePromptPanel
     :open="open"
-    :label="isContainerSwitch ? 'Container · Switch' : 'Container'"
+    label="Container"
     :title="title"
     :image-url="resolvedImageUrl"
     :busy="busy"
@@ -121,16 +121,16 @@ function takeItem(item: any): void {
       :inventory-items="inventoryItems || []"
       :exclude-id="containerId || ''"
       :busy="busy"
-      @confirm="(ids) => emit('putItems', ids)"
+      @confirm="(ids) => { putMode = false; emit('putItems', ids) }"
       @cancel="putMode = false"
       @item-hover="(item, event) => emit('itemHover', item, event)"
       @item-leave="emit('itemLeave')"
     />
 
     <template v-else>
-      <div :class="isContainerSwitch && switchStates.length > 0 ? 'grid grid-cols-1 md:grid-cols-3 gap-3 items-start' : 'space-y-3'">
+      <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex flex-col md:flex-row gap-4 items-start' : 'space-y-3'">
         <!-- Container Items Area -->
-        <div :class="isContainerSwitch && switchStates.length > 0 ? 'md:col-span-2 space-y-2' : 'space-y-2'">
+        <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex-1 min-w-0 w-full space-y-2' : 'space-y-2'">
           <template v-if="hasItems">
             <p class="tw-prompt-hint">
               {{ hasUnlockedItems ? 'Click an unlocked item to take it.' : 'Items inside are currently locked.' }}
@@ -173,33 +173,23 @@ function takeItem(item: any): void {
         <!-- Integrated Switch Control (for CONTAINER_SWITCH) -->
         <div
           v-if="isContainerSwitch && switchStates.length > 0"
-          class="p-2.5 rounded-xl bg-slate-950/60 border border-white/10 space-y-2"
+          class="w-full md:w-52 shrink-0 grid gap-2 md:pr-2"
         >
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[10px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5">
-              <i class="ra ra-lever text-xs"></i> Switch
+          <button
+            v-for="state in switchStates"
+            :key="state"
+            type="button"
+            :disabled="busy || isCurrentSwitchState(state)"
+            class="tw-choice-option"
+            :class="{ 'is-current': isCurrentSwitchState(state) }"
+            @click="selectSwitchState(state)"
+          >
+            <span class="tw-choice-number">
+              <Check v-if="isCurrentSwitchState(state)" class="w-3 h-3" stroke-width="3" />
+              <ChevronRight v-else class="w-3 h-3" stroke-width="3" />
             </span>
-            <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border border-emerald-500/40 bg-emerald-500/15 text-emerald-300">
-              {{ stateLabel(containerEntity, currentSwitchState) }}
-            </span>
-          </div>
-          <div class="grid gap-1.5">
-            <button
-              v-for="state in switchStates"
-              :key="state"
-              type="button"
-              :disabled="busy || isCurrentSwitchState(state)"
-              class="tw-choice-option !py-1.5 !px-2.5 !text-xs"
-              :class="{ 'is-current': isCurrentSwitchState(state) }"
-              @click="selectSwitchState(state)"
-            >
-              <span class="tw-choice-number !w-4 !h-4">
-                <Check v-if="isCurrentSwitchState(state)" class="w-2.5 h-2.5" stroke-width="3" />
-                <ChevronRight v-else class="w-2.5 h-2.5" stroke-width="3" />
-              </span>
-              <span class="flex-1 tracking-wider text-left truncate">{{ stateLabel(containerEntity, state) }}</span>
-            </button>
-          </div>
+            <span class="flex-1 tracking-wider text-left truncate">{{ stateLabel(containerEntity, state) }}</span>
+          </button>
         </div>
       </div>
 
