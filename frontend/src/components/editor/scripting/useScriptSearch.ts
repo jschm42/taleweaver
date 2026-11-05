@@ -108,14 +108,34 @@ export function useScriptSearch(
   }
 
   function toRange(match: SearchMatch): { from: CmPosition; to: CmPosition } {
+    const cm = cmInstance.value
+    if (cm) {
+      try {
+        return {
+          from: cm.posFromIndex(match.start),
+          to: cm.posFromIndex(match.end)
+        }
+      } catch {
+        // Fallback to manual line/ch calculation if posFromIndex fails
+      }
+    }
     const from = { line: match.line ?? 0, ch: match.ch ?? 0 }
     return { from, to: endPosition(match, code.value) }
   }
 
+  function safeClear(mark: CmTextMarker | null | undefined): void {
+    if (!mark) return
+    try {
+      mark.clear()
+    } catch {
+      // CodeMirror TextMarker can throw if line spans were adjusted or detached
+    }
+  }
+
   function clearMarks() {
-    marks.forEach(mark => mark.clear())
+    marks.forEach(mark => safeClear(mark))
     marks = []
-    currentMark?.clear()
+    safeClear(currentMark)
     currentMark = null
   }
 
@@ -125,10 +145,16 @@ export function useScriptSearch(
     cm.operation(() => {
       clearMarks()
       if (!isOpen.value) return
-      marks = searchMatches.value.map(match => {
-        const { from, to } = toRange(match)
-        return cm.markText(from, to, { className: MATCH_CLASS })
-      })
+      marks = searchMatches.value
+        .map(match => {
+          const { from, to } = toRange(match)
+          try {
+            return cm.markText(from, to, { className: MATCH_CLASS })
+          } catch {
+            return null
+          }
+        })
+        .filter((m): m is CmTextMarker => m !== null)
       highlightCurrent()
     })
   }
@@ -136,11 +162,15 @@ export function useScriptSearch(
   function highlightCurrent() {
     const cm = cmInstance.value
     const match = searchMatches.value[currentMatchIndex.value]
-    currentMark?.clear()
+    safeClear(currentMark)
     currentMark = null
     if (!cm || !match) return
     const { from, to } = toRange(match)
-    currentMark = cm.markText(from, to, { className: CURRENT_MATCH_CLASS })
+    try {
+      currentMark = cm.markText(from, to, { className: CURRENT_MATCH_CLASS })
+    } catch {
+      // ignore
+    }
   }
 
   function cursorIndex(): number {
@@ -184,8 +214,12 @@ export function useScriptSearch(
       return
     }
     const { from, to } = toRange(match)
-    cm.setSelection(from, to, { scroll: false })
-    cm.scrollIntoView({ from, to }, 60)
+    try {
+      cm.setSelection(from, to, { scroll: false })
+      cm.scrollIntoView({ from, to }, 60)
+    } catch {
+      // ignore
+    }
     highlightCurrent()
   }
 
@@ -258,7 +292,11 @@ export function useScriptSearch(
     clearMarks()
     searchMatches.value = []
     currentMatchIndex.value = -1
-    cmInstance.value?.focus()
+    try {
+      cmInstance.value?.focus()
+    } catch {
+      // ignore
+    }
   }
 
   function toggleSearch() {
