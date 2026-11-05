@@ -647,6 +647,7 @@ Controls adventure story chapters and sequences. In TaleWeaver, **only one seque
 - `tw.sequences.get_active() -> Optional[dict]`: Returns the dictionary definition of the currently active sequence (e.g. `{"id": "...", "title": "...", "order": 1}`), or `None` if no sequence is active.
 - `tw.sequences.get_active_id() -> Optional[str]`: Returns the ID string of the currently active sequence (e.g. `"CHAPTER_1"`), or `None`.
 - `tw.sequences.is_active(sequence_id: str) -> bool`: Returns `True` if `sequence_id` matches the currently active sequence (case-insensitive).
+- `tw.sequences.is_completed(sequence_id: str) -> bool`: Returns `True` if the specified sequence has already been completed in this playthrough.
 - `tw.sequences.active_id`: Property returning the active sequence ID (or `None`).
 - `tw.sequences.active` / `tw.sequences.current`: Property returning the active sequence dictionary (or `None`).
 - `tw.sequence.id`: Property returning the active sequence ID.

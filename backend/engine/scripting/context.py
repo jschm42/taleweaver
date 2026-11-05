@@ -109,6 +109,7 @@ class ScriptChangeset:
     sequence_start_id: Optional[str] = None
     sequence_end_id: Optional[str] = None
     sequence_advance: bool = True
+    completed_sequence_ids: list[str] = field(default_factory=list)
 
     var_updates: dict[str, Any] = field(default_factory=dict)
     story_flag_updates: dict[str, Any] = field(default_factory=dict)
@@ -1347,10 +1348,22 @@ class SequencesProxy:
         changeset: ScriptChangeset,
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
+        vars_proxy: Optional[Any] = None,
     ):
         self._changeset = changeset
         self._sequences = [s for s in (sequences or []) if isinstance(s, dict)]
         self._active_sequence_id = active_sequence_id
+        self._vars_proxy = vars_proxy
+        self._completed_ids: set[str] = set()
+        if self._vars_proxy:
+            raw_completed = self._vars_proxy.get("__completed_sequences__", [])
+            if isinstance(raw_completed, (list, set, tuple)):
+                self._completed_ids.update(str(x).strip().upper() for x in raw_completed)
+            for k in getattr(self._vars_proxy, "_data", {}):
+                if k.startswith("__seq_completed_") and k.endswith("__"):
+                    seq_key = k[len("__seq_completed_") : -2]
+                    if self._vars_proxy.get(k):
+                        self._completed_ids.add(seq_key.strip().upper())
         if not self._active_sequence_id and self._sequences:
             self._active_sequence_id = self._sequences[0].get("id")
 
@@ -1407,6 +1420,21 @@ class SequencesProxy:
             return False
         return cur_id.strip().upper() == str(sequence_id).strip().upper()
 
+    def is_completed(self, sequence_id: str) -> bool:
+        """Returns True if the specified sequence has been completed."""
+        clean = str(sequence_id or "").strip().upper()
+        if not clean:
+            return False
+        if clean in self._completed_ids:
+            return True
+        if clean in (str(x).upper() for x in self._changeset.completed_sequence_ids):
+            return True
+        if self._vars_proxy:
+            var_key = f"__seq_completed_{clean}__"
+            if self._vars_proxy.get(var_key, False):
+                return True
+        return False
+
     def all(self) -> list[dict[str, Any]]:
         """Returns a list of all sequences in the adventure."""
         return [dict(s) for s in self._sequences]
@@ -1418,6 +1446,8 @@ class SequencesProxy:
         """
         clean_id = str(sequence_id or "").strip()
         if not clean_id:
+            return
+        if str(self.get_active_id() or "").strip().upper() == clean_id.upper():
             return
         matched_id = clean_id
         for s in self._sequences:
@@ -1434,6 +1464,14 @@ class SequencesProxy:
         If advance=False, clears the active sequence.
         """
         clean_id = str(sequence_id).strip() if sequence_id else None
+        ended_id = clean_id or self.get_active_id()
+        if ended_id:
+            norm_ended = str(ended_id).strip().upper()
+            self._completed_ids.add(norm_ended)
+            if norm_ended not in self._changeset.completed_sequence_ids:
+                self._changeset.completed_sequence_ids.append(norm_ended)
+            self._changeset.var_updates[f"__seq_completed_{norm_ended}__"] = True
+
         self._changeset.sequence_completed = True
         self._changeset.sequence_end_id = clean_id
         self._changeset.sequence_advance = bool(advance)
@@ -1556,6 +1594,7 @@ class GameContext:
             self.changeset,
             active_sequence_id=active_sequence_id,
             sequences=sequences,
+            vars_proxy=self.vars,
         )
         self.sequence = self.sequences
         self.dice = DiceProxy()

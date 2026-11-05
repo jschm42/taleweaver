@@ -204,6 +204,16 @@ async def _handle_sequence_completion(
     messages: list[str] = []
     seq_id = str(completed_seq.get("id") or f"seq_{idx}")
 
+    norm_id = seq_id.strip().upper()
+    if state.entity_states is None:
+        state.entity_states = {}
+    ent_states = dict(state.entity_states)
+    script_vars = dict(ent_states.get("__script_vars__", {}))
+    script_vars[f"__seq_completed_{norm_id}__"] = True
+    ent_states["__script_vars__"] = script_vars
+    state.entity_states = ent_states
+    _flag(state, "entity_states")
+
     hook_msgs = await _execute_script_or_text(
         completed_seq.get("on_end_sequence_script"),
         completed_seq.get("on_end_sequence_text"),
