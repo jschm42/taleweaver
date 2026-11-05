@@ -77,6 +77,27 @@ class ItemIntegrityMixin:
             known.add_carried(meta.get("inventory"))
         return known
 
+    def _is_take_locked(self, entity: WorldEntity | None, carried: dict | None) -> bool:
+        item_type = ""
+        eid = ""
+        if entity is not None:
+            item_type = str(entity.item_type or "").upper()
+            eid = str(entity.id or "")
+        elif carried is not None:
+            item_type = str(carried.get("item_type") or "").upper()
+            eid = str(carried.get("id") or "")
+        if item_type in {"CONTAINER", "CONTAINER_SWITCH"}:
+            return False
+        states = self.state.entity_states or {}
+        if eid and isinstance((states.get(eid) or {}).get("locked"), bool):
+            return bool(states[eid]["locked"])
+        if carried is not None and isinstance(carried.get("locked"), bool):
+            return carried["locked"]
+        meta = entity.metadata_json if (entity and isinstance(entity.metadata_json, dict)) else {}
+        if isinstance(meta.get("locked"), bool):
+            return meta["locked"]
+        return False
+
     def _filter_invented(
         self, items: list[Any], known: KnownItems, reasons: list[str], kind: str
     ) -> list[Any]:
@@ -94,6 +115,10 @@ class ItemIntegrityMixin:
                     item.id,
                     item.name,
                 )
+                continue
+            if kind == "inventory item generation" and self._is_take_locked(entity, carried):
+                label = item.name or (entity.name if entity else "Item")
+                reasons.append(f"'{label}' is locked and cannot be taken right now.")
                 continue
             _canonicalize(item, entity, carried)
             kept.append(item)

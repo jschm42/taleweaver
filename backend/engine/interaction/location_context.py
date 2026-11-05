@@ -129,7 +129,11 @@ def _container_details(e: Any, detail: str) -> str:
     ]
     requirements = [(key, value) for key, value in requirements if value]
     session_locked = getattr(e, "session_locked_override", None)
-    is_locked = session_locked if isinstance(session_locked, bool) else bool(requirements)
+    is_locked = (
+        session_locked
+        if isinstance(session_locked, bool)
+        else bool(meta.get("locked") or requirements)
+    )
 
     if not is_locked:
         lock_str = " [UNLOCKED]"
@@ -154,11 +158,23 @@ def _describe_object(e: Any, detail: str) -> str:
         extra = _switch_details(e, detail)
     elif item_type == "CONTAINER":
         extra = _container_details(e, detail)
+    elif item_type == "CONTAINER_SWITCH":
+        extra = _container_details(e, detail) + _switch_details(e, detail)
     elif item_type == "READABLE":
         metadata = e.metadata_json or {}
         fmt = metadata.get("text_log_format") or getattr(e, "text_log_format", "DOCUMENT")
         content = metadata.get("text_log_content") or ""
         extra = f' [Format: {fmt}] [Readable text content: "{content}"]'
+
+    if item_type not in {"CONTAINER", "CONTAINER_SWITCH"}:
+        session_locked = getattr(e, "session_locked_override", None)
+        item_locked = (
+            session_locked
+            if isinstance(session_locked, bool)
+            else bool((e.metadata_json or {}).get("locked"))
+        )
+        if item_locked:
+            extra += " [LOCKED - cannot be taken]"
 
     if detail == "concise":
         return f"{e.name} (ID: {e.id}){type_str}{pos_str}{hidden_str}{extra}"

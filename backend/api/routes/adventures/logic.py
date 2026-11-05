@@ -53,6 +53,11 @@ def _merge_session_entity(
 ) -> dict[str, Any]:
     override = _entity_override(overrides, normalized, ent.get("id"))
     ent.update(override)
+    metadata = ent.get("metadata_json") if isinstance(ent.get("metadata_json"), dict) else {}
+    if "locked" not in ent and isinstance(metadata.get("locked"), bool):
+        ent["locked"] = metadata["locked"]
+    elif isinstance(ent.get("locked"), bool) and isinstance(ent.get("metadata_json"), dict):
+        ent["metadata_json"] = {**metadata, "locked": ent["locked"]}
     # CONSTRUCTABLE recipes are meta items and never appear in the world.
     if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE":
         ent["is_hidden"] = True
@@ -327,7 +332,7 @@ class AdventureLogic:
         for ent in merged_entities:
             if not _visible_in_scene(ent, scene_key, contained_ids):
                 continue
-            if str(ent.get("item_type") or "").upper() != "CONTAINER":
+            if str(ent.get("item_type") or "").upper() not in {"CONTAINER", "CONTAINER_SWITCH"}:
                 entities.append(ent)
                 continue
             inventory = AdventureLogic.hydrate_container_inventory(
@@ -402,7 +407,7 @@ class AdventureLogic:
         """Returns IDs of entities stored inside container objects."""
         contained_ids: set[str] = set()
         for entity in entities:
-            if str(entity.get("item_type") or "").upper() != "CONTAINER":
+            if str(entity.get("item_type") or "").upper() not in {"CONTAINER", "CONTAINER_SWITCH"}:
                 continue
             contained_ids.update(
                 AdventureLogic.extract_inventory_entity_ids(entity.get("inventory"))
@@ -421,6 +426,13 @@ class AdventureLogic:
         for entry in inventory:
             if isinstance(entry, dict):
                 item = dict(entry)
+                item_id = str(item.get("id") or "").strip()
+                resolved = entity_lookup.get(item_id) if item_id else None
+                if resolved:
+                    if "locked" in resolved:
+                        item["locked"] = resolved["locked"]
+                    if isinstance(resolved.get("metadata_json"), dict):
+                        item["metadata_json"] = dict(resolved["metadata_json"])
                 item["image_url"] = AdventureLogic.resolve_existing_data_asset_url(
                     item.get("image_url")
                 )

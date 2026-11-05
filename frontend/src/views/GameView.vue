@@ -413,8 +413,8 @@ const closeSheetForInlinePrompt = (): void => {
   showSheet.value = false
   if (sheetDirty.value) handleSheetChanged()
 }
-/** Set by a prompt whose own action starts a turn (Combine): it stays open. */
-const keepPromptOnTurn = ref<'combine' | null>(null)
+/** Set by a prompt whose own action starts a turn (Combine or Container Switch): it stays open. */
+const keepPromptOnTurn = ref<'combine' | 'container' | null>(null)
 
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
@@ -426,8 +426,10 @@ watch(status, (current, previous) => {
   const keep = keepPromptOnTurn.value
   keepPromptOnTurn.value = null
   const keepCombine = keep === 'combine' && showCombinePanel.value
+  const keepContainer = keep === 'container' && showContainerModal.value
   closeInlinePrompts()
   showCombinePanel.value = keepCombine
+  showContainerModal.value = keepContainer
 })
 // Same for inline prompts: opening one switches to the story tab under the cursor, and closing
 // one removes the tiles that may still be hovered.
@@ -644,6 +646,9 @@ const handleSwitchFlipCodeSubmit = async (code: string) => {
     showSwitchUnlockModal.value = false
     switchUnlockModalEntity.value = null
     switchUnlockTargetState.value = ''
+    if (showContainerModal.value) {
+      await refreshSession(true)
+    }
   } catch (error: any) {
     switchUnlockError.value = error?.message || 'Incorrect code. The switch does not move.'
   } finally {
@@ -666,6 +671,9 @@ const handleSwitchFlipItemSubmit = async (itemId: string) => {
     showSwitchUnlockModal.value = false
     switchUnlockModalEntity.value = null
     switchUnlockTargetState.value = ''
+    if (showContainerModal.value) {
+      await refreshSession(true)
+    }
   } catch (error: any) {
     switchUnlockError.value = error?.message || 'Failed to activate the switch with this item.'
   } finally {
@@ -675,7 +683,7 @@ const handleSwitchFlipItemSubmit = async (itemId: string) => {
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
-  return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+  return ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(entity.item_type || '').toUpperCase())
 }
 
 const isContainerLocked = (container: any): boolean => {
@@ -808,6 +816,48 @@ const normalizeContainerItems = (rawItems: any[]): any[] => {
     }
   }
   return result
+}
+
+const activeContainerEntity = computed(() => {
+  const id = String(activeContainer.value?.id || '').trim().toLowerCase()
+  if (!id) return null
+  return (
+    (entities.value || []).find((entry: any) => String(entry.id || '').toLowerCase() === id) ||
+    (inventoryItems.value || []).find((entry: any) => String(entry?.id || '').toLowerCase() === id) ||
+    null
+  )
+})
+
+watch(
+  () => entities.value,
+  () => {
+    if (!showContainerModal.value || !activeContainer.value) return
+    const updated = activeContainerEntity.value
+    if (updated && Array.isArray(updated.inventory)) {
+      activeContainer.value = {
+        ...activeContainer.value,
+        items: normalizeContainerItems(updated.inventory),
+      }
+    }
+  },
+  { deep: true },
+)
+
+const handleContainerSwitchStateSelect = (targetState: string): void => {
+  const entity = activeContainerEntity.value
+  if (!entity || isActionInputBlocked.value) return
+
+  const gates = getSwitchTransitionGates(entity, targetState)
+  if (gates.code || gates.item || gates.rule) {
+    switchUnlockModalEntity.value = entity
+    switchUnlockTargetState.value = targetState
+    switchUnlockError.value = ''
+    showSwitchUnlockModal.value = true
+    return
+  }
+
+  keepPromptOnTurn.value = 'container'
+  void sendMessage(`/switch "${entity.name}" ${targetState}`)
 }
 
 const openContainerFromEntity = (entity: any): boolean => {
@@ -1919,6 +1969,7 @@ usePlayAgentAutoLoop()
           :image-url="activeContainer?.imageUrl || null"
           :busy="containerBusy"
           :container-id="activeContainer?.id || ''"
+          :container-entity="activeContainerEntity"
           :inventory-items="inventoryItems"
           :can-put="!!activeContainer?.canPut"
           @close="closeContainerModal"
@@ -1926,6 +1977,7 @@ usePlayAgentAutoLoop()
           @take-item="handleContainerTakeItem"
           @drop-to-scene="handleContainerDropToScene"
           @put-items="handleContainerPutItems"
+          @select-switch-state="handleContainerSwitchStateSelect"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />

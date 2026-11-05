@@ -37,7 +37,10 @@ class ContainerGuardMixin:
 
     @staticmethod
     def _is_container_item(item: Any) -> bool:
-        return isinstance(item, dict) and str(item.get("item_type") or "").upper() == "CONTAINER"
+        return isinstance(item, dict) and str(item.get("item_type") or "").upper() in {
+            "CONTAINER",
+            "CONTAINER_SWITCH",
+        }
 
     def _is_container_locked(
         self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None
@@ -57,7 +60,10 @@ class ContainerGuardMixin:
         item_locked = inventory_container.get("locked") if inventory_container is not None else None
         if scene_container is None and isinstance(item_locked, bool):
             return item_locked
-        return any(_requirements(_metadata_of(container)))
+        meta = _metadata_of(container)
+        if isinstance(meta.get("locked"), bool):
+            return meta["locked"]
+        return any(_requirements(meta))
 
     @staticmethod
     def _extract_access_code(text: str) -> str | None:
@@ -73,7 +79,7 @@ class ContainerGuardMixin:
         conditions = [
             WorldEntity.session_id == self.game_id,
             WorldEntity.entity_type == "OBJECT",
-            WorldEntity.item_type == "CONTAINER",
+            WorldEntity.item_type.in_(["CONTAINER", "CONTAINER_SWITCH"]),
         ]
         if only_visible_here:
             conditions += [

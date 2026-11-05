@@ -262,7 +262,9 @@ const routeSceneSwitches = computed<any[]>(() => {
 })
 
 const routeSceneContainers = computed<any[]>(() => {
-  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'CONTAINER')
+  return routeSceneObjects.value.filter((obj: any) =>
+    ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(obj.item_type || '').toUpperCase()),
+  )
 })
 
 const routeSceneTextLogs = computed<any[]>(() => {
@@ -316,7 +318,7 @@ const filteredRouteSceneConstructables = computed(() => routeSceneConstructables
 /** Item types with their own group; everything else is listed under "Items". */
 function isSpecialItemType(itemType: string): boolean {
   const t = String(itemType || '').toUpperCase()
-  return t === 'SWITCH' || t === 'CONTAINER' || t === 'READABLE' || t === 'CONSTRUCTABLE'
+  return t === 'SWITCH' || t === 'CONTAINER' || t === 'CONTAINER_SWITCH' || t === 'READABLE' || t === 'CONSTRUCTABLE'
 }
 
 const availableItemsForType = computed<any[]>(() => {
@@ -340,7 +342,7 @@ const availableContainersForType = computed<any[]>(() => {
   const sId = String(props.sceneId || '').trim()
   return editorAllObjects.value.filter((obj: any) => {
     if (String(obj.current_scene_id || '') === sId) return false
-    return String(obj.item_type || '').toUpperCase() === 'CONTAINER'
+    return ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(obj.item_type || '').toUpperCase())
   })
 })
 
@@ -880,6 +882,10 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
               <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
               <div
+                v-if="obj.locked === true || obj.metadata_json?.locked === true"
+                class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100"
+              >LOCKED</div>
+              <div
                 v-if="hasScript(obj)"
                 class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
                 title="Contains custom event script(s)"
@@ -1048,6 +1054,10 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
               <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
+              <div
+                v-if="String(obj.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'"
+                class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/25 text-lime-100"
+              >SWITCH</div>
               <div
                 v-if="hasScript(obj)"
                 class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"

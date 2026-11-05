@@ -38,7 +38,7 @@ class WorldRulesMixin:
             select(WorldEntity).where(
                 WorldEntity.session_id == self.game_id,
                 WorldEntity.entity_type == "OBJECT",
-                WorldEntity.item_type == "SWITCH",
+                WorldEntity.item_type.in_(["SWITCH", "CONTAINER_SWITCH"]),
             )
         )
         flags: set[str] = set()
@@ -53,7 +53,11 @@ class WorldRulesMixin:
             )
         )
         switch = res.scalars().first()
-        return switch if switch and str(switch.item_type or "").upper() == "SWITCH" else None
+        return (
+            switch
+            if switch and str(switch.item_type or "").upper() in {"SWITCH", "CONTAINER_SWITCH"}
+            else None
+        )
 
     async def _transition_failure(
         self,

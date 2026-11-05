@@ -381,7 +381,7 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
     appearance: '',
     is_killable: true,
     item_type: itemType,
-    is_portable: String(itemType).toUpperCase() !== 'SWITCH',
+    is_portable: !['SWITCH', 'CONTAINER_SWITCH'].includes(String(itemType).toUpperCase()),
     locked: false,
     code_to_unlock: '',
     item_to_unlock: '',
@@ -824,13 +824,17 @@ const editorAllItems = computed<any[]>(() => {
 const itemsOfType = (type: string) => editorAllItems.value.filter((entity: any) => String(entity?.item_type || '').toUpperCase() === type)
 
 // Item types with their own section in the Items tab; everything else is a plain object.
-const SECTIONED_ITEM_TYPES = new Set(['READABLE', 'CONTAINER', 'SWITCH', 'CONSTRUCTABLE'])
+const SECTIONED_ITEM_TYPES = new Set(['READABLE', 'CONTAINER', 'CONTAINER_SWITCH', 'SWITCH', 'CONSTRUCTABLE'])
 
 const editorObjects = computed<any[]>(() =>
   editorAllItems.value.filter((entity: any) => !SECTIONED_ITEM_TYPES.has(String(entity?.item_type || '').toUpperCase())),
 )
 const editorSwitches = computed<any[]>(() => itemsOfType('SWITCH'))
-const editorContainers = computed<any[]>(() => itemsOfType('CONTAINER'))
+const editorContainers = computed<any[]>(() =>
+  editorAllItems.value.filter((entity: any) =>
+    ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(entity?.item_type || '').toUpperCase()),
+  ),
+)
 const editorTextLogs = computed<any[]>(() => itemsOfType('READABLE'))
 /** CONSTRUCTABLE meta items: never appear in the world and have no image. */
 const editorConstructables = computed<any[]>(() => itemsOfType('CONSTRUCTABLE'))
@@ -1243,7 +1247,7 @@ async function saveEntityText(data: any) {
           description: entityDescription,
           appearance: String(data.appearance || '').trim() || undefined,
           item_type: itemType,
-          is_portable: itemType !== 'SWITCH',
+          is_portable: !['SWITCH', 'CONTAINER_SWITCH'].includes(itemType) && data.is_portable !== false,
           inventory: data.inventory || [],
           wearable_slots: data.wearable_slots || undefined,
           combination_ingredients: data.combination_ingredients || undefined,
@@ -1263,24 +1267,50 @@ async function saveEntityText(data: any) {
           on_unequip_script: data.on_unequip_script || undefined,
           on_unequip_text: data.on_unequip_text || undefined,
         }
+        if (data.locked) {
+          createPayload.metadata_json = {
+            ...(createPayload.metadata_json || {}),
+            locked: true,
+          }
+        }
+        if (['CONTAINER', 'CONTAINER_SWITCH'].includes(itemType)) {
+          createPayload.metadata_json = {
+            ...(createPayload.metadata_json || {}),
+            locked: Boolean(data.locked || data.code_to_unlock || data.item_to_unlock || data.unlock_expression),
+            ...(data.code_to_unlock ? { code_to_unlock: String(data.code_to_unlock).trim() } : {}),
+            ...(data.item_to_unlock ? { item_to_unlock: String(data.item_to_unlock).trim().toUpperCase() } : {}),
+            ...(data.unlock_expression ? { unlock_expression: String(data.unlock_expression).trim() } : {}),
+            ...(data.on_unlock_success_script ? { on_unlock_success_script: String(data.on_unlock_success_script).trim() } : {}),
+            ...(data.on_unlock_success_text ? { on_unlock_success_text: String(data.on_unlock_success_text).trim() } : {}),
+            ...(data.on_unlock_failure_script ? { on_unlock_failure_script: String(data.on_unlock_failure_script).trim() } : {}),
+            ...(data.on_unlock_failure_text ? { on_unlock_failure_text: String(data.on_unlock_failure_text).trim() } : {}),
+            ...(data.on_items_added_script ? { on_items_added_script: String(data.on_items_added_script).trim() } : {}),
+            ...(data.on_items_added_text ? { on_items_added_text: String(data.on_items_added_text).trim() } : {}),
+          }
+        }
         if (itemType === 'READABLE') {
           createPayload.metadata_json = {
+            ...(createPayload.metadata_json || {}),
             text_log_content: String(data.text_log_content || '').trim(),
             text_log_format: String(data.text_log_format || 'DOCUMENT').toUpperCase(),
           }
         }
-        if (itemType === 'SWITCH') {
+        if (['SWITCH', 'CONTAINER_SWITCH'].includes(itemType)) {
           createPayload.metadata_json = {
             ...(createPayload.metadata_json || {}),
             switch_states: data.switch_states || [],
             switch_initial_state: data.switch_initial_state || '',
             switch_transitions: data.switch_transitions || [],
+            ...(data.on_success_script ? { on_success_script: String(data.on_success_script).trim() } : {}),
+            ...(data.on_failure_script ? { on_failure_script: String(data.on_failure_script).trim() } : {}),
             switch: {
               states: data.switch_states || [],
               state_labels: data.switch_state_labels || {},
               initial_state: data.switch_initial_state || '',
               transitions: data.switch_transitions || [],
-              outcomes: []
+              outcomes: [],
+              ...(data.on_success_script ? { on_success_script: String(data.on_success_script).trim() } : {}),
+              ...(data.on_failure_script ? { on_failure_script: String(data.on_failure_script).trim() } : {}),
             }
           }
         }
@@ -2074,7 +2104,9 @@ const routeSceneSwitches = computed<any[]>(() => {
 })
 
 const routeSceneContainers = computed<any[]>(() => {
-  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'CONTAINER')
+  return routeSceneObjects.value.filter((obj: any) =>
+    ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(obj.item_type || '').toUpperCase()),
+  )
 })
 
 const routeSceneTextLogs = computed<any[]>(() => {
@@ -2084,7 +2116,7 @@ const routeSceneTextLogs = computed<any[]>(() => {
 const routeSceneItems = computed<any[]>(() => {
   return routeSceneObjects.value.filter((obj: any) => {
     const itemType = String(obj.item_type || '').toUpperCase()
-    return itemType !== 'SWITCH' && itemType !== 'CONTAINER' && itemType !== 'READABLE'
+    return itemType !== 'SWITCH' && itemType !== 'CONTAINER' && itemType !== 'CONTAINER_SWITCH' && itemType !== 'READABLE'
   })
 })
 

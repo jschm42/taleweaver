@@ -635,9 +635,41 @@ class TurnInteractionsManager:
             item_type = str(getattr(entity, "item_type", "") or "").upper()
             metadata_json = getattr(entity, "metadata_json", None)
 
-        if item_type == "SWITCH":
+        if item_type in {"SWITCH", "CONTAINER_SWITCH"}:
             return True
         return isinstance(metadata_json, dict) and isinstance(metadata_json.get("switch"), dict)
+
+    def _is_item_take_locked(self, item_or_ent: Any) -> bool:
+        if not item_or_ent:
+            return False
+        if isinstance(item_or_ent, dict):
+            item_id = str(item_or_ent.get("id") or "").strip()
+            item_type = str(item_or_ent.get("item_type") or "").upper()
+            meta = dict(item_or_ent.get("metadata_json") or {})
+            direct_locked = item_or_ent.get("locked")
+        else:
+            item_id = str(getattr(item_or_ent, "id", "") or "").strip()
+            item_type = str(getattr(item_or_ent, "item_type", "") or "").upper()
+            meta = dict(getattr(item_or_ent, "metadata_json", None) or {})
+            direct_locked = None
+
+        if item_type in {"CONTAINER", "CONTAINER_SWITCH", "SWITCH"}:
+            return False
+
+        states = self.state.entity_states if isinstance(self.state.entity_states, dict) else {}
+        if item_id:
+            override = states.get(item_id)
+            if override is None:
+                for key, val in states.items():
+                    if str(key).upper() == item_id.upper():
+                        override = val
+                        break
+            if isinstance(override, dict) and isinstance(override.get("locked"), bool):
+                return override["locked"]
+
+        if isinstance(direct_locked, bool):
+            return direct_locked
+        return bool(meta.get("locked") is True)
 
     @staticmethod
     def _switch_config(entity: WorldEntity) -> dict[str, Any]:
@@ -793,7 +825,7 @@ class TurnInteractionsManager:
                     if ex and ex.is_locked:
                         ex.is_locked = False
                         messages.append(f"Exit unlocked: {ex.label or ex.id}.")
-                elif effect_type == "unlock_container":
+                elif effect_type in {"unlock_container", "unlock_item"}:
                     target_id = str(effect.get("target_id") or "").strip()
                     if not target_id:
                         continue
@@ -803,7 +835,19 @@ class TurnInteractionsManager:
                     states[target_id] = entry
                     self.state.entity_states = states
                     flag_modified(self.state, "entity_states")
-                    messages.append(f"Container unlocked: {target_id}.")
+                    label = "Container" if effect_type == "unlock_container" else "Item"
+                    messages.append(f"{label} unlocked: {target_id}.")
+                elif effect_type == "lock_item":
+                    target_id = str(effect.get("target_id") or "").strip()
+                    if not target_id:
+                        continue
+                    states = dict(self.state.entity_states or {})
+                    entry = dict(states.get(target_id) or {})
+                    entry["locked"] = True
+                    states[target_id] = entry
+                    self.state.entity_states = states
+                    flag_modified(self.state, "entity_states")
+                    messages.append(f"Item locked: {target_id}.")
         return messages
 
     async def _execute_switch_command(self, switch_args: str) -> str:
@@ -970,6 +1014,8 @@ class TurnInteractionsManager:
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 response = f"{ent.name} is already in your inventory."
+            elif ent and self._is_item_take_locked(ent):
+                response = f"{ent.name} is locked and cannot be taken right now."
             elif ent and ent.is_portable:
                 # Move to inventory
                 new_inv = list(self.avatar.inventory or [])
@@ -1156,15 +1202,29 @@ class TurnInteractionsManager:
                         if not normalized_items:
                             response = f"{container_name} is empty."
                         else:
-                            new_inventory = list(self.avatar.inventory or [])
-                            for item in normalized_items:
-                                new_inventory.append(item)
-                                await self._move_container_item_to_inventory(item)
-                            self.avatar.inventory = new_inventory
-                            await self._clear_container_inventory(
-                                scene_container, inventory_container, inventory_idx
-                            )
-                            response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+                            unlocked_items = [
+                                item
+                                for item in normalized_items
+                                if not self._is_item_take_locked(item)
+                            ]
+                            locked_items = [
+                                item for item in normalized_items if self._is_item_take_locked(item)
+                            ]
+                            if not unlocked_items:
+                                response = f"All items in {container_name} are locked."
+                            else:
+                                new_inventory = list(self.avatar.inventory or [])
+                                for item in unlocked_items:
+                                    new_inventory.append(item)
+                                    await self._move_container_item_to_inventory(item)
+                                self.avatar.inventory = new_inventory
+                                await self._set_container_inventory(
+                                    scene_container,
+                                    inventory_container,
+                                    inventory_idx,
+                                    locked_items,
+                                )
+                                response = f"You take {len(unlocked_items)} item(s) from {container_name}."
 
         if response.startswith("[TRIGGER_SAVE]"):
             # Written by process_turn before the final event, with a system message.
@@ -1219,14 +1279,28 @@ class TurnInteractionsManager:
                         if not normalized_items:
                             response = f"{container_name} is empty."
                         else:
-                            for item in normalized_items:
-                                moved = await self._move_container_item_to_scene(item)
-                                if not moved:
-                                    await self._spawn_scene_item(item)
-                            await self._clear_container_inventory(
-                                scene_container, inventory_container, inventory_idx
-                            )
-                            response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
+                            unlocked_items = [
+                                item
+                                for item in normalized_items
+                                if not self._is_item_take_locked(item)
+                            ]
+                            locked_items = [
+                                item for item in normalized_items if self._is_item_take_locked(item)
+                            ]
+                            if not unlocked_items:
+                                response = f"All items in {container_name} are locked."
+                            else:
+                                for item in unlocked_items:
+                                    moved = await self._move_container_item_to_scene(item)
+                                    if not moved:
+                                        await self._spawn_scene_item(item)
+                                await self._set_container_inventory(
+                                    scene_container,
+                                    inventory_container,
+                                    inventory_idx,
+                                    locked_items,
+                                )
+                                response = f"You drop {len(unlocked_items)} item(s) from {container_name} into the scene."
 
         if response.startswith("[TRIGGER_EQUIP]"):
             parts = response.replace("[TRIGGER_EQUIP]", "").strip().split("|", 1)
@@ -1372,7 +1446,10 @@ class TurnInteractionsManager:
             )
         )
         scene_ent = ent_res.scalars().first()
-        if scene_ent and str(scene_ent.item_type or "").upper() == "CONTAINER":
+        if scene_ent and str(scene_ent.item_type or "").upper() in {
+            "CONTAINER",
+            "CONTAINER_SWITCH",
+        }:
             return scene_ent, None, None
 
         for idx, inv_item in enumerate(self.avatar.inventory or []):
@@ -1540,6 +1617,8 @@ class TurnInteractionsManager:
                 break
         if match_idx is None or match_item is None:
             return f"{container_name} does not contain '{item_hint}'."
+        if self._is_item_take_locked(match_item):
+            return f"{match_item.get('name') or item_hint} is locked and cannot be taken right now."
 
         await self._move_container_item_to_inventory(match_item)
         self.avatar.inventory = [*(self.avatar.inventory or []), match_item]

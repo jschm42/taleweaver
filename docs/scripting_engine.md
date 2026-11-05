@@ -146,10 +146,13 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **Wearables & Weapons** | `on_equip_script`, `on_equip_text` | Executes when the player equips a WEAPON or WEARABLE. |
 | | `on_unequip_script`, `on_unequip_text` | Executes when the player unequips a WEAPON or WEARABLE. |
 | **Readable Items** | `on_read_script`, `on_read_text` | Executes when the player inspects or reads this item. |
-| **Container Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
+| **Container & Container-Switch Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
 | | `on_items_added_script`, `..._text` | Executes once after the player put one or more items into this container (container panel → **Put In**, or `/container_put_items`). `added_items` (list of dicts) and `added_item_ids` (list of IDs) are in scope. |
+| **Switches & Container-Switches** | `gates.expression` *(Guard)* | Deterministic Python boolean condition required for a specific transition. |
+| | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
+| | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
 | **Constructable Recipes** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
 | | `on_craft_success_script`, `..._text` | Executes when this recipe is successfully crafted (its `result_item_ids` are revealed). The script runs with the recipe as its entity. The text replaces the default craft message. |
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
@@ -165,9 +168,6 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when unlocking. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this exit is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this exit fails or is blocked by guard. |
-| **Switches** | `gates.expression` *(Guard)* | Deterministic Python boolean condition required for a specific transition. |
-| | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
-| | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
 | **NPC combat** *(metadata)* | `attack_mode: ATTACK_ON_SIGHT` | The NPC starts turn-based combat as soon as the protagonist enters its scene. |
 | | `combat_group`, `assist_mode` (`GROUP` / `ANYONE` / `NEVER`) | Not a trigger: decide which NPCs in the scene join a fight they were not attacked in. NPCs sharing a `combat_group` fight together; NPCs without one are bystanders by default. See [Combat groups](world-builder-syntax.md#npc-id-name). |
 | | `attack_trigger` *(Hard Rules + Guard)* | `required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`: the NPC attacks once when all are met while the protagonist shares its scene. |
@@ -489,16 +489,17 @@ Manages world objects and inventory items. Every world item is held by exactly *
 - `tw.objects.contents(holder_id: str) -> list[ObjectProxy]`: The items held by `"player"`, an NPC or a container.
 - `tw.objects.location(item_id: str) -> dict`: Where an item is: `{"type": "player"|"npc"|"container"|"scene"|"destroyed"|"unknown", "id": "<holder or scene ID>"}`.
 
-**Creating, destroying and hiding items**
+**Creating, destroying, hiding, and locking items**
 - `tw.objects.clone(item_id: str, scene_id: str = None, hidden: bool = None) -> ObjectProxy | None`: Creates a copy of the item with a new ID (`<ID>_1`, `<ID>_2`, ...; cloning a clone counts on from the original). The copy has the original's name, description, image, type, effects and scripts. Without `scene_id` it lies where the original lies when that is a scene, otherwise in the protagonist's scene; `"current"` puts it in the protagonist's scene. It keeps the original's hidden flag unless `hidden` is given. A cloned container starts empty. At most 20 clones per script run; returns `None` for an unknown ID. The copy is a new entity of the current game only (the adventure template is not changed) and is usable right away in the same script.
 - `tw.objects.destroy(item_id: str) -> bool`: Removes the item from the game for good: it leaves its holder and is moved to the internal scene `__DESTROYED__`.
 - `tw.objects.hide(item_id: str)` / `tw.objects.reveal(item_id: str)`: Hides an item until revealed again, or reveals it. A hidden item can also be discovered by searching or by its reveal condition, unless its reveal rule is `script`.
+- `tw.objects.lock(item_id: str) -> bool` / `tw.objects.unlock(item_id: str) -> bool` / `tw.objects.is_locked(item_id: str) -> bool`: Locks or unlocks an item or container, or checks whether it is currently locked. For `CONTAINER` and `CONTAINER_SWITCH` entities, locking prevents opening the container until unlocked. For all other item types, locking makes the item **take-locked**: it remains visible and inspectable in the scene or inside an open container (marked with a lock icon), but the player cannot pick it up until unlocked via `tw.objects.unlock(item_id)` or a switch outcome (`unlock_item`). Moving an item directly into the player's inventory via script (`tw.player.take_item(item_id)` or `tw.objects.add_to_player(item_id)`) automatically unlocks it.
 
 **`ObjectProxy`** (`tw.objects.get(item_id)`):
-- `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.location`
+- `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.lock()`, `.unlock()`, `.is_locked`, `.location`
 - `.move_to(target)`, `.give_to_player()`, `.put_into(container_id)`, `.move_to_scene(scene_id)`, `.give_to_npc(npc_id)`
-- For containers: `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
-- For switch items: `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+- For containers (`CONTAINER` and `CONTAINER_SWITCH`): `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
+- For switch items (`SWITCH` and `CONTAINER_SWITCH`): `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
 
 ```python
 # Potion dispenser: copy a hidden template potion and hand the copy over

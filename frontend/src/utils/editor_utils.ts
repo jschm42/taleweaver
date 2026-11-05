@@ -72,6 +72,7 @@ export function itemTypePrefix(itemType: string): string {
     CONSTRUCTABLE: 'CONSTRUCTABLE_',
     READABLE: 'ITEM_',
     CONTAINER: 'CON_',
+    CONTAINER_SWITCH: 'CSW_',
     SWITCH: 'SW_',
   }
   return map[String(itemType || 'DEFAULT').toUpperCase()] || 'ITEM_'

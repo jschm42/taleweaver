@@ -534,3 +534,38 @@ def test_world_custom_and_catalog_image_style_and_tone():
     assert manifest_hint["selected_image_styles"][0]["id"] == "pixelart"
     assert "pixel" in manifest_hint["selected_image_styles"][0]["instruction"].lower()
     assert manifest_hint["selected_tone"]["id"] == "sci-fi"
+
+
+def test_container_switch_and_take_locked_items_parse_correctly():
+    # Arrange
+    text = (
+        "[Scene: BREAK_ROOM] Break Room\n"
+        "[ContainerSwitch: DISPENSER] Beverage Dispenser\n"
+        "in: BREAK_ROOM\n"
+        "contains: SODA_CAN\n"
+        "states: OFF=Idle, ON=Dispensing\n"
+        "initial: OFF\n"
+        "outcome: ON -> unlock_item: SODA_CAN\n"
+        "\n"
+        "[Item: SODA_CAN] Cold Soda\n"
+        "type: CONSUMABLE\n"
+        "locked: yes\n"
+    )
+
+    # Act
+    blueprint, missing = analyze_blueprint(text)
+
+    # Assert
+    assert blueprint.errors == []
+    assert missing == []
+    dispenser, soda = blueprint.of_kind("item")
+    assert dispenser.fixed()["item_type"] == "CONTAINER_SWITCH"
+    assert dispenser.fixed()["inventory"] == ["SODA_CAN"]
+    assert dispenser.fixed()["switch_states"] == ["OFF", "ON"]
+    assert dispenser.fixed()["switch_state_labels"] == {"OFF": "Idle", "ON": "Dispensing"}
+    assert dispenser.fixed()["switch_outcomes"][0]["effects"][0] == {
+        "type": "unlock_item",
+        "target_id": "SODA_CAN",
+        "key": "",
+    }
+    assert soda.fixed()["locked"] is True

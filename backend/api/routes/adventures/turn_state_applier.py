@@ -745,7 +745,8 @@ class TurnStateApplier:
                         if ent_obj:
                             metadata_json = dict(ent_obj.metadata_json or {})
                             was_locked = bool(
-                                metadata_json.get("code_to_unlock")
+                                metadata_json.get("locked")
+                                or metadata_json.get("code_to_unlock")
                                 or metadata_json.get("item_to_unlock")
                                 or metadata_json.get("rule_to_unlock")
                             )
@@ -763,7 +764,8 @@ class TurnStateApplier:
                         if (
                             ent_obj
                             and ent_obj.entity_type == "OBJECT"
-                            and str(ent_obj.item_type or "").upper() == "CONTAINER"
+                            and str(ent_obj.item_type or "").upper()
+                            in {"CONTAINER", "CONTAINER_SWITCH"}
                         ):
                             metadata_json = dict(ent_obj.metadata_json or {})
                             code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()

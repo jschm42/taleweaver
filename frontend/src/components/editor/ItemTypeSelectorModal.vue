@@ -118,6 +118,14 @@ const itemTypes: ItemTypeOption[] = [
     borderColor: 'border-amber-500/20',
   },
   {
+    type: 'CONTAINER_SWITCH',
+    label: 'Container-Switch',
+    description: 'A combined container and multi-state switch (e.g. microwave, beverage dispenser, fuse box).',
+    icon: 'ra-lever',
+    color: 'text-amber-300',
+    borderColor: 'border-amber-500/30',
+  },
+  {
     type: 'SWITCH',
     label: 'Switch',
     description: 'A lever, button, or mechanism that toggles world state.',

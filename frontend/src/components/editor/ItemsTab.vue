@@ -48,10 +48,35 @@ const emit = defineEmits<{
 }>()
 
 const isContainerLocked = (obj: any): boolean => {
-  if (String(obj?.item_type || '').toUpperCase() !== 'CONTAINER') return false
+  if (!['CONTAINER', 'CONTAINER_SWITCH'].includes(String(obj?.item_type || '').toUpperCase())) return false
   if (typeof obj?.locked === 'boolean') return obj.locked
   const metadata = (obj?.metadata_json && typeof obj.metadata_json === 'object') ? obj.metadata_json : {}
   return Boolean(metadata.code_to_unlock || metadata.item_to_unlock)
+}
+
+const isItemLocked = (obj: any): boolean => {
+  if (['CONTAINER', 'CONTAINER_SWITCH', 'SWITCH', 'CONSTRUCTABLE'].includes(String(obj?.item_type || '').toUpperCase())) {
+    return false
+  }
+  return Boolean(obj?.locked === true || obj?.metadata_json?.locked === true)
+}
+
+const containerBadges = (obj: any) => {
+  const badges: Array<{ label: string; class: string }> = []
+  if (String(obj?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH') {
+    badges.push(...SWITCH_BADGE)
+  }
+  if (isContainerLocked(obj)) {
+    badges.push(...LOCKED_BADGE)
+  }
+  return badges
+}
+
+const objectBadges = (obj: any) => {
+  const badges: Array<{ label: string; class: string }> = []
+  if (obj.is_hidden) badges.push(...HIDDEN_BADGE)
+  if (isItemLocked(obj)) badges.push(...LOCKED_BADGE)
+  return badges
 }
 
 function buildVisualImageUrl(imagePath?: string | null) {
@@ -265,7 +290,7 @@ const activeFilterLabel = computed(() => {
             :key="'con_' + obj.id"
             v-bind="tileProps(obj)"
             accent-class="border-amber-500/20"
-            :badges="isContainerLocked(obj) ? LOCKED_BADGE : []"
+            :badges="containerBadges(obj)"
             image-actions
             movable
             v-on="tileListeners"
@@ -323,7 +348,7 @@ const activeFilterLabel = computed(() => {
             :key="'obj_' + obj.id"
             v-bind="tileProps(obj)"
             accent-class="border-white/5"
-            :badges="obj.is_hidden ? HIDDEN_BADGE : []"
+            :badges="objectBadges(obj)"
             :show-stats-dot="ruleEnforcementMode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0"
             image-actions
             movable

@@ -335,7 +335,7 @@ const itemReferenceOptions = computed(() => {
     .filter((option) => {
       if (String(option.type || '').toUpperCase() !== 'OBJECT') return false
       const itemType = String((option as any).itemType || '').toUpperCase()
-      if (itemType === 'CONTAINER') return false
+      if (itemType === 'CONTAINER' || itemType === 'CONTAINER_SWITCH') return false
       if (itemType === 'SWITCH') return false
       return true
     })
@@ -455,7 +455,7 @@ const isFormInvalid = computed(() => {
   const resultsCount = (localForm.value.result_item_ids_input || []).filter(Boolean).length
   const combinationInvalid = currentItemType.value === 'CONSTRUCTABLE' && (ingredientsCount < 2 || resultsCount < 1)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
-  const switchInvalid = currentItemType.value === 'SWITCH' && (
+  const switchInvalid = ['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType.value) && (
     switchStates.value.length < 2 ||
     uniqueStates.size !== switchStates.value.length ||
     switchStates.value.some(s => !s.trim()) ||
@@ -586,7 +586,7 @@ watch(() => localForm.value.entity_id, (newVal) => {
 
 watch(() => localForm.value.item_type, (newType) => {
   const type = String(newType || '').toUpperCase()
-  if (type === 'SWITCH') {
+  if (type === 'SWITCH' || type === 'CONTAINER_SWITCH') {
     localForm.value.is_portable = false
     if (switchStates.value.length === 0) {
       switchStates.value = ['OFF', 'ON']
@@ -648,7 +648,7 @@ function handleSave() {
       ? localForm.value.wearable_slots_input
       : []
 
-    if (currentItemType.value === 'SWITCH') {
+    if (['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType.value)) {
       parsedSwitchStates = switchStates.value
         .map(s => s.trim().toUpperCase())
         .filter(Boolean)
@@ -1284,6 +1284,7 @@ const textLogPreviewClass = computed(() => {
                       <option value="CONSTRUCTABLE">CONSTRUCTABLE</option>
                       <option value="READABLE">READABLE</option>
                       <option value="CONTAINER">CONTAINER</option>
+                      <option value="CONTAINER_SWITCH">CONTAINER_SWITCH</option>
                       <option value="SWITCH">SWITCH</option>
                     </select>
                     <input
@@ -1314,6 +1315,27 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
 
+
+                <!-- Locked (Cannot Be Taken) for regular items -->
+                <div v-if="!['CONTAINER', 'CONTAINER_SWITCH', 'SWITCH', 'CONSTRUCTABLE'].includes(currentItemType)" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1 pr-4">
+                      <p class="text-xs font-black text-slate-200 uppercase tracking-widest flex items-center gap-1.5">
+                        <Lock class="w-3.5 h-3.5 text-amber-400" /> Locked (Cannot Be Taken)
+                      </p>
+                      <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                        If enabled, this item is visible and inspectable (in the scene or inside a container) but cannot be picked up until unlocked by a script (<code class="text-amber-400">tw.objects.unlock('ID')</code>).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.locked = !localForm.locked"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1 shrink-0', localForm.locked ? 'bg-amber-600' : 'bg-slate-700']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-6' : 'translate-x-0']"></div>
+                    </button>
+                  </div>
+                </div>
 
                 <!-- Hidden state & Reveal rule for Objects -->
                 <div v-if="currentItemType !== 'CONSTRUCTABLE'" class="space-y-4 border-t border-white/5 pt-4">
@@ -1572,7 +1594,7 @@ const textLogPreviewClass = computed(() => {
 
 
                 <!-- SWITCH: Visual Configurator -->
-                <div v-if="currentItemType === 'SWITCH'" class="space-y-6">
+                <div v-if="['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-6">
                   <!-- Section Header -->
                   <div class="flex items-center gap-2 pb-2 border-b border-white/5">
                     <ToggleLeft class="w-4 h-4 text-lime-400" />
@@ -1886,7 +1908,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <!-- CONTAINER -->
-                <div v-if="currentItemType === 'CONTAINER'" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="p-3 bg-black/20 border border-white/10 rounded-xl">
                   <div class="flex items-center justify-between">
                     <div class="space-y-1 pr-4">
                       <p class="text-xs font-black text-slate-200 uppercase tracking-widest">Locked State</p>
@@ -1902,7 +1924,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <div v-if="currentItemType === 'CONTAINER'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Code To Unlock</label>
                     <input
@@ -1923,7 +1945,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <div v-if="currentItemType === 'CONTAINER'" class="space-y-3">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-3">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items</label>
                   <div class="space-y-2">
                     <div
@@ -1957,7 +1979,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <!-- CONTAINER Panels: Deterministic Guard & Unlocking Transition Rules -->
-                <div v-if="currentItemType === 'CONTAINER'" class="space-y-4 pt-2">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-4 pt-2">
                   <!-- Collapsible Panel 1: Deterministic Guard (Default Collapsed) -->
                   <div class="border border-white/10 rounded-xl overflow-hidden bg-black/30">
                     <button
@@ -2194,7 +2216,7 @@ const textLogPreviewClass = computed(() => {
 
               <div v-if="context.type === 'object'" class="space-y-6">
                 <!-- SWITCH Triggers in Advanced Tab -->
-                <div v-if="currentItemType === 'SWITCH'" class="space-y-4">
+                <div v-if="['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-4">
                   <div class="p-4 bg-lime-500/10 border border-lime-500/20 rounded-2xl space-y-1">
                     <div class="flex items-center gap-2 text-lime-400 font-bold text-xs uppercase tracking-wider">
                       <Sparkles class="w-4 h-4" /> Global Switch Script Triggers

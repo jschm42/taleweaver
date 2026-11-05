@@ -139,47 +139,56 @@ class SwitchProxy:
         """Toggles the switch between its states. Returns the new state."""
         return self.flip(apply_outcomes=apply_outcomes)
 
+    def _apply_item_lock_effect(self, target_id: str, locked: bool) -> None:
+        if not target_id:
+            return
+        if self._context:
+            obj = self._context.objects.get(target_id)
+            obj.lock() if locked else obj.unlock()
+            return
+        self._changeset.entity_updates.append({"entity_id": target_id, "locked": locked})
+
     def _apply_outcome_effect(self, eff: dict[str, Any]) -> None:
-        eff_type = str(eff.get("type") or "").strip().lower()
+        eff_type = str(eff.get("type") or eff.get("effect_type") or "").strip().lower()
+        target_id = str(eff.get("target_id") or "").strip()
         if eff_type == "story_flag":
-            key = str(eff.get("key") or "").strip()
+            key = str(eff.get("key") or eff.get("flag_key") or "").strip()
             if key:
                 self._changeset.var_updates[f"__flag_{key}"] = True
                 self._changeset.var_updates[key] = True
                 self._changeset.story_flag_updates[key] = True
-            return
+        elif eff_type == "unlock_exit" and self._context and target_id:
+            self._context.exits.unlock(target_id)
+        elif eff_type in {"unlock_container", "unlock_item"}:
+            self._apply_item_lock_effect(target_id, locked=False)
+        elif eff_type == "lock_item":
+            self._apply_item_lock_effect(target_id, locked=True)
 
-        if eff_type == "unlock_exit" and self._context:
-            target_id = str(eff.get("target_id") or "").strip()
-            if target_id:
-                self._context.exits.unlock(target_id)
-            return
-
-        if eff_type == "unlock_container" and self._context:
-            target_id = str(eff.get("target_id") or "").strip()
-            if target_id:
-                self._context.objects.get(target_id).unlock()
-
-    def _apply_configured_outcomes(self, on_state: str) -> None:
-        """Applies configured outcomes for on_state directly to the ScriptChangeset."""
-        from backend.engine.interaction.switch_service import SwitchService
-
-        cfg = SwitchService.resolve_switch_config(self._data)
-        outcomes = cfg.get("outcomes")
+    @staticmethod
+    def _collect_state_outcome_effects(outcomes: Any, on_state: str) -> list[dict[str, Any]]:
+        if isinstance(outcomes, dict):
+            raw = outcomes.get(on_state) or outcomes.get(on_state.lower())
+            return [e for e in raw if isinstance(e, dict)] if isinstance(raw, list) else []
         if not isinstance(outcomes, list):
-            return
-
+            return []
+        collected: list[dict[str, Any]] = []
         for outcome in outcomes:
             if not isinstance(outcome, dict):
                 continue
             if str(outcome.get("on_state") or "").strip().upper() != on_state:
                 continue
             effects = outcome.get("effects")
-            if not isinstance(effects, list):
-                continue
-            for eff in effects:
-                if isinstance(eff, dict):
-                    self._apply_outcome_effect(eff)
+            if isinstance(effects, list):
+                collected.extend(e for e in effects if isinstance(e, dict))
+        return collected
+
+    def _apply_configured_outcomes(self, on_state: str) -> None:
+        """Applies configured outcomes for on_state directly to the ScriptChangeset."""
+        from backend.engine.interaction.switch_service import SwitchService
+
+        cfg = SwitchService.resolve_switch_config(self._data)
+        for eff in self._collect_state_outcome_effects(cfg.get("outcomes"), on_state):
+            self._apply_outcome_effect(eff)
 
 
 class SwitchesProxy:
@@ -258,7 +267,9 @@ class SwitchesProxy:
         result = []
         for eid, data in self._entities.items():
             item_type = str(data.get("item_type") or "").strip().upper()
-            if item_type == "SWITCH" or bool(SwitchService.resolve_switch_config(data)):
+            if item_type in {"SWITCH", "CONTAINER_SWITCH"} or bool(
+                SwitchService.resolve_switch_config(data)
+            ):
                 result.append(self.get(eid))
         return result
 

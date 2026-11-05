@@ -594,7 +594,10 @@ class GameTurnManager:
         for ent in all_entities:
             if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
                 continue
-            if str(getattr(ent, "item_type", "") or "").upper() != "CONTAINER":
+            if str(getattr(ent, "item_type", "") or "").upper() not in {
+                "CONTAINER",
+                "CONTAINER_SWITCH",
+            }:
                 continue
 
             # Honour session-state override for locked flag

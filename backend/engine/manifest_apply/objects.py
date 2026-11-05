@@ -143,12 +143,14 @@ def _container_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
         obj.get("code_to_unlock"), obj.get("item_to_unlock"), obj.get("rule_to_unlock")
     )
     expression = obj.get("unlock_expression") or metadata.get("unlock_expression") or None
+    explicit_locked = obj.get("locked") if obj.get("locked") is not None else metadata.get("locked")
+    has_gates = bool(code or item or rule or expression)
     metadata.update(
         code_to_unlock=code,
         item_to_unlock=item,
         rule_to_unlock=rule,
         unlock_expression=expression,
-        locked=bool(code or item or rule or expression),
+        locked=bool(explicit_locked) if isinstance(explicit_locked, bool) else has_gates,
     )
     _merge_fields(obj, metadata, _CONTAINER_SCRIPT_FIELDS)
 
@@ -199,12 +201,23 @@ def _switch_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
     )
 
 
+def _container_switch_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
+    _container_metadata(obj, metadata)
+    _switch_metadata(obj, metadata)
+    metadata["discovery_visibility"] = {
+        "mentioned_in_scene": True,
+        "listed_in_discoveries": True,
+        "lootable": False,
+    }
+
+
 _TYPE_METADATA: dict[str, Callable[[dict[str, Any], dict[str, Any]], None]] = {
     "WEAPON": _weapon_metadata,
     "READABLE": _readable_metadata,
     "CONTAINER": _container_metadata,
     "CONSTRUCTABLE": _constructable_metadata,
     "SWITCH": _switch_metadata,
+    "CONTAINER_SWITCH": _container_switch_metadata,
 }
 
 
@@ -214,9 +227,13 @@ def object_metadata(obj: dict[str, Any], numbers: dict[str, Optional[int]]) -> d
     for key in EFFECT_KEYS:
         if numbers[key] is not None:
             metadata[key] = numbers[key]
-    handler = _TYPE_METADATA.get(str(obj.get("item_type") or "").upper())
+    item_type = str(obj.get("item_type") or "").upper()
+    handler = _TYPE_METADATA.get(item_type)
     if handler:
         handler(obj, metadata)
+    elif obj.get("locked") is not None or metadata.get("locked") is not None:
+        raw_locked = obj.get("locked") if obj.get("locked") is not None else metadata.get("locked")
+        metadata["locked"] = bool(raw_locked)
     return metadata
 
 
@@ -320,7 +337,7 @@ def recipe_result_ids(objects: list[dict[str, Any]]) -> set[str]:
     return results
 
 
-_FIXED_ITEM_TYPES = {"STATIC", "SWITCH"}
+_FIXED_ITEM_TYPES = {"STATIC", "SWITCH", "CONTAINER_SWITCH"}
 
 
 def is_portable_default(obj: dict[str, Any]) -> bool:

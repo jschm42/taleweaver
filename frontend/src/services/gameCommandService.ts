@@ -25,9 +25,17 @@ const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
 /** Context menu action that opens the Give dialog for an NPC (handled in GameView). */
 export const GIVE_TO_PREFIX = '[GIVE_TO] '
 
-const isContainerEntity = (entity: any): boolean => {
+export const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
-  return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+  return ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(entity.item_type || '').toUpperCase())
+}
+
+export const isItemTakeLocked = (entity: any): boolean => {
+  if (!entity || isContainerEntity(entity)) return false
+  const itemType = String(entity.item_type || '').toUpperCase()
+  if (itemType === 'SWITCH' || itemType === 'CONSTRUCTABLE') return false
+  if (typeof entity.locked === 'boolean') return entity.locked
+  return Boolean(entity.metadata_json?.locked === true)
 }
 
 const isReadableEntity = (entity: any): boolean => {
@@ -153,7 +161,13 @@ export const gameCommandService = {
   },
 
   shouldAutoTakeOnEntityClick(entity: any): boolean {
-    return entity?.entity_type === 'OBJECT' && entity?.is_portable !== false && !isContainerEntity(entity) && !isSwitchEntity(entity)
+    return (
+      entity?.entity_type === 'OBJECT' &&
+      entity?.is_portable !== false &&
+      !isContainerEntity(entity) &&
+      !isSwitchEntity(entity) &&
+      !isItemTakeLocked(entity)
+    )
   },
 
   buildContextMenu(entity: any, _ruleMode?: string): ContextMenuModel | null {
@@ -181,7 +195,7 @@ export const gameCommandService = {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
 
       // Portable switches (e.g. a remote) can be carried and still be flipped from the inventory.
-      if (isPortableEntity(entity)) {
+      if (isPortableEntity(entity) && !isContainerEntity(entity) && !isItemTakeLocked(entity)) {
         items.push({ label: 'Take', action: `/take ${entity.name}` })
       }
 

@@ -783,16 +783,24 @@ class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
         """Returns True if this entity is configured as a switch."""
         from backend.engine.interaction.switch_service import SwitchService
 
-        return str(self._data.get("item_type") or "").strip().upper() == "SWITCH" or bool(
-            SwitchService.resolve_switch_config(self._data)
-        )
+        return str(self._data.get("item_type") or "").strip().upper() in {
+            "SWITCH",
+            "CONTAINER_SWITCH",
+        } or bool(SwitchService.resolve_switch_config(self._data))
 
     @property
     def is_locked(self) -> bool:
         for upd in reversed(self._changeset.entity_updates):
             if upd.get("entity_id") == self._id and "locked" in upd:
                 return bool(upd["locked"])
-        return bool(self._data.get("locked", False) or self._data.get("is_locked", False))
+        if isinstance(self._data.get("locked"), bool):
+            return self._data["locked"]
+        if isinstance(self._data.get("is_locked"), bool):
+            return self._data["is_locked"]
+        meta = self._data.get("metadata_json")
+        if isinstance(meta, dict) and isinstance(meta.get("locked"), bool):
+            return meta["locked"]
+        return False
 
     def unlock(self) -> None:
         self._changeset.entity_updates.append({"entity_id": self._id, "locked": False})

@@ -203,7 +203,7 @@ def _extract_item_script_metadata(metadata: dict[str, Any], filtered: dict[str, 
 def _extract_item_switch_metadata(
     metadata: dict[str, Any], filtered: dict[str, Any], item_type: str
 ) -> None:
-    if item_type == "SWITCH":
+    if item_type in {"SWITCH", "CONTAINER_SWITCH"}:
         switch_config = metadata.pop("switch", {})
         if not isinstance(switch_config, dict):
             switch_config = {}
@@ -252,13 +252,17 @@ def _export_container_metadata(
     filtered: dict[str, Any], metadata: dict[str, Any], is_container: bool
 ) -> None:
     """Lifts a container's lock fields to the top level; other items drop container keys."""
-    metadata.pop("locked", None)
+    raw_locked = metadata.pop("locked", None)
     if is_container:
         for lock_key in ("code_to_unlock", "item_to_unlock", "rule_to_unlock"):
             filtered[lock_key] = metadata.pop(lock_key, "")
+        if raw_locked is True:
+            filtered["locked"] = True
         return
     for container_key in _CONTAINER_ONLY_KEYS:
         metadata.pop(container_key, None)
+    if raw_locked is True:
+        metadata["locked"] = True
 
 
 def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
@@ -286,7 +290,7 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         metadata.pop("on_read_script", None)
         metadata.pop("on_read_text", None)
 
-    _export_container_metadata(filtered, metadata, item_type == "CONTAINER")
+    _export_container_metadata(filtered, metadata, item_type in {"CONTAINER", "CONTAINER_SWITCH"})
 
     if item_type == "CONSTRUCTABLE":
         for recipe_key in ("result_item_ids", "kept_ingredients"):

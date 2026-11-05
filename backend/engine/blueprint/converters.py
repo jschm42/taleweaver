@@ -293,11 +293,16 @@ def switch_transition(raw: str) -> dict[str, Any]:
     return transition
 
 
-_EFFECT_TYPES = {"flag": "story_flag", "unlock_container": "unlock_container"}
+_EFFECT_TYPES = {
+    "flag": "story_flag",
+    "unlock_container": "unlock_container",
+    "unlock_item": "unlock_item",
+    "lock_item": "lock_item",
+}
 
 
 def switch_outcome(raw: str) -> dict[str, Any]:
-    """``ON -> flag: POWER_ON; unlock_container: FUSE_BOX``."""
+    """``ON -> flag: POWER_ON; unlock_container: FUSE_BOX; unlock_item: SODA_CAN``."""
     state, arrow, rest = raw.partition("->")
     if not arrow or not state.strip():
         raise ValueError(f"expected 'STATE -> flag: KEY', got '{raw.strip()}'")
@@ -307,8 +312,8 @@ def switch_outcome(raw: str) -> dict[str, Any]:
         effect_type = _EFFECT_TYPES.get(key.strip().lower())
         if not effect_type:
             raise ValueError(
-                f"unknown outcome effect '{key.strip()}' (use flag or unlock_container; "
-                "unlock exits with a script calling tw.exits.unlock)"
+                f"unknown outcome effect '{key.strip()}' (use flag, unlock_container, "
+                "unlock_item, or lock_item; unlock exits with a script calling tw.exits.unlock)"
             )
         slot = "key" if effect_type == "story_flag" else "target_id"
         effects.append({"type": effect_type, "target_id": "", "key": "", slot: value.strip()})

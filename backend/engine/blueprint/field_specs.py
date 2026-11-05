@@ -200,6 +200,7 @@ ITEM_TYPES = (
     "READABLE",
     "CONTAINER",
     "SWITCH",
+    "CONTAINER_SWITCH",
 )
 ITEM_KEYS: dict[str, FieldSpec] = {
     "in": _ref("start_scene_id"),
@@ -210,6 +211,7 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "hidden": FieldSpec("is_hidden", boolean),
     "reveal": FieldSpec("reveal_rule"),
     "portable": FieldSpec("is_portable", boolean),
+    "locked": FieldSpec("locked", boolean),
     "code": FieldSpec("code_to_unlock"),
     "unlock_item": _ref("item_to_unlock"),
     "unlock_rule": FieldSpec("rule_to_unlock"),
