@@ -1,0 +1,420 @@
+/**
+ * TaleWeaver Scripting Engine API Definitions
+ * 
+ * Central registry of all methods, properties, and signatures on the `tw` context.
+ * Kept in sync with docs/scripting_engine.md and backend/engine/scripting/.
+ */
+
+export type ApiItemKind = 'method' | 'property' | 'namespace'
+
+export interface TwApiItem {
+  name: string
+  kind: ApiItemKind
+  signature?: string
+  snippet?: string
+  doc: string
+  returns?: string
+}
+
+export interface TwApiNamespace {
+  name: string
+  doc: string
+  items: TwApiItem[]
+}
+
+export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
+  player: {
+    name: 'player',
+    doc: 'Avatar vitals, stats, and inventory management',
+    items: [
+      { name: 'hp', kind: 'property', signature: 'int', doc: 'Current avatar health points.' },
+      { name: 'name', kind: 'property', signature: 'str', doc: 'Protagonist name.' },
+      { name: 'inventory', kind: 'property', signature: 'list[dict]', doc: 'All items currently carried by protagonist.' },
+      { name: 'item_ids', kind: 'property', signature: 'list[str]', doc: 'IDs of carried items.' },
+      { name: 'xp', kind: 'property', signature: 'int', doc: 'Protagonist experience points.' },
+      { name: 'heal', kind: 'method', signature: '(amount: int)', snippet: 'heal(${1:10})', doc: 'Restores amount HP up to avatar maximum.' },
+      { name: 'damage', kind: 'method', signature: '(amount: int)', snippet: 'damage(${1:10})', doc: 'Inflicts amount direct damage to avatar.' },
+      { name: 'add_xp', kind: 'method', signature: '(amount: int)', snippet: 'add_xp(${1:25})', doc: 'Gives the protagonist experience points.' },
+      { name: 'modify_xp', kind: 'method', signature: '(delta: int)', snippet: 'modify_xp(${1:25})', doc: 'Modifies protagonist XP (never below 0).' },
+      { name: 'has_item', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'has_item("${1:ITEM_ID}")', doc: 'Returns True if player carries item (case-insensitive).' },
+      { name: 'take_item', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'take_item("${1:ITEM_ID}")', doc: 'Takes an existing world item into inventory.' },
+      { name: 'drop_item', kind: 'method', signature: '(item_id: str, scene_id: str = None) -> bool', snippet: 'drop_item("${1:ITEM_ID}")', doc: 'Drops carried item into scene (default: current).' },
+      { name: 'transfer_item', kind: 'method', signature: '(item_id: str, target_id: str) -> bool', snippet: 'transfer_item("${1:ITEM_ID}", "${2:TARGET_ID}")', doc: 'Hands carried item to an NPC or container.' },
+      { name: 'remove_item', kind: 'method', signature: '(item_id: str)', snippet: 'remove_item("${1:ITEM_ID}")', doc: 'Removes item from inventory without placing in scene.' },
+      { name: 'give_item', kind: 'method', signature: '(item_id: str, name: str = None)', snippet: 'give_item("${1:ITEM_ID}")', doc: 'Creates a custom non-world inventory item.' },
+      { name: 'get_stat', kind: 'method', signature: '(key: str, default: Any = None) -> Any', snippet: 'get_stat("${1:stat}", ${2:0})', doc: 'Gets a custom protagonist stat value.' },
+      { name: 'set_stat', kind: 'method', signature: '(key: str, value: Any)', snippet: 'set_stat("${1:stat}", ${2:value})', doc: 'Sets a custom protagonist stat value.' },
+    ],
+  },
+  scene: {
+    name: 'scene',
+    doc: 'Current scene inspection, attributes, and teleportation',
+    items: [
+      { name: 'id', kind: 'property', signature: 'str', doc: 'ID of current active scene.' },
+      { name: 'name', kind: 'property', signature: 'str', doc: 'Display label of current scene.' },
+      { name: 'npcs', kind: 'property', signature: 'list[NPCProxy]', doc: 'All NPCs present in the current scene.' },
+      { name: 'items', kind: 'property', signature: 'list[ObjectProxy]', doc: 'All items and objects lying in the current scene.' },
+      { name: 'teleport', kind: 'method', signature: '(target_scene_id: str)', snippet: 'teleport("${1:SCENE_ID}")', doc: 'Teleports protagonist directly to another scene.' },
+      { name: 'get_attribute', kind: 'method', signature: '(name: str, default: Any = None) -> Any', snippet: 'get_attribute("${1:visited}", ${2:False})', doc: 'Gets a scene-specific persistent attribute.' },
+      { name: 'set_attribute', kind: 'method', signature: '(name: str, value: Any)', snippet: 'set_attribute("${1:visited}", ${2:True})', doc: 'Sets a scene-specific persistent attribute.' },
+    ],
+  },
+  exits: {
+    name: 'exits',
+    doc: 'Queries and locks/unlocks passage exits',
+    items: [
+      { name: 'lock', kind: 'method', signature: '(exit_id: str, reason: str = "")', snippet: 'lock("${1:EXIT_ID}", "${2:Locked}")', doc: 'Locks an exit with an optional reason.' },
+      { name: 'unlock', kind: 'method', signature: '(exit_id: str)', snippet: 'unlock("${1:EXIT_ID}")', doc: 'Unlocks a locked passage.' },
+      { name: 'hide', kind: 'method', signature: '(exit_id: str)', snippet: 'hide("${1:EXIT_ID}")', doc: 'Hides exit from player view and map.' },
+      { name: 'reveal', kind: 'method', signature: '(exit_id: str)', snippet: 'reveal("${1:EXIT_ID}")', doc: 'Reveals a hidden exit or secret door.' },
+      { name: 'is_locked', kind: 'method', signature: '(exit_id: str) -> bool', snippet: 'is_locked("${1:EXIT_ID}")', doc: 'Returns True if the exit is locked.' },
+    ],
+  },
+  npcs: {
+    name: 'npcs',
+    doc: 'NPC dialogue, movement, combat, cloning, and persona',
+    items: [
+      { name: 'get', kind: 'method', signature: '(npc_id: str) -> NPCProxy', snippet: 'get("${1:NPC_ID}")', doc: 'Retrieves an NPCProxy for the given NPC.' },
+      { name: 'say', kind: 'method', signature: '(npc_id: str, text: str)', snippet: 'say("${1:NPC_ID}", "${2:Greetings}")', doc: 'Makes NPC speak fixed dialogue text in story feed.' },
+      { name: 'say_directed', kind: 'method', signature: '(npc_id: str, direction: str)', snippet: 'say_directed("${1:NPC_ID}", "${2:speaks softly}")', doc: 'Directs GM to author character-accurate NPC line.' },
+      { name: 'move', kind: 'method', signature: '(npc_id: str, target_scene_id: str)', snippet: 'move("${1:NPC_ID}", "${2:current}")', doc: 'Moves NPC to target scene or "current".' },
+      { name: 'move_to_player', kind: 'method', signature: '(npc_id: str)', snippet: 'move_to_player("${1:NPC_ID}")', doc: 'Moves NPC directly to player current scene.' },
+      { name: 'drop_item', kind: 'method', signature: '(npc_id: str, item_id: str, scene_id: str = None)', snippet: 'drop_item("${1:NPC_ID}", "${2:ITEM_ID}")', doc: 'Drops item from NPC inventory into scene.' },
+      { name: 'give_item', kind: 'method', signature: '(npc_id: str, item_id: str)', snippet: 'give_item("${1:NPC_ID}", "${2:ITEM_ID}")', doc: 'Puts world item into NPC inventory.' },
+      { name: 'give_to_player', kind: 'method', signature: '(npc_id: str, item_id: str) -> dict | None', snippet: 'give_to_player("${1:NPC_ID}", "${2:ITEM_ID}")', doc: 'Hands carried NPC item to the player.' },
+      { name: 'consume', kind: 'method', signature: '(npc_id: str, item_id: str) -> dict | None', snippet: 'consume("${1:NPC_ID}", "${2:POTION_ID}")', doc: 'NPC uses a consumable item they carry.' },
+      { name: 'kill', kind: 'method', signature: '(npc_id: str, drop_inventory: bool = True)', snippet: 'kill("${1:NPC_ID}")', doc: 'Defeats NPC (sets HP to 0, drops loot).' },
+      { name: 'attack', kind: 'method', signature: '(npc_id: str)', snippet: 'attack("${1:NPC_ID}")', doc: 'NPC initiates turn-based combat with player.' },
+      { name: 'hide', kind: 'method', signature: '(npc_id: str) -> bool', snippet: 'hide("${1:NPC_ID}")', doc: 'Hides NPC from current scene and GM narration.' },
+      { name: 'reveal', kind: 'method', signature: '(npc_id: str) -> bool', snippet: 'reveal("${1:NPC_ID}")', doc: 'Reveals a previously hidden NPC.' },
+      { name: 'set_character', kind: 'method', signature: '(npc_id: str, text: str)', snippet: 'set_character("${1:NPC_ID}", "${2:Gruff}")', doc: 'Changes NPC personality traits for the GM.' },
+      { name: 'set_goal', kind: 'method', signature: '(npc_id: str, text: str)', snippet: 'set_goal("${1:NPC_ID}", "${2:wants gold}")', doc: 'Changes NPC motivation and current goal.' },
+      { name: 'add_trait', kind: 'method', signature: '(npc_id: str, trait: str)', snippet: 'add_trait("${1:NPC_ID}", "${2:drunk}")', doc: 'Adds a comma-separated trait to NPC character.' },
+      { name: 'remove_trait', kind: 'method', signature: '(npc_id: str, trait: str)', snippet: 'remove_trait("${1:NPC_ID}", "${2:frightened}")', doc: 'Removes a trait from NPC character.' },
+      { name: 'clone', kind: 'method', signature: '(npc_id: str, scene_id: str = None, hidden: bool = None) -> NPCProxy | None', snippet: 'clone("${1:NPC_ID}", scene_id="${2:current}")', doc: 'Creates a full clone copy of template NPC.' },
+      { name: 'set_combat_group', kind: 'method', signature: '(npc_id: str, group: str)', snippet: 'set_combat_group("${1:NPC_ID}", "${2:GUARDS}")', doc: 'Assigns NPC to a combat group that fights together.' },
+      { name: 'set_assist_mode', kind: 'method', signature: '(npc_id: str, mode: str)', snippet: 'set_assist_mode("${1:NPC_ID}", "${2:GROUP}")', doc: 'Sets fight assist behavior: "GROUP", "ANYONE", "NEVER".' },
+    ],
+  },
+  objects: {
+    name: 'objects',
+    doc: 'World objects, inventory items, containers, and cloning',
+    items: [
+      { name: 'get', kind: 'method', signature: '(item_id: str) -> ObjectProxy', snippet: 'get("${1:ITEM_ID}")', doc: 'Retrieves an ObjectProxy for the given item.' },
+      { name: 'move_item', kind: 'method', signature: '(item_id: str, target: str) -> bool', snippet: 'move_item("${1:ITEM_ID}", "${2:player}")', doc: 'Moves item to "player", NPC, container, or scene.' },
+      { name: 'add_to_player', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'add_to_player("${1:ITEM_ID}")', doc: 'Takes item directly into player inventory.' },
+      { name: 'remove_from_player', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'remove_from_player("${1:ITEM_ID}")', doc: 'Removes item from player inventory.' },
+      { name: 'add_to_scene', kind: 'method', signature: '(item_id: str, scene_id: str = None) -> bool', snippet: 'add_to_scene("${1:ITEM_ID}")', doc: 'Places item into scene (default: current).' },
+      { name: 'put_in_container', kind: 'method', signature: '(item_id: str, container_id: str) -> bool', snippet: 'put_in_container("${1:ITEM_ID}", "${2:CHEST_ID}")', doc: 'Places an item into a container.' },
+      { name: 'take_from_container', kind: 'method', signature: '(container_id: str, item_id: str, to: str = "player") -> bool', snippet: 'take_from_container("${1:CHEST_ID}", "${2:ITEM_ID}")', doc: 'Takes an item out of a container.' },
+      { name: 'contents', kind: 'method', signature: '(holder_id: str) -> list[ObjectProxy]', snippet: 'contents("${1:CHEST_ID}")', doc: 'Returns items held by "player", NPC, or container.' },
+      { name: 'location', kind: 'method', signature: '(item_id: str) -> dict', snippet: 'location("${1:ITEM_ID}")', doc: 'Returns {type, id} where the item is located.' },
+      { name: 'clone', kind: 'method', signature: '(item_id: str, scene_id: str = None, hidden: bool = None) -> ObjectProxy | None', snippet: 'clone("${1:ITEM_ID}", scene_id="${2:current}")', doc: 'Clones template item with a fresh copy ID.' },
+      { name: 'destroy', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'destroy("${1:ITEM_ID}")', doc: 'Permanently destroys item from world.' },
+      { name: 'hide', kind: 'method', signature: '(item_id: str)', snippet: 'hide("${1:ITEM_ID}")', doc: 'Hides item from view until revealed.' },
+      { name: 'reveal', kind: 'method', signature: '(item_id: str)', snippet: 'reveal("${1:ITEM_ID}")', doc: 'Reveals a hidden item.' },
+      { name: 'lock', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'lock("${1:ITEM_ID}")', doc: 'Locks a container or take-locks an item.' },
+      { name: 'unlock', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'unlock("${1:ITEM_ID}")', doc: 'Unlocks a container or take-locked item.' },
+      { name: 'is_locked', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'is_locked("${1:ITEM_ID}")', doc: 'Checks if item or container is locked.' },
+    ],
+  },
+  switches: {
+    name: 'switches',
+    doc: 'Levers, buttons, valves, and multi-state mechanisms',
+    items: [
+      { name: 'get', kind: 'method', signature: '(switch_id: str) -> SwitchProxy', snippet: 'get("${1:SWITCH_ID}")', doc: 'Retrieves a SwitchProxy for the switch.' },
+      { name: 'get_state', kind: 'method', signature: '(switch_id: str, default: str = "") -> str', snippet: 'get_state("${1:SWITCH_ID}")', doc: 'Returns current state ID of switch (e.g. "ON").' },
+      { name: 'set_state', kind: 'method', signature: '(switch_id: str, new_state: str, apply_outcomes: bool = True) -> bool', snippet: 'set_state("${1:SWITCH_ID}", "${2:ON}")', doc: 'Transitions switch to new state and applies outcomes.' },
+      { name: 'is_state', kind: 'method', signature: '(switch_id: str, state: str) -> bool', snippet: 'is_state("${1:SWITCH_ID}", "${2:ON}")', doc: 'Checks if switch currently matches state.' },
+      { name: 'flip', kind: 'method', signature: '(switch_id: str, apply_outcomes: bool = True) -> str', snippet: 'flip("${1:SWITCH_ID}")', doc: 'Cycles switch to next state and returns new state.' },
+      { name: 'toggle', kind: 'method', signature: '(switch_id: str, apply_outcomes: bool = True) -> str', snippet: 'toggle("${1:SWITCH_ID}")', doc: 'Alias for flip().' },
+      { name: 'enable_state', kind: 'method', signature: '(switch_id: str, *states: str) -> list[str]', snippet: 'enable_state("${1:SWITCH_ID}", "${2:ON}")', doc: 'Enables specific switch state buttons.' },
+      { name: 'disable_state', kind: 'method', signature: '(switch_id: str, *states: str) -> list[str]', snippet: 'disable_state("${1:SWITCH_ID}", "${2:OFF}")', doc: 'Disables (locks) specific switch state buttons.' },
+      { name: 'is_state_enabled', kind: 'method', signature: '(switch_id: str, state: str) -> bool', snippet: 'is_state_enabled("${1:SWITCH_ID}", "${2:ON}")', doc: 'Checks if state button is enabled.' },
+      { name: 'is_state_disabled', kind: 'method', signature: '(switch_id: str, state: str) -> bool', snippet: 'is_state_disabled("${1:SWITCH_ID}", "${2:OFF}")', doc: 'Checks if state button is disabled.' },
+      { name: 'disabled_states', kind: 'method', signature: '(switch_id: str) -> list[str]', snippet: 'disabled_states("${1:SWITCH_ID}")', doc: 'Returns all disabled state IDs on switch.' },
+      { name: 'get_status_text', kind: 'method', signature: '(switch_id: str) -> str', snippet: 'get_status_text("${1:SWITCH_ID}")', doc: 'Gets status/hint text shown in switch panel.' },
+      { name: 'set_status_text', kind: 'method', signature: '(switch_id: str, text: str) -> str', snippet: 'set_status_text("${1:SWITCH_ID}", "${2:Needs power}")', doc: 'Sets status/hint text shown in switch panel.' },
+      { name: 'clear_status_text', kind: 'method', signature: '(switch_id: str) -> str', snippet: 'clear_status_text("${1:SWITCH_ID}")', doc: 'Clears status text in switch panel.' },
+    ],
+  },
+  vars: {
+    name: 'vars',
+    doc: 'Persistent session variables saved across turns and checkpoints',
+    items: [
+      { name: 'get', kind: 'method', signature: '(key: str, default: Any = None) -> Any', snippet: 'get("${1:key}", ${2:None})', doc: 'Retrieves persistent variable value.' },
+      { name: 'set', kind: 'method', signature: '(key: str, value: Any)', snippet: 'set("${1:key}", ${2:value})', doc: 'Stores persistent variable (survives saves/reloads).' },
+      { name: 'has', kind: 'method', signature: '(key: str) -> bool', snippet: 'has("${1:key}")', doc: 'Checks if persistent variable exists.' },
+      { name: 'delete', kind: 'method', signature: '(key: str)', snippet: 'delete("${1:key}")', doc: 'Deletes persistent variable.' },
+    ],
+  },
+  flags: {
+    name: 'flags',
+    doc: 'Story flags boolean store',
+    items: [
+      { name: 'get', kind: 'method', signature: '(key: str, default: bool = False) -> bool', snippet: 'get("${1:FLAG_NAME}", False)', doc: 'Retrieves story flag boolean.' },
+      { name: 'set', kind: 'method', signature: '(key: str, value: bool = True)', snippet: 'set("${1:FLAG_NAME}", True)', doc: 'Sets story flag.' },
+      { name: 'clear', kind: 'method', signature: '(key: str)', snippet: 'clear("${1:FLAG_NAME}")', doc: 'Clears story flag.' },
+      { name: 'has', kind: 'method', signature: '(key: str) -> bool', snippet: 'has("${1:FLAG_NAME}")', doc: 'Checks if story flag exists.' },
+    ],
+  },
+  story: {
+    name: 'story',
+    doc: 'Turn storytelling, GM narration, and system alerts',
+    items: [
+      { name: 'narrate', kind: 'method', signature: '(text: str)', snippet: 'narrate("${1:Narration text}")', doc: 'Emits GM narration block in the story feed.' },
+      { name: 'narrate_raw', kind: 'method', signature: '(text: str)', snippet: 'narrate_raw("${1:Verbatim text}")', doc: 'Emits verbatim GM narration without speaker parsing.' },
+      { name: 'direct', kind: 'method', signature: '(instruction: str)', snippet: 'direct("${1:instruction}")', doc: 'Gives the GM a soft stage direction for next narration.' },
+      { name: 'system', kind: 'method', signature: '(text: str)', snippet: 'system("${1:System note}")', doc: 'Emits technical system notification in feed.' },
+      { name: 'system_message', kind: 'method', signature: '(text: str)', snippet: 'system_message("${1:System note}")', doc: 'Alias for tw.story.system().' },
+      { name: 'log', kind: 'method', signature: '(text: str)', snippet: 'log("${1:Log text}")', doc: 'Appends debug log visible in developer console.' },
+    ],
+  },
+  dialog: {
+    name: 'dialog',
+    doc: 'Choice dialogs and branching RPG dialogue trees',
+    items: [
+      { name: 'choose', kind: 'method', signature: '(prompt: str, options: list, on_choice: str, speaker: str = None, narrate: bool = False) -> bool', snippet: 'choose("${1:Prompt}", ["${2:Opt 1}", "${3:Opt 2}"], on_choice="${4:handler}")', doc: 'Presents player a modal choice dialog.' },
+      { name: 'ask', kind: 'method', signature: '(prompt: str, options: list, on_choice: str, speaker: str = None, narrate: bool = False) -> bool', snippet: 'ask("${1:Prompt}", ["${2:Opt 1}", "${3:Opt 2}"], on_choice="${4:handler}")', doc: 'Alias for tw.dialog.choose().' },
+      { name: 'tree', kind: 'method', signature: '(tree: dict, on_end: str = None, on_action: str = None, speaker: str = None) -> bool', snippet: 'tree(${1:TREE_DICT}, on_end="${2:on_end}")', doc: 'Initiates a branching NPC dialogue tree.' },
+    ],
+  },
+  time: {
+    name: 'time',
+    doc: 'In-game clock, round pacing, and scheduled timers',
+    items: [
+      { name: 'now', kind: 'property', signature: 'int', doc: 'Elapsed in-game minutes since start.' },
+      { name: 'minutes', kind: 'property', signature: 'int', doc: 'Alias for tw.time.now.' },
+      { name: 'day', kind: 'property', signature: 'int', doc: 'Current clock of day.' },
+      { name: 'hour', kind: 'property', signature: 'int', doc: 'Current clock hour.' },
+      { name: 'minute', kind: 'property', signature: 'int', doc: 'Current clock minute.' },
+      { name: 'format', kind: 'method', signature: '() -> str', snippet: 'format()', doc: 'Formats time string, e.g. "Day 2, 14:30".' },
+      { name: 'ticks', kind: 'property', signature: 'int', doc: 'Number of narration ticks elapsed.' },
+      { name: 'is_paused', kind: 'property', signature: 'bool', doc: 'Whether clock ticking is paused.' },
+      { name: 'minutes_per_tick', kind: 'property', signature: 'int', doc: 'Minutes elapsed per narration tick.' },
+      { name: 'parse', kind: 'method', signature: '(value: str) -> int | None', snippet: 'parse("${1:1h 30m}")', doc: 'Parses time string into minutes.' },
+      { name: 'set', kind: 'method', signature: '(t: int | str)', snippet: 'set(${1:minutes})', doc: 'Sets total elapsed in-game time.' },
+      { name: 'advance', kind: 'method', signature: '(t: int | str)', snippet: 'advance("${1:30m}")', doc: 'Advances clock forward.' },
+      { name: 'rewind', kind: 'method', signature: '(t: int | str)', snippet: 'rewind("${1:15m}")', doc: 'Rewinds clock backwards.' },
+      { name: 'set_minutes_per_tick', kind: 'method', signature: '(t: int)', snippet: 'set_minutes_per_tick(${1:10})', doc: 'Changes pacing minutes per turn.' },
+      { name: 'reset_minutes_per_tick', kind: 'method', signature: '()', snippet: 'reset_minutes_per_tick()', doc: 'Restores adventure default pacing.' },
+      { name: 'pause', kind: 'method', signature: '()', snippet: 'pause()', doc: 'Pauses automatic clock advancement.' },
+      { name: 'resume', kind: 'method', signature: '()', snippet: 'resume()', doc: 'Resumes clock advancement.' },
+      { name: 'allow_gm_time', kind: 'method', signature: '(allowed: bool = True)', snippet: 'allow_gm_time(${1:True})', doc: 'Overrides GM time control permission.' },
+      { name: 'at', kind: 'method', signature: '(t: int | str, handler: str, timer_id: str = None, data: Any = None) -> str | None', snippet: 'at("${1:2h}", "${2:on_timer_reached}")', doc: 'Fires handler once at absolute time t.' },
+      { name: 'after', kind: 'method', signature: '(t: int | str, handler: str, timer_id: str = None, data: Any = None) -> str | None', snippet: 'after("${1:45m}", "${2:on_timer_done}")', doc: 'Fires handler once when t minutes pass.' },
+      { name: 'every', kind: 'method', signature: '(t: int | str, handler: str, timer_id: str = None, data: Any = None) -> str | None', snippet: 'every("${1:1h}", "${2:on_hourly_tick}")', doc: 'Fires recurring handler every interval t.' },
+      { name: 'cancel', kind: 'method', signature: '(timer_id: str)', snippet: 'cancel("${1:timer_id}")', doc: 'Cancels scheduled timer.' },
+      { name: 'has_timer', kind: 'method', signature: '(timer_id: str) -> bool', snippet: 'has_timer("${1:timer_id}")', doc: 'Checks if timer ID is active.' },
+      { name: 'timers', kind: 'property', signature: 'list[dict]', doc: 'All registered active timers.' },
+    ],
+  },
+  game: {
+    name: 'game',
+    doc: 'Victory, defeat, and game session outcome conditions',
+    items: [
+      { name: 'win', kind: 'method', signature: '(message: str)', snippet: 'win("${1:Victory achieved!}")', doc: 'Concludes adventure with victory.' },
+      { name: 'game_over', kind: 'method', signature: '(reason: str)', snippet: 'game_over("${1:Defeat reason}")', doc: 'Ends adventure with game-over defeat.' },
+      { name: 'time', kind: 'property', signature: 'int', doc: 'Elapsed minutes (tw.time.now).' },
+    ],
+  },
+  quests: {
+    name: 'quests',
+    doc: 'Quests and sidequest tracking',
+    items: [
+      { name: 'complete', kind: 'method', signature: '(quest_id: str)', snippet: 'complete("${1:QUEST_ID}")', doc: 'Marks quest as completed.' },
+      { name: 'activate', kind: 'method', signature: '(quest_id: str)', snippet: 'activate("${1:QUEST_ID}")', doc: 'Activates quest.' },
+      { name: 'fail', kind: 'method', signature: '(quest_id: str)', snippet: 'fail("${1:QUEST_ID}")', doc: 'Marks quest as failed.' },
+    ],
+  },
+  awards: {
+    name: 'awards',
+    doc: 'Awards and player achievements',
+    items: [
+      { name: 'grant', kind: 'method', signature: '(award_key: str)', snippet: 'grant("${1:AWARD_KEY}")', doc: 'Grants an achievement award to player.' },
+    ],
+  },
+  sequences: {
+    name: 'sequences',
+    doc: 'Story sequence / chapter transitions',
+    items: [
+      { name: 'complete', kind: 'method', signature: '(sequence_id: str = None)', snippet: 'complete()', doc: 'Completes sequence and advances chapter.' },
+    ],
+  },
+  dice: {
+    name: 'dice',
+    doc: 'Deterministic pseudo-random dice rolls',
+    items: [
+      { name: 'roll', kind: 'method', signature: '(sides: int = 20) -> int', snippet: 'roll(${1:20})', doc: 'Rolls die with specified face count.' },
+      { name: 'd6', kind: 'method', signature: '() -> int', snippet: 'd6()', doc: 'Rolls 6-sided die (1-6).' },
+      { name: 'd20', kind: 'method', signature: '() -> int', snippet: 'd20()', doc: 'Rolls 20-sided die (1-20).' },
+      { name: 'random', kind: 'method', signature: '() -> float', snippet: 'random()', doc: 'Returns random float between 0.0 and 1.0.' },
+    ],
+  },
+  memories: {
+    name: 'memories',
+    doc: 'Episodic memory bank for LLM storytelling context',
+    items: [
+      { name: 'add', kind: 'method', signature: '(memory_text: str)', snippet: 'add("${1:Memory text}")', doc: 'Injects factual memory for the Game Master LLM.' },
+    ],
+  },
+  llm: {
+    name: 'llm',
+    doc: 'Direct language model prompts and structured JSON generation',
+    items: [
+      { name: 'ask', kind: 'method', signature: '(prompt: str, model: str = "simple", system: str = "") -> str', snippet: 'ask("${1:Prompt}")', doc: 'Queries LLM with prompt (models: "simple", "advanced").' },
+      { name: 'ask_json', kind: 'method', signature: '(prompt: str, schema: Any = None, model: str = "simple") -> Any', snippet: 'ask_json("${1:Prompt}", schema=${2:SCHEMA})', doc: 'Queries LLM and returns validated structured JSON.' },
+      { name: 'available', kind: 'property', signature: 'bool', doc: 'Whether LLM querying is permitted in current context.' },
+    ],
+  },
+  json: {
+    name: 'json',
+    doc: 'Safe sandboxed JSON serialization and validation',
+    items: [
+      { name: 'loads', kind: 'method', signature: '(text: str, schema: Any = None, default: Any = None) -> Any', snippet: 'loads(${1:text})', doc: 'Parses JSON with automatic markdown fence stripping.' },
+      { name: 'validate', kind: 'method', signature: '(data: Any, schema: Any) -> bool', snippet: 'validate(${1:data}, ${2:schema})', doc: 'Validates data against lightweight sandbox schema.' },
+      { name: 'dumps', kind: 'method', signature: '(value: Any) -> str', snippet: 'dumps(${1:value})', doc: 'Serializes value to JSON string.' },
+    ],
+  },
+  log: {
+    name: 'log',
+    doc: 'Diagnostic logging to server console',
+    items: [
+      { name: 'debug', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'debug(${1:msg})', doc: 'Logs debug message to terminal/diagnostics.' },
+      { name: 'info', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'info(${1:msg})', doc: 'Logs informational entry to console.' },
+      { name: 'warn', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'warn(${1:msg})', doc: 'Logs warning to server console.' },
+      { name: 'error', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'error(${1:msg})', doc: 'Logs error to server console.' },
+    ],
+  },
+}
+
+// Aliases
+TW_NAMESPACES.items = TW_NAMESPACES.objects
+TW_NAMESPACES.console = TW_NAMESPACES.log
+
+/** Top-level members on the `tw` context object itself */
+export const TW_ROOT_ITEMS: TwApiItem[] = [
+  // Sub-namespaces
+  { name: 'player', kind: 'namespace', doc: 'Avatar stats, HP, and inventory management.' },
+  { name: 'scene', kind: 'namespace', doc: 'Current scene inspection, attributes, and teleportation.' },
+  { name: 'exits', kind: 'namespace', doc: 'Passage locking, unlocking, and hidden exits.' },
+  { name: 'npcs', kind: 'namespace', doc: 'NPC dialogue, movement, combat, cloning, and persona.' },
+  { name: 'objects', kind: 'namespace', doc: 'World objects, inventory items, containers, and cloning.' },
+  { name: 'items', kind: 'namespace', doc: 'Alias for tw.objects.' },
+  { name: 'switches', kind: 'namespace', doc: 'Levers, buttons, valves, and multi-state mechanisms.' },
+  { name: 'vars', kind: 'namespace', doc: 'Persistent session variables across turns and checkpoints.' },
+  { name: 'flags', kind: 'namespace', doc: 'Story flags boolean key-value store.' },
+  { name: 'story', kind: 'namespace', doc: 'Narration, directives, and system alerts.' },
+  { name: 'dialog', kind: 'namespace', doc: 'Choice dialogs and branching RPG dialogue trees.' },
+  { name: 'time', kind: 'namespace', doc: 'In-game clock, round pacing, and scheduled timers.' },
+  { name: 'game', kind: 'namespace', doc: 'Victory, defeat, and game session outcome conditions.' },
+  { name: 'quests', kind: 'namespace', doc: 'Quest completion and activation.' },
+  { name: 'awards', kind: 'namespace', doc: 'Player achievement awards.' },
+  { name: 'sequences', kind: 'namespace', doc: 'Story sequence and chapter transitions.' },
+  { name: 'dice', kind: 'namespace', doc: 'Deterministic pseudo-random dice rolls.' },
+  { name: 'memories', kind: 'namespace', doc: 'Episodic memory bank for LLM storytelling context.' },
+  { name: 'llm', kind: 'namespace', doc: 'Language model prompts and structured JSON generation.' },
+  { name: 'json', kind: 'namespace', doc: 'Safe sandboxed JSON serialization and validation.' },
+  { name: 'log', kind: 'namespace', doc: 'Server console logging.' },
+  { name: 'console', kind: 'namespace', doc: 'Alias for tw.log.' },
+  // Direct shortcuts
+  { name: 'narrate', kind: 'method', signature: '(message: str)', snippet: 'narrate("${1:message}")', doc: 'Shortcut for tw.story.narrate(). Emits GM narration.' },
+  { name: 'narrate_raw', kind: 'method', signature: '(message: str)', snippet: 'narrate_raw("${1:message}")', doc: 'Shortcut for tw.story.narrate_raw(). Emits verbatim GM text.' },
+  { name: 'system', kind: 'method', signature: '(message: str)', snippet: 'system("${1:message}")', doc: 'Shortcut for tw.story.system(). Emits system alert.' },
+  { name: 'direct', kind: 'method', signature: '(instruction: str)', snippet: 'direct("${1:instruction}")', doc: 'Shortcut for tw.story.direct(). Soft direction for GM narration.' },
+  { name: 'switch', kind: 'method', signature: '(switch_id: str) -> SwitchProxy', snippet: 'switch("${1:SWITCH_ID}")', doc: 'Shortcut for tw.switches.get(switch_id).' },
+  { name: 'save', kind: 'method', signature: '(label: str = "")', snippet: 'save("${1:checkpoint}")', doc: 'Creates a checkpoint save state with optional timeline label.' },
+  { name: 'debug', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'debug(${1:msg})', doc: 'Emits an in-game debug notification and logs to server.' },
+]
+
+/** Common methods/properties on dynamic proxy instances */
+export const PROXY_ITEMS: Record<string, TwApiItem[]> = {
+  NPCProxy: [
+    { name: 'name', kind: 'property', signature: 'str', doc: 'NPC display name.' },
+    { name: 'hp', kind: 'property', signature: 'int', doc: 'NPC current HP.' },
+    { name: 'mana', kind: 'property', signature: 'int', doc: 'NPC mana.' },
+    { name: 'stamina', kind: 'property', signature: 'int', doc: 'NPC stamina.' },
+    { name: 'is_defeated', kind: 'property', signature: 'bool', doc: 'Whether NPC is defeated.' },
+    { name: 'is_hidden', kind: 'property', signature: 'bool', doc: 'Whether NPC is hidden.' },
+    { name: 'is_killable', kind: 'property', signature: 'bool', doc: 'Whether NPC can be damaged.' },
+    { name: 'current_scene_id', kind: 'property', signature: 'str', doc: 'Scene ID where NPC is located.' },
+    { name: 'items', kind: 'property', signature: 'list[ObjectProxy]', doc: 'Items carried by this NPC.' },
+    { name: 'item_ids', kind: 'property', signature: 'list[str]', doc: 'IDs of items carried by this NPC.' },
+    { name: 'character', kind: 'property', signature: 'str', doc: 'NPC personality description.' },
+    { name: 'goal', kind: 'property', signature: 'str', doc: 'NPC current goal.' },
+    { name: 'combat_group', kind: 'property', signature: 'str', doc: 'Combat group tag.' },
+    { name: 'assist_mode', kind: 'property', signature: 'str', doc: 'Effective assist mode ("GROUP", "ANYONE", "NEVER").' },
+    { name: 'say', kind: 'method', signature: '(text: str)', snippet: 'say("${1:text}")', doc: 'Makes this NPC speak dialogue text.' },
+    { name: 'say_directed', kind: 'method', signature: '(direction: str)', snippet: 'say_directed("${1:direction}")', doc: 'Directs GM how this NPC speaks in next narration.' },
+    { name: 'move_to', kind: 'method', signature: '(target_scene_id: str)', snippet: 'move_to("${1:current}")', doc: 'Moves NPC to target scene or "current".' },
+    { name: 'move_to_player', kind: 'method', signature: '()', snippet: 'move_to_player()', doc: 'Moves NPC to protagonist scene.' },
+    { name: 'drop_item', kind: 'method', signature: '(item_id: str, scene_id: str = None)', snippet: 'drop_item("${1:ITEM_ID}")', doc: 'Drops item from NPC into scene.' },
+    { name: 'give_item', kind: 'method', signature: '(item_id: str)', snippet: 'give_item("${1:ITEM_ID}")', doc: 'Gives world item to this NPC.' },
+    { name: 'give_to_player', kind: 'method', signature: '(item_id: str) -> dict | None', snippet: 'give_to_player("${1:ITEM_ID}")', doc: 'Hands an item carried by this NPC to player.' },
+    { name: 'has_item', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'has_item("${1:ITEM_ID}")', doc: 'Checks if this NPC carries item.' },
+    { name: 'put_item', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'put_item("${1:ITEM_ID}")', doc: 'Transfers world item into NPC inventory.' },
+    { name: 'take_item', kind: 'method', signature: '(item_id: str, to: str = "player") -> bool', snippet: 'take_item("${1:ITEM_ID}")', doc: 'Transfers item out of NPC to target.' },
+    { name: 'damage', kind: 'method', signature: '(amount: int)', snippet: 'damage(${1:10})', doc: 'Inflicts damage on NPC.' },
+    { name: 'heal', kind: 'method', signature: '(amount: int)', snippet: 'heal(${1:10})', doc: 'Heals NPC HP.' },
+    { name: 'kill', kind: 'method', signature: '(drop_inventory: bool = True)', snippet: 'kill()', doc: 'Kills NPC and drops carried inventory.' },
+    { name: 'attack', kind: 'method', signature: '()', snippet: 'attack()', doc: 'Starts combat between this NPC and player.' },
+    { name: 'hide', kind: 'method', signature: '()', snippet: 'hide()', doc: 'Hides this NPC.' },
+    { name: 'reveal', kind: 'method', signature: '()', snippet: 'reveal()', doc: 'Reveals this NPC.' },
+    { name: 'set_character', kind: 'method', signature: '(text: str)', snippet: 'set_character("${1:text}")', doc: 'Sets NPC personality text.' },
+    { name: 'set_goal', kind: 'method', signature: '(text: str)', snippet: 'set_goal("${1:text}")', doc: 'Sets NPC motivation goal.' },
+    { name: 'add_trait', kind: 'method', signature: '(trait: str)', snippet: 'add_trait("${1:trait}")', doc: 'Adds trait to NPC character text.' },
+    { name: 'remove_trait', kind: 'method', signature: '(trait: str)', snippet: 'remove_trait("${1:trait}")', doc: 'Removes trait from NPC character text.' },
+    { name: 'has_trait', kind: 'method', signature: '(trait: str) -> bool', snippet: 'has_trait("${1:trait}")', doc: 'Checks if NPC character has trait.' },
+    { name: 'clone', kind: 'method', signature: '(scene_id: str = None, hidden: bool = None)', snippet: 'clone()', doc: 'Clones this NPC.' },
+    { name: 'set_combat_group', kind: 'method', signature: '(group: str)', snippet: 'set_combat_group("${1:GUARDS}")', doc: 'Assigns combat group.' },
+    { name: 'set_assist_mode', kind: 'method', signature: '(mode: str)', snippet: 'set_assist_mode("${1:GROUP}")', doc: 'Sets assist mode: "GROUP", "ANYONE", "NEVER".' },
+  ],
+  ObjectProxy: [
+    { name: 'id', kind: 'property', signature: 'str', doc: 'Item unique identifier.' },
+    { name: 'name', kind: 'property', signature: 'str', doc: 'Item display name.' },
+    { name: 'is_hidden', kind: 'property', signature: 'bool', doc: 'Whether item is hidden.' },
+    { name: 'is_locked', kind: 'property', signature: 'bool', doc: 'Whether container/item is locked.' },
+    { name: 'is_destroyed', kind: 'property', signature: 'bool', doc: 'Whether item is destroyed.' },
+    { name: 'location', kind: 'property', signature: 'dict', doc: 'Current holder or scene location.' },
+    { name: 'items', kind: 'property', signature: 'list[ObjectProxy]', doc: 'Items held inside if this is a container.' },
+    { name: 'item_ids', kind: 'property', signature: 'list[str]', doc: 'IDs of items inside container.' },
+    { name: 'state', kind: 'property', signature: 'str', doc: 'Switch state if this is a switch.' },
+    { name: 'status_text', kind: 'property', signature: 'str', doc: 'Status/hint text in dialog.' },
+    { name: 'move_to', kind: 'method', signature: '(target: str)', snippet: 'move_to("${1:player}")', doc: 'Moves item to "player", NPC, container, or scene.' },
+    { name: 'give_to_player', kind: 'method', signature: '()', snippet: 'give_to_player()', doc: 'Moves item into player inventory.' },
+    { name: 'put_into', kind: 'method', signature: '(container_id: str)', snippet: 'put_into("${1:CHEST_ID}")', doc: 'Places item inside container.' },
+    { name: 'put_item', kind: 'method', signature: '(item_id: str)', snippet: 'put_item("${1:ITEM_ID}")', doc: 'Puts item inside this container.' },
+    { name: 'take_item', kind: 'method', signature: '(item_id: str, to: str = "player")', snippet: 'take_item("${1:ITEM_ID}")', doc: 'Takes item out of this container.' },
+    { name: 'contains', kind: 'method', signature: '(item_id: str) -> bool', snippet: 'contains("${1:ITEM_ID}")', doc: 'Checks if container holds item.' },
+    { name: 'lock', kind: 'method', signature: '() -> bool', snippet: 'lock()', doc: 'Locks container or item.' },
+    { name: 'unlock', kind: 'method', signature: '() -> bool', snippet: 'unlock()', doc: 'Unlocks container or item.' },
+    { name: 'hide', kind: 'method', signature: '()', snippet: 'hide()', doc: 'Hides item.' },
+    { name: 'reveal', kind: 'method', signature: '()', snippet: 'reveal()', doc: 'Reveals item.' },
+    { name: 'destroy', kind: 'method', signature: '() -> bool', snippet: 'destroy()', doc: 'Permanently destroys item.' },
+    { name: 'clone', kind: 'method', signature: '(scene_id: str = None, hidden: bool = None)', snippet: 'clone()', doc: 'Clones this item.' },
+    { name: 'get_state', kind: 'method', signature: '() -> str', snippet: 'get_state()', doc: 'Gets current switch state.' },
+    { name: 'set_state', kind: 'method', signature: '(new_state: str, apply_outcomes: bool = True)', snippet: 'set_state("${1:ON}")', doc: 'Sets switch state.' },
+    { name: 'is_state', kind: 'method', signature: '(state: str) -> bool', snippet: 'is_state("${1:ON}")', doc: 'Checks switch state.' },
+    { name: 'flip', kind: 'method', signature: '() -> str', snippet: 'flip()', doc: 'Cycles switch to next state.' },
+    { name: 'toggle', kind: 'method', signature: '() -> str', snippet: 'toggle()', doc: 'Alias for flip().' },
+  ],
+  SwitchProxy: [
+    { name: 'state', kind: 'property', signature: 'str', doc: 'Current switch state string (e.g. "ON").' },
+    { name: 'label', kind: 'property', signature: 'str', doc: 'Display label of current switch state.' },
+    { name: 'states', kind: 'property', signature: 'list[str]', doc: 'All declared state IDs.' },
+    { name: 'disabled_states', kind: 'property', signature: 'list[str]', doc: 'All currently locked/disabled state IDs.' },
+    { name: 'status_text', kind: 'property', signature: 'str', doc: 'Status/hint message in dialog.' },
+    { name: 'get_state', kind: 'method', signature: '() -> str', snippet: 'get_state()', doc: 'Gets current switch state.' },
+    { name: 'set_state', kind: 'method', signature: '(new_state: str, apply_outcomes: bool = True) -> bool', snippet: 'set_state("${1:ON}")', doc: 'Sets state and applies outcomes.' },
+    { name: 'is_state', kind: 'method', signature: '(state: str) -> bool', snippet: 'is_state("${1:ON}")', doc: 'Checks if current state matches.' },
+    { name: 'flip', kind: 'method', signature: '(apply_outcomes: bool = True) -> str', snippet: 'flip()', doc: 'Cycles to next state.' },
+    { name: 'toggle', kind: 'method', signature: '(apply_outcomes: bool = True) -> str', snippet: 'toggle()', doc: 'Alias for flip().' },
+    { name: 'enable_state', kind: 'method', signature: '(*states: str) -> list[str]', snippet: 'enable_state("${1:ON}")', doc: 'Enables specific state buttons.' },
+    { name: 'disable_state', kind: 'method', signature: '(*states: str) -> list[str]', snippet: 'disable_state("${1:OFF}")', doc: 'Disables specific state buttons.' },
+    { name: 'is_state_enabled', kind: 'method', signature: '(state: str) -> bool', snippet: 'is_state_enabled("${1:ON}")', doc: 'Checks if state button is enabled.' },
+    { name: 'is_state_disabled', kind: 'method', signature: '(state: str) -> bool', snippet: 'is_state_disabled("${1:OFF}")', doc: 'Checks if state button is disabled.' },
+    { name: 'set_status_text', kind: 'method', signature: '(text: str) -> str', snippet: 'set_status_text("${1:Needs power}")', doc: 'Sets status text in dialog.' },
+    { name: 'clear_status_text', kind: 'method', signature: '() -> str', snippet: 'clear_status_text()', doc: 'Clears status text in dialog.' },
+  ],
+}
+

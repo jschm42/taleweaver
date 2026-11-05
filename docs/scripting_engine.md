@@ -1251,3 +1251,11 @@ The **World-Builder** prompt at the top of the Adventure Editor can also write i
 - **Syntax check**: every proposed script and guard runs through the sandbox syntax check. Proposals with invalid code are discarded and the reason is shown instead.
 - **Existing logic**: the World-Builder sees the hooks that already exist and reuses their `tw.vars` flags.
 - **Language**: proposal titles, summaries and notes are always English. Narrative texts (descriptions, `..._text` fields) follow the adventure's language setting, or English when none is set, never the language the instruction was typed in.
+
+### Interactive Autocomplete & IntelliSense
+The in-browser CodeMirror Python script editor provides VS Code-style autocomplete for the entire `tw` scripting API:
+- **Namespace Exploration**: Typing `tw.` immediately opens an interactive dropdown listing all available sub-namespaces (`story`, `player`, `npcs`, `objects`, `switches`, `scene`, `exits`, `vars`, `dialog`, `time`, etc.) and top-level shortcuts (`narrate`, `system`, `direct`, `save`, `switch`, `debug`).
+- **Method & Signature Inspection**: Typing a dot after any sub-namespace (e.g. `tw.story.`, `tw.player.`, `tw.switches.`) or chained proxy (`tw.npcs.get(...).`, `tw.switch(...).`) filters available methods and properties, showing parameter signatures, return types, and doc summaries.
+- **Manual Trigger**: Press `Ctrl+Space` anywhere inside the editor to open or refresh completion suggestions.
+- **Smart Call Insertion**: Selecting a method automatically inserts its call syntax (e.g. `narrate()`) and places the cursor between the parentheses when arguments are expected.
+- **Synchronization**: The autocomplete registry (`frontend/src/utils/twScriptApiDefinitions.ts`) is kept in direct sync with the engine backend and this guide.

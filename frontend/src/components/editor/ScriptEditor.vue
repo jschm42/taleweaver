@@ -22,6 +22,7 @@ import {
   BookOpen,
 } from 'lucide-vue-next'
 import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
+import { triggerTwHint } from '@/utils/scriptAutocomplete'
 
 const props = withDefaults(
   defineProps<{
@@ -309,6 +310,12 @@ function initCodeMirror() {
       Tab: (cm: any) => {
         cm.replaceSelection('    ', 'end')
       },
+      'Cmd-Space': (cm: any) => {
+        triggerTwHint(cm, true)
+      },
+      'Ctrl-Space': (cm: any) => {
+        triggerTwHint(cm, true)
+      },
     },
   })
 
@@ -317,6 +324,17 @@ function initCodeMirror() {
     if (val !== props.modelValue) {
       emit('update:modelValue', val)
       emit('change', val)
+    }
+  })
+
+  cmInstance.on('inputRead', (cm: any, change: any) => {
+    if (change.origin === '+delete') return
+    const text = change.text && change.text[0]
+    if (!text) return
+    if (text === '.' || /^[a-zA-Z0-9_]$/.test(text)) {
+      setTimeout(() => {
+        triggerTwHint(cm, false)
+      }, 20)
     }
   })
 
@@ -985,5 +1003,92 @@ onBeforeUnmount(() => {
 
 .codemirror-wrapper .cm-operator {
   color: #f43f5e !important; /* rose-500 */
+}
+
+/* CodeMirror Autocomplete / IntelliSense Popup Theme */
+.CodeMirror-hints {
+  position: absolute;
+  z-index: 99999;
+  background-color: #0f172a !important; /* slate-900 */
+  border: 1px solid rgba(251, 191, 36, 0.3) !important; /* amber-400 border */
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  padding: 4px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 11px !important;
+  max-height: 240px !important;
+  max-width: 540px !important;
+  overflow-y: auto !important;
+}
+
+.CodeMirror-hint {
+  color: #cbd5e1 !important;
+  border-radius: 4px !important;
+  padding: 4px 6px !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+li.CodeMirror-hint-active {
+  background-color: rgba(245, 158, 11, 0.2) !important; /* amber-500/20 */
+  color: #fbbf24 !important; /* amber-400 */
+}
+
+.tw-hint-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.tw-hint-badge {
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  padding: 1px 4px !important;
+  border-radius: 3px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.tw-hint-method {
+  background-color: rgba(96, 165, 250, 0.2) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(96, 165, 250, 0.3) !important;
+}
+
+.tw-hint-prop {
+  background-color: rgba(52, 211, 153, 0.2) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(52, 211, 153, 0.3) !important;
+}
+
+.tw-hint-ns {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+}
+
+.tw-hint-name {
+  font-weight: 700 !important;
+  color: #f8fafc !important;
+}
+
+.CodeMirror-hint-active .tw-hint-name {
+  color: #fde68a !important;
+}
+
+.tw-hint-sig {
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+}
+
+.tw-hint-doc {
+  color: #64748b !important;
+  font-size: 10px !important;
+  margin-left: auto !important;
+  padding-left: 12px !important;
+  font-style: italic !important;
+  max-width: 220px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 </style>

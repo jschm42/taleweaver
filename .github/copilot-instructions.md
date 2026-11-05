@@ -102,6 +102,7 @@ To ensure codebase quality, security, and prevent regression:
   * Documented examples (blueprints, scripts, commands) must match the current code. Validate them with the real parser or validator where one exists.
   * New features get a docs entry. Removed or renamed features leave no stale references behind.
   * Documentation is written in **English only**, regardless of the conversation language.
+  * **Scripting API & Editor Autocomplete Sync**: When scripting functions, methods, proxy properties or namespaces are added, modified or documented in `backend/engine/scripting/` or `docs/scripting_engine.md`, update both `docs/scripting_engine.md` and the frontend Script Editor autocomplete registry (`frontend/src/utils/twScriptApiDefinitions.ts`) in the same change to keep editor IntelliSense in sync.
 
 ---
 
