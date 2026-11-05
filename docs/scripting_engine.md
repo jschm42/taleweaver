@@ -1220,6 +1220,7 @@ All scripts are managed directly in the **Scripts** tab:
   - Optionally pick a **Target** scene or entity using the autocomplete selector. For `on_time_reached` the target field holds the elapsed in-game time instead (e.g. `90`, `2h 30m`, `1d`); **Check Syntax** rejects other values.
   - Adjust **Priority** (lower numbers execute first).
   - Use the **Insert Snippet** dropdown to paste starter code.
+  - Use **Insert ID** (or keyboard shortcut `Ctrl+I` / `Cmd+I`) to search and filter game entity IDs (items, NPCs, quests, scenes, exits, switches) with real-time text matching, category chips, and keyboard navigation (<kbd>↑</kbd>/<kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to insert raw ID, <kbd>Shift+Enter</kbd> to insert quoted, <kbd>Esc</kbd> to dismiss). Focus seamlessly returns to the script editor.
 - Click **Check Syntax** to verify Python syntax, AST safety, and trigger parameters before saving.
 - Click **Create Script** or **Save Changes** to commit the script into the adventure manifest.
 
