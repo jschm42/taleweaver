@@ -1,23 +1,23 @@
 <script setup lang="ts">
 /**
- * ImmersiveStoryFeed — Comic story pages and page history
+ * ImmersiveStoryFeed — Endless comic story feed
  *
- * A page covers one scene + sequence (chapter) and shows all of its exchanges in order
- * (see comicPages.ts). The page only changes when the scene or the sequence changes.
+ * Shows the whole loaded story in one stream. Scene and chapter changes are marked with a thin
+ * divider (see storyDividers.ts) instead of a new page. Older messages load when the reader
+ * scrolls near the top (useLoadOlderOnScroll); new content is followed down (useScrollToLatest).
  */
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import type { ComicTurn } from '@/composables/useComicTurns'
 import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import ImmersiveStoryExchange from '@/components/game/immersive/ImmersiveStoryExchange.vue'
 import ThinkingIndicator from '@/components/game/immersive/ThinkingIndicator.vue'
-import { Sparkles, ChevronLeft, ChevronRight, ChevronsDown, Compass } from 'lucide-vue-next'
+import { Sparkles, ChevronsDown, Compass, Loader2 } from 'lucide-vue-next'
 import { useScrollToLatest } from './useScrollToLatest'
+import { useLoadOlderOnScroll } from './useLoadOlderOnScroll'
+import { dividerBefore, type StoryDivider } from './storyDividers'
 
 const props = defineProps<{
-  gameTurns: ComicTurn[]
-  activeTurn: ComicTurn | null
-  activeTurnIndex: number
-  viewingTurnIndex: number | null
+  pages: ComicTurn[]
   isEvaluating?: boolean
   statusText?: string
   sheet?: any
@@ -26,11 +26,17 @@ const props = defineProps<{
   npcMetadata: Record<string, any>
   gameId?: string
   turnError?: { message: string; action: string } | null
+  /** The server has older messages than the loaded ones. */
+  hasOlderMessages?: boolean
+  /** Loads and prepends the next older page of messages. */
+  loadOlderMessages?: () => Promise<void>
+  /** Scene id -> scene metadata (label) for the dividers. */
+  sceneNodes?: Record<string, any>
+  /** Sequence id -> title for the chapter dividers. */
+  sequenceTitles?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
-  goToTurn: [index: number]
-  goToLatestTurn: []
   retryTurn: []
   cancelTurnError: []
   openSheet: []
@@ -54,10 +60,9 @@ function latestExchangeElement(): HTMLElement | undefined {
   return exchanges?.[exchanges.length - 1]
 }
 
-// Follow new content (streamed narration, engine events, choice dialogs) down the page, but
+// Follow new content (streamed narration, engine events, choice dialogs) down the feed, but
 // never past the start of the newest exchange: a long narration stays readable from its top.
-const { hasContentBelow, scrollToLatest, resumeFollowing } = useScrollToLatest(storyContainerRef, {
-  canFollow: () => props.viewingTurnIndex === null,
+const { hasContentBelow, isFollowing, scrollToLatest, resumeFollowing } = useScrollToLatest(storyContainerRef, {
   maxFollowTop: () => {
     const latest = latestExchangeElement()
     const exchangeTop = latest ? Math.max(0, latest.offsetTop - FOLLOW_TOP_GAP_PX) : null
@@ -67,13 +72,19 @@ const { hasContentBelow, scrollToLatest, resumeFollowing } = useScrollToLatest(s
   },
 })
 
+// Older messages load only once the reader scrolled up themselves (auto-follow is off then).
+const { isLoadingOlder, loadOlder } = useLoadOlderOnScroll(storyContainerRef, {
+  hasMore: () => Boolean(props.hasOlderMessages && props.loadOlderMessages),
+  load: () => props.loadOlderMessages?.() ?? Promise.resolve(),
+  readerScrolled: () => !isFollowing.value,
+})
+
+// A short first window does not fill the feed: load more until it scrolls.
+watch(() => props.pages.length, () => void loadOlder())
+
 /**
  * Scroll position that shows the open inline panels completely, or their top when they are
  * taller than the feed; `null` while no panel is open.
- *
- * The visible area ends above the container's bottom padding: that space is reserved for the
- * turn pager, which overlays the feed. Without it the panel's last row (e.g. its buttons)
- * would end up under the pager.
  */
 function inlinePanelsFollowTop(): number | null {
   const panels = inlinePanelsRef.value
@@ -100,53 +111,70 @@ onMounted(() => {
 })
 onBeforeUnmount(() => inlinePanelsObserver?.disconnect())
 
-// New page: start reading at the top (auto-follow then moves on to the newest exchange).
-watch(() => props.activeTurnIndex, () => {
-  nextTick(() => {
-    if (storyContainerRef.value) {
-      storyContainerRef.value.scrollTop = 0
-    }
-  })
-})
-
 function scrollToLatestExchange() {
   resumeFollowing()
   latestExchangeElement()?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
 
-// New exchange on the page being followed (usually the player's own action): follow again,
-// even if the reader had scrolled up before.
-watch(
-  () => props.activeTurn?.exchanges.length ?? 0,
-  (count, previousCount) => {
-    if (props.viewingTurnIndex !== null || count <= previousCount) return
-    resumeFollowing()
-  }
-)
+/** Render key of the newest exchange; prepending older pages does not change it. */
+const latestExchangeKey = computed(() => {
+  const page = props.pages[props.pages.length - 1]
+  const exchange = page?.exchanges[page.exchanges.length - 1]
+  return exchange?.userMessage?._key || exchange?.assistantMessage?._key || ''
+})
+
+// A new exchange at the end (usually the player's own action): follow again, even if the
+// reader had scrolled up before. Older pages prepended at the top do not count.
+watch(latestExchangeKey, (key, previousKey) => {
+  if (key && previousKey && key !== previousKey) resumeFollowing()
+})
 
 defineExpose({ scrollToLatestExchange })
 
-const hasPager = computed(() => props.gameTurns.length > 1)
+type Exchange = ComicTurn['exchanges'][number]
 
-const isLatestPage = computed(() => props.activeTurnIndex >= props.gameTurns.length - 1)
+/** One flat row of the feed; keys stay stable when older pages are prepended. */
+type FeedItem =
+  | { kind: 'divider'; key: string; divider: StoryDivider }
+  | { kind: 'license'; key: string; message: any }
+  | { kind: 'exchange'; key: string; exchange: Exchange }
+
+function exchangeKey(exchange: Exchange): string | undefined {
+  const first = exchange.userMessage || exchange.assistantMessage || exchange.systemMessages[0]
+  return first?._key || first?.id
+}
+
+const feedItems = computed<FeedItem[]>(() => {
+  const items: FeedItem[] = []
+  props.pages.forEach((page, pageIdx) => {
+    const firstKey = page.exchanges[0] ? exchangeKey(page.exchanges[0]) : undefined
+    const divider = dividerBefore(props.pages[pageIdx - 1], page, props.sceneNodes || {}, props.sequenceTitles || {})
+    if (divider) items.push({ kind: 'divider', key: `divider-${firstKey ?? pageIdx}`, divider })
+    if (page.licenseMessage) {
+      items.push({ kind: 'license', key: `license-${page.licenseMessage._key ?? pageIdx}`, message: page.licenseMessage })
+    }
+    page.exchanges.forEach((exchange, exIdx) => {
+      items.push({ kind: 'exchange', key: exchangeKey(exchange) ?? `p${pageIdx}-e${exIdx}`, exchange })
+    })
+  })
+  return items
+})
 </script>
 
 <template>
   <div class="story-feed flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
-    <!-- COMIC STORY CONTAINER (Page Display) -->
     <div
       ref="storyContainerRef"
       class="comic-story-container tw-feed flex-1 overflow-y-auto tw-scroll p-2 sm:p-4 flex flex-col min-h-0 relative"
-      :class="{ 'pb-12 sm:pb-12': hasPager }"
     >
       <!-- Empty State -->
-      <div v-if="!props.activeTurn && !props.isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-500">
+      <div v-if="!props.pages.length && !props.isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-500">
         <Sparkles class="w-8 h-8 text-amber-400/60 mb-2 animate-pulse" />
         <p class="text-sm font-semibold tracking-wider uppercase">Awaiting Adventure Turn...</p>
       </div>
 
       <!-- Loading / Scene Transitioning State -->
-      <div v-else-if="!props.activeTurn && props.isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-400 my-auto">
+      <div v-else-if="!props.pages.length && props.isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-400 my-auto">
         <div class="relative flex items-center justify-center w-12 h-12 mb-3">
           <div class="absolute inset-0 rounded-full bg-amber-400/20 animate-ping"></div>
           <Compass class="w-8 h-8 text-amber-400 animate-spin" style="animation-duration: 4s;" />
@@ -156,88 +184,67 @@ const isLatestPage = computed(() => props.activeTurnIndex >= props.gameTurns.len
         </p>
       </div>
 
-      <template v-else-if="props.activeTurn">
-        <!-- LICENSE & CREDITS BANNER (Initial Page / Re-run) -->
-        <LicenseInfoBlock v-if="props.activeTurn.licenseMessage" :msg="props.activeTurn.licenseMessage" class="shrink-0 max-w-2xl" />
+      <template v-else>
+        <!-- Older history: loads on scroll; the hint shows while a page is on its way -->
+        <div v-if="props.hasOlderMessages" class="story-feed-older" aria-live="polite">
+          <Loader2 v-if="isLoadingOlder" class="w-4 h-4 animate-spin" />
+          <span>{{ isLoadingOlder ? 'Loading earlier story…' : 'Scroll up for earlier story' }}</span>
+        </div>
 
-        <!-- EXCHANGES OF THIS SCENE -->
-        <ImmersiveStoryExchange
-          v-for="(exchange, exIdx) in props.activeTurn.exchanges"
-          :key="exchange.userMessage?._key || exchange.assistantMessage?._key || exIdx"
-          data-story-exchange
-          class="shrink-0"
-          :exchange="exchange"
-          :sheet="props.sheet"
-          :entities="props.entities"
-          :current-scene-description="props.currentSceneDescription"
-          :npc-metadata="props.npcMetadata"
-          :game-id="props.gameId"
-          :turn-error="props.turnError"
-          @retry-turn="emit('retryTurn')"
-          @cancel-turn-error="emit('cancelTurnError')"
-          @open-sheet="emit('openSheet')"
-          @npc-click="(name) => emit('npcClick', name)"
-          @item-click="(item) => emit('itemClick', item)"
-          @take-direct="(item) => emit('takeDirect', item)"
-          @npc-hover="(entity, event) => emit('npcHover', entity, event)"
-          @npc-leave="emit('npcLeave')"
-          @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
-        />
+        <template v-for="item in feedItems" :key="item.key">
+          <!-- SCENE / CHAPTER DIVIDER -->
+          <div v-if="item.kind === 'divider'" class="story-feed-divider" role="separator">
+            <span class="story-feed-divider-rule"></span>
+            <span v-if="item.divider.chapter || item.divider.scene" class="story-feed-divider-label">
+              <span v-if="item.divider.chapter" class="story-feed-divider-chapter">{{ item.divider.chapter }}</span>
+              <span v-if="item.divider.chapter && item.divider.scene" aria-hidden="true"> · </span>
+              <span v-if="item.divider.scene">{{ item.divider.scene }}</span>
+            </span>
+            <span class="story-feed-divider-rule"></span>
+          </div>
 
-        <!-- "GM is working" badge: always the last item of the latest page, whatever the turn
-             adds (player bubble, engine events, streamed narration) or hides (silent commands). -->
+          <!-- LICENSE & CREDITS BANNER (start of the adventure) -->
+          <LicenseInfoBlock v-else-if="item.kind === 'license'" :msg="item.message" class="shrink-0 max-w-2xl" />
+
+          <ImmersiveStoryExchange
+            v-else
+            data-story-exchange
+            class="shrink-0"
+            :exchange="item.exchange"
+            :sheet="props.sheet"
+            :entities="props.entities"
+            :current-scene-description="props.currentSceneDescription"
+            :npc-metadata="props.npcMetadata"
+            :game-id="props.gameId"
+            :turn-error="props.turnError"
+            @retry-turn="emit('retryTurn')"
+            @cancel-turn-error="emit('cancelTurnError')"
+            @open-sheet="emit('openSheet')"
+            @npc-click="(name) => emit('npcClick', name)"
+            @item-click="(item) => emit('itemClick', item)"
+            @take-direct="(item) => emit('takeDirect', item)"
+            @npc-hover="(entity, event) => emit('npcHover', entity, event)"
+            @npc-leave="emit('npcLeave')"
+            @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
+          />
+        </template>
+
+        <!-- "GM is working" badge: always the last item of the feed, whatever the turn adds
+             (player bubble, engine events, streamed narration) or hides (silent commands). -->
         <ThinkingIndicator
-          v-if="props.isEvaluating && isLatestPage"
+          v-if="props.isEvaluating"
           class="self-start my-1"
           :status-text="props.statusText"
         />
       </template>
 
-      <!-- Inline content after the latest exchange (e.g. a pending choice dialog); hidden while browsing history. -->
+      <!-- Inline content after the latest exchange (e.g. a pending choice dialog). -->
       <div ref="inlinePanelsRef" class="shrink-0 flex flex-col">
-        <slot v-if="props.viewingTurnIndex === null" name="after-exchanges" />
+        <slot name="after-exchanges" />
       </div>
     </div>
 
-    <!-- COMIC PAGE NAVIGATION & PAGING CONTROLS (revealed on hover; pinned while browsing history) -->
-    <div
-      v-if="hasPager"
-      class="tw-pager story-feed-pager absolute inset-x-0 bottom-0 z-20 flex items-center justify-between px-3 py-1.5 text-xs font-bold"
-      :class="{ 'is-pinned': props.viewingTurnIndex !== null }"
-    >
-      <div class="flex items-center gap-1">
-        <button
-          type="button"
-          :disabled="props.activeTurnIndex <= 0"
-          @click="emit('goToTurn', props.activeTurnIndex - 1)"
-          class="tw-pager-button p-1 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-          title="Previous Turn"
-        >
-          <ChevronLeft class="w-3.5 h-3.5" />
-        </button>
-        <span class="px-2 tabular-nums">Turn {{ props.activeTurnIndex + 1 }} / {{ props.gameTurns.length }}</span>
-        <button
-          type="button"
-          :disabled="props.activeTurnIndex >= props.gameTurns.length - 1"
-          @click="emit('goToTurn', props.activeTurnIndex + 1)"
-          class="tw-pager-button p-1 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-          title="Next Turn"
-        >
-          <ChevronRight class="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      <button
-        v-if="props.viewingTurnIndex !== null"
-        type="button"
-        @click="emit('goToLatestTurn')"
-        class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase tracking-wider hover:bg-amber-500/30 cursor-pointer"
-      >
-        Jump to Latest
-      </button>
-    </div>
-
-    <!-- Jump to the latest message (only while content is hidden below; after the pager for the ~ selector) -->
+    <!-- Jump to the latest message (only while content is hidden below) -->
     <Transition name="scroll-latest">
       <button
         v-if="hasContentBelow"
@@ -267,45 +274,51 @@ const isLatestPage = computed(() => props.activeTurnIndex >= props.gameTurns.len
 
 .story-feed-scroll-latest {
   bottom: 0.75rem;
-  transition: bottom 0.2s ease;
-}
-
-.story-feed-pager {
-  opacity: 0;
-  transform: translateY(100%);
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.story-feed:hover .story-feed-pager,
-.story-feed:focus-within .story-feed-pager,
-.story-feed-pager.is-pinned {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-}
-
-/* Keep the jump button clear of the pager whenever the pager is shown */
-.story-feed:hover .story-feed-pager ~ .story-feed-scroll-latest,
-.story-feed:focus-within .story-feed-pager ~ .story-feed-scroll-latest,
-.story-feed-pager.is-pinned ~ .story-feed-scroll-latest {
-  bottom: 3rem;
-}
-
-/* Touch devices cannot hover: always show the pager there */
-@media (hover: none) {
-  .story-feed-pager {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-
-  .story-feed-pager ~ .story-feed-scroll-latest {
-    bottom: 3rem;
-  }
 }
 
 .comic-story-container > * {
   flex-shrink: 0;
+}
+
+.story-feed-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.story-feed-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0.75rem;
+  color: var(--tw-accent-soft, #fbbf24);
+}
+
+.story-feed-divider-rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 55%, transparent), transparent);
+}
+
+.story-feed-divider-label {
+  max-width: 70%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-feed-divider-chapter {
+  font-weight: 900;
 }
 </style>

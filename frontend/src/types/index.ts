@@ -6,7 +6,7 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   itemIds?: string[]
-  /** Scene/sequence the message belongs to; the story feed shows one page per scene/sequence. */
+  /** Scene/sequence the message belongs to; the story feed puts a divider where they change. */
   scene_id?: string | null
   sequence_id?: string | null
   /** Script narration shown verbatim (tw.story.narrate_raw): no dialogue or voice-tag parsing. */

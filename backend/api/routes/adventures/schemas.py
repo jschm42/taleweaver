@@ -564,6 +564,10 @@ class TranslateTextResponse(BaseModel):
 
 class ChatResponse(BaseModel):
     messages: list[dict[str, Any]]
+    # True when `message_limit` cut off older messages (GET /{game_id}/chat/history loads them).
+    has_more_messages: bool = False
+    # Sequence id -> title of the chapters the chat reached (chapter dividers in the story feed).
+    sequence_titles: dict[str, str] = Field(default_factory=dict)
     sheet: dict[str, Any]
     combat: Optional[dict[str, Any]] = None
     map_data: Optional[dict[str, Any]] = None
@@ -577,7 +581,7 @@ class ChatResponse(BaseModel):
     quests: Optional[list[dict[str, Any]]] = None
     awards: Optional[list[dict[str, Any]]] = None
     active_sequence: Optional[dict[str, Any]] = None
-    # Current scene/sequence: the client groups the story into one page per scene/sequence.
+    # Current scene/sequence: the story feed marks scene/chapter changes with a divider.
     scene_id: Optional[str] = None
     sequence_id: Optional[str] = None
     is_completed: bool = False

@@ -269,6 +269,9 @@ const {
   cancelTurnError,
   isLegacyFormat,
   language,
+  hasOlderMessages,
+  sequenceTitles,
+  loadOlderMessages,
 } = useGameSocket()
 
 // Scene changes without an exit (script teleport, GM move) get the travel curtain too.
@@ -1885,6 +1888,10 @@ usePlayAgentAutoLoop()
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
+      :has-older-messages="hasOlderMessages"
+      :load-older-messages="loadOlderMessages"
+      :scene-nodes="nodes"
+      :sequence-titles="sequenceTitles"
       :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"

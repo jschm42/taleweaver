@@ -1,5 +1,5 @@
 ---
-description: Mandatory security rules for file paths, path traversal prevention (CWE-22), and safe file operations.
+description: Mandatory security rules for file paths, path traversal prevention (CWE-22), safe file operations, and session ownership checks (CWE-639).
 trigger: model_decision
 ---
 
@@ -24,3 +24,11 @@ trigger: model_decision
      ```bash
      pytest tests/test_security_hardening.py
      ```
+
+# Session Ownership (CWE-639)
+
+5. **A session id is not an access token**:
+   * Resolve a session for a request only with `AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)` (or `GameTurnManager(...).initialize()`, which does that). With `user_id` it returns `None` for another user's session; answer `404`.
+   * Never call it without `user_id` for request data, and never load `SessionState` / `GameSession` by id alone in a route.
+   * Endpoints that take an optional `session_id` next to a template id (e.g. `map_api.py`) must check the session's owner too, not only the template's.
+   * Verification: `pytest tests/test_session_ownership.py`; add new session endpoints to its parametrized list.

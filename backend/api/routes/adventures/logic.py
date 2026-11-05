@@ -254,10 +254,19 @@ class AdventureLogic:
         return await resolve_initial_scene_id(db, template_id)
 
     @staticmethod
+    def session_owner_id(state: SessionState) -> Optional[str]:
+        """Owner of a session: the game session's user (never null), else the state's user."""
+        session = state.session
+        return (session.user_id if session else None) or state.user_id
+
+    @staticmethod
     async def resolve_session_state(
         db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None
     ) -> Optional[SessionState]:
-        """Resolve a session state by session id first, then by template/adventure id."""
+        """Resolve a session state by session id first, then by template/adventure id.
+
+        With ``user_id``, only that user's session is returned (None for anyone else's).
+        """
         direct_res = await db.execute(
             select(SessionState)
             .options(selectinload(SessionState.session))
@@ -265,6 +274,8 @@ class AdventureLogic:
         )
         direct_state = direct_res.scalars().first()
         if direct_state:
+            if user_id and AdventureLogic.session_owner_id(direct_state) != user_id:
+                return None
             return direct_state
 
         session_candidate = None

@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.chat_history import HistoryPage, load_history_page
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.out_of_turn_progress import (
@@ -29,9 +30,18 @@ async def load_chat_history(db: AsyncSession, session_id: str) -> list[dict[str,
     chat_res = await db.execute(
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at.asc())
+        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
     )
     return [m.to_client_dict() for m in chat_res.scalars().all()]
+
+
+async def load_snapshot_history(
+    db: AsyncSession, session_id: str, limit: int | None
+) -> HistoryPage:
+    """The whole history, or only the newest ``limit`` messages (the feed loads older on scroll)."""
+    if limit is None:
+        return HistoryPage(await load_chat_history(db, session_id), False)
+    return await load_history_page(db, session_id, limit)
 
 
 async def load_entity_names(db: AsyncSession, session_id: str) -> dict[str, str]:
