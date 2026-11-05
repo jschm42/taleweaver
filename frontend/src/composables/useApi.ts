@@ -4,6 +4,7 @@
  * All methods throw on non-2xx responses so callers can handle errors
  * with a simple try/catch.
  */
+import type { TtsPreferences } from '@/types/tts'
 import type {
   CreateAdventurePayload,
   GameSession,
@@ -857,7 +858,7 @@ export const api = {
     })
   },
 
-  updateMyPreferences(payload: { default_language?: string | null }): Promise<any> {
+  updateMyPreferences(payload: { default_language?: string | null; tts_preferences?: TtsPreferences }): Promise<any> {
     return request('/users/me/preferences', { method: 'PUT', body: JSON.stringify(payload) })
   },
 
@@ -936,7 +937,7 @@ export const api = {
   },
 
   /** Updates a session note, status, memory turn limit, or compression toggle. */
-  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number; enable_history_compression?: boolean; narration_style?: string; ui_skin?: string }): Promise<GameSession> {
+  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number; enable_history_compression?: boolean; narration_style?: string; ui_skin?: string; tts_auto_speak?: TtsPreferences }): Promise<GameSession> {
     return request(`/adventures/sessions/${gameId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),

@@ -20,10 +20,13 @@ from backend.api.routes.adventures.session_items import (
 )
 from backend.api.routes.adventures.session_sequence_label import active_sequence_title
 from backend.api.routes.adventures.session_starter import start_session
+from backend.api.routes.adventures.session_state_settings import (
+    apply_state_settings,
+    has_state_settings,
+)
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
-from backend.core.ui_theme import UI_SKIN_AUTO
 from backend.engine.adventures.adventure_updates import is_legacy_session
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.sessions.session_exporter import SessionExporter
@@ -690,24 +693,11 @@ async def update_session(
         game_session.status = payload.status
     if payload.status_note is not None:
         game_session.status_note = payload.status_note
-    state_fields = (
-        payload.max_memory_turns,
-        payload.enable_history_compression,
-        payload.narration_style,
-        payload.ui_skin,
-    )
-    if any(value is not None for value in state_fields):
+    if has_state_settings(payload):
         state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
         session_state = state_res.scalars().first()
         if session_state:
-            if payload.max_memory_turns is not None:
-                session_state.max_memory_turns = max(1, min(100, int(payload.max_memory_turns)))
-            if payload.enable_history_compression is not None:
-                session_state.enable_history_compression = payload.enable_history_compression
-            if payload.narration_style is not None:
-                session_state.narration_style = payload.narration_style
-            if payload.ui_skin is not None:
-                session_state.ui_skin = None if payload.ui_skin == UI_SKIN_AUTO else payload.ui_skin
+            apply_state_settings(session_state, payload)
 
     await db.commit()
 

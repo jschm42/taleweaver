@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { apiFetch } from '@/services/http'
+import type { TtsPreferences } from '@/types/tts'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 
@@ -29,6 +30,7 @@ export interface User {
   adventure_count?: number
   total_xp?: number
   recovery_codes_remaining?: number
+  tts_preferences?: Partial<TtsPreferences> | null
 }
 
 export const authState = reactive({

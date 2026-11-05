@@ -16,14 +16,14 @@ import type { TextDensity } from '@/skins/useTextDensity'
 import { DEFAULT_TEXT_SCALE } from '@/skins/useTextScale'
 import { DEFAULT_NARRATION_STYLE, isNarrationStyle, type NarrationStyle } from './settings/narrationStyles'
 import type { SessionSettingsPayload, SettingsTabId } from './settings/types'
+import { DEFAULT_AUTO_SPEAK_SETTINGS, type AutoSpeakSettings } from '@/types/tts'
 
 const props = defineProps<{
   initialTurns?: number
   initialNarrationStyle?: string | null
   initialCompression?: boolean
   initialAutoSpeech?: boolean
-  initialAutoSpeakNarration?: boolean
-  initialAutoSpeakDialogues?: boolean
+  initialAutoSpeakSettings?: AutoSpeakSettings
   initialLanguage?: string
   initialTab?: SettingsTabId
   initialSkin?: SkinPreference
@@ -55,8 +55,7 @@ const narrationStyle = ref<NarrationStyle>(
 )
 const enableCompression = ref(props.initialCompression ?? true)
 const autoSpeech = ref(props.initialAutoSpeech ?? false)
-const autoSpeakNarration = ref(props.initialAutoSpeakNarration ?? true)
-const autoSpeakDialogues = ref(props.initialAutoSpeakDialogues ?? true)
+const autoSpeakSettings = ref<AutoSpeakSettings>({ ...(props.initialAutoSpeakSettings ?? DEFAULT_AUTO_SPEAK_SETTINGS) })
 const language = ref(props.initialLanguage ?? '')
 const skin = ref<SkinPreference>(props.initialSkin ?? 'auto')
 const density = ref<TextDensity>(props.initialDensity ?? 'comfortable')
@@ -94,8 +93,7 @@ function save() {
     narrationStyle: narrationStyle.value,
     enableCompression: enableCompression.value,
     autoSpeech: autoSpeech.value,
-    autoSpeakNarration: autoSpeakNarration.value,
-    autoSpeakDialogues: autoSpeakDialogues.value,
+    autoSpeakSettings: { ...autoSpeakSettings.value },
     language: language.value,
     skin: skin.value,
     density: density.value,
@@ -197,8 +195,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
         <SettingsVoiceTab
           v-else-if="activeTab === 'voice'"
           v-model:auto-speech="autoSpeech"
-          v-model:auto-speak-narration="autoSpeakNarration"
-          v-model:auto-speak-dialogues="autoSpeakDialogues"
+          v-model:auto-speak-settings="autoSpeakSettings"
           :tts-available="!!props.ttsAvailable"
         />
         <SettingsTranslationTab v-else-if="activeTab === 'translation'" v-model:language="language" />

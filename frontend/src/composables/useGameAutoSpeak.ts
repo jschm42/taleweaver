@@ -2,6 +2,8 @@ import { ref, watch, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
 import { parseAssistantContent, parseUserMessage, type DialogueSegment } from '@/composables/useComicTurns'
 import { rawAssistantContent } from '@/composables/comicPages'
+import { resolveEntityRefsText } from '@/utils/entityRefs'
+import type { AutoSpeakSettings } from '@/types/tts'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
 /** Lets the travel overlay finish fading out before the new scene's narration starts. */
@@ -17,8 +19,8 @@ type AutoSpeakOptions = {
   sheet: Ref<any>
   npcMetadata: Ref<Record<string, any>>
   sessionId: Ref<string>
-  autoSpeakNarration?: Ref<boolean>
-  autoSpeakDialogues?: Ref<boolean>
+  /** Which voices are spoken; a missing setting falls back to speaking everything except system messages. */
+  autoSpeakSettings?: Ref<AutoSpeakSettings>
   /** While true (e.g. a choice dialog waits for the player), nothing is spoken and running speech stops. */
   speechSuppressed?: Ref<boolean>
   /** While true (e.g. the travel overlay is shown), new text waits and is spoken once it turns false. */
@@ -32,6 +34,15 @@ function computeContentHash(content: string): string {
     hash = ((hash << 5) + hash) ^ normalized.charCodeAt(i)
   }
   return `${normalized.length}_${(hash >>> 0).toString(36)}`
+}
+
+/** System notes may carry markdown, emoji and entity references that must not be read aloud. */
+function speakableSystemText(content: string): string {
+  return resolveEntityRefsText(content)
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/[*_`#>~|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function getMessageSignature(message: { id?: string; content: string }, index: number): string {
@@ -166,53 +177,72 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     enqueueDialogues(parsed.dialogues.slice(alreadyStreamed))
   }
 
+  function isVoiceEnabled(dlg: DialogueSegment): boolean {
+    const settings = options.autoSpeakSettings?.value
+    if (dlg.isNarration) return settings?.gm ?? true
+    if (dlg.isPlayer) return settings?.protagonist ?? true
+    return settings?.npcs ?? true
+  }
+
+  /** Without a speaker the line is read in the Game Master's voice. */
+  function enqueueSpeech(text: string, speaker?: string, voiceTag?: string): void {
+    // One tag format ([tag]); the backend converts it for the active TTS provider.
+    const textToSpeak = voiceTag ? `[${voiceTag}] ${text}` : text
+    // The speaker is passed as a voice hint (resolved via npcMetadata), never
+    // prefixed into the text, so the name is not read aloud.
+    void audioService.enqueueSpeak(textToSpeak, {
+      sceneDescription: currentSceneDescription.value,
+      adventureId: sheet.value?.adventure_id || undefined,
+      sessionId: sessionId.value,
+      title: sheet.value?.adventure_title || undefined,
+      sceneName: sheet.value?.current_scene || undefined,
+      tone: sheet.value?.adventure_tone || undefined,
+      npcMetadata: npcMetadata.value,
+      voiceOverride: speaker,
+      speaker,
+      style: voiceTag || undefined,
+    })
+  }
+
   function enqueueDialogues(dialogues: DialogueSegment[]): void {
     if (options.speechSuppressed?.value) return
-    const speakNarration = options.autoSpeakNarration?.value ?? true
-    const speakDialogues = options.autoSpeakDialogues?.value ?? true
-
     for (const dlg of dialogues) {
-      if (!dlg.text.trim()) continue
-      if (dlg.isNarration && !speakNarration) continue
-      if (!dlg.isNarration && !speakDialogues) continue
-
-      // One tag format ([tag]); the backend converts it for the active TTS provider.
-      const textToSpeak = dlg.voiceTag ? `[${dlg.voiceTag}] ${dlg.text}` : dlg.text
+      if (!dlg.text.trim() || !isVoiceEnabled(dlg)) continue
       const isNpcLine = Boolean(dlg.speaker) && dlg.speaker !== 'Game Master'
-
-      // The speaker is passed as a voice hint (resolved via npcMetadata), never
-      // prefixed into the text, so the name is not read aloud.
-      void audioService.enqueueSpeak(textToSpeak, {
-        sceneDescription: currentSceneDescription.value,
-        adventureId: sheet.value?.adventure_id || undefined,
-        sessionId: sessionId.value,
-        title: sheet.value?.adventure_title || undefined,
-        sceneName: sheet.value?.current_scene || undefined,
-        tone: sheet.value?.adventure_tone || undefined,
-        npcMetadata: npcMetadata.value,
-        voiceOverride: isNpcLine ? dlg.speaker : undefined,
-        speaker: isNpcLine ? dlg.speaker : undefined,
-        style: dlg.voiceTag || undefined,
-      })
+      enqueueSpeech(dlg.text, isNpcLine ? dlg.speaker : undefined, dlg.voiceTag)
     }
+  }
+
+  function canSpeakNow(): boolean {
+    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return false
+    return !isCombatActive.value && !options.speechSuppressed?.value
   }
 
   /** The player's own spoken line (/say or quoted speech), read in the protagonist's voice. */
   function speakPlayerLine(message: any): void {
-    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
-    if (isCombatActive.value) return
+    if (!canSpeakNow()) return
     const { isDialogue, speechText } = parseUserMessage(message, [], npcMetadata.value)
     if (!isDialogue || !speechText.trim()) return
     // The player's name resolves to the protagonist's voice via npcMetadata.
     enqueueDialogues([{ speaker: sheet.value?.name || 'You', text: speechText, isPlayer: true }])
   }
 
+  /** Dice rolls, status updates and other system notes, read in the Game Master's voice. */
+  function speakSystemMessage(message: any): void {
+    if (!options.autoSpeakSettings?.value.system || message?.is_debug) return
+    if (!canSpeakNow()) return
+    const text = speakableSystemText(String(message?.content || ''))
+    if (text) enqueueSpeech(text)
+  }
+
   // A single message the player just sent (not a history load) is spoken right away, so it is
   // heard before the GM's answer; plain actions ("look around") are not dialogue and stay silent.
+  // A single new system note is spoken the same way when the player wants to hear them.
   watch(() => messages.value.length, (length, previous) => {
     if (!historySeeded || length !== previous + 1) return
     const last = messages.value[length - 1]
     if (last?.role === 'user') speakPlayerLine(last)
+    if (last?.role === 'system') speakSystemMessage(last)
   })
 
   /**

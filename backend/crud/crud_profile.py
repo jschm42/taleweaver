@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.tts_preferences import resolve_tts_preferences
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -93,6 +94,7 @@ async def build_user_profile_data(db: AsyncSession, user: User) -> dict[str, Any
         ],
         "has_imported_defaults": user.has_imported_defaults,
         "recovery_codes_remaining": user.recovery_codes_remaining,
+        "tts_preferences": resolve_tts_preferences(user.game_settings),
     }
 
 

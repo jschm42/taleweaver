@@ -2,7 +2,7 @@ import ipaddress
 import logging
 import time
 from collections import defaultdict
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -89,6 +89,7 @@ class UserResponse(BaseModel):
     adventure_count: Optional[int] = 0
     total_xp: Optional[int] = 0
     recovery_codes_remaining: int = 0
+    tts_preferences: Optional[dict[str, Any]] = None
 
 
 class SetupRootRequest(BaseModel):

@@ -29,6 +29,7 @@ from backend.api.routes.adventures.session_items import (
     backfill_avatar_items_from_template_entities,
 )
 from backend.core.config import settings
+from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY, resolve_tts_preferences
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
@@ -306,6 +307,8 @@ def _build_session_state(
     first_seq = sequences[0] if sequences and isinstance(sequences[0], dict) else None
     active_seq_id = str(first_seq.get("id") or "") if first_seq else None
     active_seq_order = int(first_seq.get("order") or 1) if first_seq else 1
+    # The player's profile defaults decide which voices this session reads aloud.
+    entity_states[TTS_AUTO_SPEAK_KEY] = resolve_tts_preferences(user.game_settings)
 
     return SessionState(
         session_id=session_id,
