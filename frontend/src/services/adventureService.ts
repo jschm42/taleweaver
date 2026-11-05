@@ -257,6 +257,28 @@ export const adventureService = {
     return res.json()
   },
 
+  async getScripts(adventureId: string): Promise<{ status: string; scripts: any[] }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/scripts`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to load scripts.')
+    }
+    return res.json()
+  },
+
+  async getScript(adventureId: string, scriptId: string): Promise<{ status: string; script: any }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/script/${encodeURIComponent(scriptId)}`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to load script.')
+    }
+    return res.json()
+  },
+
   async deleteScript(adventureId: string, scriptId: string): Promise<void> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/script/${encodeURIComponent(scriptId)}`, {
       method: 'DELETE',
