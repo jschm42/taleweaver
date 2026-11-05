@@ -87,11 +87,11 @@ function getSceneLabel(sceneId?: string | null): string {
             <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
             </div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div v-if="npc.is_hidden" class="px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200">HIDDEN</div>
+            <div class="absolute top-2 left-2 right-11 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+              <div v-if="npc.is_hidden" class="px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200 pointer-events-auto">HIDDEN</div>
               <div
                 v-if="hasScript(npc)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                class="p-0.5 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm pointer-events-auto shrink-0"
                 title="Contains custom event script(s)"
               >
                 <Brain class="w-3.5 h-3.5 text-purple-400" />

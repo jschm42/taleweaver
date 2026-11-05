@@ -20,6 +20,8 @@ import {
   Trash2,
   Terminal,
   BookOpen,
+  Check,
+  X,
 } from 'lucide-vue-next'
 import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
 import { triggerTwHint } from '@/utils/scriptAutocomplete'
@@ -469,9 +471,34 @@ function applyAiCode(code: string) {
   syntaxResult.value = null
 }
 
-function clearScript() {
+const isConfirmingClear = ref(false)
+let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null
+
+function requestClear() {
+  isConfirmingClear.value = true
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer)
+  }
+  clearConfirmTimer = setTimeout(() => {
+    isConfirmingClear.value = false
+    clearConfirmTimer = null
+  }, 4000)
+}
+
+function cancelClear() {
+  isConfirmingClear.value = false
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer)
+    clearConfirmTimer = null
+  }
+}
+
+function executeClear() {
+  cancelClear()
   if (cmInstance) {
-    cmInstance.setValue('')
+    const doc = cmInstance.getDoc()
+    const last = doc.lastLine()
+    doc.replaceRange('', { line: 0, ch: 0 }, { line: last, ch: doc.getLine(last).length })
     cmInstance.focus()
   } else {
     emit('update:modelValue', '')
@@ -560,6 +587,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer)
+    clearConfirmTimer = null
+  }
   window.removeEventListener('keydown', handleKeydown)
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -708,16 +739,42 @@ onBeforeUnmount(() => {
           <span class="hidden sm:inline">{{ isRunning ? 'Running...' : 'Run' }}</span>
         </button>
 
-        <!-- Clear -->
+        <!-- Clear / Clear Confirmation -->
+        <div
+          v-if="modelValue && isConfirmingClear"
+          class="flex items-center gap-1 bg-rose-500/15 border border-rose-500/40 rounded-lg px-2 py-0.5 text-[11px] animate-fadeIn"
+        >
+          <span class="text-rose-300 font-medium select-none">Clear all?</span>
+          <button
+            type="button"
+            @click="executeClear"
+            class="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors"
+            title="Confirm clear"
+          >
+            <Check class="w-3 h-3" />
+            <span>Clear</span>
+          </button>
+          <button
+            type="button"
+            @click="cancelClear"
+            class="p-0.5 rounded text-slate-400 hover:text-white transition-colors"
+            title="Cancel"
+          >
+            <X class="w-3 h-3" />
+          </button>
+        </div>
         <button
-          v-if="modelValue"
+          v-else-if="modelValue"
           type="button"
-          @click="clearScript"
+          @click="requestClear"
           class="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
           title="Clear code"
         >
           <Trash2 class="w-3.5 h-3.5" />
         </button>
+
+        <!-- Visual divider between editor actions and window controls -->
+        <div class="h-3.5 w-px bg-white/10 mx-0.5" aria-hidden="true"></div>
 
         <!-- Fullscreen Toggle -->
         <button

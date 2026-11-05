@@ -78,11 +78,18 @@ const menuItemClass = 'w-full px-3 py-2 text-left text-xs font-bold text-slate-2
         <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
       </div>
       <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
-      <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-        <div v-for="badge in badges || []" :key="badge.label" :class="['px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border', badge.class]">{{ badge.label }}</div>
+      <div class="absolute top-1.5 left-1.5 right-8 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+        <div
+          v-for="badge in badges || []"
+          :key="badge.label"
+          :class="['px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border truncate max-w-full pointer-events-auto', badge.class]"
+          :title="badge.label"
+        >
+          {{ badge.label }}
+        </div>
         <div
           v-if="hasScript"
-          class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+          class="p-0.5 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm pointer-events-auto shrink-0"
           title="Contains custom event script(s)"
         >
           <Brain class="w-3 h-3 text-purple-400" />
