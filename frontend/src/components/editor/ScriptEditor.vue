@@ -411,7 +411,10 @@ watch(
   () => {
     nextTick(() => {
       cmInstance?.refresh()
-      if (cmInstance) cmInstance.focus()
+      setTimeout(() => {
+        cmInstance?.refresh()
+        if (cmInstance) cmInstance.focus()
+      }, 50)
     })
   }
 )
@@ -534,7 +537,14 @@ function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
 }
 
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isFullscreen.value) {
+    isFullscreen.value = false
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   isLoadingCdn.value = true
   try {
     const { codeMirrorLoaded } = await loadCodeMirrorAndSkulpt()
@@ -550,6 +560,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
   resizeObserver?.disconnect()
   resizeObserver = null
   intersectionObserver?.disconnect()
@@ -563,10 +574,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <div class="script-editor-root">
+    <Teleport to="body" :disabled="!isFullscreen">
+      <!-- Fullscreen Backdrop -->
+      <div
+        v-if="isFullscreen"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9998] transition-opacity"
+        @click="toggleFullscreen"
+      />
   <div
     :class="[
       'script-editor-container flex flex-col rounded-xl border border-white/10 bg-slate-950/90 transition-all overflow-hidden',
-      isFullscreen ? 'fixed inset-4 z-50 shadow-2xl bg-slate-950 border-amber-500/50' : 'relative',
+      isFullscreen ? 'fixed inset-4 z-[9999] shadow-2xl bg-slate-950 border-amber-500/50' : 'relative',
     ]"
   >
     <!-- Header / Toolbar -->
@@ -820,7 +839,7 @@ onBeforeUnmount(() => {
       class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
       :style="{
         '--cm-min-height': isFullscreen ? '400px' : minHeight,
-        '--cm-max-height': maxHeight,
+        '--cm-max-height': isFullscreen ? 'none' : maxHeight,
         minHeight: isFullscreen ? '400px' : minHeight,
       }"
     >
@@ -917,6 +936,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </div>
+    </Teleport>
+  </div>
 </template>
 
 <style>
@@ -946,6 +967,7 @@ onBeforeUnmount(() => {
 }
 
 /* Fullscreen: the canvas has a fixed height, so the editor fills it and scrolls inside. */
+.codemirror-wrapper.codemirror-fill,
 .codemirror-wrapper.codemirror-fill .CodeMirror,
 .codemirror-wrapper.codemirror-fill .CodeMirror-scroll {
   height: 100% !important;
