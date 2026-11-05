@@ -413,21 +413,28 @@ const closeSheetForInlinePrompt = (): void => {
   showSheet.value = false
   if (sheetDirty.value) handleSheetChanged()
 }
-/** Set by a prompt whose own action starts a turn (Combine): it stays open. */
-const keepPromptOnTurn = ref<'combine' | null>(null)
+/** Set by a prompt whose own action starts a turn (Combine or Container Switch): it stays open. */
+const keepPromptOnTurn = ref<'combine' | 'container' | null>(null)
 
 // The hovered element usually disappears when a turn starts (tab switch, item taken) without a
 // mouseleave event, which would leave its tooltip floating over the story and the choice dialog.
 // Unlock attempts never start a turn, so a new turn means the player moved on: drop the open
 // inline prompts instead of keeping them pinned below the new story entries.
 watch(status, (current, previous) => {
-  if (current !== 'connecting' || previous === 'connecting') return
+  if (current === 'loading' || current === 'connecting') {
+    hoveredEntity.value = null
+  }
+  const isTurnStarting = (current === 'connecting' && previous !== 'connecting') ||
+                         (current === 'loading' && previous !== 'loading')
+  if (!isTurnStarting) return
   hoveredEntity.value = null
   const keep = keepPromptOnTurn.value
   keepPromptOnTurn.value = null
   const keepCombine = keep === 'combine' && showCombinePanel.value
+  const keepContainer = keep === 'container' && showContainerModal.value
   closeInlinePrompts()
   showCombinePanel.value = keepCombine
+  showContainerModal.value = keepContainer
 })
 // Same for inline prompts: opening one switches to the story tab under the cursor, and closing
 // one removes the tiles that may still be hovered.
@@ -644,6 +651,9 @@ const handleSwitchFlipCodeSubmit = async (code: string) => {
     showSwitchUnlockModal.value = false
     switchUnlockModalEntity.value = null
     switchUnlockTargetState.value = ''
+    if (showContainerModal.value) {
+      await refreshSession(true)
+    }
   } catch (error: any) {
     switchUnlockError.value = error?.message || 'Incorrect code. The switch does not move.'
   } finally {
@@ -666,6 +676,9 @@ const handleSwitchFlipItemSubmit = async (itemId: string) => {
     showSwitchUnlockModal.value = false
     switchUnlockModalEntity.value = null
     switchUnlockTargetState.value = ''
+    if (showContainerModal.value) {
+      await refreshSession(true)
+    }
   } catch (error: any) {
     switchUnlockError.value = error?.message || 'Failed to activate the switch with this item.'
   } finally {
@@ -675,7 +688,7 @@ const handleSwitchFlipItemSubmit = async (itemId: string) => {
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
-  return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+  return ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(entity.item_type || '').toUpperCase())
 }
 
 const isContainerLocked = (container: any): boolean => {
@@ -808,6 +821,48 @@ const normalizeContainerItems = (rawItems: any[]): any[] => {
     }
   }
   return result
+}
+
+const activeContainerEntity = computed(() => {
+  const id = String(activeContainer.value?.id || '').trim().toLowerCase()
+  if (!id) return null
+  return (
+    (entities.value || []).find((entry: any) => String(entry.id || '').toLowerCase() === id) ||
+    (inventoryItems.value || []).find((entry: any) => String(entry?.id || '').toLowerCase() === id) ||
+    null
+  )
+})
+
+watch(
+  () => entities.value,
+  () => {
+    if (!showContainerModal.value || !activeContainer.value) return
+    const updated = activeContainerEntity.value
+    if (updated && Array.isArray(updated.inventory)) {
+      activeContainer.value = {
+        ...activeContainer.value,
+        items: normalizeContainerItems(updated.inventory),
+      }
+    }
+  },
+  { deep: true },
+)
+
+const handleContainerSwitchStateSelect = (targetState: string): void => {
+  const entity = activeContainerEntity.value
+  if (!entity || isActionInputBlocked.value) return
+
+  const gates = getSwitchTransitionGates(entity, targetState)
+  if (gates.code || gates.item || gates.rule) {
+    switchUnlockModalEntity.value = entity
+    switchUnlockTargetState.value = targetState
+    switchUnlockError.value = ''
+    showSwitchUnlockModal.value = true
+    return
+  }
+
+  keepPromptOnTurn.value = 'container'
+  void sendMessage(`/switch "${entity.name}" ${targetState}`)
 }
 
 const openContainerFromEntity = (entity: any): boolean => {
@@ -1278,37 +1333,52 @@ const handlePlayerInput = async (content: string) => {
   await handlePlayerInputBase(content)
 }
 
-const runContainerAction = async (commandBuilder: (containerIdOrName: string) => string) => {
+const runContainerAction = async (
+  commandBuilder: (containerIdOrName: string) => string,
+  keepOpen = false
+) => {
   if (!activeContainer.value || containerBusy.value) return
   const identifier = activeContainer.value.id || activeContainer.value.name
   if (!identifier) return
 
+  hoveredEntity.value = null
   containerBusy.value = true
+  if (keepOpen) {
+    keepPromptOnTurn.value = 'container'
+  }
   try {
     await sendMessage(commandBuilder(identifier))
-    closeContainerModal()
+    hoveredEntity.value = null
+    if (!keepOpen) {
+      closeContainerModal()
+    }
   } finally {
     containerBusy.value = false
+    hoveredEntity.value = null
   }
 }
 
 const handleContainerTakeAll = async () => {
-  await runContainerAction((id) => `/container_take_all ${id}`)
+  const isContainerSwitch = String(activeContainerEntity.value?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'
+  await runContainerAction((id) => `/container_take_all ${id}`, isContainerSwitch)
 }
 
 const handleContainerTakeItem = async (item: any) => {
   const itemRef = String(item?.id || item?.name || '').trim()
   if (!itemRef) return
-  await runContainerAction((id) => `/container_take_item ${id} | ${itemRef}`)
+  const isContainerSwitch = String(activeContainerEntity.value?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'
+  const keepOpen = isContainerSwitch || (activeContainerItems.value || []).length > 1
+  await runContainerAction((id) => `/container_take_item ${id} | ${itemRef}`, keepOpen)
 }
 
 const handleContainerDropToScene = async () => {
-  await runContainerAction((id) => `/container_drop_scene ${id}`)
+  const isContainerSwitch = String(activeContainerEntity.value?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'
+  await runContainerAction((id) => `/container_drop_scene ${id}`, isContainerSwitch)
 }
 
 const handleContainerPutItems = async (itemIds: string[]) => {
   if (!itemIds.length) return
-  await runContainerAction((id) => `/container_put_items ${id} | ${itemIds.join(', ')}`)
+  await runContainerAction((id) => `/container_put_items ${id} | ${itemIds.join(', ')}`, true)
 }
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
@@ -1491,6 +1561,7 @@ useGameUiFeedback({
 
 const handleTakeDirect = async (entity: any) => {
   if (isActionInputBlocked.value) return
+  hoveredEntity.value = null
   await sendMessage(`/take_direct ${entity.id || entity.name}`)
 }
 
@@ -1919,6 +1990,7 @@ usePlayAgentAutoLoop()
           :image-url="activeContainer?.imageUrl || null"
           :busy="containerBusy"
           :container-id="activeContainer?.id || ''"
+          :container-entity="activeContainerEntity"
           :inventory-items="inventoryItems"
           :can-put="!!activeContainer?.canPut"
           @close="closeContainerModal"
@@ -1926,6 +1998,7 @@ usePlayAgentAutoLoop()
           @take-item="handleContainerTakeItem"
           @drop-to-scene="handleContainerDropToScene"
           @put-items="handleContainerPutItems"
+          @select-switch-state="handleContainerSwitchStateSelect"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />

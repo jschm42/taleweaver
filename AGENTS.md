@@ -36,6 +36,7 @@ Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customi
    - New features get a docs entry. Removed or renamed features are removed or renamed in the docs too, with no stale references left behind.
    - Documentation is written **in English only**, regardless of the language used in the conversation.
    - In the final summary, list the docs that were updated, or state explicitly that none were affected.
+   - **Scripting API & Editor Autocomplete Sync**: When scripting functions, methods, proxy properties or namespaces are added, modified or documented in `backend/engine/scripting/` or `docs/scripting_engine.md`, update both `docs/scripting_engine.md` and the frontend Script Editor autocomplete registry (`frontend/src/utils/twScriptApiDefinitions.ts`) in the same task to keep editor IntelliSense in sync.
 
 ---
 

@@ -36,10 +36,13 @@ async def load_session_object(
         )
     )
     entity = res.scalars().first()
+    allowed_types = {item_type}
+    if item_type in {"CONTAINER", "SWITCH"}:
+        allowed_types.add("CONTAINER_SWITCH")
     is_match = (
         entity is not None
         and entity.entity_type == "OBJECT"
-        and str(entity.item_type or "").upper() == item_type
+        and str(entity.item_type or "").upper() in allowed_types
     )
     if not is_match:
         raise HTTPException(status_code=404, detail=not_found)

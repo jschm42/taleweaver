@@ -81,6 +81,8 @@ _OBJECT_ENTITY_KEYS = {
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -183,6 +185,8 @@ _INLINE_OBJECT_SCRIPT_KEYS = (
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -203,7 +207,7 @@ def _extract_item_script_metadata(metadata: dict[str, Any], filtered: dict[str, 
 def _extract_item_switch_metadata(
     metadata: dict[str, Any], filtered: dict[str, Any], item_type: str
 ) -> None:
-    if item_type == "SWITCH":
+    if item_type in {"SWITCH", "CONTAINER_SWITCH"}:
         switch_config = metadata.pop("switch", {})
         if not isinstance(switch_config, dict):
             switch_config = {}
@@ -213,6 +217,12 @@ def _extract_item_switch_metadata(
         filtered["switch_state_labels"] = dict(switch_config.get("state_labels") or {})
         filtered["switch_initial_state"] = (
             switch_config.get("initial_state") or metadata.pop("switch_initial_state", "") or ""
+        )
+        filtered["switch_disabled_states"] = (
+            switch_config.get("disabled_states") or metadata.pop("switch_disabled_states", []) or []
+        )
+        filtered["switch_status_text"] = (
+            switch_config.get("status_text") or metadata.pop("switch_status_text", "") or ""
         )
         filtered["switch_transitions"] = (
             switch_config.get("transitions") or metadata.pop("switch_transitions", []) or []
@@ -228,6 +238,8 @@ def _extract_item_switch_metadata(
     metadata.pop("switch", None)
     metadata.pop("switch_states", None)
     metadata.pop("switch_initial_state", None)
+    metadata.pop("switch_disabled_states", None)
+    metadata.pop("switch_status_text", None)
     metadata.pop("switch_transitions", None)
     metadata.pop("on_success_script", None)
     metadata.pop("on_failure_script", None)
@@ -245,6 +257,10 @@ _CONTAINER_ONLY_KEYS = (
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
+    "min_items",
+    "max_items",
 )
 
 
@@ -252,13 +268,17 @@ def _export_container_metadata(
     filtered: dict[str, Any], metadata: dict[str, Any], is_container: bool
 ) -> None:
     """Lifts a container's lock fields to the top level; other items drop container keys."""
-    metadata.pop("locked", None)
+    raw_locked = metadata.pop("locked", None)
     if is_container:
         for lock_key in ("code_to_unlock", "item_to_unlock", "rule_to_unlock"):
             filtered[lock_key] = metadata.pop(lock_key, "")
+        if raw_locked is True:
+            filtered["locked"] = True
         return
     for container_key in _CONTAINER_ONLY_KEYS:
         metadata.pop(container_key, None)
+    if raw_locked is True:
+        metadata["locked"] = True
 
 
 def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
@@ -286,7 +306,7 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         metadata.pop("on_read_script", None)
         metadata.pop("on_read_text", None)
 
-    _export_container_metadata(filtered, metadata, item_type == "CONTAINER")
+    _export_container_metadata(filtered, metadata, item_type in {"CONTAINER", "CONTAINER_SWITCH"})
 
     if item_type == "CONSTRUCTABLE":
         for recipe_key in ("result_item_ids", "kept_ingredients"):

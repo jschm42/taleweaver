@@ -103,6 +103,88 @@ class SwitchProxy:
         """Checks if the switch is in target_state (case-insensitive)."""
         return self.state == str(target_state).strip().upper()
 
+    @property
+    def disabled_states(self) -> list[str]:
+        """Returns the list of currently disabled/locked state IDs for this switch."""
+        for upd in reversed(self._changeset.entity_updates):
+            if upd.get("entity_id") == self._id and "disabled_switch_states" in upd:
+                raw = upd["disabled_switch_states"]
+                return (
+                    [str(s).strip().upper() for s in raw if str(s).strip()]
+                    if isinstance(raw, list)
+                    else []
+                )
+        session_disabled = self._data.get("disabled_switch_states")
+        if isinstance(session_disabled, list):
+            return [str(s).strip().upper() for s in session_disabled if str(s).strip()]
+        from backend.engine.interaction.switch_service import SwitchService
+
+        cfg = SwitchService.resolve_switch_config(self._data)
+        cfg_disabled = cfg.get("disabled_states")
+        if isinstance(cfg_disabled, list):
+            return [str(s).strip().upper() for s in cfg_disabled if str(s).strip()]
+        return []
+
+    def is_state_disabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently disabled/locked."""
+        return str(target_state).strip().upper() in self.disabled_states
+
+    def is_state_enabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently enabled/unlocked."""
+        return not self.is_state_disabled(target_state)
+
+    def disable_state(self, *states: str) -> None:
+        """Disables/locks one or more switch states so they cannot be selected by the player."""
+        current = list(self.disabled_states)
+        for st in states:
+            clean = str(st).strip().upper()
+            if clean and clean not in current:
+                current.append(clean)
+        self._changeset.entity_updates.append(
+            {"entity_id": self._id, "disabled_switch_states": current}
+        )
+
+    def enable_state(self, *states: str) -> None:
+        """Enables/unlocks one or more switch states so they can be selected by the player."""
+        to_enable = {str(st).strip().upper() for st in states if str(st).strip()}
+        updated = [s for s in self.disabled_states if s not in to_enable]
+        self._changeset.entity_updates.append(
+            {"entity_id": self._id, "disabled_switch_states": updated}
+        )
+
+    def set_state_enabled(self, state: str, enabled: bool) -> None:
+        """Enables or disables a single switch state."""
+        if enabled:
+            self.enable_state(state)
+        else:
+            self.disable_state(state)
+
+    @property
+    def status_text(self) -> str:
+        """Returns the current status/hint text shown in the switch panel."""
+        for upd in reversed(self._changeset.entity_updates):
+            if upd.get("entity_id") == self._id and "switch_status_text" in upd:
+                return str(upd.get("switch_status_text") or "")
+        if "switch_status_text" in self._data and self._data["switch_status_text"] is not None:
+            return str(self._data["switch_status_text"] or "")
+        from backend.engine.interaction.switch_service import SwitchService
+
+        cfg = SwitchService.resolve_switch_config(self._data)
+        return str(cfg.get("status_text") or "")
+
+    @status_text.setter
+    def status_text(self, text: str) -> None:
+        self.set_status_text(text)
+
+    def set_status_text(self, text: str) -> None:
+        """Sets or updates the status/hint text displayed in the switch panel."""
+        clean = str(text or "").strip()[:300]
+        self._changeset.entity_updates.append({"entity_id": self._id, "switch_status_text": clean})
+
+    def clear_status_text(self) -> None:
+        """Clears the status/hint text displayed in the switch panel."""
+        self.set_status_text("")
+
     def set_state(self, target_state: str, apply_outcomes: bool = True) -> None:
         """
         Sets the switch directly to target_state.
@@ -139,47 +221,56 @@ class SwitchProxy:
         """Toggles the switch between its states. Returns the new state."""
         return self.flip(apply_outcomes=apply_outcomes)
 
+    def _apply_item_lock_effect(self, target_id: str, locked: bool) -> None:
+        if not target_id:
+            return
+        if self._context:
+            obj = self._context.objects.get(target_id)
+            obj.lock() if locked else obj.unlock()
+            return
+        self._changeset.entity_updates.append({"entity_id": target_id, "locked": locked})
+
     def _apply_outcome_effect(self, eff: dict[str, Any]) -> None:
-        eff_type = str(eff.get("type") or "").strip().lower()
+        eff_type = str(eff.get("type") or eff.get("effect_type") or "").strip().lower()
+        target_id = str(eff.get("target_id") or "").strip()
         if eff_type == "story_flag":
-            key = str(eff.get("key") or "").strip()
+            key = str(eff.get("key") or eff.get("flag_key") or "").strip()
             if key:
                 self._changeset.var_updates[f"__flag_{key}"] = True
                 self._changeset.var_updates[key] = True
                 self._changeset.story_flag_updates[key] = True
-            return
+        elif eff_type == "unlock_exit" and self._context and target_id:
+            self._context.exits.unlock(target_id)
+        elif eff_type in {"unlock_container", "unlock_item"}:
+            self._apply_item_lock_effect(target_id, locked=False)
+        elif eff_type == "lock_item":
+            self._apply_item_lock_effect(target_id, locked=True)
 
-        if eff_type == "unlock_exit" and self._context:
-            target_id = str(eff.get("target_id") or "").strip()
-            if target_id:
-                self._context.exits.unlock(target_id)
-            return
-
-        if eff_type == "unlock_container" and self._context:
-            target_id = str(eff.get("target_id") or "").strip()
-            if target_id:
-                self._context.objects.get(target_id).unlock()
-
-    def _apply_configured_outcomes(self, on_state: str) -> None:
-        """Applies configured outcomes for on_state directly to the ScriptChangeset."""
-        from backend.engine.interaction.switch_service import SwitchService
-
-        cfg = SwitchService.resolve_switch_config(self._data)
-        outcomes = cfg.get("outcomes")
+    @staticmethod
+    def _collect_state_outcome_effects(outcomes: Any, on_state: str) -> list[dict[str, Any]]:
+        if isinstance(outcomes, dict):
+            raw = outcomes.get(on_state) or outcomes.get(on_state.lower())
+            return [e for e in raw if isinstance(e, dict)] if isinstance(raw, list) else []
         if not isinstance(outcomes, list):
-            return
-
+            return []
+        collected: list[dict[str, Any]] = []
         for outcome in outcomes:
             if not isinstance(outcome, dict):
                 continue
             if str(outcome.get("on_state") or "").strip().upper() != on_state:
                 continue
             effects = outcome.get("effects")
-            if not isinstance(effects, list):
-                continue
-            for eff in effects:
-                if isinstance(eff, dict):
-                    self._apply_outcome_effect(eff)
+            if isinstance(effects, list):
+                collected.extend(e for e in effects if isinstance(e, dict))
+        return collected
+
+    def _apply_configured_outcomes(self, on_state: str) -> None:
+        """Applies configured outcomes for on_state directly to the ScriptChangeset."""
+        from backend.engine.interaction.switch_service import SwitchService
+
+        cfg = SwitchService.resolve_switch_config(self._data)
+        for eff in self._collect_state_outcome_effects(cfg.get("outcomes"), on_state):
+            self._apply_outcome_effect(eff)
 
 
 class SwitchesProxy:
@@ -236,6 +327,38 @@ class SwitchesProxy:
         """Returns True if the switch is currently in the specified state."""
         return self.get(switch_id_or_name).is_state(state)
 
+    def disabled_states(self, switch_id_or_name: str) -> list[str]:
+        """Returns the list of disabled states for the switch."""
+        return self.get(switch_id_or_name).disabled_states
+
+    def is_state_enabled(self, switch_id_or_name: str, state: str) -> bool:
+        """Returns True if the specified state on the switch is enabled."""
+        return self.get(switch_id_or_name).is_state_enabled(state)
+
+    def is_state_disabled(self, switch_id_or_name: str, state: str) -> bool:
+        """Returns True if the specified state on the switch is disabled."""
+        return self.get(switch_id_or_name).is_state_disabled(state)
+
+    def enable_state(self, switch_id_or_name: str, *states: str) -> None:
+        """Enables one or more states on the switch."""
+        self.get(switch_id_or_name).enable_state(*states)
+
+    def disable_state(self, switch_id_or_name: str, *states: str) -> None:
+        """Disables one or more states on the switch."""
+        self.get(switch_id_or_name).disable_state(*states)
+
+    def get_status_text(self, switch_id_or_name: str) -> str:
+        """Returns the status/hint text of the switch."""
+        return self.get(switch_id_or_name).status_text
+
+    def set_status_text(self, switch_id_or_name: str, text: str) -> None:
+        """Sets the status/hint text shown in the switch panel."""
+        self.get(switch_id_or_name).set_status_text(text)
+
+    def clear_status_text(self, switch_id_or_name: str) -> None:
+        """Clears the status/hint text shown in the switch panel."""
+        self.get(switch_id_or_name).clear_status_text()
+
     def flip(
         self,
         switch_id_or_name: str,
@@ -258,7 +381,9 @@ class SwitchesProxy:
         result = []
         for eid, data in self._entities.items():
             item_type = str(data.get("item_type") or "").strip().upper()
-            if item_type == "SWITCH" or bool(SwitchService.resolve_switch_config(data)):
+            if item_type in {"SWITCH", "CONTAINER_SWITCH"} or bool(
+                SwitchService.resolve_switch_config(data)
+            ):
                 result.append(self.get(eid))
         return result
 

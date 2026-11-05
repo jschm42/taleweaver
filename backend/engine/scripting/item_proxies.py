@@ -118,6 +118,19 @@ class ItemManagerMixin:
     def reveal(self, item_id: str) -> bool:
         return self._require_mover().set_hidden(item_id, False)
 
+    def lock(self, item_id: str) -> bool:
+        return self._require_mover().set_locked(item_id, True)
+
+    def unlock(self, item_id: str) -> bool:
+        return self._require_mover().set_locked(item_id, False)
+
+    def is_locked(self, item_id: str) -> bool:
+        mover = self._require_mover()
+        eid = mover.item_id(item_id)
+        if eid is None:
+            return False
+        return mover._objects.get(eid).is_locked
+
     def location(self, item_id: str) -> dict[str, str]:
         return self._require_mover().location(item_id)
 

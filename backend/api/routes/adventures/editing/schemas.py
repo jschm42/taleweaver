@@ -49,6 +49,8 @@ class EntityUpdateRequest(BaseModel):
     switch_states: Optional[list[str]] = None
     switch_state_labels: Optional[dict[str, str]] = None
     switch_initial_state: Optional[str] = None
+    switch_disabled_states: Optional[list[str]] = None
+    switch_status_text: Optional[str] = None
     switch_transitions: Optional[list[dict[str, Any]]] = None
     on_success_script: Optional[str] = None
     on_failure_script: Optional[str] = None
@@ -96,6 +98,10 @@ class EntityUpdateRequest(BaseModel):
     on_unlock_failure_text: Optional[str] = None
     on_items_added_script: Optional[str] = None
     on_items_added_text: Optional[str] = None
+    on_items_removed_script: Optional[str] = None
+    on_items_removed_text: Optional[str] = None
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
     on_read_script: Optional[str] = None
     on_read_text: Optional[str] = None
     result_item_ids: Optional[list[str]] = None
@@ -173,6 +179,8 @@ class EntityCreateRequest(BaseModel):
     kept_ingredients: Optional[list[str]] = None
     stat_modifier_strength: Optional[int] = None
     inventory: Optional[list] = None
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
     is_hidden: Optional[bool] = None
     reveal_rule: Optional[str] = None
     moveable: Optional[bool] = None

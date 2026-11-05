@@ -594,7 +594,10 @@ class GameTurnManager:
         for ent in all_entities:
             if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
                 continue
-            if str(getattr(ent, "item_type", "") or "").upper() != "CONTAINER":
+            if str(getattr(ent, "item_type", "") or "").upper() not in {
+                "CONTAINER",
+                "CONTAINER_SWITCH",
+            }:
                 continue
 
             # Honour session-state override for locked flag
@@ -2864,6 +2867,8 @@ class GameTurnManager:
                 adventure_id=self.state.template_id,
                 language=self.turn_language,
             ),
+            active_sequence_id=self.state.active_sequence_id,
+            sequences=getattr(self.adventure, "sequences", None),
         )
 
     def _get_script_runner(self) -> ScriptRunner:
@@ -3100,6 +3105,9 @@ class GameTurnManager:
                 exit_states[k] = st
             self.state.exit_states = exit_states
             flag_modified(self.state, "exit_states")
+            from backend.engine.interaction.script_item_apply import sync_exit_rows
+
+            await sync_exit_rows(self.db, self.state, changeset)
 
         if getattr(changeset, "ordered_messages", None):
             for msg in changeset.ordered_messages:
@@ -3156,74 +3164,21 @@ class GameTurnManager:
         elif changeset.game_over:
             raise GameOverError(changeset.status_note or f"{self.avatar.name} has met their end.")
 
-        if (
-            changeset.sequence_completed
-            and hasattr(self.adventure, "sequences")
-            and self.adventure.sequences
-        ):
-            sequences = sorted(self.adventure.sequences, key=lambda x: x.get("order", 1))
-            current_seq_idx = -1
+        from backend.api.routes.adventures.sequence_progress import apply_sequence_changeset
 
-            for i, seq in enumerate(sequences):
-                if seq.get("id") == self.state.active_sequence_id or (
-                    not self.state.active_sequence_id and i == 0
-                ):
-                    current_seq_idx = i
-                    break
-
-            if current_seq_idx >= 0:
-                completed_seq = sequences[current_seq_idx]
-                seq_title = (
-                    completed_seq.get("title")
-                    or completed_seq.get("id")
-                    or f"Chapter {current_seq_idx + 1}"
-                )
-
-                if completed_seq.get("on_end_sequence_script"):
-                    end_msgs = await self._execute_inline_script(
-                        completed_seq["on_end_sequence_script"],
-                        "on_end_sequence",
-                        completed_seq.get("id", f"seq_{current_seq_idx}"),
-                    )
-                    system_messages.extend(end_msgs)
-                if completed_seq.get("on_end_sequence_text"):
-                    await self._save_chat_message("system", completed_seq["on_end_sequence_text"])
-                    system_messages.append(completed_seq["on_end_sequence_text"])
-
-                xp_reward = int(completed_seq.get("exp_reward") or 0)
-                if xp_reward > 0:
-                    self.avatar.exp = (self.avatar.exp or 0) + xp_reward
-                    xp_msg = f"Sequence completed: {seq_title} (+{xp_reward} XP)"
-                else:
-                    xp_msg = f"Sequence completed: {seq_title}"
-                await self._save_chat_message("system", xp_msg)
-                system_messages.append(xp_msg)
-
-                next_seq_idx = current_seq_idx + 1
-                if next_seq_idx < len(sequences):
-                    next_seq = sequences[next_seq_idx]
-                    self.state.active_sequence_id = next_seq.get("id")
-                    self.state.active_sequence_order = next_seq.get("order", next_seq_idx + 1)
-
-                    next_title = next_seq.get("title") or next_seq.get("id")
-                    next_msg = f"New Sequence unlocked: {next_title}"
-                    await self._save_chat_message("system", next_msg)
-                    system_messages.append(next_msg)
-
-                    if next_seq.get("on_start_sequence_script"):
-                        start_msgs = await self._execute_inline_script(
-                            next_seq["on_start_sequence_script"],
-                            "on_start_sequence",
-                            next_seq.get("id", f"seq_{next_seq_idx}"),
-                        )
-                        system_messages.extend(start_msgs)
-                    if next_seq.get("on_start_sequence_text"):
-                        await self._save_chat_message("system", next_seq["on_start_sequence_text"])
-                        system_messages.append(next_seq["on_start_sequence_text"])
-                else:
-                    await self._finalize_session(
-                        "completed", "Congratulations! You have completed the final sequence."
-                    )
+        seq_msgs = await apply_sequence_changeset(
+            self.adventure,
+            self.state,
+            self.avatar,
+            changeset,
+            script_executor=self._execute_inline_script,
+            message_saver=self._save_chat_message,
+        )
+        system_messages.extend(seq_msgs)
+        if getattr(self.state, "is_completed", False):
+            await self._finalize_session(
+                "completed", "Congratulations! You have completed the final sequence."
+            )
 
         # Last, so the save state holds everything this script changed.
         for save_msg in await SessionCheckpointService.save_from_script(

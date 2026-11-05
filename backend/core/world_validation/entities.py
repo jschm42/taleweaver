@@ -89,7 +89,11 @@ def check_item_references(ctx: ValidationContext) -> list[ValidationFinding]:
                 )
             )
         has_key = any(entity_field(entity, k) for k in _LOCK_KEY_FIELDS)
-        if metadata(entity).get("locked") is True and not has_key:
+        if (
+            item_type(entity) == "CONTAINER"
+            and metadata(entity).get("locked") is True
+            and not has_key
+        ):
             findings.append(
                 finding(
                     "warn",
@@ -105,7 +109,9 @@ def check_item_references(ctx: ValidationContext) -> list[ValidationFinding]:
 def check_container_inventory(ctx: ValidationContext) -> list[ValidationFinding]:
     findings: list[ValidationFinding] = []
     for entity in ctx.entities_of("OBJECT"):
-        if item_type(entity) != "CONTAINER" or not isinstance(entity.get("inventory"), list):
+        if item_type(entity) not in {"CONTAINER", "CONTAINER_SWITCH"} or not isinstance(
+            entity.get("inventory"), list
+        ):
             continue
         eid = entity_id(entity) or "?"
         contents = ref_ids(entity["inventory"])
@@ -136,7 +142,7 @@ def check_container_inventory(ctx: ValidationContext) -> list[ValidationFinding]
 def check_switch_state_consistency(ctx: ValidationContext) -> list[ValidationFinding]:
     findings: list[ValidationFinding] = []
     for entity in ctx.entities:
-        if item_type(entity) != "SWITCH":
+        if item_type(entity) not in {"SWITCH", "CONTAINER_SWITCH"}:
             continue
         eid = entity_id(entity) or "?"
         states = entity.get("switch_states")
@@ -195,7 +201,7 @@ def check_switch_state_ids(ctx: ValidationContext) -> list[ValidationFinding]:
     """State IDs are script keys (A-Z, 0-9, _ and -, max 15); labels are max 20 characters."""
     findings: list[ValidationFinding] = []
     for entity in ctx.entities:
-        if item_type(entity) == "SWITCH":
+        if item_type(entity) in {"SWITCH", "CONTAINER_SWITCH"}:
             findings += _switch_state_findings(entity_id(entity) or "?", entity)
     return findings
 

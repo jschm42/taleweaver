@@ -121,6 +121,51 @@ def test_hide_and_reveal_shortcuts():
     assert context.objects.get("POTION").is_hidden is True
 
 
+def test_item_lock_unlock_and_auto_unlock_on_player_take():
+    # Arrange
+    entities = _entities()
+    entities["MICROWAVE"] = {
+        "id": "MICROWAVE",
+        "name": "Microwave",
+        "item_type": "CONTAINER_SWITCH",
+        "current_scene_id": "START",
+        "inventory": ["GEM"],
+        "metadata_json": {
+            "switch": {
+                "states": [{"id": "OFF"}, {"id": "ON"}],
+                "initial_state": "OFF",
+                "outcomes": {
+                    "ON": [{"effect_type": "unlock_item", "target_id": "GEM"}],
+                },
+            }
+        },
+    }
+    context = GameContext(
+        avatar_data={"inventory": []},
+        current_scene_id="START",
+        entities=entities,
+    )
+
+    # Act & Assert: lock GEM via tw.objects.lock
+    assert context.objects.lock("GEM") is True
+    assert context.objects.is_locked("GEM") is True
+    assert context.objects.get("GEM").is_locked is True
+
+    # Act & Assert: flipping CONTAINER_SWITCH unlocks GEM via outcome
+    mw = context.objects.get("MICROWAVE")
+    assert mw.is_switch is True
+    assert mw.item_ids == ["GEM"]
+    mw.set_state("ON")
+    assert context.objects.is_locked("GEM") is False
+
+    # Re-lock GEM and verify auto-unlock when moved to player
+    context.objects.get("GEM").lock()
+    assert context.objects.is_locked("GEM") is True
+    assert context.player.take_item("GEM") is True
+    assert context.objects.is_locked("GEM") is False
+    assert context.player.inventory[0].get("locked") is False
+
+
 async def _seed_world(db) -> GameTurnManager:
     user, _adv, avatar, _state = await _seed_game_context(db)
     avatar.inventory = [{"id": "SWORD", "name": "Sword"}]

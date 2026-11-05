@@ -262,7 +262,9 @@ const routeSceneSwitches = computed<any[]>(() => {
 })
 
 const routeSceneContainers = computed<any[]>(() => {
-  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'CONTAINER')
+  return routeSceneObjects.value.filter((obj: any) =>
+    ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(obj.item_type || '').toUpperCase()),
+  )
 })
 
 const routeSceneTextLogs = computed<any[]>(() => {
@@ -316,7 +318,7 @@ const filteredRouteSceneConstructables = computed(() => routeSceneConstructables
 /** Item types with their own group; everything else is listed under "Items". */
 function isSpecialItemType(itemType: string): boolean {
   const t = String(itemType || '').toUpperCase()
-  return t === 'SWITCH' || t === 'CONTAINER' || t === 'READABLE' || t === 'CONSTRUCTABLE'
+  return t === 'SWITCH' || t === 'CONTAINER' || t === 'CONTAINER_SWITCH' || t === 'READABLE' || t === 'CONSTRUCTABLE'
 }
 
 const availableItemsForType = computed<any[]>(() => {
@@ -340,7 +342,7 @@ const availableContainersForType = computed<any[]>(() => {
   const sId = String(props.sceneId || '').trim()
   return editorAllObjects.value.filter((obj: any) => {
     if (String(obj.current_scene_id || '') === sId) return false
-    return String(obj.item_type || '').toUpperCase() === 'CONTAINER'
+    return ['CONTAINER', 'CONTAINER_SWITCH'].includes(String(obj.item_type || '').toUpperCase())
   })
 })
 
@@ -793,14 +795,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-sky-400/50 bg-sky-500/20 text-sky-100">NPC</div>
+            <div class="absolute top-2 left-2 right-8 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+              <div class="px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border border-sky-400/50 bg-sky-500/20 text-sky-100 pointer-events-auto">NPC</div>
               <div
                 v-if="hasScript(npc)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                class="p-0.5 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm pointer-events-auto shrink-0"
                 title="Contains custom event script(s)"
               >
-                <Brain class="w-3.5 h-3.5 text-purple-400" />
+                <Brain class="w-3 h-3 text-purple-400" />
               </div>
             </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -877,14 +879,18 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
+            <div class="absolute top-2 left-2 right-8 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+              <div class="px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200 pointer-events-auto truncate max-w-full" :title="obj.item_type || 'ITEM'">{{ obj.item_type || 'ITEM' }}</div>
+              <div
+                v-if="obj.locked === true || obj.metadata_json?.locked === true"
+                class="px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100 pointer-events-auto"
+              >LOCKED</div>
               <div
                 v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                class="p-0.5 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm pointer-events-auto shrink-0"
                 title="Contains custom event script(s)"
               >
-                <Brain class="w-3.5 h-3.5 text-purple-400" />
+                <Brain class="w-3 h-3 text-purple-400" />
               </div>
             </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -969,14 +975,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100">SWITCH</div>
+            <div class="absolute top-2 left-2 right-8 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+              <div class="px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100 pointer-events-auto">SWITCH</div>
               <div
                 v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                class="p-0.5 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm pointer-events-auto shrink-0"
                 title="Contains custom event script(s)"
               >
-                <Brain class="w-3.5 h-3.5 text-purple-400" />
+                <Brain class="w-3 h-3 text-purple-400" />
               </div>
             </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -1046,14 +1052,18 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
-            <div class="absolute top-2 left-2 flex items-center gap-1 z-10">
-              <div class="px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
+            <div class="absolute top-2 left-2 right-8 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+              <div class="px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100 pointer-events-auto">CONTAINER</div>
+              <div
+                v-if="String(obj.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'"
+                class="px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border border-lime-400/50 bg-lime-500/25 text-lime-100 pointer-events-auto"
+              >SWITCH</div>
               <div
                 v-if="hasScript(obj)"
-                class="p-1 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm"
+                class="p-0.5 rounded-full border border-purple-500/50 bg-purple-950/80 text-purple-300 shadow-md flex items-center justify-center backdrop-blur-sm pointer-events-auto shrink-0"
                 title="Contains custom event script(s)"
               >
-                <Brain class="w-3.5 h-3.5 text-purple-400" />
+                <Brain class="w-3 h-3 text-purple-400" />
               </div>
             </div>
             <div class="absolute bottom-0 left-0 right-0 p-2">

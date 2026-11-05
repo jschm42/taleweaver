@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Check, ChevronRight } from 'lucide-vue-next'
+import { Check, ChevronRight, Lock } from 'lucide-vue-next'
 import { getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
 import { parseMetadata, isTypingTarget } from './promptUtils'
@@ -42,8 +42,29 @@ const imageUrl = computed(() => getImageUrl(props.switchEntity?.image_url) || nu
 const focusedIndex = ref(0)
 const isCurrent = (state: string) => state.toUpperCase() === currentState.value
 
+const disabledStates = computed<Set<string>>(() => {
+  const raw =
+    props.switchEntity?.disabled_switch_states ??
+    switchConfig.value.disabled_states ??
+    props.switchEntity?.switch_disabled_states ??
+    []
+  return new Set(
+    Array.isArray(raw) ? raw.map((s: any) => String(s || '').trim().toUpperCase()).filter(Boolean) : []
+  )
+})
+
+const isDisabled = (state: string) => disabledStates.value.has(state.toUpperCase())
+
+const switchStatusText = computed<string>(() => {
+  return String(
+    props.switchEntity?.switch_status_text ??
+    switchConfig.value.status_text ??
+    ''
+  ).trim()
+})
+
 const select = (state: string) => {
-  if (props.busy || isCurrent(state)) return
+  if (props.busy || isCurrent(state) || isDisabled(state)) return
   emit('selectState', state.toUpperCase())
 }
 
@@ -80,7 +101,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
 <template>
   <InlinePromptPanel
     :open="open && !!switchEntity"
-    label="Switch"
+
     :title="switchEntity?.name || 'Switch'"
     :description="switchEntity?.description || ''"
     :image-url="imageUrl"
@@ -89,21 +110,34 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
     @close="emit('close')"
     @revealed="onRevealed"
   >
-    <template #label-icon><i class="ra ra-lever"></i></template>
+
+
+    <p
+      v-if="switchStatusText"
+      class="text-sm italic text-amber-100/90 leading-snug mb-3"
+    >
+      {{ switchStatusText }}
+    </p>
 
     <div class="grid gap-2" :class="allStates.length > 3 ? 'sm:grid-cols-2' : 'grid-cols-1'">
       <button
         v-for="(state, idx) in allStates"
         :key="state"
         type="button"
-        :disabled="busy || isCurrent(state)"
+        :disabled="busy || isCurrent(state) || isDisabled(state)"
         class="tw-choice-option"
-        :class="{ 'is-focused': focusedIndex === idx && !isCurrent(state), 'is-current': isCurrent(state) }"
+        :class="{
+          'is-focused': focusedIndex === idx && !isCurrent(state) && !isDisabled(state),
+          'is-current': isCurrent(state),
+          'opacity-45 cursor-not-allowed': isDisabled(state) && !isCurrent(state),
+        }"
+        :title="isDisabled(state) ? `${stateLabel(switchEntity, state)} (Locked)` : stateLabel(switchEntity, state)"
         @click="select(state)"
         @mouseenter="focusedIndex = idx"
       >
         <span class="tw-choice-number">
           <Check v-if="isCurrent(state)" class="w-3 h-3" stroke-width="3" />
+          <Lock v-else-if="isDisabled(state)" class="w-3 h-3" />
           <ChevronRight v-else class="w-3 h-3" stroke-width="3" />
         </span>
         <span class="flex-1 tracking-wider">{{ stateLabel(switchEntity, state) }}</span>

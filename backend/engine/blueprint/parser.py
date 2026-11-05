@@ -56,6 +56,8 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "readable": ("item", "READABLE"),
     "container": ("item", "CONTAINER"),
     "switch": ("item", "SWITCH"),
+    "containerswitch": ("item", "CONTAINER_SWITCH"),
+    "container_switch": ("item", "CONTAINER_SWITCH"),
     "mechanism": ("item", "SWITCH"),
     "weapon": ("item", "WEAPON"),
     "recipe": ("item", "CONSTRUCTABLE"),
@@ -428,6 +430,12 @@ def _derive_implied_fields(block: BlueprintBlock) -> None:
             block.fields["is_locked"] = BlueprintValue(True, "fixed", block.line)
         return
     if block.kind != "item" or "item_type" in block.fields:
+        return
+    has_container_fields = any(
+        f in block.fields for f in ("inventory", "on_items_added_script", "on_items_added_text")
+    )
+    if "switch_states" in block.fields and has_container_fields:
+        block.fields["item_type"] = BlueprintValue("CONTAINER_SWITCH", "fixed", block.line)
         return
     for source, item_type in _IMPLIED_ITEM_TYPES:
         if source in block.fields:

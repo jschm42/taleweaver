@@ -106,6 +106,10 @@ class ScriptChangeset:
     failed_quest_ids: list[str] = field(default_factory=list)
     granted_award_keys: list[str] = field(default_factory=list)
     sequence_completed: bool = False
+    sequence_start_id: Optional[str] = None
+    sequence_end_id: Optional[str] = None
+    sequence_advance: bool = True
+    completed_sequence_ids: list[str] = field(default_factory=list)
 
     var_updates: dict[str, Any] = field(default_factory=dict)
     story_flag_updates: dict[str, Any] = field(default_factory=dict)
@@ -162,6 +166,8 @@ class ScriptChangeset:
             or self.failed_quest_ids
             or self.granted_award_keys
             or self.sequence_completed
+            or self.sequence_start_id is not None
+            or self.sequence_end_id is not None
             or self.var_updates
             or self.story_flag_updates
             or self.game_completed
@@ -747,11 +753,53 @@ class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
         curr = self.switch_state
         return curr is not None and curr == str(target_state).strip().upper()
 
-    def set_state(self, state: str) -> None:
+    def set_state(self, state: str, apply_outcomes: bool = True) -> None:
         """Sets the switch state directly."""
-        self._changeset.entity_updates.append(
-            {"entity_id": self._id, "switch_state": str(state).strip().upper()}
+        SwitchProxy(self._id, self._data, self._changeset).set_state(
+            state, apply_outcomes=apply_outcomes
         )
+
+    @property
+    def disabled_states(self) -> list[str]:
+        """Returns the list of currently disabled/locked state IDs for this switch."""
+        return SwitchProxy(self._id, self._data, self._changeset).disabled_states
+
+    def is_state_disabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently disabled/locked."""
+        return SwitchProxy(self._id, self._data, self._changeset).is_state_disabled(target_state)
+
+    def is_state_enabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently enabled/unlocked."""
+        return SwitchProxy(self._id, self._data, self._changeset).is_state_enabled(target_state)
+
+    def disable_state(self, *states: str) -> None:
+        """Disables/locks one or more switch states."""
+        SwitchProxy(self._id, self._data, self._changeset).disable_state(*states)
+
+    def enable_state(self, *states: str) -> None:
+        """Enables/unlocks one or more switch states."""
+        SwitchProxy(self._id, self._data, self._changeset).enable_state(*states)
+
+    def set_state_enabled(self, state: str, enabled: bool) -> None:
+        """Enables or disables a single switch state."""
+        SwitchProxy(self._id, self._data, self._changeset).set_state_enabled(state, enabled)
+
+    @property
+    def status_text(self) -> str:
+        """Returns the status/hint text shown on this switch or container-switch."""
+        return SwitchProxy(self._id, self._data, self._changeset).status_text
+
+    @status_text.setter
+    def status_text(self, text: str) -> None:
+        self.set_status_text(text)
+
+    def set_status_text(self, text: str) -> None:
+        """Sets the status/hint text shown on this switch or container-switch."""
+        SwitchProxy(self._id, self._data, self._changeset).set_status_text(text)
+
+    def clear_status_text(self) -> None:
+        """Clears the status/hint text shown on this switch or container-switch."""
+        SwitchProxy(self._id, self._data, self._changeset).clear_status_text()
 
     def flip(self, target_state: Optional[str] = None) -> str:
         """Flips/toggles the switch. Returns the new state."""
@@ -783,16 +831,54 @@ class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
         """Returns True if this entity is configured as a switch."""
         from backend.engine.interaction.switch_service import SwitchService
 
-        return str(self._data.get("item_type") or "").strip().upper() == "SWITCH" or bool(
-            SwitchService.resolve_switch_config(self._data)
-        )
+        return str(self._data.get("item_type") or "").strip().upper() in {
+            "SWITCH",
+            "CONTAINER_SWITCH",
+        } or bool(SwitchService.resolve_switch_config(self._data))
+
+    @property
+    def min_items(self) -> Optional[int]:
+        """Configured minimum item count for a container, or None if not set."""
+        meta = self._data.get("metadata_json")
+        raw = self._data.get("min_items")
+        if raw is None and isinstance(meta, dict):
+            raw = meta.get("min_items")
+        return int(raw) if isinstance(raw, (int, float)) and int(raw) > 0 else None
+
+    @property
+    def max_items(self) -> Optional[int]:
+        """Configured maximum item capacity for a container, or None if unlimited."""
+        meta = self._data.get("metadata_json")
+        raw = self._data.get("max_items")
+        if raw is None and isinstance(meta, dict):
+            raw = meta.get("max_items")
+        return int(raw) if isinstance(raw, (int, float)) and int(raw) > 0 else None
+
+    @property
+    def is_full(self) -> bool:
+        """True if this container has a max_items limit and has reached it."""
+        limit = self.max_items
+        return limit is not None and len(self.item_ids) >= limit
+
+    @property
+    def has_min_items(self) -> bool:
+        """True if this container has at least min_items inside (or no min_items limit)."""
+        req = self.min_items
+        return req is None or len(self.item_ids) >= req
 
     @property
     def is_locked(self) -> bool:
         for upd in reversed(self._changeset.entity_updates):
             if upd.get("entity_id") == self._id and "locked" in upd:
                 return bool(upd["locked"])
-        return bool(self._data.get("locked", False) or self._data.get("is_locked", False))
+        if isinstance(self._data.get("locked"), bool):
+            return self._data["locked"]
+        if isinstance(self._data.get("is_locked"), bool):
+            return self._data["is_locked"]
+        meta = self._data.get("metadata_json")
+        if isinstance(meta, dict) and isinstance(meta.get("locked"), bool):
+            return meta["locked"]
+        return False
 
     def unlock(self) -> None:
         self._changeset.entity_updates.append({"entity_id": self._id, "locked": False})
@@ -1255,16 +1341,166 @@ class AwardsProxy:
 
 
 class SequencesProxy:
-    """Safe proxy for sequence progression."""
+    """Safe proxy for sequence progression and inspection."""
 
-    def __init__(self, changeset: ScriptChangeset):
+    def __init__(
+        self,
+        changeset: ScriptChangeset,
+        active_sequence_id: Optional[str] = None,
+        sequences: Optional[list[dict[str, Any]]] = None,
+        vars_proxy: Optional[Any] = None,
+    ):
         self._changeset = changeset
+        self._sequences = [s for s in (sequences or []) if isinstance(s, dict)]
+        self._active_sequence_id = active_sequence_id
+        self._vars_proxy = vars_proxy
+        self._completed_ids: set[str] = set()
+        if self._vars_proxy:
+            raw_completed = self._vars_proxy.get("__completed_sequences__", [])
+            if isinstance(raw_completed, (list, set, tuple)):
+                self._completed_ids.update(str(x).strip().upper() for x in raw_completed)
+            for k in getattr(self._vars_proxy, "_data", {}):
+                if k.startswith("__seq_completed_") and k.endswith("__"):
+                    seq_key = k[len("__seq_completed_") : -2]
+                    if self._vars_proxy.get(k):
+                        self._completed_ids.add(seq_key.strip().upper())
+        if not self._active_sequence_id and self._sequences:
+            self._active_sequence_id = self._sequences[0].get("id")
 
-    def advance(self) -> None:
+    @property
+    def id(self) -> Optional[str]:
+        """ID of the currently active sequence, or None."""
+        return self.get_active_id()
+
+    @property
+    def title(self) -> Optional[str]:
+        """Title of the currently active sequence, or None."""
+        seq = self.get_active()
+        return seq.get("title") if seq else None
+
+    @property
+    def active_id(self) -> Optional[str]:
+        """ID of the currently active sequence, or None."""
+        return self.get_active_id()
+
+    @property
+    def active(self) -> Optional[dict[str, Any]]:
+        """Dictionary of the currently active sequence, or None."""
+        return self.get_active()
+
+    @property
+    def current(self) -> Optional[dict[str, Any]]:
+        """Alias for active sequence dictionary."""
+        return self.get_active()
+
+    def get_active(self) -> Optional[dict[str, Any]]:
+        """Returns the dictionary of the currently active sequence, or None."""
+        cur_id = self.get_active_id()
+        if not cur_id:
+            return None
+        for s in self._sequences:
+            if str(s.get("id", "")).strip().upper() == cur_id.strip().upper():
+                return dict(s)
+        return {"id": cur_id}
+
+    def get_active_id(self) -> Optional[str]:
+        """Returns the ID of the currently active sequence, or None."""
+        if self._changeset.sequence_completed and not self._changeset.sequence_advance:
+            return None
+        if self._changeset.sequence_start_id is not None:
+            return self._changeset.sequence_start_id
+        return self._active_sequence_id
+
+    def is_active(self, sequence_id: str) -> bool:
+        """Returns True if the given sequence_id is the currently active sequence."""
+        if not sequence_id:
+            return False
+        cur_id = self.get_active_id()
+        if not cur_id:
+            return False
+        return cur_id.strip().upper() == str(sequence_id).strip().upper()
+
+    def is_completed(self, sequence_id: str) -> bool:
+        """Returns True if the specified sequence has been completed."""
+        clean = str(sequence_id or "").strip().upper()
+        if not clean:
+            return False
+        if clean in self._completed_ids:
+            return True
+        if clean in (str(x).upper() for x in self._changeset.completed_sequence_ids):
+            return True
+        if self._vars_proxy:
+            var_key = f"__seq_completed_{clean}__"
+            if self._vars_proxy.get(var_key, False):
+                return True
+        return False
+
+    def all(self) -> list[dict[str, Any]]:
+        """Returns a list of all sequences in the adventure."""
+        return [dict(s) for s in self._sequences]
+
+    def start(self, sequence_id: str) -> None:
+        """
+        Starts the sequence with the given sequence_id.
+        Sets it as the single active sequence.
+        """
+        clean_id = str(sequence_id or "").strip()
+        if not clean_id:
+            return
+        if str(self.get_active_id() or "").strip().upper() == clean_id.upper():
+            return
+        matched_id = clean_id
+        for s in self._sequences:
+            if str(s.get("id", "")).strip().upper() == clean_id.upper():
+                matched_id = s.get("id", clean_id)
+                break
+        self._changeset.sequence_start_id = matched_id
+        self._active_sequence_id = matched_id
+
+    def end(self, sequence_id: Optional[str] = None, advance: bool = True) -> None:
+        """
+        Ends the active sequence (or the specified sequence if active).
+        If advance=True (default), advances to the next sequence.
+        If advance=False, clears the active sequence.
+        """
+        clean_id = str(sequence_id).strip() if sequence_id else None
+        ended_id = clean_id or self.get_active_id()
+        if ended_id:
+            norm_ended = str(ended_id).strip().upper()
+            self._completed_ids.add(norm_ended)
+            if norm_ended not in self._changeset.completed_sequence_ids:
+                self._changeset.completed_sequence_ids.append(norm_ended)
+            self._changeset.var_updates[f"__seq_completed_{norm_ended}__"] = True
+
         self._changeset.sequence_completed = True
+        self._changeset.sequence_end_id = clean_id
+        self._changeset.sequence_advance = bool(advance)
+        if not advance:
+            self._changeset.sequence_start_id = None
+            self._active_sequence_id = None
+        elif self._sequences:
+            cur_id = self.get_active_id()
+            idx = -1
+            for i, s in enumerate(self._sequences):
+                if str(s.get("id", "")).strip().upper() == str(cur_id or "").strip().upper():
+                    idx = i
+                    break
+            if idx >= 0 and idx + 1 < len(self._sequences):
+                self._active_sequence_id = self._sequences[idx + 1].get("id")
+            else:
+                self._active_sequence_id = None
+
+    def complete(self, sequence_id: Optional[str] = None) -> None:
+        """Alias for end(sequence_id, advance=True)."""
+        self.end(sequence_id=sequence_id, advance=True)
 
     def complete_current(self) -> None:
-        self._changeset.sequence_completed = True
+        """Alias for end(None, advance=True)."""
+        self.end(sequence_id=None, advance=True)
+
+    def advance(self) -> None:
+        """Advances to the next sequence."""
+        self.end(sequence_id=None, advance=True)
 
 
 class DiceProxy:
@@ -1308,6 +1544,8 @@ class GameContext:
         is_debug_enabled: bool = False,
         llm_asker: Optional[LlmAsker] = None,
         clock: Optional[dict[str, Any]] = None,
+        active_sequence_id: Optional[str] = None,
+        sequences: Optional[list[dict[str, Any]]] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1352,7 +1590,13 @@ class GameContext:
         self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
-        self.sequences = SequencesProxy(self.changeset)
+        self.sequences = SequencesProxy(
+            self.changeset,
+            active_sequence_id=active_sequence_id,
+            sequences=sequences,
+            vars_proxy=self.vars,
+        )
+        self.sequence = self.sequences
         self.dice = DiceProxy()
         self.dialog = DialogProxy(self.changeset, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".

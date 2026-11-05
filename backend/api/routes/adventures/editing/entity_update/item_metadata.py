@@ -33,8 +33,11 @@ _UNLOCK_SCRIPT_FIELDS = (
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
 )
-_CONTAINER_KEYS = (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, "locked")
+_CONTAINER_CAPACITY_FIELDS = ("min_items", "max_items")
+_CONTAINER_KEYS = (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, *_CONTAINER_CAPACITY_FIELDS, "locked")
 _READABLE_SCRIPT_FIELDS = ("on_read_script", "on_read_text")
 _READABLE_KEYS = ("text_log_content", "text_log_format", *_READABLE_SCRIPT_FIELDS)
 _TEXT_LOG_FORMATS = {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}
@@ -62,12 +65,16 @@ _SWITCH_FLAT_KEYS = (
     "switch_states",
     "switch_state_labels",
     "switch_initial_state",
+    "switch_disabled_states",
+    "switch_status_text",
     "switch_transitions",
 )
 _SWITCH_FIELDS = (
     "switch_states",
     "switch_state_labels",
     "switch_initial_state",
+    "switch_disabled_states",
+    "switch_status_text",
     "switch_transitions",
     "on_success_script",
     "on_failure_script",
@@ -88,13 +95,34 @@ def _drop(metadata_json: dict[str, Any], keys: tuple[str, ...]) -> None:
         metadata_json.pop(key, None)
 
 
+def _update_container_capacity(metadata_json: dict[str, Any], payload: EntityUpdateRequest) -> None:
+    for key in _CONTAINER_CAPACITY_FIELDS:
+        if not given(payload, key):
+            continue
+        raw = getattr(payload, key)
+        if raw is None or (isinstance(raw, (int, float)) and int(raw) <= 0):
+            metadata_json.pop(key, None)
+        else:
+            metadata_json[key] = max(1, min(50, int(raw)))
+    min_v = metadata_json.get("min_items")
+    max_v = metadata_json.get("max_items")
+    if isinstance(min_v, int) and isinstance(max_v, int) and min_v > max_v:
+        raise HTTPException(
+            status_code=400,
+            detail=f"min_items ({min_v}) cannot be greater than max_items ({max_v}).",
+        )
+
+
 def update_container(
     ent: WorldEntity, metadata_json: dict[str, Any], payload: EntityUpdateRequest, active: bool
 ) -> None:
     if not active:
-        _drop(metadata_json, _CONTAINER_KEYS)
+        _drop(metadata_json, (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, *_CONTAINER_CAPACITY_FIELDS))
+        if given(payload, "locked"):
+            metadata_json["locked"] = bool(payload.locked)
         return
     put_metadata(metadata_json, payload, _UNLOCK_SCRIPT_FIELDS, empty_as_none=True)
+    _update_container_capacity(metadata_json, payload)
     if not any(given(payload, f) for f in (*_LOCK_FIELDS, "locked")):
         return
     current = {f: metadata_json.get(f) or "" for f in _LOCK_FIELDS}
@@ -206,11 +234,20 @@ def validated_switch(switch_config: dict[str, Any]) -> dict[str, Any]:
             detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states)}.",
         )
     labels = normalize_state_labels(states, switch_config.get("state_labels"))
+    raw_disabled = switch_config.get("disabled_states") or []
+    disabled_states = [
+        str(s).strip().upper()
+        for s in (raw_disabled if isinstance(raw_disabled, list) else [])
+        if str(s).strip() and str(s).strip().upper() in states
+    ]
+    status_text = str(switch_config.get("status_text") or "").strip()[:300]
     return {
         **switch_config,
         "states": states,
         "state_labels": labels,
         "initial_state": initial_state,
+        "disabled_states": disabled_states,
+        "status_text": status_text,
     }
 
 
@@ -221,6 +258,8 @@ def _merged_switch(metadata_json: dict[str, Any], payload: EntityUpdateRequest) 
         ("switch_states", "states"),
         ("switch_state_labels", "state_labels"),
         ("switch_initial_state", "initial_state"),
+        ("switch_disabled_states", "disabled_states"),
+        ("switch_status_text", "status_text"),
         ("switch_transitions", "transitions"),
     ):
         if given(payload, field):

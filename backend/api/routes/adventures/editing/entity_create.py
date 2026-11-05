@@ -58,9 +58,10 @@ async def create_template_entity(
     if item_type == "CONSTRUCTABLE":
         metadata_json[RESULT_FIELD] = normalize_ids(payload.result_item_ids)
         metadata_json[KEPT_FIELD] = normalize_ids(payload.kept_ingredients)
-    if item_type == "SWITCH":
+    if item_type in {"SWITCH", "CONTAINER_SWITCH"}:
         metadata_json["switch"] = validated_switch(dict(metadata_json.get("switch") or {}))
 
+    default_portable = item_type not in {"STATIC", "SWITCH", "CONTAINER_SWITCH"}
     entity = WorldEntity(
         id=entity_id,
         template_id=template_id,
@@ -76,7 +77,9 @@ async def create_template_entity(
         if item_type == "CONSTRUCTABLE"
         else (bool(payload.is_hidden) if payload.is_hidden is not None else False),
         reveal_rule=str(payload.reveal_rule or "").strip() or None,
-        is_portable=bool(payload.is_portable) if payload.is_portable is not None else True,
+        is_portable=bool(payload.is_portable)
+        if payload.is_portable is not None
+        else default_portable,
         goal=str(payload.goal or "").strip() or None,
         character=str(payload.character or "").strip() or None,
         hp=payload.hp,

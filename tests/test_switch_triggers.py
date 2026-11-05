@@ -348,3 +348,64 @@ if sw.state == "OFF":
         upd.get("to_scene_id") == "EXIT_SECRET" and upd.get("is_locked") is False
         for upd in ctx.changeset.exit_updates
     )
+
+
+def test_scripting_engine_switch_enable_disable_states():
+    """Verify per-state enable/disable via tw.switches and tw.objects."""
+    entities = {
+        "CSW_MICROWAVE": {
+            "id": "CSW_MICROWAVE",
+            "name": "Lab Microwave",
+            "item_type": "CONTAINER_SWITCH",
+            "inventory": [],
+            "metadata_json": {
+                "min_items": 1,
+                "max_items": 1,
+                "switch": {
+                    "states": ["OFF", "DEFROST", "COOK"],
+                    "initial_state": "OFF",
+                    "disabled_states": ["DEFROST", "COOK"],
+                    "status_text": "The microwave needs some electrical power first.",
+                },
+            },
+        }
+    }
+    ctx = GameContext(entities=entities)
+    runner = ScriptRunner([])
+
+    mw = ctx.objects.get("CSW_MICROWAVE")
+    assert mw.min_items == 1
+    assert mw.max_items == 1
+    assert mw.is_full is False
+    assert mw.has_min_items is False
+    assert mw.disabled_states == ["DEFROST", "COOK"]
+    assert mw.is_state_disabled("DEFROST") is True
+    assert mw.is_state_enabled("OFF") is True
+    assert mw.status_text == "The microwave needs some electrical power first."
+
+    script = """
+mw = tw.objects.get("CSW_MICROWAVE")
+mw.enable_state("DEFROST", "COOK")
+tw.vars.set("after_enable", list(mw.disabled_states))
+mw.disable_state("COOK")
+tw.vars.set("after_disable", list(tw.switches.disabled_states("CSW_MICROWAVE")))
+mw.clear_status_text()
+tw.vars.set("cleared_status", mw.status_text)
+mw.set_status_text("Ready to heat.")
+"""
+    runner.execute_code(script, {"tw": ctx, "game": ctx})
+
+    assert ctx.vars.get("after_enable") == []
+    assert ctx.vars.get("after_disable") == ["COOK"]
+    assert ctx.vars.get("cleared_status") == ""
+    assert mw.status_text == "Ready to heat."
+    assert mw.is_state_enabled("DEFROST") is True
+    assert mw.is_state_disabled("COOK") is True
+    assert any(
+        u.get("entity_id") == "CSW_MICROWAVE" and u.get("disabled_switch_states") == ["COOK"]
+        for u in ctx.changeset.entity_updates
+    )
+    assert any(
+        u.get("entity_id") == "CSW_MICROWAVE" and u.get("switch_status_text") == "Ready to heat."
+        for u in ctx.changeset.entity_updates
+    )

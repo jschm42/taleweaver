@@ -45,6 +45,28 @@ def pick_items(
     return picked, missing
 
 
+def _container_max_items(container: Any) -> int | None:
+    meta = dict(getattr(container, "metadata_json", None) or {})
+    raw = meta.get("max_items")
+    if isinstance(raw, (int, float)) and int(raw) > 0:
+        return int(raw)
+    return None
+
+
+def _capacity_error(container: Any, contents: list[Any], picked_count: int) -> str | None:
+    max_items = _container_max_items(container)
+    if max_items is None:
+        return None
+    free_slots = max_items - len(contents)
+    if free_slots <= 0:
+        unit = "item" if max_items == 1 else "items"
+        return f"{container.name} is full (max {max_items} {unit})."
+    if picked_count > free_slots:
+        unit = "item" if free_slots == 1 else "items"
+        return f"{container.name} only has room for {free_slots} more {unit} (max {max_items})."
+    return None
+
+
 async def put_items_into_container(handler: Any, args: str) -> list[tuple[str, str]]:
     """Stores inventory items in a scene container; returns (role, text) events to stream."""
     container_hint, _, item_part = (part.strip() for part in args.partition("|"))
@@ -63,6 +85,11 @@ async def put_items_into_container(handler: Any, args: str) -> list[tuple[str, s
     picked, missing = pick_items(list(handler.avatar.inventory or []), refs, str(container.id))
     if not picked:
         return [("system", f"You don't carry {', '.join(missing)}.")]
+
+    contents = await handler._get_container_inventory(container, None)
+    cap_err = _capacity_error(container, contents, len(picked))
+    if cap_err:
+        return [("system", cap_err)]
 
     await _store(handler, container, picked)
     names = ", ".join(str(e.get("name") or ref_id(e)) if isinstance(e, dict) else e for e in picked)
@@ -102,6 +129,39 @@ async def _run_trigger(handler: Any, container: Any, picked: list[Any]) -> list[
         )
         events.extend((str(getattr(m, "role", "system")), str(m)) for m in messages)
     text = str(meta.get("on_items_added_text") or "").strip()
+    if text:
+        events.append(await _say(handler, "system", text))
+    return events
+
+
+async def run_container_items_removed_trigger(
+    handler: Any, container: Any, removed: list[Any]
+) -> list[tuple[str, str]]:
+    """Runs ``on_items_removed_script`` / ``on_items_removed_text`` when items leave a container."""
+    if container is None or not removed:
+        return []
+    raw_meta = (
+        container.get("metadata_json")
+        if isinstance(container, dict)
+        else getattr(container, "metadata_json", None)
+    )
+    meta = dict(raw_meta or {})
+    container_id = (
+        container.get("id") if isinstance(container, dict) else getattr(container, "id", "")
+    )
+    events: list[tuple[str, str]] = []
+    code = str(meta.get("on_items_removed_script") or "").strip()
+    if code:
+        removed_items = [dict(e) if isinstance(e, dict) else {"id": e, "name": e} for e in removed]
+        scope = {
+            "removed_items": removed_items,
+            "removed_item_ids": [str(e.get("id")) for e in removed_items],
+        }
+        messages = await handler.manager._execute_inline_script(
+            code, "on_items_removed", str(container_id), extra_scope=scope
+        )
+        events.extend((str(getattr(m, "role", "system")), str(m)) for m in messages)
+    text = str(meta.get("on_items_removed_text") or "").strip()
     if text:
         events.append(await _say(handler, "system", text))
     return events

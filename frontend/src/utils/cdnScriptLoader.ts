@@ -6,6 +6,7 @@
 const CODEMIRROR_CSS = [
   'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css',
 ]
 
 const CODEMIRROR_SCRIPTS = [
@@ -13,6 +14,7 @@ const CODEMIRROR_SCRIPTS = [
   'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js',
 ]
 
 const SKULPT_SCRIPTS = [
@@ -58,8 +60,22 @@ function loadScript(src: string): Promise<boolean> {
   })
 }
 
+export async function ensureCodeMirrorHintLoaded(): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  if (typeof (window as any).CodeMirror?.prototype?.showHint === 'function') {
+    return true
+  }
+  await loadStyle('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css')
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js')
+  return typeof (window as any).CodeMirror?.prototype?.showHint === 'function'
+}
+
 export function isCodeMirrorAvailable(): boolean {
-  return typeof window !== 'undefined' && typeof (window as any).CodeMirror === 'function'
+  return (
+    typeof window !== 'undefined' &&
+    typeof (window as any).CodeMirror === 'function' &&
+    typeof (window as any).CodeMirror.prototype?.showHint === 'function'
+  )
 }
 
 export function isSkulptAvailable(): boolean {
@@ -74,7 +90,7 @@ export async function loadCodeMirrorAndSkulpt(): Promise<{
     return { codeMirrorLoaded: true, skulptLoaded: true }
   }
 
-  if (loadPromise) {
+  if (loadPromise && isCodeMirrorAvailable()) {
     return loadPromise
   }
 

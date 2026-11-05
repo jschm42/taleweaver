@@ -234,8 +234,10 @@ def _patch_container_lock(
     if not any(k in updates for k in ("locked", *_LOCK_FIELDS)):
         return
     if not is_container:
-        for key in (*_LOCK_FIELDS, "locked"):
+        for key in _LOCK_FIELDS:
             metadata_json.pop(key, None)
+        if "locked" in updates:
+            metadata_json["locked"] = bool(updates["locked"])
         return
     code, item, rule = _merged_lock(updates, metadata_json)
     metadata_json.update(code_to_unlock=code, item_to_unlock=item, rule_to_unlock=rule)
@@ -261,7 +263,7 @@ def _patch_text_log(metadata_json: dict[str, Any], updates: dict[str, Any]) -> N
 def _patch_object_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     item_type = str(ent.item_type or "").upper()
     metadata_json = dict(ent.metadata_json or {})
-    _patch_container_lock(metadata_json, updates, item_type == "CONTAINER")
+    _patch_container_lock(metadata_json, updates, item_type in {"CONTAINER", "CONTAINER_SWITCH"})
     if item_type == "READABLE":
         _patch_text_log(metadata_json, updates)
     ent.metadata_json = metadata_json

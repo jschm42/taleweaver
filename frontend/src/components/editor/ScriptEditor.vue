@@ -25,6 +25,7 @@ import {
   Upload,
   Download,
   Check,
+  X,
 } from 'lucide-vue-next'
 import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
 import ScriptSearchBar from '@/components/editor/scripting/ScriptSearchBar.vue'
@@ -33,6 +34,7 @@ import { snippetsForContext } from '@/components/editor/scripting/scriptSnippets
 import { useScriptSearch } from '@/components/editor/scripting/useScriptSearch'
 import { useScriptPersistence } from '@/components/editor/scripting/useScriptPersistence'
 import type { CmEditor } from '@/components/editor/scripting/codeMirrorTypes'
+import { triggerTwHint } from '@/utils/scriptAutocomplete'
 
 const props = withDefaults(
   defineProps<{
@@ -167,6 +169,12 @@ function initCodeMirror() {
       'Cmd-S': () => {
         if (props.allowSave) void handleSave()
       },
+      'Cmd-Space': (cm: any) => {
+        triggerTwHint(cm, true)
+      },
+      'Ctrl-Space': (cm: any) => {
+        triggerTwHint(cm, true)
+      },
     },
   })
 
@@ -177,6 +185,17 @@ function initCodeMirror() {
     if (val !== props.modelValue) {
       emit('update:modelValue', val)
       emit('change', val)
+    }
+  })
+
+  cmInstance.on('inputRead', (cm: any, change: any) => {
+    if (change.origin === '+delete') return
+    const text = change.text && change.text[0]
+    if (!text) return
+    if (text === '.' || /^[a-zA-Z0-9_]$/.test(text)) {
+      setTimeout(() => {
+        triggerTwHint(cm, false)
+      }, 20)
     }
   })
 
@@ -253,7 +272,10 @@ watch(
   () => {
     nextTick(() => {
       cmInstance?.refresh()
-      if (cmInstance) cmInstance.focus()
+      setTimeout(() => {
+        cmInstance?.refresh()
+        if (cmInstance) cmInstance.focus()
+      }, 50)
     })
   }
 )
@@ -308,9 +330,34 @@ function applyAiCode(code: string) {
   syntaxResult.value = null
 }
 
-function clearScript() {
+const isConfirmingClear = ref(false)
+let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null
+
+function requestClear() {
+  isConfirmingClear.value = true
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer)
+  }
+  clearConfirmTimer = setTimeout(() => {
+    isConfirmingClear.value = false
+    clearConfirmTimer = null
+  }, 4000)
+}
+
+function cancelClear() {
+  isConfirmingClear.value = false
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer)
+    clearConfirmTimer = null
+  }
+}
+
+function executeClear() {
+  cancelClear()
   if (cmInstance) {
-    cmInstance.setValue('')
+    const doc = cmInstance.getDoc()
+    const last = doc.lastLine()
+    doc.replaceRange('', { line: 0, ch: 0 }, { line: last, ch: doc.getLine(last).length })
     cmInstance.focus()
   } else {
     emit('update:modelValue', '')
@@ -376,7 +423,14 @@ function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
 }
 
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isFullscreen.value) {
+    isFullscreen.value = false
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   isLoadingCdn.value = true
   try {
     const { codeMirrorLoaded } = await loadCodeMirrorAndSkulpt()
@@ -392,6 +446,11 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer)
+    clearConfirmTimer = null
+  }
+  window.removeEventListener('keydown', handleKeydown)
   resizeObserver?.disconnect()
   resizeObserver = null
   intersectionObserver?.disconnect()
@@ -480,10 +539,18 @@ defineExpose({
 </script>
 
 <template>
+  <div class="script-editor-root">
+    <Teleport to="body" :disabled="!isFullscreen">
+      <!-- Fullscreen Backdrop -->
+      <div
+        v-if="isFullscreen"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9998] transition-opacity"
+        @click="toggleFullscreen"
+      />
   <div
     :class="[
       'script-editor-container flex flex-col rounded-xl border border-white/10 bg-slate-950/90 transition-all overflow-hidden',
-      isFullscreen ? 'fixed inset-4 z-50 shadow-2xl bg-slate-950 border-amber-500/50' : 'relative',
+      isFullscreen ? 'fixed inset-4 z-[9999] shadow-2xl bg-slate-950 border-amber-500/50' : 'relative',
     ]"
     @keydown="handleContainerKeydown"
   >
@@ -682,16 +749,42 @@ defineExpose({
           <span class="hidden sm:inline">{{ isRunning ? 'Running...' : 'Run' }}</span>
         </button>
 
-        <!-- Clear -->
+        <!-- Clear / Clear Confirmation -->
+        <div
+          v-if="modelValue && isConfirmingClear"
+          class="flex items-center gap-1 bg-rose-500/15 border border-rose-500/40 rounded-lg px-2 py-0.5 text-[11px] animate-fadeIn"
+        >
+          <span class="text-rose-300 font-medium select-none">Clear all?</span>
+          <button
+            type="button"
+            @click="executeClear"
+            class="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors"
+            title="Confirm clear"
+          >
+            <Check class="w-3 h-3" />
+            <span>Clear</span>
+          </button>
+          <button
+            type="button"
+            @click="cancelClear"
+            class="p-0.5 rounded text-slate-400 hover:text-white transition-colors"
+            title="Cancel"
+          >
+            <X class="w-3 h-3" />
+          </button>
+        </div>
         <button
-          v-if="modelValue"
+          v-else-if="modelValue"
           type="button"
-          @click="clearScript"
+          @click="requestClear"
           class="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
           title="Clear code"
         >
           <Trash2 class="w-3.5 h-3.5" />
         </button>
+
+        <!-- Visual divider between editor actions and window controls -->
+        <div class="h-3.5 w-px bg-white/10 mx-0.5" aria-hidden="true"></div>
 
         <!-- Fullscreen Toggle -->
         <button
@@ -831,7 +924,7 @@ defineExpose({
       class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
       :style="{
         '--cm-min-height': isFullscreen ? '400px' : minHeight,
-        '--cm-max-height': maxHeight,
+        '--cm-max-height': isFullscreen ? 'none' : maxHeight,
         minHeight: isFullscreen ? '400px' : minHeight,
       }"
     >
@@ -948,12 +1041,14 @@ defineExpose({
       </div>
     </div>
   </div>
+    </Teleport>
 
-  <ScriptUnsavedModal
-    v-if="persistence.showUnsavedModal.value"
-    @cancel="persistence.cancelLoad"
-    @confirm="persistence.confirmDiscardAndLoad"
-  />
+    <ScriptUnsavedModal
+      v-if="persistence.showUnsavedModal.value"
+      @cancel="persistence.cancelLoad"
+      @confirm="persistence.confirmDiscardAndLoad"
+    />
+  </div>
 </template>
 
 <style>
@@ -995,6 +1090,7 @@ defineExpose({
 }
 
 /* Fullscreen: the canvas has a fixed height, so the editor fills it and scrolls inside. */
+.codemirror-wrapper.codemirror-fill,
 .codemirror-wrapper.codemirror-fill .CodeMirror,
 .codemirror-wrapper.codemirror-fill .CodeMirror-scroll {
   height: 100% !important;
@@ -1052,5 +1148,92 @@ defineExpose({
 
 .codemirror-wrapper .cm-operator {
   color: #f43f5e !important; /* rose-500 */
+}
+
+/* CodeMirror Autocomplete / IntelliSense Popup Theme */
+.CodeMirror-hints {
+  position: absolute;
+  z-index: 99999;
+  background-color: #0f172a !important; /* slate-900 */
+  border: 1px solid rgba(251, 191, 36, 0.3) !important; /* amber-400 border */
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  padding: 4px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 11px !important;
+  max-height: 240px !important;
+  max-width: 540px !important;
+  overflow-y: auto !important;
+}
+
+.CodeMirror-hint {
+  color: #cbd5e1 !important;
+  border-radius: 4px !important;
+  padding: 4px 6px !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+li.CodeMirror-hint-active {
+  background-color: rgba(245, 158, 11, 0.2) !important; /* amber-500/20 */
+  color: #fbbf24 !important; /* amber-400 */
+}
+
+.tw-hint-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.tw-hint-badge {
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  padding: 1px 4px !important;
+  border-radius: 3px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.tw-hint-method {
+  background-color: rgba(96, 165, 250, 0.2) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(96, 165, 250, 0.3) !important;
+}
+
+.tw-hint-prop {
+  background-color: rgba(52, 211, 153, 0.2) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(52, 211, 153, 0.3) !important;
+}
+
+.tw-hint-ns {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+}
+
+.tw-hint-name {
+  font-weight: 700 !important;
+  color: #f8fafc !important;
+}
+
+.CodeMirror-hint-active .tw-hint-name {
+  color: #fde68a !important;
+}
+
+.tw-hint-sig {
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+}
+
+.tw-hint-doc {
+  color: #64748b !important;
+  font-size: 10px !important;
+  margin-left: auto !important;
+  padding-left: 12px !important;
+  font-style: italic !important;
+  max-width: 220px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 </style>

@@ -88,7 +88,7 @@ fields are rejected (no silent typos).
   `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`.
   A code/item/rule lock needs a lock description (set `description` in the same or an earlier update,
   or `lock_description` on `create_exit`).
-- **object**: scripts such as `on_interact_*`, `on_pickup_*`, `on_read_*`, `unlock_expression`,
+- **object**: `item_type` (`CONTAINER`, `SWITCH`, `CONTAINER_SWITCH`, ...), `locked` (locks a container/container-switch, or take-locks a regular item so it is visible/inspectable in the scene or container but cannot be picked up until unlocked), scripts such as `on_interact_*`, `on_pickup_*`, `on_read_*`, `unlock_expression`,
   container `on_unlock_success_*`, `on_items_added_script/_text`, `inventory` (container contents),
   switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it; npc too),
   `current_scene_id`, ...
@@ -161,5 +161,6 @@ that a script unlocks it. That warning is expected for script-unlocked exits; me
 - Never edit the SQLite file or tables directly (SQL, `inspect_state.py`); the change set path keeps
   the manifest and the world tables in sync.
 - All adventure content and scripts follow the adventure's language; code comments stay English.
+- Format scripts cleanly for readability: put one statement per line (never chain with `;`), indent consistently with 4 spaces, group logical steps, and use **sparse `#` comments** to explain non-obvious puzzle logic or state transitions without over-commenting trivial lines.
 - Puzzles must be enforceable by the engine (locks, guards, scripts) - see the
   [taleweaver-adventure-concept-creator](../taleweaver-adventure-concept-creator/SKILL.md) skill for puzzle design.

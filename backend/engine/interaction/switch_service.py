@@ -39,7 +39,14 @@ class SwitchService:
 
         config = metadata.get("switch")
         if isinstance(config, dict):
-            return dict(config)
+            resolved = dict(config)
+            if "disabled_states" not in resolved and isinstance(
+                metadata.get("switch_disabled_states"), list
+            ):
+                resolved["disabled_states"] = metadata["switch_disabled_states"]
+            if "status_text" not in resolved and metadata.get("switch_status_text") is not None:
+                resolved["status_text"] = str(metadata.get("switch_status_text") or "")
+            return resolved
 
         # Fallback for flat metadata representations
         states = metadata.get("switch_states")
@@ -48,6 +55,8 @@ class SwitchService:
                 "states": states,
                 "state_labels": metadata.get("switch_state_labels") or {},
                 "initial_state": metadata.get("switch_initial_state", ""),
+                "disabled_states": metadata.get("switch_disabled_states") or [],
+                "status_text": str(metadata.get("switch_status_text") or ""),
                 "transitions": metadata.get("switch_transitions", []),
                 "outcomes": metadata.get("switch_outcomes", []),
                 "on_success_script": metadata.get("on_success_script", ""),

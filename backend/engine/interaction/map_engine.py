@@ -14,7 +14,7 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,7 +167,12 @@ class MapEngine:
         flag_modified(world_map, "edges")
 
     @staticmethod
-    def augment_map_data(map_dict: dict, exits: list, current_scene_id: str) -> dict:
+    def augment_map_data(
+        map_dict: dict,
+        exits: list,
+        current_scene_id: str,
+        exit_states: Optional[dict[str, Any]] = None,
+    ) -> dict:
         """
         Adds adjacent unvisited scenes as placeholder nodes to the map dictionary.
 
@@ -195,6 +200,22 @@ class MapEngine:
             target_raw_id = ex.to_scene_id if is_from_current else ex.from_scene_id
             target_safe_id = MapEngine._safe_id(target_raw_id)
 
+            is_locked = bool(getattr(ex, "is_locked", False))
+            lock_desc = getattr(ex, "lock_description", "") or ""
+            if exit_states:
+                k1 = f"{ex.from_scene_id}:{ex.to_scene_id}"
+                k2 = f"{ex.to_scene_id}:{ex.from_scene_id}"
+                st = (
+                    exit_states.get(k1)
+                    or (exit_states.get(k2) if ex.exit_type == "bidirectional" else None)
+                    or exit_states.get(str(getattr(ex, "id", "")))
+                )
+                if isinstance(st, dict):
+                    if "is_locked" in st:
+                        is_locked = bool(st["is_locked"])
+                    if "lock_description" in st:
+                        lock_desc = st["lock_description"] or ""
+
             MapEngine._ensure_target_node(nodes, target_safe_id, target_raw_id, ex)
             # Check if this edge already exists and sync its lock state
             matched_edge = MapEngine._find_edge(
@@ -208,10 +229,10 @@ class MapEngine:
                         "from": current_scene_id if is_from_current else target_raw_id,
                         "to": target_raw_id if is_from_current else current_scene_id,
                         "label": getattr(ex, "label", "") or "",
-                        "is_locked": getattr(ex, "is_locked", False),
+                        "is_locked": is_locked,
                         "is_revealed": bool(getattr(ex, "is_revealed", False)),
                         "exit_type": getattr(ex, "exit_type", "directional"),
-                        "lock_description": getattr(ex, "lock_description", "") or "",
+                        "lock_description": lock_desc,
                         "code_to_unlock": getattr(ex, "code_to_unlock", "") or "",
                         "item_to_unlock": getattr(ex, "item_to_unlock", "") or "",
                         "rule_to_unlock": getattr(ex, "rule_to_unlock", "") or "",
@@ -225,9 +246,9 @@ class MapEngine:
                 if not matched_edge.get("id"):
                     matched_edge["id"] = ex.id
                 matched_edge["label"] = ex.label or ""
-                matched_edge["is_locked"] = ex.is_locked
+                matched_edge["is_locked"] = is_locked
                 matched_edge["is_revealed"] = bool(getattr(ex, "is_revealed", False))
-                matched_edge["lock_description"] = ex.lock_description or ""
+                matched_edge["lock_description"] = lock_desc
                 matched_edge["code_to_unlock"] = ex.code_to_unlock or ""
                 matched_edge["item_to_unlock"] = ex.item_to_unlock or ""
                 matched_edge["rule_to_unlock"] = ex.rule_to_unlock or ""

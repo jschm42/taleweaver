@@ -135,7 +135,9 @@ class TurnStateApplier:
 
         # Augment with adjacent unvisited scenes
         exits = await load_map_exits(self.db, self.state.template_id, self.state.session_id)
-        map_dict = MapEngine.augment_map_data(map_dict, exits, self.state.current_scene_id)
+        map_dict = MapEngine.augment_map_data(
+            map_dict, exits, self.state.current_scene_id, self.state.exit_states
+        )
 
         return map_dict
 
@@ -745,7 +747,8 @@ class TurnStateApplier:
                         if ent_obj:
                             metadata_json = dict(ent_obj.metadata_json or {})
                             was_locked = bool(
-                                metadata_json.get("code_to_unlock")
+                                metadata_json.get("locked")
+                                or metadata_json.get("code_to_unlock")
                                 or metadata_json.get("item_to_unlock")
                                 or metadata_json.get("rule_to_unlock")
                             )
@@ -763,7 +766,8 @@ class TurnStateApplier:
                         if (
                             ent_obj
                             and ent_obj.entity_type == "OBJECT"
-                            and str(ent_obj.item_type or "").upper() == "CONTAINER"
+                            and str(ent_obj.item_type or "").upper()
+                            in {"CONTAINER", "CONTAINER_SWITCH"}
                         ):
                             metadata_json = dict(ent_obj.metadata_json or {})
                             code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()

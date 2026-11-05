@@ -39,7 +39,7 @@ def current_inventory(changeset: ScriptChangeset, entity_id: str, data: dict[str
 
 
 def _is_container(data: dict[str, Any]) -> bool:
-    return str(data.get("item_type") or "").strip().upper() == "CONTAINER"
+    return str(data.get("item_type") or "").strip().upper() in {"CONTAINER", "CONTAINER_SWITCH"}
 
 
 class ItemMover:
@@ -173,8 +173,10 @@ class ItemMover:
         if self._player.has_item(eid):
             return self._entry(eid, None)
         entry = self._entry(eid, self.detach(eid))
+        entry["locked"] = False
         self._player._add_entry(entry)
         self._place(eid, INVENTORY_SCENE_ID, hidden=False, in_inventory=True)
+        self._changeset.entity_updates.append({"entity_id": eid, "locked": False})
         return entry
 
     def to_npc(self, item_id: str, npc_id: str) -> bool:
@@ -252,6 +254,13 @@ class ItemMover:
         if eid is None:
             return False
         self._changeset.entity_updates.append({"entity_id": eid, "is_hidden": bool(hidden)})
+        return True
+
+    def set_locked(self, item_id: str, locked: bool) -> bool:
+        eid = self.item_id(item_id)
+        if eid is None:
+            return False
+        self._changeset.entity_updates.append({"entity_id": eid, "locked": bool(locked)})
         return True
 
     def clone(

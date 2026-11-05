@@ -53,6 +53,41 @@ def _merge_session_entity(
 ) -> dict[str, Any]:
     override = _entity_override(overrides, normalized, ent.get("id"))
     ent.update(override)
+    metadata = ent.get("metadata_json") if isinstance(ent.get("metadata_json"), dict) else {}
+    if "locked" not in ent and isinstance(metadata.get("locked"), bool):
+        ent["locked"] = metadata["locked"]
+    elif isinstance(ent.get("locked"), bool) and isinstance(ent.get("metadata_json"), dict):
+        metadata = {**metadata, "locked": ent["locked"]}
+        ent["metadata_json"] = metadata
+    if isinstance(ent.get("disabled_switch_states"), list) and isinstance(
+        metadata.get("switch"), dict
+    ):
+        metadata = {
+            **metadata,
+            "switch": {**metadata["switch"], "disabled_states": ent["disabled_switch_states"]},
+            "switch_disabled_states": ent["disabled_switch_states"],
+        }
+        ent["metadata_json"] = metadata
+    elif "disabled_switch_states" not in ent:
+        sw_cfg = metadata.get("switch") if isinstance(metadata.get("switch"), dict) else {}
+        cfg_disabled = sw_cfg.get("disabled_states") or metadata.get("switch_disabled_states")
+        if isinstance(cfg_disabled, list):
+            ent["disabled_switch_states"] = cfg_disabled
+    if "switch_status_text" in ent and isinstance(metadata.get("switch"), dict):
+        metadata = {
+            **metadata,
+            "switch": {
+                **metadata["switch"],
+                "status_text": str(ent.get("switch_status_text") or ""),
+            },
+            "switch_status_text": str(ent.get("switch_status_text") or ""),
+        }
+        ent["metadata_json"] = metadata
+    elif "switch_status_text" not in ent:
+        sw_cfg = metadata.get("switch") if isinstance(metadata.get("switch"), dict) else {}
+        cfg_status = sw_cfg.get("status_text") or metadata.get("switch_status_text")
+        if cfg_status is not None:
+            ent["switch_status_text"] = str(cfg_status)
     # CONSTRUCTABLE recipes are meta items and never appear in the world.
     if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE":
         ent["is_hidden"] = True
@@ -327,7 +362,7 @@ class AdventureLogic:
         for ent in merged_entities:
             if not _visible_in_scene(ent, scene_key, contained_ids):
                 continue
-            if str(ent.get("item_type") or "").upper() != "CONTAINER":
+            if str(ent.get("item_type") or "").upper() not in {"CONTAINER", "CONTAINER_SWITCH"}:
                 entities.append(ent)
                 continue
             inventory = AdventureLogic.hydrate_container_inventory(
@@ -402,7 +437,7 @@ class AdventureLogic:
         """Returns IDs of entities stored inside container objects."""
         contained_ids: set[str] = set()
         for entity in entities:
-            if str(entity.get("item_type") or "").upper() != "CONTAINER":
+            if str(entity.get("item_type") or "").upper() not in {"CONTAINER", "CONTAINER_SWITCH"}:
                 continue
             contained_ids.update(
                 AdventureLogic.extract_inventory_entity_ids(entity.get("inventory"))
@@ -421,6 +456,13 @@ class AdventureLogic:
         for entry in inventory:
             if isinstance(entry, dict):
                 item = dict(entry)
+                item_id = str(item.get("id") or "").strip()
+                resolved = entity_lookup.get(item_id) if item_id else None
+                if resolved:
+                    if "locked" in resolved:
+                        item["locked"] = resolved["locked"]
+                    if isinstance(resolved.get("metadata_json"), dict):
+                        item["metadata_json"] = dict(resolved["metadata_json"])
                 item["image_url"] = AdventureLogic.resolve_existing_data_asset_url(
                     item.get("image_url")
                 )

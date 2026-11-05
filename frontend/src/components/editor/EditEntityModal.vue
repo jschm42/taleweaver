@@ -54,6 +54,7 @@ const props = defineProps<{
     switch_states_json: string
     switch_state_labels?: Record<string, string>
     switch_initial_state: string
+    switch_disabled_states?: string[]
     switch_transitions_json: string
     on_success_script?: string
     on_failure_script?: string
@@ -73,6 +74,8 @@ const props = defineProps<{
     on_unlock_failure_text?: string
     on_items_added_script?: string
     on_items_added_text?: string
+    on_items_removed_script?: string
+    on_items_removed_text?: string
     craft_guard_expression?: string
     on_craft_success_script?: string
     on_craft_success_text?: string
@@ -143,6 +146,8 @@ const localForm = ref({
   on_unlock_failure_text: '',
   on_items_added_script: '',
   on_items_added_text: '',
+  on_items_removed_script: '',
+  on_items_removed_text: '',
   craft_guard_expression: '',
   on_craft_success_script: '',
   on_craft_success_text: '',
@@ -179,6 +184,7 @@ const localForm = ref({
 })
 const switchStates = ref<string[]>([])
 const switchStateLabels = ref<Record<string, string>>({})
+const switchDisabledStates = ref<string[]>([])
 const switchTransitions = ref<any[]>([])
 
 function syncFromForm() {
@@ -197,6 +203,12 @@ function syncFromForm() {
   switchStateLabels.value = Object.fromEntries(
     Object.entries(labels).filter(([state, label]) => states.includes(state.toUpperCase()) && String(label).trim())
   )
+  const rawDisabled = Array.isArray(localForm.value.switch_disabled_states)
+    ? localForm.value.switch_disabled_states
+    : []
+  switchDisabledStates.value = rawDisabled
+    .map((s: any) => String(s || '').trim().toUpperCase())
+    .filter((s: string) => s && states.includes(s))
 
   const initial = String(localForm.value.switch_initial_state || '').trim().toUpperCase()
   if (!initial || !states.includes(initial)) {
@@ -256,6 +268,7 @@ function removeState(index: number) {
   switchStateLabels.value = Object.fromEntries(
     Object.entries(switchStateLabels.value).filter(([state]) => state !== removed)
   )
+  switchDisabledStates.value = switchDisabledStates.value.filter(s => s !== removed)
   
   if (localForm.value.switch_initial_state === removed) {
     localForm.value.switch_initial_state = switchStates.value[0] || ''
@@ -278,6 +291,11 @@ function updateStateValue(index: number, val: string) {
   if (oldVal in switchStateLabels.value) {
     const { [oldVal]: label, ...rest } = switchStateLabels.value
     switchStateLabels.value = cleanVal ? { ...rest, [cleanVal]: label } : rest
+  }
+  if (switchDisabledStates.value.includes(oldVal)) {
+    switchDisabledStates.value = switchDisabledStates.value
+      .map(s => (s === oldVal ? cleanVal : s))
+      .filter(Boolean)
   }
   
   if (localForm.value.switch_initial_state === oldVal) {
@@ -335,7 +353,7 @@ const itemReferenceOptions = computed(() => {
     .filter((option) => {
       if (String(option.type || '').toUpperCase() !== 'OBJECT') return false
       const itemType = String((option as any).itemType || '').toUpperCase()
-      if (itemType === 'CONTAINER') return false
+      if (itemType === 'CONTAINER' || itemType === 'CONTAINER_SWITCH') return false
       if (itemType === 'SWITCH') return false
       return true
     })
@@ -455,7 +473,7 @@ const isFormInvalid = computed(() => {
   const resultsCount = (localForm.value.result_item_ids_input || []).filter(Boolean).length
   const combinationInvalid = currentItemType.value === 'CONSTRUCTABLE' && (ingredientsCount < 2 || resultsCount < 1)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
-  const switchInvalid = currentItemType.value === 'SWITCH' && (
+  const switchInvalid = ['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType.value) && (
     switchStates.value.length < 2 ||
     uniqueStates.size !== switchStates.value.length ||
     switchStates.value.some(s => !s.trim()) ||
@@ -463,7 +481,10 @@ const isFormInvalid = computed(() => {
     !uniqueStates.has(String(localForm.value.switch_initial_state).trim().toUpperCase()) ||
     switchTransitions.value.some(t => !t.to || !uniqueStates.has(t.to) || (t.from && !uniqueStates.has(t.from)))
   )
-  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid || weaponInvalid.value
+  const minCap = Number(localForm.value.min_items || 0)
+  const maxCap = Number(localForm.value.max_items || 0)
+  const capacityInvalid = ['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType.value) && minCap > 0 && maxCap > 0 && minCap > maxCap
+  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid || capacityInvalid || weaponInvalid.value
 })
 
 const weaponInvalid = computed(() => {
@@ -586,7 +607,7 @@ watch(() => localForm.value.entity_id, (newVal) => {
 
 watch(() => localForm.value.item_type, (newType) => {
   const type = String(newType || '').toUpperCase()
-  if (type === 'SWITCH') {
+  if (type === 'SWITCH' || type === 'CONTAINER_SWITCH') {
     localForm.value.is_portable = false
     if (switchStates.value.length === 0) {
       switchStates.value = ['OFF', 'ON']
@@ -648,7 +669,7 @@ function handleSave() {
       ? localForm.value.wearable_slots_input
       : []
 
-    if (currentItemType.value === 'SWITCH') {
+    if (['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType.value)) {
       parsedSwitchStates = switchStates.value
         .map(s => s.trim().toUpperCase())
         .filter(Boolean)
@@ -724,6 +745,8 @@ function handleSave() {
         .filter(([state, label]) => parsedSwitchStates.includes(state) && label.trim())
         .map(([state, label]) => [state, label.trim().slice(0, 20)])
     ),
+    switch_disabled_states: switchDisabledStates.value.filter((state) => parsedSwitchStates.includes(state)),
+    switch_status_text: String(localForm.value.switch_status_text || '').trim().slice(0, 300),
     switch_transitions: parsedSwitchTransitions,
     on_success_script: String(localForm.value.on_success_script || '').trim(),
     on_failure_script: String(localForm.value.on_failure_script || '').trim(),
@@ -749,6 +772,10 @@ function handleSave() {
     on_unlock_failure_text: String(localForm.value.on_unlock_failure_text || '').trim(),
     on_items_added_script: String(localForm.value.on_items_added_script || '').trim(),
     on_items_added_text: String(localForm.value.on_items_added_text || '').trim(),
+    on_items_removed_script: String(localForm.value.on_items_removed_script || '').trim(),
+    on_items_removed_text: String(localForm.value.on_items_removed_text || '').trim(),
+    min_items: Number(localForm.value.min_items || 0) > 0 ? Math.floor(Number(localForm.value.min_items)) : null,
+    max_items: Number(localForm.value.max_items || 0) > 0 ? Math.floor(Number(localForm.value.max_items)) : null,
     craft_guard_expression: String(localForm.value.craft_guard_expression || '').trim(),
     on_craft_success_script: String(localForm.value.on_craft_success_script || '').trim(),
     on_craft_success_text: String(localForm.value.on_craft_success_text || '').trim(),
@@ -1284,6 +1311,7 @@ const textLogPreviewClass = computed(() => {
                       <option value="CONSTRUCTABLE">CONSTRUCTABLE</option>
                       <option value="READABLE">READABLE</option>
                       <option value="CONTAINER">CONTAINER</option>
+                      <option value="CONTAINER_SWITCH">CONTAINER_SWITCH</option>
                       <option value="SWITCH">SWITCH</option>
                     </select>
                     <input
@@ -1314,6 +1342,27 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
 
+
+                <!-- Locked (Cannot Be Taken) for regular items -->
+                <div v-if="!['CONTAINER', 'CONTAINER_SWITCH', 'SWITCH', 'CONSTRUCTABLE'].includes(currentItemType)" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1 pr-4">
+                      <p class="text-xs font-black text-slate-200 uppercase tracking-widest flex items-center gap-1.5">
+                        <Lock class="w-3.5 h-3.5 text-amber-400" /> Locked (Cannot Be Taken)
+                      </p>
+                      <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                        If enabled, this item is visible and inspectable (in the scene or inside a container) but cannot be picked up until unlocked by a script (<code class="text-amber-400">tw.objects.unlock('ID')</code>).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.locked = !localForm.locked"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1 shrink-0', localForm.locked ? 'bg-amber-600' : 'bg-slate-700']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-6' : 'translate-x-0']"></div>
+                    </button>
+                  </div>
+                </div>
 
                 <!-- Hidden state & Reveal rule for Objects -->
                 <div v-if="currentItemType !== 'CONSTRUCTABLE'" class="space-y-4 border-t border-white/5 pt-4">
@@ -1572,7 +1621,7 @@ const textLogPreviewClass = computed(() => {
 
 
                 <!-- SWITCH: Visual Configurator -->
-                <div v-if="currentItemType === 'SWITCH'" class="space-y-6">
+                <div v-if="['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-6">
                   <!-- Section Header -->
                   <div class="flex items-center gap-2 pb-2 border-b border-white/5">
                     <ToggleLeft class="w-4 h-4 text-lime-400" />
@@ -1582,21 +1631,37 @@ const textLogPreviewClass = computed(() => {
                   <!-- 1. States Management -->
                   <SwitchStatesEditor
                     v-model:labels="switchStateLabels"
+                    v-model:disabled-states="switchDisabledStates"
                     :states="switchStates"
                     @add="addState"
                     @remove="removeState"
                     @rename="updateStateValue"
                   />
 
-                  <!-- 2. Initial State Selection -->
-                  <div class="space-y-2 bg-black/20 border border-white/5 p-4 rounded-2xl">
-                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Initial State</label>
-                    <select
-                      v-model="localForm.switch_initial_state"
-                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-lime-500/50 outline-none transition-all"
-                    >
-                      <option v-for="state in switchStates" :key="state" :value="state">{{ switchStateLabels[state] ? `${state} (${switchStateLabels[state]})` : state }}</option>
-                    </select>
+                  <!-- 2. Initial State Selection & Status Text -->
+                  <div class="space-y-4 bg-black/20 border border-white/5 p-4 rounded-2xl">
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Initial State</label>
+                      <select
+                        v-model="localForm.switch_initial_state"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-lime-500/50 outline-none transition-all"
+                      >
+                        <option v-for="state in switchStates" :key="state" :value="state">{{ switchStateLabels[state] ? `${state} (${switchStateLabels[state]})` : state }}</option>
+                      </select>
+                    </div>
+                    <div class="space-y-1.5">
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Status / Hint Text (Optional)</label>
+                      <input
+                        v-model="localForm.switch_status_text"
+                        type="text"
+                        maxlength="300"
+                        placeholder="e.g. The microwave needs some electrical power first."
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs text-white focus:border-lime-500/50 outline-none transition-all"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Shown inside the switch or container-switch dialog (can be updated or cleared via script: <code class="text-slate-400">obj.set_status_text(...)</code> / <code class="text-slate-400">obj.clear_status_text()</code>).
+                      </span>
+                    </div>
                   </div>
 
                   <!-- 3. Transitions Management -->
@@ -1886,7 +1951,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <!-- CONTAINER -->
-                <div v-if="currentItemType === 'CONTAINER'" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="p-3 bg-black/20 border border-white/10 rounded-xl">
                   <div class="flex items-center justify-between">
                     <div class="space-y-1 pr-4">
                       <p class="text-xs font-black text-slate-200 uppercase tracking-widest">Locked State</p>
@@ -1902,7 +1967,7 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <div v-if="currentItemType === 'CONTAINER'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Code To Unlock</label>
                     <input
@@ -1923,7 +1988,46 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <div v-if="currentItemType === 'CONTAINER'" class="space-y-3">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-4">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Min Items Required</label>
+                      <input
+                        v-model.number="localForm.min_items"
+                        type="number"
+                        min="0"
+                        max="50"
+                        placeholder="0 (No minimum)"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Minimum items needed inside (e.g. 3 for a fuse box requiring 3 components).
+                      </span>
+                    </div>
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Max Items Capacity</label>
+                      <input
+                        v-model.number="localForm.max_items"
+                        type="number"
+                        min="0"
+                        max="50"
+                        placeholder="0 (Unlimited)"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Maximum items that fit inside (e.g. 1 for a microwave or coin slot).
+                      </span>
+                    </div>
+                  </div>
+                  <p
+                    v-if="Number(localForm.min_items || 0) > 0 && Number(localForm.max_items || 0) > 0 && Number(localForm.min_items) > Number(localForm.max_items)"
+                    class="text-xs text-red-400 font-bold"
+                  >
+                    Min Items cannot be greater than Max Items Capacity.
+                  </p>
+                </div>
+
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-3">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items</label>
                   <div class="space-y-2">
                     <div
@@ -1957,7 +2061,7 @@ const textLogPreviewClass = computed(() => {
                 </div>
 
                 <!-- CONTAINER Panels: Deterministic Guard & Unlocking Transition Rules -->
-                <div v-if="currentItemType === 'CONTAINER'" class="space-y-4 pt-2">
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-4 pt-2">
                   <!-- Collapsible Panel 1: Deterministic Guard (Default Collapsed) -->
                   <div class="border border-white/10 rounded-xl overflow-hidden bg-black/30">
                     <button
@@ -2004,7 +2108,7 @@ const textLogPreviewClass = computed(() => {
                         <span class="text-[11px] font-black text-slate-300 uppercase tracking-wider">
                           Unlocking Transition Rules
                         </span>
-                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script || localForm.on_items_added_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
+                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script || localForm.on_items_added_script || localForm.on_items_removed_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
                           Configured
                         </span>
                       </div>
@@ -2059,6 +2163,23 @@ const textLogPreviewClass = computed(() => {
                           v-model="localForm.on_items_added_text"
                           rows="2"
                           placeholder="e.g. The offering bowl glows faintly as the items settle inside."
+                          class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
+                        ></textarea>
+                      </div>
+
+                      <ScriptEditor
+                        v-model="localForm.on_items_removed_script"
+                        label="On Items Removed Script"
+                        help-text="Executed once after the player takes or drops one or more items from this container. removed_items (list of dicts) and removed_item_ids (list of IDs) are in scope."
+                        context="container_items_removed"
+                        min-height="100px"
+                      />
+                      <div class="space-y-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Items Removed Text</label>
+                        <textarea
+                          v-model="localForm.on_items_removed_text"
+                          rows="2"
+                          placeholder="e.g. The chamber resets as you take the item out."
                           class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
                         ></textarea>
                       </div>
@@ -2194,7 +2315,7 @@ const textLogPreviewClass = computed(() => {
 
               <div v-if="context.type === 'object'" class="space-y-6">
                 <!-- SWITCH Triggers in Advanced Tab -->
-                <div v-if="currentItemType === 'SWITCH'" class="space-y-4">
+                <div v-if="['SWITCH', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-4">
                   <div class="p-4 bg-lime-500/10 border border-lime-500/20 rounded-2xl space-y-1">
                     <div class="flex items-center gap-2 text-lime-400 font-bold text-xs uppercase tracking-wider">
                       <Sparkles class="w-4 h-4" /> Global Switch Script Triggers

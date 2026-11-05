@@ -97,7 +97,7 @@ watch(() => props.errorMessage, (message) => {
 <template>
   <InlinePromptPanel
     :open="open && !!container"
-    :label="effectiveHeader"
+
     :title="effectiveTitle"
     :description="effectiveDescription"
     :image-url="imageUrl"
@@ -106,7 +106,7 @@ watch(() => props.errorMessage, (message) => {
     @close="emit('close')"
     @revealed="onRevealed"
   >
-    <template #label-icon><Lock class="w-3 h-3" /></template>
+
 
     <!-- CODE REQUIREMENT -->
     <form v-if="requiredCode" class="flex gap-2" @submit.prevent="handleCodeSubmit">

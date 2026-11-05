@@ -21,10 +21,10 @@ TaleWeaver adventures are represented as self-contained blueprints following spe
 * **`scenes`**: Graph nodes representing spatial locations (`id`, `label`, `description`, `image_url`).
 * **`exits`**: Graph edges between scenes (`from_scene_id`, `to_scene_id`, `exit_type`, `is_locked`, `code_to_unlock`, `item_to_unlock`, `rule_to_unlock`).
 * **`npcs`**: Non-player characters with spatial position, stats, inventory, hidden flag, movement type (`STATIONARY` vs `MOVABLE`), and optional TTS voice.
-* **`objects`**: Interactive scene items or inventory objects (`CONTAINER`, `SWITCH`, `WEAPON`, `WEARABLE`, `CONSUMABLE`, `KEY`, `READABLE`, `CONSTRUCTABLE`). Containers support locks and nested items; switches hold finite state machines (`switch_states`, `switch_actions`).
+* **`objects`**: Interactive scene items or inventory objects (`CONTAINER`, `SWITCH`, `CONTAINER_SWITCH`, `WEAPON`, `WEARABLE`, `CONSUMABLE`, `KEY`, `READABLE`, `CONSTRUCTABLE`). Containers support locks and nested items; switches hold finite state machines (`switch_states`, `switch_actions`); `CONTAINER_SWITCH` combines both in one entity (shown in Room Discoveries with an integrated switch inside the container panel); non-container items support take-locking (`locked: true`), keeping them visible and inspectable in a scene or container while preventing pickup until unlocked.
 * **`quests`**: Main and side quests with clear objectives and EXP rewards.
 * **`awards`**: Achievements (`bronze`, `silver`, `gold`) evaluated during turn execution.
-* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`, `on_time_reached`, ...) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message.
+* **`scripts`**: Sandboxed Python event scripts reacting to triggers (`on_turn_start`, `on_enter_scene`, `on_interact`, `on_turn_end`, `on_time_reached`, ...) via the `tw` GameContext API. `on_turn_start`/`on_turn_end` fire on in-game turn boundaries (scene or sequence change), not on every message. The scripting API is documented in `docs/scripting_engine.md` and mirrored for editor autocomplete in `frontend/src/utils/twScriptApiDefinitions.ts` (kept in sync on changes).
 
 ---
 

@@ -32,7 +32,10 @@ ITEM_TYPES = (
     "READABLE",
     "CONTAINER",
     "SWITCH",
+    "CONTAINER_SWITCH",
 )
+CONTAINER_ITEM_TYPES = {"CONTAINER", "CONTAINER_SWITCH"}
+SWITCH_ITEM_TYPES = {"SWITCH", "CONTAINER_SWITCH"}
 _MAX_READABLE_DESCRIPTION = 200
 
 
@@ -110,7 +113,7 @@ def _apply_type_change(item: WorldEntity, payload: EntityUpdateRequest) -> Optio
             status_code=400,
             detail=(
                 "item_type must be one of DEFAULT, CONSUMABLE, WEARABLE, "
-                "WEAPON, CONSTRUCTABLE, READABLE, CONTAINER, SWITCH."
+                "WEAPON, CONSTRUCTABLE, READABLE, CONTAINER, SWITCH, CONTAINER_SWITCH."
             ),
         )
     item.item_type = new_type
@@ -119,7 +122,7 @@ def _apply_type_change(item: WorldEntity, payload: EntityUpdateRequest) -> Optio
 
 def _update_metadata(item: WorldEntity, payload: EntityUpdateRequest, item_type: str) -> None:
     metadata_json = dict(item.metadata_json or {})
-    item_metadata.update_container(item, metadata_json, payload, item_type == "CONTAINER")
+    item_metadata.update_container(item, metadata_json, payload, item_type in CONTAINER_ITEM_TYPES)
     if given(payload, "inventory"):
         item.inventory = payload.inventory
         flag_modified(item, "inventory")
@@ -127,7 +130,7 @@ def _update_metadata(item: WorldEntity, payload: EntityUpdateRequest, item_type:
     item_metadata.update_constructable(metadata_json, payload, item_type == "CONSTRUCTABLE")
     item_metadata.update_item_events(metadata_json, payload)
     item_metadata.update_pickup_trigger(metadata_json, payload)
-    item_metadata.update_switch(metadata_json, payload, item_type == "SWITCH")
+    item_metadata.update_switch(metadata_json, payload, item_type in SWITCH_ITEM_TYPES)
     item_metadata.update_consumable(metadata_json, payload, item_type == "CONSUMABLE")
     item_metadata.update_weapon(metadata_json, payload, item_type == "WEAPON")
     item.metadata_json = metadata_json

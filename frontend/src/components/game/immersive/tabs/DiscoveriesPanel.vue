@@ -3,8 +3,9 @@
  * DiscoveriesPanel — Objects found in the current scene as large icon tiles.
  */
 import { ref, computed } from 'vue'
-import { Hand } from 'lucide-vue-next'
+import { Hand, Lock } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
+import { isContainerEntity, isItemTakeLocked } from '@/services/gameCommandService'
 
 const props = defineProps<{
   items: any[]
@@ -28,7 +29,11 @@ const thumbFailed = ref<Record<string, boolean>>({})
 const brokenImages = ref<Record<string, boolean>>({})
 const loadedImages = ref<Record<string, boolean>>({})
 
-const portableItems = computed(() => props.items.filter((item: any) => item.is_portable !== false))
+const portableItems = computed(() =>
+  props.items.filter(
+    (item: any) => item.is_portable !== false && !isContainerEntity(item) && !isItemTakeLocked(item),
+  ),
+)
 const canTakeAll = computed(() => portableItems.value.length > 1 && !props.isEvaluating && !isTakingAll.value)
 
 function imageUrl(path: string): string {
@@ -56,7 +61,9 @@ function hasImage(item: any): boolean {
 }
 
 function typeLabel(item: any): string {
-  return String(item.item_type || 'Object').toLowerCase()
+  const raw = String(item.item_type || 'Object').toUpperCase()
+  if (raw === 'CONTAINER_SWITCH') return 'container · switch'
+  return raw.toLowerCase()
 }
 
 async function takeAll() {
@@ -109,8 +116,17 @@ async function takeAll() {
         @mouseleave="emit('itemLeave')"
         @contextmenu.prevent="emit('itemContextmenu', item, $event)"
       >
+        <span
+          v-if="!isContainerEntity(item) && isItemTakeLocked(item)"
+          class="absolute z-10 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400"
+          :class="props.compact ? 'top-1 right-1 p-1' : 'top-2 right-2 p-1.5'"
+          title="Locked — cannot be taken right now"
+          aria-label="Locked item"
+        >
+          <Lock :class="props.compact ? 'w-3 h-3' : 'w-3.5 h-3.5'" />
+        </span>
         <button
-          v-if="item.is_portable !== false"
+          v-else-if="item.is_portable !== false && !isContainerEntity(item)"
           type="button"
           class="absolute z-10 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-500 hover:scale-110 transition-all cursor-pointer disabled:opacity-40"
           :class="props.compact ? 'top-1 right-1 p-1' : 'top-2 right-2 p-1.5'"
