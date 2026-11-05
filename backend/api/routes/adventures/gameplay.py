@@ -873,7 +873,21 @@ async def traverse_exit(
     if not world_exit:
         raise HTTPException(status_code=404, detail="Exit not found.")
 
-    if world_exit.is_locked:
+    exit_states = state.exit_states or {}
+    key1 = f"{world_exit.from_scene_id}:{world_exit.to_scene_id}"
+    key2 = f"{world_exit.to_scene_id}:{world_exit.from_scene_id}"
+    st = (
+        exit_states.get(key1)
+        or (exit_states.get(key2) if world_exit.exit_type == "bidirectional" else None)
+        or exit_states.get(str(world_exit.id))
+    )
+    is_exit_locked = (
+        bool(st["is_locked"])
+        if (isinstance(st, dict) and "is_locked" in st)
+        else bool(world_exit.is_locked)
+    )
+
+    if is_exit_locked:
         raise HTTPException(
             status_code=403, detail=str(world_exit.lock_description or "The way is locked.")
         )

@@ -12,6 +12,7 @@ from backend.engine.interaction.script_item_apply import (
     apply_player_inventory,
     insert_cloned_entities,
     sync_entity_rows,
+    sync_exit_rows,
 )
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
@@ -82,6 +83,11 @@ class TriggerService:
         script_vars = dict(session_overrides.get("__script_vars__", {}))
         story_flags = dict(session_overrides.get("__switch_story_flags__", {}))
 
+        from backend.api.routes.adventures.session_adventure import load_session_adventure
+
+        adventure = await load_session_adventure(db, state)
+        sequences = getattr(adventure, "sequences", None) if adventure else None
+
         return GameContext(
             avatar_data=avatar_dict,
             current_scene_id=state.current_scene_id,
@@ -94,6 +100,8 @@ class TriggerService:
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
+            active_sequence_id=state.active_sequence_id,
+            sequences=sequences,
         )
 
     @classmethod
@@ -195,6 +203,15 @@ class TriggerService:
             apply_player_inventory(await cls._load_avatar(db, state), context.changeset)
             await cls._sync_npc_personas(db, state, context.changeset)
             await sync_entity_rows(db, state, context.changeset)
+            await sync_exit_rows(db, state, context.changeset)
+
+            from backend.api.routes.adventures.sequence_progress import apply_sequence_changeset
+            from backend.api.routes.adventures.session_adventure import load_session_adventure
+
+            avatar = await cls._load_avatar(db, state)
+            adventure = await load_session_adventure(db, state)
+            seq_msgs = await apply_sequence_changeset(adventure, state, avatar, context.changeset)
+            messages.extend(seq_msgs)
             messages.extend(
                 await SessionCheckpointService.save_from_script(
                     db, state.session_id, context.changeset.save_requests

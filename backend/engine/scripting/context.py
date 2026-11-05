@@ -106,6 +106,9 @@ class ScriptChangeset:
     failed_quest_ids: list[str] = field(default_factory=list)
     granted_award_keys: list[str] = field(default_factory=list)
     sequence_completed: bool = False
+    sequence_start_id: Optional[str] = None
+    sequence_end_id: Optional[str] = None
+    sequence_advance: bool = True
 
     var_updates: dict[str, Any] = field(default_factory=dict)
     story_flag_updates: dict[str, Any] = field(default_factory=dict)
@@ -162,6 +165,8 @@ class ScriptChangeset:
             or self.failed_quest_ids
             or self.granted_award_keys
             or self.sequence_completed
+            or self.sequence_start_id is not None
+            or self.sequence_end_id is not None
             or self.var_updates
             or self.story_flag_updates
             or self.game_completed
@@ -1335,16 +1340,129 @@ class AwardsProxy:
 
 
 class SequencesProxy:
-    """Safe proxy for sequence progression."""
+    """Safe proxy for sequence progression and inspection."""
 
-    def __init__(self, changeset: ScriptChangeset):
+    def __init__(
+        self,
+        changeset: ScriptChangeset,
+        active_sequence_id: Optional[str] = None,
+        sequences: Optional[list[dict[str, Any]]] = None,
+    ):
         self._changeset = changeset
+        self._sequences = [s for s in (sequences or []) if isinstance(s, dict)]
+        self._active_sequence_id = active_sequence_id
+        if not self._active_sequence_id and self._sequences:
+            self._active_sequence_id = self._sequences[0].get("id")
 
-    def advance(self) -> None:
+    @property
+    def id(self) -> Optional[str]:
+        """ID of the currently active sequence, or None."""
+        return self.get_active_id()
+
+    @property
+    def title(self) -> Optional[str]:
+        """Title of the currently active sequence, or None."""
+        seq = self.get_active()
+        return seq.get("title") if seq else None
+
+    @property
+    def active_id(self) -> Optional[str]:
+        """ID of the currently active sequence, or None."""
+        return self.get_active_id()
+
+    @property
+    def active(self) -> Optional[dict[str, Any]]:
+        """Dictionary of the currently active sequence, or None."""
+        return self.get_active()
+
+    @property
+    def current(self) -> Optional[dict[str, Any]]:
+        """Alias for active sequence dictionary."""
+        return self.get_active()
+
+    def get_active(self) -> Optional[dict[str, Any]]:
+        """Returns the dictionary of the currently active sequence, or None."""
+        cur_id = self.get_active_id()
+        if not cur_id:
+            return None
+        for s in self._sequences:
+            if str(s.get("id", "")).strip().upper() == cur_id.strip().upper():
+                return dict(s)
+        return {"id": cur_id}
+
+    def get_active_id(self) -> Optional[str]:
+        """Returns the ID of the currently active sequence, or None."""
+        if self._changeset.sequence_completed and not self._changeset.sequence_advance:
+            return None
+        if self._changeset.sequence_start_id is not None:
+            return self._changeset.sequence_start_id
+        return self._active_sequence_id
+
+    def is_active(self, sequence_id: str) -> bool:
+        """Returns True if the given sequence_id is the currently active sequence."""
+        if not sequence_id:
+            return False
+        cur_id = self.get_active_id()
+        if not cur_id:
+            return False
+        return cur_id.strip().upper() == str(sequence_id).strip().upper()
+
+    def all(self) -> list[dict[str, Any]]:
+        """Returns a list of all sequences in the adventure."""
+        return [dict(s) for s in self._sequences]
+
+    def start(self, sequence_id: str) -> None:
+        """
+        Starts the sequence with the given sequence_id.
+        Sets it as the single active sequence.
+        """
+        clean_id = str(sequence_id or "").strip()
+        if not clean_id:
+            return
+        matched_id = clean_id
+        for s in self._sequences:
+            if str(s.get("id", "")).strip().upper() == clean_id.upper():
+                matched_id = s.get("id", clean_id)
+                break
+        self._changeset.sequence_start_id = matched_id
+        self._active_sequence_id = matched_id
+
+    def end(self, sequence_id: Optional[str] = None, advance: bool = True) -> None:
+        """
+        Ends the active sequence (or the specified sequence if active).
+        If advance=True (default), advances to the next sequence.
+        If advance=False, clears the active sequence.
+        """
+        clean_id = str(sequence_id).strip() if sequence_id else None
         self._changeset.sequence_completed = True
+        self._changeset.sequence_end_id = clean_id
+        self._changeset.sequence_advance = bool(advance)
+        if not advance:
+            self._changeset.sequence_start_id = None
+            self._active_sequence_id = None
+        elif self._sequences:
+            cur_id = self.get_active_id()
+            idx = -1
+            for i, s in enumerate(self._sequences):
+                if str(s.get("id", "")).strip().upper() == str(cur_id or "").strip().upper():
+                    idx = i
+                    break
+            if idx >= 0 and idx + 1 < len(self._sequences):
+                self._active_sequence_id = self._sequences[idx + 1].get("id")
+            else:
+                self._active_sequence_id = None
+
+    def complete(self, sequence_id: Optional[str] = None) -> None:
+        """Alias for end(sequence_id, advance=True)."""
+        self.end(sequence_id=sequence_id, advance=True)
 
     def complete_current(self) -> None:
-        self._changeset.sequence_completed = True
+        """Alias for end(None, advance=True)."""
+        self.end(sequence_id=None, advance=True)
+
+    def advance(self) -> None:
+        """Advances to the next sequence."""
+        self.end(sequence_id=None, advance=True)
 
 
 class DiceProxy:
@@ -1388,6 +1506,8 @@ class GameContext:
         is_debug_enabled: bool = False,
         llm_asker: Optional[LlmAsker] = None,
         clock: Optional[dict[str, Any]] = None,
+        active_sequence_id: Optional[str] = None,
+        sequences: Optional[list[dict[str, Any]]] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1432,7 +1552,12 @@ class GameContext:
         self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
-        self.sequences = SequencesProxy(self.changeset)
+        self.sequences = SequencesProxy(
+            self.changeset,
+            active_sequence_id=active_sequence_id,
+            sequences=sequences,
+        )
+        self.sequence = self.sequences
         self.dice = DiceProxy()
         self.dialog = DialogProxy(self.changeset, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".

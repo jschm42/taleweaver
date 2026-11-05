@@ -631,6 +631,42 @@ Directly manipulates adventure quest entries:
 Awards achievements to the player's profile:
 - `tw.awards.grant(award_key: str)`: Grants the award, exactly like an award the Game Master grants: it is added to the player's earned awards (once per adventure), the chat shows `Award Achievement: <title>`, a checkpoint is saved, and the game shows the award in a short overlay. The key is matched case-insensitively against the adventure's award keys; an unknown key is ignored (see the server log).
 
+### `tw.sequences` & `tw.sequence`
+Controls adventure story chapters and sequences. In TaleWeaver, **only one sequence can be active at a time** (`state.active_sequence_id`). Both `tw.sequences` and `tw.sequence` provide the same API.
+
+#### Starting & Ending Sequences
+- `tw.sequences.start(sequence_id: str)`: Immediately switches to and activates the specified sequence. Sets it as the active sequence, logs a system notification (`Sequence started: <title>`), and executes the sequence's `on_start_sequence_script` / `on_start_sequence_text` if defined.
+- `tw.sequences.end(sequence_id: Optional[str] = None, advance: bool = True)`: Ends the currently active sequence (or `sequence_id` if specified).
+  - When `advance=True` (default): triggers `on_end_sequence_script` / text, awards sequence completion XP, and advances to the next chapter in order (or completes the adventure if no chapters remain).
+  - When `advance=False`: triggers `on_end_sequence_script` / text, awards sequence completion XP, and clears the active sequence (`active_sequence_id = None`) without advancing.
+- `tw.sequences.complete(sequence_id: Optional[str] = None)`: Convenience alias for `tw.sequences.end(sequence_id, advance=True)`.
+- `tw.sequences.complete_current()`: Convenience alias for `tw.sequences.end(None, advance=True)`.
+- `tw.sequences.advance()`: Advances to the next sequence in the adventure.
+
+#### Determining the Active Sequence
+- `tw.sequences.get_active() -> Optional[dict]`: Returns the dictionary definition of the currently active sequence (e.g. `{"id": "...", "title": "...", "order": 1}`), or `None` if no sequence is active.
+- `tw.sequences.get_active_id() -> Optional[str]`: Returns the ID string of the currently active sequence (e.g. `"CHAPTER_1"`), or `None`.
+- `tw.sequences.is_active(sequence_id: str) -> bool`: Returns `True` if `sequence_id` matches the currently active sequence (case-insensitive).
+- `tw.sequences.active_id`: Property returning the active sequence ID (or `None`).
+- `tw.sequences.active` / `tw.sequences.current`: Property returning the active sequence dictionary (or `None`).
+- `tw.sequence.id`: Property returning the active sequence ID.
+- `tw.sequence.title`: Property returning the active sequence title.
+- `tw.sequences.all() -> list[dict]`: Returns a list of all sequences defined in the adventure.
+
+```python
+# Check which sequence is active
+if tw.sequences.is_active("HEIST_PHASE"):
+    tw.narrate("Security remains on high alert!")
+
+# Retrieve active sequence properties
+current_id = tw.sequence.id
+if current_id == "RIDDLE_TOWER":
+    tw.sequences.end()  # Complete and advance to next sequence
+
+# Jump directly to a specific sequence
+tw.sequences.start("VAULT_SHOWDOWN")
+```
+
 ### `tw.dice`
 Provides deterministic, seeded random number generation:
 - `tw.dice.roll(sides: int = 20) -> int`: Rolls a die with `sides` faces (1 to `sides`).

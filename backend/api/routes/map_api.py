@@ -86,7 +86,13 @@ async def get_map(
 
         if raw_current_id:
             exits = await load_map_exits(db, template_id, session_id)
-            map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
+            exit_states = None
+            if session_id:
+                state = await AdventureLogic.resolve_session_state(db, session_id)
+                exit_states = state.exit_states if state else None
+            map_dict = MapEngine.augment_map_data(
+                map_dict, exits, raw_current_id, exit_states=exit_states
+            )
 
     return map_dict
 

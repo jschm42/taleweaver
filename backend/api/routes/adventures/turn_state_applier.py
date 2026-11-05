@@ -135,7 +135,9 @@ class TurnStateApplier:
 
         # Augment with adjacent unvisited scenes
         exits = await load_map_exits(self.db, self.state.template_id, self.state.session_id)
-        map_dict = MapEngine.augment_map_data(map_dict, exits, self.state.current_scene_id)
+        map_dict = MapEngine.augment_map_data(
+            map_dict, exits, self.state.current_scene_id, self.state.exit_states
+        )
 
         return map_dict
 

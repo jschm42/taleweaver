@@ -10,14 +10,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.engine.scripting.context import ScriptChangeset
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldEntity
+from backend.models.world_entity import WorldEntity, WorldExit
 
 logger = logging.getLogger(__name__)
 
@@ -115,3 +115,58 @@ async def sync_entity_rows(
         st = states.get(str(ent.id), {})
         for field in (f for f in _ROW_FIELDS if f in st):
             setattr(ent, field, st[field])
+
+
+async def sync_exit_rows(db: AsyncSession, state: SessionState, changeset: ScriptChangeset) -> None:
+    """Synchronizes database WorldExit rows and world_map edges from exit updates."""
+    if not changeset.exit_updates:
+        return
+
+    for eu in changeset.exit_updates:
+        from_scene = str(eu.get("from_scene_id") or "").strip().upper()
+        to_scene = str(eu.get("to_scene_id") or "").strip().upper()
+        if not from_scene or not to_scene:
+            continue
+
+        is_locked = bool(eu.get("is_locked", False))
+        lock_description = eu.get("lock_description")
+
+        res = await db.execute(
+            select(WorldExit).where(
+                WorldExit.session_id == state.session_id,
+                or_(
+                    and_(
+                        func.upper(WorldExit.from_scene_id) == from_scene,
+                        func.upper(WorldExit.to_scene_id) == to_scene,
+                    ),
+                    and_(
+                        func.upper(WorldExit.from_scene_id) == to_scene,
+                        func.upper(WorldExit.to_scene_id) == from_scene,
+                        WorldExit.exit_type == "bidirectional",
+                    ),
+                ),
+            )
+        )
+        for exit_row in res.scalars().all():
+            exit_row.is_locked = is_locked
+            if lock_description is not None:
+                exit_row.lock_description = lock_description
+
+        try:
+            from backend.api.routes.adventures.adventure_logic import AdventureLogic
+            from backend.engine.interaction.map_engine import MapEngine
+
+            world_map = await AdventureLogic.get_or_create_map(
+                db, state.template_id, session_id=state.session_id
+            )
+            if world_map:
+                MapEngine.register_exit(
+                    world_map,
+                    from_scene,
+                    to_scene,
+                    is_locked=is_locked,
+                )
+        except Exception as exc:
+            logger.warning(
+                "[Script] Could not sync world_map edge for %s -> %s: %s", from_scene, to_scene, exc
+            )

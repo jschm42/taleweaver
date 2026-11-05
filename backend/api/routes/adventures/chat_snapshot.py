@@ -71,7 +71,7 @@ async def build_session_map(db: AsyncSession, state: SessionState) -> dict[str, 
             node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(image_url)
 
     exits = await load_map_exits(db, state.template_id, state.session_id)
-    return MapEngine.augment_map_data(map_dict, exits, state.current_scene_id)
+    return MapEngine.augment_map_data(map_dict, exits, state.current_scene_id, state.exit_states)
 
 
 async def load_full_world_debug(db: AsyncSession, state: SessionState, requested: bool) -> Any:
