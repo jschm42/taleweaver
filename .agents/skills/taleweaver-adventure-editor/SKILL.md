@@ -161,5 +161,6 @@ that a script unlocks it. That warning is expected for script-unlocked exits; me
 - Never edit the SQLite file or tables directly (SQL, `inspect_state.py`); the change set path keeps
   the manifest and the world tables in sync.
 - All adventure content and scripts follow the adventure's language; code comments stay English.
+- Format scripts cleanly for readability: put one statement per line (never chain with `;`), indent consistently with 4 spaces, group logical steps, and use **sparse `#` comments** to explain non-obvious puzzle logic or state transitions without over-commenting trivial lines.
 - Puzzles must be enforceable by the engine (locks, guards, scripts) - see the
   [taleweaver-adventure-concept-creator](../taleweaver-adventure-concept-creator/SKILL.md) skill for puzzle design.
