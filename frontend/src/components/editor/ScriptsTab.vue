@@ -723,6 +723,8 @@ function handleTabKey(e: KeyboardEvent) {
             help-text="Executed during turn evaluation. Use tw.* APIs to interact with player, inventory, scenes, or NPCs."
             context="general"
             min-height="240px"
+            :filename="`${modalScript.id || 'script'}.py`"
+            @save="saveScript"
           />
 
           <!-- Syntax Validation Banner -->

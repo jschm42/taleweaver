@@ -21,9 +21,20 @@ import {
   Terminal,
   BookOpen,
   Hash,
+  Search,
+  Save,
+  Upload,
+  Download,
+  Check,
 } from 'lucide-vue-next'
 import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
 import EntityIdSearchModal, { type GameEntityOption } from '@/components/editor/EntityIdSearchModal.vue'
+import ScriptSearchBar from '@/components/editor/scripting/ScriptSearchBar.vue'
+import ScriptUnsavedModal from '@/components/editor/scripting/ScriptUnsavedModal.vue'
+import { snippetsForContext } from '@/components/editor/scripting/scriptSnippets'
+import { useScriptSearch } from '@/components/editor/scripting/useScriptSearch'
+import { useScriptPersistence } from '@/components/editor/scripting/useScriptPersistence'
+import type { CmEditor } from '@/components/editor/scripting/codeMirrorTypes'
 
 const props = withDefaults(
   defineProps<{
@@ -38,6 +49,11 @@ const props = withDefaults(
     showActions?: boolean
     showRunner?: boolean
     referenceOptions?: GameEntityOption[]
+    allowSave?: boolean
+    allowLoad?: boolean
+    allowSearch?: boolean
+    filename?: string
+    onSave?: (code: string) => Promise<void> | void
   }>(),
   {
     modelValue: '',
@@ -51,16 +67,25 @@ const props = withDefaults(
     showActions: true,
     showRunner: false,
     referenceOptions: () => [],
+    allowSave: true,
+    allowLoad: true,
+    allowSearch: true,
+    filename: 'script.py',
   }
 )
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'change', value: string): void
+  (e: 'save', value: string): void
+  (e: 'dirty-change', isDirty: boolean): void
 }>()
 
 const editorEl = ref<HTMLDivElement | null>(null)
 const fallbackTextarea = ref<HTMLTextAreaElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const cmEditorRef = ref<CmEditor | null>(null)
+const currentCode = ref(props.modelValue || '')
 const isCmReady = ref(false)
 const isLoadingCdn = ref(true)
 const isFullscreen = ref(false)
@@ -133,214 +158,35 @@ function closeEntitySearch() {
 
 let cmInstance: any = null
 
-// Snippet templates based on trigger context
-const availableSnippets = computed(() => {
-  const common = [
-    {
-      label: 'GM Narration (Game Master)',
-      code: 'tw.story.narrate("You take the piece of chocolate. Maybe it will help with the persuasion.")\n',
-    },
-    {
-      label: 'System Notification',
-      code: 'tw.system("System notification message.")\n',
-    },
-    {
-      label: 'Save game (checkpoint)',
-      code: 'tw.save("Before the duel")\n',
-    },
-    {
-      label: 'Modify player stat',
-      code: 'hp = tw.player.get_stat("hp", 100)\ntw.player.set_stat("hp", max(0, hp - 10))\n',
-    },
-    {
-      label: 'Add item to inventory',
-      code: 'tw.player.add_item("IRON_KEY")\n',
-    },
-    {
-      label: 'Scene attribute',
-      code: 'tw.scene.set_attribute("is_visited", True)\n',
-    },
-    {
-      label: 'NPC speech',
-      code: 'tw.npcs.say("NPC_ID", "Greetings, traveler!")\n',
-    },
-    {
-      label: 'Move NPC to scene',
-      code: 'tw.npcs.move("NPC_ID", "current")\n',
-    },
-    {
-      label: 'Transfer item (NPC)',
-      code: '# NPC hands an item it carries to the player:\ntw.npcs.give_to_player("NPC_ID", "ITEM_ID")\n# Or drop from NPC into scene:\n# tw.npcs.drop_item("NPC_ID", "ITEM_ID")\n# Or give item to NPC:\n# tw.npcs.give_item("NPC_ID", "ITEM_ID")\n',
-    },
-    {
-      label: 'Clone item (dispenser)',
-      code: '# Copies a (hidden) template item and hands the copy to the player:\npotion = tw.objects.get("HEALING_POTION").clone()\nif potion:\n    potion.reveal()\n    potion.move_to("player")\n',
-    },
-    {
-      label: 'Container contents',
-      code: '# List, put into and take out of a container:\nids = tw.objects.get("CHEST_ID").item_ids\ntw.objects.put_in_container("ITEM_ID", "CHEST_ID")\n# tw.objects.take_from_container("CHEST_ID", "ITEM_ID", to="player")\n',
-    },
-    {
-      label: 'Destroy / hide item',
-      code: 'tw.objects.destroy("ITEM_ID")\n# Or keep it, but out of sight:\n# tw.objects.hide("ITEM_ID")\n# tw.objects.reveal("ITEM_ID")\n',
-    },
-    {
-      label: 'NPC speaks (GM-worded)',
-      code: '# The GM writes the line in the next narration, in character:\ntw.npcs.say_directed("NPC_ID", "sings an old sailor song")\n# Fixed wording instead:\n# tw.npcs.say("NPC_ID", "Ahoy!")\n',
-    },
-    {
-      label: 'Change NPC personality',
-      code: '# Changes how the GM plays the NPC for the rest of this game:\ntw.npcs.set_character("NPC_ID", "Hostile and suspicious; short, rude answers.")\n# Or add / remove a single trait:\n# tw.npcs.add_trait("NPC_ID", "drunk")\n# tw.npcs.remove_trait("NPC_ID", "drunk")\n',
-    },
-    {
-      label: 'Change NPC combat allies',
-      code: '# NPCs in the same combat group fight together (applies from the next fight on):\ntw.npcs.set_combat_group("NPC_ID", "GUARDS")\n# Turn an NPC into a bystander who only fights when attacked directly:\n# tw.npcs.set_assist_mode("NPC_ID", "NEVER")\n',
-    },
-    {
-      label: 'Spawn NPC pack (clone)',
-      code: '# Spawns fresh copies of a (hidden) template NPC; clones share its combat group:\nfor i in range(5):\n    tw.npcs.clone("NPC_ID", scene_id="current", hidden=False)\n',
-    },
-    {
-      label: 'Defeat / Kill NPC',
-      code: 'tw.npcs.kill("NPC_ID", drop_inventory=True)\n',
-    },
-    {
-      label: 'Choice dialog',
-      code: '# Opens a choice dialog. The handler must be defined in the global init script:\n#   def on_wire_choice(answ):\n#       if answ == 0:\n#           tw.vars.set("bomb_disarmed", True)\ntw.dialog.choose("The bomb starts ticking. What do you do?", ["Cut the red wire", "Cut the blue wire", "Run"], on_choice="on_wire_choice")\n',
-    },
-  ]
-
-  if (props.context === 'init_script') {
-    return [
-      {
-        label: 'Choice dialog handler',
-        code: '# Called with the index of the chosen option (its position in the options list).\ndef on_wire_choice(answ):\n    if answ == 0:\n        tw.vars.set("bomb_disarmed", True)\n        tw.narrate("The ticking stops.")\n        return\n    tw.game.game_over("The bomb exploded.")\n',
-      },
-      {
-        label: 'Dialogue tree',
-        code: '# Start it from any script: tw.dialog.tree(SMITH_TALK, on_end="on_smith_end", on_action="on_smith_action")\nSMITH_TALK = {\n    "npc_id": "SMITH",\n    "initial_node": "root",\n    "nodes": {\n        "root": {\n            "npc_text": "What do you want?",\n            "responses": [\n                {"text": "A sword. [50 Gold]", "condition": "tw.vars.get(\'gold\', 0) >= 50", "action": "BUY_SWORD", "next_node": "root"},\n                {"text": "Any rumours?", "once": True, "script": "tw.vars.set(\'heard_rumour\', True)", "next_node": "root"},\n                {"text": "Bye.", "next_node": None},\n            ],\n        },\n    },\n}\n\ndef on_smith_action(action, choice):\n    if action == "BUY_SWORD":\n        tw.vars.set("gold", tw.vars.get("gold", 0) - 50)\n        tw.player.take_item("SWORD")\n\ndef on_smith_end(path):\n    tw.vars.set("smith_talked", True)\n',
-      },
-      {
-        label: 'Shared helper function',
-        code: 'def has_all(*item_ids):\n    return all(tw.player.has_item(i) for i in item_ids)\n',
-      },
-      ...common,
-    ]
+watch(
+  () => props.modelValue,
+  (val) => {
+    currentCode.value = val || ''
   }
+)
 
-  if (props.context === 'on_pickup' || props.context === 'on_drop') {
-    return [
-      {
-        label: 'Pickup curse / buff',
-        code: 'tw.player.set_stat("strength", tw.player.get_stat("strength", 10) + 2)\ntw.narrate("You feel surging power coursing through your veins.")\n',
-      },
-      ...common,
-    ]
+function updateCode(newCode: string): void {
+  currentCode.value = newCode
+  emit('update:modelValue', newCode)
+  emit('change', newCode)
+}
+
+const persistence = useScriptPersistence(currentCode)
+watch(
+  () => persistence.isDirty.value,
+  (dirty) => emit('dirty-change', dirty)
+)
+
+const search = useScriptSearch(cmEditorRef, fallbackTextarea, currentCode, (newVal) => {
+  if (cmInstance) {
+    /* CodeMirror change event will emit */
+  } else {
+    updateCode(newVal)
   }
-
-  if (props.context === 'soft_rule') {
-    return [
-      {
-        label: 'NPC hands player an item',
-        code: 'item = tw.npcs.give_to_player("NPC_ID", "ITEM_ID")\nif item:\n    tw.npcs.say("NPC_ID", "Here, take it.")\n',
-      },
-      {
-        label: 'Change NPC trust',
-        code: 'tw.vars.set("NPC_TRUST", tw.vars.get("NPC_TRUST", 0) - 1)\n',
-      },
-      ...common,
-    ]
-  }
-
-  if (props.context === 'on_receive_item') {
-    return [
-      {
-        label: 'Accept the right item, return the rest',
-        code: "if 'SILVER_RING' in received_item_ids:\n    tw.vars.set('ring_returned', True)\n    tw.story.direct('The NPC is deeply moved and thanks the player warmly.')\nelse:\n    for item_id in received_item_ids:\n        tw.npcs.give_to_player('NPC_ID', item_id)\n    tw.story.direct('The NPC politely hands the gift back.')\n",
-      },
-      ...common,
-    ]
-  }
-
-  if (props.context === 'on_defeat') {
-    return [
-      {
-        label: 'Spawn reward on defeat',
-        code: 'tw.player.add_item("ANCIENT_AMULET")\ntw.narrate("The foe drops a glowing amulet upon falling.")\n',
-      },
-      ...common,
-    ]
-  }
-
-  if (props.context === 'special_action') {
-    return [
-      {
-        label: 'React to a critical success',
-        code: "if special['crit']:\n    tw.story.narrate('A devastating blow!')\n",
-      },
-      {
-        label: 'Remember who used the special',
-        code: "tw.vars.set('last_special_caster', special['caster'])\n",
-      },
-      {
-        label: 'Backfire on failure',
-        code: "if not special['success']:\n    tw.player.damage(5)\n    tw.story.narrate('The spell backfires! (-5 HP)')\n",
-      },
-      ...common,
-    ]
-  }
-
-  if (props.context === 'on_enter_scene' || props.context === 'on_protagonist_enters_scene') {
-    return [
-      {
-        label: 'First entrance trigger',
-        code: 'if not tw.scene.get_attribute("visited", False):\n    tw.scene.set_attribute("visited", True)\n    tw.narrate("You step into the chamber for the first time.")\n',
-      },
-      ...common,
-    ]
-  }
-
-  if (['switch_success', 'switch_failure', 'transition_success', 'transition_failure'].includes(props.context || '')) {
-    return [
-      {
-        label: 'Flip / change another switch',
-        code: 'tw.switches.set_state("OTHER_SWITCH", "ON")\ntw.story.narrate("You hear heavy machinery hum to life in the distance.")\n',
-      },
-      {
-        label: 'Inspect switch state',
-        code: 'if tw.switches.get_state("LEVER_ID") == "ACTIVE":\n    tw.vars.set("puzzle_solved", True)\n    tw.story.narrate("The final seal is broken!")\n',
-      },
-      ...common,
-    ]
-  }
-
-  if (props.context === 'guard_expression') {
-    return [
-      {
-        label: 'Check quest / script flag',
-        code: "tw.vars.get('puzzle_solved', False) == True",
-      },
-      {
-        label: 'Check switch state',
-        code: "tw.switches.get('SWITCH_ID') == 'ON'",
-      },
-      {
-        label: 'Check player inventory item',
-        code: "tw.player.has_item('KEY_ID')",
-      },
-      {
-        label: 'Combined guard (AND / OR)',
-        code: "tw.vars.get('flag_a', False) and tw.switches.get('LEVER') == 'ACTIVE'",
-      },
-      {
-        label: 'Check player stat threshold',
-        code: "tw.player.get_stat('hp', 100) > 50",
-      },
-    ]
-  }
-
-  return common
 })
+
+// Snippet templates based on trigger context
+const availableSnippets = computed(() => snippetsForContext(props.context || 'general'))
 
 function initCodeMirror() {
   if (!editorEl.value || !isCodeMirrorAvailable()) return
@@ -376,8 +222,22 @@ function initCodeMirror() {
       'Cmd-I': () => {
         openEntitySearch()
       },
+      'Ctrl-F': () => {
+        if (props.allowSearch) search.openSearch()
+      },
+      'Cmd-F': () => {
+        if (props.allowSearch) search.openSearch()
+      },
+      'Ctrl-S': () => {
+        if (props.allowSave) void handleSave()
+      },
+      'Cmd-S': () => {
+        if (props.allowSave) void handleSave()
+      },
     },
   })
+
+  cmEditorRef.value = cmInstance as CmEditor
 
   cmInstance.on('change', () => {
     const val = cmInstance.getValue()
@@ -603,11 +463,89 @@ onBeforeUnmount(() => {
   resizeObserver = null
   intersectionObserver?.disconnect()
   intersectionObserver = null
+  cmEditorRef.value = null
   if (cmInstance) {
     const wrapper = cmInstance.getWrapperElement()
     wrapper?.parentNode?.removeChild(wrapper)
     cmInstance = null
   }
+})
+
+async function handleSave(): Promise<boolean> {
+  if (props.disabled || persistence.isSaving.value) return false
+  const code = cmInstance ? cmInstance.getValue() : currentCode.value
+  const ok = await persistence.requestSave(code, async (c) => {
+    emit('save', c)
+    if (props.onSave) {
+      await props.onSave(c)
+    }
+  })
+  if (ok) {
+    persistence.markSaved(code)
+  }
+  return ok
+}
+
+function triggerFileInput(): void {
+  if (props.disabled) return
+  persistence.requestLoad(() => {
+    fileInputRef.value?.click()
+  })
+}
+
+function onFileSelected(e: Event): void {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  persistence.loadScriptFromFile(file, (loaded) => {
+    if (cmInstance) {
+      cmInstance.setValue(loaded)
+    } else {
+      updateCode(loaded)
+    }
+    persistence.markSaved(loaded)
+  })
+  target.value = ''
+}
+
+function handleExport(): void {
+  const code = cmInstance ? cmInstance.getValue() : currentCode.value
+  persistence.exportScriptToFile(code, props.filename)
+}
+
+function handleContainerKeydown(e: KeyboardEvent): void {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+    if (props.allowSearch) {
+      e.preventDefault()
+      search.openSearch()
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    if (props.allowSave) {
+      e.preventDefault()
+      void handleSave()
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+    e.preventDefault()
+    openEntitySearch()
+  }
+}
+
+defineExpose({
+  isDirty: persistence.isDirty,
+  saveScript: handleSave,
+  loadScript: (code: string) => {
+    persistence.requestLoad(() => {
+      if (cmInstance) {
+        cmInstance.setValue(code)
+      } else {
+        updateCode(code)
+      }
+      persistence.markSaved(code)
+    })
+  },
+  openSearch: search.openSearch,
+  closeSearch: search.closeSearch,
+  cmInstance: () => cmInstance,
 })
 </script>
 
@@ -617,6 +555,7 @@ onBeforeUnmount(() => {
       'script-editor-container flex flex-col rounded-xl border border-white/10 bg-slate-950/90 transition-all overflow-hidden',
       isFullscreen ? 'fixed inset-4 z-50 shadow-2xl bg-slate-950 border-amber-500/50' : 'relative',
     ]"
+    @keydown="handleContainerKeydown"
   >
     <!-- Header / Toolbar -->
     <div
@@ -662,6 +601,81 @@ onBeforeUnmount(() => {
 
       <!-- Actions -->
       <div v-if="showActions" class="flex items-center gap-1.5 shrink-0">
+        <!-- In-Editor Search Toggle -->
+        <button
+          v-if="allowSearch"
+          type="button"
+          @click="search.toggleSearch"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors',
+            search.isOpen.value
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+              : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5',
+          ]"
+          title="Search & Replace (Ctrl+F)"
+        >
+          <Search class="w-3 h-3 text-amber-400" />
+          <span class="hidden md:inline">Find</span>
+        </button>
+
+        <!-- File Load -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".py,.txt"
+          class="hidden"
+          @change="onFileSelected"
+        />
+        <button
+          v-if="allowLoad"
+          type="button"
+          @click="triggerFileInput"
+          :disabled="disabled || persistence.isLoading.value"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] font-bold text-slate-300 transition-colors border border-white/5 disabled:opacity-40"
+          title="Load script from file"
+        >
+          <Upload class="w-3 h-3 text-sky-400" />
+          <span class="hidden md:inline">{{ persistence.isLoading.value ? 'Loading...' : 'Load' }}</span>
+        </button>
+
+        <!-- Export / Download -->
+        <button
+          type="button"
+          @click="handleExport"
+          :disabled="!modelValue"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] font-bold text-slate-300 transition-colors border border-white/5 disabled:opacity-40"
+          title="Export script to .py file"
+        >
+          <Download class="w-3 h-3 text-indigo-400" />
+          <span class="hidden md:inline">Export</span>
+        </button>
+
+        <!-- Save Script -->
+        <button
+          v-if="allowSave"
+          type="button"
+          @click="handleSave"
+          :disabled="disabled || persistence.isSaving.value"
+          :class="[
+            'relative flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all disabled:opacity-40',
+            persistence.isDirty.value
+              ? 'bg-amber-600/80 hover:bg-amber-500 text-white border-amber-500/50 shadow-sm'
+              : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5',
+          ]"
+          title="Save script (Ctrl+S)"
+        >
+          <Save v-if="!persistence.saveSuccess.value" class="w-3.5 h-3.5" :class="persistence.isDirty.value ? 'text-white' : 'text-amber-400'" />
+          <Check v-else class="w-3.5 h-3.5 text-emerald-300" />
+          <span class="hidden sm:inline">
+            {{ persistence.isSaving.value ? 'Saving...' : persistence.saveSuccess.value ? 'Saved' : 'Save' }}
+          </span>
+          <span
+            v-if="persistence.isDirty.value"
+            class="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse"
+            title="Unsaved changes"
+          ></span>
+        </button>
+
         <!-- Scripting Engine Docs (?) Button -->
         <button
           type="button"
@@ -772,6 +786,24 @@ onBeforeUnmount(() => {
           <Maximize2 v-else class="w-3.5 h-3.5" />
         </button>
       </div>
+    </div>
+
+    <!-- Persistence Error Notice -->
+    <div
+      v-if="persistence.saveError.value || persistence.loadError.value"
+      class="px-3.5 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs flex items-center justify-between"
+    >
+      <div class="flex items-center gap-2">
+        <AlertCircle class="w-4 h-4 text-rose-400 shrink-0" />
+        <span>{{ persistence.saveError.value || persistence.loadError.value }}</span>
+      </div>
+      <button
+        type="button"
+        class="text-rose-400 hover:text-rose-200 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-white/5"
+        @click="persistence.saveError.value = null; persistence.loadError.value = null"
+      >
+        ✕
+      </button>
     </div>
 
     <!-- Scripting Guide / API Reference Drawer -->
@@ -915,6 +947,26 @@ onBeforeUnmount(() => {
         class="w-full h-full p-3 bg-transparent text-emerald-300 font-mono text-xs focus:outline-none resize-y leading-relaxed"
         spellcheck="false"
       ></textarea>
+
+      <!-- Search & Replace Bar -->
+      <ScriptSearchBar
+        v-if="search.isOpen.value"
+        v-model:query="search.query.value"
+        v-model:replace-text="search.replaceText.value"
+        v-model:match-case="search.matchCase.value"
+        v-model:whole-word="search.wholeWord.value"
+        v-model:use-regex="search.useRegex.value"
+        :current-match-index="search.currentMatchIndex.value"
+        :total-matches="search.totalMatches.value"
+        :limit-reached="search.limitReached.value"
+        :error="search.searchError.value"
+        :can-replace="!disabled"
+        @next="search.findNext"
+        @prev="search.findPrev"
+        @replace="search.replaceCurrent"
+        @replace-all="search.replaceAll"
+        @close="search.closeSearch"
+      />
     </div>
 
     <!-- Entity ID Search & Insert Modal -->
@@ -988,12 +1040,30 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </div>
+
+  <ScriptUnsavedModal
+    v-if="persistence.showUnsavedModal.value"
+    @cancel="persistence.cancelLoad"
+    @confirm="persistence.confirmDiscardAndLoad"
+  />
 </template>
 
 <style>
 .codemirror-wrapper {
   overflow: hidden;
   height: 100%;
+}
+
+.cm-search-match {
+  background-color: rgba(234, 179, 8, 0.35) !important;
+  border-bottom: 1px solid rgba(234, 179, 8, 0.8) !important;
+  border-radius: 2px;
+}
+
+.cm-search-match-current {
+  background-color: rgba(249, 115, 22, 0.65) !important;
+  outline: 1px solid #f97316 !important;
+  border-radius: 2px;
 }
 
 /* CodeMirror overrides to integrate with TaleWeaver dark theme */

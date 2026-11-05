@@ -172,6 +172,34 @@ async def validate_editor_script(
     )
 
 
+@router.get("/{template_id}/editor/scripts")
+async def list_editor_scripts(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Returns all scripts of the adventure manifest."""
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    return {"status": "success", "scripts": list(adv.scripts or [])}
+
+
+@router.get("/{template_id}/editor/script/{script_id}")
+async def get_editor_script(
+    template_id: str,
+    script_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Returns a single script of the adventure manifest."""
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    script_id = _sanitize_editor_id(script_id, "script_id")
+
+    script = next((s for s in adv.scripts or [] if str(s.get("id") or "") == script_id), None)
+    if script is None:
+        raise HTTPException(status_code=404, detail="Script not found")
+    return {"status": "success", "script": script}
+
+
 @router.post("/{template_id}/editor/script")
 async def save_editor_script(
     template_id: str,
