@@ -26,8 +26,12 @@ import {
   Upload,
   Download,
   Check,
+  ListTree,
 } from 'lucide-vue-next'
 import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
+import ScriptOutlineSidebar from '@/components/editor/ScriptOutlineSidebar.vue'
+import { parseScriptOutline } from '@/utils/scriptOutlineParser'
+import type { OutlineFunction } from '@/types/scriptOutline'
 import EntityIdSearchModal, { type GameEntityOption } from '@/components/editor/EntityIdSearchModal.vue'
 import ScriptSearchBar from '@/components/editor/scripting/ScriptSearchBar.vue'
 import ScriptUnsavedModal from '@/components/editor/scripting/ScriptUnsavedModal.vue'
@@ -155,6 +159,11 @@ function closeEntitySearch() {
     }
   })
 }
+
+// Function Outline Sidebar State
+const showOutline = ref(false)
+const isOutlineCollapsed = ref(false)
+const outlineFunctions = computed(() => parseScriptOutline(props.modelValue || ''))
 
 let cmInstance: any = null
 
@@ -325,6 +334,32 @@ watch(
   }
 )
 
+watch([showOutline, isOutlineCollapsed], () => {
+  nextTick(() => cmInstance?.refresh())
+})
+
+/** Moves the cursor to the definition of an outline function and scrolls it into view. */
+function jumpToFunction(fn: OutlineFunction) {
+  const pos = { line: fn.line - 1, ch: fn.column }
+  if (cmInstance) {
+    cmInstance.focus()
+    cmInstance.setCursor(pos)
+    cmInstance.scrollIntoView(pos, 100)
+    cursorPosition.value = { line: fn.line, ch: fn.column + 1 }
+    return
+  }
+  const textarea = fallbackTextarea.value
+  if (!textarea) {
+    return
+  }
+  const lines = textarea.value.split('\n')
+  const lineStart = lines.slice(0, pos.line).reduce((sum, l) => sum + l.length + 1, 0)
+  const offset = Math.min(lineStart + fn.column, textarea.value.length)
+  textarea.focus()
+  textarea.setSelectionRange(offset, offset)
+  cursorPosition.value = { line: fn.line, ch: fn.column + 1 }
+}
+
 function handleFallbackInput(e: Event) {
   const target = e.target as HTMLTextAreaElement
   emit('update:modelValue', target.value)
@@ -441,6 +476,32 @@ async function handleRunScript() {
 
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
+}
+
+watch([showOutline, isOutlineCollapsed], () => {
+  nextTick(() => cmInstance?.refresh())
+})
+
+/** Moves the cursor to the definition of an outline function and scrolls it into view. */
+function jumpToFunction(fn: OutlineFunction) {
+  const pos = { line: fn.line - 1, ch: fn.column }
+  if (cmInstance) {
+    cmInstance.focus()
+    cmInstance.setCursor(pos)
+    cmInstance.scrollIntoView(pos, 100)
+    cursorPosition.value = { line: fn.line, ch: fn.column + 1 }
+    return
+  }
+  const textarea = fallbackTextarea.value
+  if (!textarea) {
+    return
+  }
+  const lines = textarea.value.split('\n')
+  const lineStart = lines.slice(0, pos.line).reduce((sum, l) => sum + l.length + 1, 0)
+  const offset = Math.min(lineStart + fn.column, textarea.value.length)
+  textarea.focus()
+  textarea.setSelectionRange(offset, offset)
+  cursorPosition.value = { line: fn.line, ch: fn.column + 1 }
 }
 
 onMounted(async () => {
@@ -616,6 +677,28 @@ defineExpose({
         >
           <Search class="w-3 h-3 text-amber-400" />
           <span class="hidden md:inline">Find</span>
+        </button>
+
+        <!-- Function Outline Toggle -->
+        <button
+          type="button"
+          @click="showOutline = !showOutline"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors',
+            showOutline
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+              : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5',
+          ]"
+          title="Toggle function outline sidebar"
+        >
+          <ListTree class="w-3 h-3 text-amber-400" />
+          <span class="hidden md:inline">Outline</span>
+          <span
+            v-if="outlineFunctions.length > 0"
+            class="px-1 min-w-[16px] text-center rounded bg-amber-500/20 text-amber-300 text-[9px] font-black leading-4"
+          >
+            {{ outlineFunctions.length }}
+          </span>
         </button>
 
         <!-- File Load -->
@@ -910,62 +993,73 @@ defineExpose({
 
     <!-- Main Editor Canvas -->
     <div
-      class="relative flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
+      class="relative flex flex-row flex-1 min-h-0 bg-slate-950 font-mono text-xs overflow-hidden"
       :style="{
         '--cm-min-height': isFullscreen ? '400px' : minHeight,
         '--cm-max-height': maxHeight,
         minHeight: isFullscreen ? '400px' : minHeight,
       }"
     >
-      <!-- Loading CDN Spinner / Notice -->
-      <div
-        v-if="isLoadingCdn && !isCmReady"
-        class="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-10 backdrop-blur-sm gap-2 text-slate-400 text-xs"
-      >
-        <div class="w-3.5 h-3.5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin"></div>
-        <span>Loading Python Editor engine...</span>
+      <div class="relative flex-1 min-w-0 h-full overflow-hidden">
+        <!-- Loading CDN Spinner / Notice -->
+        <div
+          v-if="isLoadingCdn && !isCmReady"
+          class="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-10 backdrop-blur-sm gap-2 text-slate-400 text-xs"
+        >
+          <div class="w-3.5 h-3.5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin"></div>
+          <span>Loading Python Editor engine...</span>
+        </div>
+
+        <!-- CodeMirror Container -->
+        <div
+          ref="editorEl"
+          v-show="isCmReady"
+          :class="['codemirror-wrapper w-full h-full text-slate-200', { 'codemirror-fill': isFullscreen }]"
+        ></div>
+
+        <!-- Fallback Textarea if CDN is offline or unavailable -->
+        <textarea
+          v-if="!isCmReady"
+          ref="fallbackTextarea"
+          :value="modelValue"
+          @input="handleFallbackInput"
+          @keydown.ctrl.i.prevent="openEntitySearch"
+          @keydown.meta.i.prevent="openEntitySearch"
+          :placeholder="placeholder"
+          :disabled="disabled"
+          rows="5"
+          class="w-full h-full p-3 bg-transparent text-emerald-300 font-mono text-xs focus:outline-none resize-y leading-relaxed"
+          spellcheck="false"
+        ></textarea>
+
+        <!-- Search & Replace Bar -->
+        <ScriptSearchBar
+          v-if="search.isOpen.value"
+          v-model:query="search.query.value"
+          v-model:replace-text="search.replaceText.value"
+          v-model:match-case="search.matchCase.value"
+          v-model:whole-word="search.wholeWord.value"
+          v-model:use-regex="search.useRegex.value"
+          :current-match-index="search.currentMatchIndex.value"
+          :total-matches="search.totalMatches.value"
+          :limit-reached="search.limitReached.value"
+          :error="search.searchError.value"
+          :can-replace="!disabled"
+          @next="search.findNext"
+          @prev="search.findPrev"
+          @replace="search.replaceCurrent"
+          @replace-all="search.replaceAll"
+          @close="search.closeSearch"
+        />
       </div>
 
-      <!-- CodeMirror Container -->
-      <div
-        ref="editorEl"
-        v-show="isCmReady"
-        :class="['codemirror-wrapper w-full h-full text-slate-200', { 'codemirror-fill': isFullscreen }]"
-      ></div>
-
-      <!-- Fallback Textarea if CDN is offline or unavailable -->
-      <textarea
-        v-if="!isCmReady"
-        ref="fallbackTextarea"
-        :value="modelValue"
-        @input="handleFallbackInput"
-        @keydown.ctrl.i.prevent="openEntitySearch"
-        @keydown.meta.i.prevent="openEntitySearch"
-        :placeholder="placeholder"
-        :disabled="disabled"
-        rows="5"
-        class="w-full h-full p-3 bg-transparent text-emerald-300 font-mono text-xs focus:outline-none resize-y leading-relaxed"
-        spellcheck="false"
-      ></textarea>
-
-      <!-- Search & Replace Bar -->
-      <ScriptSearchBar
-        v-if="search.isOpen.value"
-        v-model:query="search.query.value"
-        v-model:replace-text="search.replaceText.value"
-        v-model:match-case="search.matchCase.value"
-        v-model:whole-word="search.wholeWord.value"
-        v-model:use-regex="search.useRegex.value"
-        :current-match-index="search.currentMatchIndex.value"
-        :total-matches="search.totalMatches.value"
-        :limit-reached="search.limitReached.value"
-        :error="search.searchError.value"
-        :can-replace="!disabled"
-        @next="search.findNext"
-        @prev="search.findPrev"
-        @replace="search.replaceCurrent"
-        @replace-all="search.replaceAll"
-        @close="search.closeSearch"
+      <ScriptOutlineSidebar
+        v-if="showOutline"
+        :functions="outlineFunctions"
+        :active-line="cursorPosition.line"
+        v-model:collapsed="isOutlineCollapsed"
+        @select="jumpToFunction"
+        @close="showOutline = false"
       />
     </div>
 
