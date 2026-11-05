@@ -26,6 +26,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     original_prompt: Optional[str] = None
     intro_text: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = "linear"
     generate_scene_images: bool = False
     generate_npc_images: bool = False
     generate_item_images: bool = False
@@ -313,6 +314,7 @@ class AdventureTemplateResponse(BaseModel):
     origin_id: Optional[str] = None
 
     rule_enforcement_mode: str
+    sequence_progression_mode: str = "linear"
     strict_rules: bool = True
     time_per_turn: int
     pacing_minutes: int
@@ -496,6 +498,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     engine_outdated: bool = False
     can_start: bool = True
     rule_enforcement_mode: Optional[str] = "rpg"
+    sequence_progression_mode: Optional[str] = "linear"
     selected_image_styles: Optional[list[dict[str, Any]]] = None
 
     @field_validator("selected_tone", mode="before")
@@ -657,6 +660,7 @@ class AdventureTemplateUpdate(BaseModel):
     intro_text: Optional[str] = None
     original_prompt: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None

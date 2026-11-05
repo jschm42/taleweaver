@@ -6,13 +6,22 @@
  * when entering a new sequence/chapter, with gentle fade in and out.
  * Colors and fonts follow the active dialog skin (--tw-overlay-* tokens).
  */
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { formatEntityRefs } from '@/utils/entityRefs'
 
 const props = defineProps<{
   activeSequence?: any | null
   adventureTitle?: string | null
+  progressionMode?: string | null
 }>()
+
+const isDynamic = computed(() => {
+  return (
+    props.progressionMode === 'dynamic' ||
+    props.activeSequence?.progression_mode === 'dynamic' ||
+    displayedSequence.value?.progression_mode === 'dynamic'
+  )
+})
 
 const isVisible = ref(false)
 const displayedSequence = ref<any | null>(null)
@@ -95,7 +104,7 @@ onBeforeUnmount(() => {
         <div class="flex items-center gap-3 mb-3">
           <div class="tw-overlay-rule w-8 sm:w-16 h-[1px]"></div>
           <span class="tw-overlay-eyebrow text-[11px] sm:text-xs font-bold tracking-[0.35em] uppercase">
-            <template v-if="displayedSequence.order">
+            <template v-if="!isDynamic && displayedSequence.order">
               Chapter {{ displayedSequence.order }}
             </template>
             <template v-else>

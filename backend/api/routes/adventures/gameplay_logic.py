@@ -2869,6 +2869,9 @@ class GameTurnManager:
             ),
             active_sequence_id=self.state.active_sequence_id,
             sequences=getattr(self.adventure, "sequences", None),
+            sequence_progression_mode=getattr(
+                self.adventure, "sequence_progression_mode", "linear"
+            ),
         )
 
     def _get_script_runner(self) -> ScriptRunner:
@@ -3175,10 +3178,6 @@ class GameTurnManager:
             message_saver=self._save_chat_message,
         )
         system_messages.extend(seq_msgs)
-        if getattr(self.state, "is_completed", False):
-            await self._finalize_session(
-                "completed", "Congratulations! You have completed the final sequence."
-            )
 
         # Last, so the save state holds everything this script changed.
         for save_msg in await SessionCheckpointService.save_from_script(

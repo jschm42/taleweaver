@@ -102,6 +102,9 @@ class TriggerService:
             llm_asker=llm_asker,
             active_sequence_id=state.active_sequence_id,
             sequences=sequences,
+            sequence_progression_mode=getattr(adventure, "sequence_progression_mode", "linear")
+            if adventure
+            else "linear",
         )
 
     @classmethod

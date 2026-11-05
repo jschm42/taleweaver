@@ -379,13 +379,20 @@ class AdventureLogic:
         sequences = adventure.sequences
         if not isinstance(sequences, list) or len(sequences) == 0:
             return None
+        mode = getattr(adventure, "sequence_progression_mode", "linear")
         active_seq_id = getattr(state, "active_sequence_id", None)
         if active_seq_id:
             for s in sequences:
                 if isinstance(s, dict) and s.get("id") == active_seq_id:
-                    return s
+                    res = dict(s)
+                    res["progression_mode"] = mode
+                    return res
+        if mode == "dynamic":
+            return None
         if isinstance(sequences[0], dict):
-            return sequences[0]
+            res = dict(sequences[0])
+            res["progression_mode"] = mode
+            return res
         return None
 
     @staticmethod

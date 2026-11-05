@@ -246,6 +246,9 @@ def _run_init_scripts(
         clock=clock_view(SimpleNamespace(in_game_time=0, entity_states={}), adventure),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
+        active_sequence_id=str(first_seq.get("id") or "") if first_seq else None,
+        sequences=getattr(adventure, "sequences", None),
+        sequence_progression_mode=getattr(adventure, "sequence_progression_mode", "linear"),
     )
     runner = runner_for_manifest(
         getattr(adventure, "original_manifest", None),

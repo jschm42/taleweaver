@@ -282,6 +282,9 @@ def _adventure_fields(state: SessionState, ctx: _SheetContext) -> dict[str, Any]
         "time_per_turn": ctx.get("time_per_turn", 5),
         "max_time_per_turn": ctx.get("max_time_per_turn"),
         "max_memory_turns": _memory_turns(state, ctx.adventure),
+        "sequence_progression_mode": getattr(ctx.adventure, "sequence_progression_mode", "linear")
+        if ctx.adventure
+        else "linear",
     }
 
 

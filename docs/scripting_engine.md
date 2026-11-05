@@ -584,10 +584,13 @@ Directly writes into the avatar's episodic memory bank:
 - `tw.memories.add(memory_text: str)`: Injects a factual memory into the avatar context that the Game Master LLM references in subsequent turns.
 
 ### `tw.game`
-Controls session outcome conditions:
-- `tw.game.win(message: str)`: Ends the adventure in victory and displays `message`.
-- `tw.game.game_over(reason: str)`: Ends the adventure in defeat with `reason`.
+Controls session outcome conditions (alias: `tw.session`):
+- `tw.game.win(message: str = None)` / `tw.game.game_won(message: str = None)`: Ends the adventure in victory and displays `message`.
+- `tw.game.game_over(reason: str = None)`: Ends the adventure in defeat with `reason`.
 - `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
+
+> [!NOTE]
+> In both linear and dynamic modes, completing the final sequence does **not** automatically end the adventure in victory. The session concludes only when the adventure's winning condition (`completed_guard_expression` or `completed_condition`) evaluates to true or when a script explicitly calls `tw.game.win()` / `tw.game.game_won()`.
 
 ### `tw.time` (In-Game Clock)
 The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
@@ -636,23 +639,34 @@ Controls adventure story chapters and sequences. In TaleWeaver, **only one seque
 
 #### Starting & Ending Sequences
 - `tw.sequences.start(sequence_id: str)`: Immediately switches to and activates the specified sequence. Sets it as the active sequence, logs a system notification (`Sequence started: <title>`), and executes the sequence's `on_start_sequence_script` / `on_start_sequence_text` if defined.
-- `tw.sequences.end(sequence_id: Optional[str] = None, advance: bool = True)`: Ends the currently active sequence (or `sequence_id` if specified).
-  - When `advance=True` (default): triggers `on_end_sequence_script` / text, awards sequence completion XP, and advances to the next chapter in order (or completes the adventure if no chapters remain).
+- `tw.sequences.end(sequence_id: Optional[str] = None, advance: Optional[bool] = None)`: Ends the currently active sequence (or `sequence_id` if specified).
+  - When `advance=True`: triggers `on_end_sequence_script` / text, awards sequence completion XP, and advances to the next chapter in order (or completes the adventure if no chapters remain).
   - When `advance=False`: triggers `on_end_sequence_script` / text, awards sequence completion XP, and clears the active sequence (`active_sequence_id = None`) without advancing.
-- `tw.sequences.complete(sequence_id: Optional[str] = None)`: Convenience alias for `tw.sequences.end(sequence_id, advance=True)`.
-- `tw.sequences.complete_current()`: Convenience alias for `tw.sequences.end(None, advance=True)`.
-- `tw.sequences.advance()`: Advances to the next sequence in the adventure.
+  - When `advance` is omitted: defaults to `True` in `linear` mode, and `False` in `dynamic` mode.
+- `tw.sequences.complete(sequence_id: Optional[str] = None, advance: Optional[bool] = None)`: Convenience alias for `tw.sequences.end(sequence_id, advance=advance)`.
+- `tw.sequences.complete_current(advance: Optional[bool] = None)`: Convenience alias for `tw.sequences.end(None, advance=advance)`.
+- `tw.sequences.advance()`: Advances to the next sequence in linear order.
+- `tw.sequences.clear()`: Clears the active sequence without marking it completed or advancing.
 
 #### Determining the Active Sequence
 - `tw.sequences.get_active() -> Optional[dict]`: Returns the dictionary definition of the currently active sequence (e.g. `{"id": "...", "title": "...", "order": 1}`), or `None` if no sequence is active.
 - `tw.sequences.get_active_id() -> Optional[str]`: Returns the ID string of the currently active sequence (e.g. `"CHAPTER_1"`), or `None`.
 - `tw.sequences.is_active(sequence_id: str) -> bool`: Returns `True` if `sequence_id` matches the currently active sequence (case-insensitive).
 - `tw.sequences.is_completed(sequence_id: str) -> bool`: Returns `True` if the specified sequence has already been completed in this playthrough.
+- `tw.sequences.progression_mode`: Property returning the adventure's progression mode (`"linear"` or `"dynamic"`).
 - `tw.sequences.active_id`: Property returning the active sequence ID (or `None`).
 - `tw.sequences.active` / `tw.sequences.current`: Property returning the active sequence dictionary (or `None`).
 - `tw.sequence.id`: Property returning the active sequence ID.
 - `tw.sequence.title`: Property returning the active sequence title.
 - `tw.sequences.all() -> list[dict]`: Returns a list of all sequences defined in the adventure.
+
+#### Progression Modes: Linear vs. Dynamic
+Adventures configure `sequence_progression_mode` in their manifest or template:
+- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence marks the adventure completed (`state.is_completed = True`).
+- **`"dynamic"`**: Ideal for hubs, sandboxes, QA workbenches, and open-world investigations:
+  - Sequences do not auto-advance to the next array index on completion.
+  - Completing a sequence clears `active_sequence_id = None` without finishing the entire adventure.
+  - Sequences are activated explicitly via `tw.sequences.start(seq_id)` or automatically via their `activation_scene_id` upon entering a designated room.
 
 ```python
 # Check which sequence is active

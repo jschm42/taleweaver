@@ -328,6 +328,7 @@ defineExpose({
         :mode="props.mode"
         :debug-mode="!!props.sheet?.debug_mode"
         :has-scene-image="Boolean(activeSceneImageUrl)"
+        :progression-mode="props.sheet?.sequence_progression_mode || props.activeSequence?.progression_mode"
         @view-scene-image="showSceneImage = true"
         @open-chronicles="emit('openChronicles')"
         @open-quests="emit('openQuests')"
@@ -520,6 +521,7 @@ defineExpose({
     <CinematicSequenceOverlay
       :active-sequence="props.activeSequence"
       :adventure-title="props.adventureTitle"
+      :progression-mode="props.sheet?.sequence_progression_mode || props.activeSequence?.progression_mode"
     />
 
     <SceneImageViewer

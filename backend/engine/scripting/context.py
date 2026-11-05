@@ -1290,6 +1290,10 @@ class GameProxy:
         self._changeset.game_completed = True
         self._changeset.status_note = reason or "Victory has been achieved!"
 
+    def game_won(self, reason: Optional[str] = None) -> None:
+        """Alias for win(). Concludes adventure with victory."""
+        self.win(reason)
+
     def game_over(self, reason: Optional[str] = None) -> None:
         self._changeset.game_over = True
         self._changeset.status_note = reason or "Game Over."
@@ -1349,11 +1353,15 @@ class SequencesProxy:
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
         vars_proxy: Optional[Any] = None,
+        progression_mode: str = "linear",
     ):
         self._changeset = changeset
         self._sequences = [s for s in (sequences or []) if isinstance(s, dict)]
         self._active_sequence_id = active_sequence_id
         self._vars_proxy = vars_proxy
+        self._progression_mode = (
+            "dynamic" if str(progression_mode or "").strip().lower() == "dynamic" else "linear"
+        )
         self._completed_ids: set[str] = set()
         if self._vars_proxy:
             raw_completed = self._vars_proxy.get("__completed_sequences__", [])
@@ -1364,8 +1372,20 @@ class SequencesProxy:
                     seq_key = k[len("__seq_completed_") : -2]
                     if self._vars_proxy.get(k):
                         self._completed_ids.add(seq_key.strip().upper())
-        if not self._active_sequence_id and self._sequences:
+        if not self._active_sequence_id and self._sequences and self._progression_mode == "linear":
             self._active_sequence_id = self._sequences[0].get("id")
+
+    @property
+    def progression_mode(self) -> str:
+        """Progression mode of sequences: 'linear' or 'dynamic'."""
+        return self._progression_mode
+
+    def clear(self) -> None:
+        """Clears the currently active sequence without advancing."""
+        self._changeset.sequence_start_id = None
+        self._changeset.sequence_completed = False
+        self._changeset.sequence_advance = False
+        self._active_sequence_id = None
 
     @property
     def id(self) -> Optional[str]:
@@ -1457,12 +1477,14 @@ class SequencesProxy:
         self._changeset.sequence_start_id = matched_id
         self._active_sequence_id = matched_id
 
-    def end(self, sequence_id: Optional[str] = None, advance: bool = True) -> None:
+    def end(self, sequence_id: Optional[str] = None, advance: Optional[bool] = None) -> None:
         """
         Ends the active sequence (or the specified sequence if active).
-        If advance=True (default), advances to the next sequence.
+        If advance=True, advances to the next sequence.
         If advance=False, clears the active sequence.
+        When advance is omitted: defaults to True in linear mode, and False in dynamic mode.
         """
+        should_advance = (self._progression_mode == "linear") if advance is None else bool(advance)
         clean_id = str(sequence_id).strip() if sequence_id else None
         ended_id = clean_id or self.get_active_id()
         if ended_id:
@@ -1474,8 +1496,8 @@ class SequencesProxy:
 
         self._changeset.sequence_completed = True
         self._changeset.sequence_end_id = clean_id
-        self._changeset.sequence_advance = bool(advance)
-        if not advance:
+        self._changeset.sequence_advance = should_advance
+        if not should_advance:
             self._changeset.sequence_start_id = None
             self._active_sequence_id = None
         elif self._sequences:
@@ -1490,13 +1512,13 @@ class SequencesProxy:
             else:
                 self._active_sequence_id = None
 
-    def complete(self, sequence_id: Optional[str] = None) -> None:
-        """Alias for end(sequence_id, advance=True)."""
-        self.end(sequence_id=sequence_id, advance=True)
+    def complete(self, sequence_id: Optional[str] = None, advance: Optional[bool] = None) -> None:
+        """Alias for end(). Advances in linear mode, finishes without advance in dynamic mode."""
+        self.end(sequence_id=sequence_id, advance=advance)
 
-    def complete_current(self) -> None:
-        """Alias for end(None, advance=True)."""
-        self.end(sequence_id=None, advance=True)
+    def complete_current(self, advance: Optional[bool] = None) -> None:
+        """Alias for end(None)."""
+        self.end(sequence_id=None, advance=advance)
 
     def advance(self) -> None:
         """Advances to the next sequence."""
@@ -1546,6 +1568,7 @@ class GameContext:
         clock: Optional[dict[str, Any]] = None,
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
+        sequence_progression_mode: str = "linear",
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1588,6 +1611,7 @@ class GameContext:
         # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
         self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
         self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
+        self.session = self.game
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
         self.sequences = SequencesProxy(
@@ -1595,6 +1619,7 @@ class GameContext:
             active_sequence_id=active_sequence_id,
             sequences=sequences,
             vars_proxy=self.vars,
+            progression_mode=sequence_progression_mode,
         )
         self.sequence = self.sequences
         self.dice = DiceProxy()

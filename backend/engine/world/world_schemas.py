@@ -878,6 +878,10 @@ class SequenceSchema(WorldBaseSchema):
         default="",
         description="Optional hard rule: ID of the NPC the protagonist must defeat to complete the sequence",
     )
+    activation_scene_id: Optional[str] = Field(
+        default="",
+        description="Optional scene ID that activates this sequence upon entry (only if not already completed).",
+    )
     guard_expression: Optional[str] = Field(
         default="",
         description="Optional deterministic script guard expression evaluated to complete the sequence (e.g. tw.vars.get('puzzle_solved') == True). Keep empty if none.",
@@ -1148,6 +1152,10 @@ class WorldManifesto(WorldBaseSchema):
         True, description="Global flag: whether NPCs can damage the protagonist."
     )
     max_sequences: int = Field(15, description="Maximum number of allowed sequences.")
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = Field(
+        default="linear",
+        description="Sequence progression mode: 'linear' (default, advances in sequence order and completes adventure after last sequence) or 'dynamic' (sequences are activated/managed via scripts or scene entries, without auto-completion after last sequence).",
+    )
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]

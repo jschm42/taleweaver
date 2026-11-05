@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.out_of_turn_progress import (
-    FINAL_SEQUENCE_NOTE,
     TERMINAL_STATUSES,
 )
 from backend.core.config import settings
@@ -136,7 +135,7 @@ async def apply_pending_sequence_progress(
         manager = GameTurnManager(
             db, state.session_id, user, state=state, adventure=adventure, avatar=avatar
         )
-        await manager._finalize_session("completed", FINAL_SEQUENCE_NOTE)
+        await manager._finalize_session("completed", "Victory achieved!")
     await db.commit()
     return True
 
