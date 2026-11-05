@@ -1,0 +1,23 @@
+{
+  "name": "taleweaver-skills",
+  "version": "0.1.0",
+  "description": "Installer for TaleWeaver agent skills and their companion documentation.",
+  "type": "module",
+  "bin": {
+    "taleweaver-skills": "./bin/install-skill.js",
+    "install-skill": "./bin/install-skill.js"
+  },
+  "scripts": {
+    "install-skill": "node bin/install-skill.js",
+    "test": "node --test bin/test/installer.test.js"
+  },
+  "files": [
+    "bin",
+    ".agents",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
