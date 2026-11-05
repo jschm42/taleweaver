@@ -662,7 +662,7 @@ Controls adventure story chapters and sequences. In TaleWeaver, **only one seque
 
 #### Progression Modes: Linear vs. Dynamic
 Adventures configure `sequence_progression_mode` in their manifest or template:
-- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence marks the adventure completed (`state.is_completed = True`).
+- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence does not end the adventure (see the note under `tw.game`).
 - **`"dynamic"`**: Ideal for hubs, sandboxes, QA workbenches, and open-world investigations:
   - Sequences do not auto-advance to the next array index on completion.
   - Completing a sequence clears `active_sequence_id = None` without finishing the entire adventure.

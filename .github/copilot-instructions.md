@@ -103,6 +103,11 @@ To ensure codebase quality, security, and prevent regression:
   * New features get a docs entry. Removed or renamed features leave no stale references behind.
   * Documentation is written in **English only**, regardless of the conversation language.
   * **Scripting API & Editor Autocomplete Sync**: When scripting functions, methods, proxy properties or namespaces are added, modified or documented in `backend/engine/scripting/` or `docs/scripting_engine.md`, update both `docs/scripting_engine.md` and the frontend Script Editor autocomplete registry (`frontend/src/utils/twScriptApiDefinitions.ts`) in the same change to keep editor IntelliSense in sync.
+* **Engine Change Propagation (Mandatory):**
+  * A change to the engine (item types, entity or manifest fields, triggers/hooks, container/switch mechanics, sequence or progression logic, scripting API) is not finished until everything that generates, imports, validates or documents the feature is updated in the same change.
+  * Find the consumers by grepping for an existing sibling feature (e.g. `on_items_added` for a new container hook, `SWITCH` for a new item type).
+  * Checklist: World generation schemas in `backend/engine/world/` (they use `extra="forbid"`, so every field the applier reads must exist there) and the prompts (`backend/core/prompts.py`, `backend/engine/world/world_scripting_prompt.py`, `world_prompt_builder.py`); blueprint `backend/engine/blueprint/`; manifest import/export `backend/engine/manifest_apply/` and `adventure_exporter.py`; editor World-Builder / AI fix (`backend/core/world_builder_prompts.py`, `backend/core/validators_prompts.py`, `backend/api/routes/adventures/editing/ai_fix_*.py`); validators (`backend/core/world_validation/`, `backend/core/script_validator.py`); docs and `.agents/skills/` (then run `python scripts/bundle_skill.py` and `--check`); `frontend/src/utils/twScriptApiDefinitions.ts`; tests covering schema → applier and blueprint → field.
+  * See rule 5 in `AGENTS.md` for the full list.
 
 ---
 

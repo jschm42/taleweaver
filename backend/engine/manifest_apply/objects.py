@@ -198,11 +198,13 @@ def _switch_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
         key: str(obj.get(key) or metadata.get(key) or "").strip()
         for key in ("on_success_script", "on_failure_script")
     }
+    status_text = obj.get("switch_status_text") or metadata.pop("switch_status_text", "") or ""
     metadata["switch"] = {
         "states": states,
         "state_labels": normalize_state_labels(states, obj.get("switch_state_labels")),
         "initial_state": initial if initial in states else states[0],
         "disabled_states": disabled_states,
+        "status_text": str(status_text).strip()[:300],
         "transitions": _list_or_empty(obj.get("switch_transitions")),
         "outcomes": _list_or_empty(obj.get("switch_outcomes")),
         **scripts,
