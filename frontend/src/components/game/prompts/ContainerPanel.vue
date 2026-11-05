@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Backpack, PackageOpen, PackagePlus, ArrowDownToLine, Lock, Check, ChevronRight } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
@@ -152,6 +152,20 @@ function selectSwitchState(state: string): void {
 }
 
 watch(() => [props.open, props.title], () => { putMode.value = false })
+
+watch(() => props.items, () => {
+  emit('itemLeave')
+}, { deep: true })
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen) {
+    emit('itemLeave')
+  }
+})
+
+onBeforeUnmount(() => {
+  emit('itemLeave')
+})
 const resolvedImageUrl = computed(() => getImageUrl(props.imageUrl) || null)
 
 const brokenImages = ref<Record<string, boolean>>({})
@@ -267,6 +281,8 @@ function takeItem(item: any): void {
                 :class="(!canPut || isContainerFull) ? 'opacity-50 cursor-default' : 'cursor-pointer'"
                 :title="canPut && !isContainerFull ? `Empty Slot ${currentCount + slotIdx} — Click to insert item` : `Empty Slot ${currentCount + slotIdx}`"
                 @click="canPut && !busy && !isContainerFull ? (putMode = true) : undefined"
+                @mouseenter="emit('itemLeave')"
+                @mouseleave="emit('itemLeave')"
               >
                 <PackagePlus class="w-5 h-5 text-amber-400/45" />
                 <span class="tw-prompt-tile-caption opacity-55">Slot {{ currentCount + slotIdx }}</span>

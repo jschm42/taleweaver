@@ -421,7 +421,12 @@ const keepPromptOnTurn = ref<'combine' | 'container' | null>(null)
 // Unlock attempts never start a turn, so a new turn means the player moved on: drop the open
 // inline prompts instead of keeping them pinned below the new story entries.
 watch(status, (current, previous) => {
-  if (current !== 'connecting' || previous === 'connecting') return
+  if (current === 'loading' || current === 'connecting') {
+    hoveredEntity.value = null
+  }
+  const isTurnStarting = (current === 'connecting' && previous !== 'connecting') ||
+                         (current === 'loading' && previous !== 'loading')
+  if (!isTurnStarting) return
   hoveredEntity.value = null
   const keep = keepPromptOnTurn.value
   keepPromptOnTurn.value = null
@@ -1336,17 +1341,20 @@ const runContainerAction = async (
   const identifier = activeContainer.value.id || activeContainer.value.name
   if (!identifier) return
 
+  hoveredEntity.value = null
   containerBusy.value = true
   if (keepOpen) {
     keepPromptOnTurn.value = 'container'
   }
   try {
     await sendMessage(commandBuilder(identifier))
+    hoveredEntity.value = null
     if (!keepOpen) {
       closeContainerModal()
     }
   } finally {
     containerBusy.value = false
+    hoveredEntity.value = null
   }
 }
 
@@ -1553,6 +1561,7 @@ useGameUiFeedback({
 
 const handleTakeDirect = async (entity: any) => {
   if (isActionInputBlocked.value) return
+  hoveredEntity.value = null
   await sendMessage(`/take_direct ${entity.id || entity.name}`)
 }
 

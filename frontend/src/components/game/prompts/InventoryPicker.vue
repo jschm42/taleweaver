@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { Check, PackagePlus } from 'lucide-vue-next'
 import PromptItemTile from './PromptItemTile.vue'
 
@@ -73,6 +73,10 @@ const confirm = () => {
   emit('itemLeave')
   emit('confirm', [...selectedIds.value])
 }
+
+onBeforeUnmount(() => {
+  emit('itemLeave')
+})
 </script>
 
 <template>
