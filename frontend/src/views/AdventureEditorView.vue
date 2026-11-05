@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adventureService } from '@/services/adventureService'
 import { visualService } from '@/services/visualService'
@@ -2105,8 +2105,44 @@ const referenceOptions = computed<ReferenceEntry[]>(() => {
       sceneOrder,
     })
   }
+
+  const rawQuests = adventure.value?.quests || debugData.value?.adventure?.quests || []
+  let questList: any[] = []
+  if (Array.isArray(rawQuests)) {
+    questList = rawQuests
+  } else if (typeof rawQuests === 'string') {
+    try {
+      const parsed = JSON.parse(rawQuests)
+      if (Array.isArray(parsed)) questList = parsed
+    } catch {}
+  }
+  for (const q of questList) {
+    if (q?.id) {
+      entries.push({
+        id: String(q.id),
+        name: String(q.title || q.name || q.id),
+        type: 'QUEST',
+        description: q.description || q.goal || '',
+      })
+    }
+  }
+
+  const exits = Array.isArray(debugData.value?.exits) ? debugData.value.exits : []
+  for (const exit of exits) {
+    if (exit?.id) {
+      entries.push({
+        id: String(exit.id),
+        name: String(exit.label || exit.name || exit.id),
+        type: 'EXIT',
+      })
+    }
+  }
+
   return entries.filter((entry) => entry.id)
 })
+
+provide('adventureReferenceOptions', referenceOptions)
+provide('adventureData', adventure)
 
 const sceneReferenceOptions = computed(() => {
   return referenceOptions.value.filter((entry) => entry.type === 'SCENE')

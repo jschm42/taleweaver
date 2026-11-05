@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed, inject, unref, type Ref } from 'vue'
 import {
   loadCodeMirrorAndSkulpt,
   isCodeMirrorAvailable,
@@ -20,8 +20,10 @@ import {
   Trash2,
   Terminal,
   BookOpen,
+  Hash,
 } from 'lucide-vue-next'
 import ScriptAiAssist from '@/components/editor/ScriptAiAssist.vue'
+import EntityIdSearchModal, { type GameEntityOption } from '@/components/editor/EntityIdSearchModal.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -35,6 +37,7 @@ const props = withDefaults(
     disabled?: boolean
     showActions?: boolean
     showRunner?: boolean
+    referenceOptions?: GameEntityOption[]
   }>(),
   {
     modelValue: '',
@@ -47,6 +50,7 @@ const props = withDefaults(
     disabled: false,
     showActions: true,
     showRunner: false,
+    referenceOptions: () => [],
   }
 )
 
@@ -69,6 +73,63 @@ const isRunning = ref(false)
 const runResult = ref<ScriptRunResult | null>(null)
 const showOutputPanel = ref(false)
 const showApiDocs = ref(false)
+const showEntitySearchModal = ref(false)
+
+const injectedReferenceOptions = inject<Ref<any[]> | any[]>('adventureReferenceOptions', [])
+
+const mergedEntityOptions = computed<GameEntityOption[]>(() => {
+  if (Array.isArray(props.referenceOptions) && props.referenceOptions.length > 0) {
+    return props.referenceOptions as GameEntityOption[]
+  }
+  const injected = unref(injectedReferenceOptions)
+  if (Array.isArray(injected) && injected.length > 0) {
+    return injected as GameEntityOption[]
+  }
+  return []
+})
+
+function openEntitySearch() {
+  if (props.disabled) return
+  showEntitySearchModal.value = true
+}
+
+function insertEntityId(chosenId: string) {
+  showEntitySearchModal.value = false
+  if (cmInstance) {
+    const doc = cmInstance.getDoc()
+    const cursor = doc.getCursor()
+    doc.replaceRange(chosenId, cursor)
+    const nextCh = cursor.ch + chosenId.length
+    doc.setCursor({ line: cursor.line, ch: nextCh })
+    nextTick(() => {
+      cmInstance.focus()
+    })
+  } else if (fallbackTextarea.value) {
+    const el = fallbackTextarea.value
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? el.value.length
+    const val = el.value
+    const updated = val.slice(0, start) + chosenId + val.slice(end)
+    emit('update:modelValue', updated)
+    emit('change', updated)
+    nextTick(() => {
+      el.focus()
+      const nextPos = start + chosenId.length
+      el.setSelectionRange(nextPos, nextPos)
+    })
+  }
+}
+
+function closeEntitySearch() {
+  showEntitySearchModal.value = false
+  nextTick(() => {
+    if (cmInstance) {
+      cmInstance.focus()
+    } else if (fallbackTextarea.value) {
+      fallbackTextarea.value.focus()
+    }
+  })
+}
 
 let cmInstance: any = null
 
@@ -308,6 +369,12 @@ function initCodeMirror() {
     extraKeys: {
       Tab: (cm: any) => {
         cm.replaceSelection('    ', 'end')
+      },
+      'Ctrl-I': () => {
+        openEntitySearch()
+      },
+      'Cmd-I': () => {
+        openEntitySearch()
       },
     },
   })
@@ -637,6 +704,18 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <!-- Entity ID Search Dialog (Ctrl+I) -->
+        <button
+          type="button"
+          @click="openEntitySearch"
+          :disabled="disabled"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] font-bold text-slate-300 transition-colors border border-white/5 hover:border-amber-500/30 hover:text-amber-300 disabled:opacity-40"
+          title="Search & Insert Game Entity ID (Ctrl+I)"
+        >
+          <Hash class="w-3 h-3 text-amber-400" />
+          <span class="hidden md:inline">Insert ID</span>
+        </button>
+
         <!-- AI Optimize / AI Generate (diff preview before anything changes) -->
         <ScriptAiAssist
           :code="modelValue || ''"
@@ -828,6 +907,8 @@ onBeforeUnmount(() => {
         ref="fallbackTextarea"
         :value="modelValue"
         @input="handleFallbackInput"
+        @keydown.ctrl.i.prevent="openEntitySearch"
+        @keydown.meta.i.prevent="openEntitySearch"
         :placeholder="placeholder"
         :disabled="disabled"
         rows="5"
@@ -835,6 +916,14 @@ onBeforeUnmount(() => {
         spellcheck="false"
       ></textarea>
     </div>
+
+    <!-- Entity ID Search & Insert Modal -->
+    <EntityIdSearchModal
+      :show="showEntitySearchModal"
+      :entities="mergedEntityOptions"
+      @close="closeEntitySearch"
+      @select="insertEntityId"
+    />
 
     <!-- Output / Results Drawer -->
     <div
