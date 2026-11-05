@@ -10,7 +10,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback
 }
 
-function validateScriptFile(file: File): string | null {
+export function validateScriptFile(file: { name: string; size: number }): string | null {
   const name = file.name.toLowerCase()
   if (!ALLOWED_EXTENSIONS.some(ext => name.endsWith(ext))) {
     return `Unsupported file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`

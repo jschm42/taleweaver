@@ -26,14 +26,14 @@ function escapeRegExp(text: string): string {
 }
 
 /** Builds the global search pattern, or throws a SyntaxError for an invalid user regex. */
-function buildPattern(opts: SearchOptions): RegExp {
+export function buildPattern(opts: SearchOptions): RegExp {
   const source = opts.useRegex ? opts.query : escapeRegExp(opts.query)
   const wrapped = opts.wholeWord ? `\\b(?:${source})\\b` : source
   return new RegExp(wrapped, opts.matchCase ? 'gm' : 'gim')
 }
 
 /** Finds all matches in a single pass and annotates them with line/ch positions. */
-function findMatches(text: string, pattern: RegExp): SearchMatch[] {
+export function findMatches(text: string, pattern: RegExp): SearchMatch[] {
   const matches: SearchMatch[] = []
   let line = 0
   let lineStart = 0
