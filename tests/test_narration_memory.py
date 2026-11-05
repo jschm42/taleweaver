@@ -347,3 +347,48 @@ async def test_build_narration_messages_marks_current_turn_script_lines(setup_te
             '[Already shown to the player this turn: Dad: "The locker code is on my poster!"]'
             in final
         )
+
+
+async def test_narration_history_starts_at_the_current_scene(setup_test_db):
+    """Turns played in a scene the player left are not replayed: their NPCs must not speak."""
+    from datetime import UTC, datetime, timedelta
+
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_context(db)
+        manager = GameTurnManager(db, "session-mem-1", user)
+        manager.state, manager.adventure, manager.avatar = state, adv, avatar
+        base = datetime(2030, 1, 1, tzinfo=UTC)
+        rows = [
+            ("user", "Talk to Vera", "HALL"),
+            ("assistant", 'Vera: "Welcome to the lab."', "HALL"),
+            ("user", "Go to the lab", "HALL"),
+            ("assistant", "You walk into the lab.", "START"),
+            ("user", "Look at the fridge", "START"),
+            ("assistant", "The fridge hums.", "START"),
+            ("user", "Open the fridge", "START"),
+        ]
+        for i, (role, content, scene) in enumerate(rows):
+            db.add(
+                ChatMessage(
+                    session_id="session-mem-1",
+                    role=role,
+                    content=content,
+                    scene_id=scene,
+                    created_at=base + timedelta(seconds=i),
+                )
+            )
+        await db.commit()
+
+        messages, _turns = await manager._build_narration_messages("System", "Open the fridge")
+
+    replayed = [m["content"] for m in messages[1:]]
+    assert replayed == [
+        "Go to the lab",
+        "You walk into the lab.",
+        "Look at the fridge",
+        "The fridge hums.",
+        "Open the fridge",
+    ]
+    assert not any("Vera" in content for content in replayed)

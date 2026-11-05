@@ -62,7 +62,7 @@ graph TD
 ### Prompt Layout (Token Efficiency)
 * System prompts are **static** (persona, adventure frame, rules, formatting, voice direction) so providers can cache them across messages; Anthropic models get explicit `cache_control` breakpoints (`backend/core/llm_request_tuning.py`).
 * Everything volatile (CURRENT STATE block: time, location, NPCs, character sheet, notes, memories, compressed history; quests/awards; outcome; violations; reminders) goes into the **latest user message**.
-* Pass 2 history contains only player/GM messages of previous turns; system events are kept for the current message only, and `[DEBUG` lines are never sent.
+* Pass 2 history contains only player/GM messages of previous turns; system events are kept for the current message only, and `[DEBUG` lines are never sent. It starts at the player action that led into the current scene (`turn_prompt_layout._since_scene_entry`), so NPCs of a scene the player left are not carried along.
 
 ### Pass 1: Mechanics Evaluation (Small/Fast Model)
 * Uses `small_model` (e.g. Gemini Flash / GPT-4o-mini) with the trimmed structured output schema `MechanicsIntent` (strict/story) or `ChatProgressionIntent` (chat mode) from `backend/engine/interaction/llm_intents.py`, converted to `GameEvent` afterwards. Backend-filled result fields and generator tools are never sent to the model.

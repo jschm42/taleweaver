@@ -3,6 +3,8 @@
 ``tw.npcs.say("BRAM", text)`` prints a fixed line. ``tw.npcs.say_directed("BRAM", "sings
 Yellow Submarine")`` instead queues a GM direction (like ``tw.story.direct``), so the next
 narration lets the NPC say or sing it in their own voice, in character and in the scene.
+Like ``tw.story.direct`` it takes ``after``/``after_args``: an init-script function that runs
+once that narration is done.
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from backend.engine.scripting.gm_directions import clean_direction
+from backend.engine.scripting.gm_directions import clean_direction, queue_direction
 
 
 def speech_direction(name: str, npc_id: str, direction: Any) -> str:
@@ -32,11 +34,13 @@ class NPCDirectionMixin:
     name: str
     _changeset: Any
 
-    def say_directed(self, direction: str) -> None:
-        """Lets the GM voice this NPC in the next narration, following the direction."""
+    def say_directed(self, direction: str, after: Any = None, after_args: Any = None) -> None:
+        """Lets the GM voice this NPC in the next narration, following the direction.
+
+        ``after`` names an init-script function that runs once that narration is done.
+        """
         text = speech_direction(self.name, self.id, direction)
-        if text:
-            self._changeset.gm_directions.append(text)
+        queue_direction(self._changeset, text, after, after_args)
 
 
 class NPCDirectionManagerMixin:
@@ -44,5 +48,7 @@ class NPCDirectionManagerMixin:
 
     get: Callable[[str], Any]
 
-    def say_directed(self, npc_id: str, direction: str) -> None:
-        self.get(npc_id).say_directed(direction)
+    def say_directed(
+        self, npc_id: str, direction: str, after: Any = None, after_args: Any = None
+    ) -> None:
+        self.get(npc_id).say_directed(direction, after=after, after_args=after_args)

@@ -1,4 +1,7 @@
-"""Static check for dialogs: every ``on_choice`` / ``on_end`` / ``on_action`` handler must exist.
+"""Static check for script handlers: every dialog handler and direction callback must exist.
+
+Covers ``on_choice`` / ``on_end`` / ``on_action`` of ``tw.dialog`` and the ``after=`` callback of
+``tw.story.direct`` / ``tw.npcs.say_directed`` (run once the next narration is done).
 
 ``tw.dialog.choose(..., on_choice=handler)`` (and ``tw.dialog.tree``) resolve the handler in a later request, where only
 functions from the global ``init_script`` and the sequence/scene helper blocks are in scope. A handler
@@ -14,7 +17,9 @@ from typing import Any
 
 from backend.schemas.validation import ValidationFinding
 
-_DIALOG_MARKER = "dialog."
+_MARKERS = ("dialog.", "after=")
+# Direction methods whose ``after=`` keyword names a callback.
+_DIRECTION_METHODS = {"direct", "say_directed"}
 # Dialog method -> (handler keyword, its position) pairs: choose(prompt, options, on_choice),
 # tree(tree, on_end, on_action).
 _HANDLER_PARAMS = {
@@ -26,7 +31,7 @@ _HANDLER_PARAMS = {
 
 def _strings(value: Any) -> Iterator[str]:
     """Yields every string nested in dicts/lists that may contain a dialog call."""
-    if isinstance(value, str) and _DIALOG_MARKER in value:
+    if isinstance(value, str) and any(marker in value for marker in _MARKERS):
         yield value
     elif isinstance(value, dict):
         yield from (code for child in value.values() for code in _strings(child))
@@ -70,6 +75,26 @@ def dialog_handlers(code: str) -> set[str]:
     return {name for call in calls for name in _handler_names(call)}
 
 
+def _is_direction_callback(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in _DIRECTION_METHODS
+        and any(kw.arg == "after" for kw in node.keywords)
+    )
+
+
+def direction_callbacks(code: str) -> set[str]:
+    """Returns the ``after=`` callback names of tw.story.direct / say_directed calls in ``code``."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return set()
+    calls = (node for node in ast.walk(tree) if _is_direction_callback(node))
+    names = (_handler_name(call, "after", len(call.args)) for call in calls)
+    return {name for name in names if name}
+
+
 def init_functions(init_script: Any) -> set[str]:
     if not isinstance(init_script, str) or not init_script.strip():
         return set()
@@ -88,9 +113,34 @@ def check_dialog_handlers(
     for code in helper_scripts:
         defined |= init_functions(code)
     referenced: set[str] = set()
+    callbacks: set[str] = set()
     for source in sources:
         for code in _strings(source):
             referenced |= dialog_handlers(code)
+            callbacks |= direction_callbacks(code)
+    return [
+        *_missing_dialog_handlers(referenced - defined),
+        *_missing_callbacks(callbacks - defined),
+    ]
+
+
+def _missing_callbacks(names: set[str]) -> list[ValidationFinding]:
+    return [
+        ValidationFinding(
+            severity="warn",
+            code="direction_callback_missing",
+            message=(
+                f"Direction callback '{name}' (after=) is not defined in the global init_script "
+                "or in any sequence or scene helpers; it will not run after the narration."
+            ),
+            location="adventure",
+            context={"handler": name},
+        )
+        for name in sorted(names)
+    ]
+
+
+def _missing_dialog_handlers(names: set[str]) -> list[ValidationFinding]:
     return [
         ValidationFinding(
             severity="warn",
@@ -102,5 +152,5 @@ def check_dialog_handlers(
             location="adventure",
             context={"handler": name},
         )
-        for name in sorted(referenced - defined)
+        for name in sorted(names)
     ]

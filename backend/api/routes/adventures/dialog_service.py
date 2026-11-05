@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.after_narration import run_after_narration
 from backend.api.routes.adventures.dialog_tree_service import DialogTreeStep
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
@@ -96,8 +97,17 @@ class DialogChoiceResolver:
                 take_gm_directions(self.manager.state)
                 await self.manager._save_chat_message("assistant", narration)
                 messages.append(narration)
+                ended = await self._run_after_narration(messages)
         await self.manager.db.commit()
         return {"status": "ok", "messages": [str(m) for m in messages]}
+
+    async def _run_after_narration(self, messages: list[Any]) -> bool:
+        """Callbacks of the narrated directions; returns True when the adventure ended."""
+        after_messages, ended = await run_after_narration(self.manager)
+        messages.extend(after_messages)
+        if ended:
+            messages.extend(await self._announce_ending())
+        return ended
 
     async def _apply_follow_ups(self, messages: list[Any]) -> bool:
         """What a turn would do after state changes; returns True when the adventure ended."""

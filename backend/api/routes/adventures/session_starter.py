@@ -272,7 +272,7 @@ def _run_init_scripts(
         entity_states["__switch_story_flags__"] = dict(changes.story_flag_updates)
     _persist_init_entity_updates(entity_states, changes)
     store_pending_dialog(entity_states, changes.pending_dialog)
-    store_gm_directions(entity_states, changes.gm_directions)
+    store_gm_directions(entity_states, changes.gm_directions, changes.after_narration)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):

@@ -7,7 +7,7 @@
  * - Top header with scene details, tracked quest, clock, and speech controls
  * - Left character stage with portrait cards and active speaker auras
  * - Center story area with tabs (Story, Passages, Discoveries, System) and scene switches;
- *   the Story tab holds the endless comic feed (dialogue bubbles, narration boxes, scene dividers)
+ *   the Story tab holds the comic feed: one page per scene, endless within it (chapter dividers)
  * - Dialog skin (data-skin) resolved from player preference, adventure theme and tone
  * - Bottom action bar and user input with speech-to-text voice recording
  * - "story-end" slot rendered after the latest exchange (e.g. an inline choice dialog)
@@ -223,12 +223,14 @@ const {
 watch(() => props.status, (status, previous) => {
   if (status !== 'connecting' || previous === 'connecting') return
   showStory()
+  storyFeedRef.value?.showLatest()
 })
 
-// Choice dialogs and unlock prompts are answered inline at the end of the story feed.
+// Choice dialogs and unlock prompts are answered inline at the end of the latest scene.
 watch(() => props.hasInlinePrompt, (pending) => {
   if (!pending) return
   showStory()
+  storyFeedRef.value?.showLatest()
 })
 
 function handleTraverseExit(exit: any) {
@@ -253,6 +255,7 @@ useGameShortcuts({
 function handleSend(content: string) {
   showStory()
   emit('send', content)
+  storyFeedRef.value?.showLatest()
 }
 
 function handleNpcClick(npc: any) {

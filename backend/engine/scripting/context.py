@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
-from backend.engine.scripting.gm_directions import clean_direction
+from backend.engine.scripting.gm_directions import clean_direction, queue_direction
 from backend.engine.scripting.item_ops import ItemMover
 from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
@@ -99,6 +99,8 @@ class ScriptChangeset:
     system_messages: list[str] = field(default_factory=list)
     ordered_messages: list[ScriptMessage] = field(default_factory=list)
     gm_directions: list[str] = field(default_factory=list)
+    # Init-script callbacks {handler, args} to run once the next narration is done.
+    after_narration: list[dict[str, Any]] = field(default_factory=list)
     rejected_actions: list[str] = field(default_factory=list)
     new_memories: list[dict[str, Any]] = field(default_factory=list)
 
@@ -160,6 +162,7 @@ class ScriptChangeset:
             or self.ordered_messages
             or self.save_requests
             or self.gm_directions
+            or self.after_narration
             or self.rejected_actions
             or self.new_memories
             or self.completed_quest_ids
@@ -1177,11 +1180,13 @@ class StoryProxy:
         """Alias for system_message()."""
         self.system_message(message)
 
-    def direct(self, instruction: str) -> None:
-        """Gives the GM a soft direction for its next narration (used once, then dropped)."""
-        text = clean_direction(instruction)
-        if text:
-            self._changeset.gm_directions.append(text)
+    def direct(self, instruction: str, after: Any = None, after_args: Any = None) -> None:
+        """Gives the GM a soft direction for its next narration (used once, then dropped).
+
+        ``after`` names an init-script function that runs once that narration is done, called
+        with ``after_args`` as keyword arguments.
+        """
+        queue_direction(self._changeset, clean_direction(instruction), after, after_args)
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active."""
@@ -1653,9 +1658,9 @@ class GameContext:
         if len(self.changeset.save_requests) < MAX_SAVES_PER_SCRIPT:
             self.changeset.save_requests.append(str(label or "").strip())
 
-    def direct(self, instruction: str) -> None:
+    def direct(self, instruction: str, after: Any = None, after_args: Any = None) -> None:
         """Shortcut for tw.story.direct(). Gives the GM a soft direction."""
-        self.story.direct(instruction)
+        self.story.direct(instruction, after=after, after_args=after_args)
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active and logs to console."""

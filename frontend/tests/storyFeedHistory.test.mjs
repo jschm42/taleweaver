@@ -91,3 +91,18 @@ test('dividers mark scene and chapter changes', () => {
 test('legacy pages without scene info get a plain divider', () => {
   assert.deepEqual(dividerBefore(page(null), page(null), nodes, titles), { scene: null, chapter: null })
 })
+
+test('scene segments split on scene changes only', () => {
+  const { groupSceneSegments } = loaded.storyDividers
+  const segments = groupSceneSegments([page('HALL|SEQ_1'), page('HALL|SEQ_2'), page('LAB|SEQ_2'), page('HALL|SEQ_2')])
+
+  assert.deepEqual(
+    segments.map((s) => [s.sceneId, s.pages.length]),
+    [['HALL', 2], ['LAB', 1], ['HALL', 1]]
+  )
+})
+
+test('legacy pages without scene info are their own segments', () => {
+  const { groupSceneSegments } = loaded.storyDividers
+  assert.equal(groupSceneSegments([page(null), page(null)]).length, 2)
+})
