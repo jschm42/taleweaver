@@ -126,10 +126,14 @@ function insertEntityId(chosenId: string) {
   showEntitySearchModal.value = false
   if (cmInstance) {
     const doc = cmInstance.getDoc()
-    const cursor = doc.getCursor()
-    doc.replaceRange(chosenId, cursor)
-    const nextCh = cursor.ch + chosenId.length
-    doc.setCursor({ line: cursor.line, ch: nextCh })
+    if (doc.somethingSelected?.()) {
+      doc.replaceSelection(chosenId, 'end')
+    } else {
+      const cursor = doc.getCursor()
+      doc.replaceRange(chosenId, cursor)
+      const nextCh = cursor.ch + chosenId.length
+      doc.setCursor({ line: cursor.line, ch: nextCh })
+    }
     nextTick(() => {
       cmInstance.focus()
     })
@@ -139,8 +143,7 @@ function insertEntityId(chosenId: string) {
     const end = el.selectionEnd ?? el.value.length
     const val = el.value
     const updated = val.slice(0, start) + chosenId + val.slice(end)
-    emit('update:modelValue', updated)
-    emit('change', updated)
+    updateCode(updated)
     nextTick(() => {
       el.focus()
       const nextPos = start + chosenId.length
@@ -170,7 +173,20 @@ let cmInstance: any = null
 watch(
   () => props.modelValue,
   (val) => {
-    currentCode.value = val || ''
+    const nextVal = val || ''
+    if (nextVal !== currentCode.value) {
+      if (!persistence.isDirty.value) {
+        persistence.markSaved(nextVal)
+      }
+      currentCode.value = nextVal
+    }
+  }
+)
+
+watch(
+  () => props.filename,
+  () => {
+    persistence.markSaved(props.modelValue || '')
   }
 )
 
@@ -250,7 +266,8 @@ function initCodeMirror() {
 
   cmInstance.on('change', () => {
     const val = cmInstance.getValue()
-    if (val !== props.modelValue) {
+    if (val !== currentCode.value) {
+      currentCode.value = val
       emit('update:modelValue', val)
       emit('change', val)
     }
@@ -362,8 +379,10 @@ function jumpToFunction(fn: OutlineFunction) {
 
 function handleFallbackInput(e: Event) {
   const target = e.target as HTMLTextAreaElement
-  emit('update:modelValue', target.value)
-  emit('change', target.value)
+  const val = target.value
+  currentCode.value = val
+  emit('update:modelValue', val)
+  emit('change', val)
 }
 
 function insertSnippet(snippetCode: string) {
@@ -478,32 +497,6 @@ function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
 }
 
-watch([showOutline, isOutlineCollapsed], () => {
-  nextTick(() => cmInstance?.refresh())
-})
-
-/** Moves the cursor to the definition of an outline function and scrolls it into view. */
-function jumpToFunction(fn: OutlineFunction) {
-  const pos = { line: fn.line - 1, ch: fn.column }
-  if (cmInstance) {
-    cmInstance.focus()
-    cmInstance.setCursor(pos)
-    cmInstance.scrollIntoView(pos, 100)
-    cursorPosition.value = { line: fn.line, ch: fn.column + 1 }
-    return
-  }
-  const textarea = fallbackTextarea.value
-  if (!textarea) {
-    return
-  }
-  const lines = textarea.value.split('\n')
-  const lineStart = lines.slice(0, pos.line).reduce((sum, l) => sum + l.length + 1, 0)
-  const offset = Math.min(lineStart + fn.column, textarea.value.length)
-  textarea.focus()
-  textarea.setSelectionRange(offset, offset)
-  cursorPosition.value = { line: fn.line, ch: fn.column + 1 }
-}
-
 onMounted(async () => {
   isLoadingCdn.value = true
   try {
@@ -593,6 +586,7 @@ function handleContainerKeydown(e: KeyboardEvent): void {
 
 defineExpose({
   isDirty: persistence.isDirty,
+  markSaved: persistence.markSaved,
   saveScript: handleSave,
   loadScript: (code: string) => {
     persistence.requestLoad(() => {
