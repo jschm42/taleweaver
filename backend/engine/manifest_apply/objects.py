@@ -56,7 +56,7 @@ _BASE_SCRIPT_FIELDS = (
 )  # fmt: skip
 _CONTAINER_SCRIPT_FIELDS = (
     "on_unlock_success_script", "on_unlock_success_text", "on_unlock_failure_script", "on_unlock_failure_text",
-    "on_items_added_script", "on_items_added_text",
+    "on_items_added_script", "on_items_added_text", "on_items_removed_script", "on_items_removed_text",
 )  # fmt: skip
 _CONSTRUCTABLE_FIELDS = (
     "result_item_ids", "kept_ingredients",
@@ -182,6 +182,12 @@ def _list_or_empty(value: Any) -> list:
 def _switch_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
     states = normalize_switch_states(obj.get("switch_states"))
     initial = normalize_state_id(obj.get("switch_initial_state") or states[0])
+    raw_disabled = obj.get("switch_disabled_states") or metadata.get("switch_disabled_states") or []
+    disabled_states = [
+        normalize_state_id(s)
+        for s in (raw_disabled if isinstance(raw_disabled, list) else [])
+        if normalize_state_id(s) in states
+    ]
     scripts = {
         key: str(obj.get(key) or metadata.get(key) or "").strip()
         for key in ("on_success_script", "on_failure_script")
@@ -190,6 +196,7 @@ def _switch_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
         "states": states,
         "state_labels": normalize_state_labels(states, obj.get("switch_state_labels")),
         "initial_state": initial if initial in states else states[0],
+        "disabled_states": disabled_states,
         "transitions": _list_or_empty(obj.get("switch_transitions")),
         "outcomes": _list_or_empty(obj.get("switch_outcomes")),
         **scripts,

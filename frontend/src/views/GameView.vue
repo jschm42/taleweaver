@@ -1351,17 +1351,21 @@ const runContainerAction = async (
 }
 
 const handleContainerTakeAll = async () => {
-  await runContainerAction((id) => `/container_take_all ${id}`)
+  const isContainerSwitch = String(activeContainerEntity.value?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'
+  await runContainerAction((id) => `/container_take_all ${id}`, isContainerSwitch)
 }
 
 const handleContainerTakeItem = async (item: any) => {
   const itemRef = String(item?.id || item?.name || '').trim()
   if (!itemRef) return
-  await runContainerAction((id) => `/container_take_item ${id} | ${itemRef}`)
+  const isContainerSwitch = String(activeContainerEntity.value?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'
+  const keepOpen = isContainerSwitch || (activeContainerItems.value || []).length > 1
+  await runContainerAction((id) => `/container_take_item ${id} | ${itemRef}`, keepOpen)
 }
 
 const handleContainerDropToScene = async () => {
-  await runContainerAction((id) => `/container_drop_scene ${id}`)
+  const isContainerSwitch = String(activeContainerEntity.value?.item_type || '').toUpperCase() === 'CONTAINER_SWITCH'
+  await runContainerAction((id) => `/container_drop_scene ${id}`, isContainerSwitch)
 }
 
 const handleContainerPutItems = async (itemIds: string[]) => {

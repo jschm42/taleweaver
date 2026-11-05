@@ -57,7 +57,22 @@ def _merge_session_entity(
     if "locked" not in ent and isinstance(metadata.get("locked"), bool):
         ent["locked"] = metadata["locked"]
     elif isinstance(ent.get("locked"), bool) and isinstance(ent.get("metadata_json"), dict):
-        ent["metadata_json"] = {**metadata, "locked": ent["locked"]}
+        metadata = {**metadata, "locked": ent["locked"]}
+        ent["metadata_json"] = metadata
+    if isinstance(ent.get("disabled_switch_states"), list) and isinstance(
+        metadata.get("switch"), dict
+    ):
+        metadata = {
+            **metadata,
+            "switch": {**metadata["switch"], "disabled_states": ent["disabled_switch_states"]},
+            "switch_disabled_states": ent["disabled_switch_states"],
+        }
+        ent["metadata_json"] = metadata
+    elif "disabled_switch_states" not in ent:
+        sw_cfg = metadata.get("switch") if isinstance(metadata.get("switch"), dict) else {}
+        cfg_disabled = sw_cfg.get("disabled_states") or metadata.get("switch_disabled_states")
+        if isinstance(cfg_disabled, list):
+            ent["disabled_switch_states"] = cfg_disabled
     # CONSTRUCTABLE recipes are meta items and never appear in the world.
     if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE":
         ent["is_hidden"] = True

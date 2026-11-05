@@ -236,6 +236,7 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "format": FieldSpec("text_log_format", choice("DOCUMENT", "SCROLL", "BOOK", "SIGN")),
     "states": FieldSpec("*", switch_states),
     "initial": FieldSpec("switch_initial_state", lambda raw: raw.strip().upper()),
+    "disabled_states": _refs("switch_disabled_states"),
     "transition": FieldSpec("switch_transitions", switch_transition, "transition", repeat=True),
     "outcome": FieldSpec("switch_outcomes", switch_outcome, "outcome", repeat=True),
 }
@@ -249,6 +250,7 @@ for _key, _target in (
     ("on_unlock", "on_unlock_success"),
     ("on_unlock_fail", "on_unlock_failure"),
     ("on_items_added", "on_items_added"),
+    ("on_items_removed", "on_items_removed"),
     ("on_read", "on_read"),
     ("on_craft", "on_craft_success"),
     ("on_craft_fail", "on_craft_failure"),

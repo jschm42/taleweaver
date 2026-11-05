@@ -348,3 +348,46 @@ if sw.state == "OFF":
         upd.get("to_scene_id") == "EXIT_SECRET" and upd.get("is_locked") is False
         for upd in ctx.changeset.exit_updates
     )
+
+
+def test_scripting_engine_switch_enable_disable_states():
+    """Verify per-state enable/disable via tw.switches and tw.objects."""
+    entities = {
+        "CSW_MICROWAVE": {
+            "id": "CSW_MICROWAVE",
+            "name": "Lab Microwave",
+            "item_type": "CONTAINER_SWITCH",
+            "metadata_json": {
+                "switch": {
+                    "states": ["OFF", "DEFROST", "COOK"],
+                    "initial_state": "OFF",
+                    "disabled_states": ["DEFROST", "COOK"],
+                }
+            },
+        }
+    }
+    ctx = GameContext(entities=entities)
+    runner = ScriptRunner([])
+
+    mw = ctx.objects.get("CSW_MICROWAVE")
+    assert mw.disabled_states == ["DEFROST", "COOK"]
+    assert mw.is_state_disabled("DEFROST") is True
+    assert mw.is_state_enabled("OFF") is True
+
+    script = """
+mw = tw.objects.get("CSW_MICROWAVE")
+mw.enable_state("DEFROST", "COOK")
+tw.vars.set("after_enable", list(mw.disabled_states))
+mw.disable_state("COOK")
+tw.vars.set("after_disable", list(tw.switches.disabled_states("CSW_MICROWAVE")))
+"""
+    runner.execute_code(script, {"tw": ctx, "game": ctx})
+
+    assert ctx.vars.get("after_enable") == []
+    assert ctx.vars.get("after_disable") == ["COOK"]
+    assert mw.is_state_enabled("DEFROST") is True
+    assert mw.is_state_disabled("COOK") is True
+    assert any(
+        u.get("entity_id") == "CSW_MICROWAVE" and u.get("disabled_switch_states") == ["COOK"]
+        for u in ctx.changeset.entity_updates
+    )

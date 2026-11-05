@@ -105,3 +105,36 @@ async def _run_trigger(handler: Any, container: Any, picked: list[Any]) -> list[
     if text:
         events.append(await _say(handler, "system", text))
     return events
+
+
+async def run_container_items_removed_trigger(
+    handler: Any, container: Any, removed: list[Any]
+) -> list[tuple[str, str]]:
+    """Runs ``on_items_removed_script`` / ``on_items_removed_text`` when items leave a container."""
+    if container is None or not removed:
+        return []
+    raw_meta = (
+        container.get("metadata_json")
+        if isinstance(container, dict)
+        else getattr(container, "metadata_json", None)
+    )
+    meta = dict(raw_meta or {})
+    container_id = (
+        container.get("id") if isinstance(container, dict) else getattr(container, "id", "")
+    )
+    events: list[tuple[str, str]] = []
+    code = str(meta.get("on_items_removed_script") or "").strip()
+    if code:
+        removed_items = [dict(e) if isinstance(e, dict) else {"id": e, "name": e} for e in removed]
+        scope = {
+            "removed_items": removed_items,
+            "removed_item_ids": [str(e.get("id")) for e in removed_items],
+        }
+        messages = await handler.manager._execute_inline_script(
+            code, "on_items_removed", str(container_id), extra_scope=scope
+        )
+        events.extend((str(getattr(m, "role", "system")), str(m)) for m in messages)
+    text = str(meta.get("on_items_removed_text") or "").strip()
+    if text:
+        events.append(await _say(handler, "system", text))
+    return events

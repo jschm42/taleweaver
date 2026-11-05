@@ -75,8 +75,21 @@ const currentSwitchState = computed(() => {
 
 const isCurrentSwitchState = (state: string): boolean => state.toUpperCase() === currentSwitchState.value
 
+const disabledSwitchStates = computed<Set<string>>(() => {
+  const raw =
+    props.containerEntity?.disabled_switch_states ??
+    switchConfig.value.disabled_states ??
+    props.containerEntity?.switch_disabled_states ??
+    []
+  return new Set(
+    Array.isArray(raw) ? raw.map((s: any) => String(s || '').trim().toUpperCase()).filter(Boolean) : []
+  )
+})
+
+const isStateDisabled = (state: string): boolean => disabledSwitchStates.value.has(state.toUpperCase())
+
 function selectSwitchState(state: string): void {
-  if (props.busy || isCurrentSwitchState(state)) return
+  if (props.busy || isCurrentSwitchState(state) || isStateDisabled(state)) return
   emit('selectSwitchState', state.toUpperCase())
 }
 
@@ -179,13 +192,18 @@ function takeItem(item: any): void {
             v-for="state in switchStates"
             :key="state"
             type="button"
-            :disabled="busy || isCurrentSwitchState(state)"
+            :disabled="busy || isCurrentSwitchState(state) || isStateDisabled(state)"
             class="tw-choice-option"
-            :class="{ 'is-current': isCurrentSwitchState(state) }"
+            :class="{
+              'is-current': isCurrentSwitchState(state),
+              'opacity-45 cursor-not-allowed': isStateDisabled(state) && !isCurrentSwitchState(state),
+            }"
+            :title="isStateDisabled(state) ? `${stateLabel(containerEntity, state)} (Locked)` : stateLabel(containerEntity, state)"
             @click="selectSwitchState(state)"
           >
             <span class="tw-choice-number">
               <Check v-if="isCurrentSwitchState(state)" class="w-3 h-3" stroke-width="3" />
+              <Lock v-else-if="isStateDisabled(state)" class="w-3 h-3" />
               <ChevronRight v-else class="w-3 h-3" stroke-width="3" />
             </span>
             <span class="flex-1 tracking-wider text-left truncate">{{ stateLabel(containerEntity, state) }}</span>

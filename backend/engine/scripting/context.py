@@ -747,11 +747,36 @@ class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
         curr = self.switch_state
         return curr is not None and curr == str(target_state).strip().upper()
 
-    def set_state(self, state: str) -> None:
+    def set_state(self, state: str, apply_outcomes: bool = True) -> None:
         """Sets the switch state directly."""
-        self._changeset.entity_updates.append(
-            {"entity_id": self._id, "switch_state": str(state).strip().upper()}
+        SwitchProxy(self._id, self._data, self._changeset).set_state(
+            state, apply_outcomes=apply_outcomes
         )
+
+    @property
+    def disabled_states(self) -> list[str]:
+        """Returns the list of currently disabled/locked state IDs for this switch."""
+        return SwitchProxy(self._id, self._data, self._changeset).disabled_states
+
+    def is_state_disabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently disabled/locked."""
+        return SwitchProxy(self._id, self._data, self._changeset).is_state_disabled(target_state)
+
+    def is_state_enabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently enabled/unlocked."""
+        return SwitchProxy(self._id, self._data, self._changeset).is_state_enabled(target_state)
+
+    def disable_state(self, *states: str) -> None:
+        """Disables/locks one or more switch states."""
+        SwitchProxy(self._id, self._data, self._changeset).disable_state(*states)
+
+    def enable_state(self, *states: str) -> None:
+        """Enables/unlocks one or more switch states."""
+        SwitchProxy(self._id, self._data, self._changeset).enable_state(*states)
+
+    def set_state_enabled(self, state: str, enabled: bool) -> None:
+        """Enables or disables a single switch state."""
+        SwitchProxy(self._id, self._data, self._changeset).set_state_enabled(state, enabled)
 
     def flip(self, target_state: Optional[str] = None) -> str:
         """Flips/toggles the switch. Returns the new state."""

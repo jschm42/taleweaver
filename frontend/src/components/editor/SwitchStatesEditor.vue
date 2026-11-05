@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Trash2 } from 'lucide-vue-next'
+import { Lock, Plus, Trash2, Unlock } from 'lucide-vue-next'
 
 /**
  * State list of a SWITCH: each state has an ID (script key, max 15 characters: A-Z, 0-9, _ and -)
@@ -9,6 +9,7 @@ import { Plus, Trash2 } from 'lucide-vue-next'
 const props = defineProps<{
   states: string[]
   labels: Record<string, string>
+  disabledStates?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   (e: 'remove', index: number): void
   (e: 'rename', index: number, value: string): void
   (e: 'update:labels', value: Record<string, string>): void
+  (e: 'update:disabledStates', value: string[]): void
 }>()
 
 const STATE_ID_MAX = 15
@@ -31,6 +33,21 @@ function setLabel(state: string, value: string) {
   }
   emit('update:labels', next)
 }
+
+function isStateDisabled(state: string): boolean {
+  const clean = String(state || '').trim().toUpperCase()
+  return Boolean(clean && (props.disabledStates || []).includes(clean))
+}
+
+function toggleDisabled(state: string) {
+  const clean = String(state || '').trim().toUpperCase()
+  if (!clean) return
+  const current = [...(props.disabledStates || [])]
+  const next = current.includes(clean)
+    ? current.filter((s) => s !== clean)
+    : [...current, clean]
+  emit('update:disabledStates', next)
+}
 </script>
 
 <template>
@@ -39,9 +56,10 @@ function setLabel(state: string, value: string) {
       <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Switch States</label>
       <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">At least 2 required</span>
     </div>
-    <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+    <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto_auto] gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
       <span>ID (scripts)</span>
       <span>In-game text (optional)</span>
+      <span class="w-9 text-center">Lock</span>
       <span class="w-9"></span>
     </div>
 
@@ -49,7 +67,7 @@ function setLabel(state: string, value: string) {
       <div
         v-for="(state, idx) in states"
         :key="idx"
-        class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] gap-2 items-center"
+        class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto_auto] gap-2 items-center"
       >
         <input
           :value="state"
@@ -65,6 +83,16 @@ function setLabel(state: string, value: string) {
           class="min-w-0 bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-sm text-slate-200 focus:border-lime-500 outline-none transition-all"
           @input="(e) => setLabel(state, (e.target as HTMLInputElement).value)"
         />
+        <button
+          type="button"
+          class="shrink-0 px-2.5 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest transition-all"
+          :class="isStateDisabled(state) ? 'border-amber-500/40 bg-amber-500/15 text-amber-300' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-slate-200'"
+          :title="isStateDisabled(state) ? 'State starts disabled/locked (enable via script)' : 'State starts enabled (click to lock by default)'"
+          @click="toggleDisabled(state)"
+        >
+          <Lock v-if="isStateDisabled(state)" class="w-4 h-4" />
+          <Unlock v-else class="w-4 h-4" />
+        </button>
         <button
           type="button"
           :disabled="states.length <= 2"

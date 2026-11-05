@@ -54,6 +54,7 @@ const props = defineProps<{
     switch_states_json: string
     switch_state_labels?: Record<string, string>
     switch_initial_state: string
+    switch_disabled_states?: string[]
     switch_transitions_json: string
     on_success_script?: string
     on_failure_script?: string
@@ -73,6 +74,8 @@ const props = defineProps<{
     on_unlock_failure_text?: string
     on_items_added_script?: string
     on_items_added_text?: string
+    on_items_removed_script?: string
+    on_items_removed_text?: string
     craft_guard_expression?: string
     on_craft_success_script?: string
     on_craft_success_text?: string
@@ -143,6 +146,8 @@ const localForm = ref({
   on_unlock_failure_text: '',
   on_items_added_script: '',
   on_items_added_text: '',
+  on_items_removed_script: '',
+  on_items_removed_text: '',
   craft_guard_expression: '',
   on_craft_success_script: '',
   on_craft_success_text: '',
@@ -179,6 +184,7 @@ const localForm = ref({
 })
 const switchStates = ref<string[]>([])
 const switchStateLabels = ref<Record<string, string>>({})
+const switchDisabledStates = ref<string[]>([])
 const switchTransitions = ref<any[]>([])
 
 function syncFromForm() {
@@ -197,6 +203,12 @@ function syncFromForm() {
   switchStateLabels.value = Object.fromEntries(
     Object.entries(labels).filter(([state, label]) => states.includes(state.toUpperCase()) && String(label).trim())
   )
+  const rawDisabled = Array.isArray(localForm.value.switch_disabled_states)
+    ? localForm.value.switch_disabled_states
+    : []
+  switchDisabledStates.value = rawDisabled
+    .map((s: any) => String(s || '').trim().toUpperCase())
+    .filter((s: string) => s && states.includes(s))
 
   const initial = String(localForm.value.switch_initial_state || '').trim().toUpperCase()
   if (!initial || !states.includes(initial)) {
@@ -256,6 +268,7 @@ function removeState(index: number) {
   switchStateLabels.value = Object.fromEntries(
     Object.entries(switchStateLabels.value).filter(([state]) => state !== removed)
   )
+  switchDisabledStates.value = switchDisabledStates.value.filter(s => s !== removed)
   
   if (localForm.value.switch_initial_state === removed) {
     localForm.value.switch_initial_state = switchStates.value[0] || ''
@@ -278,6 +291,11 @@ function updateStateValue(index: number, val: string) {
   if (oldVal in switchStateLabels.value) {
     const { [oldVal]: label, ...rest } = switchStateLabels.value
     switchStateLabels.value = cleanVal ? { ...rest, [cleanVal]: label } : rest
+  }
+  if (switchDisabledStates.value.includes(oldVal)) {
+    switchDisabledStates.value = switchDisabledStates.value
+      .map(s => (s === oldVal ? cleanVal : s))
+      .filter(Boolean)
   }
   
   if (localForm.value.switch_initial_state === oldVal) {
@@ -724,6 +742,7 @@ function handleSave() {
         .filter(([state, label]) => parsedSwitchStates.includes(state) && label.trim())
         .map(([state, label]) => [state, label.trim().slice(0, 20)])
     ),
+    switch_disabled_states: switchDisabledStates.value.filter((state) => parsedSwitchStates.includes(state)),
     switch_transitions: parsedSwitchTransitions,
     on_success_script: String(localForm.value.on_success_script || '').trim(),
     on_failure_script: String(localForm.value.on_failure_script || '').trim(),
@@ -749,6 +768,8 @@ function handleSave() {
     on_unlock_failure_text: String(localForm.value.on_unlock_failure_text || '').trim(),
     on_items_added_script: String(localForm.value.on_items_added_script || '').trim(),
     on_items_added_text: String(localForm.value.on_items_added_text || '').trim(),
+    on_items_removed_script: String(localForm.value.on_items_removed_script || '').trim(),
+    on_items_removed_text: String(localForm.value.on_items_removed_text || '').trim(),
     craft_guard_expression: String(localForm.value.craft_guard_expression || '').trim(),
     on_craft_success_script: String(localForm.value.on_craft_success_script || '').trim(),
     on_craft_success_text: String(localForm.value.on_craft_success_text || '').trim(),
@@ -1604,6 +1625,7 @@ const textLogPreviewClass = computed(() => {
                   <!-- 1. States Management -->
                   <SwitchStatesEditor
                     v-model:labels="switchStateLabels"
+                    v-model:disabled-states="switchDisabledStates"
                     :states="switchStates"
                     @add="addState"
                     @remove="removeState"
@@ -2026,7 +2048,7 @@ const textLogPreviewClass = computed(() => {
                         <span class="text-[11px] font-black text-slate-300 uppercase tracking-wider">
                           Unlocking Transition Rules
                         </span>
-                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script || localForm.on_items_added_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
+                        <span v-if="localForm.on_unlock_success_script || localForm.on_unlock_failure_script || localForm.on_items_added_script || localForm.on_items_removed_script" class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold">
                           Configured
                         </span>
                       </div>
@@ -2081,6 +2103,23 @@ const textLogPreviewClass = computed(() => {
                           v-model="localForm.on_items_added_text"
                           rows="2"
                           placeholder="e.g. The offering bowl glows faintly as the items settle inside."
+                          class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
+                        ></textarea>
+                      </div>
+
+                      <ScriptEditor
+                        v-model="localForm.on_items_removed_script"
+                        label="On Items Removed Script"
+                        help-text="Executed once after the player takes or drops one or more items from this container. removed_items (list of dicts) and removed_item_ids (list of IDs) are in scope."
+                        context="container_items_removed"
+                        min-height="100px"
+                      />
+                      <div class="space-y-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Items Removed Text</label>
+                        <textarea
+                          v-model="localForm.on_items_removed_text"
+                          rows="2"
+                          placeholder="e.g. The chamber resets as you take the item out."
                           class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
                         ></textarea>
                       </div>

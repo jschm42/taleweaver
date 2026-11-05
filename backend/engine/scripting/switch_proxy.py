@@ -103,6 +103,62 @@ class SwitchProxy:
         """Checks if the switch is in target_state (case-insensitive)."""
         return self.state == str(target_state).strip().upper()
 
+    @property
+    def disabled_states(self) -> list[str]:
+        """Returns the list of currently disabled/locked state IDs for this switch."""
+        for upd in reversed(self._changeset.entity_updates):
+            if upd.get("entity_id") == self._id and "disabled_switch_states" in upd:
+                raw = upd["disabled_switch_states"]
+                return (
+                    [str(s).strip().upper() for s in raw if str(s).strip()]
+                    if isinstance(raw, list)
+                    else []
+                )
+        session_disabled = self._data.get("disabled_switch_states")
+        if isinstance(session_disabled, list):
+            return [str(s).strip().upper() for s in session_disabled if str(s).strip()]
+        from backend.engine.interaction.switch_service import SwitchService
+
+        cfg = SwitchService.resolve_switch_config(self._data)
+        cfg_disabled = cfg.get("disabled_states")
+        if isinstance(cfg_disabled, list):
+            return [str(s).strip().upper() for s in cfg_disabled if str(s).strip()]
+        return []
+
+    def is_state_disabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently disabled/locked."""
+        return str(target_state).strip().upper() in self.disabled_states
+
+    def is_state_enabled(self, target_state: str) -> bool:
+        """Returns True if target_state is currently enabled/unlocked."""
+        return not self.is_state_disabled(target_state)
+
+    def disable_state(self, *states: str) -> None:
+        """Disables/locks one or more switch states so they cannot be selected by the player."""
+        current = list(self.disabled_states)
+        for st in states:
+            clean = str(st).strip().upper()
+            if clean and clean not in current:
+                current.append(clean)
+        self._changeset.entity_updates.append(
+            {"entity_id": self._id, "disabled_switch_states": current}
+        )
+
+    def enable_state(self, *states: str) -> None:
+        """Enables/unlocks one or more switch states so they can be selected by the player."""
+        to_enable = {str(st).strip().upper() for st in states if str(st).strip()}
+        updated = [s for s in self.disabled_states if s not in to_enable]
+        self._changeset.entity_updates.append(
+            {"entity_id": self._id, "disabled_switch_states": updated}
+        )
+
+    def set_state_enabled(self, state: str, enabled: bool) -> None:
+        """Enables or disables a single switch state."""
+        if enabled:
+            self.enable_state(state)
+        else:
+            self.disable_state(state)
+
     def set_state(self, target_state: str, apply_outcomes: bool = True) -> None:
         """
         Sets the switch directly to target_state.
@@ -244,6 +300,26 @@ class SwitchesProxy:
     def is_state(self, switch_id_or_name: str, state: str) -> bool:
         """Returns True if the switch is currently in the specified state."""
         return self.get(switch_id_or_name).is_state(state)
+
+    def disabled_states(self, switch_id_or_name: str) -> list[str]:
+        """Returns the list of disabled states for the switch."""
+        return self.get(switch_id_or_name).disabled_states
+
+    def is_state_enabled(self, switch_id_or_name: str, state: str) -> bool:
+        """Returns True if the specified state on the switch is enabled."""
+        return self.get(switch_id_or_name).is_state_enabled(state)
+
+    def is_state_disabled(self, switch_id_or_name: str, state: str) -> bool:
+        """Returns True if the specified state on the switch is disabled."""
+        return self.get(switch_id_or_name).is_state_disabled(state)
+
+    def enable_state(self, switch_id_or_name: str, *states: str) -> None:
+        """Enables one or more states on the switch."""
+        self.get(switch_id_or_name).enable_state(*states)
+
+    def disable_state(self, switch_id_or_name: str, *states: str) -> None:
+        """Disables one or more states on the switch."""
+        self.get(switch_id_or_name).disable_state(*states)
 
     def flip(
         self,

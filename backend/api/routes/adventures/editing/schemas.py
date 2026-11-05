@@ -49,6 +49,7 @@ class EntityUpdateRequest(BaseModel):
     switch_states: Optional[list[str]] = None
     switch_state_labels: Optional[dict[str, str]] = None
     switch_initial_state: Optional[str] = None
+    switch_disabled_states: Optional[list[str]] = None
     switch_transitions: Optional[list[dict[str, Any]]] = None
     on_success_script: Optional[str] = None
     on_failure_script: Optional[str] = None
@@ -96,6 +97,8 @@ class EntityUpdateRequest(BaseModel):
     on_unlock_failure_text: Optional[str] = None
     on_items_added_script: Optional[str] = None
     on_items_added_text: Optional[str] = None
+    on_items_removed_script: Optional[str] = None
+    on_items_removed_text: Optional[str] = None
     on_read_script: Optional[str] = None
     on_read_text: Optional[str] = None
     result_item_ids: Optional[list[str]] = None

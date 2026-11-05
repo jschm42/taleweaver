@@ -81,6 +81,8 @@ _OBJECT_ENTITY_KEYS = {
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -183,6 +185,8 @@ _INLINE_OBJECT_SCRIPT_KEYS = (
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
     "on_read_script",
     "on_read_text",
     "craft_guard_expression",
@@ -214,6 +218,9 @@ def _extract_item_switch_metadata(
         filtered["switch_initial_state"] = (
             switch_config.get("initial_state") or metadata.pop("switch_initial_state", "") or ""
         )
+        filtered["switch_disabled_states"] = (
+            switch_config.get("disabled_states") or metadata.pop("switch_disabled_states", []) or []
+        )
         filtered["switch_transitions"] = (
             switch_config.get("transitions") or metadata.pop("switch_transitions", []) or []
         )
@@ -228,6 +235,7 @@ def _extract_item_switch_metadata(
     metadata.pop("switch", None)
     metadata.pop("switch_states", None)
     metadata.pop("switch_initial_state", None)
+    metadata.pop("switch_disabled_states", None)
     metadata.pop("switch_transitions", None)
     metadata.pop("on_success_script", None)
     metadata.pop("on_failure_script", None)
@@ -245,6 +253,8 @@ _CONTAINER_ONLY_KEYS = (
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
 )
 
 

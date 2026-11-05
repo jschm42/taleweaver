@@ -150,6 +150,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
 | | `on_items_added_script`, `..._text` | Executes once after the player put one or more items into this container (container panel → **Put In**, or `/container_put_items`). `added_items` (list of dicts) and `added_item_ids` (list of IDs) are in scope. |
+| | `on_items_removed_script`, `..._text` | Executes once after the player takes or drops one or more items out of this container (`Take`, `Take All`, or `Drop in Scene`). `removed_items` (list of dicts) and `removed_item_ids` (list of IDs) are in scope. |
 | **Switches & Container-Switches** | `gates.expression` *(Guard)* | Deterministic Python boolean condition required for a specific transition. |
 | | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
 | | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
@@ -499,7 +500,7 @@ Manages world objects and inventory items. Every world item is held by exactly *
 - `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.lock()`, `.unlock()`, `.is_locked`, `.location`
 - `.move_to(target)`, `.give_to_player()`, `.put_into(container_id)`, `.move_to_scene(scene_id)`, `.give_to_npc(npc_id)`
 - For containers (`CONTAINER` and `CONTAINER_SWITCH`): `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
-- For switch items (`SWITCH` and `CONTAINER_SWITCH`): `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+- For switch items (`SWITCH` and `CONTAINER_SWITCH`): `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, `.toggle()`, `.disabled_states`, `.is_state_enabled(state)`, `.is_state_disabled(state)`, `.enable_state(*states)`, `.disable_state(*states)`, and `.set_state_enabled(state, enabled)`.
 
 ```python
 # Potion dispenser: copy a hidden template potion and hand the copy over
@@ -521,6 +522,8 @@ Inspects and manipulates interactive switches, levers, buttons, and puzzle mecha
 - `tw.switches.is_state(switch_id: str, state: str) -> bool`: Returns `True` if the switch currently matches `state`.
 - `tw.switches.flip(switch_id: str, apply_outcomes: bool = True) -> str`: Cycles or toggles the switch to its next configured state, returning the new state.
 - `tw.switches.toggle(switch_id: str, apply_outcomes: bool = True) -> str`: Alias for `flip()`.
+- `tw.switches.enable_state(switch_id: str, *states: str) -> list[str]` / `tw.switches.disable_state(switch_id: str, *states: str) -> list[str]`: Enables or disables specific switch state buttons on `switch_id` (e.g. `tw.switches.disable_state('MICROWAVE', 'DEFROST', 'COOK')`), returning the updated list of disabled state IDs. Disabled states are shown with a lock icon and cannot be clicked by the player until re-enabled.
+- `tw.switches.is_state_enabled(switch_id: str, state: str) -> bool` / `tw.switches.is_state_disabled(switch_id: str, state: str) -> bool` / `tw.switches.disabled_states(switch_id: str) -> list[str]`: Checks whether a specific state on `switch_id` is enabled/disabled, or returns all currently disabled state IDs.
 - `tw.switch(switch_id: str) -> SwitchProxy`: Convenience shortcut for `tw.switches.get(switch_id)`.
 
 #### `SwitchProxy` and `ObjectProxy` Switch Attributes
@@ -534,6 +537,9 @@ When interacting with a `SwitchProxy` or an `ObjectProxy` for a switch entity:
 - `.flip(apply_outcomes: bool = True) -> str`: Cycles to the next state in sequence.
 - `.toggle(apply_outcomes: bool = True) -> str`: Alias for `flip()`.
 - `.states` *(list[str])*: List of declared switch state IDs (1-15 characters: `A-Z`, `0-9`, `_`, `-`).
+- `.disabled_states` *(list[str])*: List of currently disabled (locked) state IDs on this switch.
+- `.is_state_enabled(state: str) -> bool` / `.is_state_disabled(state: str) -> bool`: Checks whether `state` is currently enabled or disabled.
+- `.enable_state(*states: str) -> list[str]` / `.disable_state(*states: str) -> list[str]` / `.set_state_enabled(state: str, enabled: bool) -> list[str]`: Enables or disables one or more state IDs on this switch.
 - `.initial_state` *(str)*: Configured initial state.
 - `.is_switch` *(bool)*: `True` if the object is a switch.
 

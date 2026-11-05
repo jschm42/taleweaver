@@ -33,6 +33,8 @@ _UNLOCK_SCRIPT_FIELDS = (
     "on_unlock_failure_text",
     "on_items_added_script",
     "on_items_added_text",
+    "on_items_removed_script",
+    "on_items_removed_text",
 )
 _CONTAINER_KEYS = (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, "locked")
 _READABLE_SCRIPT_FIELDS = ("on_read_script", "on_read_text")
@@ -62,12 +64,14 @@ _SWITCH_FLAT_KEYS = (
     "switch_states",
     "switch_state_labels",
     "switch_initial_state",
+    "switch_disabled_states",
     "switch_transitions",
 )
 _SWITCH_FIELDS = (
     "switch_states",
     "switch_state_labels",
     "switch_initial_state",
+    "switch_disabled_states",
     "switch_transitions",
     "on_success_script",
     "on_failure_script",
@@ -208,11 +212,18 @@ def validated_switch(switch_config: dict[str, Any]) -> dict[str, Any]:
             detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states)}.",
         )
     labels = normalize_state_labels(states, switch_config.get("state_labels"))
+    raw_disabled = switch_config.get("disabled_states") or []
+    disabled_states = [
+        str(s).strip().upper()
+        for s in (raw_disabled if isinstance(raw_disabled, list) else [])
+        if str(s).strip() and str(s).strip().upper() in states
+    ]
     return {
         **switch_config,
         "states": states,
         "state_labels": labels,
         "initial_state": initial_state,
+        "disabled_states": disabled_states,
     }
 
 
@@ -223,6 +234,7 @@ def _merged_switch(metadata_json: dict[str, Any], payload: EntityUpdateRequest) 
         ("switch_states", "states"),
         ("switch_state_labels", "state_labels"),
         ("switch_initial_state", "initial_state"),
+        ("switch_disabled_states", "disabled_states"),
         ("switch_transitions", "transitions"),
     ):
         if given(payload, field):

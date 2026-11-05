@@ -10,7 +10,10 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.api.routes.adventures.container_put import put_items_into_container
+from backend.api.routes.adventures.container_put import (
+    put_items_into_container,
+    run_container_items_removed_trigger,
+)
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
@@ -48,6 +51,8 @@ class TurnInteractionsManager:
         self.pending_pickup_trigger: dict[str, Any] | None = None
         self.pending_sequence_intro: dict[str, Any] | None = None
         self.pending_reaction_prompt: str | None = None
+        self.pending_container_remove_trigger: tuple[Any, list[dict[str, Any]]] | None = None
+        self.pending_switch_messages: list[Any] = []
 
     @property
     def db(self):
@@ -871,6 +876,12 @@ class TurnInteractionsManager:
 
         session_states = dict(self.state.entity_states or {})
         entry = dict(session_states.get(switch_entity.id) or {})
+        raw_disabled = entry.get("disabled_switch_states")
+        if not isinstance(raw_disabled, list):
+            raw_disabled = config.get("disabled_states") or []
+        disabled_states = {str(s).strip().upper() for s in raw_disabled if str(s).strip()}
+        if target_state in disabled_states:
+            return f"{state_label(config, target_state)} on {switch_entity.name} is currently disabled."
         configured_current = str(config.get("initial_state") or allowed_states[0]).strip().upper()
         current_state = str(entry.get("switch_state") or configured_current).strip().upper()
         if current_state == target_state:
@@ -898,13 +909,17 @@ class TurnInteractionsManager:
                     context=script_context,
                     switch_id=switch_entity.id,
                 )
-                await self.manager._apply_script_changeset(script_context.changeset)
+                self.pending_switch_messages = await self.manager._apply_script_changeset(
+                    script_context.changeset
+                )
                 return fail_msg or f"{switch_entity.name} does not move."
 
         entry["switch_state"] = target_state
         session_states[switch_entity.id] = entry
         self.state.entity_states = session_states
         flag_modified(self.state, "entity_states")
+        if switch_entity.id in script_context._entities:
+            script_context._entities[switch_entity.id]["switch_state"] = target_state
 
         SwitchService.execute_transition_triggers(
             runner=runner,
@@ -916,7 +931,9 @@ class TurnInteractionsManager:
         )
         # Script narration/system messages are persisted and shown as their own chat entries
         # by _apply_script_changeset; repeating them here would duplicate them.
-        await self.manager._apply_script_changeset(script_context.changeset)
+        self.pending_switch_messages = await self.manager._apply_script_changeset(
+            script_context.changeset
+        )
 
         narration = config.get("narration") if isinstance(config.get("narration"), dict) else {}
         state_change_notes = (
@@ -948,6 +965,8 @@ class TurnInteractionsManager:
         self.pending_sequence_intro: dict[str, Any] | None = None
         # Set when the command wants a Game Master reaction (e.g. items given to an NPC).
         self.pending_reaction_prompt: str | None = None
+        self.pending_container_remove_trigger = None
+        self.pending_switch_messages = []
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_payload = await self._build_map_payload()
@@ -1224,7 +1243,13 @@ class TurnInteractionsManager:
                                     inventory_idx,
                                     locked_items,
                                 )
-                                response = f"You take {len(unlocked_items)} item(s) from {container_name}."
+                                self.pending_container_remove_trigger = (
+                                    scene_container or inventory_container,
+                                    unlocked_items,
+                                )
+                                response = (
+                                    f"You take {len(unlocked_items)} item(s) from {container_name}."
+                                )
 
         if response.startswith("[TRIGGER_SAVE]"):
             # Written by process_turn before the final event, with a system message.
@@ -1300,6 +1325,10 @@ class TurnInteractionsManager:
                                     inventory_idx,
                                     locked_items,
                                 )
+                                self.pending_container_remove_trigger = (
+                                    scene_container or inventory_container,
+                                    unlocked_items,
+                                )
                                 response = f"You drop {len(unlocked_items)} item(s) from {container_name} into the scene."
 
         if response.startswith("[TRIGGER_EQUIP]"):
@@ -1374,6 +1403,20 @@ class TurnInteractionsManager:
         if response and not response.startswith("[TRIGGER_"):
             await self._save_chat_message("system", response)
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
+
+        if self.pending_switch_messages:
+            for sw_msg in self.pending_switch_messages:
+                role = str(getattr(sw_msg, "role", "system"))
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(sw_msg)})}\n\n"
+            self.pending_switch_messages = []
+
+        if self.pending_container_remove_trigger:
+            rem_container, rem_items = self.pending_container_remove_trigger
+            self.pending_container_remove_trigger = None
+            for role, content in await run_container_items_removed_trigger(
+                self, rem_container, rem_items
+            ):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
 
         # Check sequence progress deterministically
         adv = getattr(self.manager, "adventure", None)
@@ -1625,6 +1668,10 @@ class TurnInteractionsManager:
         remaining = [raw for idx, raw in enumerate(raw_items) if idx != match_idx]
         await self._set_container_inventory(
             scene_container, inventory_container, inventory_idx, remaining
+        )
+        self.pending_container_remove_trigger = (
+            scene_container or inventory_container,
+            [match_item],
         )
         return f"You take {match_item.get('name') or item_hint} from {container_name}."
 
