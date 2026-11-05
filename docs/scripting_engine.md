@@ -1223,6 +1223,9 @@ All scripts are managed directly in the **Scripts** tab:
 - Click **Check Syntax** to verify Python syntax, AST safety, and trigger parameters before saving.
 - Click **Create Script** or **Save Changes** to commit the script into the adventure manifest.
 
+### Function Outline
+The **Outline** button in the script editor toolbar opens a sidebar to the right of the code. It lists every function defined in the script (`def` and `async def`, including nested functions and class methods), and the badge on the button shows how many there are. Click an entry to move the cursor to that definition and scroll it into view. The entry at the cursor line is highlighted. You can filter the list, collapse the sidebar to a narrow rail, or close it.
+
 ### AI Optimize & AI Generate
 Every script and guard editor in the Adventure Editor has two AI buttons next to **Check Syntax**:
 - **AI Optimize** fixes errors and API misuse in the current code, simplifies it while keeping its behaviour, and replaces placeholder comments (`# TODO: give the player the key`) with working code.
