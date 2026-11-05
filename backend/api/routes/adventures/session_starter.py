@@ -247,6 +247,9 @@ def _run_init_scripts(
         clock=clock_view(SimpleNamespace(in_game_time=0, entity_states={}), adventure),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
+        active_sequence_id=str(first_seq.get("id") or "") if first_seq else None,
+        sequences=getattr(adventure, "sequences", None),
+        sequence_progression_mode=getattr(adventure, "sequence_progression_mode", "linear"),
     )
     runner = runner_for_manifest(
         getattr(adventure, "original_manifest", None),
@@ -270,7 +273,7 @@ def _run_init_scripts(
         entity_states["__switch_story_flags__"] = dict(changes.story_flag_updates)
     _persist_init_entity_updates(entity_states, changes)
     store_pending_dialog(entity_states, changes.pending_dialog)
-    store_gm_directions(entity_states, changes.gm_directions)
+    store_gm_directions(entity_states, changes.gm_directions, changes.after_narration)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):

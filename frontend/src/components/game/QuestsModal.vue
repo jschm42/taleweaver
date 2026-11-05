@@ -53,7 +53,7 @@
       <div class="quests-body tw-dialog-scroll">
         <template v-if="activeTab === 'quests'">
           <div class="quests-section" v-if="activeSequence">
-            <h3><span class="section-icon">📜</span> Current Chapter</h3>
+            <h3><span class="section-icon">📜</span> {{ activeSequence?.progression_mode === 'dynamic' ? 'Current Sequence' : 'Current Chapter' }}</h3>
             <div class="quest-card tw-card open">
               <div class="quest-info">
                 <div class="quest-header">

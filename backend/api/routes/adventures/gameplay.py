@@ -13,13 +13,14 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.chat_history import MAX_PAGE_SIZE, visited_sequence_titles
 from backend.api.routes.adventures.chat_snapshot import (
     apply_pending_sequence_progress,
     build_awards_for_snapshot,
     build_session_map,
-    load_chat_history,
     load_entity_names,
     load_full_world_debug,
+    load_snapshot_history,
     resolve_prompt_suggestions,
 )
 from backend.api.routes.adventures.dialog_routes import ensure_no_pending_dialog
@@ -150,10 +151,11 @@ async def get_session_debug(
 async def get_chat_history(
     game_id: str,
     include_full_world: bool = Query(False),
+    message_limit: Optional[int] = Query(None, ge=1, le=MAX_PAGE_SIZE),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieves full chat history and current UI state for a game session."""
+    """Retrieves the chat history (all, or the newest `message_limit` messages) and UI state."""
     state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -171,12 +173,14 @@ async def get_chat_history(
     pending_terminal_epilogue, input_locked = _terminal_flags_from_state(state)
     full_world_debug = await load_full_world_debug(db, state, include_full_world)
     prompt_suggestions = await resolve_prompt_suggestions(db, state, current_user)
-    history = await load_chat_history(db, state.session_id)
+    history = await load_snapshot_history(db, state.session_id, message_limit)
     session_status = state.session.status if state.session else None
     await mark_session_played(db, state.session_id)
 
     return ChatResponse(
-        messages=history,
+        messages=history.messages,
+        has_more_messages=history.has_more,
+        sequence_titles=await visited_sequence_titles(db, state.session_id, adventure),
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
         combat=AdventureLogic.get_combat_snapshot(state),
         map_data=map_dict,

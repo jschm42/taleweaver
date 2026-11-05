@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 
 TERMINAL_STATUSES = frozenset({"completed", "game_over"})
-FINAL_SEQUENCE_NOTE = "Congratulations! You have completed the final sequence."
 
 # (guard field, condition field, resulting session status, fallback note); loss is checked first.
 _END_GUARDS = (
@@ -83,7 +82,7 @@ async def _advance_sequences(manager: GameTurnManager, script_context: Any) -> l
 
 
 def _ending(manager: GameTurnManager, script_context: Any) -> Optional[tuple[str, str]]:
-    """(status, note) when a win/loss guard holds or the final sequence completed."""
+    """(status, note) when a win/loss guard holds."""
     for guard_field, condition_field, status, fallback in _END_GUARDS:
         guard = _field(manager, guard_field)
         if not guard:
@@ -93,8 +92,6 @@ def _ending(manager: GameTurnManager, script_context: Any) -> Optional[tuple[str
         )
         if met:
             return status, _field(manager, condition_field) or fallback
-    if getattr(manager.state, "is_completed", False) is True:
-        return "completed", FINAL_SEQUENCE_NOTE
     return None
 
 

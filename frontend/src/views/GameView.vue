@@ -266,6 +266,9 @@ const {
   cancelTurnError,
   isLegacyFormat,
   language,
+  hasOlderMessages,
+  sequenceTitles,
+  loadOlderMessages,
 } = useGameSocket()
 const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
@@ -1882,6 +1885,10 @@ usePlayAgentAutoLoop()
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
+      :has-older-messages="hasOlderMessages"
+      :load-older-messages="loadOlderMessages"
+      :scene-nodes="nodes"
+      :sequence-titles="sequenceTitles"
       :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"

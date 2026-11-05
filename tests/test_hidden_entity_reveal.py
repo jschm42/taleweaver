@@ -1,9 +1,9 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rules.rule_engine import GameEvent, WorldEntityUpdate
+from backend.engine.rules.rule_engine import GameEvent
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -211,7 +211,7 @@ async def test_hidden_entity_revealed_via_llm_fallback():
             patch("backend.core.llm_router.GameMasterLLM.__init__", return_value=None),
             patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_aexecute,
         ):
-            mock_aexecute.return_value = {"discovered": True}
+            mock_aexecute.return_value = {"discovered_ids": ["LOOSE_BATTERIES"]}
             await logic._enforce_hidden_entity_reveal(event, "suche batterien")
 
         assert event.updated_entities is not None
@@ -219,3 +219,91 @@ async def test_hidden_entity_revealed_via_llm_fallback():
             up.entity_id == "LOOSE_BATTERIES" and up.is_hidden is False
             for up in event.updated_entities
         )
+
+
+async def _two_hidden_items(db, suffix: str) -> GameTurnManager:
+    user = User(id=f"u-batch-{suffix}", username=f"batch{suffix}", hashed_password="x")
+    db.add(user)
+    await db.flush()
+    adv = Adventure(id=f"adv-batch-{suffix}", title="Batch", owner_id=user.id, origin_id="ROOM")
+    db.add(adv)
+    await db.flush()
+    state = SessionState(
+        session_id=f"s-batch-{suffix}",
+        adventure_id=adv.id,
+        user_id=user.id,
+        current_scene_id="ROOM",
+        entity_states={},
+    )
+    avatar = Avatar(id=f"av-batch-{suffix}", user_id=user.id, template_id=adv.id, name="Hero")
+    db.add_all([state, avatar])
+    for item_id in ("KEY", "COIN"):
+        db.add(
+            WorldEntity(
+                id=item_id,
+                session_id=state.session_id,
+                template_id=adv.id,
+                name=item_id.title(),
+                description="Hidden.",
+                entity_type="OBJECT",
+                item_type="PICKABLE",
+                current_scene_id="ROOM",
+                is_hidden=True,
+            )
+        )
+    await db.commit()
+    logic = GameTurnManager(db=db, game_id=state.session_id, user=user)
+    logic.state, logic.adventure, logic.avatar = state, adv, avatar
+    return logic
+
+
+@pytest.mark.asyncio
+async def test_all_hidden_entities_are_checked_in_one_call():
+    async with TestSessionLocal() as db:
+        logic = await _two_hidden_items(db, "one-call")
+        event = GameEvent()
+
+        with (
+            patch("backend.core.llm_router.GameMasterLLM.__init__", return_value=None),
+            patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_llm,
+        ):
+            mock_llm.return_value = {"discovered_ids": ["COIN", "NOT_IN_SCENE"]}
+            messages = await logic._enforce_hidden_entity_reveal(event, "search the floor")
+
+        assert mock_llm.call_count == 1
+        prompt = mock_llm.call_args.kwargs["user_prompt"]
+        assert "ID: KEY" in prompt and "ID: COIN" in prompt
+        assert messages == ["Revealed Coin"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("movement", ["new_scene", "moved", "arrival"])
+async def test_movement_turns_skip_the_discovery_call(movement):
+    async with TestSessionLocal() as db:
+        logic = await _two_hidden_items(db, movement)
+        event = GameEvent(new_scene_id="HALL" if movement == "new_scene" else None)
+        logic.arrival_narration = movement == "arrival"
+
+        with (
+            patch("backend.core.llm_router.GameMasterLLM.__init__", return_value=None),
+            patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_llm,
+        ):
+            messages = await logic._enforce_hidden_entity_reveal(
+                event, "go through the door", "You step in.", moved=movement == "moved"
+            )
+
+        assert mock_llm.call_count == 0
+        assert messages == []
+
+
+@pytest.mark.asyncio
+async def test_movement_turn_keeps_deterministic_reveals():
+    async with TestSessionLocal() as db:
+        logic = await _two_hidden_items(db, "deterministic")
+        event = GameEvent(new_scene_id="HALL", discovered_entity_ids=["KEY"])
+
+        with patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_llm:
+            messages = await logic._enforce_hidden_entity_reveal(event, "grab the key and leave")
+
+        assert mock_llm.call_count == 0
+        assert messages == ["Revealed Key"]

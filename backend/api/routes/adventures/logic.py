@@ -254,10 +254,19 @@ class AdventureLogic:
         return await resolve_initial_scene_id(db, template_id)
 
     @staticmethod
+    def session_owner_id(state: SessionState) -> Optional[str]:
+        """Owner of a session: the game session's user (never null), else the state's user."""
+        session = state.session
+        return (session.user_id if session else None) or state.user_id
+
+    @staticmethod
     async def resolve_session_state(
         db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None
     ) -> Optional[SessionState]:
-        """Resolve a session state by session id first, then by template/adventure id."""
+        """Resolve a session state by session id first, then by template/adventure id.
+
+        With ``user_id``, only that user's session is returned (None for anyone else's).
+        """
         direct_res = await db.execute(
             select(SessionState)
             .options(selectinload(SessionState.session))
@@ -265,6 +274,8 @@ class AdventureLogic:
         )
         direct_state = direct_res.scalars().first()
         if direct_state:
+            if user_id and AdventureLogic.session_owner_id(direct_state) != user_id:
+                return None
             return direct_state
 
         session_candidate = None
@@ -379,13 +390,20 @@ class AdventureLogic:
         sequences = adventure.sequences
         if not isinstance(sequences, list) or len(sequences) == 0:
             return None
+        mode = getattr(adventure, "sequence_progression_mode", "linear")
         active_seq_id = getattr(state, "active_sequence_id", None)
         if active_seq_id:
             for s in sequences:
                 if isinstance(s, dict) and s.get("id") == active_seq_id:
-                    return s
+                    res = dict(s)
+                    res["progression_mode"] = mode
+                    return res
+        if mode == "dynamic":
+            return None
         if isinstance(sequences[0], dict):
-            return sequences[0]
+            res = dict(sequences[0])
+            res["progression_mode"] = mode
+            return res
         return None
 
     @staticmethod

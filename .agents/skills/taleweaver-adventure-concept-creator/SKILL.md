@@ -41,7 +41,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 
 | Block | Most useful keys |
 | :--- | :--- |
-| `[World]` | `language`, `image_style`/`style`, `tone`, `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script` |
+| `[World]` | `language`, `image_style`/`style`, `tone`, `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script`, `progression` (`linear` default / `dynamic` for hubs: sequences start via `activation` or `tw.sequences.start`) |
 | `[Protagonist] Name` | `role`, `goal`, `hp`, `str`…`ac`, `inventory`, `weapon`, `armor` |
 | `[Scene: ID] Name` | `decor`, `on_enter`, `on_enter_text`, `on_leave`, `helpers` (only `def`s and constants; callable from every script, e.g. the scene's dialog handlers) |
 | `[Exit: A -> B] label` (name the passage, e.g. `an old rusty gate`, never the way like `To the lab`; without one the AI writes it) | `code`, `key_item`, `rule`, `guard`, `revealed` (target known from the start), `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |
@@ -49,7 +49,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `locked` (take-locked on regular items: visible/inspectable in scene or container, cannot be taken until unlocked), `code`, `unlock_item`, `unlock_guard`, `contains`, `min_items`, `max_items`, `reveals`, `bonus` (`str+2`), `damage`, `cost`, weapons: `category` (melee/ranged/magic), `hit` (`str`), `hit_effects` (`target sta -1d4, self hp +2`), `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read`, `on_items_added`, `on_items_removed` |
 | `[Recipe: ID] Name` | `combine` (`A + B`), `results` (crafted item IDs), `keep` (ingredients not consumed), `craft_guard`, `on_craft`, `on_craft_fail_text` |
 | `[Switch: ID] Name` / `[ContainerSwitch: ID] Name` | `states` (IDs ≤15 chars, `A-Z 0-9 _ -`; optional in-game text ≤20 chars: `OFF=Dark, ON=Lights on`), `initial`, `disabled_states`, `status_text`, `transition: A -> B \| item: X \| code: 1 \| guard: … \| fail: … \| script: …`, `outcome: B -> flag: KEY; unlock_container: ID; unlock_item: ID`, `on_success` / `on_fail` (or `on_success_script` / `on_failure_script`), `portable: yes` (carried switch, e.g. a remote). `[ContainerSwitch: ID]` combines container (`contains`, `min_items`, `max_items`, `on_items_added`, `on_items_removed`, locks) and switch states in one appliance (microwave, dispenser, fuse box). |
-| `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `on_start`, `on_end`, `helpers` (only `def`s and constants, e.g. the chapter's dialog handlers; callable from every script) |
+| `[Sequence: N] Title` | `goal_item`, `goal_scene`, `defeat`, `guard`, `end`, `xp`, `activation` (scene ID that starts the sequence on entry), `on_start`, `on_end`, `helpers` (only `def`s and constants, e.g. the chapter's dialog handlers; callable from every script) |
 | `[Rule: ID] condition` | `guard`, `script`, `text`, `max` |
 | `[Script: ID] Name` | `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, …), `target`, `code` |
 | `[Sidequest: ID] Title` | `goal`, `goal_item`, `guard`, `xp` |

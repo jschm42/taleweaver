@@ -1999,6 +1999,22 @@ async function handleUpdateSequences(newSequences: any[]) {
   }
 }
 
+async function handleUpdateProgressionMode(mode: 'linear' | 'dynamic') {
+  isSaving.value = true
+  try {
+    const updated = await adventureService.updateAdventure(props.adventureId, { sequence_progression_mode: mode } as any)
+    if (updated) {
+      adventure.value = updated
+    }
+    await fetchAdventure()
+    addNotification(`Progression mode set to ${mode}.`, 'success')
+  } catch (error: any) {
+    addNotification(error instanceof Error ? error.message : 'Failed to update progression mode', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 async function handleUpdateQuests(newQuests: any[]) {
   isSaving.value = true
   try {
@@ -2903,6 +2919,7 @@ watch(
                 :editor-npcs="editorNpcs"
                 :is-saving="isSaving"
                 @update-sequences="handleUpdateSequences"
+                @update-progression-mode="handleUpdateProgressionMode"
                 @notify="addNotification"
               />
             </div>

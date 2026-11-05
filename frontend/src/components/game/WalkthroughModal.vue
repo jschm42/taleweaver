@@ -148,20 +148,20 @@ function fixNewlines(text: string | null | undefined): string {
 
             <div v-else-if="data?.can_reveal" class="tw-card p-4 border-l-4 !border-l-[var(--tw-accent)]">
               <p class="text-sm mb-3">
-                The walkthrough for the current chapter<span v-if="data?.current_chapter_title"> ({{ data.current_chapter_title }})</span>
-                is sealed. Each chapter is unlocked separately, and only the chapter you are in can be unlocked.
+                The walkthrough for the current {{ data?.progression_mode === 'dynamic' ? 'sequence' : 'chapter' }}<span v-if="data?.current_chapter_title"> ({{ data.current_chapter_title }})</span>
+                is sealed. Each {{ data?.progression_mode === 'dynamic' ? 'sequence' : 'chapter' }} is unlocked separately, and only the {{ data?.progression_mode === 'dynamic' ? 'sequence' : 'chapter' }} you are in can be unlocked.
               </p>
               <button type="button" class="tw-dialog-button" @click="emit('reveal')">
-                Unlock Current Chapter ({{ data?.reveal_cost ?? 150 }} XP)
+                Unlock Current {{ data?.progression_mode === 'dynamic' ? 'Sequence' : 'Chapter' }} ({{ data?.reveal_cost ?? 150 }} XP)
               </button>
             </div>
 
             <div v-if="data?.available" class="space-y-3">
-              <p v-if="data?.steps?.length" class="tw-dialog-eyebrow text-sm">Unlocked Chapters</p>
+              <p v-if="data?.steps?.length" class="tw-dialog-eyebrow text-sm">{{ data?.progression_mode === 'dynamic' ? 'Unlocked Sequences' : 'Unlocked Chapters' }}</p>
 
               <ol v-if="data?.steps && data.steps.length > 0" class="space-y-2">
                 <li v-for="(step, index) in data.steps" :key="index" class="tw-card p-3">
-                  <p class="tw-muted text-xxs uppercase tracking-widest font-black">Chapter {{ step.chapter ?? index + 1 }}</p>
+                  <p class="tw-muted text-xxs uppercase tracking-widest font-black">{{ data?.progression_mode === 'dynamic' ? 'Sequence' : `Chapter ${step.chapter ?? index + 1}` }}</p>
                   <p v-if="step.title" class="text-sm font-bold mt-1">{{ step.title }}</p>
                   <p class="text-sm mt-1 leading-relaxed whitespace-pre-wrap">
                     <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">

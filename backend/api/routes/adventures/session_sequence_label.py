@@ -31,5 +31,12 @@ def active_sequence_title(template: Any, state: Optional[SessionState]) -> Optio
     if not sequences:
         return None
     active_id = state.active_sequence_id
-    active = next((s for s in sequences if s.get("id") == active_id), sequences[0])
+    mode = getattr(template, "sequence_progression_mode", "linear")
+    if not active_id and mode == "dynamic":
+        return None
+    active = next((s for s in sequences if s.get("id") == active_id), None)
+    if not active:
+        if mode == "dynamic":
+            return None
+        active = sequences[0]
     return active.get("title") or active.get("id")

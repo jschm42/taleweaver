@@ -26,6 +26,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     original_prompt: Optional[str] = None
     intro_text: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = "linear"
     generate_scene_images: bool = False
     generate_npc_images: bool = False
     generate_item_images: bool = False
@@ -313,6 +314,7 @@ class AdventureTemplateResponse(BaseModel):
     origin_id: Optional[str] = None
 
     rule_enforcement_mode: str
+    sequence_progression_mode: str = "linear"
     strict_rules: bool = True
     time_per_turn: int
     pacing_minutes: int
@@ -496,6 +498,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     engine_outdated: bool = False
     can_start: bool = True
     rule_enforcement_mode: Optional[str] = "rpg"
+    sequence_progression_mode: Optional[str] = "linear"
     selected_image_styles: Optional[list[dict[str, Any]]] = None
 
     @field_validator("selected_tone", mode="before")
@@ -561,6 +564,10 @@ class TranslateTextResponse(BaseModel):
 
 class ChatResponse(BaseModel):
     messages: list[dict[str, Any]]
+    # True when `message_limit` cut off older messages (GET /{game_id}/chat/history loads them).
+    has_more_messages: bool = False
+    # Sequence id -> title of the chapters the chat reached (chapter dividers in the story feed).
+    sequence_titles: dict[str, str] = Field(default_factory=dict)
     sheet: dict[str, Any]
     combat: Optional[dict[str, Any]] = None
     map_data: Optional[dict[str, Any]] = None
@@ -574,7 +581,7 @@ class ChatResponse(BaseModel):
     quests: Optional[list[dict[str, Any]]] = None
     awards: Optional[list[dict[str, Any]]] = None
     active_sequence: Optional[dict[str, Any]] = None
-    # Current scene/sequence: the client groups the story into one page per scene/sequence.
+    # Current scene/sequence: the story feed marks scene/chapter changes with a divider.
     scene_id: Optional[str] = None
     sequence_id: Optional[str] = None
     is_completed: bool = False
@@ -657,6 +664,7 @@ class AdventureTemplateUpdate(BaseModel):
     intro_text: Optional[str] = None
     original_prompt: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None

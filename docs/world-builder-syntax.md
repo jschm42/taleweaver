@@ -40,7 +40,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
@@ -133,8 +133,23 @@ A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game and 
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
 The free text becomes the chapter's description and walkthrough.
+
+**Sequence progression** is set with `progression:` in `[World]`:
+- `linear` (default): completing a sequence starts the next one by number.
+- `dynamic`: for hubs and open investigations. Completing a sequence only ends it; the next one starts when the protagonist enters its `activation` scene or when a script calls `tw.sequences.start('SEQ_ID')`. Give every sequence after the first an `activation` scene or a starting script.
+
+In both modes, finishing the last sequence does not win the adventure; use `win` / `win_guard` or `tw.game.win()`.
+
+```text
+[World]
+progression: dynamic
+
+[Sequence: 1] The Archive
+activation: ARCHIVE
+goal_item: LEDGER
+```
 Legacy keys still work: `Required Item:`, `Required Scene:`, `Defeat NPC:`, `End Condition:`.
 
 Nested blocks (indent them for readability; they always belong to the **latest** sequence):

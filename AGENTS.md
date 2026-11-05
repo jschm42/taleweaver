@@ -38,6 +38,19 @@ Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customi
    - In the final summary, list the docs that were updated, or state explicitly that none were affected.
    - **Scripting API & Editor Autocomplete Sync**: When scripting functions, methods, proxy properties or namespaces are added, modified or documented in `backend/engine/scripting/` or `docs/scripting_engine.md`, update both `docs/scripting_engine.md` and the frontend Script Editor autocomplete registry (`frontend/src/utils/twScriptApiDefinitions.ts`) in the same task to keep editor IntelliSense in sync.
 
+5. **Engine Change Propagation (Mandatory)**:
+   - A change to the engine (item types, entity or manifest fields, triggers/hooks, container/switch mechanics, sequence or progression logic, scripting API) is **not finished** until every place that generates, imports, validates or documents that feature is updated in the same task. Engine support alone is useless if the World-Builder cannot generate it.
+   - **Find the consumers**: grep for an existing sibling of the feature (e.g. `on_items_added` when adding a container hook, `SWITCH` when adding an item type). Every hit outside the engine is a candidate that must be checked.
+   - Work through this checklist and report each item in the final summary as *updated* or *not affected*:
+     1. **World generation (LLM)**: the schemas in `backend/engine/world/` (`world_schemas.py`, `world_object_schema.py`, `switch_schemas.py`). They use `extra="forbid"`, so every field the manifest applier reads must exist there, or generation fails or loses the data. Also the prompts: `backend/core/prompts.py` (`WORLD_GENERATION_SYSTEM_PROMPT`), `backend/engine/world/world_scripting_prompt.py` (trigger catalogue, `TW_API_REFERENCE`, examples) and `backend/engine/world/world_prompt_builder.py`.
+     2. **Blueprint / Story Idea**: `backend/engine/blueprint/` (`field_specs.py` keys, `parser.py` kind aliases and implied types, `converters.py`, `prompt.py`).
+     3. **Manifest import/export**: `backend/engine/manifest_apply/` and `backend/engine/adventures/adventure_exporter.py`. An export/import round trip must keep the field.
+     4. **Editor World-Builder / AI fix**: `backend/core/world_builder_prompts.py`, `backend/core/validators_prompts.py` (`FIX_PATCH_FIELD_RULES`) and `backend/api/routes/adventures/editing/ai_fix_*.py` (field allowlists such as `OBJECT_SCRIPT_FIELDS`).
+     5. **Validators**: `backend/core/world_validation/` and `backend/core/script_validator.py` (every new `*_script` field must be syntax-checked).
+     6. **Docs and skills**: `docs/world-builder-syntax.md`, `docs/world-builder-blueprint-manual.md`, `docs/scripting_engine.md` and the affected `.agents/skills/*/SKILL.md` (especially `taleweaver-adventure-concept-creator` and `taleweaver-adventure-editor`). Then rebuild the bundled skill docs with `poetry run python scripts/bundle_skill.py` and confirm `poetry run python scripts/bundle_skill.py --check` passes.
+     7. **Editor autocomplete**: `frontend/src/utils/twScriptApiDefinitions.ts` for scripting API changes (see rule 4).
+     8. **Tests**: add a test that the feature survives the whole path (generation schema → manifest applier, and blueprint key → parsed field), then run `tests/test_world_*.py`, `tests/test_world_builder_*.py` and the tests of the touched engine area.
+
 ---
 
 ## 1. Workspace Rules (`.agents/rules/`)

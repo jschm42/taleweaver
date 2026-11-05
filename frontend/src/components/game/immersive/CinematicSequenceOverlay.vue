@@ -2,17 +2,27 @@
 /**
  * CinematicSequenceOverlay — Movie-style Sequence / Chapter intro banner
  *
- * Displays an atmospheric, cinematic title overlay across the story chat
- * when entering a new sequence/chapter, with gentle fade in and out.
+ * Displays an atmospheric, cinematic title band across the middle of the screen
+ * when entering a new sequence/chapter. The band is translucent so the game stays
+ * visible, while its dense, blurred center keeps the text readable.
  * Colors and fonts follow the active dialog skin (--tw-overlay-* tokens).
  */
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { formatEntityRefs } from '@/utils/entityRefs'
 
 const props = defineProps<{
   activeSequence?: any | null
   adventureTitle?: string | null
+  progressionMode?: string | null
 }>()
+
+const isDynamic = computed(() => {
+  return (
+    props.progressionMode === 'dynamic' ||
+    props.activeSequence?.progression_mode === 'dynamic' ||
+    displayedSequence.value?.progression_mode === 'dynamic'
+  )
+})
 
 const isVisible = ref(false)
 const displayedSequence = ref<any | null>(null)
@@ -79,55 +89,58 @@ onBeforeUnmount(() => {
   <Transition name="cinematic-fade">
     <div
       v-if="isVisible && displayedSequence"
-      class="tw-overlay tw-overlay--translucent fixed inset-0 z-[70] flex flex-col items-center justify-center p-6 select-none backdrop-blur-md cursor-pointer overflow-hidden"
-      @click="dismiss"
+      class="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none select-none"
     >
-      <!-- Cinematic Vignette / Letterbox Lighting -->
-      <div class="tw-overlay-veil absolute inset-0 pointer-events-none"></div>
-      <div class="tw-overlay-wash absolute inset-0 pointer-events-none opacity-60"></div>
-      <div class="tw-overlay-texture absolute inset-0 pointer-events-none"></div>
+      <!-- Translucent band: the game stays visible around it, the band keeps the text readable -->
+      <div
+        class="tw-overlay-band relative w-full flex flex-col items-center justify-center py-8 sm:py-10 px-4 pointer-events-auto cursor-pointer overflow-hidden"
+        @click="dismiss"
+      >
+        <div class="tw-overlay-wash absolute inset-0 pointer-events-none opacity-50"></div>
+        <div class="tw-overlay-texture absolute inset-0 pointer-events-none"></div>
 
-      <!-- Glowing Ambient Orb behind title -->
-      <div class="tw-overlay-glow absolute w-96 h-96 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+        <!-- Glowing Ambient Orb behind title -->
+        <div class="tw-overlay-glow absolute w-72 h-72 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
 
-      <div class="relative z-10 flex flex-col items-center text-center max-w-2xl px-6">
-        <!-- Sequence Chapter Eyebrow -->
-        <div class="flex items-center gap-3 mb-3">
-          <div class="tw-overlay-rule w-8 sm:w-16 h-[1px]"></div>
-          <span class="tw-overlay-eyebrow text-[11px] sm:text-xs font-bold tracking-[0.35em] uppercase">
-            <template v-if="displayedSequence.order">
-              Chapter {{ displayedSequence.order }}
-            </template>
-            <template v-else>
-              Sequence
-            </template>
+        <div class="relative z-10 flex flex-col items-center text-center max-w-2xl px-2 sm:px-6">
+          <!-- Sequence Chapter Eyebrow -->
+          <div class="flex items-center gap-3 mb-3">
+            <div class="tw-overlay-rule w-8 sm:w-16 h-[1px]"></div>
+            <span class="tw-overlay-eyebrow text-[11px] sm:text-xs font-bold tracking-[0.35em] uppercase">
+              <template v-if="!isDynamic && displayedSequence.order">
+                Chapter {{ displayedSequence.order }}
+              </template>
+              <template v-else>
+                Sequence
+              </template>
+            </span>
+            <div class="tw-overlay-rule w-8 sm:w-16 h-[1px]"></div>
+          </div>
+
+          <!-- Grand Cinematic Sequence Title -->
+          <h1 class="tw-overlay-title tw-overlay-title--chapter text-2xl sm:text-4xl md:text-5xl font-black leading-tight cinema-title">
+            {{ displayedSequence.title || displayedSequence.id }}
+          </h1>
+
+          <!-- Ornate Center Accent Divider -->
+          <div class="flex items-center justify-center gap-2 my-3 sm:my-4 w-full">
+            <div class="tw-overlay-rule w-16 sm:w-28 h-[1px]"></div>
+            <div class="tw-overlay-diamond w-1.5 h-1.5 rotate-45"></div>
+            <div class="tw-overlay-rule w-16 sm:w-28 h-[1px]"></div>
+          </div>
+
+          <!-- Optional Description / Tagline -->
+          <p
+            v-if="displayedSequence.description"
+            class="tw-overlay-muted text-xs sm:text-sm font-serif italic max-w-md sm:max-w-lg leading-relaxed text-center drop-shadow px-2"
+            v-html="formatEntityRefs(displayedSequence.description)"
+          ></p>
+
+          <!-- Subtle Skip Hint -->
+          <span class="tw-overlay-muted text-[9px] uppercase tracking-[0.25em] font-semibold mt-6 opacity-70 transition-opacity hover:opacity-100">
+            Click to continue
           </span>
-          <div class="tw-overlay-rule w-8 sm:w-16 h-[1px]"></div>
         </div>
-
-        <!-- Grand Cinematic Sequence Title -->
-        <h1 class="tw-overlay-title tw-overlay-title--chapter text-2xl sm:text-4xl md:text-5xl font-black leading-tight cinema-title">
-          {{ displayedSequence.title || displayedSequence.id }}
-        </h1>
-
-        <!-- Ornate Center Accent Divider -->
-        <div class="flex items-center justify-center gap-2 my-3 sm:my-4 w-full">
-          <div class="tw-overlay-rule w-16 sm:w-28 h-[1px]"></div>
-          <div class="tw-overlay-diamond w-1.5 h-1.5 rotate-45"></div>
-          <div class="tw-overlay-rule w-16 sm:w-28 h-[1px]"></div>
-        </div>
-
-        <!-- Optional Description / Tagline -->
-        <p
-          v-if="displayedSequence.description"
-          class="tw-overlay-muted text-xs sm:text-sm font-serif italic max-w-md sm:max-w-lg leading-relaxed text-center drop-shadow px-2"
-          v-html="formatEntityRefs(displayedSequence.description)"
-        ></p>
-
-        <!-- Subtle Skip Hint -->
-        <span class="tw-overlay-muted text-[9px] uppercase tracking-[0.25em] font-semibold mt-6 opacity-60 transition-opacity hover:opacity-100">
-          Click anywhere to continue
-        </span>
       </div>
     </div>
   </Transition>

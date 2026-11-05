@@ -52,15 +52,23 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("on_equip", "the item is equipped (only WEAPON/WEARABLE items)"),
         ("on_unequip", "the item is unequipped (only WEAPON/WEARABLE items)"),
         ("on_read", "the readable item is inspected or read (only READABLE items)"),
-        ("on_unlock_success", "container is successfully unlocked (only CONTAINER items)"),
+        (
+            "on_unlock_success",
+            "container is successfully unlocked (only CONTAINER/CONTAINER_SWITCH items)",
+        ),
         (
             "on_unlock_failure",
-            "container unlock fails or is blocked by guard (only CONTAINER items)",
+            "container unlock fails or is blocked by guard (only CONTAINER/CONTAINER_SWITCH items)",
         ),
         (
             "on_items_added",
-            "the player puts items from the inventory into this container (only CONTAINER items; "
-            "`added_items` and `added_item_ids` are in scope)",
+            "the player puts items from the inventory into this container (only CONTAINER/"
+            "CONTAINER_SWITCH items; `added_items` and `added_item_ids` are in scope)",
+        ),
+        (
+            "on_items_removed",
+            "the player takes or drops items out of this container (only CONTAINER/"
+            "CONTAINER_SWITCH items; `removed_items` and `removed_item_ids` are in scope)",
         ),
         ("on_craft_success", "the recipe is crafted (only CONSTRUCTABLE recipes)"),
         (
@@ -123,8 +131,9 @@ TW_API_REFERENCE = (
     "attack(npc_id) (an NPC in the current scene starts turn-based combat after the turn), "
     "consume(npc_id, item_id) (the NPC uses a CONSUMABLE it carries: the item is destroyed and its "
     "HP/Mana/Stamina effects apply to the NPC; None if it lacks the item), "
-    "say_directed(npc_id, direction) (the GM words the NPC's line in the next narration, e.g. "
-    "say_directed('BRAM', 'sings a sailor song'))\n"
+    "say_directed(npc_id, direction, after=None, after_args=None) (the GM words the NPC's line in "
+    "the next narration, e.g. say_directed('BRAM', 'sings a sailor song'); after='fn' runs that "
+    "init_script function with after_args as keyword arguments once that narration is done)\n"
     "- tw.npcs persona (changes how the GM plays the NPC from then on, this session only): "
     "set_character(npc_id, text), set_goal(npc_id, text), add_trait(npc_id, trait), remove_trait(npc_id, trait)\n"
     "- tw.npcs combat allies: set_combat_group(npc_id, group) (NPCs sharing a group fight together; "
@@ -141,8 +150,12 @@ TW_API_REFERENCE = (
     "combat_group, assist_mode, set_combat_group(group), set_assist_mode(mode), clone(scene_id=None, hidden=None); "
     "objects also state, switch_state, flip(), toggle(); NPCs and containers also items, item_ids, "
     "contains(item_id), put_item(item_id), take_item(item_id, to='player'|NPC id|container id); "
+    "containers (CONTAINER/CONTAINER_SWITCH) also min_items, max_items, is_full, has_min_items; "
     "objects also clone(scene_id=None, hidden=None), destroy(), is_destroyed, hide(), reveal(), "
-    "location(), move_to(target), give_to_player(), put_into(container_id)\n"
+    "location(), move_to(target), give_to_player(), put_into(container_id), lock(), unlock(), is_locked\n"
+    "- tw.objects.lock(item_id) / unlock(item_id) / is_locked(item_id): a locked CONTAINER or "
+    "CONTAINER_SWITCH cannot be opened; any other locked item is TAKE-LOCKED (visible, cannot be "
+    "picked up until unlocked; moving it to the player by script unlocks it)\n"
     "- item operations on tw.objects (every item has exactly one holder: player, NPC, container "
     "or scene; moves take it from the old holder): clone(item_id, scene_id=None, hidden=None) -> "
     "proxy of a new copy with id <ITEM>_<n> for this game only (e.g. a dispenser: "
@@ -153,12 +166,24 @@ TW_API_REFERENCE = (
     "add_to_player(item_id), remove_from_player(item_id), add_to_scene(item_id, scene_id=None), "
     "put_in_container(item_id, container_id), take_from_container(container_id, item_id, to='player')\n"
     "- tw.switches: get(id), get_state(id, default), set_state(id, new_state, apply_outcomes=True), "
-    "is_state(id, state), flip(id, apply_outcomes=True), toggle(id, apply_outcomes=True) | switch proxies from get() or tw.switch(id): id, state, switch_state, states, initial_state, flip(), toggle()\n"
+    "is_state(id, state), flip(id, apply_outcomes=True), toggle(id, apply_outcomes=True), "
+    "enable_state(id, *states), disable_state(id, *states) (disabled states show a lock and cannot be "
+    "clicked), is_state_enabled(id, state), is_state_disabled(id, state), disabled_states(id), "
+    "get_status_text(id), set_status_text(id, text), clear_status_text(id) (hint shown in the switch "
+    "panel) | switch proxies from get() or tw.switch(id): id, state, switch_state, states, "
+    "initial_state, flip(), toggle(), disabled_states, enable_state(*states), disable_state(*states), "
+    "set_state_enabled(state, enabled), is_state_enabled(state), status_text (read/write), "
+    "set_status_text(text), clear_status_text(). All of this also works on CONTAINER_SWITCH items.\n"
     "- tw.vars: get(key, default), set(key, value)  (persistent story flags)\n"
-    "- tw.story: narrate(text), narrate_raw(text), direct(text)  (soft hint for the GM's next narration), system_message(text), reject_action(reason)\n"
+    "- tw.story: narrate(text), narrate_raw(text), direct(text, after=None, after_args=None)  (soft hint for the GM's next narration; after='fn' runs that init_script function once it is done), system_message(text), reject_action(reason)\n"
     "- tw.memories.add(description, scope='global'|'local', emotion='positive'|'negative'|'neutral')\n"
     "- tw.quests: complete(quest_id), fail(quest_id), is_completed(quest_id)\n"
-    "- tw.awards.grant(award_key) | tw.sequences.advance() | tw.dice.d20()\n"
+    "- tw.awards.grant(award_key) | tw.dice.d20()\n"
+    "- tw.sequences (alias tw.sequence; only ONE sequence is active at a time): start(seq_id), "
+    "end(seq_id=None, advance=None) / complete(seq_id=None, advance=None) / complete_current(advance=None) "
+    "(advance defaults to True in 'linear' and False in 'dynamic' progression mode), advance(), clear(), "
+    "is_active(seq_id), is_completed(seq_id), get_active() -> dict|None, get_active_id(), all(), "
+    "progression_mode, active_id, tw.sequence.id, tw.sequence.title\n"
     "- tw.llm.ask(prompt, model='simple'|'advanced', system='') -> str: asks the LLM for a short "
     "text (max 3 calls per trigger, returns '' on failure, not usable in guards). Use sparingly for "
     "flavour text and always provide a fallback: tw.llm.ask(...) or 'fixed text'.\n"
@@ -167,7 +192,8 @@ TW_API_REFERENCE = (
     "{'question': 'str', 'options': {'type': 'list', 'items': 'str', 'min_len': 4, 'max_len': 4}, "
     "'correct_index': {'type': 'int', 'min': 0, 'max': 3}}). Returns None on error or invalid JSON.\n"
     "- tw.json: loads(text, schema=None, default=None), dumps(value) -> str, validate(data, schema) -> bool\n"
-    "- tw.game: time | win(reason), game_over(reason)\n"
+    "- tw.game (alias tw.session): time | win(reason) / game_won(reason), game_over(reason). "
+    "Completing the last sequence does NOT win the adventure; use completed_guard_expression or tw.game.win()\n"
     "- tw.time: now, day, hour, minute, format() | set(t), advance(t), rewind(t), pause(), resume(), "
     "set_minutes_per_tick(t), allow_gm_time(bool) | at(t, handler), after(t, handler), "
     "every(t, handler), cancel(timer_id). t is minutes or text like '2h 30m'; the clock advances "
@@ -268,6 +294,20 @@ _EXAMPLES = (
     "['A man', 'A dog', 'A ghost'], on_choice='on_sphinx_riddle', speaker='The Sphinx', "
     "narrate=True)\n"
     "   (init_script defines on_sphinx_riddle(answ) and unlocks the gate exit when answ == 0)\n"
+    "20. Microwave (CONTAINER_SWITCH, max_items=1, switch_states ['OFF','COOK'], "
+    "switch_disabled_states ['COOK'], switch_status_text 'Put something inside first.'):\n"
+    "   on_items_added_script:\n"
+    "   m = tw.switch('MICROWAVE')\\n"
+    "   m.enable_state('COOK')\\n"
+    "   m.clear_status_text()\n"
+    "   on_items_removed_script:\n"
+    "   m = tw.switch('MICROWAVE')\\n"
+    "   m.disable_state('COOK')\\n"
+    "   m.set_status_text('Put something inside first.')\n"
+    "21. Hub chapter (sequence_progression_mode='dynamic'; a scene's on_enter_scene_script):\n"
+    "   if not tw.sequences.is_completed('SEQ_ARCHIVE') and not tw.sequences.is_active('SEQ_ARCHIVE'):\\n"
+    "       tw.sequences.start('SEQ_ARCHIVE')\n"
+    "   (simpler: give SEQ_ARCHIVE activation_scene_id='ARCHIVE'; end it with tw.sequences.end())\n"
 )
 
 

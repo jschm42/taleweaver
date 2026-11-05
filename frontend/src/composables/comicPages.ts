@@ -4,6 +4,7 @@
  * A page covers one scene + sequence (chapter). It only changes when the player enters
  * another scene or the sequence advances — not for every player message. Each page holds
  * the exchanges (player action → events → narration → follow-up events) of that scene.
+ * The endless story feed shows all pages in one stream, with a divider between them.
  */
 import type { ChatMessage } from '@/types'
 
