@@ -834,13 +834,14 @@ Returns strict JSON; on parse failure the guard is silently skipped.
 
 HIDDEN_ENTITY_DISCOVERY_SYSTEM_PROMPT = (
     "You are a mechanics checker for an AI Text Adventure RPG.\n"
-    "Determine if the Game Master's narration or the player's message explicitly describes finding, discovering, or revealing a specific hidden entity.\n"
-    "You must respond with a JSON object containing a single boolean field: 'discovered'.\n"
-    "Guidelines:\n"
-    "1. If the narration describes the player finding the item, or the item being uncovered (even using synonyms or translated words), 'discovered' must be true.\n"
-    "2. If the player searches the exact hiding spot (e.g. they search the couch, and the entity is hidden in the couch cushions), 'discovered' must be true.\n"
-    "3. Otherwise, if the item remains hidden or unmentioned, 'discovered' must be false.\n"
-    '4. Respond with exactly the JSON structure: {"discovered": true} or {"discovered": false}.'
+    "You get a list of hidden entities, the player's message and (if available) the Game Master's narration. "
+    "Determine which of these hidden entities the message or narration explicitly finds, discovers, or reveals.\n"
+    "You must respond with a JSON object containing a single field 'discovered_ids': the list of IDs of the discovered entities.\n"
+    "Guidelines (check every entity on its own):\n"
+    "1. If the narration describes the player finding the entity, or the entity being uncovered (even using synonyms or translated words), it is discovered.\n"
+    "2. If the player searches the exact hiding spot (e.g. they search the couch, and the entity is hidden in the couch cushions), it is discovered.\n"
+    "3. Otherwise, if the entity remains hidden or unmentioned, it is not discovered.\n"
+    '4. Respond with exactly the JSON structure, e.g. {"discovered_ids": ["LOOSE_BATTERIES"]} or {"discovered_ids": []}.'
 )
 """Pass 1.5 hidden-entity reveal check (guardrails/reveals.py). Works in any language."""
 

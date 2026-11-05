@@ -221,11 +221,13 @@ function exchangeKey(exchange: Exchange): string | undefined {
 const feedItems = computed<FeedItem[]>(() => {
   const items: FeedItem[] = []
   const pages = activeSegment.value?.pages ?? []
+  // A chapter that starts on entering the scene needs no divider: the new page shows the cut.
+  let hasStory = false
   pages.forEach((page, pageIdx) => {
     const firstKey = page.exchanges[0] ? exchangeKey(page.exchanges[0]) : undefined
     // Within a scene only chapter changes are marked; the scene itself is the segment.
     const divider = dividerBefore(pages[pageIdx - 1], page, props.sceneNodes || {}, props.sequenceTitles || {})
-    if (divider?.chapter) {
+    if (divider?.chapter && hasStory) {
       items.push({ kind: 'divider', key: `divider-${firstKey ?? pageIdx}`, divider: { scene: null, chapter: divider.chapter } })
     }
     if (page.licenseMessage) {
@@ -233,6 +235,7 @@ const feedItems = computed<FeedItem[]>(() => {
     }
     page.exchanges.forEach((exchange, exIdx) => {
       items.push({ kind: 'exchange', key: exchangeKey(exchange) ?? `p${pageIdx}-e${exIdx}`, exchange })
+      hasStory = hasStory || Boolean(exchange.userMessage || exchange.assistantMessage)
     })
   })
   return items

@@ -64,12 +64,14 @@ def after_narration_callback(after: Any, after_args: Any) -> tuple[Optional[dict
 def queue_direction(changeset: Any, text: str, after: Any = None, after_args: Any = None) -> None:
     """Adds a direction (and its after-narration callback) to a script changeset.
 
+    The callback is queued even without a direction text (e.g. the NPC was not present), so the
+    state change it makes still happens after the next narration.
+
     An unusable callback is reported as a visible script error (like a missing dialog handler):
     otherwise the author's follow-up silently never happens.
     """
-    if not text:
-        return
-    changeset.gm_directions.append(text)
+    if text:
+        changeset.gm_directions.append(text)
     if after is None:
         return
     callback, problem = after_narration_callback(after, after_args)

@@ -72,3 +72,95 @@ def test_say_directed_caps_the_direction_length():
 
     # Assert
     assert len(ctx.changeset.gm_directions[0]) == MAX_DIRECTION_LENGTH
+
+
+def test_is_with_player_and_speech_silenced_outside_scene():
+    # Arrange
+    ctx = GameContext(
+        avatar_data={"name": "Alex"},
+        current_scene_id="ENTRY_HALL",
+        entities={
+            "CAT": {
+                "id": "CAT",
+                "name": "Schrödinger",
+                "entity_type": "NPC",
+                "current_scene_id": "TIME_MACHINE_LAB",
+            },
+            "VERA": {
+                "id": "VERA",
+                "name": "Vera",
+                "entity_type": "NPC",
+                "current_scene_id": "ENTRY_HALL",
+            },
+        },
+    )
+
+    # Act
+    _run(
+        ctx,
+        "tw.vars.set('cat_with_player', tw.npcs.get('CAT').is_with_player)\n"
+        "tw.vars.set('vera_with_player', tw.npcs.get('VERA').is_with_player)\n"
+        "tw.npcs.say('CAT', 'Miao!')\n"
+        "tw.npcs.say('VERA', 'Welcome.')\n"
+        "tw.npcs.say_directed('CAT', 'purrs on the coil')\n"
+        "tw.npcs.say_directed('VERA', 'sighs deeply')\n",
+    )
+
+    # Assert
+    assert ctx.changeset.var_updates["cat_with_player"] is False
+    assert ctx.changeset.var_updates["vera_with_player"] is True
+    # Cat's speech and direction are suppressed; Vera's are kept
+    assert ctx.changeset.narrative_messages == ['Vera: "Welcome."']
+    assert len(ctx.changeset.gm_directions) == 1
+    assert "Vera (VERA) speaks in this narration" in ctx.changeset.gm_directions[0]
+
+
+def test_speech_allowed_after_moving_to_player():
+    # Arrange
+    ctx = GameContext(
+        avatar_data={"name": "Alex"},
+        current_scene_id="ENTRY_HALL",
+        entities={
+            "CAT": {
+                "id": "CAT",
+                "name": "Schrödinger",
+                "entity_type": "NPC",
+                "current_scene_id": "TIME_MACHINE_LAB",
+            }
+        },
+    )
+
+    # Act
+    _run(
+        ctx,
+        "tw.npcs.get('CAT').move_to_player()\n"
+        "tw.vars.set('cat_with_player_after_move', tw.npcs.get('CAT').is_with_player)\n"
+        "tw.npcs.say('CAT', 'Miao!')\n",
+    )
+
+    # Assert
+    assert ctx.changeset.var_updates["cat_with_player_after_move"] is True
+    assert ctx.changeset.narrative_messages == ['Schrödinger: "Miao!"']
+
+
+def test_say_directed_callback_still_queued_when_npc_absent():
+    # Arrange
+    ctx = GameContext(
+        avatar_data={"name": "Alex"},
+        current_scene_id="ENTRY_HALL",
+        entities={
+            "CAT": {
+                "id": "CAT",
+                "name": "Schrödinger",
+                "entity_type": "NPC",
+                "current_scene_id": "TIME_MACHINE_LAB",
+            }
+        },
+    )
+
+    # Act: callback 'on_after' is queued, but direction text is dropped
+    _run(ctx, "tw.npcs.say_directed('CAT', 'purrs', after='on_after', after_args={'x': 1})")
+
+    # Assert
+    assert ctx.changeset.gm_directions == []
+    assert ctx.changeset.after_narration == [{"handler": "on_after", "args": {"x": 1}}]

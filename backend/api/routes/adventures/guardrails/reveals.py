@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.routes.adventures.guardrails.base import item_id_upper
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class DiscoveryCheckResponse(BaseModel):
-    discovered: bool
+    discovered_ids: list[str] = Field(default_factory=list)
 
 
 def _named(items, ent: WorldEntity) -> bool:
@@ -116,16 +116,21 @@ class RevealGuardMixin:
                 )
         return []
 
-    async def _llm_says_discovered(self, ent: WorldEntity, user_msg: str, narration: str) -> bool:
-        """Language-agnostic fallback: asks the small model whether the turn discovered the entity."""
+    async def _llm_discovered_ids(
+        self, candidates: list[WorldEntity], user_msg: str, narration: str
+    ) -> set[str]:
+        """Language-agnostic fallback: one small-model call for all candidates of the turn."""
+        listing = "\n".join(
+            f"- ID: {ent.id} | Name: {ent.name} | Hidden at / reveal rule: "
+            f"{ent.spatial_position or ''} {ent.reveal_rule or ''}".rstrip()
+            for ent in candidates
+        )
         try:
             llm, model = self._small_llm()
             res = await llm.aexecute_complex_task(
                 system_prompt=HIDDEN_ENTITY_DISCOVERY_SYSTEM_PROMPT,
                 user_prompt=(
-                    f"Hidden Entity ID: {ent.id}\n"
-                    f"Hidden Entity Name: {ent.name}\n"
-                    f"Entity Hidden At/Reveal Rule: {ent.spatial_position or ''} {ent.reveal_rule or ''}\n"
+                    f"Hidden entities:\n{listing}\n"
                     f'Player Message: "{user_msg}"\n'
                     f'Game Master Narration: "{narration}"'
                 ),
@@ -134,19 +139,18 @@ class RevealGuardMixin:
             )
         except Exception as exc:
             logger.error("Error checking hidden entity discovery with LLM: %s", exc)
-            return False
-        if isinstance(res, DiscoveryCheckResponse):
-            return res.discovered
-        return bool(res.get("discovered", False)) if isinstance(res, dict) else False
+            return set()
+        ids = res.discovered_ids if isinstance(res, DiscoveryCheckResponse) else None
+        if ids is None and isinstance(res, dict):
+            ids = res.get("discovered_ids")
+        candidate_ids = {ent.id.upper() for ent in candidates}
+        return {str(i).strip().upper() for i in ids or []} & candidate_ids
 
-    async def _should_reveal(
-        self,
-        event: GameEvent,
-        ent: WorldEntity,
-        by_id: dict[str, WorldEntity],
-        user_msg: str,
-        narration: str,
+    @staticmethod
+    def _deterministic_reveal(
+        event: GameEvent, ent: WorldEntity, by_id: dict[str, WorldEntity]
     ) -> bool:
+        """The turn itself names the entity: GM discovery, item handout or a parent update."""
         discovered = {
             str(e).strip().upper() for e in getattr(event, "discovered_entity_ids", []) or []
         }
@@ -154,38 +158,63 @@ class RevealGuardMixin:
             return True
         if _named(event.spawned_items, ent) or _named(event.new_inventory_items, ent):
             return True
-        if _parent_reveals(event, ent, by_id):
+        return _parent_reveals(event, ent, by_id)
+
+    def _is_movement_turn(self, event: GameEvent, moved: bool) -> bool:
+        """Leaving or entering a scene discovers nothing hidden there: no small-model check.
+
+        ``moved``: the caller knows the scene changed this turn; ``arrival_narration``: the
+        narration of an exit traversal; ``new_scene_id``: the GM moves the player this turn.
+        """
+        if moved or getattr(self.manager, "arrival_narration", False):
             return True
-        if not (user_msg or narration):
-            return False
-        return await self._llm_says_discovered(ent, user_msg, narration)
+        target = str(event.new_scene_id or "").strip().upper()
+        return bool(target) and target != str(self.state.current_scene_id or "").upper()
+
+    def _reveal(self, event: GameEvent, ent: WorldEntity, revealed: list[str]) -> None:
+        self._upsert_entity_update(event, ent.id, is_hidden=False)
+        revealed.append(f"Revealed {ent.name}")
+        logger.info(
+            "[Turn %s] Auto-revealed hidden entity '%s' (%s) in scene '%s'",
+            self.game_id,
+            ent.id,
+            ent.name,
+            self.state.current_scene_id,
+        )
 
     async def _enforce_hidden_entity_reveal(
-        self, event: GameEvent, user_msg: str, draft_narration: str = ""
+        self, event: GameEvent, user_msg: str, draft_narration: str = "", moved: bool = False
     ) -> list[str]:
-        """Auto-reveals hidden entities in the current scene that this turn discovered."""
+        """Auto-reveals hidden entities in the current scene that this turn discovered.
+
+        Deterministic reveals come first; the rest is checked with one small-model call, which
+        is skipped on movement turns and when there is no text to check.
+        """
         entities = await self._session_entities()
         hidden = self._hidden_scene_entities(entities)
         if not hidden:
             return []
         by_id = {e.id: e for e in entities if e.id}
         revealed: list[str] = []
+        candidates: list[WorldEntity] = []
         for ent in hidden:
             already = any(
                 (up.entity_id or "").upper() == ent.id.upper() and up.is_hidden is False
                 for up in event.updated_entities or []
             )
-            if already or not await self._should_reveal(
-                event, ent, by_id, user_msg, draft_narration
-            ):
+            if already:
                 continue
-            self._upsert_entity_update(event, ent.id, is_hidden=False)
-            revealed.append(f"Revealed {ent.name}")
-            logger.info(
-                "[Turn %s] Auto-revealed hidden entity '%s' (%s) in scene '%s'",
-                self.game_id,
-                ent.id,
-                ent.name,
-                self.state.current_scene_id,
-            )
+            if self._deterministic_reveal(event, ent, by_id):
+                self._reveal(event, ent, revealed)
+                continue
+            candidates.append(ent)
+
+        if not candidates or not (user_msg or draft_narration):
+            return revealed
+        if self._is_movement_turn(event, moved):
+            return revealed
+        found = await self._llm_discovered_ids(candidates, user_msg, draft_narration)
+        for ent in candidates:
+            if ent.id.upper() in found:
+                self._reveal(event, ent, revealed)
         return revealed

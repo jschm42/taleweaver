@@ -1975,7 +1975,10 @@ class GameTurnManager:
         if isinstance(game_event, GameEvent):
             reveal_event = GameEvent()
             post_reveal_messages = await self._enforce_hidden_entity_reveal(
-                reveal_event, user_msg, draft_narration=response_text
+                reveal_event,
+                user_msg,
+                draft_narration=response_text,
+                moved=scene_changed_this_turn,
             )
             if post_reveal_messages and reveal_event.updated_entities:
                 await self._apply_game_event(reveal_event)

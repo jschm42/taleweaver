@@ -143,7 +143,8 @@ async def test_discovery_never_reveals_script_only_entity():
             patch("backend.core.llm_router.GameMasterLLM.__init__", return_value=None),
             patch("backend.core.llm_router.GameMasterLLM.aexecute_complex_task") as mock_llm,
         ):
-            mock_llm.return_value = {"discovered": True}
+            # The model even names the script-only entity: it is no candidate, so it stays hidden.
+            mock_llm.return_value = {"discovered_ids": ["LURKER", "STOWAWAY"]}
             messages = await logic._enforce_hidden_entity_reveal(
                 event, "I inspect the raised metal platform"
             )

@@ -449,6 +449,15 @@ class EntityProxy:
         return str(self._data.get("current_scene_id", ""))
 
     @property
+    def is_with_player(self) -> bool:
+        """True when the entity is in the player's current scene (or either scene is unknown)."""
+        player_scene = self._changeset.teleport_scene_id or self._current_player_scene_id
+        entity_scene = self.current_scene_id
+        if not player_scene or not entity_scene:
+            return True
+        return entity_scene == player_scene
+
+    @property
     def is_hidden(self) -> bool:
         for upd in reversed(self._changeset.entity_updates):
             if upd.get("entity_id") == self._id and "is_hidden" in upd:
@@ -513,7 +522,12 @@ class NPCProxy(
         return list(self._data.get("inventory") or [])
 
     def say(self, text: str) -> None:
-        """Makes this NPC speak dialogue text."""
+        """Makes this NPC speak dialogue text; an NPC outside the player's scene stays silent."""
+        if not self.is_with_player:
+            logger.info(
+                "[Script] %s is not in the player's scene; line not shown: %s", self._id, text
+            )
+            return
         clean_text = str(text).strip()
         formatted = f'{self.name}: "{clean_text}"'
         self._changeset.narrative_messages.append(formatted)
@@ -1000,7 +1014,7 @@ class EntityManagerProxy:
         ent = self.get(entity_id)
         if isinstance(ent, NPCProxy):
             ent.say(text)
-        else:
+        elif getattr(ent, "is_with_player", True):
             clean_text = str(text).strip()
             self._changeset.narrative_messages.append(f'{ent.name}: "{clean_text}"')
 

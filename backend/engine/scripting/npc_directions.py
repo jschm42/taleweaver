@@ -9,10 +9,13 @@ once that narration is done.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from backend.engine.scripting.gm_directions import clean_direction, queue_direction
+
+logger = logging.getLogger(__name__)
 
 
 def speech_direction(name: str, npc_id: str, direction: Any) -> str:
@@ -37,9 +40,13 @@ class NPCDirectionMixin:
     def say_directed(self, direction: str, after: Any = None, after_args: Any = None) -> None:
         """Lets the GM voice this NPC in the next narration, following the direction.
 
-        ``after`` names an init-script function that runs once that narration is done.
+        An NPC outside the player's scene does not speak (the direction is dropped), but the
+        ``after`` callback (an init-script function run once the narration is done) still runs.
         """
         text = speech_direction(self.name, self.id, direction)
+        if not getattr(self, "is_with_player", True):
+            logger.info("[Script] %s is not in the player's scene; direction dropped.", self.id)
+            text = ""
         queue_direction(self._changeset, text, after, after_args)
 
 
