@@ -1,2 +1,7 @@
 # Shell scripts must keep LF endings (bash, Git Bash and Docker break on CRLF)
 *.sh text eol=lf
+
+# Bundled skills carry sha256 checksums (scripts/bundle_skill.py); keep the skill files
+# and their doc sources byte-identical on every platform
+.agents/skills/** text eol=lf
+docs/**/*.md text eol=lf

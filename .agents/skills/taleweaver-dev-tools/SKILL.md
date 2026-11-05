@@ -1,11 +1,11 @@
 ---
 name: taleweaver-dev-tools
-description: Developer toolkit for TaleWeaver administration, security key generation, admin credential resets, catalog management, media thumbnail regeneration, and ADZ archive extraction.
+description: Developer toolkit for TaleWeaver administration, security key generation, admin credential resets, catalog management, media thumbnail regeneration, ADZ archive extraction, and agent skill bundling.
 ---
 
 # TaleWeaver Developer & Administration Tools
 
-Use this skill when you need to configure environments, manage admin credentials, generate security keys, freeze catalog defaults, process media assets, or unpack adventure archives.
+Use this skill when you need to configure environments, manage admin credentials, generate security keys, freeze catalog defaults, process media assets, unpack adventure archives, or bundle agent skills for distribution.
 
 All commands should be executed with Poetry: `poetry run python scripts/<script_name>.py`.
 
@@ -103,3 +103,35 @@ Script: [scripts/convert_assets.py](file:///c:/Users/jean/DEV/repositories/talew
 # Convert PNG images to JPEG in backend/static/assets/catalog/
 poetry run python scripts/convert_assets.py
 ```
+
+---
+
+## 7. Agent Skill Bundling & Verification
+
+Bundle agent skills (e.g. `taleweaver-adventure-concept-creator`) with companion documentation specs, generating `package.json` and `manifest.json` with SHA-256 checksums, and exporting distribution archives.
+
+Script: [scripts/bundle_skill.py](file:///c:/Users/jean/DEV/repositories/taleweaver/scripts/bundle_skill.py)
+
+```bash
+# Copy companion docs into the skill and regenerate package.json + manifest.json
+poetry run python scripts/bundle_skill.py --skill taleweaver-adventure-concept-creator
+
+# Verify only (docs up to date, checksums, references); exits 1 on errors, writes nothing
+poetry run python scripts/bundle_skill.py --check
+
+# Export a verified bundle to dist/ (tar.gz or zip)
+poetry run python scripts/bundle_skill.py --export-archive tar.gz --output dist/
+```
+
+Example output:
+
+```text
+Bundled taleweaver-adventure-concept-creator 1.0.0 (7 files)
+WARNING: docs/scripting_engine.md: link not bundled: in_game_debugging.md
+Check passed.
+WARNING: docs/scripting_engine.md: link not bundled: in_game_debugging.md
+Check passed.
+Exported dist/taleweaver-adventure-concept-creator-1.0.0.tar.gz
+```
+
+*(Note: `link not bundled` warnings are informational. Bundled docs are exact copies of the repo docs, so links to docs outside the bundle stay unresolved. Only errors fail the check or block an export.)*

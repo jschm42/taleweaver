@@ -1,0 +1,57 @@
+{
+  "name": "taleweaver-adventure-concept-creator",
+  "version": "1.0.0",
+  "description": "Generates TaleWeaver adventure concepts (Story Idea text for the World-Builder) with a gripping story, a planted twist and non-trivial puzzles that the engine can actually enforce. Writes them in the World-Builder blueprint syntax (World, Protagonist, Scene, Exit, NPC, Item, Switch, Sequence, Rule, Script, Sidequest, Award tags with fixed/hint/open keys) and knows the parser's and engine's limits.",
+  "main": "SKILL.md",
+  "files": [
+    "SKILL.md",
+    "docs/scripting-enginge.md",
+    "docs/scripting_engine.md",
+    "docs/specs/adventure_format.md",
+    "docs/world-builder-blueprint-manual.md",
+    "docs/world-builder-syntax.md",
+    "package.json",
+    "manifest.json"
+  ],
+  "keywords": [
+    "taleweaver",
+    "agent-skill",
+    "world-builder",
+    "interactive-fiction"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "taleweaver": {
+    "type": "agent-skill",
+    "entry": "SKILL.md",
+    "manifest": "manifest.json",
+    "docs": [
+      {
+        "path": "docs/world-builder-blueprint-manual.md",
+        "source": "docs/world-builder-blueprint-manual.md",
+        "description": "Story Idea blueprint manual: workflow, tag overview and design advice."
+      },
+      {
+        "path": "docs/world-builder-syntax.md",
+        "source": "docs/world-builder-syntax.md",
+        "description": "Full key reference for the World-Builder blueprint syntax."
+      },
+      {
+        "path": "docs/scripting_engine.md",
+        "source": "docs/scripting_engine.md",
+        "description": "Scripting engine (`tw.*` API) used by on_start, guard, Rule and Script blocks."
+      },
+      {
+        "path": "docs/scripting-enginge.md",
+        "source": "docs/scripting_engine.md",
+        "description": "Alias of docs/scripting_engine.md for references using the misspelled name.",
+        "alias_of": "docs/scripting_engine.md"
+      },
+      {
+        "path": "docs/specs/adventure_format.md",
+        "source": "docs/specs/adventure_format.md",
+        "description": "Adventure file format specification (adventure.adv / .adz)."
+      }
+    ]
+  }
+}
