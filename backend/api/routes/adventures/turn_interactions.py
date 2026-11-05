@@ -886,6 +886,19 @@ class TurnInteractionsManager:
         current_state = str(entry.get("switch_state") or configured_current).strip().upper()
         if current_state == target_state:
             return f"{switch_entity.name} is already set to {state_label(config, target_state)}."
+        sw_meta = dict(switch_entity.metadata_json or {})
+        raw_min = sw_meta.get("min_items")
+        if (
+            str(switch_entity.item_type or "").upper() == "CONTAINER_SWITCH"
+            and isinstance(raw_min, (int, float))
+            and int(raw_min) > 0
+            and target_state != configured_current
+        ):
+            min_req = int(raw_min)
+            c_items = await self._get_container_inventory(switch_entity, None)
+            if len(c_items) < min_req:
+                unit = "item" if min_req == 1 else "items"
+                return f"{switch_entity.name} requires at least {min_req} {unit} inside before switching (currently {len(c_items)})."
 
         transition = SwitchService.resolve_transition(config, current_state, target_state)
         script_context = await self.manager._build_script_context()
@@ -918,8 +931,8 @@ class TurnInteractionsManager:
         session_states[switch_entity.id] = entry
         self.state.entity_states = session_states
         flag_modified(self.state, "entity_states")
-        if switch_entity.id in script_context._entities:
-            script_context._entities[switch_entity.id]["switch_state"] = target_state
+        if switch_entity.id in script_context.switches._entities:
+            script_context.switches._entities[switch_entity.id]["switch_state"] = target_state
 
         SwitchService.execute_transition_triggers(
             runner=runner,

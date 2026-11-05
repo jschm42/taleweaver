@@ -778,6 +778,23 @@ class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
         """Enables or disables a single switch state."""
         SwitchProxy(self._id, self._data, self._changeset).set_state_enabled(state, enabled)
 
+    @property
+    def status_text(self) -> str:
+        """Returns the status/hint text shown on this switch or container-switch."""
+        return SwitchProxy(self._id, self._data, self._changeset).status_text
+
+    @status_text.setter
+    def status_text(self, text: str) -> None:
+        self.set_status_text(text)
+
+    def set_status_text(self, text: str) -> None:
+        """Sets the status/hint text shown on this switch or container-switch."""
+        SwitchProxy(self._id, self._data, self._changeset).set_status_text(text)
+
+    def clear_status_text(self) -> None:
+        """Clears the status/hint text shown on this switch or container-switch."""
+        SwitchProxy(self._id, self._data, self._changeset).clear_status_text()
+
     def flip(self, target_state: Optional[str] = None) -> str:
         """Flips/toggles the switch. Returns the new state."""
         from backend.engine.interaction.switch_service import SwitchService
@@ -812,6 +829,36 @@ class ObjectProxy(EntityProxy, ItemOpsMixin, ItemHolderMixin):
             "SWITCH",
             "CONTAINER_SWITCH",
         } or bool(SwitchService.resolve_switch_config(self._data))
+
+    @property
+    def min_items(self) -> Optional[int]:
+        """Configured minimum item count for a container, or None if not set."""
+        meta = self._data.get("metadata_json")
+        raw = self._data.get("min_items")
+        if raw is None and isinstance(meta, dict):
+            raw = meta.get("min_items")
+        return int(raw) if isinstance(raw, (int, float)) and int(raw) > 0 else None
+
+    @property
+    def max_items(self) -> Optional[int]:
+        """Configured maximum item capacity for a container, or None if unlimited."""
+        meta = self._data.get("metadata_json")
+        raw = self._data.get("max_items")
+        if raw is None and isinstance(meta, dict):
+            raw = meta.get("max_items")
+        return int(raw) if isinstance(raw, (int, float)) and int(raw) > 0 else None
+
+    @property
+    def is_full(self) -> bool:
+        """True if this container has a max_items limit and has reached it."""
+        limit = self.max_items
+        return limit is not None and len(self.item_ids) >= limit
+
+    @property
+    def has_min_items(self) -> bool:
+        """True if this container has at least min_items inside (or no min_items limit)."""
+        req = self.min_items
+        return req is None or len(self.item_ids) >= req
 
     @property
     def is_locked(self) -> bool:

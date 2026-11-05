@@ -55,6 +55,14 @@ const disabledStates = computed<Set<string>>(() => {
 
 const isDisabled = (state: string) => disabledStates.value.has(state.toUpperCase())
 
+const switchStatusText = computed<string>(() => {
+  return String(
+    props.switchEntity?.switch_status_text ??
+    switchConfig.value.status_text ??
+    ''
+  ).trim()
+})
+
 const select = (state: string) => {
   if (props.busy || isCurrent(state) || isDisabled(state)) return
   emit('selectState', state.toUpperCase())
@@ -103,6 +111,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
     @revealed="onRevealed"
   >
     <template #label-icon><i class="ra ra-lever"></i></template>
+
+    <p
+      v-if="switchStatusText"
+      class="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2 mb-3 leading-snug"
+    >
+      {{ switchStatusText }}
+    </p>
 
     <div class="grid gap-2" :class="allStates.length > 3 ? 'sm:grid-cols-2' : 'grid-cols-1'">
       <button

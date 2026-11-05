@@ -159,6 +159,32 @@ class SwitchProxy:
         else:
             self.disable_state(state)
 
+    @property
+    def status_text(self) -> str:
+        """Returns the current status/hint text shown in the switch panel."""
+        for upd in reversed(self._changeset.entity_updates):
+            if upd.get("entity_id") == self._id and "switch_status_text" in upd:
+                return str(upd.get("switch_status_text") or "")
+        if "switch_status_text" in self._data and self._data["switch_status_text"] is not None:
+            return str(self._data["switch_status_text"] or "")
+        from backend.engine.interaction.switch_service import SwitchService
+
+        cfg = SwitchService.resolve_switch_config(self._data)
+        return str(cfg.get("status_text") or "")
+
+    @status_text.setter
+    def status_text(self, text: str) -> None:
+        self.set_status_text(text)
+
+    def set_status_text(self, text: str) -> None:
+        """Sets or updates the status/hint text displayed in the switch panel."""
+        clean = str(text or "").strip()[:300]
+        self._changeset.entity_updates.append({"entity_id": self._id, "switch_status_text": clean})
+
+    def clear_status_text(self) -> None:
+        """Clears the status/hint text displayed in the switch panel."""
+        self.set_status_text("")
+
     def set_state(self, target_state: str, apply_outcomes: bool = True) -> None:
         """
         Sets the switch directly to target_state.
@@ -320,6 +346,18 @@ class SwitchesProxy:
     def disable_state(self, switch_id_or_name: str, *states: str) -> None:
         """Disables one or more states on the switch."""
         self.get(switch_id_or_name).disable_state(*states)
+
+    def get_status_text(self, switch_id_or_name: str) -> str:
+        """Returns the status/hint text of the switch."""
+        return self.get(switch_id_or_name).status_text
+
+    def set_status_text(self, switch_id_or_name: str, text: str) -> None:
+        """Sets the status/hint text shown in the switch panel."""
+        self.get(switch_id_or_name).set_status_text(text)
+
+    def clear_status_text(self, switch_id_or_name: str) -> None:
+        """Clears the status/hint text shown in the switch panel."""
+        self.get(switch_id_or_name).clear_status_text()
 
     def flip(
         self,

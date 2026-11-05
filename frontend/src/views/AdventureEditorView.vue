@@ -1105,6 +1105,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     switch_disabled_states: Array.isArray(selectedObject?.switch_disabled_states ?? metadata?.switch?.disabled_states)
       ? [...(selectedObject?.switch_disabled_states ?? metadata.switch.disabled_states)]
       : [],
+    switch_status_text: String(selectedObject?.switch_status_text ?? metadata?.switch?.status_text ?? ''),
     switch_transitions_json: JSON.stringify(selectedObject?.switch_transitions || metadata?.switch?.transitions || metadata?.switch_transitions || [], null, 2),
     effects_hp: selectedObject?.effects?.hp || metadata?.effects?.hp || 0,
     effects_stamina: selectedObject?.effects?.stamina || metadata?.effects?.stamina || 0,
@@ -1143,6 +1144,8 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_items_added_text: selectedObject?.on_items_added_text || metadata?.on_items_added_text || '',
     on_items_removed_script: selectedObject?.on_items_removed_script || metadata?.on_items_removed_script || '',
     on_items_removed_text: selectedObject?.on_items_removed_text || metadata?.on_items_removed_text || '',
+    min_items: selectedObject?.min_items ?? metadata?.min_items ?? null,
+    max_items: selectedObject?.max_items ?? metadata?.max_items ?? null,
     craft_guard_expression: selectedObject?.craft_guard_expression || metadata?.craft_guard_expression || '',
     on_craft_success_script: selectedObject?.on_craft_success_script || metadata?.on_craft_success_script || '',
     on_craft_success_text: selectedObject?.on_craft_success_text || metadata?.on_craft_success_text || '',
@@ -1295,6 +1298,8 @@ async function saveEntityText(data: any) {
             ...(data.on_items_added_text ? { on_items_added_text: String(data.on_items_added_text).trim() } : {}),
             ...(data.on_items_removed_script ? { on_items_removed_script: String(data.on_items_removed_script).trim() } : {}),
             ...(data.on_items_removed_text ? { on_items_removed_text: String(data.on_items_removed_text).trim() } : {}),
+            ...(Number(data.min_items || 0) > 0 ? { min_items: Math.floor(Number(data.min_items)) } : {}),
+            ...(Number(data.max_items || 0) > 0 ? { max_items: Math.floor(Number(data.max_items)) } : {}),
           }
         }
         if (itemType === 'READABLE') {
@@ -1310,6 +1315,7 @@ async function saveEntityText(data: any) {
             switch_states: data.switch_states || [],
             switch_initial_state: data.switch_initial_state || '',
             switch_disabled_states: data.switch_disabled_states || [],
+            switch_status_text: data.switch_status_text || '',
             switch_transitions: data.switch_transitions || [],
             ...(data.on_success_script ? { on_success_script: String(data.on_success_script).trim() } : {}),
             ...(data.on_failure_script ? { on_failure_script: String(data.on_failure_script).trim() } : {}),
@@ -1318,6 +1324,7 @@ async function saveEntityText(data: any) {
               state_labels: data.switch_state_labels || {},
               initial_state: data.switch_initial_state || '',
               disabled_states: data.switch_disabled_states || [],
+              status_text: data.switch_status_text || '',
               transitions: data.switch_transitions || [],
               outcomes: [],
               ...(data.on_success_script ? { on_success_script: String(data.on_success_script).trim() } : {}),
@@ -1450,6 +1457,7 @@ async function saveEntityText(data: any) {
       switch_state_labels: editEntityContext.value.type === 'object' ? data.switch_state_labels : undefined,
       switch_initial_state: editEntityContext.value.type === 'object' ? data.switch_initial_state : undefined,
       switch_disabled_states: editEntityContext.value.type === 'object' ? data.switch_disabled_states : undefined,
+      switch_status_text: editEntityContext.value.type === 'object' ? data.switch_status_text : undefined,
       switch_transitions: editEntityContext.value.type === 'object' ? data.switch_transitions : undefined,
       on_success_script: editEntityContext.value.type === 'object' ? data.on_success_script : undefined,
       on_failure_script: editEntityContext.value.type === 'object' ? data.on_failure_script : undefined,
@@ -1487,6 +1495,8 @@ async function saveEntityText(data: any) {
       on_items_added_text: editEntityContext.value.type === 'object' ? data.on_items_added_text : undefined,
       on_items_removed_script: editEntityContext.value.type === 'object' ? data.on_items_removed_script : undefined,
       on_items_removed_text: editEntityContext.value.type === 'object' ? data.on_items_removed_text : undefined,
+      min_items: editEntityContext.value.type === 'object' ? data.min_items : undefined,
+      max_items: editEntityContext.value.type === 'object' ? data.max_items : undefined,
       craft_guard_expression: editEntityContext.value.type === 'object' ? data.craft_guard_expression : undefined,
       on_craft_success_script: editEntityContext.value.type === 'object' ? data.on_craft_success_script : undefined,
       on_craft_success_text: editEntityContext.value.type === 'object' ? data.on_craft_success_text : undefined,

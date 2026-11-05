@@ -12,6 +12,8 @@ const props = withDefaults(defineProps<{
   inventoryItems: any[]
   excludeId?: string
   busy?: boolean
+  /** Optional maximum number of items that can be selected at once (e.g. remaining container capacity). */
+  maxSelect?: number | null
   /** Hint above the tiles. */
   hint?: string
   /** Hint when nothing can be selected. */
@@ -22,6 +24,7 @@ const props = withDefaults(defineProps<{
   tileVerb?: string
 }>(), {
   excludeId: '',
+  maxSelect: null,
   hint: 'Select the items to put inside.',
   emptyHint: 'You carry nothing you could put inside.',
   actionLabel: 'Put In',
@@ -45,10 +48,21 @@ const candidates = computed(() => {
 })
 
 const isSelected = (item: any) => selectedIds.value.includes(itemId(item))
+const canSelectMore = computed(() => props.maxSelect == null || selectedIds.value.length < props.maxSelect)
+
+const effectiveHint = computed(() => {
+  if (props.maxSelect != null && props.maxSelect > 0) {
+    return props.maxSelect === 1
+      ? 'Select 1 item to put inside.'
+      : `Select up to ${props.maxSelect} items to put inside.`
+  }
+  return props.hint
+})
 
 const toggle = (item: any) => {
   if (props.busy) return
   const id = itemId(item)
+  if (!isSelected(item) && !canSelectMore.value) return
   selectedIds.value = isSelected(item)
     ? selectedIds.value.filter(selected => selected !== id)
     : [...selectedIds.value, id]
@@ -63,14 +77,14 @@ const confirm = () => {
 
 <template>
   <template v-if="candidates.length">
-    <p class="tw-prompt-hint">{{ hint }}</p>
+    <p class="tw-prompt-hint">{{ effectiveHint }}</p>
     <div class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-56 overflow-y-auto p-0.5">
       <PromptItemTile
         v-for="item in candidates"
         :key="itemId(item)"
         :item="item"
         :selected="isSelected(item)"
-        :disabled="busy"
+        :disabled="busy || (!isSelected(item) && !canSelectMore)"
         :title="isSelected(item) ? `Keep ${item.name || item.id}` : `${tileVerb} ${item.name || item.id}`"
         @click="toggle(item)"
         @mouseenter="emit('itemHover', { ...item, entity_type: 'ITEM' }, $event)"

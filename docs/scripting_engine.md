@@ -499,8 +499,8 @@ Manages world objects and inventory items. Every world item is held by exactly *
 **`ObjectProxy`** (`tw.objects.get(item_id)`):
 - `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.lock()`, `.unlock()`, `.is_locked`, `.location`
 - `.move_to(target)`, `.give_to_player()`, `.put_into(container_id)`, `.move_to_scene(scene_id)`, `.give_to_npc(npc_id)`
-- For containers (`CONTAINER` and `CONTAINER_SWITCH`): `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
-- For switch items (`SWITCH` and `CONTAINER_SWITCH`): `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, `.toggle()`, `.disabled_states`, `.is_state_enabled(state)`, `.is_state_disabled(state)`, `.enable_state(*states)`, `.disable_state(*states)`, and `.set_state_enabled(state, enabled)`.
+- For containers (`CONTAINER` and `CONTAINER_SWITCH`): `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`, `.min_items` *(int | None)*, `.max_items` *(int | None)*, `.is_full` *(bool)*, `.has_min_items` *(bool)*
+- For switch items (`SWITCH` and `CONTAINER_SWITCH`): `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, `.toggle()`, `.disabled_states`, `.is_state_enabled(state)`, `.is_state_disabled(state)`, `.enable_state(*states)`, `.disable_state(*states)`, `.set_state_enabled(state, enabled)`, `.status_text`, `.set_status_text(text)`, and `.clear_status_text()`.
 
 ```python
 # Potion dispenser: copy a hidden template potion and hand the copy over
@@ -524,6 +524,7 @@ Inspects and manipulates interactive switches, levers, buttons, and puzzle mecha
 - `tw.switches.toggle(switch_id: str, apply_outcomes: bool = True) -> str`: Alias for `flip()`.
 - `tw.switches.enable_state(switch_id: str, *states: str) -> list[str]` / `tw.switches.disable_state(switch_id: str, *states: str) -> list[str]`: Enables or disables specific switch state buttons on `switch_id` (e.g. `tw.switches.disable_state('MICROWAVE', 'DEFROST', 'COOK')`), returning the updated list of disabled state IDs. Disabled states are shown with a lock icon and cannot be clicked by the player until re-enabled.
 - `tw.switches.is_state_enabled(switch_id: str, state: str) -> bool` / `tw.switches.is_state_disabled(switch_id: str, state: str) -> bool` / `tw.switches.disabled_states(switch_id: str) -> list[str]`: Checks whether a specific state on `switch_id` is enabled/disabled, or returns all currently disabled state IDs.
+- `tw.switches.get_status_text(switch_id: str) -> str` / `tw.switches.set_status_text(switch_id: str, text: str) -> str` / `tw.switches.clear_status_text(switch_id: str) -> str`: Gets, sets, or clears the optional status/hint message displayed inside the switch or container-switch dialog (e.g. `"The microwave needs some electrical power first."`).
 - `tw.switch(switch_id: str) -> SwitchProxy`: Convenience shortcut for `tw.switches.get(switch_id)`.
 
 #### `SwitchProxy` and `ObjectProxy` Switch Attributes
@@ -540,6 +541,8 @@ When interacting with a `SwitchProxy` or an `ObjectProxy` for a switch entity:
 - `.disabled_states` *(list[str])*: List of currently disabled (locked) state IDs on this switch.
 - `.is_state_enabled(state: str) -> bool` / `.is_state_disabled(state: str) -> bool`: Checks whether `state` is currently enabled or disabled.
 - `.enable_state(*states: str) -> list[str]` / `.disable_state(*states: str) -> list[str]` / `.set_state_enabled(state: str, enabled: bool) -> list[str]`: Enables or disables one or more state IDs on this switch.
+- `.status_text` *(str)*: Gets or sets the status/hint message shown inside the switch or container-switch panel.
+- `.set_status_text(text: str) -> str` / `.clear_status_text() -> str`: Sets or clears the status/hint message.
 - `.initial_state` *(str)*: Configured initial state.
 - `.is_switch` *(bool)*: `True` if the object is a switch.
 

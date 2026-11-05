@@ -217,6 +217,8 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "unlock_rule": FieldSpec("rule_to_unlock"),
     "unlock_guard": _expr("unlock_expression"),
     "contains": _refs("inventory"),
+    "min_items": FieldSpec("min_items", integer),
+    "max_items": FieldSpec("max_items", integer),
     "combine": _refs("combination_ingredients"),
     "results": _refs("result_item_ids"),
     "result": _refs("result_item_ids"),
@@ -237,6 +239,7 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "states": FieldSpec("*", switch_states),
     "initial": FieldSpec("switch_initial_state", lambda raw: raw.strip().upper()),
     "disabled_states": _refs("switch_disabled_states"),
+    "status_text": FieldSpec("switch_status_text"),
     "transition": FieldSpec("switch_transitions", switch_transition, "transition", repeat=True),
     "outcome": FieldSpec("switch_outcomes", switch_outcome, "outcome", repeat=True),
 }

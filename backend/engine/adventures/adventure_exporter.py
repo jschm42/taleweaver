@@ -221,6 +221,9 @@ def _extract_item_switch_metadata(
         filtered["switch_disabled_states"] = (
             switch_config.get("disabled_states") or metadata.pop("switch_disabled_states", []) or []
         )
+        filtered["switch_status_text"] = (
+            switch_config.get("status_text") or metadata.pop("switch_status_text", "") or ""
+        )
         filtered["switch_transitions"] = (
             switch_config.get("transitions") or metadata.pop("switch_transitions", []) or []
         )
@@ -236,6 +239,7 @@ def _extract_item_switch_metadata(
     metadata.pop("switch_states", None)
     metadata.pop("switch_initial_state", None)
     metadata.pop("switch_disabled_states", None)
+    metadata.pop("switch_status_text", None)
     metadata.pop("switch_transitions", None)
     metadata.pop("on_success_script", None)
     metadata.pop("on_failure_script", None)
@@ -255,6 +259,8 @@ _CONTAINER_ONLY_KEYS = (
     "on_items_added_text",
     "on_items_removed_script",
     "on_items_removed_text",
+    "min_items",
+    "max_items",
 )
 
 

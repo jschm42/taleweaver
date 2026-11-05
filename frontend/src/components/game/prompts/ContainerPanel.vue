@@ -43,20 +43,67 @@ const isItemLocked = (item: any): boolean => {
 }
 
 const hasItems = computed(() => (props.items || []).length > 0)
+const currentCount = computed(() => (props.items || []).length)
 const unlockedItems = computed(() => (props.items || []).filter((item: any) => !isItemLocked(item)))
 const hasUnlockedItems = computed(() => unlockedItems.value.length > 0)
 const putMode = ref(false)
 
+const containerMeta = computed(() => parseMetadata(props.containerEntity?.metadata_json))
+
+const minItems = computed<number | null>(() => {
+  const raw = props.containerEntity?.min_items ?? containerMeta.value.min_items
+  const num = Number(raw)
+  return Number.isFinite(num) && num > 0 ? Math.floor(num) : null
+})
+
+const maxItems = computed<number | null>(() => {
+  const raw = props.containerEntity?.max_items ?? containerMeta.value.max_items
+  const num = Number(raw)
+  return Number.isFinite(num) && num > 0 ? Math.floor(num) : null
+})
+
+const remainingCapacity = computed<number | null>(() => {
+  if (maxItems.value === null) return null
+  return Math.max(0, maxItems.value - currentCount.value)
+})
+
+const isContainerFull = computed(() => remainingCapacity.value !== null && remainingCapacity.value <= 0)
+const belowMinItems = computed(() => minItems.value !== null && currentCount.value < minItems.value)
+const slotCount = computed<number>(() => maxItems.value ?? minItems.value ?? 0)
+const emptySlotCount = computed<number>(() => Math.max(0, slotCount.value - currentCount.value))
+
+const switchStatusText = computed<string>(() => {
+  return String(
+    props.containerEntity?.switch_status_text ??
+    switchConfig.value.status_text ??
+    ''
+  ).trim()
+})
+
+const capacityBadgeText = computed(() => {
+  if (minItems.value !== null && maxItems.value !== null) {
+    if (minItems.value === maxItems.value) {
+      return `${currentCount.value} / ${maxItems.value} required`
+    }
+    return `${currentCount.value} / ${maxItems.value} (min ${minItems.value})`
+  }
+  if (maxItems.value !== null) {
+    return `${currentCount.value} / ${maxItems.value} slots`
+  }
+  if (minItems.value !== null) {
+    return `${currentCount.value} items (min ${minItems.value})`
+  }
+  return ''
+})
+
 const isContainerSwitch = computed(() => {
   const itemType = String(props.containerEntity?.item_type || '').toUpperCase()
   if (itemType === 'CONTAINER_SWITCH') return true
-  const meta = parseMetadata(props.containerEntity?.metadata_json)
-  return Boolean(meta.switch && Array.isArray(meta.switch.states) && meta.switch.states.length > 0)
+  return Boolean(containerMeta.value.switch && Array.isArray(containerMeta.value.switch.states) && containerMeta.value.switch.states.length > 0)
 })
 
 const switchConfig = computed(() => {
-  const meta = parseMetadata(props.containerEntity?.metadata_json)
-  return (meta.switch && typeof meta.switch === 'object') ? meta.switch : {}
+  return (containerMeta.value.switch && typeof containerMeta.value.switch === 'object') ? containerMeta.value.switch : {}
 })
 
 const switchStates = computed<string[]>(() => {
@@ -64,12 +111,18 @@ const switchStates = computed<string[]>(() => {
   return Array.isArray(raw) ? raw.map((s: any) => String(s || '').trim()).filter(Boolean) : []
 })
 
-const currentSwitchState = computed(() => {
+const initialSwitchState = computed(() => {
   return String(
-    props.containerEntity?.switch_state ||
     switchConfig.value.initial_state ||
     props.containerEntity?.switch_initial_state ||
     (switchStates.value[0] ?? '')
+  ).trim().toUpperCase()
+})
+
+const currentSwitchState = computed(() => {
+  return String(
+    props.containerEntity?.switch_state ||
+    initialSwitchState.value
   ).trim().toUpperCase()
 })
 
@@ -86,7 +139,12 @@ const disabledSwitchStates = computed<Set<string>>(() => {
   )
 })
 
-const isStateDisabled = (state: string): boolean => disabledSwitchStates.value.has(state.toUpperCase())
+const isStateDisabled = (state: string): boolean => {
+  const normalized = state.toUpperCase()
+  if (disabledSwitchStates.value.has(normalized)) return true
+  if (belowMinItems.value && normalized !== initialSwitchState.value) return true
+  return false
+}
 
 function selectSwitchState(state: string): void {
   if (props.busy || isCurrentSwitchState(state) || isStateDisabled(state)) return
@@ -133,6 +191,7 @@ function takeItem(item: any): void {
       v-if="putMode"
       :inventory-items="inventoryItems || []"
       :exclude-id="containerId || ''"
+      :max-select="remainingCapacity"
       :busy="busy"
       @confirm="(ids) => { putMode = false; emit('putItems', ids) }"
       @cancel="putMode = false"
@@ -141,13 +200,34 @@ function takeItem(item: any): void {
     />
 
     <template v-else>
+      <p
+        v-if="switchStatusText"
+        class="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2 mb-3 leading-snug"
+      >
+        {{ switchStatusText }}
+      </p>
       <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex flex-col md:flex-row gap-4 items-start' : 'space-y-3'">
         <!-- Container Items Area -->
         <div :class="isContainerSwitch && switchStates.length > 0 ? 'flex-1 min-w-0 w-full space-y-2' : 'space-y-2'">
-          <template v-if="hasItems">
+          <div class="flex items-center justify-between gap-2">
             <p class="tw-prompt-hint">
-              {{ hasUnlockedItems ? 'Click an unlocked item to take it.' : 'Items inside are currently locked.' }}
+              <template v-if="hasItems">
+                {{ hasUnlockedItems ? 'Click an unlocked item to take it.' : 'Items inside are currently locked.' }}
+              </template>
+              <template v-else-if="emptySlotCount > 0">
+                Click an empty slot or Put In to insert items.
+              </template>
+              <template v-else>This container is empty.</template>
             </p>
+            <span
+              v-if="capacityBadgeText"
+              class="shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border"
+              :class="belowMinItems ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-white/10 bg-white/5 opacity-75'"
+            >
+              {{ capacityBadgeText }}
+            </span>
+          </div>
+          <template v-if="hasItems || emptySlotCount > 0">
             <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-56 overflow-y-auto p-0.5">
               <button
                 v-for="item in items"
@@ -178,9 +258,21 @@ function takeItem(item: any): void {
                 <i v-else :class="['ra text-2xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
                 <span class="tw-prompt-tile-caption">{{ item.name || item.id }}</span>
               </button>
+              <button
+                v-for="slotIdx in emptySlotCount"
+                :key="`empty-slot-${slotIdx}`"
+                type="button"
+                :disabled="busy || !canPut || isContainerFull"
+                class="tw-prompt-tile border-dashed border-amber-500/30 bg-black/20 hover:border-amber-500/60 hover:bg-amber-500/5 transition-all"
+                :class="(!canPut || isContainerFull) ? 'opacity-50 cursor-default' : 'cursor-pointer'"
+                :title="canPut && !isContainerFull ? `Empty Slot ${currentCount + slotIdx} — Click to insert item` : `Empty Slot ${currentCount + slotIdx}`"
+                @click="canPut && !busy && !isContainerFull ? (putMode = true) : undefined"
+              >
+                <PackagePlus class="w-5 h-5 text-amber-400/45" />
+                <span class="tw-prompt-tile-caption opacity-55">Slot {{ currentCount + slotIdx }}</span>
+              </button>
             </div>
           </template>
-          <p v-else class="tw-prompt-hint">This container is empty.</p>
         </div>
 
         <!-- Integrated Switch Control (for CONTAINER_SWITCH) -->
@@ -212,7 +304,14 @@ function takeItem(item: any): void {
       </div>
 
       <div class="flex flex-wrap justify-end gap-2 pt-1">
-        <button v-if="canPut" type="button" class="tw-prompt-action tw-prompt-action--ghost" :disabled="busy" @click="putMode = true">
+        <button
+          v-if="canPut"
+          type="button"
+          class="tw-prompt-action tw-prompt-action--ghost"
+          :disabled="busy || isContainerFull"
+          :title="isContainerFull ? 'Container is full' : 'Put items inside'"
+          @click="putMode = true"
+        >
           <PackagePlus class="w-4 h-4" />
           <span>Put In</span>
         </button>

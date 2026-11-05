@@ -481,7 +481,10 @@ const isFormInvalid = computed(() => {
     !uniqueStates.has(String(localForm.value.switch_initial_state).trim().toUpperCase()) ||
     switchTransitions.value.some(t => !t.to || !uniqueStates.has(t.to) || (t.from && !uniqueStates.has(t.from)))
   )
-  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid || weaponInvalid.value
+  const minCap = Number(localForm.value.min_items || 0)
+  const maxCap = Number(localForm.value.max_items || 0)
+  const capacityInvalid = ['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType.value) && minCap > 0 && maxCap > 0 && minCap > maxCap
+  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid || capacityInvalid || weaponInvalid.value
 })
 
 const weaponInvalid = computed(() => {
@@ -743,6 +746,7 @@ function handleSave() {
         .map(([state, label]) => [state, label.trim().slice(0, 20)])
     ),
     switch_disabled_states: switchDisabledStates.value.filter((state) => parsedSwitchStates.includes(state)),
+    switch_status_text: String(localForm.value.switch_status_text || '').trim().slice(0, 300),
     switch_transitions: parsedSwitchTransitions,
     on_success_script: String(localForm.value.on_success_script || '').trim(),
     on_failure_script: String(localForm.value.on_failure_script || '').trim(),
@@ -770,6 +774,8 @@ function handleSave() {
     on_items_added_text: String(localForm.value.on_items_added_text || '').trim(),
     on_items_removed_script: String(localForm.value.on_items_removed_script || '').trim(),
     on_items_removed_text: String(localForm.value.on_items_removed_text || '').trim(),
+    min_items: Number(localForm.value.min_items || 0) > 0 ? Math.floor(Number(localForm.value.min_items)) : null,
+    max_items: Number(localForm.value.max_items || 0) > 0 ? Math.floor(Number(localForm.value.max_items)) : null,
     craft_guard_expression: String(localForm.value.craft_guard_expression || '').trim(),
     on_craft_success_script: String(localForm.value.on_craft_success_script || '').trim(),
     on_craft_success_text: String(localForm.value.on_craft_success_text || '').trim(),
@@ -1632,15 +1638,30 @@ const textLogPreviewClass = computed(() => {
                     @rename="updateStateValue"
                   />
 
-                  <!-- 2. Initial State Selection -->
-                  <div class="space-y-2 bg-black/20 border border-white/5 p-4 rounded-2xl">
-                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Initial State</label>
-                    <select
-                      v-model="localForm.switch_initial_state"
-                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-lime-500/50 outline-none transition-all"
-                    >
-                      <option v-for="state in switchStates" :key="state" :value="state">{{ switchStateLabels[state] ? `${state} (${switchStateLabels[state]})` : state }}</option>
-                    </select>
+                  <!-- 2. Initial State Selection & Status Text -->
+                  <div class="space-y-4 bg-black/20 border border-white/5 p-4 rounded-2xl">
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Initial State</label>
+                      <select
+                        v-model="localForm.switch_initial_state"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-lime-500/50 outline-none transition-all"
+                      >
+                        <option v-for="state in switchStates" :key="state" :value="state">{{ switchStateLabels[state] ? `${state} (${switchStateLabels[state]})` : state }}</option>
+                      </select>
+                    </div>
+                    <div class="space-y-1.5">
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Status / Hint Text (Optional)</label>
+                      <input
+                        v-model="localForm.switch_status_text"
+                        type="text"
+                        maxlength="300"
+                        placeholder="e.g. The microwave needs some electrical power first."
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs text-white focus:border-lime-500/50 outline-none transition-all"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Shown inside the switch or container-switch dialog (can be updated or cleared via script: <code class="text-slate-400">obj.set_status_text(...)</code> / <code class="text-slate-400">obj.clear_status_text()</code>).
+                      </span>
+                    </div>
                   </div>
 
                   <!-- 3. Transitions Management -->
@@ -1965,6 +1986,45 @@ const textLogPreviewClass = computed(() => {
                       :enable-search="true"
                     />
                   </div>
+                </div>
+
+                <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-4">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Min Items Required</label>
+                      <input
+                        v-model.number="localForm.min_items"
+                        type="number"
+                        min="0"
+                        max="50"
+                        placeholder="0 (No minimum)"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Minimum items needed inside (e.g. 3 for a fuse box requiring 3 components).
+                      </span>
+                    </div>
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Max Items Capacity</label>
+                      <input
+                        v-model.number="localForm.max_items"
+                        type="number"
+                        min="0"
+                        max="50"
+                        placeholder="0 (Unlimited)"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Maximum items that fit inside (e.g. 1 for a microwave or coin slot).
+                      </span>
+                    </div>
+                  </div>
+                  <p
+                    v-if="Number(localForm.min_items || 0) > 0 && Number(localForm.max_items || 0) > 0 && Number(localForm.min_items) > Number(localForm.max_items)"
+                    class="text-xs text-red-400 font-bold"
+                  >
+                    Min Items cannot be greater than Max Items Capacity.
+                  </p>
                 </div>
 
                 <div v-if="['CONTAINER', 'CONTAINER_SWITCH'].includes(currentItemType)" class="space-y-3">

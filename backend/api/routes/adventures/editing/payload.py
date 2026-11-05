@@ -140,6 +140,7 @@ def _switch_fields(metadata_json: dict[str, Any]) -> dict[str, Any]:
         "switch_state_labels": pick("switch_state_labels", "state_labels", {}),
         "switch_initial_state": pick("switch_initial_state", "initial_state", ""),
         "switch_disabled_states": pick("switch_disabled_states", "disabled_states", []),
+        "switch_status_text": pick("switch_status_text", "status_text", ""),
         "switch_transitions": pick("switch_transitions", "transitions", []),
         "on_success_script": pick("on_success_script", "on_success_script", ""),
         "on_failure_script": pick("on_failure_script", "on_failure_script", ""),
@@ -159,6 +160,8 @@ def _object_extras(entity: WorldEntity) -> dict[str, Any]:
         },
         **_text_fields(metadata_json, _OBJECT_METADATA_FIELDS),
         "locked": locked,
+        "min_items": metadata_json.get("min_items"),
+        "max_items": metadata_json.get("max_items"),
         **_switch_fields(metadata_json),
     }
 

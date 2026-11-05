@@ -152,6 +152,12 @@ def _container_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
         unlock_expression=expression,
         locked=bool(explicit_locked) if isinstance(explicit_locked, bool) else has_gates,
     )
+    for cap_key in ("min_items", "max_items"):
+        raw_cap = obj.get(cap_key) if obj.get(cap_key) is not None else metadata.get(cap_key)
+        if isinstance(raw_cap, (int, float)) and int(raw_cap) > 0:
+            metadata[cap_key] = max(1, min(50, int(raw_cap)))
+        else:
+            metadata.pop(cap_key, None)
     _merge_fields(obj, metadata, _CONTAINER_SCRIPT_FIELDS)
 
 
