@@ -13,6 +13,7 @@ from backend.api.routes.adventures.guardrails.items import ItemIntegrityMixin
 from backend.api.routes.adventures.guardrails.locks import LockEngineMixin
 from backend.api.routes.adventures.guardrails.progress import ProgressGuardMixin
 from backend.api.routes.adventures.guardrails.reading import ReadingMixin
+from backend.api.routes.adventures.guardrails.removals import InventoryRemovalGuardMixin
 from backend.api.routes.adventures.guardrails.reveals import RevealGuardMixin
 from backend.api.routes.adventures.guardrails.soft_rules import SoftRuleGuardMixin
 from backend.api.routes.adventures.guardrails.world_rules import WorldRulesMixin
@@ -27,6 +28,7 @@ class TurnGuardrailsManager(
     ExitGuardMixin,
     LockEngineMixin,
     ItemIntegrityMixin,
+    InventoryRemovalGuardMixin,
     CraftingGuardMixin,
     RevealGuardMixin,
     ProgressGuardMixin,

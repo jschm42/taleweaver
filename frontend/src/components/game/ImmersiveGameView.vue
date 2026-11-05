@@ -517,7 +517,7 @@ defineExpose({
       :background-image-url="transitionSceneImageUrl"
     />
 
-    <!-- 6. CINEMATIC SEQUENCE TITLE OVERLAY (full window, above the travel curtain) -->
+    <!-- 6. CINEMATIC SEQUENCE TITLE BAND (translucent, above the travel curtain) -->
     <CinematicSequenceOverlay
       :active-sequence="props.activeSequence"
       :adventure-title="props.adventureTitle"
