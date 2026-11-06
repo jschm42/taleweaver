@@ -10,6 +10,11 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.container_detach import (
+    carried_ids,
+    detach_carried_items,
+    entry_id,
+)
 from backend.api.routes.adventures.container_put import (
     put_items_into_container,
     run_container_items_removed_trigger,
@@ -1071,6 +1076,7 @@ class TurnInteractionsManager:
                 states[ent.id]["current_scene_id"] = "INVENTORY"
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
+                await detach_carried_items(self.db, self.state, [ent.id])
                 response = f"Added {ent.name} to your inventory."
                 await self._check_special_action_unlocks("FIND_ITEM", ent.id)
 
@@ -1242,8 +1248,23 @@ class TurnInteractionsManager:
                             locked_items = [
                                 item for item in normalized_items if self._is_item_take_locked(item)
                             ]
+                            # Stale entries of items already carried are dropped, not copied.
+                            carried = carried_ids(self.avatar.inventory)
+                            unlocked_items = [
+                                item for item in unlocked_items if entry_id(item) not in carried
+                            ]
                             if not unlocked_items:
-                                response = f"All items in {container_name} are locked."
+                                await self._set_container_inventory(
+                                    scene_container,
+                                    inventory_container,
+                                    inventory_idx,
+                                    locked_items,
+                                )
+                                response = (
+                                    f"All items in {container_name} are locked."
+                                    if locked_items
+                                    else f"{container_name} is empty."
+                                )
                             else:
                                 new_inventory = list(self.avatar.inventory or [])
                                 for item in unlocked_items:
@@ -1675,10 +1696,16 @@ class TurnInteractionsManager:
             return f"{container_name} does not contain '{item_hint}'."
         if self._is_item_take_locked(match_item):
             return f"{match_item.get('name') or item_hint} is locked and cannot be taken right now."
+        remaining = [raw for idx, raw in enumerate(raw_items) if idx != match_idx]
+        if entry_id(match_item) in carried_ids(self.avatar.inventory):
+            # A stale entry: the item already left this container.
+            await self._set_container_inventory(
+                scene_container, inventory_container, inventory_idx, remaining
+            )
+            return f"{match_item.get('name') or item_hint} is already in your inventory."
 
         await self._move_container_item_to_inventory(match_item)
         self.avatar.inventory = [*(self.avatar.inventory or []), match_item]
-        remaining = [raw for idx, raw in enumerate(raw_items) if idx != match_idx]
         await self._set_container_inventory(
             scene_container, inventory_container, inventory_idx, remaining
         )

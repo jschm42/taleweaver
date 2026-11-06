@@ -9,6 +9,10 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.award_granting import grant_awards
+from backend.api.routes.adventures.container_detach import (
+    detach_from_containers,
+    load_session_containers,
+)
 from backend.api.routes.adventures.entity_state_merge import merge_entity_states
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.quest_completion import (
@@ -856,6 +860,12 @@ class TurnStateApplier:
                         if meta.get("on_pickup_text"):
                             await self._save_chat_message("system", meta["on_pickup_text"])
                             system_messages.append(meta["on_pickup_text"])
+
+        granted_ids = [item.id for item in event.new_inventory_items or [] if item.id]
+        if granted_ids:
+            containers = await load_session_containers(self.db, self.game_id)
+            if detach_from_containers(states, containers, granted_ids):
+                state_dirty = True
 
         if event.removed_inventory_item_ids:
             for item_id in event.removed_inventory_item_ids:

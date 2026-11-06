@@ -61,13 +61,11 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
   },
   exits: {
     name: 'exits',
-    doc: 'Queries and locks/unlocks passage exits',
+    doc: 'Queries and locks/unlocks passage exits (addressed by route: from_scene_id, to_scene_id)',
     items: [
-      { name: 'lock', kind: 'method', signature: '(exit_id: str, reason: str = "")', snippet: 'lock("${1:EXIT_ID}", "${2:Locked}")', doc: 'Locks an exit with an optional reason.' },
-      { name: 'unlock', kind: 'method', signature: '(exit_id: str)', snippet: 'unlock("${1:EXIT_ID}")', doc: 'Unlocks a locked passage.' },
-      { name: 'hide', kind: 'method', signature: '(exit_id: str)', snippet: 'hide("${1:EXIT_ID}")', doc: 'Hides exit from player view and map.' },
-      { name: 'reveal', kind: 'method', signature: '(exit_id: str)', snippet: 'reveal("${1:EXIT_ID}")', doc: 'Reveals a hidden exit or secret door.' },
-      { name: 'is_locked', kind: 'method', signature: '(exit_id: str) -> bool', snippet: 'is_locked("${1:EXIT_ID}")', doc: 'Returns True if the exit is locked.' },
+      { name: 'lock', kind: 'method', signature: '(from_scene_id: str, to_scene_id: str, reason: str = None)', snippet: 'lock("${1:FROM_SCENE}", "${2:TO_SCENE}", "${3:Locked}")', doc: 'Locks the exit on this route with an optional reason.' },
+      { name: 'unlock', kind: 'method', signature: '(from_scene_id: str, to_scene_id: str)', snippet: 'unlock("${1:FROM_SCENE}", "${2:TO_SCENE}")', doc: 'Unlocks the exit on this route.' },
+      { name: 'is_locked', kind: 'method', signature: '(from_scene_id: str, to_scene_id: str) -> bool', snippet: 'is_locked("${1:FROM_SCENE}", "${2:TO_SCENE}")', doc: 'Returns True if the exit on this route is locked.' },
     ],
   },
   npcs: {
@@ -337,7 +335,7 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   // Sub-namespaces
   { name: 'player', kind: 'namespace', doc: 'Avatar stats, HP, and inventory management.' },
   { name: 'scene', kind: 'namespace', doc: 'Current scene inspection, attributes, and teleportation.' },
-  { name: 'exits', kind: 'namespace', doc: 'Passage locking, unlocking, and hidden exits.' },
+  { name: 'exits', kind: 'namespace', doc: 'Passage locking and unlocking.' },
   { name: 'npcs', kind: 'namespace', doc: 'NPC dialogue, movement, combat, cloning, and persona.' },
   { name: 'objects', kind: 'namespace', doc: 'World objects, inventory items, containers, and cloning.' },
   { name: 'items', kind: 'namespace', doc: 'Alias for tw.objects.' },

@@ -423,12 +423,12 @@ tw.story.direct("The floor gives way. The player tumbles down into the cellar.")
 ```
 
 ### `tw.exits`
-Queries and manipulates passage exits:
-- `tw.exits.lock(exit_id: str, reason: str = "")`: Locks the exit. If the player attempts to traverse it, `reason` explains why it is blocked.
-- `tw.exits.unlock(exit_id: str)`: Unlocks a previously locked passage.
-- `tw.exits.hide(exit_id: str)`: Hides the exit from the player's map and navigation choices.
-- `tw.exits.reveal(exit_id: str)`: Reveals a hidden exit or secret door.
-- `tw.exits.is_locked(exit_id: str) -> bool`: Returns `True` if the exit is currently locked.
+Queries and locks/unlocks passage exits. Exits are addressed by their route (`from_scene_id`, `to_scene_id`), not by the generated exit ID; a bidirectional exit can be named from either side. `"FROM:TO"` in one string works as well.
+- `tw.exits.lock(from_scene_id: str, to_scene_id: str, reason: str = None)`: Locks the exit. If the player attempts to traverse it, `reason` explains why it is blocked.
+- `tw.exits.unlock(from_scene_id: str, to_scene_id: str)`: Unlocks a previously locked passage.
+- `tw.exits.is_locked(from_scene_id: str, to_scene_id: str) -> bool`: Returns `True` if the exit is currently locked.
+
+Exits cannot be hidden: every exit of a scene is listed. For a secret door, lock the exit and unlock it from a script, or set `is_revealed` on the exit to show its destination on the map before the player has been there.
 
 ### `tw.npcs`
 Inspects, dialogues with, moves, and manages Non-Player Characters:
@@ -890,11 +890,11 @@ Target: `SCENE_CASTLE_GATES`
 # Check if the player possesses the royal seal
 if not tw.player.has_item("ROYAL_SIGNET"):
     # Lock the inner courtyard exit
-    tw.exits.lock("EXIT_TO_COURTYARD", "The armored sentry lowers his halberd: 'Halt! Only bearers of the Royal Signet may enter.'")
+    tw.exits.lock("SCENE_CASTLE_GATES", "SCENE_COURTYARD", "The armored sentry lowers his halberd: 'Halt! Only bearers of the Royal Signet may enter.'")
     tw.story.narrate("The castle guard steps forward, barring the iron gate.")
 else:
     # Unlock and allow passage
-    tw.exits.unlock("EXIT_TO_COURTYARD")
+    tw.exits.unlock("SCENE_CASTLE_GATES", "SCENE_COURTYARD")
     tw.story.narrate("The guard notices the Royal Signet ring, salutes respectfully, and raises the heavy portcullis.")
 ```
 
@@ -916,7 +916,7 @@ g = tw.vars.get("lever_gold", False)
 if b and r and g:
     if not tw.vars.get("vault_unlocked", False):
         tw.vars.set("vault_unlocked", True)
-        tw.exits.unlock("EXIT_VAULT_DOOR")
+        tw.exits.unlock("SCENE_VAULT_HALL", "SCENE_VAULT")
         tw.story.narrate("With a resonant chime, all three mechanisms lock into place and the massive vault door unseals!")
         tw.awards.grant("PUZZLE_MASTER")
 ```
@@ -1002,7 +1002,7 @@ Target: `LEVER_POWER_GRID`
 # Check state of another mechanism before powering the main grid
 if tw.switches.is_state("VALVE_COOLANT", "OPEN"):
     tw.switches.set_state("LEVER_POWER_GRID", "ONLINE")
-    tw.exits.unlock("EXIT_VAULT_DOOR")
+    tw.exits.unlock("SCENE_VAULT_HALL", "SCENE_VAULT")
     tw.story.narrate("Coolant surges into the coils. The main power grid hums online and the vault unseals!")
 else:
     tw.story.narrate("The lever clicks, but nothing happens. A red warning light blinks: 'Coolant valve must be opened first!'")
