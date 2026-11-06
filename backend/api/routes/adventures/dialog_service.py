@@ -22,6 +22,7 @@ from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.history_compression_window import CHOICE_MESSAGE_PREFIX
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks
+from backend.api.routes.adventures.story_continuation import continuation_due
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.rules.rule_engine import GameOverError
 from backend.engine.scripting.dialog import (
@@ -44,6 +45,8 @@ _NARRATION_SYSTEM_PROMPT = (
     "facts were decided by the game engine and are binding: stay consistent with them and never "
     "invent additional state changes, items, damage or rewards. 'npcs_present' describes the "
     "current personality and goal of the NPCs in the scene: let them shape how those NPCs react. "
+    "'already_shown' holds the narration and dialogue lines the player has just read on screen: "
+    "never repeat, quote or paraphrase them; continue the scene right where they end. "
     "Work any 'author_directions' naturally into the narration; a direction that makes an NPC "
     "speak becomes its own dialogue line, in addition to the 2-4 sentences. "
     "Dialogue format (mandatory): every spoken line starts on a NEW line as "
@@ -51,6 +54,11 @@ _NARRATION_SYSTEM_PROMPT = (
     "separated from the prose by a blank line; NEVER embed quotation marks or spoken dialogue inside prose sentences. "
     "Use colons only for this speaker attribution. No JSON, lists or headings."
 )
+
+
+def _is_story_line(message: Any) -> bool:
+    """Narration and NPC speech of the handler (tw.story.narrate, tw.npcs.say), not notices."""
+    return getattr(message, "role", "system") == "assistant"
 
 
 class DialogChoiceResolver:
@@ -99,7 +107,13 @@ class DialogChoiceResolver:
                 messages.append(narration)
                 ended = await self._run_after_narration(messages)
         await self.manager.db.commit()
-        return {"status": "ok", "messages": [str(m) for m in messages]}
+        # A callback still waits for a narration: the client continues the scene on its own.
+        follow_up = not ended and continuation_due(self.manager.state.entity_states)
+        return {
+            "status": "ok",
+            "messages": [str(m) for m in messages],
+            "continue_story": follow_up,
+        }
 
     async def _run_after_narration(self, messages: list[Any]) -> bool:
         """Callbacks of the narrated directions; returns True when the adventure ended."""
@@ -178,6 +192,7 @@ class DialogChoiceResolver:
             or "openai"
         )
         model = settings.get("small_model") or "gpt-4o-mini"
+        visible = [m for m in outcome if not str(m).startswith("[DEBUG")]
         system_prompt = _NARRATION_SYSTEM_PROMPT
         if language:
             system_prompt += f" Respond only in {language}."
@@ -186,7 +201,8 @@ class DialogChoiceResolver:
             "speaker": dialog.get("speaker"),
             "question": dialog.get("prompt"),
             "player_choice": option["label"],
-            "outcome_facts": [str(m) for m in outcome if not str(m).startswith("[DEBUG")],
+            "already_shown": [str(m) for m in visible if _is_story_line(m)],
+            "outcome_facts": [str(m) for m in visible if not _is_story_line(m)],
             "npcs_present": await self._scene_npc_personas(),
             "author_directions": pending_gm_directions(self.manager.state.entity_states),
         }

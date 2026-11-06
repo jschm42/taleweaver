@@ -40,6 +40,8 @@ const SILENT_COMMANDS = new Set([
   '/shuffle',
   '/suggest',
   '/suggestions',
+  // The scene goes on by itself after a dialog choice (sent by the client, not the player)
+  '/continue_story',
 ])
 
 /**

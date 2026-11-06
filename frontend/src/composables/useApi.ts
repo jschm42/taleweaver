@@ -600,7 +600,7 @@ export const api = {
 
 
   /** Answers the choice dialog a script opened (tw.dialog.choose) and runs its handler. */
-  chooseDialogOption(gameId: string, dialogId: string, index: number, language?: string): Promise<{ status: string; messages: string[] }> {
+  chooseDialogOption(gameId: string, dialogId: string, index: number, language?: string): Promise<{ status: string; messages: string[]; continue_story?: boolean }> {
     return request(`/adventures/${gameId}/dialog/choice`, {
       method: 'POST',
       body: JSON.stringify({ dialog_id: dialogId, index, language: language || undefined }),

@@ -20,6 +20,10 @@ from backend.api.routes.adventures.agent_commands import (
 from backend.api.routes.adventures.after_narration import run_after_narration
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
 from backend.api.routes.adventures.history_compression_window import messages_to_compress
+from backend.api.routes.adventures.story_continuation import (
+    CONTINUE_STORY_COMMAND,
+    continue_story,
+)
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
 from backend.api.routes.adventures.talent_use import resolve_talent_request, stream_talent_turn
@@ -826,6 +830,19 @@ class GameTurnManager:
             await self._generate_prompt_suggestions(last_response)
             await self.db.commit()
             yield await self._command_final_event()
+            return
+
+        if user_msg.lower() == CONTINUE_STORY_COMMAND:
+            try:
+                async for chunk in continue_story(self, language):
+                    yield chunk
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                detail = (
+                    _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
+                )
+                yield f"event: error\ndata: {json.dumps({'detail': detail, 'retryable': True})}\n\n"
             return
 
         cmd_parts = user_msg.strip().split(None, 1)

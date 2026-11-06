@@ -452,14 +452,18 @@ const handleDialogChoice = async (index: number): Promise<void> => {
   if (!dialog || dialogChoiceBusy.value) return
   dialogChoiceBusy.value = true
   dialogChoiceError.value = ''
+  let continueStory = false
   try {
-    await api.chooseDialogOption(props.id, dialog.id, index, language.value)
+    const result = await api.chooseDialogOption(props.id, dialog.id, index, language.value)
+    continueStory = Boolean(result?.continue_story)
   } catch (error: any) {
     dialogChoiceError.value = error?.message || 'Your choice could not be applied.'
   } finally {
     await refreshSession(true)
     dialogChoiceBusy.value = false
   }
+  // The handler queued a follow-up beat (tw.story.direct(..., after=...)): play it right away.
+  if (continueStory) await sendMessage('/continue_story')
 }
 
 const handleEntityClick = async (entity: any) => {
