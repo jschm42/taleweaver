@@ -353,9 +353,11 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     actionStartIndex = messages.value.length
   })
 
+  // The window starts with a request and closes when it is done: a scene change later on (an
+  // exit click starts the travel overlay before its request) never re-reads finished turns.
   watch(() => status.value, (newStatus, oldStatus) => {
     const isBusy = (value: string): boolean => value === 'connecting' || value === 'loading'
-    if (isBusy(newStatus) && !isBusy(oldStatus)) actionStartIndex = messages.value.length
+    if (isBusy(newStatus) !== isBusy(oldStatus)) actionStartIndex = messages.value.length
   })
 
   // Leaving the scene silences the old narration; the new scene is read once the overlay is gone.
@@ -377,8 +379,13 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       // A chained turn may already be streaming: its progress reader also catches up on the
       // lines that were cut off by the overlay.
       const busy = status.value === 'connecting' || status.value === 'loading'
-      if (busy) speakStreamingProgress()
-      else speakLatestAssistantMessage()
+      if (busy) {
+        speakStreamingProgress()
+        return
+      }
+      speakLatestAssistantMessage()
+      // The cut-off lines are queued again; the next scene change must not repeat them.
+      actionStartIndex = messages.value.length
     }, DEFERRED_SPEECH_DELAY_MS)
   })
 
