@@ -1,5 +1,7 @@
 """Integration tests for the AI fix suggestion / apply endpoints."""
 
+from datetime import UTC
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -13,6 +15,7 @@ from backend.models.user import User
 from backend.models.validation_run import ValidationRun
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from tests.conftest import TestSessionLocal
+from tests.server_settings_helpers import seed_server_settings
 
 
 def _auth_headers(username: str) -> dict:
@@ -128,6 +131,7 @@ async def test_suggest_fix_returns_proposals(client, setup_test_db, monkeypatch)
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -201,6 +205,7 @@ async def test_suggest_fix_rejects_more_than_three(client, setup_test_db, monkey
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -282,6 +287,7 @@ async def test_suggest_fix_timeout_returns_200_with_error(client, setup_test_db,
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -337,6 +343,7 @@ async def test_suggest_fix_runtime_error_returns_200_with_error(client, setup_te
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -385,6 +392,7 @@ async def test_suggest_fix_all_missing_keys_returns_config_message(
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -437,6 +445,7 @@ async def test_suggest_fix_all_timeouts_returns_timeout_message(
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -448,7 +457,7 @@ async def test_suggest_fix_all_timeouts_returns_timeout_message(
 
         async def aexecute_complex_task(self, **kwargs):
             await _asyncio.sleep(2)
-            raise _asyncio.TimeoutError()
+            raise TimeoutError()
 
     from backend.api.routes.adventures.editing import ai_fix_llm as editor_module
 
@@ -489,6 +498,7 @@ async def test_suggest_fix_uses_focused_prompt(client, setup_test_db, monkeypatc
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -557,6 +567,7 @@ async def test_suggest_fix_falls_back_on_timeout(client, setup_test_db, monkeypa
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -571,7 +582,7 @@ async def test_suggest_fix_falls_back_on_timeout(client, setup_test_db, monkeypa
         async def aexecute_complex_task(self, **kwargs):
             attempts.append("primary")
             await _asyncio.sleep(5)
-            raise _asyncio.TimeoutError()
+            raise TimeoutError()
 
     class _FallbackPatch:
         def __init__(self):
@@ -657,6 +668,7 @@ async def test_suggest_fix_falls_back_to_user_small_provider(client, setup_test_
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -671,7 +683,7 @@ async def test_suggest_fix_falls_back_to_user_small_provider(client, setup_test_
         async def aexecute_complex_task(self, **kwargs):
             attempts.append("deepseek")
             await _asyncio.sleep(2)
-            raise _asyncio.TimeoutError()
+            raise TimeoutError()
 
     class _Patch:
         def __init__(self):
@@ -748,6 +760,7 @@ async def test_suggest_fix_skips_provider_with_missing_api_key(client, setup_tes
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -832,6 +845,7 @@ async def test_suggest_fix_clean_error_when_all_providers_unavailable(
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -878,6 +892,7 @@ async def test_suggest_fix_cache_hit_skips_llm(client, setup_test_db, monkeypatc
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -949,6 +964,7 @@ async def test_apply_fix_evicts_cache(client, setup_test_db, monkeypatch):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1037,6 +1053,7 @@ async def test_apply_fix_resolves_exit_by_composite_id(client, setup_test_db):
     user = User(username="fix_user_exit_composite", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1088,6 +1105,7 @@ async def test_apply_fix_resolves_exit_by_from_scene_only(client, setup_test_db)
     user = User(username="fix_user_exit_from", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1137,6 +1155,7 @@ async def test_apply_fix_resolves_exit_by_label(client, setup_test_db):
     user = User(username="fix_user_exit_label", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1183,7 +1202,7 @@ async def test_apply_fix_resolves_exit_by_label(client, setup_test_db):
 async def test_apply_fix_with_stale_uuid_still_404(client, setup_test_db):
     """A target_id that resolves to nothing should still produce a clean 400 + cache evict."""
 
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import delete as _del
     from sqlalchemy import select as _sel
@@ -1193,6 +1212,7 @@ async def test_apply_fix_with_stale_uuid_still_404(client, setup_test_db):
     user = User(username="fix_user_stale_uuid", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
         user_id = user.id
@@ -1211,7 +1231,7 @@ async def test_apply_fix_with_stale_uuid_still_404(client, setup_test_db):
                 user_id=user_id,
                 finding_signature=stale_sig,
                 response=cache_payload,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
             )
         )
         await db.commit()
@@ -1263,6 +1283,7 @@ async def test_apply_fix_to_npc_description(client, setup_test_db):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1316,6 +1337,7 @@ async def test_apply_fix_to_object_container_code(client, setup_test_db):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1369,6 +1391,7 @@ async def test_apply_fix_to_adventure_field(client, setup_test_db):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1415,6 +1438,7 @@ async def test_apply_fix_rejects_unknown_field(client, setup_test_db):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1467,6 +1491,7 @@ async def test_apply_fix_to_protagonist(client, setup_test_db):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
         db.add(
@@ -1528,6 +1553,7 @@ async def test_apply_fix_no_op_when_patches_empty(client, setup_test_db):
     user = User(username="fix_user_no_op", hashed_password="x", role="admin")
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1555,6 +1581,7 @@ async def test_apply_fix_does_not_call_llm(client, setup_test_db, monkeypatch):
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1608,6 +1635,7 @@ async def test_apply_fix_removes_finding_from_persisted_validation_run(client, s
     )
     async with TestSessionLocal() as db:
         db.add(user)
+        await seed_server_settings(db, llm_settings=user.llm_settings)
         await db.commit()
         tpl_id = await _seed_simple_adventure(db, owner=user)
 
@@ -1626,7 +1654,7 @@ async def test_apply_fix_removes_finding_from_persisted_validation_run(client, s
             "location": "scene:START",
             "context": {},
         }
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.api.routes.adventures.editor import _finding_signature
         from backend.schemas.validation import ValidationFinding
@@ -1643,7 +1671,7 @@ async def test_apply_fix_removes_finding_from_persisted_validation_run(client, s
             ai_finding_count=2,
             error_count=0,
             warning_count=2,
-            run_at=datetime.now(timezone.utc),
+            run_at=datetime.now(UTC),
         )
         db.add(run)
         await db.commit()

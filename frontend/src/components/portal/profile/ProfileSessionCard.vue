@@ -15,7 +15,9 @@ const progressPercent = computed(() => {
   return total ? Math.round((done / total) * 100) : 0
 })
 const currentChapter = computed(() => props.session.sequences.find(s => s.active)?.title)
-const lastDate = computed(() => formatShortDate(props.session.updated_at || props.session.created_at))
+const lastDate = computed(() => formatShortDate(
+  props.session.last_played_at || props.session.updated_at || props.session.created_at,
+))
 </script>
 
 <template>
@@ -29,6 +31,7 @@ const lastDate = computed(() => formatShortDate(props.session.updated_at || prop
         v-if="session.image_url"
         :src="session.image_url"
         alt=""
+        loading="lazy"
         class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         :class="isDefeated ? 'grayscale opacity-50' : 'opacity-80'"
       />

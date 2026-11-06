@@ -18,7 +18,7 @@ DEFAULT_TTS_PREFERENCES: dict[str, bool] = {
     "readables": True,
 }
 
-# game_settings keys that belong to one player and must survive the global settings broadcast.
+# game_settings keys that belong to one player; they stay in User.game_settings, never in ServerSettings.
 USER_SCOPED_GAME_SETTING_KEYS = (TTS_PREFERENCES_KEY,)
 
 

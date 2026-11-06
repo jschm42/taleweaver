@@ -35,9 +35,9 @@ class ModelListResponse(BaseModel):
 
 
 def _resolve_api_key(user: User, provider: str) -> Optional[str]:
-    """Environment first (as at runtime), then the admin's stored key.
+    """Environment first (as at runtime), then the stored server key.
 
-    Global settings are broadcast to every user, so the admin's own copy is current.
+    ``get_current_user`` lays the server settings over ``user``, so its keys are current.
     """
     env_key = settings.get_env_api_key(provider)
     if env_key:

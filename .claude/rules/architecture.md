@@ -129,6 +129,11 @@ graph TD
 * **Exit Resolution Rule**:
   * Always resolve session-scoped exits by preferring session records over template records to respect dynamic in-game unlocking.
 
+### Server-Wide Settings (`backend/core/global_settings.py`)
+* API keys, LLM / image / TTS settings, the style, tone and narrator voice catalogs and the shared `game_settings` exist **once**, in the single-row table `server_settings` (`backend/models/server_settings.py`). Admins manage it; it belongs to no user. `User.game_settings` holds only the player-owned keys (`USER_SCOPED_GAME_SETTING_KEYS`).
+* `User.encrypted_api_keys`, `llm_settings`, `t2i_settings`, `tts_settings`, `image_styles_catalog` and `tone_catalog` are plain runtime attributes, not columns. `get_current_user` and the background loaders (generation jobs, manifest apply, change sets, imports) call `apply_global_settings`, which copies the server values onto the instance, so LLM / image / TTS code reads `user.llm_settings` & co. as usual. A new code path that loads a `User` by id and then uses these settings must call `apply_global_settings` too.
+* Reads without a user use `read_server_settings(db)` (returns an empty unsaved row when none exists). Admin writes use `get_server_settings_for_update(db)`; shared game settings are stored via `shared_game_settings(...)`. Tests seed the row with `tests/server_settings_helpers.seed_server_settings`.
+
 ---
 
 ## 4. Engine Package Layout (`backend/engine/`)

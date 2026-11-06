@@ -21,6 +21,7 @@ from backend.core.adventure_format import (
 )
 from backend.core.adventure_identity import manifest_origin_id
 from backend.core.config import settings
+from backend.core.global_settings import apply_global_settings
 from backend.engine.adventures.adventure_importer import AdventureTemplateImporter
 from backend.engine.rules.sequence_walkthrough import legacy_main_sequence
 from backend.models.adventure_template import AdventureTemplate
@@ -589,7 +590,7 @@ async def migrate_single_adventure(
             from backend.models.user import User
 
             user_res = await db.execute(select(User).where(User.id == user_id))
-            user = user_res.scalars().first()
+            user = await apply_global_settings(db, user_res.scalars().first())
             await WorldGenerator.apply_manifest(
                 db=db,
                 template_id=template.id,

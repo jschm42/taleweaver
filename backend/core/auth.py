@@ -1,6 +1,6 @@
 import asyncio
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 import jwt
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.core.database import get_db
+from backend.core.global_settings import apply_global_settings
 from backend.models.user import User
 
 # PBKDF2-HMAC-SHA256 with explicit iteration count above OWASP 2023 guidance
@@ -108,10 +109,10 @@ def validate_username(username: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
+        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": datetime.now(UTC)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -157,6 +158,8 @@ async def get_current_user(
     user = result.scalars().first()
     if user is None or not _token_matches_user(payload, user):
         raise credentials_exception
+    # Server-wide settings live only in the owner's row; every request reads them live.
+    await apply_global_settings(db, user)
     return user
 
 

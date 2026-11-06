@@ -18,11 +18,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.core.global_settings import SettingsSource, read_server_settings
 from backend.core.security import encryption_util
 from backend.engine.audio.elevenlabs_voices import VoiceOption, custom_voice_id, load_voice_catalog
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
-from backend.models.user import User
 
 NPC_VOICE_PROVIDER: Final = "elevenlabs"
 # Key of the protagonist in the voice metadata (NPC ids are upper-case slugs, never this).
@@ -116,24 +116,18 @@ def cast_npc_voices(
     return cast_voices(candidates, setup.voices, reserved=[setup.narrator_voice])
 
 
-async def load_tts_owner(db: AsyncSession) -> Optional[User]:
-    """TTS settings are global and owned by the (first) admin."""
-    return (await db.execute(select(User).where(User.role == "admin").limit(1))).scalars().first()
-
-
-def provider_api_key(provider: str, owner: Optional[User]) -> Optional[str]:
-    """The provider key from the environment, else the owner's stored (encrypted) key."""
+def provider_api_key(provider: str, source: Optional[SettingsSource]) -> Optional[str]:
+    """The provider key from the environment, else the stored (encrypted) server key."""
     api_key = settings.get_env_api_key(provider)
     if api_key:
         return api_key
-    encrypted = ((owner.encrypted_api_keys if owner else None) or {}).get(provider)
+    encrypted = ((source.encrypted_api_keys if source else None) or {}).get(provider)
     return encryption_util.decrypt_key(encrypted) if encrypted else None
 
 
 async def resolve_voice_setup(db: AsyncSession) -> VoiceSetup:
     """Active TTS provider, narrator voice and (for ElevenLabs) the voice list."""
-    owner = await load_tts_owner(db)
-    tts_settings = (owner.tts_settings if owner else None) or {}
+    tts_settings = (await read_server_settings(db)).tts_settings or {}
     provider = str(tts_settings.get("provider") or "google").lower()
     if provider != NPC_VOICE_PROVIDER:
         return VoiceSetup(provider, str(tts_settings.get("selected_voice") or ""), [])

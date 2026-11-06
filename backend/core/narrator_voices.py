@@ -1,6 +1,6 @@
 """Narrator voices: HOW the GM narrates (diction, rhythm, attitude), not how much.
 
-The admin manages a catalog of voices (``User.narrator_voice_catalog``, defaults below). An
+The admin manages a catalog of voices (``ServerSettings.narrator_voice_catalog``, defaults below). An
 adventure stores its voice in ``AdventureTemplate.narrator_voice`` as a full copy
 (``{"id", "name", "instruction", "sample"}``), so manifests and running sessions keep working
 without the catalog. ``id == "custom"`` marks a voice written by the author in the editor.

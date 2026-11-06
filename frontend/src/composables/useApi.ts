@@ -60,6 +60,29 @@ export interface PlayerSessionSummary {
   sequences_total: number
   created_at?: string | null
   updated_at?: string | null
+  last_played_at?: string | null
+}
+
+export type PlayerSessionStatus = 'active' | 'completed' | 'game_over' | 'archived'
+export type PlayerSessionSort = 'recent' | 'oldest' | 'title' | 'xp'
+export type PlayerSessionCounts = Record<PlayerSessionStatus | 'all', number>
+
+export interface PlayerSessionQuery {
+  status?: PlayerSessionStatus | null
+  search?: string
+  sort?: PlayerSessionSort
+  limit?: number
+  offset?: number
+}
+
+export interface PlayerSessionPage {
+  items: PlayerSessionSummary[]
+  /** Sessions matching status filter and search. */
+  total: number
+  /** Per status for the search alone (filter chip numbers). */
+  counts: PlayerSessionCounts
+  /** Per status without any filter (profile stats). */
+  totals: PlayerSessionCounts
 }
 
 class ApiError extends Error {
@@ -862,8 +885,15 @@ export const api = {
     return request('/users/me/preferences', { method: 'PUT', body: JSON.stringify(payload) })
   },
 
-  getMySessions(): Promise<PlayerSessionSummary[]> {
-    return request('/users/me/sessions')
+  getMySessions(query: PlayerSessionQuery = {}): Promise<PlayerSessionPage> {
+    const params = new URLSearchParams()
+    if (query.status) params.set('status', query.status)
+    if (query.search?.trim()) params.set('search', query.search.trim())
+    if (query.sort) params.set('sort', query.sort)
+    if (query.limit) params.set('limit', String(query.limit))
+    if (query.offset) params.set('offset', String(query.offset))
+    const qs = params.toString()
+    return request(`/users/me/sessions${qs ? `?${qs}` : ''}`)
   },
 
   createPasswordResetLink(userId: string): Promise<{ token: string; expires_in_hours: number }> {

@@ -322,8 +322,8 @@ async def generate_my_profile_image(
     current_user: User = USER_DEP,
     db: AsyncSession = DB_DEP,
 ):
-    admin_res = await db.execute(select(User).where(User.role == "admin").limit(1))
-    settings_owner = admin_res.scalars().first() or current_user
+    # Server settings are laid over current_user by get_current_user.
+    settings_owner = current_user
 
     t2i = settings_owner.t2i_settings or {}
     if not t2i:
