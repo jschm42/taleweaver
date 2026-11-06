@@ -19,8 +19,9 @@ from backend.engine.scripting.gm_directions import pending_after_narration
 CONTINUE_STORY_COMMAND = "/continue_story"
 CONTINUE_STORY_PROMPT = (
     "[CONTINUE] The player does nothing: the scene goes on by itself. Narrate only the next short "
-    "moment of the current scene in one paragraph, following the author's directions. Do not "
-    "repeat what was already narrated and do not change any state."
+    "moment of the current scene in one paragraph, following the author's directions. The player "
+    "character neither acts nor speaks in it: describe only what the others do and what can be "
+    "heard or seen. Do not repeat what was already narrated and do not change any state."
 )
 
 

@@ -9,11 +9,11 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { audioService } from '@/services/audioService'
+import { waitForSpeechToFinish } from '@/services/speechWait'
 
 /** Shortest pause between two auto-mode turns, so the player can follow along. */
 const MIN_STEP_DELAY_MS = 1500
 /** Narration is read once its turn has ended; this long the loop waits for speech to start. */
-const SPEECH_START_GRACE_MS = 4000
 const POLL_INTERVAL_MS = 250
 
 export const PLAY_AGENT_PERSONALITIES = [
@@ -41,10 +41,6 @@ const nextStepAt = ref<number | null>(null)
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function isSpeechBusy(): boolean {
-  return audioService.isPlaying.value || audioService.isGenerating.value
 }
 
 export function usePlayAgent() {
@@ -138,13 +134,7 @@ export function usePlayAgentAutoLoop(): void {
   async function waitForSpeech(): Promise<void> {
     if (!waitForTts.value || !audioService.autoSpeechEnabled.value) return
     autoLoopPhase.value = 'speech'
-    const startDeadline = Date.now() + SPEECH_START_GRACE_MS
-    while (shouldAutoRun() && !isSpeechBusy() && Date.now() < startDeadline) {
-      await sleep(POLL_INTERVAL_MS)
-    }
-    while (shouldAutoRun() && isSpeechBusy()) {
-      await sleep(POLL_INTERVAL_MS)
-    }
+    await waitForSpeechToFinish(shouldAutoRun)
   }
 
   /** The configured pause; checked in short slices so Pause and Stop take effect at once. */

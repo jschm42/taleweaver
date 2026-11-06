@@ -61,6 +61,7 @@ import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
+import { waitForSpeechToFinish } from '@/services/speechWait'
 import { type GameSettings } from '@/services/gameViewService'
 import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
@@ -462,8 +463,19 @@ const handleDialogChoice = async (index: number): Promise<void> => {
     await refreshSession(true)
     dialogChoiceBusy.value = false
   }
-  // The handler queued a follow-up beat (tw.story.direct(..., after=...)): play it right away.
-  if (continueStory) await sendMessage('/continue_story')
+  if (continueStory) await continueStoryAfterSpeech()
+}
+
+/**
+ * The handler queued a follow-up beat (tw.story.direct(..., after=...)). It is played once the
+ * lines that led to it have been read aloud, so a character entering in that beat does not show
+ * up while the previous lines are still being spoken.
+ */
+const continueStoryAfterSpeech = async (): Promise<void> => {
+  const idle = (): boolean => status.value === 'connected' && !isDialogOpen.value
+  await waitForSpeechToFinish(idle)
+  // The player acted meanwhile: that turn's narration runs the waiting callback instead.
+  if (idle()) await sendMessage('/continue_story')
 }
 
 const handleEntityClick = async (entity: any) => {
