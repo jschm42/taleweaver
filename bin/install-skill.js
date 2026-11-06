@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Installs TaleWeaver agent skills (.agents/skills/<skill>) plus their companion docs
+// Installs TaleWeaver agent skills (.claude/skills/<skill>) plus their companion docs
 // into another project or directory. Uses only the Node.js standard library.
 
 import fs from 'node:fs';
@@ -15,7 +15,7 @@ import {
   discoverSkills,
   findSkill,
   resolveSkillsRoot,
-  SKILLS_SUBDIR,
+  SOURCE_SKILLS_SUBDIR,
 } from './lib/skills.js';
 
 const EXIT_OK = 0;
@@ -74,7 +74,7 @@ function loadSkills() {
   const roots = [...new Set([PACKAGE_ROOT, process.cwd()])];
   const located = resolveSkillsRoot(roots);
   if (!located) {
-    throw new Error(`No ${SKILLS_SUBDIR} directory found in: ${roots.join(', ')}`);
+    throw new Error(`No ${SOURCE_SKILLS_SUBDIR} directory found in: ${roots.join(', ')}`);
   }
   const skills = discoverSkills(located.skillsDir);
   if (skills.length === 0) {

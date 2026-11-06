@@ -1,6 +1,6 @@
 # Agent Skills Installer (`taleweaver-skills`)
 
-TaleWeaver ships with a standalone, dependency-free npm/npx-executable script that installs agent skills from `.agents/skills` and their companion documentation into target projects or agent directories.
+TaleWeaver ships with a standalone, dependency-free npm/npx-executable script that installs agent skills from `.claude/skills` and their companion documentation into target projects or agent directories.
 
 ---
 

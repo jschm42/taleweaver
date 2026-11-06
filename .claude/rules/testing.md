@@ -2,6 +2,8 @@
 description: Testing standards, AAA pattern, lifecycle verification, and mocking guidelines for TaleWeaver.
 trigger: glob
 globs: "tests/**/*.py"
+paths:
+  - "tests/**/*.py"
 ---
 
 # Testing Guidelines

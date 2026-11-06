@@ -54,3 +54,10 @@ export function formatShortDate(value?: string | null): string {
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
+
+export const SESSION_SORTS: Array<{ key: 'recent' | 'oldest' | 'title' | 'xp', label: string }> = [
+  { key: 'recent', label: 'Last played' },
+  { key: 'oldest', label: 'Oldest first' },
+  { key: 'title', label: 'Title A–Z' },
+  { key: 'xp', label: 'Most XP' },
+]

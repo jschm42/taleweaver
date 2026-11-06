@@ -20,6 +20,7 @@ import {
   findSkill,
   resolveSkillsRoot,
   SKILLS_SUBDIR,
+  SOURCE_SKILLS_SUBDIR,
   toSafeRelative,
 } from '../lib/skills.js';
 
@@ -303,10 +304,10 @@ describe('parseFrontmatter', () => {
 // 3. Skill discovery and companion collection
 // ---------------------------------------------------------------------------
 
-/** Create a source root with .agents/skills and return helpers to populate it. */
+/** Create a source root with .claude/skills and return helpers to populate it. */
 function makeSourceRoot() {
   const root = makeTempDir('tw-src-');
-  const skillsDir = path.join(root, SKILLS_SUBDIR);
+  const skillsDir = path.join(root, SOURCE_SKILLS_SUBDIR);
   fs.mkdirSync(skillsDir, { recursive: true });
   const addSkill = (id, frontmatter = '', extraFiles = {}) => {
     const dir = path.join(skillsDir, id);
@@ -325,16 +326,16 @@ function loadSkill(skillsDir, id) {
 }
 
 describe('resolveSkillsRoot', () => {
-  test('returns the first candidate containing .agents/skills', () => {
+  test('returns the first candidate containing .claude/skills', () => {
     const empty = makeTempDir();
     const { root, skillsDir } = makeSourceRoot();
     const other = makeSourceRoot();
     assert.deepEqual(resolveSkillsRoot([empty, root, other.root]), { sourceRoot: root, skillsDir });
   });
 
-  test('ignores a .agents/skills path that is a file', () => {
+  test('ignores a .claude/skills path that is a file', () => {
     const root = makeTempDir();
-    writeFile(path.join(root, SKILLS_SUBDIR), 'not a dir');
+    writeFile(path.join(root, SOURCE_SKILLS_SUBDIR), 'not a dir');
     assert.equal(resolveSkillsRoot([root]), null);
   });
 
@@ -829,7 +830,7 @@ describe('install-skill.js CLI', () => {
   let version;
 
   before(() => {
-    skillIds = discoverSkills(path.join(PACKAGE_ROOT, SKILLS_SUBDIR)).map((s) => s.id);
+    skillIds = discoverSkills(path.join(PACKAGE_ROOT, SOURCE_SKILLS_SUBDIR)).map((s) => s.id);
     version = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
   });
 

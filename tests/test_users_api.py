@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 
 import pytest
 from httpx import AsyncClient
@@ -6,6 +6,7 @@ from httpx import AsyncClient
 from backend.core.auth import create_access_token, get_password_hash
 from backend.models.user import User
 from tests.conftest import TestSessionLocal
+from tests.server_settings_helpers import seed_server_settings
 
 pytestmark = pytest.mark.asyncio
 
@@ -18,11 +19,14 @@ async def _create_user(*, username: str, role: str = "admin", bio: Optional[str]
                 hashed_password=get_password_hash("pw"),
                 role=role,
                 bio=bio,
-                t2i_settings={
-                    "simple_model": "test-simple-vision",
-                    "simple_model_provider": "ollama",
-                },
             )
+        )
+        await seed_server_settings(
+            session,
+            t2i_settings={
+                "simple_model": "test-simple-vision",
+                "simple_model_provider": "ollama",
+            },
         )
         await session.commit()
 

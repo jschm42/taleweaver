@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.api_keys import PersonalKeyRequiredError
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.core.global_settings import read_server_settings
 from backend.engine.audio.elevenlabs_voices import load_voice_catalog, looks_like_voice_id
 from backend.engine.audio.tts_engine import (
     TTSEngine,
@@ -19,8 +21,9 @@ from backend.engine.audio.tts_engine import (
     TTSRateLimitError,
     TTSTimeoutError,
 )
-from backend.engine.audio.voice_casting import NPC_VOICE_PROVIDER, load_tts_owner, provider_api_key
+from backend.engine.audio.voice_casting import NPC_VOICE_PROVIDER, provider_api_key
 from backend.models.game_session import GameSession
+from backend.models.server_settings import ServerSettings
 from backend.models.user import User
 
 router = APIRouter(prefix="/tts", tags=["TTS"])
@@ -77,8 +80,11 @@ def _resolve_model(provider: str, raw_model: Any) -> str:
     return model
 
 
-def _resolve_api_key(provider: str, settings_user: User) -> str:
-    api_key = provider_api_key(provider, settings_user)
+def _resolve_api_key(provider: str, user: User) -> str:
+    try:
+        api_key = provider_api_key(provider, user)
+    except PersonalKeyRequiredError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
     if not api_key:
         raise HTTPException(
             status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS."
@@ -86,23 +92,23 @@ def _resolve_api_key(provider: str, settings_user: User) -> str:
     return api_key
 
 
-async def _resolve_tts_settings_source_user(db: AsyncSession, current_user: User) -> User:
-    """Use global/admin settings owner for TTS, falling back to current user."""
-    return await load_tts_owner(db) or current_user
+async def _resolve_tts_settings_source(db: AsyncSession) -> ServerSettings:
+    """TTS configuration and keys are server-wide."""
+    return await read_server_settings(db)
 
 
 async def _resolve_tts_config(
     db: AsyncSession, current_user: User, require_enabled: bool = False
 ) -> ResolvedTTSConfig:
-    """Load the global TTS configuration (admin-owned) and the provider API key."""
-    settings_user = await _resolve_tts_settings_source_user(db, current_user)
+    """Server-wide TTS configuration plus the caller's key for it (per key policy)."""
+    settings_user = await _resolve_tts_settings_source(db)
     tts_settings = settings_user.tts_settings or {}
     if require_enabled and not _coerce_bool(tts_settings.get("enabled"), False):
         raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
     provider = str(tts_settings.get("provider", "google")).lower()
     return ResolvedTTSConfig(
         provider=provider,
-        api_key=_resolve_api_key(provider, settings_user),
+        api_key=_resolve_api_key(provider, current_user),
         voice=tts_settings.get("selected_voice", "Puck"),
         elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
         use_vocal_tags=_coerce_bool(tts_settings.get("use_vocal_tags"), True),
@@ -367,7 +373,7 @@ async def list_tts_voices(
     only spoken with ElevenLabs (``supports_npc_voices``). ``provider`` lets the settings form
     ask about ElevenLabs before the provider is saved.
     """
-    owner = await _resolve_tts_settings_source_user(db, current_user)
+    owner = await _resolve_tts_settings_source(db)
     active = str((owner.tts_settings or {}).get("provider") or "google").lower()
     requested = (provider or active).lower()
     return {

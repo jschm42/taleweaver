@@ -60,6 +60,7 @@ from backend.api.routes.adventures.turn_prompt_layout import (
     build_pass1_user_prompt,
 )
 from backend.core import prompts
+from backend.core.api_keys import PersonalKeyRequiredError, key_source
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
@@ -220,6 +221,8 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
 
     lower_text = str(exc or "").lower()
 
+    if isinstance(exc, PersonalKeyRequiredError):
+        return str(exc)
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
@@ -1896,6 +1899,8 @@ class GameTurnManager:
             operation="chat_turn",
             phase="narration",
             model=complex_model,
+            # Who pays for this narration: the server or the player's own key.
+            key_source=key_source(self.user.encrypted_api_keys, complex_model_provider),
             memory_turns=memory_turns,
             history_messages_count=len(narration_messages),
             **token_usage,

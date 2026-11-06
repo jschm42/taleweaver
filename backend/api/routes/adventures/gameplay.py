@@ -64,6 +64,7 @@ from backend.core.prompts import (
     BABLE_FISH_TRANSLATION_SYSTEM_PROMPT,
     BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE,
 )
+from backend.core.turn_key_preflight import ensure_turn_providers_available
 from backend.engine.adventures.adventure_updates import is_legacy_session
 from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.rules.walkthrough_unlocks import walkthrough_payload, walkthrough_status
@@ -226,6 +227,7 @@ async def post_chat_message(
     current_user: User = Depends(get_current_user),
 ):
     """Processes a user message and returns a streaming response."""
+    ensure_turn_providers_available(current_user)
     await ensure_no_pending_dialog(db, game_id, current_user)
     try:
         manager = GameTurnManager(db, game_id, current_user)

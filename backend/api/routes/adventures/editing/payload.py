@@ -23,6 +23,7 @@ from backend.api.routes.adventures.schemas import (
 from backend.api.routes.adventures.session_items import backfill_avatar_items_from_template_entities
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.core.global_settings import apply_global_settings
 from backend.engine.media.media_engine import MediaEngine
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
@@ -270,7 +271,7 @@ async def _build_adventure_editor_assets(
             user = None
             if adventure.owner_id:
                 user_res = await db.execute(select(User).where(User.id == adventure.owner_id))
-                user = user_res.scalars().first()
+                user = await apply_global_settings(db, user_res.scalars().first())
             await WorldGenerator.apply_manifest(
                 db=db,
                 template_id=template_id,

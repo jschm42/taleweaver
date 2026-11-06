@@ -22,6 +22,7 @@ from backend.core.database import get_db
 from backend.main import app
 from backend.models.base import Base
 from backend.models.user import User
+from tests.server_settings_helpers import seed_server_settings
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -138,6 +139,9 @@ async def auth_client(client: AsyncClient) -> AsyncClient:
             username=username,
             hashed_password=get_password_hash("test_password"),
             role="admin",
+        )
+        await seed_server_settings(
+            session,
             llm_settings={
                 "small_model": "llama3.2",
                 "small_model_provider": "ollama",
