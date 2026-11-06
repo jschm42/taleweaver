@@ -635,6 +635,26 @@ export interface EarnedAward extends Award {
   earned_at: string
 }
 
+/** One ranked player on the leaderboard (backend/api/routes/leaderboard_api.py). */
+export interface LeaderboardEntry {
+  id: string
+  username: string
+  profile_image_url?: string | null
+  bio?: string | null
+  rank: number
+  total_xp: number
+  completed_quests: number
+  failed_quests: number
+  total_awards: number
+  adventure_count: number
+  earned_awards: EarnedAward[]
+}
+
+export interface LeaderboardResponse {
+  players: LeaderboardEntry[]
+  total_players: number
+}
+
 
 /** A voice from the curated ElevenLabs voice list (backend/core/elevenlabs_voices.json). */
 export interface TtsVoice {

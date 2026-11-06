@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { X, ChevronsLeft, ChevronsRight } from 'lucide-vue-next'
 
-type Section = 'templates' | 'sessions' | 'profile'
+type Section = 'templates' | 'sessions' | 'leaderboard' | 'profile'
 
 const props = defineProps<{
   isAdmin: boolean
@@ -41,6 +41,7 @@ watch(isCollapsed, (value) => {
 const navItems: ReadonlyArray<{ section: Section; label: string; icon: string }> = [
   { section: 'templates', label: 'Library', icon: 'ra-book' },
   { section: 'sessions', label: 'Sessions', icon: 'ra-hourglass' },
+  { section: 'leaderboard', label: 'Leaderboard', icon: 'ra-trophy' },
   { section: 'profile', label: 'Profile', icon: 'ra-hood' },
 ]
 

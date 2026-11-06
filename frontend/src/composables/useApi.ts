@@ -18,6 +18,8 @@ import type {
   GeneratorSurprisePresetPayload,
   GeneratorSurprisePresetResponse,
   TtsVoiceList,
+  LeaderboardResponse,
+  EarnedAward,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -365,6 +367,16 @@ export const GENERATION_SAYINGS: string[] = [
 ]
 
 export const api = {
+  /** Fetches all players ranked by XP, awards and quest outcomes. */
+  getLeaderboard(): Promise<LeaderboardResponse> {
+    return request<LeaderboardResponse>('/leaderboard')
+  },
+
+  /** Fetches the awards earned by another player. */
+  getPlayerAwards(userId: string): Promise<EarnedAward[]> {
+    return request<EarnedAward[]>(`/leaderboard/player/${encodeURIComponent(userId)}/awards`)
+  },
+
   /** Manually trigger import of example adventures (samples). */
   importExamples(): Promise<{ status: string; message: string }> {
     return request('/adventures/import-examples', { method: 'POST' })

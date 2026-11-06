@@ -88,6 +88,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### 🎯 Quests & Meta-Progression
 * **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log.
 * **Achievement System:** Unlock custom, AI-generated awards (Bronze, Silver, Gold) for exceptional problem-solving and out-of-the-box thinking.
+* **Server Leaderboard (Hall of Legends):** Compare yourself with every adventurer on the server. Players are ranked by total gained XP, completed and failed quest outcomes, and earned awards. Click any player to open the Trophy Hall modal and inspect their awards and chronicle statistics.
 
 ### ⚙️ Deep RPG Mechanics
 * **Strict Rule Enforcement:** While the narrative flows freely, a strict 2-pass RPG rulebook (Mechanics + Narrative) runs in the background.
