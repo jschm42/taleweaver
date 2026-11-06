@@ -9,6 +9,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.award_granting import grant_awards
+from backend.api.routes.adventures.entity_state_merge import merge_entity_states
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.quest_completion import (
     announce_completed_quests,
@@ -610,7 +611,8 @@ class TurnStateApplier:
                     logger.error(f"Map update failed during turn: {e}")
 
         # Entity State Overrides (Movement, Stats, Visibility)
-        states = dict(self.state.entity_states or {})
+        base_states = self.state.entity_states or {}
+        states = dict(base_states)
 
         if event.moved_entities:
             for move in event.moved_entities:
@@ -1148,7 +1150,9 @@ class TurnStateApplier:
             state_dirty = True
 
         if state_dirty:
-            self.state.entity_states = states
+            self.state.entity_states = merge_entity_states(
+                base_states, states, self.state.entity_states
+            )
             flag_modified(self.state, "entity_states")
 
         await self._apply_adventure_generator_tools(event)

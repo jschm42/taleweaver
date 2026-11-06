@@ -19,6 +19,7 @@ from backend.api.routes.adventures.agent_commands import (
 )
 from backend.api.routes.adventures.after_narration import run_after_narration
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
+from backend.api.routes.adventures.history_compression_window import messages_to_compress
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
 from backend.api.routes.adventures.talent_use import resolve_talent_request, stream_talent_turn
@@ -2281,17 +2282,6 @@ class GameTurnManager:
             .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
         )
         all_msgs = list(res.scalars().all())
-        user_indices = [i for i, m in enumerate(all_msgs) if m.role == "user"]
-
-        if len(user_indices) <= max_turns:
-            return
-
-        cutoff_user_idx = len(user_indices) - max_turns
-        cutoff_msg_idx = user_indices[cutoff_user_idx]
-
-        msgs_outside_memory = all_msgs[:cutoff_msg_idx]
-        if not msgs_outside_memory:
-            return
 
         compressed_data = self.state.compressed_history
         current_summary = ""
@@ -2302,16 +2292,10 @@ class GameTurnManager:
         elif isinstance(compressed_data, str):
             current_summary = compressed_data
 
-        start_idx = 0
-        if last_compressed_msg_id:
-            for idx, msg in enumerate(msgs_outside_memory):
-                if msg.id == last_compressed_msg_id:
-                    start_idx = idx + 1
-                    break
-
-        new_msgs_to_compress = msgs_outside_memory[start_idx:]
+        new_msgs_to_compress = messages_to_compress(all_msgs, last_compressed_msg_id, max_turns)
         if not new_msgs_to_compress:
             return
+        msgs_outside_memory = new_msgs_to_compress
 
         formatted_lines = []
         for m in new_msgs_to_compress:

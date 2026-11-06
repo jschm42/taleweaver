@@ -119,7 +119,8 @@ async def test_compress_history_if_needed_triggers_compression():
         manager.state.compressed_history["summary"]
         == "The hero entered a glowing cave and gathered sweet-smelling mushrooms."
     )
-    assert manager.state.compressed_history["last_compressed_msg_id"] == "m4"
+    # Window 2 -> keep the newest turn uncompressed, fold everything before it in one go.
+    assert manager.state.compressed_history["last_compressed_msg_id"] == "m6"
     manager.db.commit.assert_awaited()
 
 

@@ -858,6 +858,7 @@ export function useGameSocket(): UseGameSocket {
     status.value = 'connecting' 
     statusText.value = 'Agent is thinking...'
     let receivedFinalEvent = false
+    let receivedErrorEvent = false
     const controller = new AbortController()
     activeAgentController = controller
     // Idle timeout: an agent turn (decision + full GM turn) can legitimately take long,
@@ -971,6 +972,7 @@ export function useGameSocket(): UseGameSocket {
               statusText.value = ''
             }
           } else if (event === 'error') {
+            receivedErrorEvent = true
             const detail = data.detail || 'An error occurred.'
             _pushMessage('system', detail)
             addNotification(detail, 'error')
@@ -988,7 +990,8 @@ export function useGameSocket(): UseGameSocket {
           applySessionSnapshot(snapshot, true)
         }
       }
-      if (!receivedFinalEvent && (timedOut || !controller.signal.aborted)) {
+      // An error event already explained the failed turn; do not add a second notice.
+      if (!receivedFinalEvent && !receivedErrorEvent && (timedOut || !controller.signal.aborted)) {
         _pushMessage('system', timedOut ? 'The Agent did not respond in time.' : 'The Agent turn ended unexpectedly without a result.')
       }
       return receivedFinalEvent

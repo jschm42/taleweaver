@@ -19,6 +19,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.api.routes.adventures.after_narration import run_after_narration
 from backend.api.routes.adventures.dialog_tree_service import DialogTreeStep
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.api.routes.adventures.history_compression_window import CHOICE_MESSAGE_PREFIX
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks
 from backend.core.llm_router import GameMasterLLM
@@ -36,7 +37,6 @@ from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)
 
-CHOICE_MESSAGE_PREFIX = "[Choice]"
 _NARRATION_HISTORY_LIMIT = 6
 _NARRATION_SYSTEM_PROMPT = (
     "You are the Game Master of a text adventure. The player just answered a choice dialog. "

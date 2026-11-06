@@ -61,6 +61,10 @@ UNBRACKETED_RE = re.compile(
 )
 
 
+_OPENING_QUOTES = ('"', "“", "„", "«")
+_CLOSING_QUOTES = ('"', "”", "»", "“")
+
+
 def _clean_dialogue_voice_body(raw_body: str) -> str:
     return (
         raw_body.rstrip('"')
@@ -91,7 +95,14 @@ def _normalize_dialogue_line(
     canon_tag = GameMasterLLM._to_canonical_voice_tag(raw_tag)
     if canon_tag not in VOICE_TAG_SET:
         return line
-    body = _clean_dialogue_voice_body(tag_match.group("body").strip())
+    raw_body = tag_match.group("body").strip()
+    body = _clean_dialogue_voice_body(raw_body)
+    # A streamed prefix can end inside the quote ('"P'); closing it there splits the word.
+    after_tag = speech_part[speech_part.find("]") + 1 : tag_match.start("body")]
+    is_opened = '"' in after_tag or raw_body.startswith(_OPENING_QUOTES)
+    is_closed = len(raw_body) > 1 and raw_body.endswith(_CLOSING_QUOTES)
+    if is_opened and not is_closed:
+        return f'{speaker_part}[{canon_tag}] "{body}'
     return f'{speaker_part}[{canon_tag}] "{body}"'
 
 

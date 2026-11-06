@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.history_compression_window import CHOICE_MESSAGE_PREFIX
 from backend.models.chat import ChatMessage
 
 RECENT_NARRATION_MAX_CHARS = 400
@@ -142,19 +143,38 @@ def _resolve_max_turns(state: Any, adventure: Any) -> int:
     return max(0, int(max_turns))
 
 
+async def _load_choice_only_history(db: AsyncSession, session_id: str) -> list[ChatMessage]:
+    """Before the first typed player message only dialog choices exist; keep them from the first."""
+    msg_res = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+    )
+    messages = list(msg_res.scalars().all())
+    first_user = next((i for i, m in enumerate(messages) if m.role == "user"), None)
+    return [] if first_user is None else messages[first_user:]
+
+
 async def _load_memory_window(
     db: AsyncSession, session_id: str, max_turns: int
 ) -> list[ChatMessage]:
-    """Loads only the messages of the last `max_turns` turns plus the current one."""
+    """Loads only the messages of the last `max_turns` turns plus the current one.
+
+    Dialog choices belong to the turn they answer and do not count as turns.
+    """
     marker_res = await db.execute(
         select(ChatMessage.id, ChatMessage.created_at)
-        .where(ChatMessage.session_id == session_id, ChatMessage.role == "user")
+        .where(
+            ChatMessage.session_id == session_id,
+            ChatMessage.role == "user",
+            ~ChatMessage.content.startswith(CHOICE_MESSAGE_PREFIX, autoescape=True),
+        )
         .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(max_turns + 1)
     )
     markers = list(marker_res.all())
     if not markers:
-        return []
+        return await _load_choice_only_history(db, session_id)
 
     start_id, start_created_at = markers[-1]
     msg_res = await db.execute(

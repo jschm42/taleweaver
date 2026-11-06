@@ -392,3 +392,42 @@ async def test_narration_history_starts_at_the_current_scene(setup_test_db):
         "Open the fridge",
     ]
     assert not any("Vera" in content for content in replayed)
+
+
+async def test_build_narration_messages_dialog_choices_do_not_count_as_turns(setup_test_db):
+    """Dialog choices belong to the turn they answer, so they do not shrink the window."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange: window of 2 turns; turn 2 is followed by two dialog choices
+        user, adv, avatar, state = await _seed_context(
+            db, max_memory_turns_adv=30, max_memory_turns_state=2
+        )
+        manager = GameTurnManager(db, "session-mem-1", user)
+        manager.state = state
+        manager.adventure = adv
+        manager.avatar = avatar
+        contents = [
+            ("user", "User action 1"),
+            ("assistant", "Narrator response 1"),
+            ("user", "User action 2"),
+            ("assistant", "Narrator response 2"),
+            ("user", "[Choice] Ask about the door"),
+            ("assistant", "Console answer A"),
+            ("user", "[Choice] Log off"),
+            ("assistant", "Console answer B"),
+            ("user", "Turn 3 action"),
+        ]
+        for role, content in contents:
+            db.add(ChatMessage(session_id="session-mem-1", role=role, content=content))
+            await db.flush()
+        await db.commit()
+
+        # Act
+        messages, _ = await manager._build_narration_messages("System prompt", "Turn 3 action")
+
+        # Assert: both real turns stay in the window
+        texts = [m["content"] for m in messages]
+        assert texts[1] == "User action 1"
+        assert "[Choice] Log off" in texts
+        assert texts[-1] == "Turn 3 action"
