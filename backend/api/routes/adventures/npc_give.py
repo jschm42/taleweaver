@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.container_put import pick_items, split_item_refs
+from backend.engine.scripting.dialog import pending_dialog
 from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
 from backend.engine.scripting.item_transfer import ref_id
 from backend.models.world_entity import WorldEntity
@@ -86,6 +87,9 @@ async def give_items_to_npc(manager: Any, args: str) -> GiveOutcome:
     if missing:
         events.append(await _say(manager, "system", f"You don't carry {', '.join(missing)}."))
     events.extend(await _run_receive_trigger(manager, npc, picked))
+    if pending_dialog(manager.state.entity_states):
+        # The receive script asked the player something; the answer drives the reaction.
+        return GiveOutcome(events)
     return GiveOutcome(events, _reaction_prompt(npc, names))
 
 

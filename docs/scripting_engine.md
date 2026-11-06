@@ -160,7 +160,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
 | | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
-| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction. |
+| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction, unless the script opened a choice dialog (`tw.dialog.choose` / `tw.dialog.tree`): then the player's answer drives what happens next and no GM reaction runs. |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
 | | `helpers_script` *(definitions)* | Not a trigger: functions and constants every script can call. See [Scene Helpers](#scene-helpers-helpers_script). |

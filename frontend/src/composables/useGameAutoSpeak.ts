@@ -4,6 +4,7 @@ import { parseAssistantContent, parseUserMessage, type DialogueSegment } from '@
 import { rawAssistantContent } from '@/composables/comicPages'
 import { resolveEntityRefsText } from '@/utils/entityRefs'
 import type { AutoSpeakSettings } from '@/types/tts'
+import { currentTurnAssistantMessages, unspokenTurnMessages } from '@/utils/autoSpeakQueue'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
 /** Lets the travel overlay finish fading out before the new scene's narration starts. */
@@ -125,6 +126,18 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     return false
   }
 
+  /** Lets a message be read again (its speech was cut off before it finished). */
+  function unmarkMessageAsSpoken(message: { id?: string; content: string }, index: number): void {
+    spokenSignatures.delete(getMessageSignature(message, index))
+    if (message.id) spokenSignatures.delete(`id:${message.id}`)
+    spokenSignatures.delete(`hash:${computeContentHash(message.content)}`)
+    if (lastSpokenContent.value === String(message.content || '').trim()) {
+      lastSpokenSignature.value = null
+      lastSpokenContent.value = null
+    }
+    streamedSegmentCounts.delete(message)
+  }
+
   function seedExistingMessagesAsSpoken(): void {
     if (!Array.isArray(messages.value)) return
     for (let i = 0; i < messages.value.length; i++) {
@@ -158,22 +171,27 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     const now = Date.now()
     if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
 
-    const latest = findLatestSpeakableAssistantMessage(messages.value)
-    if (!latest) return
-    const { index, message: lastMsg } = latest
-
-    if (!force && isMessageAlreadySpoken(lastMsg, index)) return
+    // Every GM message of this turn that was not read yet, in order (script lines, narration, ...).
+    let pending = unspokenTurnMessages(messages.value, isMessageAlreadySpoken)
+    if (force && pending.length === 0) {
+      const latest = findLatestSpeakableAssistantMessage(messages.value)
+      pending = latest ? [latest] : []
+    }
+    if (pending.length === 0) return
 
     lastAutoSpeakAt.value = now
-    markMessageAsSpoken(lastMsg, index)
+    for (const { index, message } of pending) speakWholeMessage(message, index)
+  }
+
+  /** Reads one message, skipping the lines already spoken while it was streaming. */
+  function speakWholeMessage(message: { id?: string; content: string; raw?: boolean }, index: number): void {
+    markMessageAsSpoken(message, index)
     // Text that arrives while speech is suppressed is skipped, not replayed later.
     if (options.speechSuppressed?.value) return
-
-    // Lines already spoken while the turn was streaming are skipped.
-    const alreadyStreamed = streamedSegmentCounts.get(lastMsg) ?? 0
-    const parsed = lastMsg.raw
-      ? rawAssistantContent(lastMsg.content)
-      : parseAssistantContent(lastMsg.content, sheet.value, [], npcMetadata.value)
+    const alreadyStreamed = streamedSegmentCounts.get(message) ?? 0
+    const parsed = message.raw
+      ? rawAssistantContent(message.content)
+      : parseAssistantContent(message.content, sheet.value, [], npcMetadata.value)
     enqueueDialogues(parsed.dialogues.slice(alreadyStreamed))
   }
 
@@ -258,6 +276,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
     const latest = findLatestSpeakableAssistantMessage(messages.value)
     if (!latest || isMessageAlreadySpoken(latest.message, latest.index)) return
+    // Earlier GM messages of this turn (e.g. script lines before a chained narration) go first.
+    for (const earlier of unspokenTurnMessages(messages.value, isMessageAlreadySpoken)) {
+      if (earlier.index !== latest.index) speakWholeMessage(earlier.message, earlier.index)
+    }
     // Raw script narration arrives complete and is spoken as one block once the turn ends.
     if (latest.message.raw) return
 
@@ -330,11 +352,20 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     deferredSpeechTimer = null
     if (deferred) {
       audioService.stop()
+      // This turn's lines were cut off by the overlay (e.g. a script teleport): read them again
+      // once the new scene is shown, before anything that arrives later.
+      for (const { message, index } of currentTurnAssistantMessages(messages.value)) {
+        unmarkMessageAsSpoken(message, index)
+      }
       return
     }
     deferredSpeechTimer = setTimeout(() => {
       deferredSpeechTimer = null
-      speakLatestAssistantMessage()
+      // A chained turn may already be streaming: its progress reader also catches up on the
+      // lines that were cut off by the overlay.
+      const busy = status.value === 'connecting' || status.value === 'loading'
+      if (busy) speakStreamingProgress()
+      else speakLatestAssistantMessage()
     }, DEFERRED_SPEECH_DELAY_MS)
   })
 
