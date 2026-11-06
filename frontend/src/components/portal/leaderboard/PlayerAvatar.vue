@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { normalizeAvatarUrl } from './leaderboardUtils'
+import { playerAvatarUrl } from './leaderboardUtils'
 
 const props = defineProps<{
   username: string
@@ -17,7 +17,7 @@ watch(
   },
 )
 
-const src = computed(() => normalizeAvatarUrl(props.imageUrl))
+const src = computed(() => playerAvatarUrl(props.imageUrl, props.username))
 const initial = computed(() => (props.username || '?').charAt(0).toUpperCase())
 </script>
 

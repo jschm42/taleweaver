@@ -8,7 +8,7 @@ const filename = new URL('../src/components/portal/leaderboard/leaderboardUtils.
 const source = ts.transpileModule(readFileSync(filename, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
 }).outputText
-const { sortPlayers, filterPlayers, rankTier, normalizeAvatarUrl, formatNumber } =
+const { sortPlayers, filterPlayers, rankTier, normalizeAvatarUrl, playerAvatarUrl, formatNumber } =
   await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 
 const player = (rank, username, awards, completed, failed) => ({
@@ -64,6 +64,12 @@ test('normalizeAvatarUrl converts backslashes and tolerates missing values', () 
   assert.equal(normalizeAvatarUrl(null), '')
   assert.equal(normalizeAvatarUrl(undefined), '')
   assert.equal(normalizeAvatarUrl(''), '')
+})
+
+test('playerAvatarUrl keeps a profile image and falls back to the generated avatar', () => {
+  assert.equal(playerAvatarUrl('static\\avatars\\a.png', 'admin'), 'static/avatars/a.png')
+  assert.equal(playerAvatarUrl(null, 'admin'), 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin')
+  assert.equal(playerAvatarUrl('', 'Sir Bram'), 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sir%20Bram')
 })
 
 test('formatNumber uses en-US grouping', () => {

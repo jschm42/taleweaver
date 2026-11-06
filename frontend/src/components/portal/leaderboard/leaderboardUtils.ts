@@ -41,6 +41,15 @@ export function normalizeAvatarUrl(url?: string | null): string {
   return (url || '').replace(/\\/g, '/')
 }
 
+/** Same generated avatar the header and profile page show for users without a profile image. */
+export function fallbackAvatarUrl(username?: string | null): string {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username || 'default')}`
+}
+
+export function playerAvatarUrl(url: string | null | undefined, username: string): string {
+  return normalizeAvatarUrl(url) || fallbackAvatarUrl(username)
+}
+
 export function formatNumber(value: number): string {
   return value.toLocaleString('en-US')
 }
