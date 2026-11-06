@@ -90,6 +90,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   const lastSpokenSignature = ref<string | null>(null)
   const lastSpokenContent = ref<string | null>(null)
   const lastAutoSpeakAt = ref(0)
+  // Index of the first message produced by the player's latest action (a request or a dialog
+  // choice). A scene change only lets messages from there on be read again; older text belongs
+  // to the scene the player left and stays silent.
+  let actionStartIndex = 0
 
   function pruneSpokenSignatures(): void {
     if (spokenSignatures.size > MAX_TRACKED_SIGNATURES) {
@@ -303,6 +307,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
   watch(() => sessionId.value, (newSessionId, oldSessionId) => {
     if (newSessionId !== oldSessionId) {
+      actionStartIndex = 0
       spokenSignatures.clear()
       lastSpokenSignature.value = null
       lastSpokenContent.value = null
@@ -342,7 +347,15 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   )
 
   watch(() => options.speechSuppressed?.value, (suppressed) => {
-    if (suppressed) audioService.stop()
+    if (!suppressed) return
+    audioService.stop()
+    // Everything after an opened dialog is the answer to the player's choice.
+    actionStartIndex = messages.value.length
+  })
+
+  watch(() => status.value, (newStatus, oldStatus) => {
+    const isBusy = (value: string): boolean => value === 'connecting' || value === 'loading'
+    if (isBusy(newStatus) && !isBusy(oldStatus)) actionStartIndex = messages.value.length
   })
 
   // Leaving the scene silences the old narration; the new scene is read once the overlay is gone.
@@ -352,10 +365,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     deferredSpeechTimer = null
     if (deferred) {
       audioService.stop()
-      // This turn's lines were cut off by the overlay (e.g. a script teleport): read them again
-      // once the new scene is shown, before anything that arrives later.
+      // Lines of the action that changed the scene (e.g. a script teleport after a dialog) were
+      // cut off by the overlay: read them once the new scene is shown. Earlier text is dropped.
       for (const { message, index } of currentTurnAssistantMessages(messages.value)) {
-        unmarkMessageAsSpoken(message, index)
+        if (index >= actionStartIndex) unmarkMessageAsSpoken(message, index)
       }
       return
     }
