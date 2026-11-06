@@ -245,6 +245,8 @@ class CommandParser:
             "- `/sheet`: Open your character sheet.",
             "- `/playagent [on/off]`: Activate or deactivate the autonomous Play-Agent.",
             "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom).",
+            "- `/playagent delay <seconds>`: Pause between two Play-Agent steps in Auto mode (0 = none).",
+            "- `/playagent tts on/off`: Let the Play-Agent wait until text-to-speech has finished.",
         ]
 
         if debug_enabled:

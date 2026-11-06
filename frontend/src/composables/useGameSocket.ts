@@ -42,6 +42,8 @@ export interface AgentSettingsPatch {
   custom_personality?: string
   allow_walkthrough?: boolean
   monkey_mode?: boolean
+  step_delay?: number
+  wait_for_tts?: boolean
 }
 
 export interface UseGameSocket {

@@ -250,7 +250,9 @@ Template for generating NPC portraits.
 Variables: name, description, context (appearance keywords incl. trailing space, or empty).
 """
 
-OBJECT_IMAGE_PROMPT_TEMPLATE = "Item asset: {name}. {description}. {context}Centered, isolated on simple background."
+OBJECT_IMAGE_PROMPT_TEMPLATE = (
+    "Item asset: {name}. {description}. {context}Centered, isolated on simple background."
+)
 ITEM_IMAGE_PROMPT_TEMPLATE = OBJECT_IMAGE_PROMPT_TEMPLATE
 """
 Template for generating icons/portraits for items and objects.
@@ -1036,7 +1038,16 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "   - To manipulate mechanisms: Use `/push <target>` or `/pull <target>` (e.g., `/push lever`, `/pull chain`).\n"
     "   - To recover when safe: Use `/rest`.\n"
     "   - To drop an item: Use `/drop <item>`.\n"
-    "   - To take everything out of an opened container: Use `/container_take_all <container>`.\n\n"
+    "   - To eat, drink or use up a consumable: Use `/consume <item>`.\n"
+    "   - To craft from exact ingredients: Use `/craft <item_a> | <item_b>`.\n"
+    "   - To start a fight with a character: Use `/attack <name>`.\n\n"
+    "   CONTAINERS, HANDOVERS AND SWITCHES (these change the world directly, like the game's buttons):\n"
+    "   - Look into a container: `/open <container>`. Its contents are then listed under CURRENT SCENE ITEMS.\n"
+    "   - Take one item out of a container: `/take <item> from <container>` (e.g., `/take silver key from old chest`).\n"
+    "   - Take everything out of a container: `/container_take_all <container>`.\n"
+    "   - Put carried items into a container: `/put <item>[, <item>] in <container>` (e.g., `/put gem in altar`).\n"
+    "   - Give carried items to a character: `/give <item>[, <item>] to <character>` (e.g., `/give letter to guard`).\n"
+    "   - Set a switch, lever or dial: `/switch <switch> <STATE>` with a state from its list (e.g., `/switch lever DOWN`). Add a code at the end if the switch asks for one.\n\n"
     "2. MOVEMENT & LOCKS (CRITICAL - this is how you progress through the adventure):\n"
     "   - To leave the current location you MUST use `/go <exit name>` with an exit from the EXITS FROM HERE list (e.g., `/go Wooden Door`). Writing 'go north' or 'I leave the room' in prose does NOT move you.\n"
     "   - Do NOT ask the Game Master where to go. Pick an exit yourself. Once the current location is explored (NPCs spoken to, interesting objects inspected/searched, useful items taken), move on with `/go`.\n"
@@ -1044,7 +1055,8 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "   - Locked exit or container that needs a code: `/unlock <target> code <code>`. Only use codes you actually discovered in the game (notes, dialogue, inscriptions).\n"
     "   - Locks that open through the story are solved by the right in-world action, e.g. `/use <item> on <target>`, `/push lever`, or talking to the right NPC.\n\n"
     "3. NATURAL LANGUAGE ACTIONS:\n"
-    "   - For any other environmental interaction (e.g., plugging in an oven, flipping a switch): Write your action in natural, descriptive language (e.g., 'I plug in the oven').\n"
+    "   - For any other environmental interaction (e.g., plugging in an oven, climbing a wall): Write your action in natural, descriptive language (e.g., 'I plug in the oven').\n"
+    "   - Switches listed under CURRENT SCENE ITEMS are set with `/switch`, not with prose.\n"
     "   - NEVER invent custom slash commands that are not listed here (e.g., do NOT write `/plug`, `/flip`, `/climb`). Unrecognized commands will fail.\n\n"
     "4. MODAL CONTENT MIRRORING (CRITICAL):\n"
     "   - If an action opens a modal dialog (especially `/open` for containers or `/read` for text logs), ensure the discovered content/text is ALSO written explicitly into chat output.\n"

@@ -65,6 +65,10 @@ export interface CharacterSheet {
   agent_monkey_mode?: boolean
   agent_allow_walkthrough?: boolean
   agent_step_by_step?: boolean
+  /** Pause in seconds between two Play-Agent steps in Auto mode. */
+  agent_step_delay?: number
+  /** In Auto mode, the next Play-Agent step waits until text-to-speech has finished. */
+  agent_wait_for_tts?: boolean
   agent_personality?: string
   agent_custom_personality?: string
   max_memory_turns?: number

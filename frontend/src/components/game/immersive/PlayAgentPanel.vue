@@ -3,10 +3,11 @@
  * PlayAgentPanel — Right-side control panel for the autonomous Play-Agent.
  *
  * Shown while the agent is active. Lets the player switch between Auto and Step mode,
- * trigger the next step, pause/resume, change the personality and stop the agent.
+ * trigger the next step, pause/resume, set the pause between steps (fixed delay and/or
+ * waiting for text-to-speech), change the personality and stop the agent.
  */
-import { computed, nextTick, ref, watch } from 'vue'
-import { PLAY_AGENT_PERSONALITIES, usePlayAgent } from '@/composables/usePlayAgent'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { PLAY_AGENT_PERSONALITIES, PLAY_AGENT_STEP_DELAYS, usePlayAgent } from '@/composables/usePlayAgent'
 
 const {
   sheet,
@@ -14,12 +15,18 @@ const {
   agentLog,
   statusText,
   isStepMode,
+  stepDelay,
+  waitForTts,
+  autoLoopPhase,
+  nextStepAt,
   isBusy,
   canRunStep,
   setStepMode,
   setPersonality,
   setWalkthroughAllowed,
   setMonkeyMode,
+  setStepDelay,
+  setWaitForTts,
   nextStep,
   togglePause,
   stop,
@@ -46,12 +53,38 @@ watch(() => agentLog.value.length, async () => {
   logContainer.value?.scrollTo({ top: logContainer.value.scrollHeight, behavior: 'smooth' })
 })
 
+// Ticks once per second while a countdown to the next step is shown.
+const now = ref(Date.now())
+const clockTimer = window.setInterval(() => {
+  now.value = Date.now()
+}, 1000)
+onUnmounted(() => window.clearInterval(clockTimer))
+
+const secondsToNextStep = computed(() =>
+  nextStepAt.value ? Math.max(0, Math.ceil((nextStepAt.value - now.value) / 1000)) : 0
+)
+
 const statusLabel = computed(() => {
   if (isBusy.value) return statusText.value || 'Agent is thinking...'
   if (isStepMode.value) return 'Waiting for next step'
   if (agentPaused.value) return 'Paused - press Resume to continue'
+  if (autoLoopPhase.value === 'speech') return 'Waiting for the narration to finish...'
+  if (autoLoopPhase.value === 'delay' && secondsToNextStep.value > 1) {
+    return `Next step in ${secondsToNextStep.value} s`
+  }
   return 'Playing autonomously'
 })
+
+const delayOptions = computed(() => {
+  const known = PLAY_AGENT_STEP_DELAYS.some(d => d.seconds === stepDelay.value)
+  return known
+    ? PLAY_AGENT_STEP_DELAYS
+    : [...PLAY_AGENT_STEP_DELAYS, { seconds: stepDelay.value, label: `${stepDelay.value} seconds` }]
+})
+
+async function handleDelayChange(event: Event): Promise<void> {
+  await setStepDelay(Number((event.target as HTMLSelectElement).value))
+}
 
 const customDirty = computed(() =>
   customText.value.trim() !== (sheet.value?.agent_custom_personality || '').trim()
@@ -138,6 +171,33 @@ async function applyCustomPersonality(): Promise<void> {
       >
         {{ agentPaused ? 'Resume' : 'Pause' }}
       </button>
+
+      <!-- Pacing (Auto mode) -->
+      <div v-if="!isStepMode" class="flex flex-col gap-1.5">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Delay between steps</span>
+          <select
+            :value="stepDelay"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
+            title="Extra pause before the agent plays its next step"
+            @change="handleDelayChange"
+          >
+            <option v-for="d in delayOptions" :key="d.seconds" :value="d.seconds">{{ d.label }}</option>
+          </select>
+        </label>
+        <label
+          class="flex items-center gap-2 cursor-pointer select-none text-[11px]"
+          title="Only continue once text-to-speech has finished reading the narration (needs auto-speech)"
+        >
+          <input
+            type="checkbox"
+            :checked="waitForTts"
+            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1"
+            @change="setWaitForTts(!waitForTts)"
+          />
+          Wait for speech to finish
+        </label>
+      </div>
 
       <!-- Personality -->
       <label class="flex flex-col gap-1.5">

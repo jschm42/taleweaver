@@ -38,6 +38,7 @@ _AGENT_FLAGS = {
     "agent_monkey_mode": ("monkey_mode", False),
     "agent_allow_walkthrough": ("allow_walkthrough", True),
     "agent_step_by_step": ("step_by_step", False),
+    "agent_wait_for_tts": ("wait_for_tts", False),
 }
 
 
@@ -255,6 +256,7 @@ def _agent_fields(state: SessionState) -> dict[str, Any]:
     }
     fields["agent_personality"] = str(agent.get("personality", "casual"))
     fields["agent_custom_personality"] = str(agent.get("custom_personality", ""))
+    fields["agent_step_delay"] = _as_int(agent.get("step_delay")) or 0
     return fields
 
 

@@ -8,6 +8,8 @@ the same engine operations:
 - `/unlock <target> with <item>`       -> exit/container unlock with a key item
 - `/unlock <target> code <code>`       -> exit/container unlock with a code
 - `/unlock <target>`                   -> exit/container unlock guarded by a script expression
+
+Container, handover and switch commands live in `agent_item_actions`.
 """
 
 from __future__ import annotations
@@ -19,6 +21,11 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 
+from backend.api.routes.adventures.agent_item_actions import (
+    AgentActionOutcome,
+    execute_item_action,
+)
+from backend.api.routes.adventures.agent_world_view import CONTAINER_TYPES, lock_hint
 from backend.api.routes.adventures.turn_context_helpers import orient_exits
 from backend.engine.world.exit_labels import exit_display_name
 from backend.models.avatar import Avatar
@@ -38,14 +45,6 @@ _CODE_PATTERN = re.compile(
 class SceneExit:
     exit: WorldExit
     target_label: str
-
-
-@dataclass
-class AgentActionOutcome:
-    """Either a command to play as a regular turn, or a message for an action handled here."""
-
-    turn_command: str | None = None
-    message: str | None = None
 
 
 def _routes() -> Any:
@@ -86,14 +85,6 @@ async def load_scene_exits(db: Any, game_id: str, scene_id: str | None) -> list[
     ]
 
 
-def _lock_hint(label: str, code: Any, item: Any) -> str:
-    if code:
-        return f"Requires a code -> `/unlock {label} code <code>`"
-    if item:
-        return f"Requires a key item -> `/unlock {label} with <item name>`"
-    return "Opens through the story: find the right action or item (e.g. `/use <item> on <target>`)"
-
-
 def format_exits_for_agent(scene_exits: list[SceneExit]) -> str:
     """Player-visible exit list with the exact command to use each exit."""
     if not scene_exits:
@@ -107,21 +98,11 @@ def format_exits_for_agent(scene_exits: list[SceneExit]) -> str:
             lines.append(f"{route} [OPEN] -> `/go {label}`")
             continue
         lock_desc = f": {ex.lock_description}" if ex.lock_description else ""
-        hint = _lock_hint(label, ex.code_to_unlock, ex.item_to_unlock)
+        hint = lock_hint(label, ex.code_to_unlock, ex.item_to_unlock)
         lines.append(f"{route} [LOCKED{lock_desc}] {hint}")
     return "EXITS FROM HERE (moving to another location ONLY works with `/go`):\n" + "\n".join(
         lines
     )
-
-
-def container_lock_hint(entity: WorldEntity, states: dict[str, Any]) -> str:
-    """Short lock annotation for a visible container, or empty when it is open."""
-    meta = entity.metadata_json or {}
-    entry = states.get(entity.id) if isinstance(states, dict) else None
-    locked = (entry or {}).get("locked", bool(meta.get("locked")))
-    if not locked:
-        return " (container, open it with `/open`)"
-    return f" (container, LOCKED: {_lock_hint(entity.name, meta.get('code_to_unlock'), meta.get('item_to_unlock'))})"
 
 
 def _match_exit(scene_exits: list[SceneExit], ref: str) -> SceneExit | None:
@@ -156,7 +137,7 @@ async def _match_container(manager: Any, ref: str) -> WorldEntity | None:
     candidates = [
         e
         for e in res.scalars().all()
-        if str(e.item_type or "").upper() == "CONTAINER"
+        if str(e.item_type or "").upper() in CONTAINER_TYPES
         and _norm((states.get(e.id) or {}).get("current_scene_id", e.current_scene_id)) == scene_id
     ]
     exact = next((e for e in candidates if _norm(e.name) == wanted), None)
@@ -190,7 +171,7 @@ async def _go(manager: Any, ref: str) -> AgentActionOutcome:
     if ex.is_locked:
         reason = ex.lock_description or "The way is locked."
         name = exit_display_name(ex.label, scene_exit.target_label)
-        hint = _lock_hint(name, ex.code_to_unlock, ex.item_to_unlock)
+        hint = lock_hint(name, ex.code_to_unlock, ex.item_to_unlock)
         return AgentActionOutcome(message=f"{name} is locked. {reason} {hint}")
     return AgentActionOutcome(turn_command=f"/traverse_exit {ex.id}")
 
@@ -233,7 +214,7 @@ async def _unlock_exit(
     elif world_exit.unlock_expression and not world_exit.rule_to_unlock:
         await gameplay_routes.unlock_exit(game_id, world_exit.id, db=db, current_user=user)
     else:
-        return f"{label} cannot be unlocked like that. " + _lock_hint(
+        return f"{label} cannot be unlocked like that. " + lock_hint(
             label, world_exit.code_to_unlock, world_exit.item_to_unlock
         )
     return f"{label} is now unlocked. Use `/go {label}` to pass through."
@@ -258,7 +239,7 @@ async def _unlock_container(
     elif meta.get("unlock_expression") and not meta.get("rule_to_unlock"):
         await gameplay_routes.unlock_container(game_id, entity.id, db=db, current_user=user)
     else:
-        return f"{entity.name} cannot be unlocked like that. " + _lock_hint(
+        return f"{entity.name} cannot be unlocked like that. " + lock_hint(
             entity.name, meta.get("code_to_unlock"), meta.get("item_to_unlock")
         )
     return f"{entity.name} is now unlocked. Use `/open {entity.name}` to look inside."
@@ -299,4 +280,5 @@ async def execute_agent_action(manager: Any, action: str) -> AgentActionOutcome:
         return await _go(manager, args)
     if command == UNLOCK_COMMAND:
         return await _unlock(manager, args)
-    return AgentActionOutcome(turn_command=action)
+    item_outcome = await execute_item_action(manager, command, args)
+    return item_outcome or AgentActionOutcome(turn_command=action)

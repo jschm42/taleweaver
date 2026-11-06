@@ -7,7 +7,7 @@ import os
 from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
-from backend.api.routes.adventures.agent_logic import AgentService
+from backend.api.routes.adventures.agent_logic import MAX_STEP_DELAY_SECONDS, AgentService
 from backend.api.routes.adventures.agent_settings import (
     activate_with_defaults,
     normalize_personality,
@@ -21,7 +21,8 @@ PLAYAGENT_COMMANDS = ("/playagent", "/play-agent")
 USAGE_TEXT = (
     "Usage: /playagent [on/off] | /playagent [casual|bureaucrat|powerplayer] | "
     "/playagent personality <casual|bureaucrat|powerplayer|custom <text>> | "
-    "/playagent walkthrough on/off | /playagent step on/off | /playagent monkey on/off"
+    "/playagent walkthrough on/off | /playagent step on/off | /playagent monkey on/off | "
+    "/playagent delay <seconds> | /playagent tts on/off"
 )
 
 
@@ -130,6 +131,16 @@ _FIXED_HANDLERS: dict[str, Callable[[Any], str]] = {
         "Play-Agent Monkey Mode enabled. The agent will now deliberately try invalid, chaotic, "
         "or context-inappropriate actions to stress-test engine robustness.",
     ),
+    "tts on": _toggle(
+        AgentService.set_wait_for_tts,
+        True,
+        "Play-Agent waits until the narration has been read aloud before its next step.",
+    ),
+    "tts off": _toggle(
+        AgentService.set_wait_for_tts,
+        False,
+        "Play-Agent no longer waits for text-to-speech.",
+    ),
     "monkey off": _toggle(
         AgentService.set_monkey_mode,
         False,
@@ -138,12 +149,24 @@ _FIXED_HANDLERS: dict[str, Callable[[Any], str]] = {
 }
 
 
+def _set_delay(manager: Any, args: str) -> tuple[str, bool]:
+    if not args.isdigit() or int(args) > MAX_STEP_DELAY_SECONDS:
+        return f"Usage: /playagent delay <seconds> (0-{MAX_STEP_DELAY_SECONDS}).", False
+    AgentService.set_step_delay(manager.state, int(args))
+    if int(args) == 0:
+        return "Play-Agent step delay removed.", True
+    return f"Play-Agent waits {int(args)} seconds between two steps in Auto mode.", True
+
+
 def resolve_playagent_message(manager: Any, cmd_args: str) -> tuple[str, bool]:
     """Applies the sub-command and returns (message, whether state changed)."""
     args_lower = cmd_args.lower()
     handler = _FIXED_HANDLERS.get(args_lower)
     if handler:
         return handler(manager), True
+
+    if args_lower.startswith("delay"):
+        return _set_delay(manager, args_lower[len("delay") :].strip())
 
     if args_lower.startswith("personality"):
         return _set_personality(manager, cmd_args[len("personality") :].strip()), True
