@@ -2,7 +2,7 @@
 """
 TaleWeaver Skill Bundler (CLI)
 
-Bundles an agent skill from `.agents/skills/<name>/` for distribution: copies the companion
+Bundles an agent skill from `.claude/skills/<name>/` for distribution: copies the companion
 docs from the repo `docs/` folder into `<skill>/docs/`, writes `package.json` (npm package
 config) and `manifest.json` (sha256 + sizes), verifies docs, checksums and relative
 references (--check) and exports a verified bundle as a .tar.gz or .zip archive.
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SKILLS_SUBDIR = Path(".agents") / "skills"
+SKILLS_SUBDIR = Path(".claude") / "skills"
 ENTRY_FILE = "SKILL.md"
 PACKAGE_FILE = "package.json"
 MANIFEST_FILE = "manifest.json"
@@ -130,7 +130,7 @@ def sha256_file(path: Path) -> str:
 
 
 def resolve_skill(skill_arg: str, repo_root: Path = REPO_ROOT) -> Skill:
-    """Resolve a skill name or path inside `.agents/skills/`. O(1)."""
+    """Resolve a skill name or path inside `.claude/skills/`. O(1)."""
     skills_dir = (repo_root / SKILLS_SUBDIR).resolve()
     is_path = "/" in skill_arg or "\\" in skill_arg
     root = Path(skill_arg).resolve() if is_path else safe_join(skills_dir, skill_arg)

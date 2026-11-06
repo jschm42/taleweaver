@@ -13,6 +13,7 @@ import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from backend.core.api_keys import is_blocked
 from backend.utils.path_security import _resolve_host_ips, validate_provider_url
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,8 @@ def configure_custom_router(router: Any, llm_settings: dict, prefix: str = "") -
     router.api_base = validate_custom_url(base_url)
     router.api_key = None
     vault = router.user.encrypted_api_keys or {}
-    if vault.get("custom_openai"):
+    # A blocked provider (personal key missing / disabled) raises in _get_decrypted_key.
+    if vault.get("custom_openai") or is_blocked(vault, "custom_openai"):
         router.api_key = router._get_decrypted_key("custom_openai")
     elif "openrouter.ai" in (router.api_base or "") and vault.get("openrouter"):
         router.api_key = router._get_decrypted_key("openrouter")

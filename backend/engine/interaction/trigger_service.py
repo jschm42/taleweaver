@@ -102,6 +102,9 @@ class TriggerService:
             llm_asker=llm_asker,
             active_sequence_id=state.active_sequence_id,
             sequences=sequences,
+            sequence_progression_mode=getattr(adventure, "sequence_progression_mode", "linear")
+            if adventure
+            else "linear",
         )
 
     @classmethod
@@ -251,6 +254,7 @@ class TriggerService:
             or changeset.exit_updates
             or changeset.pending_dialog
             or changeset.gm_directions
+            or changeset.after_narration
             or changeset.clock_ops
         ):
             return
@@ -274,7 +278,7 @@ class TriggerService:
             st.update({k: v for k, v in upd.items() if k != "entity_id"})
             cur_states[upd["entity_id"]] = st
         store_pending_dialog(cur_states, changeset.pending_dialog)
-        store_gm_directions(cur_states, changeset.gm_directions)
+        store_gm_directions(cur_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(state, cur_states, changeset.clock_ops)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")

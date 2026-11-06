@@ -101,3 +101,25 @@ class TalentSchema(WorldBaseSchema):
     )
 
     model_config = {"extra": "forbid"}
+
+
+class SpecialEffectSchema(WorldBaseSchema):
+    target: Literal["target", "self"] = Field(
+        "target", description="'target' affects the attacked combatant, 'self' the caster."
+    )
+    stat: Literal[
+        "hp",
+        "mana",
+        "stamina",
+        "strength",
+        "dexterity",
+        "intelligence",
+        "wisdom",
+        "charisma",
+        "armor_class",
+    ] = Field(..., description="Stat changed by the effect. Attribute changes last for the fight.")
+    amount: str = Field(
+        ..., description="Signed amount, fixed or dice, e.g. '-2d6', '+5', '-3', '+1d4+1'."
+    )
+
+    model_config = {"extra": "forbid"}

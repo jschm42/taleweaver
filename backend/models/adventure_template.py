@@ -176,3 +176,47 @@ class AdventureTemplate(Base, TimestampMixin):
         manifest["init_script"] = cleaned if cleaned else None
         self.original_manifest = manifest
         flag_modified(self, "original_manifest")
+
+    @property
+    def sequence_progression_mode(self) -> str:
+        """Returns sequence progression mode: 'linear' or 'dynamic'."""
+        if not self.original_manifest or not isinstance(self.original_manifest, dict):
+            return "linear"
+        mode = self.original_manifest.get(
+            "sequence_progression_mode"
+        ) or self.original_manifest.get("sequence_progression")
+        cleaned = str(mode or "linear").strip().lower()
+        return cleaned if cleaned in {"linear", "dynamic"} else "linear"
+
+    @sequence_progression_mode.setter
+    def sequence_progression_mode(self, value: Optional[str]) -> None:
+        """Sets sequence_progression_mode inside original_manifest and marks original_manifest modified."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        manifest = dict(self.original_manifest or {})
+        mode = str(value or "linear").strip().lower()
+        manifest["sequence_progression_mode"] = mode if mode in {"dynamic", "linear"} else "linear"
+        self.original_manifest = manifest
+        flag_modified(self, "original_manifest")
+
+    @property
+    def sequence_progression_mode(self) -> str:
+        """Returns sequence progression mode: 'linear' or 'dynamic'."""
+        if not self.original_manifest or not isinstance(self.original_manifest, dict):
+            return "linear"
+        mode = self.original_manifest.get(
+            "sequence_progression_mode"
+        ) or self.original_manifest.get("sequence_progression")
+        cleaned = str(mode or "linear").strip().lower()
+        return cleaned if cleaned in {"linear", "dynamic"} else "linear"
+
+    @sequence_progression_mode.setter
+    def sequence_progression_mode(self, value: Optional[str]) -> None:
+        """Sets sequence_progression_mode inside original_manifest and marks original_manifest modified."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        manifest = dict(self.original_manifest or {})
+        mode = str(value or "linear").strip().lower()
+        manifest["sequence_progression_mode"] = mode if mode in {"dynamic", "linear"} else "linear"
+        self.original_manifest = manifest
+        flag_modified(self, "original_manifest")

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
-from backend.engine.scripting.gm_directions import clean_direction
+from backend.engine.scripting.gm_directions import clean_direction, queue_direction
 from backend.engine.scripting.item_ops import ItemMover
 from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
@@ -99,6 +99,8 @@ class ScriptChangeset:
     system_messages: list[str] = field(default_factory=list)
     ordered_messages: list[ScriptMessage] = field(default_factory=list)
     gm_directions: list[str] = field(default_factory=list)
+    # Init-script callbacks {handler, args} to run once the next narration is done.
+    after_narration: list[dict[str, Any]] = field(default_factory=list)
     rejected_actions: list[str] = field(default_factory=list)
     new_memories: list[dict[str, Any]] = field(default_factory=list)
 
@@ -160,6 +162,7 @@ class ScriptChangeset:
             or self.ordered_messages
             or self.save_requests
             or self.gm_directions
+            or self.after_narration
             or self.rejected_actions
             or self.new_memories
             or self.completed_quest_ids
@@ -446,6 +449,15 @@ class EntityProxy:
         return str(self._data.get("current_scene_id", ""))
 
     @property
+    def is_with_player(self) -> bool:
+        """True when the entity is in the player's current scene (or either scene is unknown)."""
+        player_scene = self._changeset.teleport_scene_id or self._current_player_scene_id
+        entity_scene = self.current_scene_id
+        if not player_scene or not entity_scene:
+            return True
+        return entity_scene == player_scene
+
+    @property
     def is_hidden(self) -> bool:
         for upd in reversed(self._changeset.entity_updates):
             if upd.get("entity_id") == self._id and "is_hidden" in upd:
@@ -510,7 +522,12 @@ class NPCProxy(
         return list(self._data.get("inventory") or [])
 
     def say(self, text: str) -> None:
-        """Makes this NPC speak dialogue text."""
+        """Makes this NPC speak dialogue text; an NPC outside the player's scene stays silent."""
+        if not self.is_with_player:
+            logger.info(
+                "[Script] %s is not in the player's scene; line not shown: %s", self._id, text
+            )
+            return
         clean_text = str(text).strip()
         formatted = f'{self.name}: "{clean_text}"'
         self._changeset.narrative_messages.append(formatted)
@@ -997,7 +1014,7 @@ class EntityManagerProxy:
         ent = self.get(entity_id)
         if isinstance(ent, NPCProxy):
             ent.say(text)
-        else:
+        elif getattr(ent, "is_with_player", True):
             clean_text = str(text).strip()
             self._changeset.narrative_messages.append(f'{ent.name}: "{clean_text}"')
 
@@ -1177,11 +1194,13 @@ class StoryProxy:
         """Alias for system_message()."""
         self.system_message(message)
 
-    def direct(self, instruction: str) -> None:
-        """Gives the GM a soft direction for its next narration (used once, then dropped)."""
-        text = clean_direction(instruction)
-        if text:
-            self._changeset.gm_directions.append(text)
+    def direct(self, instruction: str, after: Any = None, after_args: Any = None) -> None:
+        """Gives the GM a soft direction for its next narration (used once, then dropped).
+
+        ``after`` names an init-script function that runs once that narration is done, called
+        with ``after_args`` as keyword arguments.
+        """
+        queue_direction(self._changeset, clean_direction(instruction), after, after_args)
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active."""
@@ -1290,6 +1309,10 @@ class GameProxy:
         self._changeset.game_completed = True
         self._changeset.status_note = reason or "Victory has been achieved!"
 
+    def game_won(self, reason: Optional[str] = None) -> None:
+        """Alias for win(). Concludes adventure with victory."""
+        self.win(reason)
+
     def game_over(self, reason: Optional[str] = None) -> None:
         self._changeset.game_over = True
         self._changeset.status_note = reason or "Game Over."
@@ -1349,11 +1372,15 @@ class SequencesProxy:
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
         vars_proxy: Optional[Any] = None,
+        progression_mode: str = "linear",
     ):
         self._changeset = changeset
         self._sequences = [s for s in (sequences or []) if isinstance(s, dict)]
         self._active_sequence_id = active_sequence_id
         self._vars_proxy = vars_proxy
+        self._progression_mode = (
+            "dynamic" if str(progression_mode or "").strip().lower() == "dynamic" else "linear"
+        )
         self._completed_ids: set[str] = set()
         if self._vars_proxy:
             raw_completed = self._vars_proxy.get("__completed_sequences__", [])
@@ -1364,8 +1391,20 @@ class SequencesProxy:
                     seq_key = k[len("__seq_completed_") : -2]
                     if self._vars_proxy.get(k):
                         self._completed_ids.add(seq_key.strip().upper())
-        if not self._active_sequence_id and self._sequences:
+        if not self._active_sequence_id and self._sequences and self._progression_mode == "linear":
             self._active_sequence_id = self._sequences[0].get("id")
+
+    @property
+    def progression_mode(self) -> str:
+        """Progression mode of sequences: 'linear' or 'dynamic'."""
+        return self._progression_mode
+
+    def clear(self) -> None:
+        """Clears the currently active sequence without advancing."""
+        self._changeset.sequence_start_id = None
+        self._changeset.sequence_completed = False
+        self._changeset.sequence_advance = False
+        self._active_sequence_id = None
 
     @property
     def id(self) -> Optional[str]:
@@ -1457,12 +1496,14 @@ class SequencesProxy:
         self._changeset.sequence_start_id = matched_id
         self._active_sequence_id = matched_id
 
-    def end(self, sequence_id: Optional[str] = None, advance: bool = True) -> None:
+    def end(self, sequence_id: Optional[str] = None, advance: Optional[bool] = None) -> None:
         """
         Ends the active sequence (or the specified sequence if active).
-        If advance=True (default), advances to the next sequence.
+        If advance=True, advances to the next sequence.
         If advance=False, clears the active sequence.
+        When advance is omitted: defaults to True in linear mode, and False in dynamic mode.
         """
+        should_advance = (self._progression_mode == "linear") if advance is None else bool(advance)
         clean_id = str(sequence_id).strip() if sequence_id else None
         ended_id = clean_id or self.get_active_id()
         if ended_id:
@@ -1474,8 +1515,8 @@ class SequencesProxy:
 
         self._changeset.sequence_completed = True
         self._changeset.sequence_end_id = clean_id
-        self._changeset.sequence_advance = bool(advance)
-        if not advance:
+        self._changeset.sequence_advance = should_advance
+        if not should_advance:
             self._changeset.sequence_start_id = None
             self._active_sequence_id = None
         elif self._sequences:
@@ -1490,13 +1531,13 @@ class SequencesProxy:
             else:
                 self._active_sequence_id = None
 
-    def complete(self, sequence_id: Optional[str] = None) -> None:
-        """Alias for end(sequence_id, advance=True)."""
-        self.end(sequence_id=sequence_id, advance=True)
+    def complete(self, sequence_id: Optional[str] = None, advance: Optional[bool] = None) -> None:
+        """Alias for end(). Advances in linear mode, finishes without advance in dynamic mode."""
+        self.end(sequence_id=sequence_id, advance=advance)
 
-    def complete_current(self) -> None:
-        """Alias for end(None, advance=True)."""
-        self.end(sequence_id=None, advance=True)
+    def complete_current(self, advance: Optional[bool] = None) -> None:
+        """Alias for end(None)."""
+        self.end(sequence_id=None, advance=advance)
 
     def advance(self) -> None:
         """Advances to the next sequence."""
@@ -1546,6 +1587,7 @@ class GameContext:
         clock: Optional[dict[str, Any]] = None,
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
+        sequence_progression_mode: str = "linear",
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1588,6 +1630,7 @@ class GameContext:
         # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
         self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
         self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
+        self.session = self.game
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
         self.sequences = SequencesProxy(
@@ -1595,6 +1638,7 @@ class GameContext:
             active_sequence_id=active_sequence_id,
             sequences=sequences,
             vars_proxy=self.vars,
+            progression_mode=sequence_progression_mode,
         )
         self.sequence = self.sequences
         self.dice = DiceProxy()
@@ -1628,9 +1672,9 @@ class GameContext:
         if len(self.changeset.save_requests) < MAX_SAVES_PER_SCRIPT:
             self.changeset.save_requests.append(str(label or "").strip())
 
-    def direct(self, instruction: str) -> None:
+    def direct(self, instruction: str, after: Any = None, after_args: Any = None) -> None:
         """Shortcut for tw.story.direct(). Gives the GM a soft direction."""
-        self.story.direct(instruction)
+        self.story.direct(instruction, after=after, after_args=after_args)
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active and logs to console."""

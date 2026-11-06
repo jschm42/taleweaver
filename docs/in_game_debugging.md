@@ -4,13 +4,19 @@ TaleWeaver provides a suite of administrative commands to help developers and te
 
 ## Activation
 
-To enable debug commands, you must set the following environment variable in your `.env` file:
+There are two ways to turn debug mode on:
 
-```env
-TALEWEAVER_DEBUG_ENABLED=True
-```
+- **Permanently (global):** set the following environment variable in your `.env` file and restart the backend:
 
-If this is not set to `True`, all `/debug` commands will be ignored or return an error for security reasons.
+  ```env
+  TALEWEAVER_DEBUG_ENABLED=True
+  ```
+
+  Debug mode is then on for every session, including new ones, and `/debug off` cannot turn it off.
+
+- **Per session:** with `TALEWEAVER_DEBUG_ENABLED=False`, type `/debug on` in a session to enable debug mode for that session only (`/debug off` disables it again).
+
+While debug mode is off, every other `/debug` command is treated as an unknown command.
 
 ## Command Syntax
 

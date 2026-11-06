@@ -19,21 +19,40 @@ interface AnnouncedAward {
   description: string
 }
 
-const props = defineProps<{
-  messages: Array<{ role?: string; content?: unknown }>
+interface Props {
+  messages: Array<{ role?: string; content?: unknown; _key?: string }>
   awards?: Array<{ key?: string; title?: string; tier?: string; description?: string }>
-}>()
+}
+
+const props = defineProps<Props>()
 
 const queue = ref<AnnouncedAward[]>([])
 const current = computed(() => queue.value[0] ?? null)
 let nextId = 1
-let seenAwardMessages: number | null = null
+/** Render key of the newest message already checked; undefined until the first check. */
+let lastSeenKey: string | null | undefined = undefined
 let timer = 0
 
-function awardTitles(): string[] {
-  return (props.messages || [])
+function awardTitles(messages: Props['messages']): string[] {
+  return messages
     .filter((m) => m.role === 'system' && String(m.content ?? '').startsWith(AWARD_MESSAGE_PREFIX))
     .map((m) => String(m.content).slice(AWARD_MESSAGE_PREFIX.length).trim())
+}
+
+/**
+ * Award titles of the messages added at the end since the last check.
+ *
+ * Only messages after the last seen one count: the loaded history and older pages prepended
+ * while scrolling up are never announced. If the last seen message is gone (history replaced),
+ * nothing is announced either.
+ */
+function freshAwardTitles(): string[] {
+  const messages = props.messages || []
+  const previousKey = lastSeenKey
+  lastSeenKey = messages[messages.length - 1]?._key ?? null
+  if (previousKey === undefined || previousKey === null) return []
+  const seenAt = messages.findIndex((m) => m._key === previousKey)
+  return seenAt < 0 ? [] : awardTitles(messages.slice(seenAt + 1))
 }
 
 function describe(title: string): AnnouncedAward {
@@ -57,21 +76,12 @@ function dismiss() {
   showNext()
 }
 
-// Count the award messages: the first count is the loaded history; later growth is new awards.
-// Counting (instead of comparing message objects) survives the feed reloading its messages.
+// Re-check whenever messages are added, removed or reloaded (keys survive reloads, see messageKeys.ts).
 watch(
-  () => awardTitles(),
-  (titles) => {
-    if (seenAwardMessages === null) {
-      seenAwardMessages = titles.length
-      return
-    }
-    if (titles.length <= seenAwardMessages) {
-      seenAwardMessages = titles.length
-      return
-    }
-    const fresh = titles.slice(seenAwardMessages).map(describe)
-    seenAwardMessages = titles.length
+  () => (props.messages || []).map((m) => m._key).join('|'),
+  () => {
+    const fresh = freshAwardTitles().map(describe)
+    if (!fresh.length) return
     const wasIdle = !current.value
     queue.value = [...queue.value, ...fresh]
     if (wasIdle) showNext()

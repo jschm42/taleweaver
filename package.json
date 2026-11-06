@@ -13,7 +13,7 @@
   },
   "files": [
     "bin",
-    ".agents",
+    ".claude/skills",
     "docs"
   ],
   "engines": {

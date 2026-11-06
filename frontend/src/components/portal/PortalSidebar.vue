@@ -114,7 +114,7 @@ function itemClass(active: boolean): string {
         @click="emit('about'); emit('close-mobile')"
         class="w-full flex items-center gap-4 px-4 py-2.5 rounded-xl text-slate-500 hover:bg-white/5 hover:text-white transition-all"
         :class="isCollapsed ? 'lg:justify-center lg:px-0' : ''"
-        :title="isCollapsed ? 'About Archive' : undefined"
+        :title="isCollapsed ? 'About' : undefined"
       >
         <i class="ra ra-scroll-unfurled w-5 text-center"></i>
         <span class="text-xs font-bold uppercase tracking-widest" :class="isCollapsed ? 'lg:hidden' : ''">About Archive</span>

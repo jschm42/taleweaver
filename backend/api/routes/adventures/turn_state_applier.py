@@ -959,10 +959,6 @@ class TurnStateApplier:
                     self.state.active_sequence_id,
                 )
             )
-            if getattr(self.state, "is_completed", False):
-                event.game_completed = True
-                if not event.status_note:
-                    event.status_note = "Congratulations! You have completed the final sequence."
 
         raw_win_guard = getattr(self.state, "completed_guard_expression", None) or getattr(
             self.adventure, "completed_guard_expression", None

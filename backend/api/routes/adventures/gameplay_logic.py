@@ -17,6 +17,7 @@ from backend.api.routes.adventures.agent_commands import (
     PLAYAGENT_COMMANDS,
     handle_playagent_command,
 )
+from backend.api.routes.adventures.after_narration import run_after_narration
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
@@ -59,6 +60,7 @@ from backend.api.routes.adventures.turn_prompt_layout import (
     build_pass1_user_prompt,
 )
 from backend.core import prompts
+from backend.core.api_keys import PersonalKeyRequiredError, key_source
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
@@ -219,6 +221,8 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
 
     lower_text = str(exc or "").lower()
 
+    if isinstance(exc, PersonalKeyRequiredError):
+        return str(exc)
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
@@ -1807,7 +1811,12 @@ class GameTurnManager:
         narration_prompt = "\n\n".join(part for part in narration_prompt_parts if part)
 
         reminders: list[str] = [
-            narration_style_reminder(getattr(self.state, "narration_style", None))
+            narration_style_reminder(getattr(self.state, "narration_style", None)),
+            (
+                "STRICT SEPARATION: Keep prose narration and character speech strictly separated. "
+                'NEVER embed quotes in prose. Every spoken line MUST start on its own line as Character Name: "Dialogue" '
+                "(separated from prose by blank lines)."
+            ),
         ]
         if use_vocal_tags:
             reminders.append(vocal_tag_reminder())
@@ -1890,6 +1899,8 @@ class GameTurnManager:
             operation="chat_turn",
             phase="narration",
             model=complex_model,
+            # Who pays for this narration: the server or the player's own key.
+            key_source=key_source(self.user.encrypted_api_keys, complex_model_provider),
             memory_turns=memory_turns,
             history_messages_count=len(narration_messages),
             **token_usage,
@@ -1974,7 +1985,10 @@ class GameTurnManager:
         if isinstance(game_event, GameEvent):
             reveal_event = GameEvent()
             post_reveal_messages = await self._enforce_hidden_entity_reveal(
-                reveal_event, user_msg, draft_narration=response_text
+                reveal_event,
+                user_msg,
+                draft_narration=response_text,
+                moved=scene_changed_this_turn,
             )
             if post_reveal_messages and reveal_event.updated_entities:
                 await self._apply_game_event(reveal_event)
@@ -1990,6 +2004,15 @@ class GameTurnManager:
             session_id=self.state.session_id, role="assistant", content=response_text
         )
         self.db.add(assistant_chat)
+
+        # Callbacks attached to this narration's directions (direct/say_directed after=...).
+        # Before on_narration_done: callbacks queued there belong to the next narration.
+        after_msgs, after_ended = await run_after_narration(self)
+        for sm in after_msgs:
+            yield sse_role_message(sm)
+        if after_ended and isinstance(game_event, GameEvent):
+            game_event.game_over = True
+            game_event.status_note = getattr(self.state.session, "status_note", None)
 
         # Post-narration scripts (on_narration_done)
         if script_runner.scripts:
@@ -2869,6 +2892,9 @@ class GameTurnManager:
             ),
             active_sequence_id=self.state.active_sequence_id,
             sequences=getattr(self.adventure, "sequences", None),
+            sequence_progression_mode=getattr(
+                self.adventure, "sequence_progression_mode", "linear"
+            ),
         )
 
     def _get_script_runner(self) -> ScriptRunner:
@@ -3048,7 +3074,7 @@ class GameTurnManager:
             entity_states["__switch_story_flags__"] = story_flags
 
         store_pending_dialog(entity_states, changeset.pending_dialog)
-        store_gm_directions(entity_states, changeset.gm_directions)
+        store_gm_directions(entity_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
@@ -3175,10 +3201,6 @@ class GameTurnManager:
             message_saver=self._save_chat_message,
         )
         system_messages.extend(seq_msgs)
-        if getattr(self.state, "is_completed", False):
-            await self._finalize_session(
-                "completed", "Congratulations! You have completed the final sequence."
-            )
 
         # Last, so the save state holds everything this script changed.
         for save_msg in await SessionCheckpointService.save_from_script(

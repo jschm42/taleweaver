@@ -26,6 +26,7 @@ import backend.models.user
 import backend.models.world_map
 from backend.api.routes import (
     adventures,
+    api_keys_api,
     auth_api,
     avatars,
     characters,
@@ -204,6 +205,7 @@ app.include_router(map_api.router, prefix="/api")
 app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
 app.include_router(leaderboard_api.router, prefix="/api")
+app.include_router(api_keys_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
 app.include_router(tts_stream_api.router, prefix="/api")
 app.include_router(stt_api.router, prefix="/api")

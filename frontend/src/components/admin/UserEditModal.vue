@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import UserKeyPolicyEditor from './UserKeyPolicyEditor.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -31,7 +32,7 @@ const handleSubmit = () => {
   <Teleport to="body">
     <div v-if="isOpen" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/85 backdrop-blur-sm" @click="emit('close')"></div>
-      <div class="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 animate-fade-in">
+      <div class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 animate-fade-in">
         <!-- Header -->
         <div class="flex items-center justify-between pb-4 mb-6 border-b border-slate-800">
           <div>
@@ -125,6 +126,14 @@ const handleSubmit = () => {
               </button>
             </div>
           </div>
+
+          <UserKeyPolicyEditor
+            v-if="isEditingExisting && editingUser.id"
+            :key="editingUser.id"
+            :user-id="editingUser.id"
+            :overrides="editingUser.api_key_policy_overrides"
+            :personal-key-providers="editingUser.personal_key_providers"
+          />
 
           <!-- Actions -->
           <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">

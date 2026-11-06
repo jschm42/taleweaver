@@ -10,7 +10,9 @@ from fastapi import HTTPException
 from backend.api.routes import config_api
 from backend.core import custom_openai
 from backend.core.custom_openai_diagnostics import connection_test_diagnostic
-from backend.models.user import User
+from backend.models.server_settings import SERVER_SETTINGS_ID, ServerSettings
+from tests.conftest import TestSessionLocal
+from tests.server_settings_helpers import seed_server_settings
 
 SECRET = "private-example-token-do-not-display"
 
@@ -85,13 +87,11 @@ def test_http_400_identifies_api_rejection_without_echoing_body():
     [("", "No OpenAI-compatible Base URL is saved"), ("https://example.test", "must end in /v1")],
 )
 async def test_real_router_validation_prevents_generation(auth_client, monkeypatch, base, expected):
-    owner = User(
-        username="diagnostic-owner",
-        llm_settings={"custom_openai_url": base},
-        encrypted_api_keys={},
-    )
-    original_settings = owner.llm_settings
-    monkeypatch.setattr(config_api, "_resolve_global_settings_owner", AsyncMock(return_value=owner))
+    async with TestSessionLocal() as session:
+        await seed_server_settings(
+            session, llm_settings={"custom_openai_url": base}, encrypted_api_keys={}
+        )
+        await session.commit()
     addresses = [ipaddress.ip_address("8.8.8.8")]
     monkeypatch.setattr("backend.utils.path_security._resolve_host_ips", lambda _: addresses)
     monkeypatch.setattr(custom_openai, "_resolve_host_ips", lambda _: addresses)
@@ -107,7 +107,9 @@ async def test_real_router_validation_prevents_generation(auth_client, monkeypat
     assert expected in response.json()["message"]
     assert "No generation request was sent" in response.json()["message"]
     generate.assert_not_awaited()
-    assert owner.llm_settings is original_settings
+    async with TestSessionLocal() as session:
+        server = await session.get(ServerSettings, SERVER_SETTINGS_ID)
+        assert server.llm_settings == {"custom_openai_url": base}
 
 
 @pytest.mark.asyncio

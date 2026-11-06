@@ -60,7 +60,9 @@ _STYLE_RULES: Final[dict[str, str]] = {
         "paragraphs; new scenes and major events up to 4. Every prose paragraph has at most 4 sentences "
         "(roughly 80 words). Use concrete sensory detail (light, sound, smell, texture) and show how the "
         "world and its characters react. NPC dialogue may run 2-4 sentences per character and reveal "
-        "personality. Stay focused on the current moment; never pad with repetition or recaps."
+        "personality. Stay focused on the current moment; never pad with repetition or recaps. "
+        "Keep character speech and prose strictly separated: all dialogue must be on its own line as "
+        'Character Name: "Dialogue", never embedded in prose paragraphs.'
     ),
     "epic": (
         "NARRATION STYLE - EPIC (CRITICAL): Write like a novel. Standard actions get 3-5 paragraphs; new "
@@ -69,7 +71,8 @@ _STYLE_RULES: Final[dict[str, str]] = {
         "vary rhythm between long flowing sentences and short beats. NPC dialogue may be expansive and "
         "layered (up to 5 sentences per character), and NPCs may talk among themselves. Every paragraph must "
         "still add something new: no repetition, no recaps of earlier turns, and no decisions on behalf of "
-        "the player."
+        "the player. Even in novelistic style, always separate character dialogue from narration prose "
+        'using standalone lines formatted as Character Name: "Dialogue".'
     ),
 }
 

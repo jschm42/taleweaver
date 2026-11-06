@@ -4,6 +4,7 @@
  * All methods throw on non-2xx responses so callers can handle errors
  * with a simple try/catch.
  */
+import type { TtsPreferences } from '@/types/tts'
 import type {
   CreateAdventurePayload,
   GameSession,
@@ -61,6 +62,54 @@ export interface PlayerSessionSummary {
   sequences_total: number
   created_at?: string | null
   updated_at?: string | null
+  last_played_at?: string | null
+}
+
+export type PlayerSessionStatus = 'active' | 'completed' | 'game_over' | 'archived'
+export type PlayerSessionSort = 'recent' | 'oldest' | 'title' | 'xp'
+export type PlayerSessionCounts = Record<PlayerSessionStatus | 'all', number>
+
+export interface PlayerSessionQuery {
+  status?: PlayerSessionStatus | null
+  search?: string
+  sort?: PlayerSessionSort
+  limit?: number
+  offset?: number
+}
+
+export interface PlayerSessionPage {
+  items: PlayerSessionSummary[]
+  /** Sessions matching status filter and search. */
+  total: number
+  /** Per status for the search alone (filter chip numbers). */
+  counts: PlayerSessionCounts
+  /** Per status without any filter (profile stats). */
+  totals: PlayerSessionCounts
+}
+
+export type KeyPolicy = 'server' | 'user_optional' | 'user_required' | 'disabled'
+export type KeySource = 'server' | 'personal' | 'missing' | 'disabled'
+export type KeyPolicyMap = Record<string, KeyPolicy>
+
+export interface PersonalKeyProvider {
+  id: string
+  name: string
+  policy: KeyPolicy
+  can_store_key: boolean
+  has_personal_key: boolean
+  source: KeySource
+}
+
+export interface MyApiKeysResponse {
+  providers: PersonalKeyProvider[]
+  personal_keys_allowed: boolean
+  verified?: boolean
+}
+
+export interface KeyPolicyResponse {
+  policy: KeyPolicyMap
+  providers: Array<{ id: string, name: string }>
+  policies: KeyPolicy[]
 }
 
 class ApiError extends Error {
@@ -88,6 +137,7 @@ interface SettingsResponse {
   game_settings: Record<string, unknown>
   is_llm_configured: boolean
   is_t2i_configured: boolean
+  missing_personal_keys?: Array<{ id: string, reason: 'missing' | 'disabled', message: string }>
   image_styles_catalog: CatalogTile[]
   tone_catalog: CatalogTile[]
   tts_settings: Record<string, unknown>
@@ -869,12 +919,19 @@ export const api = {
     })
   },
 
-  updateMyPreferences(payload: { default_language?: string | null }): Promise<any> {
+  updateMyPreferences(payload: { default_language?: string | null; tts_preferences?: TtsPreferences }): Promise<any> {
     return request('/users/me/preferences', { method: 'PUT', body: JSON.stringify(payload) })
   },
 
-  getMySessions(): Promise<PlayerSessionSummary[]> {
-    return request('/users/me/sessions')
+  getMySessions(query: PlayerSessionQuery = {}): Promise<PlayerSessionPage> {
+    const params = new URLSearchParams()
+    if (query.status) params.set('status', query.status)
+    if (query.search?.trim()) params.set('search', query.search.trim())
+    if (query.sort) params.set('sort', query.sort)
+    if (query.limit) params.set('limit', String(query.limit))
+    if (query.offset) params.set('offset', String(query.offset))
+    const qs = params.toString()
+    return request(`/users/me/sessions${qs ? `?${qs}` : ''}`)
   },
 
   createPasswordResetLink(userId: string): Promise<{ token: string; expires_in_hours: number }> {
@@ -883,6 +940,37 @@ export const api = {
 
   setupRootAdmin(payload: any): Promise<any> {
     return request('/auth/setup-root', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  getMyApiKeys(): Promise<MyApiKeysResponse> {
+    return request('/users/me/api-keys')
+  },
+
+  storeMyApiKey(provider: string, apiKey: string): Promise<MyApiKeysResponse> {
+    return request(`/users/me/api-keys/${encodeURIComponent(provider)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ api_key: apiKey }),
+      timeoutMs: 30000,
+    })
+  },
+
+  deleteMyApiKey(provider: string): Promise<MyApiKeysResponse> {
+    return request(`/users/me/api-keys/${encodeURIComponent(provider)}`, { method: 'DELETE' })
+  },
+
+  getKeyPolicy(): Promise<KeyPolicyResponse> {
+    return request('/settings/key-policy')
+  },
+
+  updateKeyPolicy(policy: KeyPolicyMap): Promise<{ status: string, policy: KeyPolicyMap }> {
+    return request('/settings/key-policy', { method: 'PUT', body: JSON.stringify({ policy }) })
+  },
+
+  updateUserKeyPolicy(userId: string, policy: KeyPolicyMap): Promise<{ status: string, overrides: KeyPolicyMap }> {
+    return request(`/users/${encodeURIComponent(userId)}/key-policy`, {
+      method: 'PUT',
+      body: JSON.stringify({ policy }),
+    })
   },
 
   listUsers(): Promise<any[]> {
@@ -948,7 +1036,7 @@ export const api = {
   },
 
   /** Updates a session note, status, memory turn limit, or compression toggle. */
-  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number; enable_history_compression?: boolean; narration_style?: string; ui_skin?: string }): Promise<GameSession> {
+  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number; enable_history_compression?: boolean; narration_style?: string; ui_skin?: string; tts_auto_speak?: TtsPreferences }): Promise<GameSession> {
     return request(`/adventures/sessions/${gameId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),

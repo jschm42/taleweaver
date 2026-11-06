@@ -249,6 +249,7 @@ watch(
     if (cmInstance) {
       if ((newVal || '') !== cmInstance.getValue()) {
         const cur = cmInstance.getCursor()
+        search.clearMarks()
         cmInstance.setValue(newVal || '')
         cmInstance.setCursor(cur)
       }
@@ -455,10 +456,17 @@ onBeforeUnmount(() => {
   resizeObserver = null
   intersectionObserver?.disconnect()
   intersectionObserver = null
+  try {
+    search.clearMarks()
+  } catch {}
   cmEditorRef.value = null
   if (cmInstance) {
-    const wrapper = cmInstance.getWrapperElement()
-    wrapper?.parentNode?.removeChild(wrapper)
+    try {
+      const wrapper = cmInstance.getWrapperElement()
+      if (wrapper && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper)
+      }
+    } catch {}
     cmInstance = null
   }
 })

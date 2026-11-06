@@ -196,7 +196,7 @@ async def test_hard_rule_defeated_npc_completion():
     await applier._apply_game_event(event)
 
     assert event.sequence_completed is True
-    assert event.game_completed is True  # Final sequence completed!
+    assert event.game_completed is False  # Final sequence completion no longer auto-wins the game
     assert mock_manager.avatar.exp == 500
 
 

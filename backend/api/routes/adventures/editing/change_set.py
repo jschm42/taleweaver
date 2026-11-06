@@ -54,6 +54,7 @@ from backend.api.routes.adventures.editor_npc_combat import (
 )
 from backend.api.routes.adventures.schemas import AdventureTemplateUpdate
 from backend.api.routes.adventures.templates import update_adventure
+from backend.core.global_settings import apply_global_settings
 from backend.core.world_validator import validate_adventure
 from backend.engine.scripting.sandbox import SafeAstInterpreter
 from backend.models.adventure_template import AdventureTemplate
@@ -329,6 +330,7 @@ async def apply_change_set(
         raise ChangeSetError(f"At most {MAX_OPERATIONS} operations per change set.")
     adv = await db.get(AdventureTemplate, template_id)
     owner = await db.get(User, adv.owner_id) if adv and adv.owner_id else None
+    await apply_global_settings(db, owner)
     if owner is None:
         raise ChangeSetError(f"Adventure '{template_id}' not found or it has no owner.")
 

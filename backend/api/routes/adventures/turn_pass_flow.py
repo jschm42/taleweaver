@@ -59,6 +59,8 @@ async def run_guardrail_chain(
     for message in await manager.guardrails._enforce_soft_rules(game_event, active_sequence):
         yield sse_system(message)
     await manager.guardrails._block_script_only_reveals(game_event)
+    # Before crafting, which adds its own (legitimate) ingredient removals.
+    await manager.guardrails._enforce_inventory_removals(game_event, user_msg)
 
     for method_name, takes_user_msg in _GUARDRAIL_STEPS:
         enforce = getattr(manager, method_name)

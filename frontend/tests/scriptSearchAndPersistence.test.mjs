@@ -150,3 +150,42 @@ test('useScriptPersistence dirty tracking and unsaved changes guard', async () =
   assert.equal(loaded, true)
 })
 
+
+test('useScriptSearch safely handles CodeMirror mark.clear throwing', async () => {
+  const { ref, nextTick } = await import('vue')
+  const { useScriptSearch } = await loadTsModule(
+    '../src/components/editor/scripting/useScriptSearch.ts'
+  )
+
+  const code = ref('tw.narrate("foo")\ntw.narrate("bar")')
+  const mockCm = {
+    posFromIndex: (idx) => ({ line: 0, ch: idx }),
+    indexFromPos: () => 0,
+    getCursor: () => ({ line: 0, ch: 0 }),
+    getSelection: () => '',
+    markText: () => ({
+      clear: () => {
+        throw new TypeError("Cannot read properties of undefined (reading 'from')")
+      }
+    }),
+    setSelection: () => {},
+    scrollIntoView: () => {},
+    operation: (fn) => fn(),
+    focus: () => {}
+  }
+
+  const search = useScriptSearch(
+    ref(mockCm),
+    ref(null),
+    code,
+    () => {}
+  )
+
+  search.openSearch()
+  search.query.value = 'tw.narrate'
+  await nextTick()
+
+  assert.doesNotThrow(() => search.findNext())
+  assert.doesNotThrow(() => search.findPrev())
+  assert.doesNotThrow(() => search.closeSearch())
+})

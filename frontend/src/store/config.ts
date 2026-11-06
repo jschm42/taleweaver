@@ -2,11 +2,19 @@ import { reactive } from 'vue'
 import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
 
+export interface MissingPersonalKey {
+  id: string
+  reason: 'missing' | 'disabled'
+  message: string
+}
+
 export const configState = reactive({
   appVersion: '0.0.0-loading' as string,
   isLoaded: false,
   hasLlmConfig: false,
   hasT2iConfig: false,
+  /** Chat passes the player cannot run until they add an own key (or the admin enables it). */
+  missingPersonalKeys: [] as MissingPersonalKey[],
   isBackendReachable: true,
   isTtsEnabled: false,
   lastErrorMessage: '' as string
@@ -47,6 +55,7 @@ export async function refreshConfig() {
     
     configState.hasLlmConfig = !!data.is_llm_configured
     configState.hasT2iConfig = !!data.is_t2i_configured
+    configState.missingPersonalKeys = data.missing_personal_keys || []
     const tts = data.tts_settings as any
     configState.isTtsEnabled = !!tts?.enabled
     

@@ -6,7 +6,7 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   itemIds?: string[]
-  /** Scene/sequence the message belongs to; the story feed shows one page per scene/sequence. */
+  /** Scene/sequence the message belongs to; the story feed puts a divider where they change. */
   scene_id?: string | null
   sequence_id?: string | null
   /** Script narration shown verbatim (tw.story.narrate_raw): no dialogue or voice-tag parsing. */
@@ -53,6 +53,7 @@ export interface CharacterSheet {
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
+  sequence_progression_mode?: 'linear' | 'dynamic'
   adventure_tone?: string | { id?: string; name?: string } | null
   /** Author-defined dialog skin (validated server-side). */
   ui_theme?: { skin?: string | null; accent?: string | null } | null
@@ -378,6 +379,7 @@ export interface GameSession {
   narration_style?: 'terse' | 'dialogue' | 'balanced' | 'rich' | 'epic' | string
   is_legacy_format?: boolean
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat' | string
+  sequence_progression_mode?: 'linear' | 'dynamic'
   selected_image_styles?: CatalogTile[] | any[]
   selected_tone?: CatalogTile | string | null
 }
@@ -428,6 +430,7 @@ export interface AdventureTemplateSummary {
   selected_tone?: CatalogTile | string | null
   selected_image_styles?: CatalogTile[] | any[]
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat' | string
+  sequence_progression_mode?: 'linear' | 'dynamic'
   progress?: number
   quest_count?: number
   completed_quest_count?: number

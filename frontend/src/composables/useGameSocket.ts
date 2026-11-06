@@ -9,8 +9,14 @@ import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import { registerEntityNames } from '@/utils/entityRefs'
-import { carryOverMessageKeys, newMessageKey } from '@/composables/messageKeys'
+import { newMessageKey } from '@/composables/messageKeys'
 import { isHiddenPlayerMessage } from '@/composables/silentCommands'
+import {
+  HISTORY_PAGE_SIZE,
+  mergeNewestWindow,
+  prependOlderPage,
+  visibleServerMessages,
+} from '@/composables/historyWindow'
 import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
@@ -40,6 +46,10 @@ export interface AgentSettingsPatch {
 
 export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
+  /** The server holds older messages than the loaded ones (see loadOlderMessages). */
+  hasOlderMessages: Ref<boolean>
+  /** Sequence id -> title of the chapters the chat reached (story feed chapter dividers). */
+  sequenceTitles: Ref<Record<string, string>>
   sheet: Ref<CharacterSheet | null>
   mapData: Ref<any | null>
   nodes: Ref<Record<string, any>>
@@ -92,6 +102,7 @@ export interface UseGameSocket {
   createTerminalEpilogue: () => Promise<void>
   revealIllustration: (name: string, url: string) => void
   deleteMessage: (messageId: string) => Promise<void>
+  loadOlderMessages: () => Promise<void>
 }
 
 let gameSocketSingleton: UseGameSocket | null = null
@@ -123,6 +134,8 @@ export function useGameSocket(): UseGameSocket {
   const adventureImage = ref<string | null>(null)
   const quests = ref<any[]>([])
   const activeSequence = ref<any | null>(null)
+  const hasOlderMessages = ref(false)
+  const sequenceTitles = ref<Record<string, string>>({})
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
   const isLegacyFormat = ref(false)
@@ -247,9 +260,10 @@ export function useGameSocket(): UseGameSocket {
     return headers
   }
 
-  async function fetchSessionSnapshot(gameId: string): Promise<any | null> {
+  /** Session snapshot with the newest `messageLimit` chat messages (older ones load on scroll). */
+  async function fetchSessionSnapshot(gameId: string, messageLimit = HISTORY_PAGE_SIZE): Promise<any | null> {
     try {
-      const res = await fetch(`${BASE}/adventures/${gameId}/chat`, {
+      const res = await fetch(`${BASE}/adventures/${gameId}/chat?message_limit=${messageLimit}`, {
         headers: authHeaders(false)
       })
       if (res.status === 401 && authState.isAuthenticated) {
@@ -289,11 +303,11 @@ export function useGameSocket(): UseGameSocket {
     if (!data) return
 
     if (updateMessages && Array.isArray(data.messages)) {
-      const reloaded = data.messages
-        .filter((m: any) => !(m.role === 'user' && isHiddenPlayerMessage(m.content)))
-        .map((m: any) => ({ ...m, timestamp: new Date() }))
-      messages.value = carryOverMessageKeys(messages.value, reloaded)
+      const merged = mergeNewestWindow(messages.value, visibleServerMessages(data.messages))
+      messages.value = merged.messages
+      if (!merged.keptOlder) hasOlderMessages.value = !!data.has_more_messages
     }
+    if (data.sequence_titles) sequenceTitles.value = data.sequence_titles
 
     if (data.scene_id !== undefined) updateCurrentScene(data.scene_id || null, announcedScene)
     if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
@@ -371,7 +385,8 @@ export function useGameSocket(): UseGameSocket {
         return
       }
 
-      const snapshot = await fetchSessionSnapshot(currentGameId)
+      // State only: the messages are not applied, so one is enough.
+      const snapshot = await fetchSessionSnapshot(currentGameId, 1)
       if (currentGameId) {
         applySessionSnapshot(snapshot, false)
       }
@@ -396,6 +411,8 @@ export function useGameSocket(): UseGameSocket {
     localStorage.setItem(ACTIVE_LANGUAGE_KEY, language.value)
     status.value = 'loading'
     messages.value = []
+    hasOlderMessages.value = false
+    sequenceTitles.value = {}
     stopSyncTimer()
     
     try {
@@ -434,6 +451,8 @@ export function useGameSocket(): UseGameSocket {
 
     // Clear all session-specific states
     messages.value = []
+    hasOlderMessages.value = false
+    sequenceTitles.value = {}
     sheet.value = null
     mapData.value = null
     nodes.value = {}
@@ -589,6 +608,16 @@ export function useGameSocket(): UseGameSocket {
         return
       }
 
+      if (res.status === 403) {
+        // The key policy blocks a model pass (own key required / provider disabled).
+        const body = await res.json().catch(() => null) as { detail?: { code?: string, message?: string } } | null
+        if (body?.detail?.code === 'personal_key_required' && body.detail.message) {
+          _pushMessage('system', body.detail.message)
+          status.value = 'connected'
+          return
+        }
+      }
+
       if (!res.ok) {
         _pushMessage('system', 'The Game Master is currently over capacity. Try once more.')
         status.value = 'connected'
@@ -693,7 +722,7 @@ export function useGameSocket(): UseGameSocket {
               statusText.value = ''
             }
           } else if (event === 'scene_transition') {
-            // The story feed starts a new page per scene; previous scenes stay browsable.
+            // The story feed marks the new scene with a divider; earlier scenes stay above it.
             isSceneTransitioning.value = true
             applySessionSnapshot(data, false, true)
           } else if (event === 'adventure_generator_proposal') {
@@ -1028,8 +1057,31 @@ export function useGameSocket(): UseGameSocket {
     }
   }
 
+  /** Prepends the next older page of the chat history (story feed scrolled to the top). */
+  async function loadOlderMessages(): Promise<void> {
+    const gameId = currentGameId
+    const oldest = messages.value.find((m) => m.id)
+    if (!gameId || !oldest?.id || !hasOlderMessages.value) return
+    try {
+      const params = new URLSearchParams({ before: oldest.id, limit: String(HISTORY_PAGE_SIZE) })
+      const res = await fetch(`${BASE}/adventures/${gameId}/chat/history?${params}`, {
+        headers: authHeaders(false)
+      })
+      if (!res.ok || gameId !== currentGameId) return
+      const page = await res.json()
+      const older = visibleServerMessages(Array.isArray(page.messages) ? page.messages : [])
+      messages.value = prependOlderPage(messages.value, older)
+      hasOlderMessages.value = !!page.has_more && older.length > 0
+    } catch (err) {
+      console.error('[Session] Older messages load error:', err)
+    }
+  }
+
   gameSocketSingleton = {
     messages,
+    hasOlderMessages,
+    sequenceTitles,
+    loadOlderMessages,
     sheet,
     mapData,
     nodes,

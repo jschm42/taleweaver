@@ -63,6 +63,7 @@ def walkthrough_status(adventure: Any, state: Any, free: bool = False) -> dict[s
         "current_revealed": current is not None and _is_revealed(state, current, free),
         "steps": visible,
         "walkthrough": format_walkthrough_steps(visible),
+        "progression_mode": getattr(adventure, "sequence_progression_mode", "linear"),
     }
 
 

@@ -126,6 +126,10 @@ Before generating the narrative in Pass 2, `GameTurnManager` systematically vali
    - If invalid: Reverts `switch_state` to its pre-turn state and adds a violation notice.
 4. **Visibility & Target Guardrails:**
    - Inspect and search commands are blocked if target entities are off-scene and not within the player's or present NPCs' accessible inventories.
+5. **Inventory Removal Validation:**
+   - A proposed `removed_inventory_item_ids` entry is kept only if the item is in the player's inventory and the turn message refers to it (ID, name, or a synonym/translation confirmed by the small model).
+   - Engine reaction turns (prompts starting with a tag such as `[ITEM_GIVEN]`) skip the small-model check, so the exact ID or name must appear.
+   - If invalid: the removal is dropped silently (logged as a warning); the player keeps the item. Crafting ingredient removals are added after this check and are not affected.
 
 ---
 

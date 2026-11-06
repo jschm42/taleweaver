@@ -1,6 +1,6 @@
 """Account security: login throttling, token revocation, recovery codes, reset links, profile sessions."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -185,7 +185,7 @@ async def test_expired_reset_link_is_rejected(client: AsyncClient) -> None:
             .one()
         )
         token = issue_password_reset_token(user)
-        user.password_reset_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        user.password_reset_expires_at = datetime.now(UTC) - timedelta(minutes=1)
         await session.commit()
 
     # Act
@@ -254,7 +254,7 @@ async def test_session_overview_reports_sequence_progress_and_xp(client: AsyncCl
 
     # Assert
     assert resp.status_code == 200
-    [entry] = resp.json()
+    [entry] = resp.json()["items"]
     assert entry["status"] == "game_over"
     assert entry["xp"] == 50
     assert entry["sequences_completed"] == 1

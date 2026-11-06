@@ -23,8 +23,8 @@ class ChatMessage(Base, TimestampMixin):
     # The actual message payload
     content = Column(Text, nullable=False)
 
-    # Scene and sequence the message was written in. The client groups the story into
-    # one page per scene/sequence. Stamped automatically on flush (see below).
+    # Scene and sequence the message was written in. The story feed marks scene and
+    # chapter changes with a divider. Stamped automatically on flush (see below).
     scene_id = Column(String(100), nullable=True)
     sequence_id = Column(String(100), nullable=True)
 

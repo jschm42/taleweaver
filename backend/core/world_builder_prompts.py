@@ -29,9 +29,12 @@ of the allowlist below.
   it for pure flavour and a script for mechanics (damage, items, locks, flags).
 - Object hooks depend on the item type: on_pickup, on_drop and on_interact work for every
   item; on_equip/on_unequip only for WEAPON and WEARABLE; on_read only for READABLE;
-  unlock_expression, on_unlock_success/on_unlock_failure and on_items_added (the player puts
-  inventory items in; `added_item_ids` is in scope) only for CONTAINER;
+  unlock_expression, on_unlock_success/on_unlock_failure, on_items_added (the player puts
+  inventory items in; `added_item_ids` is in scope) and on_items_removed (the player takes
+  items out; `removed_item_ids` is in scope) only for CONTAINER and CONTAINER_SWITCH;
   craft_guard_expression and on_craft_* only for CONSTRUCTABLE recipes.
+- `"locked": true` on a non-container object makes it TAKE-LOCKED: visible, but it cannot
+  be picked up until a script calls tw.objects.unlock(id).
 - NPC hooks: on_defeat (the NPC is defeated), on_protagonist_enters_scene (the protagonist
   enters the NPC's scene), on_interact (the protagonist talks to or interacts with it),
   on_receive_item (the protagonist gives it items; `received_item_ids` is in scope).
@@ -107,7 +110,7 @@ CREATING NPCS AND OBJECTS
   is_hidden, reveal_rule.
 - new_object may also set: item_type (DEFAULT, CONSUMABLE, READABLE, WEARABLE, WEAPON or
   CONTAINER; default DEFAULT), is_portable, appearance (max 100 chars), is_hidden,
-  reveal_rule. SWITCH and CONSTRUCTABLE items cannot be created here.
+  reveal_rule. SWITCH, CONTAINER_SWITCH and CONSTRUCTABLE items cannot be created here.
 - To configure the new entity further (e.g. a readable text, a lock, or another entity
   referring to it), add regular "npc"/"object" patches with the new id AFTER its creation
   patch in the same proposal.

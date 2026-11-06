@@ -167,6 +167,27 @@ async def _load_memory_window(
     return window[start_idx:]
 
 
+def _since_scene_entry(window: list[ChatMessage], scene_id: str | None) -> list[ChatMessage]:
+    """Drops the earlier turns that were played in another scene.
+
+    The GM tends to carry characters along from the history, so NPCs of a scene the player
+    left would keep talking. The history starts at the player action that led into this scene
+    (providers expect a user message first); the current turn always stays. Messages without
+    scene info (legacy) are kept.
+    """
+    current_turn_idx = max((i for i, m in enumerate(window) if m.role == "user"), default=-1)
+    if not scene_id or current_turn_idx <= 0:
+        return window
+    earlier = window[:current_turn_idx]
+    left_at = max(
+        (i for i, m in enumerate(earlier) if m.scene_id and m.scene_id != scene_id), default=-1
+    )
+    start = left_at + 1
+    while 0 < start < current_turn_idx and window[start].role != "user":
+        start -= 1
+    return window[start:]
+
+
 def _current_turn_entry(role: str, content: str) -> str | None:
     """Annotation for a message saved after the player's action in the current turn.
 
@@ -203,11 +224,13 @@ async def build_narration_messages(
       stat changes, debug lines) were already narrated and would only cost tokens.
     - The current turn keeps its system events as `[Game Event: ...]` annotations and its
       script output as `[Already shown to the player this turn: ...]` annotations.
+    - Only turns played in the current scene are replayed (see `_since_scene_entry`).
     - `turn_context` (CURRENT STATE + TURN RESOLUTION) is prepended to the final user message.
     Returns (messages, max_turns_configured).
     """
     max_turns = _resolve_max_turns(state, adventure)
     window = await _load_memory_window(db, state.session_id, max_turns)
+    window = _since_scene_entry(window, getattr(state, "current_scene_id", None))
     current_turn_idx = max((i for i, m in enumerate(window) if m.role == "user"), default=-1)
 
     messages: list[dict[str, str]] = [{"role": "system", "content": narration_prompt}]

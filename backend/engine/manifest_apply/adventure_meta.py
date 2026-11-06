@@ -56,6 +56,7 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("game_over_rules", None, False),
     ("selected_image_styles", None, True),
     ("selected_tone", None, True),
+    ("sequence_progression_mode", None, True),
 )
 
 _SESSION_SYNC_FIELDS = (
@@ -110,6 +111,8 @@ def _clean_sequence(seq: Any) -> Any:
     for hard_field in _HARD_RULE_FIELDS:
         value = str(cleaned.get(hard_field) or "").replace("##", "").strip()
         cleaned[hard_field] = "" if value.upper() in _EMPTY_TOKENS else value.upper()
+    act_val = str(cleaned.get("activation_scene_id") or "").replace("##", "").strip()
+    cleaned["activation_scene_id"] = "" if act_val.upper() in _EMPTY_TOKENS else act_val.upper()
     return cleaned
 
 

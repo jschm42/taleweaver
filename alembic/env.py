@@ -9,6 +9,7 @@ import backend.models.avatar  # noqa: F401
 import backend.models.character  # noqa: F401
 import backend.models.chat  # noqa: F401
 import backend.models.game_session  # noqa: F401
+import backend.models.server_settings  # noqa: F401
 import backend.models.session_state  # noqa: F401
 
 # Import all models so metadata is fully registered for autogenerate.
