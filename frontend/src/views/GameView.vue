@@ -1657,6 +1657,7 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
   speechDeferred: isSceneTransitioning,
+  playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
 })
 
 const handleTrackQuest = (questId: string | null) => {
