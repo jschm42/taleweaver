@@ -6,11 +6,13 @@ import { useBackendStatus } from '@/composables/useBackendStatus'
 import { authState, setToken } from '@/store/auth'
 import { configState, isAppVersionKnown, refreshConfig } from '@/store/config'
 import BackgroundSlideshow from '@/components/common/BackgroundSlideshow.vue'
+import BackgroundMusic from '@/components/common/BackgroundMusic.vue'
 import RecoveryCodeForm from '@/components/auth/RecoveryCodeForm.vue'
 
 const backgroundImages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(
   (n) => `${import.meta.env.BASE_URL}assets/background/background${n}.jpg`,
 )
+const backgroundMusic = `${import.meta.env.BASE_URL}assets/audio/${encodeURIComponent('Clockwork Tension.mp3')}`
 
 const router = useRouter()
 const username = ref('')
@@ -104,6 +106,7 @@ async function handleRecovered(token: string, recoveredUsername: string) {
 <template>
   <div class="min-h-screen flex items-center justify-center bg-[#02060c] relative overflow-hidden">
     <BackgroundSlideshow :images="backgroundImages" />
+    <BackgroundMusic :src="backgroundMusic" />
 
     <!-- Animated Background Orbs -->
     <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-aether-primary/10 rounded-full blur-[120px] animate-pulse"></div>

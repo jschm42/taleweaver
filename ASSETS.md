@@ -40,8 +40,15 @@ This document provides transparency regarding the creation, licensing, and origi
 
 ---
 
+## 🎵 Audio & Music
+
+- **Ambient Music:** Background tracks in `frontend/public/assets/audio/` were generated with [Suno](https://suno.com) under a paid subscription, which grants commercial use rights per Suno's Terms of Service. Distributed with TaleWeaver under the MIT License; feel free to reuse them.
+
+---
+
 ## 📜 Licensing Summary
 
 - The TaleWeaver codebase is licensed under the [MIT License](LICENSE).
 - Bundled adventure blueprints and packages are licensed under [CC BY-NC 4.0](LICENSE-CC-BY-NC-4.0).
 - Visual assets generated via Black Forest Labs FLUX / OpenAI API are distributed under MIT License / Public Domain equivalent.
+- Ambient music generated with Suno (paid subscription) is distributed under the MIT License.
