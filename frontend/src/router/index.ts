@@ -10,6 +10,10 @@ const router = createRouter({
       component: () => import('@/views/PortalView.vue'),
     },
     {
+      path: '/leaderboard',
+      redirect: { path: '/', query: { section: 'leaderboard' } },
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/views/AdminView.vue'),

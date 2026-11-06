@@ -14,6 +14,7 @@ import AdventureLibraryTable from '@/components/portal/AdventureLibraryTable.vue
 import GameSessionsGrid from '@/components/portal/GameSessionsGrid.vue'
 import GameSessionsTable from '@/components/portal/GameSessionsTable.vue'
 import UserProfileContent from '@/components/portal/UserProfileContent.vue'
+import LeaderboardView from '@/components/portal/LeaderboardView.vue'
 import PortalFooter from '@/components/portal/PortalFooter.vue'
 import PortalHeroBanner from '@/components/portal/PortalHeroBanner.vue'
 import { ambientAccent } from '@/store/portalAmbient'
@@ -421,7 +422,7 @@ onUnmounted(() => {
         />
 
         <PortalLibraryToolbar
-          v-if="activeSection !== 'profile'"
+          v-if="activeSection === 'templates' || activeSection === 'sessions'"
           :active-section="activeSection"
           :template-count="templates.length"
           :is-deleting-templates="isDeleting"
@@ -438,7 +439,7 @@ onUnmounted(() => {
         />
 
         <PortalFilterToolbar
-          v-if="activeSection !== 'profile' && !isLoading"
+          v-if="(activeSection === 'templates' || activeSection === 'sessions') && !isLoading"
           :section="activeSection"
           :search-query="activeSection === 'templates' ? templateFilters.searchQuery.value : sessionFilters.searchQuery.value"
           :selected-type="activeSection === 'templates' ? templateFilters.selectedType.value : sessionFilters.selectedType.value"
@@ -560,6 +561,10 @@ onUnmounted(() => {
 
           <div v-else-if="activeSection === 'profile'">
             <UserProfileContent />
+          </div>
+
+          <div v-else-if="activeSection === 'leaderboard'">
+            <LeaderboardView />
           </div>
         </div>
 

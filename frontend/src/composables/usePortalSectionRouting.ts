@@ -1,11 +1,12 @@
 import { ref, watch, type Ref } from 'vue'
 import { useRoute, useRouter, type RouteLocationNormalizedLoaded, type Router } from 'vue-router'
 
-export type PortalSection = 'templates' | 'sessions' | 'profile'
+export type PortalSection = 'templates' | 'sessions' | 'leaderboard' | 'profile'
 
 function parsePortalSection(section: unknown): PortalSection {
   if (section === 'profile') return 'profile'
   if (section === 'sessions') return 'sessions'
+  if (section === 'leaderboard') return 'leaderboard'
   return 'templates'
 }
 

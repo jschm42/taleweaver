@@ -32,6 +32,7 @@ from backend.api.routes import (
     characters,
     config_api,
     data,
+    leaderboard_api,
     map_api,
     model_discovery_api,
     narrator_voices_api,
@@ -203,6 +204,7 @@ app.include_router(data.router, prefix="/api")
 app.include_router(map_api.router, prefix="/api")
 app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
+app.include_router(leaderboard_api.router, prefix="/api")
 app.include_router(api_keys_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
 app.include_router(tts_stream_api.router, prefix="/api")
