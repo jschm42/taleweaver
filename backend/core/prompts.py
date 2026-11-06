@@ -250,9 +250,7 @@ Template for generating NPC portraits.
 Variables: name, description, context (appearance keywords incl. trailing space, or empty).
 """
 
-OBJECT_IMAGE_PROMPT_TEMPLATE = (
-    "Item asset: {name}. {description}. {context}Centered, isolated on simple background."
-)
+OBJECT_IMAGE_PROMPT_TEMPLATE = "Item asset: {name}. {description}. {context}Centered, isolated on simple background."
 ITEM_IMAGE_PROMPT_TEMPLATE = OBJECT_IMAGE_PROMPT_TEMPLATE
 """
 Template for generating icons/portraits for items and objects.
@@ -417,8 +415,23 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Do not mention numbers, IDs, or system terms. "
     "Response length, paragraph size and pacing follow the NARRATION STYLE rules.\n\n"
     "COMPACT TEXT BLOCKS (CRITICAL): Keep each prose paragraph within the sentence limit of the NARRATION STYLE. "
-    "Split longer passages into separate paragraphs with a blank line. "
-    "Never embed NPC speech inside a prose paragraph; it always goes on its own dialogue line.\n\n"
+    "Split longer passages into separate paragraphs with a blank line.\n\n"
+    "STRICT SEPARATION OF NARRATION AND DIALOGUE (CRITICAL - MANDATORY UI CONTRACT):\n"
+    "The game engine renders Game Master narration and character speech as separate UI elements: "
+    "narration appears in narrator caption boxes, while character speech appears in dedicated comic speech bubbles "
+    "linked to character portraits and text-to-speech audio.\n"
+    "Because of this, YOU MUST NEVER ATTACH QUOTED DIALOGUE TO A PROSE PARAGRAPH OR USE NOVEL-STYLE EMBEDDED SPEECH.\n"
+    "- Prose paragraphs (Game Master) must contain ONLY description and action, with ZERO quotation marks.\n"
+    "- EVERY line of character speech MUST be on its own standalone line starting with the character's name, "
+    "separated from prose by a blank line:\n"
+    '  Character Name: "Dialogue"\n'
+    '  (or with a tone tag: Character Name: [tag] "Dialogue")\n'
+    '- FORBIDDEN (novel style): `She swings her legs off the bed, folding her arms. "What is it?"` '
+    "(This traps character dialogue inside the Game Master box!).\n"
+    "- REQUIRED FORMAT:\n"
+    "  She swings her legs off the bed and folds her arms, one eyebrow climbing.\n\n"
+    '  Tina: "What is it, squirt?"\n\n'
+    "Always attribute spoken lines with the character's name, even when the preceding sentence already referred to them with a pronoun.\n\n"
     "NO REPETITION (CRITICAL): Never repeat or paraphrase descriptions from earlier turns or from the CURRENT STATE. "
     "When the player looks at or inspects something already described, give only 1-2 new, telling details "
     "(or let a present NPC react) instead of describing it again.\n\n"
@@ -432,7 +445,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "When several NPCs are present, they talk to each other directly as well: they banter, interrupt, contradict or back each other up. "
     "Keep each line short and in the speaker's own voice; prefer several quick exchanges over one long speech. "
     "Never let an NPC decide or speak for the player, and never let NPCs block the player's action or repeat a question the player ignored word for word.\n\n"
-    "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
+    "MANDATORY FORMATTING: Start all character dialogue on its own standalone line. "
     'Use the format: Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" if an emotion tag is used, e.g. Professor Quark: [excited] "Look here!"). '
     'NEVER put emotion tags inside quotation marks (do NOT write Character Name: "[tag] Dialogue" or "[tag]" "Dialogue"). '
     "Separate narrative prose from speech with a blank line. "

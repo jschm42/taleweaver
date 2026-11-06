@@ -1808,7 +1808,12 @@ class GameTurnManager:
         narration_prompt = "\n\n".join(part for part in narration_prompt_parts if part)
 
         reminders: list[str] = [
-            narration_style_reminder(getattr(self.state, "narration_style", None))
+            narration_style_reminder(getattr(self.state, "narration_style", None)),
+            (
+                "STRICT SEPARATION: Keep prose narration and character speech strictly separated. "
+                'NEVER embed quotes in prose. Every spoken line MUST start on its own line as Character Name: "Dialogue" '
+                "(separated from prose by blank lines)."
+            ),
         ]
         if use_vocal_tags:
             reminders.append(vocal_tag_reminder())

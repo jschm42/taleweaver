@@ -48,7 +48,7 @@ _NARRATION_SYSTEM_PROMPT = (
     "speak becomes its own dialogue line, in addition to the 2-4 sentences. "
     "Dialogue format (mandatory): every spoken line starts on a NEW line as "
     'Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" with an emotion tag), '
-    "separated from the prose by a blank line; never quote speech inside a prose sentence. "
+    "separated from the prose by a blank line; NEVER embed quotation marks or spoken dialogue inside prose sentences. "
     "Use colons only for this speaker attribution. No JSON, lists or headings."
 )
 
