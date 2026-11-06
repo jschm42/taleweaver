@@ -18,8 +18,8 @@ import requests
 from PIL import Image
 
 from backend.core import prompts
+from backend.core.api_keys import resolve_api_key
 from backend.core.config import settings
-from backend.core.security import encryption_util
 from backend.engine.media.asset_naming import (
     DEFAULT_IMAGE_FORMAT,
     asset_filename,
@@ -593,23 +593,11 @@ class MediaEngine:
 
     @staticmethod
     def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
-        """Resolves API key by checking environment variables first, then the provided dictionary."""
-        provider_key = (provider or "").lower()
+        """Key for ``provider`` per the key policy (personal, env or stored server key).
 
-        # 1. Check environment variables first
-        env_key = settings.get_env_api_key(provider_key)
-        if env_key:
-            return env_key
-
-        # 2. Fallback to database-stored (and encrypted) keys
-        if api_keys_dict and provider_key in api_keys_dict:
-            try:
-                return encryption_util.decrypt_key(api_keys_dict[provider_key])
-            except (ValueError, TypeError, KeyError):
-                logger.error("Failed to decrypt API key for provider '%s'", provider_key)
-                return None
-
-        return None
+        Raises ``PersonalKeyRequiredError`` when the provider is unavailable for this user.
+        """
+        return resolve_api_key(api_keys_dict, provider)
 
     @staticmethod
     async def generate_image(

@@ -90,6 +90,7 @@ async function copyResetLink() {
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">User</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Role</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Recovery codes</th>
+            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest" title="Personal API keys (names only) and key policy exceptions">Own keys</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
           </tr>
         </thead>
@@ -115,6 +116,24 @@ async function copyResetLink() {
               <span :class="['text-xs font-bold', user.recovery_codes_remaining ? 'text-emerald-400' : 'text-slate-600']">
                 {{ user.recovery_codes_remaining ? `${user.recovery_codes_remaining} left` : 'None' }}
               </span>
+            </td>
+            <td class="px-6 py-4">
+              <div class="flex flex-wrap items-center gap-1">
+                <span
+                  v-for="provider in user.personal_key_providers || []"
+                  :key="provider"
+                  class="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300"
+                >{{ provider }}</span>
+                <span
+                  v-if="Object.keys(user.api_key_policy_overrides || {}).length"
+                  class="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300"
+                  :title="JSON.stringify(user.api_key_policy_overrides)"
+                >{{ Object.keys(user.api_key_policy_overrides).length }} exception(s)</span>
+                <span
+                  v-if="!(user.personal_key_providers || []).length && !Object.keys(user.api_key_policy_overrides || {}).length"
+                  class="text-xs text-slate-600"
+                >—</span>
+              </div>
             </td>
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-2">

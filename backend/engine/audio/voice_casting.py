@@ -17,9 +17,8 @@ from typing import Any, Final, NamedTuple, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.config import settings
+from backend.core.api_keys import resolve_api_key
 from backend.core.global_settings import SettingsSource, read_server_settings
-from backend.core.security import encryption_util
 from backend.engine.audio.elevenlabs_voices import VoiceOption, custom_voice_id, load_voice_catalog
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -117,12 +116,12 @@ def cast_npc_voices(
 
 
 def provider_api_key(provider: str, source: Optional[SettingsSource]) -> Optional[str]:
-    """The provider key from the environment, else the stored (encrypted) server key."""
-    api_key = settings.get_env_api_key(provider)
-    if api_key:
-        return api_key
-    encrypted = ((source.encrypted_api_keys if source else None) or {}).get(provider)
-    return encryption_util.decrypt_key(encrypted) if encrypted else None
+    """The key for ``provider`` per the key policy (personal, env or stored server key).
+
+    ``source`` is a user with the settings overlay (effective keys) or the server row.
+    Raises ``PersonalKeyRequiredError`` when the provider is unavailable for that user.
+    """
+    return resolve_api_key(source.encrypted_api_keys if source else None, provider)
 
 
 async def resolve_voice_setup(db: AsyncSession) -> VoiceSetup:

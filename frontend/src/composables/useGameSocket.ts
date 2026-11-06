@@ -608,6 +608,16 @@ export function useGameSocket(): UseGameSocket {
         return
       }
 
+      if (res.status === 403) {
+        // The key policy blocks a model pass (own key required / provider disabled).
+        const body = await res.json().catch(() => null) as { detail?: { code?: string, message?: string } } | null
+        if (body?.detail?.code === 'personal_key_required' && body.detail.message) {
+          _pushMessage('system', body.detail.message)
+          status.value = 'connected'
+          return
+        }
+      }
+
       if (!res.ok) {
         _pushMessage('system', 'The Game Master is currently over capacity. Try once more.')
         status.value = 'connected'

@@ -21,6 +21,7 @@ from typing import Any, Literal, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.adventure_identity import new_origin_id
+from backend.core.api_keys import PersonalKeyRequiredError, has_api_key, is_blocked, key_source
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
@@ -83,10 +84,10 @@ def _image_generation_timeout_seconds() -> float:
 def _check_image_provider_credentials(provider: str, user: User, model_type: str) -> None:
     if provider in ("ollama", "stable_diffusion"):
         return
-    if settings.get_env_api_key(provider):
-        return
-    encrypted_api_keys = user.encrypted_api_keys or {}
-    if provider not in encrypted_api_keys:
+    keys = user.encrypted_api_keys or {}
+    if is_blocked(keys, provider):
+        raise PersonalKeyRequiredError(provider, key_source(keys, provider))
+    if not has_api_key(keys, provider):
         raise ValueError(f"API key missing for {model_type} image provider '{provider}'.")
 
 

@@ -296,7 +296,7 @@ cd ..
 poetry run taleweaver
 ```
 
-Open `http://127.0.0.1:8000` in your browser. Complete the initial setup, add your API keys under **Administration**, and jump into an adventure!
+Open `http://127.0.0.1:8000` in your browser. Complete the initial setup, add your API keys under **Administration**, and jump into an adventure! Under **Administration → Provider Vault** you can also decide per provider who pays: the server key, or each player's own key (entered in their profile) — see [Personal API keys](docs/specs/personal_api_keys.md).
 
 #### ⚡ Development: Uvicorn with Auto-Reload
 

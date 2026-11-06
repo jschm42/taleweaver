@@ -178,3 +178,22 @@ async def discover_models(
 
     matching = sorted((m for m in models if kind in m.kinds), key=lambda m: m.id.lower())
     return DiscoveryResult(matching, "live")
+
+
+async def verify_api_key(
+    provider: str, api_key: str, client: Optional[httpx.AsyncClient] = None
+) -> tuple[bool, Optional[str]]:
+    """Check a key with a free model-list call: ``(verified, error)``.
+
+    ``(False, None)`` means the provider cannot be checked this way (no list endpoint, or the
+    list needs no key); the key is then stored unverified. The cache is bypassed on purpose:
+    it is keyed by provider and URL, not by key.
+    """
+    spec = PROVIDERS.get(provider)
+    if spec is None or spec.fetch is None or not spec.needs_key or not spec.default_base:
+        return False, None
+    try:
+        await _fetch(spec, api_key, spec.default_base.rstrip("/"), client)
+    except DiscoveryError as exc:
+        return False, str(exc)
+    return True, None

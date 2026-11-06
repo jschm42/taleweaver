@@ -85,6 +85,31 @@ export interface PlayerSessionPage {
   totals: PlayerSessionCounts
 }
 
+export type KeyPolicy = 'server' | 'user_optional' | 'user_required' | 'disabled'
+export type KeySource = 'server' | 'personal' | 'missing' | 'disabled'
+export type KeyPolicyMap = Record<string, KeyPolicy>
+
+export interface PersonalKeyProvider {
+  id: string
+  name: string
+  policy: KeyPolicy
+  can_store_key: boolean
+  has_personal_key: boolean
+  source: KeySource
+}
+
+export interface MyApiKeysResponse {
+  providers: PersonalKeyProvider[]
+  personal_keys_allowed: boolean
+  verified?: boolean
+}
+
+export interface KeyPolicyResponse {
+  policy: KeyPolicyMap
+  providers: Array<{ id: string, name: string }>
+  policies: KeyPolicy[]
+}
+
 class ApiError extends Error {
   status: number
   /**
@@ -110,6 +135,7 @@ interface SettingsResponse {
   game_settings: Record<string, unknown>
   is_llm_configured: boolean
   is_t2i_configured: boolean
+  missing_personal_keys?: Array<{ id: string, reason: 'missing' | 'disabled', message: string }>
   image_styles_catalog: CatalogTile[]
   tone_catalog: CatalogTile[]
   tts_settings: Record<string, unknown>
@@ -902,6 +928,37 @@ export const api = {
 
   setupRootAdmin(payload: any): Promise<any> {
     return request('/auth/setup-root', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  getMyApiKeys(): Promise<MyApiKeysResponse> {
+    return request('/users/me/api-keys')
+  },
+
+  storeMyApiKey(provider: string, apiKey: string): Promise<MyApiKeysResponse> {
+    return request(`/users/me/api-keys/${encodeURIComponent(provider)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ api_key: apiKey }),
+      timeoutMs: 30000,
+    })
+  },
+
+  deleteMyApiKey(provider: string): Promise<MyApiKeysResponse> {
+    return request(`/users/me/api-keys/${encodeURIComponent(provider)}`, { method: 'DELETE' })
+  },
+
+  getKeyPolicy(): Promise<KeyPolicyResponse> {
+    return request('/settings/key-policy')
+  },
+
+  updateKeyPolicy(policy: KeyPolicyMap): Promise<{ status: string, policy: KeyPolicyMap }> {
+    return request('/settings/key-policy', { method: 'PUT', body: JSON.stringify({ policy }) })
+  },
+
+  updateUserKeyPolicy(userId: string, policy: KeyPolicyMap): Promise<{ status: string, overrides: KeyPolicyMap }> {
+    return request(`/users/${encodeURIComponent(userId)}/key-policy`, {
+      method: 'PUT',
+      body: JSON.stringify({ policy }),
+    })
   },
 
   listUsers(): Promise<any[]> {

@@ -31,5 +31,8 @@ class ServerSettings(Base, TimestampMixin):
     narrator_voice_catalog: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON, nullable=True
     )
+    # Who pays per provider: {provider: "user_optional" | "user_required" | "disabled"};
+    # providers not listed use the server key (see backend/core/api_keys.py).
+    api_key_policy: Mapped[Optional[dict[str, str]]] = mapped_column(JSON, nullable=True)
     # Shared game settings; player-owned keys stay in ``User.game_settings``.
     game_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)

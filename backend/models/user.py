@@ -44,12 +44,19 @@ class User(Base, TimestampMixin):
     # Server-wide settings, read at runtime from ``ServerSettings`` (not stored per user).
     # ``backend.core.global_settings.apply_global_settings`` fills them on every loaded user,
     # so LLM, image and TTS code can keep reading ``user.llm_settings`` & co.
+    # ``encrypted_api_keys`` holds the *effective* keys (server or personal, per key policy).
     encrypted_api_keys: Optional[dict[str, str]] = None
     llm_settings: Optional[dict[str, Any]] = None
     t2i_settings: Optional[dict[str, Any]] = None
     tts_settings: Optional[dict[str, Any]] = None
     image_styles_catalog: Optional[list[dict[str, Any]]] = None
     tone_catalog: Optional[list[dict[str, Any]]] = None
+
+    # The player's own provider keys ({provider: ciphertext}), used when the key policy allows
+    # them (backend/core/api_keys.py). Never returned by any endpoint.
+    personal_api_keys: Mapped[Optional[dict[str, str]]] = mapped_column(JSON, nullable=True)
+    # Admin-set key policy for this user only; same shape as ServerSettings.api_key_policy.
+    api_key_policy_overrides: Mapped[Optional[dict[str, str]]] = mapped_column(JSON, nullable=True)
 
     # Player-owned game preferences (Auto-Speak); shared ones live in ServerSettings.
     game_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
@@ -64,6 +71,11 @@ class User(Base, TimestampMixin):
     # Game Log: stores history of completed or game-over sessions
     # [{"session_id": "...", "adventure_title": "...", "status": "completed|game_over", "note": "...", "ended_at": "..."}]
     game_log: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+
+    @property
+    def personal_key_providers(self) -> list[str]:
+        """Providers with a stored personal key (names only, for the admin user list)."""
+        return sorted(p for p, key in (self.personal_api_keys or {}).items() if key)
 
     @property
     def recovery_codes_remaining(self) -> int:

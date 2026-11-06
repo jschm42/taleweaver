@@ -90,6 +90,9 @@ class UserResponse(BaseModel):
     total_xp: Optional[int] = 0
     recovery_codes_remaining: int = 0
     tts_preferences: Optional[dict[str, Any]] = None
+    # Names only, never the keys themselves.
+    personal_key_providers: list[str] = []
+    api_key_policy_overrides: Optional[dict[str, str]] = None
 
 
 class SetupRootRequest(BaseModel):

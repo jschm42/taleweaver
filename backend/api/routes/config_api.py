@@ -25,6 +25,7 @@ from backend.api.routes.settings_normalization import (
 from backend.api.routes.settings_normalization import (
     normalize_tts_settings as _normalize_tts_settings,
 )
+from backend.core.api_keys import PersonalKeyRequiredError, has_api_key, resolve_api_key
 from backend.core.auth import get_current_admin, get_current_user
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
 from backend.core.comfyui import ComfySettings, ComfyTestOptions, default_edge
@@ -47,6 +48,7 @@ from backend.core.models_config import (
     TTS_PROVIDERS,
 )
 from backend.core.security import encryption_util
+from backend.core.turn_key_preflight import missing_turn_keys
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
@@ -425,7 +427,7 @@ def _is_llm_configured(user: User, db_keys: dict) -> bool:
             return bool(per_pass or llm.get("custom_openai_url"))
         if provider == "ollama":
             return True
-        return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
+        return has_api_key(db_keys, provider)
 
     return all(
         [
@@ -445,25 +447,17 @@ def _is_t2i_configured(user: User, db_keys: dict) -> bool:
     def has_key(provider):
         if provider in ("ollama", "stable_diffusion", "comfyui"):
             return True
-        return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
+        return has_api_key(db_keys, provider)
 
     return has_key(simple_provider) and bool(simple_model)
 
 
 def _resolve_provider_api_key(provider: str, encrypted_keys: Optional[dict]) -> Optional[str]:
-    """Resolve provider API key from environment first, then encrypted DB keys."""
-    provider_key = (provider or "").lower()
-    env_key = settings.get_env_api_key(provider_key)
-    if env_key:
-        return env_key
-
-    if encrypted_keys and provider_key in encrypted_keys:
-        try:
-            return encryption_util.decrypt_key(encrypted_keys[provider_key])
-        except (ValueError, TypeError, KeyError):
-            logger.error("Failed to decrypt API key for provider: %s", provider_key)
-            return None
-    return None
+    """The caller's key for ``provider`` per the key policy; ``None`` when unavailable."""
+    try:
+        return resolve_api_key(encrypted_keys, provider)
+    except PersonalKeyRequiredError:
+        return None
 
 
 class ApiKeyPayload(BaseModel):
@@ -638,11 +632,13 @@ async def get_settings(
 
     return {
         "app_version": settings.APP_VERSION,
-        "keys": get_keys_status(user.encrypted_api_keys),
+        "keys": get_keys_status(server.encrypted_api_keys),
         "llm_settings": normalized_llm_settings,
         "t2i_settings": _normalize_t2i_settings(user.t2i_settings),
         "is_llm_configured": _is_llm_configured(user, user.encrypted_api_keys),
         "is_t2i_configured": _is_t2i_configured(user, user.encrypted_api_keys),
+        # Chat passes this user cannot run (own key required / provider disabled).
+        "missing_personal_keys": missing_turn_keys(user),
         "image_styles_catalog": _normalize_catalog(
             user.image_styles_catalog,
             fallback=_default_image_styles_catalog(),
@@ -693,13 +689,7 @@ async def get_minimax_models(
 ):
     """Return available MiniMax model names for the configured endpoint."""
     if not api_key:
-        user = current_user
-        if user and user.encrypted_api_keys and "minimax" in user.encrypted_api_keys:
-            from backend.core.security import encryption_util
-
-            api_key = encryption_util.decrypt_key(user.encrypted_api_keys["minimax"])
-        elif settings.MINIMAX_API_KEY:
-            api_key = settings.MINIMAX_API_KEY
+        api_key = _resolve_provider_api_key("minimax", current_user.encrypted_api_keys)
 
     try:
         validated_base = validate_provider_url(api_base or settings.MINIMAX_API_BASE)
@@ -712,16 +702,9 @@ async def get_minimax_models(
 async def _resolve_provider_api_key_for_models(
     db: AsyncSession, current_user: User, provider: str
 ) -> Optional[str]:
-    """Return the best available API key for a provider (user DB first, then env)."""
-    user = current_user
-    if user and user.encrypted_api_keys and provider in user.encrypted_api_keys:
-        from backend.core.security import encryption_util
-
-        try:
-            return encryption_util.decrypt_key(user.encrypted_api_keys[provider])
-        except (ValueError, TypeError, KeyError):
-            logger.error("Failed to decrypt API key for provider '%s'", provider)
-    return settings.get_env_api_key(provider)
+    """The caller's key for ``provider`` (personal, env or server key, per key policy)."""
+    _ = db
+    return _resolve_provider_api_key(provider, current_user.encrypted_api_keys)
 
 
 @router.get("/llm-models")
@@ -1019,17 +1002,13 @@ def _resolve_vision_api_key(
     """Returns (api_key, error_response); local providers need no key."""
     if provider_key in _LOCAL_IMAGE_PROVIDERS:
         return None, None
-    api_key = settings.get_env_api_key(provider_key)
-    if api_key:
-        return api_key, None
-    encrypted_keys = user.encrypted_api_keys
-    if not encrypted_keys or provider_key not in encrypted_keys:
-        return None, {"status": "error", "message": f"No API key configured for {provider_name}."}
     try:
-        return encryption_util.decrypt_key(encrypted_keys[provider_key]), None
-    except Exception as dec_exc:
-        diag = diagnose_provider_error(dec_exc, provider=provider_name, context="vision")
-        return None, {"status": "error", "message": diag}
+        api_key = resolve_api_key(user.encrypted_api_keys, provider_key)
+    except PersonalKeyRequiredError as exc:
+        return None, {"status": "error", "message": str(exc)}
+    if not api_key:
+        return None, {"status": "error", "message": f"No API key configured for {provider_name}."}
+    return api_key, None
 
 
 def _build_vision_provider_options(payload: "TestVisionPayload", provider_key: str) -> dict:
@@ -1110,15 +1089,10 @@ async def test_tts_connection(
     provider = tts_settings.get("provider", "google").lower()
     api_key = None
     if provider != "qwen":
-        api_key = settings.get_env_api_key(provider)
-        if not api_key and user.encrypted_api_keys:
-            enc_key = user.encrypted_api_keys.get(provider)
-            if enc_key:
-                try:
-                    api_key = encryption_util.decrypt_key(enc_key)
-                except Exception as dec_exc:
-                    diag = diagnose_provider_error(dec_exc, provider=provider, context="tts")
-                    return {"status": "error", "message": diag}
+        try:
+            api_key = resolve_api_key(user.encrypted_api_keys, provider)
+        except PersonalKeyRequiredError as exc:
+            return {"status": "error", "message": str(exc)}
 
         if not api_key:
             return {

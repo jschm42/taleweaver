@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.api_keys import build_effective_keys
 from backend.core.tts_preferences import with_user_scoped_settings
 from backend.models.server_settings import SERVER_SETTINGS_ID, ServerSettings
 from backend.models.user import User
@@ -54,6 +55,13 @@ async def apply_global_settings(db: AsyncSession, user: Optional[User]) -> Optio
     server = await read_server_settings(db)
     for field in USER_OVERLAY_FIELDS:
         setattr(user, field, copy.deepcopy(getattr(server, field)))
+    # Personal keys replace or block server keys as the key policy says.
+    user.encrypted_api_keys = build_effective_keys(
+        server.encrypted_api_keys,
+        server.api_key_policy,
+        user.personal_api_keys,
+        user.api_key_policy_overrides,
+    )
     return user
 
 

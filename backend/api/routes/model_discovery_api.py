@@ -6,9 +6,8 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from backend.core.api_keys import PersonalKeyRequiredError, resolve_api_key
 from backend.core.auth import get_current_admin
-from backend.core.config import settings
-from backend.core.security import encryption_util
 from backend.models.user import User
 from backend.services.model_discovery import (
     discover_models,
@@ -39,16 +38,9 @@ def _resolve_api_key(user: User, provider: str) -> Optional[str]:
 
     ``get_current_user`` lays the server settings over ``user``, so its keys are current.
     """
-    env_key = settings.get_env_api_key(provider)
-    if env_key:
-        return env_key
-    stored = (user.encrypted_api_keys or {}).get(provider)
-    if not stored:
-        return None
     try:
-        return encryption_util.decrypt_key(stored)
-    except (ValueError, TypeError, KeyError):
-        logger.error("Failed to decrypt API key for provider '%s'", provider)
+        return resolve_api_key(user.encrypted_api_keys, provider)
+    except PersonalKeyRequiredError:
         return None
 
 

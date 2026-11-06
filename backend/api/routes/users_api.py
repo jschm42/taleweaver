@@ -18,6 +18,7 @@ from backend.core.account_recovery import (
     issue_password_reset_token,
     set_new_password,
 )
+from backend.core.api_keys import PersonalKeyRequiredError, resolve_api_key
 from backend.core.auth import (
     aget_password_hash,
     get_current_admin,
@@ -25,14 +26,12 @@ from backend.core.auth import (
     validate_password_strength,
     validate_username,
 )
-from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
     USER_BIO_GENERATION_SYSTEM_PROMPT,
     USER_BIO_GENERATION_USER_PROMPT_TEMPLATE,
 )
-from backend.core.security import encryption_util
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
@@ -151,19 +150,10 @@ async def _ensure_admin_remains(db: AsyncSession, user: User, new_role: str, adm
 def _resolve_provider_api_key(
     provider: str, api_keys_dict: Optional[dict[str, str]]
 ) -> Optional[str]:
-    provider_key = (provider or "").lower()
-    env_key = settings.get_env_api_key(provider_key)
-    if env_key:
-        return env_key
-
-    if api_keys_dict and provider_key in api_keys_dict:
-        try:
-            return encryption_util.decrypt_key(api_keys_dict[provider_key])
-        except (ValueError, TypeError, KeyError):
-            logger.error("Failed to decrypt API key for provider '%s'", provider_key)
-            return None
-
-    return None
+    try:
+        return resolve_api_key(api_keys_dict, provider)
+    except PersonalKeyRequiredError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
 
 
 @router.get("/users", response_model=list[UserResponse])
