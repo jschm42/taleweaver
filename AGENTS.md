@@ -1,6 +1,9 @@
 # TaleWeaver Agent Guidelines
 
-Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customization System** with progressive disclosure rules, on-demand skills, and guidelines aligned with [Copilot Instructions](.github/copilot-instructions.md).
+Welcome to the TaleWeaver workspace! This file is the entry point for every coding agent (Claude Code, Copilot, Antigravity, Codex, Cursor, ...) and for human developers. It uses progressive disclosure: core rules here, detailed rules and on-demand skills under `.claude/`.
+
+> [!IMPORTANT]
+> **Rules and skills live in `.claude/`** (`.claude/rules/` and `.claude/skills/`). This is the single source of truth for every agent. Claude Code loads them automatically. Other agents (Copilot, Antigravity, Codex, Cursor, ...) must read the matching file from `.claude/` themselves when a rule or skill below applies.
 
 > [!IMPORTANT]
 > **Language Rule**: All texts, UI labels, buttons, tooltips, documentation, comments, and agent communications must be kept strictly in **English** until the user explicitly specifies otherwise.
@@ -27,11 +30,12 @@ Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customi
      ```
    - Ensure **zero errors** before concluding.
    - Never suppress complexity (`C901`, `PLR0912`, `PLR0915`) or security (`S`) warnings with `# noqa`; refactor the code instead.
-   - Full check / fix command: `poetry run python scripts/lint.py --fix`.
+   - Full check / fix command: `poetry run python scripts/lint.py --fix`. Staged files only: `poetry run python scripts/lint.py --staged`.
+   - A Git pre-commit hook (`.githooks/pre-commit`) runs Ruff on all staged Python files before each commit.
 
 4. **Documentation Stays in Sync (Mandatory)**:
    - Every change to user-facing behavior, syntax, settings, APIs, scripting functions or file formats **must update the affected documentation in the same task**. A task is not finished while its docs are outdated.
-   - Check and update, where affected: `docs/` (e.g. `world-builder-syntax.md`, `world-builder-blueprint-manual.md`, `scripting_engine.md`), `README.md`, in-app help texts (info popovers, tooltips, placeholders), `.agents/skills/` and `.agents/rules/`.
+   - Check and update, where affected: `docs/` (e.g. `world-builder-syntax.md`, `world-builder-blueprint-manual.md`, `scripting_engine.md`), `README.md`, in-app help texts (info popovers, tooltips, placeholders), `.claude/skills/` and `.claude/rules/`.
    - Keep the examples in the docs working: a documented blueprint, script or command must match the current code. Run examples through the real validator where one exists (e.g. `backend.engine.blueprint.analyze_blueprint` for Story Idea blueprints).
    - New features get a docs entry. Removed or renamed features are removed or renamed in the docs too, with no stale references left behind.
    - Documentation is written **in English only**, regardless of the language used in the conversation.
@@ -47,38 +51,49 @@ Welcome to the TaleWeaver workspace! This project uses the **Antigravity Customi
      3. **Manifest import/export**: `backend/engine/manifest_apply/` and `backend/engine/adventures/adventure_exporter.py`. An export/import round trip must keep the field.
      4. **Editor World-Builder / AI fix**: `backend/core/world_builder_prompts.py`, `backend/core/validators_prompts.py` (`FIX_PATCH_FIELD_RULES`) and `backend/api/routes/adventures/editing/ai_fix_*.py` (field allowlists such as `OBJECT_SCRIPT_FIELDS`).
      5. **Validators**: `backend/core/world_validation/` and `backend/core/script_validator.py` (every new `*_script` field must be syntax-checked).
-     6. **Docs and skills**: `docs/world-builder-syntax.md`, `docs/world-builder-blueprint-manual.md`, `docs/scripting_engine.md` and the affected `.agents/skills/*/SKILL.md` (especially `taleweaver-adventure-concept-creator` and `taleweaver-adventure-editor`). Then rebuild the bundled skill docs with `poetry run python scripts/bundle_skill.py` and confirm `poetry run python scripts/bundle_skill.py --check` passes.
+     6. **Docs and skills**: `docs/world-builder-syntax.md`, `docs/world-builder-blueprint-manual.md`, `docs/scripting_engine.md` and the affected `.claude/skills/*/SKILL.md` (especially `taleweaver-adventure-concept-creator` and `taleweaver-adventure-editor`). Then rebuild the bundled skill docs with `poetry run python scripts/bundle_skill.py` and confirm `poetry run python scripts/bundle_skill.py --check` passes.
      7. **Editor autocomplete**: `frontend/src/utils/twScriptApiDefinitions.ts` for scripting API changes (see rule 4).
      8. **Tests**: add a test that the feature survives the whole path (generation schema → manifest applier, and blueprint key → parsed field), then run `tests/test_world_*.py`, `tests/test_world_builder_*.py` and the tests of the touched engine area.
 
 ---
 
-## 1. Workspace Rules (`.agents/rules/`)
+## 1. Workspace Rules (`.claude/rules/`)
 
-Specific project rules are located in `.agents/rules/` and triggered contextually to optimize context usage:
+Specific project rules are located in `.claude/rules/` and triggered contextually to optimize context usage:
 
-* [architecture.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/architecture.md) (`trigger: model_decision`) — Complete architectural breakdown of the Game Turn Loop (Pass 1, Pass 1.5, Pass 2), World Manifest (`adventure.adv`/`.adz`), state mutations, and scripting engine.
-* [typescript.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/typescript.md) (`trigger: glob`, `**/*.ts, **/*.tsx`) — TypeScript code formatting, naming conventions, and strict typing.
-* [python.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/python.md) (`trigger: glob`, `**/*.py`) — Python conventions, type hinting, error handling, and Alembic migrations.
-* [testing.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/testing.md) (`trigger: glob`, `tests/**/*.py`) — AAA pattern, mocking requirements, and mandatory adventure lifecycle verification.
-* [security.md](file:///d:/DEV/repositories/git/taleweaver/.agents/rules/security.md) (`trigger: model_decision`) — Path traversal prevention (CWE-22) and secure filesystem handling.
-
----
-
-## 2. On-Demand Skills (`.agents/skills/`)
-
-> [!NOTE]
-> **Claude Code** discovers skills only in `.claude/skills/`. Each folder there is a local directory junction to `.agents/skills/<name>` (git-ignored), so `.agents/skills/` stays the single source of truth. After adding a new skill, create its junction (PowerShell): `New-Item -ItemType Junction -Path .claude\skills\<name> -Target .agents\skills\<name>`.
-
-* [taleweaver-inspector](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-inspector/SKILL.md) — Inspect database state, session inventories, entity overrides, and manifests via `python scripts/inspect_state.py`.
-* [taleweaver-adventure-concept-creator](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-adventure-concept-creator/SKILL.md) — Generates structured adventure concepts using sequence, scene, and entity tags.
-* [taleweaver-dev-tools](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-dev-tools/SKILL.md) — Developer toolkit for admin credential resets, security keys, and thumbnail regeneration.
-* [taleweaver-adventure-editor](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-adventure-editor/SKILL.md) — Modify an existing adventure in the DB (scenes, exits, entities, scripts, init script) via JSON change sets and `python scripts/edit_adventure.py` (dry run by default).
-* [taleweaver-telemetry](file:///d:/DEV/repositories/git/taleweaver/.agents/skills/taleweaver-telemetry/SKILL.md) — LLM telemetry, latency percentiles (p50/p90/p95), and token analysis.
+* [architecture.md](.claude/rules/architecture.md) (`trigger: model_decision`) — Complete architectural breakdown of the Game Turn Loop (Pass 1, Pass 1.5, Pass 2), World Manifest (`adventure.adv`/`.adz`), state mutations, and scripting engine.
+* [typescript.md](.claude/rules/typescript.md) (`trigger: glob`, `**/*.ts, **/*.tsx`) — TypeScript code formatting, naming conventions, and strict typing.
+* [python.md](.claude/rules/python.md) (`trigger: glob`, `**/*.py`) — Python conventions, type hinting, error handling, and Alembic migrations.
+* [testing.md](.claude/rules/testing.md) (`trigger: glob`, `tests/**/*.py`) — AAA pattern, mocking requirements, and mandatory adventure lifecycle verification.
+* [gameplay-guardrails.md](.claude/rules/gameplay-guardrails.md) (`trigger: model_decision`) — No language-keyword gating, server-side visibility authority, fail-safe behavior, and state-based Pass 1.5 enforcement.
+* [security.md](.claude/rules/security.md) (`trigger: model_decision`) — Path traversal prevention (CWE-22) and secure filesystem handling.
 
 ---
 
-## 3. Agent-Friendly Command Execution
+## 2. On-Demand Skills (`.claude/skills/`)
+
+Each skill is a folder with a `SKILL.md` entry file. Read it before doing the task it covers.
+
+* [taleweaver-inspector](.claude/skills/taleweaver-inspector/SKILL.md) — Inspect database state, session inventories, entity overrides, and manifests via `python scripts/inspect_state.py`.
+* [taleweaver-adventure-concept-creator](.claude/skills/taleweaver-adventure-concept-creator/SKILL.md) — Generates structured adventure concepts using sequence, scene, and entity tags.
+* [taleweaver-dev-tools](.claude/skills/taleweaver-dev-tools/SKILL.md) — Developer toolkit for admin credential resets, security keys, and thumbnail regeneration.
+* [taleweaver-adventure-editor](.claude/skills/taleweaver-adventure-editor/SKILL.md) — Modify an existing adventure in the DB (scenes, exits, entities, scripts, init script) via JSON change sets and `python scripts/edit_adventure.py` (dry run by default).
+* [taleweaver-telemetry](.claude/skills/taleweaver-telemetry/SKILL.md) — LLM telemetry, latency percentiles (p50/p90/p95), and token analysis.
+
+---
+
+## 3. Workflows & Diagrams
+
+Mermaid diagrams of the internal processes:
+
+* **Adventure Generation:** [adventure_generation.mermaid](docs/diagrams/adventure_generation.mermaid) | [Activity Diagram](docs/diagrams/adventure_generation_activity.mermaid) — How worlds are created.
+* **Adventure Import/Export:** [adventure_import.mermaid](docs/diagrams/adventure_import.mermaid) | [adventure_export.mermaid](docs/diagrams/adventure_export.mermaid) — `.adz` and `.adv` portability.
+* **Game Session Loop:** [game_session_loop.mermaid](docs/diagrams/game_session_loop.mermaid) | [Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid) — A single chat turn from user input to GM response.
+* **Data Formats:** [Adventure Format Specification](docs/specs/adventure_format.md) — Structure of `.adv` and `.adz` files.
+
+---
+
+## 4. Agent-Friendly Command Execution
 
 To prevent terminal commands from hanging or consuming excessive tokens:
 

@@ -6,6 +6,9 @@ import path from 'node:path';
 import { parseFrontmatter } from './frontmatter.js';
 
 export const SKILL_FILE = 'SKILL.md';
+// Where this repo keeps its skills (the installer's source).
+export const SOURCE_SKILLS_SUBDIR = path.join('.claude', 'skills');
+// Install layout for the antigravity format.
 export const SKILLS_SUBDIR = path.join('.agents', 'skills');
 
 const MANIFEST_FILES = ['manifest.json', 'skill.json', 'package.json'];
@@ -36,12 +39,12 @@ export const COMPANION_ALIASES = {
 };
 
 /**
- * Locate the .agents/skills directory: next to the package first, then in the cwd.
+ * Locate the .claude/skills source directory: next to the package first, then in the cwd.
  * Returns { sourceRoot, skillsDir } or null.
  */
 export function resolveSkillsRoot(candidates) {
   for (const root of candidates) {
-    const skillsDir = path.join(root, SKILLS_SUBDIR);
+    const skillsDir = path.join(root, SOURCE_SKILLS_SUBDIR);
     if (fs.existsSync(skillsDir) && fs.statSync(skillsDir).isDirectory()) {
       return { sourceRoot: root, skillsDir };
     }

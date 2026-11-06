@@ -3,5 +3,5 @@
 
 # Bundled skills carry sha256 checksums (scripts/bundle_skill.py); keep the skill files
 # and their doc sources byte-identical on every platform
-.agents/skills/** text eol=lf
+.claude/skills/** text eol=lf
 docs/**/*.md text eol=lf

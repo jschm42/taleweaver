@@ -11,13 +11,13 @@
     },
     {
       "path": "docs/scripting-enginge.md",
-      "sha256": "da6f6eea8991f4b0595dc1bdac6c0f371cb09ac6a105080539bcac29c738c418",
-      "size": 111549
+      "sha256": "80e10317bf7b0eb0696633b7c21341dc90a918b85171861e4cbc2be06bece1a3",
+      "size": 110206
     },
     {
       "path": "docs/scripting_engine.md",
-      "sha256": "da6f6eea8991f4b0595dc1bdac6c0f371cb09ac6a105080539bcac29c738c418",
-      "size": 111549
+      "sha256": "80e10317bf7b0eb0696633b7c21341dc90a918b85171861e4cbc2be06bece1a3",
+      "size": 110206
     },
     {
       "path": "docs/specs/adventure_format.md",

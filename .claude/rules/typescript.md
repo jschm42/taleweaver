@@ -2,6 +2,9 @@
 description: Enforces naming conventions, strict typing, and best practices for TypeScript files.
 trigger: glob
 globs: "**/*.ts, **/*.tsx"
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
 ---
 
 # TypeScript Guidelines

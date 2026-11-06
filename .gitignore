@@ -221,6 +221,3 @@ backend/brain/
 # Editor
 .vscode/
 data-docker/
-
-# Claude Code skill junctions (local, point to .agents/skills/)
-.claude/skills/
