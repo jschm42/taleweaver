@@ -608,6 +608,10 @@ def _localize_manifest_images(
         record["image_url"] = _localize_asset_path(
             record.get("image_url"), adventure_dir, asset_mapping
         )
+    for scene in manifest["scenes"]:
+        scene["music_url"] = _localize_asset_path(
+            scene.get("music_url"), adventure_dir, asset_mapping
+        )
 
 
 class AdventureExporter:

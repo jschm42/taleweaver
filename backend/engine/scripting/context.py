@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from backend.engine.scripting.audio_proxy import AudioProxy
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.gm_directions import clean_direction, queue_direction
 from backend.engine.scripting.item_ops import ItemMover
@@ -127,6 +128,8 @@ class ScriptChangeset:
     save_requests: list[str] = field(default_factory=list)
     # Ordered tw.time operations, replayed by game_clock.apply_clock_ops.
     clock_ops: list[dict[str, Any]] = field(default_factory=list)
+    # tw.audio commands ({action, url, loop, volume}), sent to the client as audio_events.
+    audio_commands: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -182,6 +185,7 @@ class ScriptChangeset:
             or self.pending_dialog
             or self.cloned_entities
             or self.clock_ops
+            or self.audio_commands
         )
 
 
@@ -302,11 +306,14 @@ class SceneProxy:
         changeset: ScriptChangeset,
         npcs_mgr: EntityManagerProxy,
         objects_mgr: EntityManagerProxy,
+        script_vars: Optional[dict[str, Any]] = None,
     ):
         self._current_scene_id = current_scene_id
         self._changeset = changeset
         self._npcs_mgr = npcs_mgr
         self._objects_mgr = objects_mgr
+        # Persisted __script_vars__, so attributes set in earlier turns stay readable.
+        self._script_vars = script_vars or {}
 
     @property
     def id(self) -> str:
@@ -327,11 +334,23 @@ class SceneProxy:
         k = f"__scene_attr_{self.id}_{attr_name}"
         if k in self._changeset.var_updates:
             return self._changeset.var_updates[k]
-        return default
+        return self._script_vars.get(k, default)
 
     def set_attribute(self, attr_name: str, val: Any) -> None:
         k = f"__scene_attr_{self.id}_{attr_name}"
         self._changeset.var_updates[k] = val
+
+    @property
+    def music(self) -> str:
+        """Background music URL of the scene set by scripts ("" when none was set)."""
+        return str(self.get_attribute("music_url", "") or "")
+
+    @music.setter
+    def music(self, value: str) -> None:
+        self.set_attribute("music_url", str(value or "").strip())
+
+    # Same field name as the scene's manifest/editor field.
+    music_url = music
 
 
 class ExitProxy:
@@ -1619,7 +1638,9 @@ class GameContext:
         mover = ItemMover(self.changeset, self.player, self.npcs, self.objects, current_scene_id)
         self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)
-        self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
+        self.scene = SceneProxy(
+            current_scene_id, self.changeset, self.npcs, self.objects, script_vars=raw_vars
+        )
         self.exits = ExitProxy(exit_states or {}, self.changeset)
         self.vars = VarsProxy(raw_vars, self.changeset, story_flags=story_flags)
         self.flags = StoryFlagsProxy(story_flags or {}, self.changeset)
@@ -1646,6 +1667,8 @@ class GameContext:
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
+        self.audio = AudioProxy(self.changeset)
+        self.sound = self.audio
 
     def switch(self, switch_id_or_name: str) -> SwitchProxy:
         """Shortcut for tw.switches.get(switch_id_or_name)."""

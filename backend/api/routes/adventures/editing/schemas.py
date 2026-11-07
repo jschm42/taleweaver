@@ -66,6 +66,8 @@ class EntityUpdateRequest(BaseModel):
     exp: Optional[int] = None
     equipment: Optional[dict[str, Any]] = None
     decorative_objects: Optional[list[str]] = None
+    # Scene background music; an empty string clears it.
+    music_url: Optional[str] = Field(default=None, max_length=500)
     on_pickup_script: Optional[str] = None
     on_pickup_text: Optional[str] = None
     on_drop_script: Optional[str] = None

@@ -449,6 +449,8 @@ export interface AdventureTemplateSummary {
   cover_source_adventure_name?: string | null
   /** Stable adventure id (manifest origin_id); matches the Adventure Library entry id. */
   origin_id?: string | null
+  /** Background music of the entry scene, previewed while hovering the card. */
+  entry_scene_music_url?: string | null
   has_update?: boolean
   available_version?: string | null
   /** Where the update comes from: a local /adventures file or the Adventure Library. */

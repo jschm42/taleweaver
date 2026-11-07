@@ -9,6 +9,7 @@ from backend.api.routes.adventures.asset_url_healing import (
     heal_template_avatar_profile_image,
     resolve_existing_data_asset_url,
 )
+from backend.api.routes.adventures.scene_music import resolve_scene_music
 from backend.api.routes.adventures.sequence_progress import evaluate_sequence_progress
 from backend.api.routes.adventures.session_adventure import (
     SESSION_MANIFEST_SNAPSHOT_KEY,
@@ -238,6 +239,13 @@ class AdventureLogic:
             .order_by(WorldScene.session_id.is_(None))
         )
         return AdventureLogic.resolve_existing_data_asset_url(res.scalars().first())
+
+    @staticmethod
+    async def resolve_scene_music(
+        db: AsyncSession, state: SessionState, scene_id: str
+    ) -> Optional[str]:
+        """Background music of a scene: `tw.scene.music` override, session copy, template."""
+        return await resolve_scene_music(db, state, scene_id)
 
     @staticmethod
     def resolve_start_datetime(
@@ -535,6 +543,7 @@ class AdventureLogic:
                 "label": s.label,
                 "description": s.description or "",
                 "image_url": AdventureLogic.resolve_existing_data_asset_url(s.image_url),
+                "music_url": AdventureLogic.resolve_existing_data_asset_url(s.music_url),
                 "decorative_objects": [
                     str(d) for d in (s.decorative_objects or []) if isinstance(d, (str, int, float))
                 ],

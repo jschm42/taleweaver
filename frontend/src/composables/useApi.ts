@@ -26,6 +26,7 @@ import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
 import { apiFetch, buildApiUrl } from '@/services/http'
 import type { ApiFetchInit } from '@/services/http'
+import type { AudioEvent } from '@/services/musicService'
 
 export interface PasswordPolicy {
   min_length: number
@@ -600,7 +601,7 @@ export const api = {
 
 
   /** Answers the choice dialog a script opened (tw.dialog.choose) and runs its handler. */
-  chooseDialogOption(gameId: string, dialogId: string, index: number, language?: string): Promise<{ status: string; messages: string[]; continue_story?: boolean }> {
+  chooseDialogOption(gameId: string, dialogId: string, index: number, language?: string): Promise<{ status: string; messages: string[]; continue_story?: boolean; audio_events?: AudioEvent[] }> {
     return request(`/adventures/${gameId}/dialog/choice`, {
       method: 'POST',
       body: JSON.stringify({ dialog_id: dialogId, index, language: language || undefined }),

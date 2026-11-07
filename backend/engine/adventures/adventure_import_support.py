@@ -148,6 +148,14 @@ def collect_existing_image_urls(
     return image_urls
 
 
+def localize_scene_music(scenes: list[dict[str, Any]], asset_mapping: dict[str, str]) -> None:
+    """Point scene ``music_url`` entries at the extracted assets (``assets/x.mp3`` -> /data/)."""
+    for scene in scenes:
+        music_url = scene.get("music_url")
+        if music_url in asset_mapping:
+            scene["music_url"] = asset_mapping[music_url]
+
+
 def fill_start_scene_ids(
     records: list[dict[str, Any]], default_scene_id: str, fallback_keys: tuple[str, ...]
 ) -> None:

@@ -52,6 +52,7 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
     items: [
       { name: 'id', kind: 'property', signature: 'str', doc: 'ID of current active scene.' },
       { name: 'name', kind: 'property', signature: 'str', doc: 'Display label of current scene.' },
+      { name: 'music_url', kind: 'property', signature: 'str', doc: 'URL of the background music file configured for this scene.' },
       { name: 'npcs', kind: 'property', signature: 'list[NPCProxy]', doc: 'All NPCs present in the current scene.' },
       { name: 'items', kind: 'property', signature: 'list[ObjectProxy]', doc: 'All items and objects lying in the current scene.' },
       { name: 'teleport', kind: 'method', signature: '(target_scene_id: str)', snippet: 'teleport("${1:SCENE_ID}")', doc: 'Teleports protagonist directly to another scene.' },
@@ -324,6 +325,26 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'error', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'error(${1:msg})', doc: 'Logs error to server console.' },
     ],
   },
+  audio: {
+    name: 'audio',
+    doc: 'Controls background music and sound effects playback',
+    items: [
+      { name: 'play_music', kind: 'method', signature: '(url: str, loop: bool = True, volume: float = 1.0)', snippet: 'play_music("")', doc: 'Plays background music track. Loop defaults to True.' },
+      { name: 'stop_music', kind: 'method', signature: '()', snippet: 'stop_music()', doc: 'Stops current background music.' },
+      { name: 'play_sound', kind: 'method', signature: '(url: str, volume: float = 1.0)', snippet: 'play_sound("")', doc: 'Plays a one-shot sound effect.' },
+      { name: 'play', kind: 'method', signature: '(url: str, loop: bool = False, volume: float = 1.0)', snippet: 'play("")', doc: 'Plays an audio file. If loop is True, acts as play_music; otherwise play_sound.' },
+    ],
+  },
+  sound: {
+    name: 'sound',
+    doc: 'Alias for tw.audio — controls background music and sound effects',
+    items: [
+      { name: 'play_music', kind: 'method', signature: '(url: str, loop: bool = True, volume: float = 1.0)', snippet: 'play_music("")', doc: 'Plays background music track. Loop defaults to True.' },
+      { name: 'stop_music', kind: 'method', signature: '()', snippet: 'stop_music()', doc: 'Stops current background music.' },
+      { name: 'play_sound', kind: 'method', signature: '(url: str, volume: float = 1.0)', snippet: 'play_sound("")', doc: 'Plays a one-shot sound effect.' },
+      { name: 'play', kind: 'method', signature: '(url: str, loop: bool = False, volume: float = 1.0)', snippet: 'play("")', doc: 'Plays an audio file. If loop is True, acts as play_music; otherwise play_sound.' },
+    ],
+  },
 }
 
 // Aliases
@@ -357,6 +378,8 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'json', kind: 'namespace', doc: 'Safe sandboxed JSON serialization and validation.' },
   { name: 'log', kind: 'namespace', doc: 'Server console logging.' },
   { name: 'console', kind: 'namespace', doc: 'Alias for tw.log.' },
+  { name: 'audio', kind: 'namespace', doc: 'Background music and sound effects playback.' },
+  { name: 'sound', kind: 'namespace', doc: 'Alias for tw.audio.' },
   // Direct shortcuts
   { name: 'narrate', kind: 'method', signature: '(message: str)', snippet: 'narrate("${1:message}")', doc: 'Shortcut for tw.story.narrate(). Emits GM narration.' },
   { name: 'narrate_raw', kind: 'method', signature: '(message: str)', snippet: 'narrate_raw("${1:message}")', doc: 'Shortcut for tw.story.narrate_raw(). Emits verbatim GM text.' },

@@ -115,6 +115,7 @@ The physical locations composing the world map.
 | `label` | `string` | Human-readable scene name displayed in the UI. |
 | `description` | `string` | Sensory, atmospheric description of the location. |
 | `image_url` | `string` | Path or URL to the background scenery image. |
+| `music_url` | `string` | Optional background music file for the scene (MP3, OGG, WAV). `/data/` paths are bundled into `assets/` in `.adz` exports. |
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |

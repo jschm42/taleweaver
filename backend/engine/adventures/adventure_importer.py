@@ -21,6 +21,7 @@ from backend.engine.adventures.adventure_import_support import (
     fill_start_scene_ids,
     find_existing_template,
     load_owner,
+    localize_scene_music,
     read_adz_manifest,
     resolve_import_user,
 )
@@ -553,6 +554,7 @@ class AdventureTemplateImporter:
                 )
 
                 image_urls = collect_existing_image_urls(manifest_data, existing_images_mapping)
+                localize_scene_music(world_manifest["scenes"], existing_images_mapping)
                 user = await load_owner(db, owner_id)
 
                 await WorldGenerator.apply_manifest(

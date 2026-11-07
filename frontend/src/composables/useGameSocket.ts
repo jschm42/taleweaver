@@ -9,6 +9,7 @@ import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import { registerEntityNames } from '@/utils/entityRefs'
+import { musicService } from '@/services/musicService'
 import { newMessageKey } from '@/composables/messageKeys'
 import { isHiddenPlayerMessage } from '@/composables/silentCommands'
 import {
@@ -329,6 +330,13 @@ export function useGameSocket(): UseGameSocket {
     if (data.adventure_image !== undefined) {
       adventureImage.value = data.adventure_image
     }
+    if (data.music_url !== undefined) {
+      if (data.music_url) void musicService.playMusic(data.music_url)
+      else musicService.stopMusic()
+    }
+    if (Array.isArray(data.audio_events) && data.audio_events.length > 0) {
+      musicService.handleAudioEvents(data.audio_events)
+    }
     if (data.quests !== undefined) {
       quests.value = data.quests || []
     }
@@ -450,6 +458,7 @@ export function useGameSocket(): UseGameSocket {
       checkpointPulseTimer = null
     }
     isCheckpointSaving.value = false
+    musicService.stopMusic()
 
     // Clear all session-specific states
     messages.value = []
@@ -487,6 +496,7 @@ export function useGameSocket(): UseGameSocket {
       activeAgentController.abort()
       activeAgentController = null
     }
+    musicService.stopMusic()
     if (status.value === 'connecting' || status.value === 'loading') {
       status.value = 'connected'
       statusText.value = ''
