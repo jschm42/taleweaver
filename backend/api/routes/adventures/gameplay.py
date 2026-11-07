@@ -217,7 +217,7 @@ async def get_chat_history(
         pending_dialog=None
         if session_status in {"completed", "game_over"}
         else client_dialog(pending_dialog(state.entity_states)),
-        music=await build_music_snapshot(db, state),
+        music=await build_music_snapshot(db, state, adventure, current_user),
     )
 
 

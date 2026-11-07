@@ -56,8 +56,13 @@ class MusicProxy:
 
     @property
     def is_playing(self) -> bool:
-        """True while a track is set to play (it may still be generating)."""
+        """True while a script track is set to play (it may still be generating)."""
         return self._state.get("now") is not None
+
+    @property
+    def is_silenced(self) -> bool:
+        """True after ``stop()``: no scene or theme music until ``play``/``release``."""
+        return bool(self._state.get("silenced"))
 
     @property
     def volume(self) -> float:
@@ -131,8 +136,12 @@ class MusicProxy:
         return True
 
     def stop(self, fade: float = 2.0) -> None:
-        """Fades the music out (silence until the next play/generate)."""
+        """Fades all music out, scene music too (silence until play/generate/release)."""
         self._record({"op": "stop", "fade": clamp_fade(fade)})
+
+    def release(self) -> None:
+        """Ends script music; the scene's own music (or the main theme) plays again."""
+        self._record({"op": "release"})
 
     def set_volume(self, value: float) -> None:
         """Sets the script music volume 0..1 (multiplied with the player's own volume)."""

@@ -39,6 +39,9 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
         manifest.setdefault(key, value)
     # Edited in the template only, so the template column wins over the stored manifest.
     manifest["narrator_voice"] = adventure.narrator_voice
+    manifest["music_prompt"] = adventure.music_prompt
+    manifest["music_url"] = adventure.music_url
+    manifest["music_enabled"] = adventure.music_enabled
 
 
 def _register_object(objects: list[dict[str, Any]], obj_dict: Any) -> None:

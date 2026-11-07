@@ -116,7 +116,8 @@ works, for example the ACE-Step templates that ship with ComfyUI.
    the output of the node set as **Output node ID**.
 4. Export it with **Workflow → Export (API)**. The editor format (with `nodes` and
    `links`) is rejected.
-5. Open **Admin → Music (Experimental)**, upload the JSON file, enter the ComfyUI
+5. Open **Admin → Music (Experimental)**, choose the provider **ComfyUI workflow**
+   (the alternative is Google Lyria with a Gemini key), upload the JSON file, enter the ComfyUI
    server URL, switch music generation on and save. Use **Generate test clip** to
    render one clip and listen to it. The test runs in the background and shows the
    elapsed time; the first run can take several minutes while ComfyUI loads the

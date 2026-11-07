@@ -1,0 +1,103 @@
+"""Music asset URLs of adventures: library storage, validation and ADZ import mapping.
+
+Scene loops and the main theme are files in ``adventures/library/<template>/music/``; the DB
+stores their ``/data/...`` URL like images. Manifests from outside (``.adv`` uploads,
+World-Builder output) may only point at the adventure's own library files; anything else is
+dropped. Deletion is likewise limited to the owning adventure's ``music/`` folder, so a crafted
+manifest can never make the editor delete another adventure's files.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from typing import Any, Optional
+
+from backend.utils.path_security import (
+    assert_within_data_dir,
+    data_url_to_local_path,
+    local_path_to_data_url,
+    safe_data_path,
+    sanitize_path_component,
+)
+
+_SAFE_STEM_RE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _within(path: str, folder: str) -> bool:
+    root = os.path.realpath(folder)
+    resolved = os.path.realpath(path)
+    try:
+        return os.path.commonpath([resolved, root]) == root and resolved != root
+    except ValueError:
+        return False
+
+
+def _url_in(url: Any, folder_of: Any, template_id: Optional[str]) -> Optional[str]:
+    text = str(url or "").strip()
+    path = data_url_to_local_path(text) if text else None
+    if not path or not template_id or len(text) > 255:
+        return None
+    try:
+        folder = folder_of(template_id)
+    except ValueError:
+        return None
+    return text if _within(path, folder) else None
+
+
+def library_dir(template_id: str) -> str:
+    safe_template = sanitize_path_component(template_id)
+    if not safe_template:
+        raise ValueError("Invalid adventure id for music storage.")
+    return safe_data_path("adventures", "library", safe_template)
+
+
+def local_music_url(url: Any, template_id: Optional[str]) -> Optional[str]:
+    """``url`` when it points into ``template_id``'s own library folder, else None.
+
+    Imported ``.adz`` assets land in the library root, rendered tracks in ``music/``.
+    """
+    return _url_in(url, library_dir, template_id)
+
+
+def library_music_dir(template_id: str) -> str:
+    safe_template = sanitize_path_component(template_id)
+    if not safe_template:
+        raise ValueError("Invalid adventure id for music storage.")
+    return safe_data_path("adventures", "library", safe_template, "music")
+
+
+def save_library_music(template_id: str, stem: str, token: str, data: bytes, ext: str) -> str:
+    """Write a rendered track into the adventure library; returns its ``/data`` URL.
+
+    The random ``token`` in the file name keeps browsers and exports from reusing an old file
+    after the track was rendered again.
+    """
+    folder = library_music_dir(template_id)
+    os.makedirs(folder, exist_ok=True)
+    safe_stem = _SAFE_STEM_RE.sub("_", stem)[:60].strip("_") or "music"
+    target = assert_within_data_dir(os.path.join(folder, f"{safe_stem}_{token}.{ext}"))
+    with open(target, "wb") as handle:
+        handle.write(data)
+    return local_path_to_data_url(target)
+
+
+def delete_library_music(url: Optional[str], template_id: str) -> None:
+    """Remove a replaced track; only files in ``template_id``'s own music folder are touched."""
+    if not _url_in(url, library_music_dir, template_id):
+        return
+    path = data_url_to_local_path(url)
+    if path and os.path.isfile(path):
+        os.remove(assert_within_data_dir(path))
+
+
+def map_imported_music(manifest: dict[str, Any], extracted: dict[str, str]) -> None:
+    """Point ``music_url`` of the adventure and its scenes at the extracted ADZ files.
+
+    Only files shipped inside the bundle are accepted; any other URL is dropped.
+    """
+    records = [manifest.get("adventure") or {}, *(manifest.get("scenes") or [])]
+    for record in records:
+        if not isinstance(record, dict) or not record.get("music_url"):
+            continue
+        record["music_url"] = extracted.get(record["music_url"])

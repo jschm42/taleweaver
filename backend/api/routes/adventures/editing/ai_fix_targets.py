@@ -48,6 +48,7 @@ _FIX_ADVENTURE_FIELDS = frozenset(
         "rules",
         "intro_text",
         "tts_director_notes",
+        "music_prompt",
         "completed_condition",
         "gameover_condition",
     }
@@ -58,6 +59,7 @@ _FIX_SCENE_FIELDS = frozenset(
         "label",
         "description",
         "decorative_objects",
+        "music_prompt",
         *SCENE_SCRIPT_FIELDS,
     }
 )

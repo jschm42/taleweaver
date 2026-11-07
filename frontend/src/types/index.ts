@@ -336,10 +336,12 @@ export interface MusicNowPlaying {
   loop: boolean
   /** Cross-fade length in seconds. */
   fade: number
+  /** Who chose the track: a script (tw.music), the scene's loop or the main theme. */
+  source?: 'script' | 'scene' | 'theme'
 }
 
 export interface MusicSnapshot {
-  /** False when the admin switched music generation off or no workflow is set up. */
+  /** False when the admin switched music generation off; rendered music still plays. */
   enabled: boolean
   rev: number
   /** Script volume 0..1, multiplied with the player's own music volume. */

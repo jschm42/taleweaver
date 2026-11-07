@@ -2,7 +2,9 @@
 
 Scripts never generate audio themselves. ``tw.music`` records ordered operations in
 ``ScriptChangeset.music_ops``; every changeset applier replays them with ``apply_music_ops``.
-The state only says *what* should play; the generation service
+Without a script track (``now`` is None) the scene's own loop or the adventure's main theme
+plays, unless a script silenced the music (``tw.music.stop()``; ``tw.music.release()`` hands
+control back to scene music). The state only says *what* should play; the generation service
 (``backend.services.music_generation``) renders missing tracks in the background and the
 client plays them once their file exists. Because the state lives in ``entity_states`` it is part
 of every checkpoint.
@@ -12,7 +14,8 @@ Shape::
     {
         "rev": 3,                      # bumped by every op, so clients notice replays
         "volume": 1.0,                 # script volume 0..1 (multiplied with the player's volume)
-        "now": {"id": "...", "loop": True, "fade": 2.0} | None,   # None = silence
+        "now": {"id": "...", "loop": True, "fade": 2.0} | None,   # script track to play
+        "silenced": False,             # tw.music.stop(): no scene/theme music either
         "tracks": {"<id>": {"name", "prompt", "negative_prompt", "duration", "seed"}},
         "library": {"<name>": "<id>"},
     }
@@ -33,7 +36,7 @@ MAX_FADE_SECONDS = 30.0
 
 
 def empty_music_state() -> dict[str, Any]:
-    return {"rev": 0, "volume": 1.0, "now": None, "tracks": {}, "library": {}}
+    return {"rev": 0, "volume": 1.0, "now": None, "silenced": False, "tracks": {}, "library": {}}
 
 
 def read_music_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -44,6 +47,7 @@ def read_music_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
         return state
     state["rev"] = int(raw.get("rev") or 0)
     state["volume"] = clamp_volume(raw.get("volume", 1.0))
+    state["silenced"] = bool(raw.get("silenced", False))
     state["tracks"] = {
         str(k): dict(v)
         for k, v in (raw.get("tracks") or {}).items()
@@ -91,16 +95,25 @@ def _op_generate(state: dict[str, Any], op: dict[str, Any]) -> None:
         state["library"][str(op["name"])] = track_id
     if op.get("play", True):
         state["now"] = _now_entry(op)
+        state["silenced"] = False
 
 
 def _op_play(state: dict[str, Any], op: dict[str, Any]) -> None:
     if op.get("id") in state["tracks"]:
         state["now"] = _now_entry(op)
+        state["silenced"] = False
 
 
 def _op_stop(state: dict[str, Any], op: dict[str, Any]) -> None:
     del op
     state["now"] = None
+    state["silenced"] = True
+
+
+def _op_release(state: dict[str, Any], op: dict[str, Any]) -> None:
+    del op
+    state["now"] = None
+    state["silenced"] = False
 
 
 def _op_volume(state: dict[str, Any], op: dict[str, Any]) -> None:
@@ -115,6 +128,7 @@ _OPS = {
     "generate": _op_generate,
     "play": _op_play,
     "stop": _op_stop,
+    "release": _op_release,
     "volume": _op_volume,
     "forget": _op_forget,
 }

@@ -87,6 +87,9 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "intro": FieldSpec("intro_text"),
     "teaser": FieldSpec("teaser"),
     "cover": FieldSpec("cover_appearance"),
+    # Main theme music prompt (plays in scenes without their own music).
+    "music": FieldSpec("music_prompt"),
+    "theme_music": FieldSpec("music_prompt"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
     "win_guard": _expr("completed_guard_expression"),
@@ -116,6 +119,8 @@ _hook(PROTAGONIST_KEYS, "on_status_change", "on_status_change")
 
 SCENE_KEYS: dict[str, FieldSpec] = {
     "decor": FieldSpec("decorative_objects", text_list),
+    # Background music loop prompt for this scene.
+    "music": FieldSpec("music_prompt"),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
 }

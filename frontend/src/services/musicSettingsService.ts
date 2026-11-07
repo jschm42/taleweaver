@@ -3,7 +3,11 @@ import { apiFetch } from '@/services/http'
 /** Admin music generation settings. Mirrors backend/core/music_settings.py (workflow summarized). */
 export interface MusicSettings {
   enabled: boolean
-  provider: 'comfyui'
+  provider: 'comfyui' | 'lyria'
+  lyria_clip_model: string
+  lyria_full_model: string
+  lyria_timeout: number
+  lyria_wav: boolean
   comfyui_url: string
   comfyui_timeout: number
   comfyui_workflow_name: string
@@ -17,7 +21,7 @@ export interface MusicSettings {
 
 export type MusicSettingsUpdate = Omit<
   MusicSettings,
-  'provider' | 'comfyui_workflow_name' | 'has_workflow' | 'workflow_node_count'
+  'comfyui_workflow_name' | 'has_workflow' | 'workflow_node_count'
 >
 
 async function readJson<T>(res: Response): Promise<T> {

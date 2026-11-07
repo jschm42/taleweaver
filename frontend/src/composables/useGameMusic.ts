@@ -5,6 +5,9 @@
  * new track once its file is rendered, keeps the previous track while the next one is still
  * generating, and fades out on `tw.music.stop()`. Mute and volume belong to the player and are
  * kept in localStorage.
+ *
+ * Looping tracks are not looped by the audio element: shortly before the end a second copy
+ * starts and the two cross-fade, because generated clips rarely have a seamless loop point.
  */
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { MusicSnapshot } from '@/types'
@@ -14,6 +17,8 @@ const VOLUME_KEY = 'game_music_volume'
 const DEFAULT_VOLUME = 0.4
 const FADE_STEP_MS = 50
 const STOP_FADE_SECONDS = 2
+/** Cross-fade at the loop point; tracks shorter than three times this loop natively. */
+const LOOP_OVERLAP_SECONDS = 1.5
 const UNLOCK_EVENTS = ['pointerdown', 'keydown'] as const
 
 function readStored(key: string): string | null {
@@ -35,6 +40,9 @@ function writeStored(key: string, value: string): void {
 interface Channel {
   audio: HTMLAudioElement
   url: string
+  loop: boolean
+  /** True once the next loop copy took over (only one hand-off per channel). */
+  handedOff?: boolean
   timer?: ReturnType<typeof setInterval>
 }
 
@@ -77,8 +85,8 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
   let current: Channel | null = null
   let unlockPending = false
 
-  /** True once the session ever asked for music; the toggle is shown only then. */
-  const hasMusic = computed(() => !!music.value?.enabled)
+  /** True when the session has music (script, scene or theme); the toggle is shown only then. */
+  const hasMusic = computed(() => !!music.value)
   const isGenerating = computed(() => music.value?.now?.status === 'pending')
   const lastError = computed(() => music.value?.now?.error || '')
 
@@ -113,8 +121,33 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
     fade(old, 0, seconds, () => release(old))
   }
 
+  function handOffLoop(channel: Channel): void {
+    const el = channel.audio
+    const duration = el.duration
+    if (channel !== current || channel.handedOff || !channel.loop) return
+    if (!Number.isFinite(duration) || duration < LOOP_OVERLAP_SECONDS * 3) return
+    if (duration - el.currentTime > LOOP_OVERLAP_SECONDS) return
+    channel.handedOff = true
+    const next = openChannel(channel.url, true)
+    current = next
+    if (!muted.value) startChannel(next, LOOP_OVERLAP_SECONDS)
+    fade(channel, 0, LOOP_OVERLAP_SECONDS, () => release(channel))
+  }
+
+  function openChannel(url: string, loop: boolean): Channel {
+    const audio = new Audio(url)
+    audio.volume = 0
+    const channel: Channel = { audio, url, loop }
+    audio.addEventListener('loadedmetadata', () => {
+      // Short clips cannot overlap themselves; let the element loop them.
+      audio.loop = loop && audio.duration < LOOP_OVERLAP_SECONDS * 3
+    })
+    audio.addEventListener('timeupdate', () => handOffLoop(channel))
+    return channel
+  }
+
   function follow(snapshot: MusicSnapshot | null): void {
-    const now = snapshot?.enabled ? snapshot.now : null
+    const now = snapshot?.now ?? null
     if (!now) {
       fadeOutCurrent(STOP_FADE_SECONDS)
       return
@@ -122,15 +155,12 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
     // Still generating or failed: keep whatever plays now.
     if (now.status !== 'ready' || !now.url) return
     if (current?.url === now.url) {
-      current.audio.loop = now.loop
+      current.loop = now.loop
       if (!muted.value) fade(current, targetVolume(), 0.5)
       return
     }
     fadeOutCurrent(now.fade)
-    const audio = new Audio(now.url)
-    audio.loop = now.loop
-    audio.volume = 0
-    current = { audio, url: now.url }
+    current = openChannel(now.url, now.loop)
     if (!muted.value) startChannel(current, now.fade)
   }
 
@@ -153,7 +183,7 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
   }
 
   watch(
-    () => [music.value?.rev, music.value?.now?.status, music.value?.now?.url, music.value?.enabled],
+    () => [music.value?.rev, music.value?.now?.status, music.value?.now?.url],
     () => follow(music.value),
     { immediate: true },
   )

@@ -15,6 +15,7 @@ import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
+import MusicPromptPanel from '@/components/editor/MusicPromptPanel.vue'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -728,6 +729,18 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             </div>
           </div>
         </div>
+
+        <!-- Scene background music (rendered loop) -->
+        <MusicPromptPanel
+          v-if="routeSceneDetails"
+          :key="`music-${routeSceneDetails.id}`"
+          :adventure-id="adventureId"
+          target-type="scene"
+          :target-id="String(routeSceneDetails.id)"
+          :prompt="routeSceneDetails.music_prompt"
+          :music-url="routeSceneDetails.music_url"
+          @refresh="emit('refresh')"
+        />
       </div>
     </div>
 

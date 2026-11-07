@@ -11,6 +11,7 @@ from backend.api.routes.adventures.editor import router as editor_router
 from backend.api.routes.adventures.editor_entity_transfer import (
     router as editor_entity_transfer_router,
 )
+from backend.api.routes.adventures.editor_music import router as editor_music_router
 from backend.api.routes.adventures.editor_npc_combat import router as editor_npc_combat_router
 from backend.api.routes.adventures.editor_npc_profile import router as editor_npc_profile_router
 from backend.api.routes.adventures.editor_special_actions import (
@@ -46,6 +47,7 @@ router.include_router(editor_npc_combat_router)
 router.include_router(editor_npc_profile_router)
 router.include_router(editor_talents_router)
 router.include_router(editor_entity_transfer_router)
+router.include_router(editor_music_router)
 
 # 5. Cloning (specific paths like /{template_id}/duplicate and /{template_id}/copy)
 router.include_router(cloning_router)

@@ -3174,6 +3174,7 @@ watch(
               @update:tone="form.selected_tone_id = $event"
               @update:narrator-voice="form.narrator_voice = $event"
               @save-changes="saveChanges"
+              @refresh-world="fetchDebugInfo"
             />
 
             <AdvancedTab 

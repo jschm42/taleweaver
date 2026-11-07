@@ -16,7 +16,7 @@ from backend.core.music_settings import (
     public_music_settings,
     validate_music_workflow,
 )
-from backend.engine.audio import comfyui_music, music_generation
+from backend.engine.audio import comfyui_music, music_generation, music_providers
 from backend.engine.audio.comfyui_music import AudioResult, audio_parameters, render_music
 from backend.engine.audio.music_state import (
     MUSIC_STATE_KEY,
@@ -215,7 +215,7 @@ async def test_snapshot_starts_generation_and_reports_ready_track(monkeypatch, t
     # Arrange
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
     render = AsyncMock(return_value=AudioResult(b"fLaC", "flac"))
-    monkeypatch.setattr(music_generation, "render_music", render)
+    monkeypatch.setattr(music_providers, "render_music", render)
     server = SimpleNamespace(music_settings={"enabled": True, "comfyui_workflow": WORKFLOW})
     monkeypatch.setattr(music_snapshot, "read_server_settings", AsyncMock(return_value=server))
     ctx = GameContext()
@@ -262,9 +262,14 @@ async def test_snapshot_enforces_the_session_generation_limit(monkeypatch, tmp_p
 
 
 @pytest.mark.asyncio
-async def test_no_snapshot_without_requested_music():
-    state = SimpleNamespace(session_id="s3", entity_states={})
-    assert await music_snapshot.build_music_snapshot(None, state) is None
+async def test_no_snapshot_without_any_music(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    state = SimpleNamespace(
+        session_id="s3", template_id="t3", current_scene_id="NOWHERE", entity_states={}
+    )
+    async with TestSessionLocal() as db:
+        assert await music_snapshot.build_music_snapshot(db, state) is None
 
 
 # --- admin API --------------------------------------------------------------------------
@@ -313,7 +318,7 @@ async def test_admin_test_run_renders_in_background_and_is_polled(
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
     release = asyncio.Event()
 
-    async def slow_render(track, _settings):
+    async def slow_render(track, _settings, _api_key=None):
         await release.wait()
         return b"fLaC", "flac"
 
@@ -325,7 +330,7 @@ async def test_admin_test_run_renders_in_background_and_is_polled(
     started = (await auth_client.post("/api/settings/music/test", json={"prompt": "harp"})).json()
     running = (await auth_client.get(f"/api/settings/music/test/{started['id']}")).json()
     release.set()
-    await music_test_runs._tasks[started["id"]]
+    await music_test_runs.test_jobs.tasks[started["id"]]
     finished = (await auth_client.get(f"/api/settings/music/test/{started['id']}")).json()
     unknown = await auth_client.get("/api/settings/music/test/0123456789abcdef")
 

@@ -469,6 +469,20 @@ guard: not tw.vars.get('anyone_defeated', False)
 
 ---
 
+### Scene music and a main theme
+
+`music` gives the main theme (on `[World]`) or a scene's background loop (on `[Scene]`) a prompt for the music model. Describe the sound, not the place: genre, lead instruments, tempo, mood. Instrumental only; music models block artist names and lyrics. Scenes without `music` play the main theme.
+
+```text
+[World]
+music: Melancholic folk theme, solo fiddle over soft harp, 75 bpm. Seamless loop: no intro, no fade-out ending.
+
+[Scene: CRYPT] The Crypt
+music: Dark ambient drone, low cello, dripping water, 60 bpm. Seamless loop: no intro, no fade-out ending.
+```
+
+The generator only stores the prompts. Render the music in the editor (scene dialog and **Tone** tab: **Generate Music**); its **AI Prompt** button writes a prompt from the tone and the scene and always adds the loop instruction.
+
 ## 7. Strict Adherence or Creative Expansion
 
 Choose the builder mode below the Story Idea field:

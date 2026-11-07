@@ -1,10 +1,10 @@
-"""Background rendering of session music tracks (experimental ComfyUI provider).
+"""Background rendering of session music tracks (ComfyUI or Lyria, see music_providers).
 
 A track is *ready* once ``adventures/sessions/<session>/music/<track_id>.<ext>`` exists, so the
 state in ``entity_states`` never has to be written from a background task (no lost updates
 against a running turn). Running jobs and their errors are kept in process memory: after a
-restart a missing track is simply rendered again. One job runs at a time, since local music
-models usually take the whole GPU.
+restart a missing track is simply rendered again. Concurrency per provider is limited in
+``music_providers.render_exclusive``.
 """
 
 from __future__ import annotations
@@ -12,13 +12,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import secrets
 from typing import Any, Literal, Optional
 
 from backend.core.music_settings import normalize_music_settings
-from backend.engine.audio.comfyui_music import AUDIO_EXTENSIONS, render_music
+from backend.engine.audio.comfyui_music import AUDIO_EXTENSIONS
+from backend.engine.audio.music_providers import render_exclusive
 from backend.engine.audio.music_state import TRACK_ID_RE
-from backend.engine.audio.music_workflow import fill_music_workflow
 from backend.utils.path_security import (
     assert_within_data_dir,
     local_path_to_data_url,
@@ -32,7 +31,6 @@ TrackStatus = Literal["ready", "pending", "failed"]
 
 _jobs: dict[str, asyncio.Task] = {}
 _errors: dict[str, str] = {}
-_gpu_lock = asyncio.Lock()
 
 
 def music_dir(session_id: str) -> str:
@@ -76,42 +74,12 @@ def _write_track(session_id: str, track_id: str, data: bytes, extension: str) ->
     os.replace(partial, target)
 
 
-def _duration(track: dict[str, Any], settings: dict[str, Any]) -> int:
-    requested = track.get("duration") or settings["default_duration"]
-    return max(5, min(int(requested), int(settings["max_duration"])))
-
-
-async def render_track(track: dict[str, Any], settings: dict[str, Any]) -> tuple[bytes, str]:
-    """Render one track with the configured workflow; returns (audio bytes, extension)."""
-    workflow = settings.get("comfyui_workflow")
-    if not workflow:
-        raise ValueError("No ComfyUI music workflow is uploaded.")
-    graph = fill_music_workflow(
-        workflow,
-        prompt=str(track.get("prompt") or ""),
-        negative_prompt=str(track.get("negative_prompt") or ""),
-        seed=int(track.get("seed") or secrets.randbelow(2**31)),
-        duration=_duration(track, settings),
-    )
-    result = await render_music(
-        graph,
-        comfyui_url=settings["comfyui_url"],
-        timeout=int(settings["comfyui_timeout"]),
-        output_node_id=str(settings.get("comfyui_output_node_id") or ""),
-    )
-    return result.data, result.extension
-
-
-async def render_exclusive(track: dict[str, Any], settings: dict[str, Any]) -> tuple[bytes, str]:
-    """``render_track`` behind the shared lock: one music job at a time on the server."""
-    async with _gpu_lock:
-        return await render_track(track, settings)
-
-
-async def _generate(session_id: str, track_id: str, track: dict, settings: dict) -> None:
+async def _generate(
+    session_id: str, track_id: str, track: dict, settings: dict, api_key: Optional[str]
+) -> None:
     key = f"{session_id}:{track_id}"
     try:
-        data, extension = await render_exclusive(track, settings)
+        data, extension = await render_exclusive(track, settings, api_key)
         _write_track(session_id, track_id, data, extension)
         logger.info("Music track %s of session %s is ready.", track_id, session_id)
     except (ValueError, TimeoutError, OSError) as exc:
@@ -125,14 +93,20 @@ async def _generate(session_id: str, track_id: str, track: dict, settings: dict)
 
 
 def ensure_generation(
-    session_id: str, track_id: str, track: dict[str, Any], raw_settings: Optional[dict]
+    session_id: str,
+    track_id: str,
+    track: dict[str, Any],
+    raw_settings: Optional[dict],
+    api_key: Optional[str] = None,
 ) -> None:
     """Start rendering ``track`` unless it is ready, running or failed."""
     key = f"{session_id}:{track_id}"
     if key in _jobs or key in _errors or track_path(session_id, track_id):
         return
     settings = normalize_music_settings(raw_settings)
-    _jobs[key] = asyncio.create_task(_generate(session_id, track_id, dict(track), settings))
+    _jobs[key] = asyncio.create_task(
+        _generate(session_id, track_id, dict(track), settings, api_key)
+    )
 
 
 def mark_failed(session_id: str, track_id: str, message: str) -> None:

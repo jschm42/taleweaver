@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from pydantic import BaseModel, Field, ValidationError
@@ -16,6 +16,7 @@ from backend.core.global_settings import get_server_settings_for_update, read_se
 from backend.core.music_settings import (
     MAX_WORKFLOW_BYTES,
     MusicSettings,
+    music_api_key,
     normalize_music_settings,
     public_music_settings,
     validate_music_workflow,
@@ -36,6 +37,11 @@ class MusicSettingsPayload(BaseModel):
     default_duration: int = Field(default=30, ge=5, le=300)
     max_duration: int = Field(default=120, ge=5, le=600)
     max_generations_per_session: int = Field(default=20, ge=0, le=500)
+    provider: Literal["comfyui", "lyria"] = "comfyui"
+    lyria_clip_model: str = Field(default="lyria-3-clip-preview", min_length=1, max_length=100)
+    lyria_full_model: str = Field(default="lyria-3.5", min_length=1, max_length=100)
+    lyria_timeout: int = Field(default=300, ge=10, le=1800)
+    lyria_wav: bool = False
 
 
 class MusicTestPayload(BaseModel):
@@ -102,7 +108,7 @@ async def delete_music_workflow(
 async def start_music_test(
     payload: MusicTestPayload,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ) -> dict[str, Any]:
     """Start rendering one clip with the stored workflow; poll ``GET /test/{id}`` for the result.
 
@@ -112,7 +118,7 @@ async def start_music_test(
     settings = normalize_music_settings((await read_server_settings(db)).music_settings)
     track = {"prompt": payload.prompt, "duration": payload.duration}
     try:
-        return start_test_run(track, settings)
+        return start_test_run(track, settings, music_api_key(admin, settings))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

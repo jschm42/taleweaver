@@ -27,6 +27,7 @@ from backend.engine.adventures.adventure_import_support import (
 from backend.engine.adventures.adventure_import_support import (
     ensure_within_data_dir as _ensure_within_data_dir,
 )
+from backend.engine.audio.music_assets import map_imported_music
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
@@ -466,6 +467,10 @@ class AdventureTemplateImporter:
                 os.makedirs(target_base_dir, exist_ok=True)
 
                 existing_images_mapping = extract_adz_assets(zip_file, target_base_dir)
+                map_imported_music(manifest_data, existing_images_mapping)
+                new_template.music_prompt = adv_data.get("music_prompt")
+                new_template.music_url = adv_data.get("music_url")
+                new_template.music_enabled = bool(adv_data.get("music_enabled", True))
 
                 # Reconstruct world
                 prot = manifest_data.get("protagonist")

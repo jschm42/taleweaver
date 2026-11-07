@@ -1,7 +1,18 @@
 # Music Generation (Concept)
 
-Status: **Phase 0 implemented** (experimental ComfyUI provider + `tw.music` scripting API).
-Phases 1–4 (Google Lyria, per-scene music, World-Builder support) are a proposal.
+Status (2026-11-07): **Phases 0–3 implemented**, Phase 4 and some cross-cutting items open.
+
+| Phase | Status | Main modules |
+| --- | --- | --- |
+| 0: ComfyUI provider + `tw.music` | done | `engine/audio/comfyui_music.py`, `music_state.py`, `scripting/music_proxy.py` |
+| 1: Provider abstraction + Lyria | done | `engine/audio/music_providers.py`, `lyria_music.py`, `core/music_settings.py` |
+| 2: Scene loops + main theme (editor, playback, ADZ) | done (sequence overrides open) | `api/routes/adventures/editor_music.py`, `music_snapshot.py`, `engine/audio/music_assets.py`, `music_prompt_context.py`, `components/editor/MusicPromptPanel.vue` |
+| 3: World-Builder (`music_prompt` in schemas, prompt, blueprint `music:`, AI fix) | done | `world_schemas.py`, `core/prompts.py`, `blueprint/field_specs.py`, `ai_fix_*` |
+| 4: Lyria RealTime adaptive score | open | – |
+
+Not built yet (see the sections below): sequence-level music overrides, the music style catalog,
+batch "Generate all music", the cross-session render cache, a per-user Lyria quota, ducking
+under TTS, player volume in `User.game_settings`, and the AI-music note in exported licenses.
 
 ## 1. Goals
 

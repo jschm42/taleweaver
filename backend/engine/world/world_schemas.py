@@ -55,6 +55,14 @@ class WorldSceneSchema(WorldBaseSchema):
         default="",
         description="Optional text output when the protagonist leaves the scene. Use empty string for none.",
     )
+    music_prompt: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional English prompt for the scene's background music loop (genre, instruments, "
+            "tempo in BPM, mood; instrumental, no artist names, no lyrics; ends with a seamless "
+            "loop request). Max 400 characters. Use empty string for none."
+        ),
+    )
     helpers_script: Optional[str] = Field(
         default="",
         description=(
@@ -751,6 +759,14 @@ class WorldManifesto(WorldBaseSchema):
     protagonist: ProtagonistSchema
     teaser: str = Field(
         ..., description="A short, atmospheric teaser text for the adventure, max 100 characters."
+    )
+    music_prompt: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional English prompt for the adventure's main theme music, played in scenes "
+            "without their own music (instrumental, no artist names, seamless loop). "
+            "Max 400 characters. Use empty string for none."
+        ),
     )
     cover_appearance: str = Field(
         default="",

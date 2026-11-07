@@ -14,7 +14,16 @@ SCENE_SCRIPT_FIELDS = (
     "on_leave_scene_text",
     "helpers_script",
 )
-SCENE_CONTENT_FIELDS = ("id", "label", "description", "decorative_objects", *SCENE_SCRIPT_FIELDS)
+# Scene music travels with the scene; the URL points at the template's library file.
+SCENE_MUSIC_FIELDS = ("music_prompt", "music_url")
+SCENE_CONTENT_FIELDS = (
+    "id",
+    "label",
+    "description",
+    "decorative_objects",
+    *SCENE_SCRIPT_FIELDS,
+    *SCENE_MUSIC_FIELDS,
+)
 
 
 def scene_content(scene: Any) -> dict[str, Any]:

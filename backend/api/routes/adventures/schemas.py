@@ -329,6 +329,9 @@ class AdventureTemplateResponse(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
+    music_prompt: Optional[str] = None
+    music_url: Optional[str] = None
+    music_enabled: bool = True
     ui_theme: Optional[dict[str, Any]] = None
     original_prompt: Optional[str] = None
     sequences: Optional[list[dict[str, Any]]] = None
@@ -676,6 +679,8 @@ class AdventureTemplateUpdate(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
+    music_prompt: Optional[str] = Field(default=None, max_length=1000)
+    music_enabled: Optional[bool] = None
     ui_theme: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None

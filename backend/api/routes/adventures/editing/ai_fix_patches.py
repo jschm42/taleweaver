@@ -156,6 +156,8 @@ async def _patch_scene(
     if "decorative_objects" in updates:
         scene.decorative_objects = _decorative_objects(updates["decorative_objects"])
         flag_modified(scene, "decorative_objects")
+    if "music_prompt" in updates:
+        scene.music_prompt = str(updates["music_prompt"] or "").strip()[:1000] or None
     set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 

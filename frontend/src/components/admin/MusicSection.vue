@@ -45,6 +45,11 @@ async function save(): Promise<void> {
       default_duration: s.default_duration,
       max_duration: s.max_duration,
       max_generations_per_session: s.max_generations_per_session,
+      provider: s.provider,
+      lyria_clip_model: s.lyria_clip_model,
+      lyria_full_model: s.lyria_full_model,
+      lyria_timeout: s.lyria_timeout,
+      lyria_wav: s.lyria_wav,
     })
     done('Music settings saved.')
   } catch (err) {
@@ -154,9 +159,15 @@ onBeforeUnmount(stopPolling)
         <label class="flex items-center justify-between gap-4">
           <span>
             <span class="block text-sm font-bold text-white">Enable music generation</span>
-            <span class="block text-xs text-slate-500">Off: scripts may still call tw.music, but nothing is rendered or played.</span>
+            <span class="block text-xs text-slate-500">Off: nothing is rendered (scripts, editor). Music rendered earlier still plays.</span>
           </span>
           <input v-model="settings.enabled" type="checkbox" class="h-5 w-5 accent-emerald-500" />
+        </label>
+        <label class="block text-xs text-slate-300">Provider
+          <select v-model="settings.provider" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white">
+            <option value="lyria">Google Lyria (Gemini API key)</option>
+            <option value="comfyui">ComfyUI workflow (local, experimental)</option>
+          </select>
         </label>
         <div class="grid gap-4 sm:grid-cols-3">
           <label class="text-xs text-slate-300">Default length (seconds)
@@ -174,7 +185,32 @@ onBeforeUnmount(stopPolling)
         </div>
       </section>
 
-      <section class="space-y-4 rounded-3xl border border-amber-500/30 bg-slate-900 p-6">
+      <section v-if="settings.provider === 'lyria'" class="space-y-4 rounded-3xl border border-sky-500/30 bg-slate-900 p-6">
+        <h3 class="font-bold text-white">Google Lyria</h3>
+        <p class="text-xs leading-relaxed text-slate-400">
+          Uses the Google (Gemini) key from the Provider Vault and its key policy. Requests up to
+          30 seconds use the clip model (fixed 30 s loops, ideal for scenes); longer ones use the
+          full model, whose length follows the prompt. Lyria blocks artist names and lyrics, and
+          every track carries an inaudible SynthID watermark.
+        </p>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <label class="text-xs text-slate-300">Clip model (≤ 30 s)
+            <input v-model="settings.lyria_clip_model" type="text" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white" />
+          </label>
+          <label class="text-xs text-slate-300">Full model (longer tracks)
+            <input v-model="settings.lyria_full_model" type="text" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white" />
+          </label>
+          <label class="text-xs text-slate-300">Timeout (seconds)
+            <input v-model.number="settings.lyria_timeout" type="number" min="10" max="1800" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white" />
+          </label>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-slate-300">
+          <input v-model="settings.lyria_wav" type="checkbox" class="accent-sky-500" />
+          WAV output for the full model (larger files; MP3 otherwise)
+        </label>
+      </section>
+
+      <section v-if="settings.provider === 'comfyui'" class="space-y-4 rounded-3xl border border-amber-500/30 bg-slate-900 p-6">
         <h3 class="font-bold text-white">ComfyUI workflow</h3>
         <p class="text-xs leading-relaxed text-slate-400">
           Build a text-to-music workflow in ComfyUI (for example an ACE-Step template) and export it with
@@ -227,7 +263,7 @@ onBeforeUnmount(stopPolling)
         <div class="flex flex-wrap items-center gap-4">
           <button
             type="button"
-            :disabled="isTesting || !settings.has_workflow || !testPrompt.trim()"
+            :disabled="isTesting || (settings.provider === 'comfyui' && !settings.has_workflow) || !testPrompt.trim()"
             class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-amber-500 disabled:opacity-50"
             @click="runTest"
           >
