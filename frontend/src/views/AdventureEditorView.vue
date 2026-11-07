@@ -44,6 +44,7 @@ import ManualVisionModal from '@/components/editor/ManualVisionModal.vue'
 import DataDebugModal from '@/components/editor/DataDebugModal.vue'
 import CreateSceneForm from '@/components/editor/CreateSceneForm.vue'
 import SceneRoutePanel from '@/components/editor/SceneRoutePanel.vue'
+import MusicTab from '@/components/editor/MusicTab.vue'
 import ExitRoutePanel from '@/components/editor/ExitRoutePanel.vue'
 import EditExitModal from '@/components/editor/EditExitModal.vue'
 import NpcCombatModal from '@/components/editor/NpcCombatModal.vue'
@@ -434,7 +435,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'music' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -536,6 +537,7 @@ const editorTabs = [
   { key: 'triggers', label: 'Trigger Overview' },
   { key: 'visuals', label: 'Visual Style' },
   { key: 'tone', label: 'Tone' },
+  { key: 'music', label: 'Music' },
   { key: 'advanced', label: 'Advanced' },
   { key: 'validation', label: 'Validation' },
 ] as const
@@ -2327,6 +2329,11 @@ function openSceneEditorRoute(sceneId: string) {
   })
 }
 
+function openMusicLibrary() {
+  closeSceneEditorDialog()
+  activeTab.value = 'music'
+}
+
 function closeSceneEditorDialog() {
   activeTab.value = sceneEditorReturnTab.value
   router.push({
@@ -3058,6 +3065,7 @@ watch(
               :return-tab-label="getTabLabel(sceneEditorReturnTab)"
               :adventure-scripts="adventure?.scripts || debugData?.adventure?.scripts || []"
               @back="closeSceneEditorDialog"
+              @open-music-library="openMusicLibrary"
               @open-text-edit="openTextEdit"
               @open-create-item="openCreateItem"
               @open-create-npc="() => openCreateNpc()"
@@ -3174,6 +3182,12 @@ watch(
               @update:tone="form.selected_tone_id = $event"
               @update:narrator-voice="form.narrator_voice = $event"
               @save-changes="saveChanges"
+            />
+
+            <MusicTab
+              v-if="activeTab === 'music'"
+              :adventure-id="adventureId"
+              :scenes="debugData?.scenes || []"
               @refresh-world="fetchDebugInfo"
             />
 

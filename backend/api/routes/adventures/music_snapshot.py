@@ -1,18 +1,19 @@
 """The ``music`` field of ``GET /chat``: what the client should play, and its render status.
 
-Priority: a script track (``tw.music``) > the current scene's loop > the adventure's main theme
-> silence. ``tw.music.stop()`` silences scene and theme music too, ``tw.music.release()`` hands
-control back to them.
+Priority: a script track (``tw.music``) > the track the current scene selected from the
+adventure's music library (``WorldScene.music_track_id``) > silence. The payload id is the track
+id, so walking between scenes that share a track keeps it playing; a scene without a track fades
+the music out. ``tw.music.stop()`` silences scene music too, ``tw.music.release()`` hands control
+back to it.
 
 Building the snapshot also starts rendering every script track the session requested but has no
 file for yet (within the per-session generation limit), so the client's regular state sync
-drives generation without a separate job queue. Scene and theme music are rendered in the
-editor; play time never renders them.
+drives generation without a separate job queue. Library tracks are rendered or uploaded in the
+editor's Music tab; play time never renders them.
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 from typing import Any, Optional
 
@@ -26,7 +27,9 @@ from backend.core.music_settings import (
     normalize_music_settings,
 )
 from backend.engine.audio.music_generation import ensure_generation, mark_failed, track_status
+from backend.engine.audio.music_library import find_track, normalize_tracks
 from backend.engine.audio.music_state import read_music_state
+from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldScene
 from backend.utils.path_security import data_url_to_local_path
@@ -70,8 +73,12 @@ def _existing(url: Optional[str]) -> Optional[str]:
     return url if path and os.path.isfile(path) else None
 
 
-async def _scene_music_url(db: AsyncSession, state: SessionState) -> tuple[Optional[str], str]:
-    """Music of the current scene: the session copy first, then the template scene."""
+async def _scene_track_id(db: AsyncSession, state: SessionState) -> Optional[str]:
+    """Track of the current scene: the session copy's choice, else the template scene's.
+
+    Sessions started before a scene got its track keep NULL in their copy; the template scene
+    then decides, so newly assigned music reaches running sessions too.
+    """
     rows = (
         await db.execute(
             select(WorldScene).where(
@@ -82,40 +89,42 @@ async def _scene_music_url(db: AsyncSession, state: SessionState) -> tuple[Optio
         )
     ).scalars()
     ordered = sorted(rows, key=lambda row: row.session_id is None)
-    for row in ordered:
-        url = _existing(row.music_url)
-        if url:
-            return url, str(row.label or row.id)
-    return None, ""
+    return next((row.music_track_id for row in ordered if row.music_track_id), None)
 
 
-def _ambient_payload(url: str, name: str, source: str) -> dict[str, Any]:
+def _track_payload(track: dict[str, Any], url: str) -> dict[str, Any]:
     return {
-        "id": f"{source}:{hashlib.sha256(url.encode('utf-8')).hexdigest()[:16]}",
-        "name": name,
+        # The track id identifies the music: two scenes with the same track keep it playing.
+        "id": f"track:{track['id']}",
+        "name": track.get("name"),
         "status": "ready",
         "url": url,
         "error": None,
         "loop": True,
         "fade": SCENE_FADE_SECONDS,
-        "source": source,
+        "source": "scene",
     }
 
 
-async def _ambient(db: AsyncSession, state: SessionState, adventure: Any) -> Optional[dict]:
-    if adventure is not None and not getattr(adventure, "music_enabled", True):
-        return None
-    url, name = await _scene_music_url(db, state)
-    if url:
-        return _ambient_payload(url, name, "scene")
-    theme = _existing(getattr(adventure, "music_url", None))
-    return _ambient_payload(theme, "Main theme", "theme") if theme else None
+async def _scene_music(db: AsyncSession, state: SessionState) -> tuple[Optional[dict], bool]:
+    """(payload of the scene's track or None, whether the adventure has any music at all)."""
+    template = await db.get(AdventureTemplate, state.template_id) if state.template_id else None
+    tracks = normalize_tracks(getattr(template, "music_tracks", None), state.template_id)
+    if not tracks or not getattr(template, "music_enabled", True):
+        return None, False
+    track = find_track(tracks, await _scene_track_id(db, state))
+    url = _existing(track.get("url")) if track else None
+    return (_track_payload(track, url) if track and url else None), True
 
 
 async def build_music_snapshot(
     db: AsyncSession, state: SessionState, adventure: Any = None, user: Any = None
 ) -> Optional[dict[str, Any]]:
-    """Return the client music payload, or None when the session has no music at all."""
+    """Return the client music payload, or None when the session has no music at all.
+
+    ``now`` is None in a scene without a track: the client fades the previous music out.
+    """
+    del adventure  # the library is read from the live template, see _scene_music
     if not state.session_id:
         return None
     music = read_music_state(state.entity_states)
@@ -125,9 +134,10 @@ async def build_music_snapshot(
         api_key = music_api_key(user, normalize_music_settings(raw))
         _start_missing_tracks(state.session_id, music["tracks"], raw, api_key)
     now = _script_payload(state.session_id, music)
+    has_library = False
     if now is None and not music["silenced"]:
-        now = await _ambient(db, state, adventure)
-    if now is None and not music["tracks"] and not music["silenced"]:
+        now, has_library = await _scene_music(db, state)
+    if now is None and not (music["tracks"] or music["silenced"] or has_library):
         return None
     return {
         "enabled": enabled,

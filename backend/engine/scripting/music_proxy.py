@@ -61,7 +61,7 @@ class MusicProxy:
 
     @property
     def is_silenced(self) -> bool:
-        """True after ``stop()``: no scene or theme music until ``play``/``release``."""
+        """True after ``stop()``: no scene music until ``play``/``release``."""
         return bool(self._state.get("silenced"))
 
     @property
@@ -140,7 +140,7 @@ class MusicProxy:
         self._record({"op": "stop", "fade": clamp_fade(fade)})
 
     def release(self) -> None:
-        """Ends script music; the scene's own music (or the main theme) plays again."""
+        """Ends script music; the current scene's library track plays again."""
         self._record({"op": "release"})
 
     def set_volume(self, value: float) -> None:

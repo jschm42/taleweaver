@@ -2,10 +2,10 @@
 
 Scripts never generate audio themselves. ``tw.music`` records ordered operations in
 ``ScriptChangeset.music_ops``; every changeset applier replays them with ``apply_music_ops``.
-Without a script track (``now`` is None) the scene's own loop or the adventure's main theme
-plays, unless a script silenced the music (``tw.music.stop()``; ``tw.music.release()`` hands
+Without a script track (``now`` is None) the track the current scene selected from the music
+library plays, unless a script silenced the music (``tw.music.stop()``; ``tw.music.release()`` hands
 control back to scene music). The state only says *what* should play; the generation service
-(``backend.services.music_generation``) renders missing tracks in the background and the
+(``backend.engine.audio.music_generation``) renders missing tracks in the background and the
 client plays them once their file exists. Because the state lives in ``entity_states`` it is part
 of every checkpoint.
 
@@ -15,7 +15,7 @@ Shape::
         "rev": 3,                      # bumped by every op, so clients notice replays
         "volume": 1.0,                 # script volume 0..1 (multiplied with the player's volume)
         "now": {"id": "...", "loop": True, "fade": 2.0} | None,   # script track to play
-        "silenced": False,             # tw.music.stop(): no scene/theme music either
+        "silenced": False,             # tw.music.stop(): no scene music either
         "tracks": {"<id>": {"name", "prompt", "negative_prompt", "duration", "seed"}},
         "library": {"<name>": "<id>"},
     }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Save, X } from 'lucide-vue-next'
 import NarratorVoicePicker from '@/components/editor/NarratorVoicePicker.vue'
-import MusicPromptPanel from '@/components/editor/MusicPromptPanel.vue'
 import type { NarratorVoice } from '@/services/narratorVoiceService'
 
 const props = defineProps<{
@@ -16,7 +15,6 @@ const emit = defineEmits<{
   (e: 'update:tone', val: string): void
   (e: 'update:narrator-voice', val: NarratorVoice | null): void
   (e: 'save-changes'): void
-  (e: 'refresh-world'): void
 }>()
 </script>
 
@@ -70,17 +68,6 @@ const emit = defineEmits<{
     @update:model-value="$emit('update:narrator-voice', $event)"
     @save-changes="$emit('save-changes')"
   />
-
-  <section v-if="debugData?.adventure" class="bg-slate-900/40 p-5 sm:p-6 rounded-2xl border border-white/5 backdrop-blur-md shadow-xl">
-    <MusicPromptPanel
-      :adventure-id="String(debugData.adventure.id || adventure?.id || '')"
-      target-type="theme"
-      :prompt="debugData.adventure.music_prompt"
-      :music-url="debugData.adventure.music_url"
-      :music-enabled="debugData.adventure.music_enabled"
-      @refresh="$emit('refresh-world')"
-    />
-  </section>
   </div>
 </template>
 

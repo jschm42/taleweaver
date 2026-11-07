@@ -69,10 +69,9 @@ class AdventureTemplate(Base, TimestampMixin):
     selected_tone: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # How the GM narrates: {id, name, instruction, sample} (see core/narrator_voices.py)
     narrator_voice: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    # Main theme: plays in scenes without their own music (docs/specs/music_generation.md).
-    music_prompt: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    music_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    # Author switch for scene/theme music; script music (tw.music) is not affected.
+    # Music library: generated or uploaded tracks that scenes pick (engine/audio/music_library.py).
+    music_tracks: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Author switch for scene music; script music (tw.music) is not affected.
     music_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )

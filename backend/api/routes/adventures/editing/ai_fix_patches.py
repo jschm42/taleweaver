@@ -42,6 +42,7 @@ from backend.api.routes.adventures.editing.common import (
 from backend.api.routes.adventures.editing.entity_update.protagonist import (
     update_protagonist_scripts,
 )
+from backend.engine.audio.music_library import track_id_or_none
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit
@@ -156,8 +157,8 @@ async def _patch_scene(
     if "decorative_objects" in updates:
         scene.decorative_objects = _decorative_objects(updates["decorative_objects"])
         flag_modified(scene, "decorative_objects")
-    if "music_prompt" in updates:
-        scene.music_prompt = str(updates["music_prompt"] or "").strip()[:1000] or None
+    if "music_track_id" in updates:
+        scene.music_track_id = track_id_or_none(updates["music_track_id"])
     set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 

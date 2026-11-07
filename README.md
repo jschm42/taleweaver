@@ -130,7 +130,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Import/Export:** Adventures can be backed up or shared.
 * **Update Badges:** Installed adventures show an **Update** badge when a newer version is available, either as a file in `/adventures` or in the Adventure Library (matched by the adventure's stable ID). Updating keeps existing game sessions.
 * **Offline Image Generation:** Local providers are supported, including **Ollama**, **Stable Diffusion via Automatic1111/Forge API**, and [**ComfyUI (Experimental)**](docs/comfyui/README.md) with selectable checkpoints and standard SD 1.5/SDXL workflows.
-* **Generated Background Music (Experimental):** Every scene can have its own looping background music and the adventure a main theme, generated in the editor from a prompt (with an AI prompt suggestion that matches the adventure's tone and the scene). Scripts compose music on the fly with `tw.music.generate(prompt, name=...)`. Rendered by **Google Lyria** (Gemini key) or your own [ComfyUI text-to-music workflow](docs/comfyui/README.md#comfyui-music-provider-experimental) (e.g. ACE-Step), cross-faded in the game and bundled in `.adz` exports ([design notes](docs/specs/music_generation.md)).
+* **Generated Background Music (Experimental):** Each adventure has a music library (editor **Music** tab): generate tracks from a prompt (with an AI prompt suggestion from the adventure's tone and a reference scene) or upload your own, then pick a track per scene. Scenes that share a track keep it playing; another track cross-fades, a scene without one fades out. Scripts compose music on the fly with `tw.music.generate(prompt, name=...)`. Rendered by **Google Lyria** (Gemini key) or your own [ComfyUI text-to-music workflow](docs/comfyui/README.md#comfyui-music-provider-experimental) (e.g. ACE-Step), cross-faded in the game and bundled in `.adz` exports ([design notes](docs/specs/music_generation.md)).
 
 ### Recent Feature Highlights
 
@@ -232,7 +232,7 @@ TaleWeaver uses an adapter layer ([LiteLLM](https://github.com/BerriAI/litellm))
 | **Text-to-Speech (TTS)** | Gemini 3.5 Flash TTS, ElevenLabs | Google Gemini, ElevenLabs | High-fidelity voice narration; feels like a live audiobook |
 | **Speech-to-Text (STT)**| faster-whisper (Whisper Base / Small / Medium, CPU int8) | Local Whisper (background thread) | Hands-free microphone input with Push-to-Talk hotkeys |
 | **Visual Scene Art** | FLUX, Stable Diffusion (A1111 / Forge), ComfyUI (Experimental), Ollama | Local SD WebUI, Ollama, Cloud APIs | Contextual illustrations for scenes, items, and NPCs |
-| **Background Music** | Google Lyria 3 Clip / 3.5, ComfyUI text-to-music workflow (Experimental) | Local ComfyUI | Scene loops, a main theme and script-composed music that follow the story |
+| **Background Music** | Google Lyria 3 Clip / 3.5, ComfyUI text-to-music workflow (Experimental) | Local ComfyUI | A per-adventure music library for scenes, plus script-composed music that follows the story |
 
 **OpenAI-Compatible API** connects hosted gateways and self-hosted servers through a configurable Chat Completions base URL, optional encrypted key and exact model ID. It is available for all five LLM roles, including the play agent and history compression. See the [configuration guide](docs/custom-openai-compatible.md) for model discovery, structured-output modes and local networking requirements. Endpoint and model compatibility must be checked with your configuration.
 

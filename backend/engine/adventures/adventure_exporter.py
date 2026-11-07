@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import zipfile
+from copy import deepcopy
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
@@ -487,8 +488,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "clock_enabled": adv.clock_enabled,
         "selected_tone": adv.selected_tone,
         "narrator_voice": adv.narrator_voice,
-        "music_prompt": adv.music_prompt,
-        "music_url": adv.music_url,
+        "music_tracks": deepcopy(adv.music_tracks or []),
         "music_enabled": bool(getattr(adv, "music_enabled", True)),
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
@@ -611,12 +611,10 @@ def _localize_manifest_images(
         record["image_url"] = _localize_asset_path(
             record.get("image_url"), adventure_dir, asset_mapping
         )
-    # Scene loops and the main theme travel as assets/ files too.
-    for record in [adventure, *manifest["scenes"]]:
-        if record.get("music_url"):
-            record["music_url"] = _localize_asset_path(
-                record.get("music_url"), adventure_dir, asset_mapping
-            )
+    # The music library's files travel as assets/ files too.
+    for track in adventure.get("music_tracks") or []:
+        if isinstance(track, dict) and track.get("url"):
+            track["url"] = _localize_asset_path(track["url"], adventure_dir, asset_mapping)
 
 
 class AdventureExporter:

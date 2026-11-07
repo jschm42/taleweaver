@@ -214,7 +214,7 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'generate', kind: 'method', signature: '(prompt: str, name: str = None, duration: int = None, play: bool = True, loop: bool = True, negative_prompt: str = "", seed: int = None, regenerate: bool = False, fade: float = 2.0) -> str | None', snippet: 'generate("${1:slow dark ambient, low strings}", name="${2:theme}")', doc: 'Requests a new track (rendered in the background). A known name replays the stored track unless regenerate=True.' },
       { name: 'play', kind: 'method', signature: '(name: str, loop: bool = True, fade: float = 2.0) -> bool', snippet: 'play("${1:theme}")', doc: 'Plays a track generated before (by name or id). False if unknown.' },
       { name: 'stop', kind: 'method', signature: '(fade: float = 2.0)', snippet: 'stop()', doc: 'Fades all music out (scene and theme music too) until play/generate/release.' },
-      { name: 'release', kind: 'method', signature: '()', snippet: 'release()', doc: 'Ends script music; the scene loop or main theme plays again.' },
+      { name: 'release', kind: 'method', signature: '()', snippet: 'release()', doc: 'Ends script music; the current scene\'s library track plays again.' },
       { name: 'set_volume', kind: 'method', signature: '(value: float)', snippet: 'set_volume(${1:0.5})', doc: 'Script music volume 0..1 (multiplied with the player volume).' },
       { name: 'forget', kind: 'method', signature: '(name: str)', snippet: 'forget("${1:theme}")', doc: 'Drops a name so the next generate() with it renders a new track.' },
       { name: 'has', kind: 'method', signature: '(name: str) -> bool', snippet: 'has("${1:theme}")', doc: 'True when a track with this name exists.' },

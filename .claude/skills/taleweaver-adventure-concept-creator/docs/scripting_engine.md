@@ -662,14 +662,14 @@ The in-game time is the number of minutes (units for the *units* time system) th
 
 Scripts compose background music on the fly from a text prompt. A call only records the request; the server renders the track in the background (seconds to minutes; ComfyUI renders one track at a time) and the player's client cross-fades to it once it is ready. Until then, the previous music keeps playing.
 
-**What plays**: a script track (`tw.music`) beats the current scene's own music loop, which beats the adventure's main theme (both set in the editor: scene dialog and **Tone** tab). `tw.music.stop()` silences all of them until the next `play`/`generate`; `tw.music.release()` ends the script music and hands back to the scene loop or main theme.
+**What plays**: a script track (`tw.music`) beats the track the current scene selected from the adventure's music library (editor: **Music** tab and the scene dialog). Scenes with the same library track keep it playing when the player walks between them; a scene without a track fades the music out. `tw.music.stop()` silences scene music too until the next `play`/`generate`; `tw.music.release()` ends the script music and hands back to the scene's track.
 
 **Changing**
 - `tw.music.generate(prompt, name=None, duration=None, play=True, loop=True, negative_prompt="", seed=None, regenerate=False, fade=2.0)`: requests a new track and returns its id (`None` if the prompt is empty or the session already holds 100 tracks). The prompt describes the music, not the scene: genre, instruments, mood, tempo (e.g. `"slow dark ambient, low strings, dripping water, 60 bpm"`). `duration` is in seconds (default and maximum come from the admin settings). With `play=False` the track is rendered in advance and played later.
 - A **name** makes a track reusable: `generate` with a name that already exists plays the stored track instead of rendering a new one (pass `regenerate=True` to render it again). Always name music that comes back, such as scene themes or battle music, so it is rendered once per session.
 - `tw.music.play(name, loop=True, fade=2.0)`: plays a track generated before, by name or id. Returns `False` if there is none.
 - `tw.music.stop(fade=2.0)`: fades all music out, scene and theme music too.
-- `tw.music.release()`: ends the script music; the scene's loop (or the main theme) plays again.
+- `tw.music.release()`: ends the script music; the current scene's library track plays again.
 - `tw.music.set_volume(value)`: script volume `0..1`, multiplied with the player's own music volume.
 - `tw.music.forget(name)`: drops the name, so the next `generate` with it renders a new track.
 

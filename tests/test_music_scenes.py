@@ -1,5 +1,5 @@
-"""Scene and main theme music: Lyria provider, editor flow, playback priority, ADZ round trip,
-World-Builder fields."""
+"""Music library: Lyria provider, editor tab (generate, upload, scene tracks), playback across
+scenes, ADZ round trip, World-Builder fields."""
 
 import base64
 import json
@@ -22,7 +22,7 @@ from backend.engine.audio.music_providers import lyria_model_for, render_track
 from backend.engine.audio.music_state import apply_music_ops
 from backend.engine.blueprint import analyze_blueprint
 from backend.engine.scripting.context import GameContext
-from backend.engine.world.world_schemas import WorldSceneSchema
+from backend.engine.world.world_schemas import WorldManifesto, WorldSceneSchema
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldScene
@@ -107,10 +107,10 @@ def test_suggested_prompts_always_become_loopable():
     assert ensure_loopable("x" * 2000).endswith(LOOP_INSTRUCTION)
 
 
-# --- editor flow ------------------------------------------------------------------------------
+# --- editor: music library --------------------------------------------------------------------
 
 
-async def _seed(owner_id: str, template_id: str = "music-adv") -> None:
+async def _seed(owner_id: str, template_id: str = "music-adv", tracks=None) -> None:
     async with TestSessionLocal() as db:
         await db.execute(delete(WorldScene).where(WorldScene.template_id == template_id))
         await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == template_id))
@@ -121,13 +121,19 @@ async def _seed(owner_id: str, template_id: str = "music-adv") -> None:
                 title="Music Test",
                 teaser="Bells under the sea.",
                 selected_tone={"id": "dark", "name": "Dark", "description": "Grim and slow"},
+                music_tracks=tracks,
+                original_manifest={"scenes": [{"id": "CRYPT"}, {"id": "HALL"}]},
             )
         )
-        db.add(
-            WorldScene(
-                id="CRYPT", template_id=template_id, label="Crypt", description="A cold crypt."
+        for scene_id, label in (("CRYPT", "Crypt"), ("HALL", "Hall")):
+            db.add(
+                WorldScene(
+                    id=scene_id,
+                    template_id=template_id,
+                    label=label,
+                    description=f"A cold {label}.",
+                )
             )
-        )
         await db.commit()
 
 
@@ -136,8 +142,17 @@ async def _owner_id() -> str:
         return (await db.execute(select(User.id).limit(1))).scalar_one()
 
 
+async def _enable_music(provider: str = "lyria") -> None:
+    from backend.core.global_settings import get_server_settings_for_update
+
+    async with TestSessionLocal() as db:
+        server = await get_server_settings_for_update(db)
+        server.music_settings = {"enabled": True, "provider": provider}
+        await db.commit()
+
+
 @pytest.mark.asyncio
-async def test_editor_suggests_loopable_prompt_from_tone_and_scene(
+async def test_prompt_suggestion_uses_tone_and_reference_scene(
     auth_client, setup_test_db, monkeypatch
 ):
     # Arrange
@@ -147,137 +162,195 @@ async def test_editor_suggests_loopable_prompt_from_tone_and_scene(
 
     # Act
     response = await auth_client.post(
-        "/api/adventures/music-adv/music/suggest-prompt",
-        json={"target_type": "scene", "target_id": "CRYPT"},
+        "/api/adventures/music-adv/music/suggest-prompt", json={"reference_scene_id": "CRYPT"}
     )
 
     # Assert
     assert response.status_code == 200
     assert response.json()["suggested_prompt"].endswith(LOOP_INSTRUCTION)
     user_prompt = llm.await_args.kwargs["user_prompt"]
-    assert "Dark - Grim and slow" in user_prompt and "A cold crypt." in user_prompt
+    assert "Dark - Grim and slow" in user_prompt and "A cold Crypt." in user_prompt
 
 
 @pytest.mark.asyncio
-async def test_editor_generates_scene_music_in_background_and_stores_it(
+async def test_generated_track_renders_in_background_and_scenes_pick_it(
     auth_client, setup_test_db, monkeypatch, tmp_path
 ):
     # Arrange
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
     await _seed(await _owner_id())
-    async with TestSessionLocal() as db:
-        from backend.core.global_settings import get_server_settings_for_update
-
-        server = await get_server_settings_for_update(db)
-        server.music_settings = {"enabled": True, "provider": "lyria"}
-        await db.commit()
+    await _enable_music()
     monkeypatch.setattr(editor_music, "session_factory", TestSessionLocal)
     monkeypatch.setattr(editor_music, "music_api_key", lambda _user, _settings: "key")
     monkeypatch.setattr(editor_music, "render_exclusive", AsyncMock(return_value=(b"ID3", "mp3")))
-    target = {"target_type": "scene", "target_id": "CRYPT"}
+    base = "/api/adventures/music-adv/music"
 
     # Act
-    started = await auth_client.post(
-        "/api/adventures/music-adv/music/generate", json={**target, "prompt": "cello loop"}
-    )
-    job_id = started.json()["id"]
-    await editor_music.editor_jobs.tasks[job_id]
-    status = (await auth_client.get(f"/api/adventures/music-adv/music/jobs/{job_id}")).json()
-    async with TestSessionLocal() as db:
-        scene = (
-            await db.execute(select(WorldScene).where(WorldScene.template_id == "music-adv"))
-        ).scalar_one()
-    removed = (await auth_client.post("/api/adventures/music-adv/music/remove", json=target)).json()
+    created = (
+        await auth_client.post(
+            f"{base}/tracks",
+            json={"name": "Crypt Theme", "prompt": "cello loop", "reference_scene_id": "CRYPT"},
+        )
+    ).json()
+    await editor_music.editor_jobs.tasks[created["job"]["id"]]
+    track_id = created["track"]["id"]
+    assigned = await auth_client.post(f"{base}/scenes/CRYPT/track", json={"track_id": track_id})
+    unknown = await auth_client.post(f"{base}/scenes/HALL/track", json={"track_id": "nope"})
+    library = (await auth_client.get(base)).json()
 
     # Assert
-    assert started.status_code == 200 and status["status"] == "done"
-    assert scene.music_prompt == "cello loop"
-    assert scene.music_url.startswith("/data/adventures/library/music-adv/music/CRYPT_")
-    assert status["url"] == scene.music_url
-    assert removed["music_url"] is None and removed["music_prompt"] == "cello loop"
-    assert not os.listdir(tmp_path / "adventures/library/music-adv/music")
+    track = library["tracks"][0]
+    assert track["name"] == "Crypt Theme" and track["reference_scene_id"] == "CRYPT"
+    assert track["url"].startswith(f"/data/adventures/library/music-adv/music/{track_id}_")
+    assert assigned.status_code == 200 and unknown.status_code == 404
+    assert library["scene_usage"] == {track_id: ["CRYPT"]}
+    assert library["jobs"][track_id]["status"] == "done"
+    async with TestSessionLocal() as db:
+        adventure = await db.get(AdventureTemplate, "music-adv")
+        assert adventure.original_manifest["music_tracks"][0]["id"] == track_id
+        assert adventure.original_manifest["scenes"][0]["music_track_id"] == track_id
 
 
 @pytest.mark.asyncio
-async def test_editor_rejects_generation_while_music_is_off(auth_client, setup_test_db):
+async def test_upload_rename_and_delete_track(auth_client, setup_test_db, monkeypatch, tmp_path):
+    # Arrange
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    await _seed(await _owner_id())
+    base = "/api/adventures/music-adv/music"
+    wav = b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 32
+
+    # Act
+    uploaded = await auth_client.post(
+        f"{base}/tracks/upload", files={"file": ("../../harbor.wav", wav, "audio/wav")}
+    )
+    fake = await auth_client.post(
+        f"{base}/tracks/upload", files={"file": ("evil.mp3", b"<html>", "audio/mpeg")}
+    )
+    track = uploaded.json()["track"]
+    await auth_client.post(f"{base}/scenes/HALL/track", json={"track_id": track["id"]})
+    renamed = await auth_client.patch(f"{base}/tracks/{track['id']}", json={"name": "Harbor"})
+    deleted = (await auth_client.delete(f"{base}/tracks/{track['id']}")).json()
+
+    # Assert
+    assert uploaded.status_code == 200 and track["source"] == "uploaded"
+    assert track["name"] == "harbor" and track["url"].endswith(".wav")
+    assert fake.status_code == 400
+    assert renamed.json()["track"]["name"] == "Harbor"
+    assert deleted["tracks"] == [] and deleted["scene_usage"] == {}
+    assert not os.listdir(tmp_path / "adventures/library/music-adv/music")
+    async with TestSessionLocal() as db:
+        hall = (await db.execute(select(WorldScene).where(WorldScene.id == "HALL"))).scalar_one()
+        assert hall.music_track_id is None
+
+
+@pytest.mark.asyncio
+async def test_generation_is_rejected_while_music_is_off(auth_client, setup_test_db):
     await _seed(await _owner_id())
     response = await auth_client.post(
-        "/api/adventures/music-adv/music/generate",
-        json={"target_type": "theme", "prompt": "harp"},
+        "/api/adventures/music-adv/music/tracks", json={"name": "x", "prompt": "harp"}
     )
     assert response.status_code == 400 and "switched off" in response.json()["detail"]
 
 
-# --- playback priority ------------------------------------------------------------------------
+# --- playback ---------------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_scene_music_plays_until_a_script_takes_over_or_stops(
+async def test_scene_tracks_keep_playing_switch_or_fade_out(
     auth_client, setup_test_db, monkeypatch, tmp_path
 ):
     # Arrange
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
-    await _seed(await _owner_id())
-    scene_url = save_library_music("music-adv", "CRYPT", "aa", b"ID3", "mp3")
-    theme_url = save_library_music("music-adv", "theme", "bb", b"ID3", "mp3")
+    calm = save_library_music("music-adv", "calm", "aa", b"ID3", "mp3")
+    storm = save_library_music("music-adv", "storm", "bb", b"ID3", "mp3")
+    tracks = [
+        {"id": "calm", "name": "Calm", "url": calm},
+        {"id": "storm", "name": "Storm", "url": storm},
+    ]
+    await _seed(await _owner_id(), tracks=tracks)
     async with TestSessionLocal() as db:
-        scene = (await db.execute(select(WorldScene))).scalars().first()
-        scene.music_url = scene_url
-        adventure = await db.get(AdventureTemplate, "music-adv")
-        adventure.music_url = theme_url
+        for scene in (await db.execute(select(WorldScene))).scalars():
+            scene.music_track_id = "calm"
+        db.add(WorldScene(id="CAVE", template_id="music-adv", label="Cave", description="."))
+        db.add(
+            WorldScene(
+                id="PEAK",
+                template_id="music-adv",
+                label="Peak",
+                description=".",
+                music_track_id="storm",
+            )
+        )
         await db.commit()
     server = SimpleNamespace(music_settings={"enabled": False})
     monkeypatch.setattr(music_snapshot, "read_server_settings", AsyncMock(return_value=server))
-    states: dict = {}
     state = SimpleNamespace(
-        session_id="sess", template_id="music-adv", current_scene_id="CRYPT", entity_states=states
+        session_id="sess", template_id="music-adv", current_scene_id="CRYPT", entity_states={}
     )
+
+    async def snapshot_in(scene_id: str) -> dict:
+        state.current_scene_id = scene_id
+        async with TestSessionLocal() as db:
+            return await music_snapshot.build_music_snapshot(db, state)
+
+    # Act
+    crypt, hall, peak, cave = [await snapshot_in(s) for s in ("CRYPT", "HALL", "PEAK", "CAVE")]
     ctx = GameContext()
     ctx.music.stop()
-
-    async with TestSessionLocal() as db:
-        adventure = await db.get(AdventureTemplate, "music-adv")
-        # Act
-        in_scene = await music_snapshot.build_music_snapshot(db, state, adventure)
-        state.current_scene_id = "HALL"
-        theme = await music_snapshot.build_music_snapshot(db, state, adventure)
-        apply_music_ops(states, ctx.changeset.music_ops)
-        silenced = await music_snapshot.build_music_snapshot(db, state, adventure)
-        released = GameContext()
-        released.music.release()
-        apply_music_ops(states, released.changeset.music_ops)
-        back = await music_snapshot.build_music_snapshot(db, state, adventure)
-        adventure.music_enabled = False
-        author_off = await music_snapshot.build_music_snapshot(db, state, adventure)
+    apply_music_ops(state.entity_states, ctx.changeset.music_ops)
+    silenced = await snapshot_in("CRYPT")
 
     # Assert
-    assert in_scene["now"]["source"] == "scene" and in_scene["now"]["url"] == scene_url
-    assert theme["now"]["source"] == "theme" and theme["now"]["url"] == theme_url
+    assert crypt["now"]["url"] == hall["now"]["url"] == calm  # same track: keeps playing
+    assert crypt["now"]["id"] == hall["now"]["id"] == "track:calm"
+    assert peak["now"]["url"] == storm  # another track: cross-fade
+    assert cave is not None and cave["now"] is None  # no track: fade out
     assert silenced["now"] is None
-    assert back["now"]["source"] == "theme"
-    assert author_off is None
-
-
-# --- ADZ round trip & World-Builder -----------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_scene_and_theme_music_survive_adz_export_and_import(
+async def test_no_music_payload_without_library_or_when_author_switched_it_off(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    url = save_library_music("music-adv", "calm", "aa", b"ID3", "mp3")
+    await _seed(await _owner_id(), tracks=[{"id": "calm", "name": "Calm", "url": url}])
+    async with TestSessionLocal() as db:
+        adventure = await db.get(AdventureTemplate, "music-adv")
+        adventure.music_enabled = False
+        await db.commit()
+    state = SimpleNamespace(
+        session_id="s", template_id="music-adv", current_scene_id="CRYPT", entity_states={}
+    )
+    async with TestSessionLocal() as db:
+        assert await music_snapshot.build_music_snapshot(db, state) is None
+
+
+# --- ADZ round trip, import safety, World-Builder ---------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_music_library_survives_adz_export_and_import(
     auth_client, setup_test_db, monkeypatch, tmp_path
 ):
     # Arrange
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
     owner = await _owner_id()
-    await _seed(owner, "music-export")
+    url = save_library_music("music-export", "calm", "cc", b"CALM", "mp3")
+    tracks = [
+        {"id": "calm", "name": "Calm", "prompt": "harp", "url": url, "source": "generated"},
+        {"id": "PLANNED", "name": "Planned", "prompt": "drums"},
+    ]
+    await _seed(owner, "music-export", tracks=tracks)
     async with TestSessionLocal() as db:
         scene = (
-            await db.execute(select(WorldScene).where(WorldScene.template_id == "music-export"))
+            await db.execute(
+                select(WorldScene).where(
+                    WorldScene.template_id == "music-export", WorldScene.id == "CRYPT"
+                )
+            )
         ).scalar_one()
-        scene.music_prompt = "cello loop"
-        scene.music_url = save_library_music("music-export", "CRYPT", "cc", b"SCENE", "mp3")
-        adventure = await db.get(AdventureTemplate, "music-export")
-        adventure.music_prompt = "harp theme"
-        adventure.music_url = save_library_music("music-export", "theme", "dd", b"THEME", "mp3")
+        scene.music_track_id = "calm"
         await db.commit()
 
         # Act
@@ -291,59 +364,94 @@ async def test_scene_and_theme_music_survive_adz_export_and_import(
                 select(AdventureTemplate).where(AdventureTemplate.title == "Music Test")
             )
         ).scalar_one()
-        new_scene = (
-            await db.execute(select(WorldScene).where(WorldScene.template_id == imported.id))
+        crypt = (
+            await db.execute(
+                select(WorldScene).where(
+                    WorldScene.template_id == imported.id, WorldScene.id == "CRYPT"
+                )
+            )
         ).scalar_one()
 
     # Assert
-    assert imported.music_prompt == "harp theme" and new_scene.music_prompt == "cello loop"
-    for url, content in ((imported.music_url, b"THEME"), (new_scene.music_url, b"SCENE")):
-        assert url.startswith(f"/data/adventures/library/{imported.id}/")
-        with open(tmp_path / url.removeprefix("/data/"), "rb") as handle:
-            assert handle.read() == content
-
-
-def test_import_mapping_drops_music_urls_that_are_not_local():
-    manifest = {
-        "adventure": {"music_url": "assets/theme.mp3"},
-        "scenes": [{"music_url": "https://evil.example/x.mp3"}, {"music_url": "assets/a.mp3"}],
-    }
-    map_imported_music(manifest, {"assets/theme.mp3": "/data/adventures/library/n/theme.mp3"})
-    assert manifest["adventure"]["music_url"] == "/data/adventures/library/n/theme.mp3"
-    assert [s["music_url"] for s in manifest["scenes"]] == [None, None]
-
-
-def test_world_builder_fields_reach_the_schema_and_blueprint():
-    # Act
-    scene = WorldSceneSchema(id="CRYPT", name="Crypt", description="Cold.", music_prompt="drone")
-    blueprint, _ = analyze_blueprint(
-        "[World]\nmusic: harp theme\n[Scene: CRYPT] Crypt\nCold.\nmusic: cello drone\n"
-    )
-
-    # Assert
-    assert scene.music_prompt == "drone"
-    assert blueprint.first("world").fields["music_prompt"].value == "harp theme"
-    assert blueprint.first("scene").fields["music_prompt"].value == "cello drone"
+    by_id = {t["id"]: t for t in imported.music_tracks}
+    assert crypt.music_track_id == "calm"
+    assert by_id["PLANNED"]["url"] is None and by_id["PLANNED"]["source"] == "planned"
+    assert by_id["calm"]["url"].startswith(f"/data/adventures/library/{imported.id}/")
+    with open(tmp_path / by_id["calm"]["url"].removeprefix("/data/"), "rb") as handle:
+        assert handle.read() == b"CALM"
 
 
 def test_music_urls_are_bound_to_the_owning_adventure(monkeypatch, tmp_path):
     # Arrange
     from backend.engine.audio.music_assets import delete_library_music, local_music_url
+    from backend.engine.audio.music_library import normalize_tracks
 
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
     victim = save_library_music("victim-adv", "CRYPT", "ee", b"VICTIM", "mp3")
     own = save_library_music("own-adv", "CRYPT", "ff", b"OWN", "mp3")
-    manifest = {"adventure": {"music_url": victim}, "scenes": [{"music_url": victim}]}
+    manifest = {"adventure": {"music_tracks": [{"id": "a", "url": victim}]}}
 
     # Act
     map_imported_music(manifest, {})
     delete_library_music(victim, "own-adv")
+    foreign = normalize_tracks([{"id": "x", "url": victim}], "own-adv")
 
     # Assert
-    assert manifest["adventure"]["music_url"] is None
-    assert manifest["scenes"][0]["music_url"] is None
+    assert manifest["adventure"]["music_tracks"][0]["url"] is None
+    assert foreign[0]["url"] is None
     assert local_music_url(victim, "own-adv") is None
     assert local_music_url(own, "own-adv") == own
     assert (tmp_path / victim.removeprefix("/data/")).exists()
     delete_library_music(own, "own-adv")
     assert not (tmp_path / own.removeprefix("/data/")).exists()
+
+
+def test_world_builder_plans_tracks_and_scenes_reference_them():
+    # Act
+    manifest = WorldManifesto.model_json_schema()
+    scene = WorldSceneSchema(id="CRYPT", name="Crypt", description="Cold.", music_track_id="DRONE")
+    blueprint, missing = analyze_blueprint(
+        "[Music: DRONE] Crypt Drone\nprompt: dark cello drone, 60 bpm\n"
+        "[Scene: CRYPT] Crypt\nCold.\nmusic: DRONE\n"
+    )
+
+    # Assert
+    assert "music_tracks" in manifest["properties"]
+    assert scene.music_track_id == "DRONE"
+    assert not [i for i in blueprint.issues if i.severity == "error"] and missing == []
+    assert blueprint.first("music").fields["prompt"].value == "dark cello drone, 60 bpm"
+    assert blueprint.first("scene").fields["music_track_id"].value == "DRONE"
+
+
+def test_blueprint_merge_recreates_dropped_tracks():
+    from backend.engine.blueprint.merge import apply_blueprint
+
+    blueprint, _ = analyze_blueprint("[Music: DRONE] Crypt Drone\nprompt: cello drone\n")
+    manifest: dict = {"scenes": []}
+    apply_blueprint(manifest, blueprint)
+    assert manifest["music_tracks"][0]["id"] == "DRONE"
+    assert manifest["music_tracks"][0]["prompt"] == "cello drone"
+
+
+@pytest.mark.asyncio
+async def test_manifest_apply_merges_tracks_and_keeps_rendered_audio(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    from backend.engine.manifest_apply.adventure_meta import _apply_music_tracks
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    url = save_library_music("music-adv", "calm", "aa", b"ID3", "mp3")
+    adventure = SimpleNamespace(music_tracks=[{"id": "CALM", "name": "Calm", "url": url}])
+    ctx = SimpleNamespace(
+        template_id="music-adv",
+        manifest={
+            "music_tracks": [
+                {"id": "CALM", "name": "Calm v2", "prompt": "harp"},
+                {"id": "NEW", "name": "New", "prompt": "drums"},
+            ]
+        },
+    )
+    _apply_music_tracks(ctx, adventure)
+    by_id = {t["id"]: t for t in adventure.music_tracks}
+    assert by_id["CALM"]["url"] == url and by_id["CALM"]["name"] == "Calm v2"
+    assert by_id["NEW"]["source"] == "planned"

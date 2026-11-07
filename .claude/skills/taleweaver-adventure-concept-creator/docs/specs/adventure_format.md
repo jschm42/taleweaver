@@ -72,8 +72,8 @@ General configuration, narrative constraints, and gameplay settings.
 | `clock_enabled` | `boolean` | Whether to track and display in-game time / calendar. |
 | `ingame_timestamp` | `string` | Formatted starting in-game timestamp (e.g. `"Day 1, 08:00"`). |
 | `selected_tone` | `string` | Narrative tone identifier or description (e.g. `"Dark Fantasy"`, `"Cyberpunk"`). |
-| `music_prompt` / `music_url` | `string` \| `null` | Optional main theme: prompt and rendered track (same rules as the scene fields). Plays in every scene without its own music. |
-| `music_enabled` | `boolean` | Default `true`. `false` switches scene and theme music off (script music via `tw.music` still plays). |
+| `music_tracks` | `array` | Optional music library: `[{"id", "name", "prompt", "url", "source", "reference_scene_id", "created_at"}]`. `id` is a slug (`A-Z a-z 0-9 _ -`, max 50). `url` is an `assets/` path in `.adz` bundles and a `/data/` URL into the adventure's own library folder in the database; anything else (other adventures' files, external URLs, `.adv` uploads without the file) is dropped, leaving a *planned* track that the editor can render from its `prompt`. `source`: `generated`, `uploaded` or `planned`. |
+| `music_enabled` | `boolean` | Default `true`. `false` switches scene music off (script music via `tw.music` still plays). |
 | `narrator_voice` | `object` \| `null` | Optional voice of the Game Master: how the narration is worded (diction, sentence rhythm, attitude), not how long it is. `{"id": "noir-detective", "name": "Hardboiled Noir Detective", "description": "...", "instruction": "Narrate like ...", "sample": "Rain hit the neon sign ..."}`. `instruction` is required (max. 1500 characters); `sample` is an optional style sample (max. 500). `id` is the catalog voice the author picked, or `"custom"` for a voice written in the editor. The full voice is stored, so an import works without the admin's voice catalog. Without it, the GM narrates in the neutral default voice. |
 | `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. The skin also styles the combat dialog (ability cards, item tiles, chronicle, and the arena's player/accent colors). |
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
@@ -118,8 +118,7 @@ The physical locations composing the world map.
 | `description` | `string` | Sensory, atmospheric description of the location. |
 | `image_url` | `string` | Path or URL to the background scenery image. |
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
-| `music_prompt` | `string` \| `null` | Optional prompt for the scene's background music loop (genre, instruments, tempo, mood; instrumental). Max 1000 characters. |
-| `music_url` | `string` \| `null` | Rendered loop: an `assets/` path in `.adz` bundles, a `/data/` URL into the adventure's own library folder in the database. Anything else (other adventures' files, external URLs, `.adv` uploads without the file) is dropped. |
+| `music_track_id` | `string` \| `null` | Optional `id` of the `adventure.music_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the music fades out. |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
 | `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |

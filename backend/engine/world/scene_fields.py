@@ -14,8 +14,8 @@ SCENE_SCRIPT_FIELDS = (
     "on_leave_scene_text",
     "helpers_script",
 )
-# Scene music travels with the scene; the URL points at the template's library file.
-SCENE_MUSIC_FIELDS = ("music_prompt", "music_url")
+# The scene's track of the adventure's music library travels with the scene.
+SCENE_MUSIC_FIELDS = ("music_track_id",)
 SCENE_CONTENT_FIELDS = (
     "id",
     "label",

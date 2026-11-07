@@ -166,7 +166,7 @@ Write "title", "summary", "rationale" and every patch "description" in English.
 
 FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, exit, protagonist, adventure, sequence.
 - Allowed `field_updates` keys MUST match the editor's patch payload exactly:
-    - scene: label, description, decorative_objects, music_prompt, on_enter_scene_script,
+    - scene: label, description, decorative_objects, music_track_id, on_enter_scene_script,
       on_enter_scene_text, on_leave_scene_script, on_leave_scene_text, helpers_script
     - object (every item type): name, description, is_portable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_pickup_script, on_pickup_text, on_drop_script,
@@ -193,7 +193,7 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - protagonist: name, description, goal, character, hp, mana, stamina, strength, intelligence,
       wisdom, dexterity, charisma, armor_class, exp, on_hp_change_script, on_hp_change_text,
       on_status_change_script, on_status_change_text
-    - adventure: title, teaser, plot, rules, intro_text, tts_director_notes, music_prompt,
+    - adventure: title, teaser, plot, rules, intro_text, tts_director_notes,
       completed_condition, gameover_condition
     - sequence: title, description, walkthrough, end_condition, required_item_id,
       required_scene_id, required_defeated_npc_id, guard_expression,

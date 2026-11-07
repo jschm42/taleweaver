@@ -20,6 +20,7 @@ from backend.api.routes.adventures.container_put import (
     run_container_items_removed_trigger,
 )
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
+from backend.api.routes.adventures.music_snapshot import build_music_snapshot
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -369,8 +370,13 @@ class TurnInteractionsManager:
             for m in msgs:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
 
-        # Signal frontend to clear old chat bubbles
-        yield f"event: scene_transition\ndata: {json.dumps({'scene_id': scene.id, 'scene_label': scene.label})}\n\n"
+        # Signal frontend to clear old chat bubbles; music switches to the new scene's track.
+        transition = {
+            "scene_id": scene.id,
+            "scene_label": scene.label,
+            "music": await build_music_snapshot(self.db, self.state, None, self.user),
+        }
+        yield f"event: scene_transition\ndata: {json.dumps(transition)}\n\n"
 
         # Build a narration prompt for the new scene
         exit_label = world_exit.label or "the exit"

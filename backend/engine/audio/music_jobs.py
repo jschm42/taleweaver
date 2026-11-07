@@ -64,6 +64,15 @@ class MusicJobs:
         self.tasks[job_id] = asyncio.create_task(self._run(job_id, work))
         return self.status(job_id) or {}
 
+    def matching(self, **filters: Any) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+        """``(meta, status)`` of every remembered job whose meta matches ``filters``."""
+        found = []
+        for job_id, job in self._jobs.items():
+            meta = job["meta"]
+            if all(meta.get(key) == value for key, value in filters.items()):
+                found.append((meta, self.status(job_id) or {}))
+        return found
+
     def meta(self, job_id: str) -> Optional[dict[str, Any]]:
         job = self._jobs.get(job_id)
         return job["meta"] if job else None

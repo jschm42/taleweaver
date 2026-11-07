@@ -41,9 +41,9 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 
 | Block | Most useful keys |
 | :--- | :--- |
-| `[World]` | `language`, `image_style`/`style`, `tone`, `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `music` (main theme prompt), `init_script`, `progression` (`linear` default / `dynamic` for hubs: sequences start via `activation` or `tw.sequences.start`) |
+| `[World]` | `language`, `image_style`/`style`, `tone`, `win`, `lose`, `win_guard`, `lose_guard`, `rules`, `intro`, `init_script`, `progression` (`linear` default / `dynamic` for hubs: sequences start via `activation` or `tw.sequences.start`) |
 | `[Protagonist] Name` | `role`, `goal`, `hp`, `str`…`ac`, `inventory`, `weapon`, `armor` |
-| `[Scene: ID] Name` | `decor`, `music` (prompt for the scene's background loop), `on_enter`, `on_enter_text`, `on_leave`, `helpers` (only `def`s and constants; callable from every script, e.g. the scene's dialog handlers) |
+| `[Scene: ID] Name` | `decor`, `music` (ID of a `[Music]` track), `on_enter`, `on_enter_text`, `on_leave`, `helpers` (only `def`s and constants; callable from every script, e.g. the scene's dialog handlers) |
 | `[Exit: A -> B] label` (name the passage, e.g. `an old rusty gate`, never the way like `To the lab`; without one the AI writes it) | `code`, `key_item`, `rule`, `guard`, `revealed` (target known from the start), `one_way` (`<->` forces two-way), `on_unlock`, `on_unlock_fail_text` |
 | `[NPC: ID] Name` | `in`, `type`, `hp`, `str`…`cha`, `ac`, `main_attack` (`Sabre \| 1d8 \| melee \| str`; no weapon item needed, `weapon`/`armor` are deprecated), `hidden`, `reveal`, `inventory`, `attack` (`passive`/`on_sight`), `attack_when_holding`, `attack_guard`, `group` (combat group: members fight together), `assist` (`group`/`anyone`/`never`), `killable`, `on_defeat`, `on_meet`, `on_interact`, `on_receive_item` |
 | `[Item: ID] Name` | `in`, `type`, `hidden`, `reveal`, `portable`, `locked` (take-locked on regular items: visible/inspectable in scene or container, cannot be taken until unlocked), `code`, `unlock_item`, `unlock_guard`, `contains`, `min_items`, `max_items`, `reveals`, `bonus` (`str+2`), `damage`, `cost`, weapons: `category` (melee/ranged/magic), `hit` (`str`), `hit_effects` (`target sta -1d4, self hp +2`), `text` (readable, ≤500 chars), `on_pickup`, `on_use`, `on_read`, `on_items_added`, `on_items_removed` |
@@ -54,6 +54,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Script: ID] Name` | `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, …), `target`, `code` |
 | `[Sidequest: ID] Title` | `goal`, `goal_item`, `guard`, `xp` |
 | `[Award: KEY] Title` | `tier`, `requires`, `guard` |
+| `[Music: ID] Name` | `prompt` (English music prompt: genre, instruments, tempo, mood; instrumental, no artist names; scenes that share a mood share a track) |
 | `[Talent: ID] Name` (inside the Protagonist) | `target` (`none`/`npc`/`item`/`any`), `cost` (`mana 10`), `uses`, `gm` (what the GM reveals/narrates), `locked`, `unlock_*`, `on_use` (`talent` dict in scope). Non-combat; the player types `use <talent>` / `cast <talent> on <target>` |
 | `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item`, `area` (`splash 1` / `all`, protagonist only), `save` (`dex`), `spare_passive` |
 

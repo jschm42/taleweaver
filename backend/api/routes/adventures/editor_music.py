@@ -1,32 +1,46 @@
-"""Editor music: scene loops and the adventure's main theme (prompt, AI suggestion, render).
+"""Editor Music tab: the adventure's music library and the scenes' track choice.
 
-Rendering runs as a background job (``MusicJobs``) the editor polls, because a render can take
-minutes. When it finishes, the job writes the file into the adventure library and stores its
-URL on the scene or template row with its own DB session, so closing the dialog does not lose
-the track.
+Tracks are generated from a prompt (optionally suggested by the small LLM from the adventure's
+tone and a reference scene) or uploaded. Rendering runs as a background job (``MusicJobs``)
+the editor polls, because a render can take minutes; when it finishes, the job stores the file
+in the adventure library and updates the track with its own DB session.
 """
 
 from __future__ import annotations
 
+import os
 import secrets
-from copy import deepcopy
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.editor_music_tracks import (
+    MAX_UPLOAD_BYTES,
+    assign_scene_track,
+    release_track,
+    replace_file,
+    require_track,
+    sniff_audio,
+    template_scenes,
+    update_tracks,
+)
 from backend.core.auth import get_current_user
 from backend.core.database import AsyncSessionLocal, get_db
 from backend.core.global_settings import read_server_settings
 from backend.core.llm_router import GameMasterLLM
 from backend.core.music_settings import music_api_key, normalize_music_settings
-from backend.engine.audio.music_assets import delete_library_music, save_library_music
+from backend.engine.audio.music_assets import save_library_music
 from backend.engine.audio.music_jobs import MusicJobs
+from backend.engine.audio.music_library import (
+    MAX_NAME_CHARS,
+    MAX_PROMPT_CHARS,
+    new_track_id,
+    normalize_tracks,
+    now_iso,
+)
 from backend.engine.audio.music_prompt_context import (
-    MAX_MUSIC_PROMPT_CHARS,
     MUSIC_PROMPT_SYSTEM_PROMPT,
     build_music_prompt_request,
     ensure_loopable,
@@ -35,28 +49,39 @@ from backend.engine.audio.music_providers import render_exclusive
 from backend.engine.audio.music_test_runs import check_provider_ready
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_entity import WorldScene
 
 router = APIRouter(prefix="/{template_id}/music", tags=["Editor"])
 
-editor_jobs = MusicJobs(max_remembered=50)
+editor_jobs = MusicJobs(max_remembered=100)
 # Replaced in tests; background jobs cannot use the request's session.
 session_factory = AsyncSessionLocal
 
-TargetType = Literal["scene", "theme"]
+TRACK_PATH = Path(..., pattern=r"^[A-Za-z0-9_-]{1,50}$")
 
 
-class MusicTarget(BaseModel):
-    target_type: TargetType
-    target_id: Optional[str] = Field(default=None, max_length=50)
+class SuggestPayload(BaseModel):
+    reference_scene_id: Optional[str] = Field(default=None, max_length=50)
 
 
-class MusicPromptPayload(MusicTarget):
-    prompt: str = Field(default="", max_length=MAX_MUSIC_PROMPT_CHARS)
-
-
-class MusicGeneratePayload(MusicPromptPayload):
+class TrackPayload(BaseModel):
+    name: str = Field(default="", max_length=MAX_NAME_CHARS)
+    prompt: str = Field(default="", max_length=MAX_PROMPT_CHARS)
+    reference_scene_id: Optional[str] = Field(default=None, max_length=50)
     duration: Optional[int] = Field(default=None, ge=5, le=600)
+
+
+class TrackUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=MAX_NAME_CHARS)
+    prompt: Optional[str] = Field(default=None, max_length=MAX_PROMPT_CHARS)
+    reference_scene_id: Optional[str] = Field(default=None, max_length=50)
+
+
+class RenderPayload(BaseModel):
+    duration: Optional[int] = Field(default=None, ge=5, le=600)
+
+
+class SceneTrackPayload(BaseModel):
+    track_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,50}$")
 
 
 async def _owned_adventure(db: AsyncSession, template_id: str, user: User) -> AdventureTemplate:
@@ -66,72 +91,86 @@ async def _owned_adventure(db: AsyncSession, template_id: str, user: User) -> Ad
     return adventure
 
 
-async def _target_row(db: AsyncSession, template_id: str, target: MusicTarget) -> Any:
-    if target.target_type == "theme":
-        return await db.get(AdventureTemplate, template_id)
-    scene = (
-        await db.execute(
-            select(WorldScene).where(
-                WorldScene.template_id == template_id,
-                WorldScene.session_id.is_(None),
-                WorldScene.id == target.target_id,
-            )
+def _job_overview(template_id: str) -> dict[str, dict[str, Any]]:
+    """Latest render job per track (running, or finished but still remembered)."""
+    jobs: dict[str, dict[str, Any]] = {}
+    for meta, status in editor_jobs.matching(template_id=template_id):
+        jobs[meta["track_id"]] = status
+    return jobs
+
+
+async def _library(db: AsyncSession, adventure: AdventureTemplate) -> dict[str, Any]:
+    await db.refresh(adventure, ["music_tracks", "music_enabled"])
+    settings = normalize_music_settings((await read_server_settings(db)).music_settings)
+    usage: dict[str, list[str]] = {}
+    for scene in await template_scenes(db, adventure.id):
+        if scene.music_track_id:
+            usage.setdefault(scene.music_track_id, []).append(scene.id)
+    return {
+        "tracks": normalize_tracks(adventure.music_tracks, adventure.id),
+        "scene_usage": usage,
+        "jobs": _job_overview(adventure.id),
+        "music_enabled": bool(adventure.music_enabled),
+        "generation": {"enabled": settings["enabled"], "provider": settings["provider"]},
+    }
+
+
+def _start_render(
+    template_id: str, track_id: str, prompt: str, duration: Optional[int], settings: dict, key
+) -> dict[str, Any]:
+    async def work() -> dict[str, Any]:
+        data, extension = await render_exclusive(
+            {"prompt": prompt, "duration": duration}, settings, key
         )
-    ).scalar_one_or_none()
-    if scene is None:
-        raise HTTPException(status_code=404, detail="Scene not found")
-    return scene
+        url = save_library_music(template_id, track_id, secrets.token_hex(4), data, extension)
+
+        def store(tracks: list[dict[str, Any]]) -> None:
+            track = require_track(tracks, track_id)
+            replace_file(track, url, template_id)
+            track["source"] = "generated"
+
+        async with session_factory() as db:
+            await update_tracks(db, template_id, store)
+        return {"url": url, "bytes": len(data)}
+
+    return editor_jobs.start(work, {"template_id": template_id, "track_id": track_id})
 
 
-def _music_fields(row: Any) -> dict[str, Any]:
-    return {"music_prompt": row.music_prompt, "music_url": row.music_url}
+async def _render_settings(db: AsyncSession, user: User) -> tuple[dict, Optional[str]]:
+    settings = normalize_music_settings((await read_server_settings(db)).music_settings)
+    if not settings["enabled"]:
+        raise HTTPException(status_code=400, detail="Music generation is switched off (Admin).")
+    api_key = music_api_key(user, settings)
+    try:
+        check_provider_ready(settings, api_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return settings, api_key
 
 
-async def _mirror_to_manifest(
-    db: AsyncSession, template_id: str, target: MusicTarget, row: Any
-) -> None:
-    """Keep ``original_manifest`` in step, so a template reset does not drop the music."""
-    adventure = (
-        row if target.target_type == "theme" else await db.get(AdventureTemplate, template_id)
-    )
-    if adventure is None or not isinstance(adventure.original_manifest, dict):
-        return
-    manifest = deepcopy(adventure.original_manifest)
-    if target.target_type == "theme":
-        entry = manifest
-    else:
-        scenes = manifest.get("scenes") if isinstance(manifest.get("scenes"), list) else []
-        entry = next((s for s in scenes if isinstance(s, dict) and s.get("id") == row.id), None)
-    if entry is None:
-        return
-    entry.update(_music_fields(row))
-    adventure.original_manifest = manifest
-    flag_modified(adventure, "original_manifest")
-
-
-async def _store_track(template_id: str, target: MusicTarget, prompt: str, url: str) -> None:
-    async with session_factory() as db:
-        row = await _target_row(db, template_id, target)
-        old = row.music_url
-        row.music_url = url
-        row.music_prompt = prompt
-        await _mirror_to_manifest(db, template_id, target, row)
-        await db.commit()
-    if old and old != url:
-        delete_library_music(old, template_id)
+@router.get("")
+async def get_music_library(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    return await _library(db, await _owned_adventure(db, template_id, current_user))
 
 
 @router.post("/suggest-prompt")
 async def suggest_music_prompt(
     template_id: str,
-    payload: MusicTarget,
+    payload: SuggestPayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    """AI music prompt from the adventure's tone and the scene (or premise), always loopable."""
+    """AI prompt from the adventure's tone and the reference scene (or premise); loopable."""
     adventure = await _owned_adventure(db, template_id, current_user)
-    if payload.target_type == "scene":
-        scene = await _target_row(db, template_id, payload)
+    scenes = {s.id: s for s in await template_scenes(db, template_id)}
+    scene = scenes.get(payload.reference_scene_id or "")
+    if payload.reference_scene_id and scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    if scene is not None:
         name, description, kind = str(scene.label or scene.id), scene.description or "", "scene"
     else:
         name = adventure.title or ""
@@ -156,81 +195,145 @@ async def suggest_music_prompt(
     return {"suggested_prompt": ensure_loopable(raw)}
 
 
-@router.post("/prompt")
-async def save_music_prompt(
+@router.post("/tracks")
+async def create_generated_track(
     template_id: str,
-    payload: MusicPromptPayload,
+    payload: TrackPayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
+    """Add a track and start rendering it; poll ``GET /jobs/{id}``."""
     await _owned_adventure(db, template_id, current_user)
-    row = await _target_row(db, template_id, payload)
-    row.music_prompt = payload.prompt.strip() or None
-    await _mirror_to_manifest(db, template_id, payload, row)
-    await db.commit()
-    return _music_fields(row)
-
-
-@router.post("/generate")
-async def generate_music(
-    template_id: str,
-    payload: MusicGeneratePayload,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Start rendering the loop; poll ``GET /jobs/{id}``. The track is stored when done."""
-    await _owned_adventure(db, template_id, current_user)
-    await _target_row(db, template_id, payload)
     prompt = payload.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Enter a music prompt first.")
-    settings = normalize_music_settings((await read_server_settings(db)).music_settings)
-    if not settings["enabled"]:
-        raise HTTPException(status_code=400, detail="Music generation is switched off (Admin).")
-    api_key = music_api_key(current_user, settings)
-    try:
-        check_provider_ready(settings, api_key)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    target = MusicTarget(target_type=payload.target_type, target_id=payload.target_id)
-    track = {"prompt": prompt, "duration": payload.duration}
-    stem = payload.target_id if payload.target_type == "scene" else "theme"
+    settings, api_key = await _render_settings(db, current_user)
+    track = {
+        "id": new_track_id(),
+        "name": payload.name.strip() or prompt[:40],
+        "prompt": prompt,
+        "url": None,
+        "source": "generated",
+        "reference_scene_id": payload.reference_scene_id or None,
+        "created_at": now_iso(),
+    }
+    await update_tracks(db, template_id, lambda tracks: tracks.append(track))
+    job = _start_render(template_id, track["id"], prompt, payload.duration, settings, api_key)
+    return {"track": track, "job": job}
 
-    async def work() -> dict[str, Any]:
-        data, extension = await render_exclusive(track, settings, api_key)
-        url = save_library_music(template_id, str(stem), secrets.token_hex(4), data, extension)
-        await _store_track(template_id, target, prompt, url)
-        return {"url": url, "bytes": len(data)}
 
-    meta = {"owner_id": current_user.id, "template_id": template_id}
-    return editor_jobs.start(work, meta)
+@router.post("/tracks/{track_id}/render")
+async def render_track_again(
+    template_id: str,
+    payload: RenderPayload,
+    track_id: str = TRACK_PATH,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """(Re-)render a track from its prompt, e.g. a track the World-Builder planned."""
+    adventure = await _owned_adventure(db, template_id, current_user)
+    track = require_track(normalize_tracks(adventure.music_tracks, template_id), track_id)
+    if not track["prompt"]:
+        raise HTTPException(status_code=400, detail="This track has no prompt to render.")
+    settings, api_key = await _render_settings(db, current_user)
+    return _start_render(
+        template_id, track_id, track["prompt"], payload.duration, settings, api_key
+    )
+
+
+@router.post("/tracks/upload")
+async def upload_track(
+    template_id: str,
+    file: UploadFile = File(...),
+    name: str = Form(default="", max_length=MAX_NAME_CHARS),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Add an uploaded audio file (MP3, WAV, OGG/Opus, FLAC, M4A; max 50 MB) to the library."""
+    await _owned_adventure(db, template_id, current_user)
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="The audio file is larger than 50 MB.")
+    original = os.path.basename(file.filename or "upload")
+    extension = sniff_audio(data, original)
+    track_id = new_track_id()
+    url = save_library_music(template_id, track_id, secrets.token_hex(4), data, extension)
+    track = {
+        "id": track_id,
+        "name": name.strip() or os.path.splitext(original)[0][:MAX_NAME_CHARS] or track_id,
+        "prompt": "",
+        "url": url,
+        "source": "uploaded",
+        "reference_scene_id": None,
+        "created_at": now_iso(),
+    }
+    await update_tracks(db, template_id, lambda tracks: tracks.append(track))
+    return {"track": track}
+
+
+@router.patch("/tracks/{track_id}")
+async def update_track(
+    template_id: str,
+    payload: TrackUpdate,
+    track_id: str = TRACK_PATH,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    await _owned_adventure(db, template_id, current_user)
+    changes = payload.model_dump(exclude_unset=True)
+
+    def change(tracks: list[dict[str, Any]]) -> dict[str, Any]:
+        track = require_track(tracks, track_id)
+        for field, value in changes.items():
+            track[field] = (value or "").strip() or (None if field != "name" else track["name"])
+        return dict(track)
+
+    return {"track": await update_tracks(db, template_id, change)}
+
+
+@router.delete("/tracks/{track_id}")
+async def delete_track(
+    template_id: str,
+    track_id: str = TRACK_PATH,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Delete the track and its file; scenes that used it become silent."""
+    adventure = await _owned_adventure(db, template_id, current_user)
+
+    def change(tracks: list[dict[str, Any]]) -> None:
+        track = require_track(tracks, track_id)
+        replace_file(track, "", template_id)
+        tracks.remove(track)
+
+    await update_tracks(db, template_id, change)
+    await release_track(db, adventure, track_id)
+    return await _library(db, adventure)
 
 
 @router.get("/jobs/{job_id}")
 async def get_music_job(
     template_id: str,
     job_id: str = Path(..., pattern=r"^[a-f0-9]{16}$"),
-    current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
-    meta = editor_jobs.meta(job_id)
-    if not meta or meta["owner_id"] != current_user.id or meta["template_id"] != template_id:
-        raise HTTPException(status_code=404, detail="Music job not found (the server restarted?).")
-    return editor_jobs.status(job_id) or {}
-
-
-@router.post("/remove")
-async def remove_music(
-    template_id: str,
-    payload: MusicTarget,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Delete the rendered track (the prompt stays)."""
     await _owned_adventure(db, template_id, current_user)
-    row = await _target_row(db, template_id, payload)
-    old = row.music_url
-    row.music_url = None
-    await _mirror_to_manifest(db, template_id, payload, row)
-    await db.commit()
-    delete_library_music(old, template_id)
-    return _music_fields(row)
+    meta = editor_jobs.meta(job_id)
+    if not meta or meta["template_id"] != template_id:
+        raise HTTPException(status_code=404, detail="Music job not found (the server restarted?).")
+    return {**(editor_jobs.status(job_id) or {}), "track_id": meta["track_id"]}
+
+
+@router.post("/scenes/{scene_id}/track")
+async def set_scene_track(
+    template_id: str,
+    payload: SceneTrackPayload,
+    scene_id: str = Path(..., max_length=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Choose the scene's track (``null`` = silent scene)."""
+    adventure = await _owned_adventure(db, template_id, current_user)
+    scene = await assign_scene_track(db, adventure, scene_id, payload.track_id)
+    return {"scene_id": scene.id, "music_track_id": scene.music_track_id}

@@ -6,8 +6,8 @@ Status (2026-11-07): **Phases 0–3 implemented**, Phase 4 and some cross-cuttin
 | --- | --- | --- |
 | 0: ComfyUI provider + `tw.music` | done | `engine/audio/comfyui_music.py`, `music_state.py`, `scripting/music_proxy.py` |
 | 1: Provider abstraction + Lyria | done | `engine/audio/music_providers.py`, `lyria_music.py`, `core/music_settings.py` |
-| 2: Scene loops + main theme (editor, playback, ADZ) | done (sequence overrides open) | `api/routes/adventures/editor_music.py`, `music_snapshot.py`, `engine/audio/music_assets.py`, `music_prompt_context.py`, `components/editor/MusicPromptPanel.vue` |
-| 3: World-Builder (`music_prompt` in schemas, prompt, blueprint `music:`, AI fix) | done | `world_schemas.py`, `core/prompts.py`, `blueprint/field_specs.py`, `ai_fix_*` |
+| 2: Music library + scene tracks (editor Music tab, playback, ADZ) | done (sequence overrides open) | `api/routes/adventures/editor_music.py`, `editor_music_tracks.py`, `music_snapshot.py`, `engine/audio/music_library.py`, `music_assets.py`, `music_prompt_context.py`, `components/editor/MusicTab.vue`, `SceneMusicSelect.vue` |
+| 3: World-Builder (`music_tracks` / `music_track_id` in schemas, prompt, blueprint `[Music]`, AI fix) | done | `world_schemas.py`, `core/prompts.py`, `blueprint/field_specs.py`, `ai_fix_*` |
 | 4: Lyria RealTime adaptive score | open | – |
 
 Not built yet (see the sections below): sequence-level music overrides, the music style catalog,
@@ -110,74 +110,72 @@ class MusicProvider(Protocol):
 * The concurrency lock becomes per provider: ComfyUI keeps one job at a time (local GPU), Lyria
   allows a small number of parallel requests (setting, default 2).
 
-## 4. Per-scene music (Phase 2)
+## 4. Music library and scene tracks (Phase 2)
 
-Mirrors scene images: a prompt is stored on the entity, generated once in the editor, stored as
-an asset, exported in the `.adz`.
+Each adventure owns a **music library**; scenes pick one track each. This replaced an earlier
+per-scene prompt/URL design (migration `f7a1c4e8d2b6` turns old scene music and main themes into
+library tracks).
 
 ### Data model
 
 | Field | On | Meaning |
 | --- | --- | --- |
-| `music_prompt` | `AdventureTemplate` | Main theme; also the fallback for scenes without music |
-| `music_url` | `AdventureTemplate` | Rendered main theme (`/data/adventures/library/<id>/music/theme.<ext>`) |
-| `music_prompt`, `music_url` | `WorldScene` | Scene loop |
-| `music_prompt`, `music_url` | sequence dict | Optional override while the sequence is active (chase, siege) |
-| `music_enabled` | `AdventureTemplate` | Author switch; off = no music even if prompts exist |
+| `music_tracks` | `AdventureTemplate` (JSON) | `[{id, name, prompt, url, source, reference_scene_id, created_at}]`, see `engine/audio/music_library.py` |
+| `music_track_id` | `WorldScene` | The scene's track; NULL = silent scene |
+| `music_enabled` | `AdventureTemplate` | Author switch for scene music (script music unaffected) |
 
-Session copies keep the URLs like images (`resolve_session_asset`), so a template change does not
-break a running session.
+`source` is `generated`, `uploaded` or `planned` (prompt only, e.g. from the World-Builder or an
+`.adv` import without files). Files live in `adventures/library/<template>/music/`; URLs must point
+into the adventure's own library folder (`music_assets.local_music_url`), deletions are limited to
+its `music/` folder.
+
+### Editor (Music tab)
+
+* **Generate**: name, optional **reference scene**, prompt, length. **AI Prompt** asks the small
+  model for a prompt from the adventure's tone, title and teaser plus the reference scene's name and
+  description (or the plot when no scene is chosen); `ensure_loopable` always appends the
+  seamless-loop instruction. Rendering is a background job (`MusicJobs`) the tab polls.
+* **Upload**: MP3, WAV, OGG/Opus, FLAC, M4A up to 50 MB; the type is decided by the file content,
+  the stored name is random.
+* **Table**: play/stop, name and prompt (editable), source, scenes using the track, status
+  (ready, composing with elapsed seconds, failed, no audio), render again, delete (scenes using it
+  become silent).
+* **Scene dialog**: a dropdown of the library tracks with preview.
+
+All library writes go through `editor_music_tracks.update_tracks` under a per-adventure lock, so a
+finishing render cannot overwrite an edit. Library and scene choices are mirrored into
+`original_manifest` (template reset, World-Builder re-apply).
 
 ### Which music plays
 
-Priority, highest first: script music (`tw.music`, while `now` is set) > active sequence music >
-scene music > adventure main theme > silence. The client already cross-fades on change, so
-scene changes reuse `useGameMusic`. The snapshot adds a `source` field (`script`, `sequence`,
-`scene`, `theme`) for the debug view. `tw.music.stop()` keeps today's meaning (silence until the
-next play); a new `tw.music.release()` hands control back to scene music.
+Script track (`tw.music`) > the current scene's library track > silence. The snapshot id is the
+track id, so:
 
-### Prompt building
+* next scene, **same track** → keeps playing without interruption,
+* next scene, **other track** → cross-fade (3 s),
+* next scene **without track** → fade out.
 
-* New target type `scene_music` / `adventure_music` for the existing prompt-suggestion endpoint
-  (`SuggestPromptRequest.target_type`): the small model turns scene description, adventure tone,
-  narrator voice and time of day into a music prompt (genre, instruments, tempo, mood; no artist
-  names, no lyrics). Rules live in a new `backend/engine/audio/music_prompt_context.py`, next to
-  `image_prompt_context.py`.
-* A **music style catalog** (admin, like image styles and tones: "Orchestral fantasy",
-  "Synthwave noir", "Chiptune") is appended to every prompt of an adventure, so all its scenes
-  sound like one score.
-* For loops: the prompt gets "seamless loop, no intro, no ending". The client additionally
-  overlaps the loop point by 1–2 s with a second audio element, because 30 s clips rarely
-  loop cleanly.
-
-### Editor and generation
-
-* Scene editor: music prompt field, "Suggest prompt", "Generate", player, "Remove". Same for the
-  adventure (Main Theme) and sequences.
-* "Generate all music" runs as a generation job (like batch scene images) with progress.
-* Generation happens at **edit time**, so playing an adventure costs nothing. Players of
-  imported adventures get the bundled files.
+The snapshot comes with every `GET /chat` and with the `scene_transition` stream event, so the
+music changes on arrival, before the arrival narration. Session scene copies prefer their own
+`music_track_id` and fall back to the template scene, and tracks are read from the live template,
+so newly rendered music reaches running sessions.
 
 ### Import/export
 
-* `.adz`: `assets/music/<scene_id>.<ext>`, `assets/music/theme.<ext>`; the manifest stores
-  relative paths like images (`adventure_exporter.py`, `manifest_apply/`). `.adv` keeps the
-  prompts only; the importer renders nothing automatically, the editor shows "music missing".
-* Adventure format spec (`docs/specs/adventure_format.md`) bumps to 1.4.
+* `.adz`: track files are bundled under `assets/`; `adventure.music_tracks[].url` holds the
+  `assets/` path and is mapped back on import. Only files shipped in the bundle are accepted.
+* `.adv` and World-Builder output keep the tracks as *planned* entries.
+* Cloning copies the library with rewritten URLs.
 
 ## 5. World-Builder support (Phase 3)
 
-Per the engine change propagation rule (AGENTS.md, rule 5) the new fields need:
-
-1. Generation schemas (`world_schemas.py`: `music_prompt` on scenes, sequences, adventure)
-   and the generation prompt (`WORLD_GENERATION_SYSTEM_PROMPT`: one short music prompt per scene,
-   style rules).
-2. Blueprint key `music:` for `Scene`, `Sequence` and `World` tags (`field_specs.py`,
-   `converters.py`, `prompt.py`).
-3. Exporter/importer round trip (`tests/test_adventure_lifecycle.py`).
-4. AI fix allowlists and `FIX_PATCH_FIELD_RULES`.
-5. Validators: warn when a scene has a music URL whose file is missing.
-6. Docs: `world-builder-syntax.md`, `world-builder-blueprint-manual.md`, skills, bundle rebuild.
+* `WorldManifesto.music_tracks` (`MusicTrackSchema`: `id`, `name`, `prompt`) and
+  `WorldSceneSchema.music_track_id`; the generation prompt asks for 2-6 tracks shared by scenes of
+  the same mood. `manifest_apply.adventure_meta._apply_music_tracks` merges them into the library
+  and keeps audio already rendered for a known id.
+* Blueprint: `[Music: ID] Name` (alias `[Track: ID]`) with `prompt`; scenes use `music: ID`.
+  Dropped tracks are re-inserted by `merge.apply_blueprint`.
+* AI fix and editor change sets: scene field `music_track_id`.
 
 ## 6. Adaptive score with Lyria RealTime (Phase 4, optional)
 

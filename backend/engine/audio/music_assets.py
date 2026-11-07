@@ -1,7 +1,7 @@
 """Music asset URLs of adventures: library storage, validation and ADZ import mapping.
 
-Scene loops and the main theme are files in ``adventures/library/<template>/music/``; the DB
-stores their ``/data/...`` URL like images. Manifests from outside (``.adv`` uploads,
+The tracks of an adventure's music library are files in ``adventures/library/<template>/music/``
+(imported ones in the library root); the library stores their ``/data/...`` URL like images. Manifests from outside (``.adv`` uploads,
 World-Builder output) may only point at the adventure's own library files; anything else is
 dropped. Deletion is likewise limited to the owning adventure's ``music/`` folder, so a crafted
 manifest can never make the editor delete another adventure's files.
@@ -92,12 +92,11 @@ def delete_library_music(url: Optional[str], template_id: str) -> None:
 
 
 def map_imported_music(manifest: dict[str, Any], extracted: dict[str, str]) -> None:
-    """Point ``music_url`` of the adventure and its scenes at the extracted ADZ files.
+    """Point the music library's track URLs at the extracted ADZ files.
 
     Only files shipped inside the bundle are accepted; any other URL is dropped.
     """
-    records = [manifest.get("adventure") or {}, *(manifest.get("scenes") or [])]
-    for record in records:
-        if not isinstance(record, dict) or not record.get("music_url"):
-            continue
-        record["music_url"] = extracted.get(record["music_url"])
+    adventure = manifest.get("adventure") if isinstance(manifest.get("adventure"), dict) else {}
+    for track in adventure.get("music_tracks") or []:
+        if isinstance(track, dict) and track.get("url"):
+            track["url"] = extracted.get(track["url"])

@@ -110,6 +110,19 @@ def clone_disk_assets(old_template_id: str, new_template_id: str) -> None:
         os.makedirs(new_dir, exist_ok=True)
 
 
+def clone_music_tracks(
+    tracks: Optional[list[dict[str, Any]]], old_id: str, new_id: str
+) -> Optional[list[dict[str, Any]]]:
+    """Copy the music library with its file URLs pointing at the clone's folder."""
+    if not tracks:
+        return None
+    cloned = deepcopy(tracks)
+    for track in cloned:
+        if isinstance(track, dict) and track.get("url"):
+            track["url"] = rewrite_asset_url(track["url"], old_id, new_id)
+    return cloned
+
+
 def clone_manifest_data(
     original_manifest: Optional[dict[str, Any]],
     new_title: str,
@@ -125,7 +138,6 @@ def clone_manifest_data(
     if isinstance(adv_dict, dict):
         adv_dict["title"] = new_title
         adv_dict["image_url"] = rewrite_asset_url(adv_dict.get("image_url"), old_id, new_id)
-        adv_dict["music_url"] = rewrite_asset_url(adv_dict.get("music_url"), old_id, new_id)
 
     protagonist = manifest.get("protagonist")
     if isinstance(protagonist, dict):
@@ -140,8 +152,6 @@ def clone_manifest_data(
         for item in items:
             if isinstance(item, dict) and "image_url" in item:
                 item["image_url"] = rewrite_asset_url(item.get("image_url"), old_id, new_id)
-            if isinstance(item, dict) and item.get("music_url"):
-                item["music_url"] = rewrite_asset_url(item.get("music_url"), old_id, new_id)
 
     return manifest
 
@@ -187,8 +197,7 @@ def _create_cloned_template_entity(
         ),
         selected_tone=(deepcopy(original.selected_tone) if original.selected_tone else None),
         narrator_voice=deepcopy(original.narrator_voice),
-        music_prompt=original.music_prompt,
-        music_url=rewrite_asset_url(original.music_url, original.id, new_id),
+        music_tracks=clone_music_tracks(original.music_tracks, original.id, new_id),
         music_enabled=original.music_enabled,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
@@ -296,8 +305,7 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_leave_scene_script=s.on_leave_scene_script,
             on_leave_scene_text=s.on_leave_scene_text,
             helpers_script=s.helpers_script,
-            music_prompt=s.music_prompt,
-            music_url=rewrite_asset_url(s.music_url, old_id, new_id),
+            music_track_id=s.music_track_id,
         )
         db.add(cloned)
 
