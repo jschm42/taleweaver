@@ -30,6 +30,7 @@ from backend.api.routes.adventures.session_items import (
 )
 from backend.core.config import settings
 from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY, resolve_tts_preferences
+from backend.engine.audio.music_state import apply_music_ops
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
@@ -274,6 +275,7 @@ def _run_init_scripts(
     _persist_init_entity_updates(entity_states, changes)
     store_pending_dialog(entity_states, changes.pending_dialog)
     store_gm_directions(entity_states, changes.gm_directions, changes.after_narration)
+    apply_music_ops(entity_states, changes.music_ops)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):

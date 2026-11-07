@@ -91,3 +91,37 @@ Automated tests use fake HTTP responses and real local image persistence; they d
 not require a GPU or contact an external ComfyUI server. A live checkpoint smoke
 test on the target ComfyUI installation remains recommended before relying on the
 experimental provider for a full adventure.
+
+# ComfyUI music provider (Experimental)
+
+Adventure scripts can compose background music during play (`tw.music`, see
+[scripting_engine.md](../scripting_engine.md#twmusic-generated-background-music)).
+The music is rendered by a ComfyUI workflow that the admin uploads. Unlike the
+image provider, TaleWeaver does not build this graph: any text-to-audio workflow
+works, for example the ACE-Step templates that ship with ComfyUI.
+
+## Setup
+
+1. In ComfyUI, open a text-to-music template (e.g. *ACE-Step 1.5: Text to Music*),
+   install its models and check that it renders.
+2. Write the placeholder `{{prompt}}` into the prompt/tags text field. Optional
+   placeholders, each in any node input:
+   - `{{negative_prompt}}`: replaced inside text.
+   - `{{seed}}`: a field that holds only the placeholder becomes a number.
+   - `{{duration}}`: seconds; a field that holds only the placeholder (e.g. the
+     `seconds` input of the empty latent audio node) becomes a number.
+   Fields without placeholders keep their exported values.
+3. The workflow must end in a `SaveAudio`, `SaveAudioMP3` or `SaveAudioOpus` node.
+   TaleWeaver downloads the first audio output (FLAC, MP3, WAV, OGG or Opus), or
+   the output of the node set as **Output node ID**.
+4. Export it with **Workflow → Export (API)**. The editor format (with `nodes` and
+   `links`) is rejected.
+5. Open **Admin → Music (Experimental)**, upload the JSON file, enter the ComfyUI
+   server URL, switch music generation on and save. Use **Generate test clip** to
+   render one clip and listen to it.
+
+Placeholders are replaced value by value in the parsed graph, so prompt text can
+never change the graph structure. The limits in the admin section (default and
+maximum length, tracks per play session) cap GPU time. One track renders at a time;
+a timeout deletes only TaleWeaver's own queued job. Private/LAN URLs follow the
+same `ALLOW_PRIVATE_NETWORK_MODELS` policy as images.

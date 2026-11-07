@@ -1,0 +1,140 @@
+"""Session music state (``entity_states["__music__"]``) and the replay of ``tw.music`` ops.
+
+Scripts never generate audio themselves. ``tw.music`` records ordered operations in
+``ScriptChangeset.music_ops``; every changeset applier replays them with ``apply_music_ops``.
+The state only says *what* should play; the generation service
+(``backend.services.music_generation``) renders missing tracks in the background and the
+client plays them once their file exists. Because the state lives in ``entity_states`` it is part
+of every checkpoint.
+
+Shape::
+
+    {
+        "rev": 3,                      # bumped by every op, so clients notice replays
+        "volume": 1.0,                 # script volume 0..1 (multiplied with the player's volume)
+        "now": {"id": "...", "loop": True, "fade": 2.0} | None,   # None = silence
+        "tracks": {"<id>": {"name", "prompt", "negative_prompt", "duration", "seed"}},
+        "library": {"<name>": "<id>"},
+    }
+"""
+
+from __future__ import annotations
+
+import copy
+import re
+from typing import Any, Optional
+
+MUSIC_STATE_KEY = "__music__"
+TRACK_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+MAX_TRACKS = 100
+MAX_PROMPT_CHARS = 1000
+MAX_NAME_CHARS = 64
+MAX_FADE_SECONDS = 30.0
+
+
+def empty_music_state() -> dict[str, Any]:
+    return {"rev": 0, "volume": 1.0, "now": None, "tracks": {}, "library": {}}
+
+
+def read_music_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Return a normalized copy of the session's music state."""
+    raw = (entity_states or {}).get(MUSIC_STATE_KEY)
+    state = empty_music_state()
+    if not isinstance(raw, dict):
+        return state
+    state["rev"] = int(raw.get("rev") or 0)
+    state["volume"] = clamp_volume(raw.get("volume", 1.0))
+    state["tracks"] = {
+        str(k): dict(v)
+        for k, v in (raw.get("tracks") or {}).items()
+        if TRACK_ID_RE.fullmatch(str(k)) and isinstance(v, dict)
+    }
+    state["library"] = {
+        str(k): str(v) for k, v in (raw.get("library") or {}).items() if v in state["tracks"]
+    }
+    now = raw.get("now")
+    if isinstance(now, dict) and now.get("id") in state["tracks"]:
+        state["now"] = dict(now)
+    return state
+
+
+def clamp_volume(value: Any) -> float:
+    try:
+        return min(1.0, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def clamp_fade(value: Any) -> float:
+    try:
+        return min(MAX_FADE_SECONDS, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return 2.0
+
+
+def _now_entry(op: dict[str, Any]) -> dict[str, Any]:
+    return {"id": op["id"], "loop": bool(op.get("loop", True)), "fade": clamp_fade(op.get("fade"))}
+
+
+def _op_generate(state: dict[str, Any], op: dict[str, Any]) -> None:
+    track_id = str(op.get("id") or "")
+    if not TRACK_ID_RE.fullmatch(track_id) or len(state["tracks"]) >= MAX_TRACKS:
+        return
+    state["tracks"][track_id] = {
+        "name": op.get("name"),
+        "prompt": str(op.get("prompt") or "")[:MAX_PROMPT_CHARS],
+        "negative_prompt": str(op.get("negative_prompt") or "")[:MAX_PROMPT_CHARS],
+        "duration": op.get("duration"),
+        "seed": int(op.get("seed") or 0),
+    }
+    if op.get("name"):
+        state["library"][str(op["name"])] = track_id
+    if op.get("play", True):
+        state["now"] = _now_entry(op)
+
+
+def _op_play(state: dict[str, Any], op: dict[str, Any]) -> None:
+    if op.get("id") in state["tracks"]:
+        state["now"] = _now_entry(op)
+
+
+def _op_stop(state: dict[str, Any], op: dict[str, Any]) -> None:
+    del op
+    state["now"] = None
+
+
+def _op_volume(state: dict[str, Any], op: dict[str, Any]) -> None:
+    state["volume"] = clamp_volume(op.get("value"))
+
+
+def _op_forget(state: dict[str, Any], op: dict[str, Any]) -> None:
+    state["library"].pop(str(op.get("name") or ""), None)
+
+
+_OPS = {
+    "generate": _op_generate,
+    "play": _op_play,
+    "stop": _op_stop,
+    "volume": _op_volume,
+    "forget": _op_forget,
+}
+
+
+def apply_music_op_list(state: dict[str, Any], ops: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return a new music state with ``ops`` applied in order (unknown ops are skipped)."""
+    result = copy.deepcopy(state)
+    for op in ops:
+        handler = _OPS.get(str(op.get("op") or ""))
+        if handler is None:
+            continue
+        handler(result, op)
+        result["rev"] = int(result.get("rev") or 0) + 1
+    return result
+
+
+def apply_music_ops(entity_states: dict[str, Any], ops: list[dict[str, Any]]) -> bool:
+    """Replay ``tw.music`` ops into ``entity_states`` in place; True when anything changed."""
+    if not ops:
+        return False
+    entity_states[MUSIC_STATE_KEY] = apply_music_op_list(read_music_state(entity_states), ops)
+    return True

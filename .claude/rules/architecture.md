@@ -126,6 +126,7 @@ graph TD
   * `entity_states`: JSON dictionary recording dynamic per-entity mutations (e.g., current HP, lock states, spatial position, visibility).
   * `avatar.inventory`: Live item list carried by the player.
   * `current_scene_id`: Active player location.
+  * `entity_states["__music__"]`: script music (`tw.music`, `engine/audio/music_state.py`): what should play and the named tracks. `ScriptChangeset.music_ops` are replayed by every changeset applier with `apply_music_ops`. Tracks render in the background (`engine/audio/music_generation.py`, experimental ComfyUI workflow from `server_settings.music_settings`); a track is ready once its file exists in the session's `music/` folder, so background tasks never write session state. `GET /chat` exposes it as `music`. Concept for Lyria and per-scene music: `docs/specs/music_generation.md`.
 * **Exit Resolution Rule**:
   * Always resolve session-scoped exits by preferring session records over template records to respect dynamic in-game unlocking.
 

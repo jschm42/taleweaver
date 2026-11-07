@@ -19,6 +19,7 @@ from backend.engine.scripting.item_ops import ItemMover
 from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
 from backend.engine.scripting.llm_proxy import JsonProxy, LlmAsker, LlmProxy
+from backend.engine.scripting.music_proxy import MusicProxy
 from backend.engine.scripting.npc_clone import NPCCloneManagerMixin, NPCCloneMixin
 from backend.engine.scripting.npc_combat_group import (
     NPCCombatGroupManagerMixin,
@@ -127,6 +128,8 @@ class ScriptChangeset:
     save_requests: list[str] = field(default_factory=list)
     # Ordered tw.time operations, replayed by game_clock.apply_clock_ops.
     clock_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.music operations, replayed by music_state.apply_music_ops.
+    music_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -182,6 +185,7 @@ class ScriptChangeset:
             or self.pending_dialog
             or self.cloned_entities
             or self.clock_ops
+            or self.music_ops
         )
 
 
@@ -1588,6 +1592,7 @@ class GameContext:
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
         sequence_progression_mode: str = "linear",
+        music: Optional[dict[str, Any]] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1643,6 +1648,8 @@ class GameContext:
         self.sequence = self.sequences
         self.dice = DiceProxy()
         self.dialog = DialogProxy(self.changeset, self)
+        # tw.music: the session's music state (music_state.read_music_state), else empty.
+        self.music = MusicProxy(self.changeset, music, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)

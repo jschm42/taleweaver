@@ -6,18 +6,18 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "4931b01f4ba93a7644305de4ee09a8bf84ea9f653b2fd6e4619c7ca0050a4e33",
-      "size": 33904
+      "sha256": "3d733989ca0881b2f0a40be6d84ab06966fcc446eedd6f6a9b2499aa540ca1b5",
+      "size": 34103
     },
     {
       "path": "docs/scripting-enginge.md",
-      "sha256": "7eb991a6d1a510c8fe8e63eab4cc8b06a1c94cadbc8c5994ea3bfa7eba66f668",
-      "size": 112733
+      "sha256": "fccae2c7cdf181125ff68517d75a9e711d3107c885cf0252c565eec13fec8b81",
+      "size": 115923
     },
     {
       "path": "docs/scripting_engine.md",
-      "sha256": "7eb991a6d1a510c8fe8e63eab4cc8b06a1c94cadbc8c5994ea3bfa7eba66f668",
-      "size": 112733
+      "sha256": "fccae2c7cdf181125ff68517d75a9e711d3107c885cf0252c565eec13fec8b81",
+      "size": 115923
     },
     {
       "path": "docs/specs/adventure_format.md",

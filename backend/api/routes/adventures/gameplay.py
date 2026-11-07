@@ -28,6 +28,7 @@ from backend.api.routes.adventures.gameplay_logic import (
     GameTurnManager,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.music_snapshot import build_music_snapshot
 from backend.api.routes.adventures.schemas import (
     ChatRequest,
     ChatResponse,
@@ -216,6 +217,7 @@ async def get_chat_history(
         pending_dialog=None
         if session_status in {"completed", "game_over"}
         else client_dialog(pending_dialog(state.entity_states)),
+        music=await build_music_snapshot(db, state),
     )
 
 

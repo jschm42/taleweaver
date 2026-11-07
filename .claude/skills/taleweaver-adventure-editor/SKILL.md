@@ -103,6 +103,7 @@ fields are rejected (no silent typos).
 
 - Function names must not start with `_` (`Cannot define private function`).
 - `tw.dialog.choose` shows at most 8 options; extra options are silently dropped.
+- `tw.music.generate(prompt, name=...)` only records a request; the track renders in the background (experimental, needs music generation in the admin settings). Name repeating themes: a known name replays the stored track instead of rendering a new one.
 
 ### Referencing exits
 

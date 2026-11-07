@@ -17,7 +17,7 @@ import {
   prependOlderPage,
   visibleServerMessages,
 } from '@/composables/historyWindow'
-import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
+import type { ChatMessage, CharacterSheet, CombatState, MusicSnapshot, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
@@ -73,6 +73,7 @@ export interface UseGameSocket {
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
   pendingDialog: Ref<PendingDialog | null>
+  music: Ref<MusicSnapshot | null>
   promptSuggestions: Ref<string[]>
   worldMemories: Ref<any[]>
   worldRumors: Ref<any[]>
@@ -148,6 +149,7 @@ export function useGameSocket(): UseGameSocket {
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
   const pendingDialog = ref<PendingDialog | null>(null)
+  const music = ref<MusicSnapshot | null>(null)
   const promptSuggestions = ref<string[]>([])
   const worldMemories = ref<any[]>([])
   const worldRumors = ref<any[]>([])
@@ -350,6 +352,9 @@ export function useGameSocket(): UseGameSocket {
     if (data.pending_dialog !== undefined) {
       pendingDialog.value = data.pending_dialog || null
     }
+    if (data.music !== undefined) {
+      music.value = data.music || null
+    }
     if (data.awards !== undefined) {
       awards.value = data.awards || []
     }
@@ -472,6 +477,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked.value = false
     pendingTerminalEpilogue.value = false
     pendingDialog.value = null
+    music.value = null
     promptSuggestions.value = []
     worldMemories.value = []
     worldRumors.value = []
@@ -1109,6 +1115,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked,
     pendingTerminalEpilogue,
     pendingDialog,
+    music,
     promptSuggestions,
     worldMemories,
     worldRumors,

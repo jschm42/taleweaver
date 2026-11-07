@@ -326,6 +326,27 @@ export interface PendingDialog {
   options: DialogOption[]
 }
 
+/** Script music (`tw.music`) of the session, from `GET /chat`. */
+export interface MusicNowPlaying {
+  id: string
+  name?: string | null
+  status: 'pending' | 'ready' | 'failed'
+  url?: string | null
+  error?: string | null
+  loop: boolean
+  /** Cross-fade length in seconds. */
+  fade: number
+}
+
+export interface MusicSnapshot {
+  /** False when the admin switched music generation off or no workflow is set up. */
+  enabled: boolean
+  rev: number
+  /** Script volume 0..1, multiplied with the player's own music volume. */
+  volume: number
+  now: MusicNowPlaying | null
+}
+
 export interface MapNode {
   id: string
   label: string

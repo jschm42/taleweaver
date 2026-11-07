@@ -24,6 +24,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.memories](#twmemories)
    - [tw.game](#twgame)
    - [tw.time (In-Game Clock)](#twtime-in-game-clock)
+   - [tw.music (Generated Background Music)](#twmusic-generated-background-music)
    - [tw.quests](#twquests)
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
@@ -655,6 +656,37 @@ The in-game time is the number of minutes (units for the *units* time system) th
 - A handler with one parameter receives `time_event`: `{"id", "at", "now", "data", "repeats"}`. `on_time_reached` scripts can read the same `time_event` variable.
 
 **When time events fire**: after the narration tick of a player message (after `on_narration_done`), after `/debug time` commands that move the clock, and after `/script` commands that changed the time. A time change inside other scripts (e.g. a dialog choice handler) fires its events at the next of these points. Due events run oldest first; a handler may change the time or register timers again (at most 5 rounds per check). The runtime state (pause, overrides, timers, fired `on_time_reached` scripts) is stored in the session and is part of every save.
+
+### `tw.music` (Generated Background Music)
+> **Experimental.** Needs music generation in **Admin > Music (Experimental)**: switched on, with an uploaded ComfyUI workflow. When it is off, `tw.music` calls are still accepted and stored, but nothing is rendered or played. Concept and roadmap: `docs/specs/music_generation.md` in the repository.
+
+Scripts compose background music on the fly from a text prompt. A call only records the request; the server renders the track in the background (seconds to minutes, one track at a time) and the player's client cross-fades to it once it is ready. Until then, the previous music keeps playing.
+
+**Changing**
+- `tw.music.generate(prompt, name=None, duration=None, play=True, loop=True, negative_prompt="", seed=None, regenerate=False, fade=2.0)`: requests a new track and returns its id (`None` if the prompt is empty or the session already holds 100 tracks). The prompt describes the music, not the scene: genre, instruments, mood, tempo (e.g. `"slow dark ambient, low strings, dripping water, 60 bpm"`). `duration` is in seconds (default and maximum come from the admin settings). With `play=False` the track is rendered in advance and played later.
+- A **name** makes a track reusable: `generate` with a name that already exists plays the stored track instead of rendering a new one (pass `regenerate=True` to render it again). Always name music that comes back, such as scene themes or battle music, so it is rendered once per session.
+- `tw.music.play(name, loop=True, fade=2.0)`: plays a track generated before, by name or id. Returns `False` if there is none.
+- `tw.music.stop(fade=2.0)`: fades the music out.
+- `tw.music.set_volume(value)`: script volume `0..1`, multiplied with the player's own music volume.
+- `tw.music.forget(name)`: drops the name, so the next `generate` with it renders a new track.
+
+**Reading** (includes changes made earlier in the same script)
+- `tw.music.current`: name (or id) of the track that should play now, else `None`.
+- `tw.music.is_playing`: `True` while a track is set to play, also while it is still rendering.
+- `tw.music.has(name)`, `tw.music.tracks` (list of names), `tw.music.volume`.
+
+```python
+# Scene on_enter_scene: each place gets its own theme, rendered only on the first visit.
+tw.music.generate("slow dark ambient, low strings, dripping water, distant choir", name="crypt_theme")
+
+# Sequence on_start_sequence: render the boss music ahead, start it when the fight begins.
+tw.music.generate("epic orchestral battle, taiko drums, brass, 140 bpm", name="boss", play=False)
+
+# Later, e.g. in the boss NPC's on_interact_script:
+tw.music.play("boss")
+```
+
+**Limits and storage**: the admin sets the number of tracks a play session may render (further requests fail and keep the old music). The music state (what plays, the named tracks, the volume) is part of every save; restoring a checkpoint restores the music. The rendered files live in the session folder (`adventures/sessions/<session>/music/`); a track whose file is missing (e.g. after a session import) is rendered again.
 
 ### `tw.quests`
 Directly manipulates adventure quest entries:

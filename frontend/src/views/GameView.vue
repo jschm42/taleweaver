@@ -9,6 +9,7 @@ import { ref, watch, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
+import GameMusicToggle from '@/components/game/GameMusicToggle.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
 import GameOverScreen from '@/components/game/GameOverScreen.vue'
@@ -50,6 +51,7 @@ import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
+import { useGameMusic } from '@/composables/useGameMusic'
 import { useSessionAutoSpeakSettings } from '@/composables/useSessionAutoSpeakSettings'
 import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
 import { useGameInteractionState } from '@/composables/useGameInteractionState'
@@ -240,6 +242,7 @@ const {
   inputLocked,
   pendingTerminalEpilogue,
   pendingDialog,
+  music,
   promptSuggestions,
   worldMemories,
   worldRumors,
@@ -271,6 +274,9 @@ const {
   sequenceTitles,
   loadOlderMessages,
 } = useGameSocket()
+
+const gameMusic = useGameMusic(music)
+const { muted: musicMuted, playerVolume: musicVolume, hasMusic, isGenerating: isMusicGenerating, lastError: musicError } = gameMusic
 const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
 // Scene changes without an exit (script teleport, GM move) get the travel curtain too.
@@ -1898,6 +1904,17 @@ usePlayAgentAutoLoop()
         </button>
       </div>
     </div>
+
+    <GameMusicToggle
+      v-if="hasMusic"
+      class="absolute top-16 right-4 sm:right-6 z-40"
+      :muted="musicMuted"
+      :volume="musicVolume"
+      :generating="isMusicGenerating"
+      :error="musicError"
+      @toggle="gameMusic.toggleMuted()"
+      @volume="gameMusic.setVolume"
+    />
 
     <ImmersiveGameView
       ref="dialogPanel"

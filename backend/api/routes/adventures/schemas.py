@@ -597,6 +597,8 @@ class ChatResponse(BaseModel):
     full_world: Optional[AdventureTemplateDebugResponse] = None
     # Choice dialog opened by a script (tw.dialog.choose) that awaits the player's answer.
     pending_dialog: Optional[dict[str, Any]] = None
+    # Script music (tw.music): what to play now and whether its track is rendered yet.
+    music: Optional[dict[str, Any]] = None
 
 
 class AdventureTemplateImportPayload(BaseModel):
