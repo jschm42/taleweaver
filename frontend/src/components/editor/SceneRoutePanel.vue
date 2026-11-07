@@ -15,6 +15,7 @@ import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
+import SceneMusicSection from '@/components/editor/SceneMusicSection.vue'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -728,6 +729,15 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             </div>
           </div>
         </div>
+
+        <SceneMusicSection
+          v-if="routeSceneDetails"
+          :key="`music-${routeSceneDetails.id}`"
+          :adventure-id="adventureId"
+          :scene-id="String(routeSceneDetails.id)"
+          :music-url="routeSceneDetails?.music_url"
+          @refresh="emit('refresh')"
+        />
       </div>
     </div>
 

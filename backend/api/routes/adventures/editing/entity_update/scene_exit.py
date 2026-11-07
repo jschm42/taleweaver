@@ -100,7 +100,7 @@ def _decorative_objects(values: list[str]) -> list[str] | None:
     return decor[:_MAX_DECORATIVE_OBJECTS] or None
 
 
-def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
+def sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
     """Mirrors the scene scripts into the manifest, adding the scene if the editor created it.
 
     Sessions read init_script and scene helpers from their manifest snapshot, so a scene
@@ -115,6 +115,7 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
         entry = {"id": scene.id, "name": scene.label, "description": scene.description}
         scenes.append(entry)
     entry.update({f: getattr(scene, f) for f in SCENE_SCRIPT_FIELDS})
+    entry["music_url"] = scene.music_url
     manifest["scenes"] = scenes
     adv.original_manifest = manifest
     flag_modified(adv, "original_manifest")
@@ -136,8 +137,10 @@ async def update_scene(
     if given(payload, "decorative_objects"):
         scene.decorative_objects = _decorative_objects(payload.decorative_objects or [])
         flag_modified(scene, "decorative_objects")
+    if given(payload, "music_url"):
+        scene.music_url = (payload.music_url or "").strip() or None
     copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
-    _sync_scene_manifest(adv, scene)
+    sync_scene_manifest(adv, scene)
 
 
 def _update_exit_lock(world_exit: WorldExit, payload: EntityUpdateRequest) -> None:

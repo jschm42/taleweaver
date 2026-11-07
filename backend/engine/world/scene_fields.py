@@ -14,7 +14,14 @@ SCENE_SCRIPT_FIELDS = (
     "on_leave_scene_text",
     "helpers_script",
 )
-SCENE_CONTENT_FIELDS = ("id", "label", "description", "decorative_objects", *SCENE_SCRIPT_FIELDS)
+SCENE_CONTENT_FIELDS = (
+    "id",
+    "label",
+    "description",
+    "music_url",
+    "decorative_objects",
+    *SCENE_SCRIPT_FIELDS,
+)
 
 
 def scene_content(scene: Any) -> dict[str, Any]:

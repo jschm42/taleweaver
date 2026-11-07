@@ -113,6 +113,7 @@ class DialogChoiceResolver:
             "status": "ok",
             "messages": [str(m) for m in messages],
             "continue_story": follow_up,
+            "audio_events": self.manager._pop_pending_audio_events(),
         }
 
     async def _run_after_narration(self, messages: list[Any]) -> bool:

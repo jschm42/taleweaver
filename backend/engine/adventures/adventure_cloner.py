@@ -139,6 +139,8 @@ def clone_manifest_data(
         for item in items:
             if isinstance(item, dict) and "image_url" in item:
                 item["image_url"] = rewrite_asset_url(item.get("image_url"), old_id, new_id)
+            if isinstance(item, dict) and item.get("music_url"):
+                item["music_url"] = rewrite_asset_url(item["music_url"], old_id, new_id)
 
     return manifest
 
@@ -284,6 +286,7 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             label=s.label,
             description=s.description,
             image_url=rewrite_asset_url(s.image_url, old_id, new_id),
+            music_url=rewrite_asset_url(s.music_url, old_id, new_id),
             decorative_objects=(deepcopy(s.decorative_objects) if s.decorative_objects else None),
             on_enter_scene_script=s.on_enter_scene_script,
             on_enter_scene_text=s.on_enter_scene_text,

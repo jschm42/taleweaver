@@ -30,6 +30,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
    - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
+   - [tw.audio & tw.sound (Music & Sound Effects)](#twaudio--twsound-music--sound-effects)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -397,6 +398,7 @@ Inspects and modifies the avatar's state:
 ### `tw.scene`
 Inspects the current scene:
 - `tw.scene.id` *(str)*: ID of the current scene (the target scene once the script called `tw.scene.teleport`).
+- `tw.scene.music_url` *(str)* (alias `tw.scene.music`): URL of the background music file configured or set by scripts for the current scene (`""` when none is set). Assigning `tw.scene.music_url = "..."` updates the scene's persistent `music_url` attribute.
 - `tw.scene.npcs` *(list[NPCProxy])*: All NPCs in the current scene, as the same proxies `tw.npcs.get()` returns. Includes NPCs that are hidden (`.is_hidden`) or defeated (`.is_defeated`) and NPCs moved here earlier in the same script; filter them yourself if needed.
 - `tw.scene.items` *(list[ObjectProxy])*: All objects and items lying in the current scene.
 - `tw.scene.teleport(target_scene_id: str)`: Moves the protagonist directly into another scene, whether or not an exit connects the two. Works in every script, including scene and exit triggers (`on_enter_scene`, `on_leave_scene`, exit scripts). After the call, `tw.scene.id`, `tw.scene.npcs`, `tw.scene.items` and `"current"` targets (e.g. `tw.npcs.move_to_player`) refer to the target scene. A teleport does **not** fire the target scene's `on_enter_scene` or the old scene's `on_leave_scene` script, and no "You have entered" message is shown, so describe the jump yourself (e.g. with `tw.story.direct`). The player sees the travel overlay with the target scene, just like after walking through an exit, whether the teleport happens during a turn or in a script fired by a pickup, a dialog choice or an unlock.
@@ -821,6 +823,22 @@ quiz = tw.llm.ask_json(
 if quiz:
     tw.vars.set("current_quiz", quiz)
     tw.dialog.choose(quiz["question"], quiz["options"], on_choice="on_quiz_answer", speaker="Examiner")
+```
+
+### `tw.audio` & `tw.sound` (Music & Sound Effects)
+
+Controls background music and one-shot sound effects from scripts (`tw.sound` is an alias for `tw.audio`). Audio commands are queued on the script changeset and sent to the client as `audio_events` at the end of the turn.
+
+- `tw.audio.play_music(url: str, loop: bool = True, volume: float = 1.0)`: Plays a background music track from `url`. `loop` defaults to `True`, and `volume` is clamped to `0.0`–`1.0`.
+- `tw.audio.stop_music()`: Stops the currently playing background music.
+- `tw.audio.play_sound(url: str, volume: float = 1.0)`: Plays a one-shot sound effect from `url` (`volume` clamped to `0.0`–`1.0`).
+- `tw.audio.play(url: str, loop: bool = False, volume: float = 1.0)`: Plays an audio file. When `loop=True`, behaves like `play_music()`; when `loop=False` (default), behaves like `play_sound()`.
+- `tw.scene.music_url` *(str)* (alias `tw.scene.music`): Reads or sets the background music URL attribute for the current scene.
+
+```python
+# Play tense boss music and a thunder sound effect
+tw.audio.play_music("/static/audio/boss_theme.mp3", loop=True, volume=0.8)
+tw.audio.play_sound("/static/audio/thunder.mp3", volume=1.0)
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)

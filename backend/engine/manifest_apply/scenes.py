@@ -102,6 +102,7 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                 label=scene.get("name") or scene.get("label") or "Unknown Scene",
                 description=scene.get("description") or "",
                 image_url=image_url,
+                music_url=scene.get("music_url") or None,
                 decorative_objects=clean_decorative_objects(scene.get("decorative_objects"))
                 or None,
                 **{key: scene.get(key) or None for key in SCENE_SCRIPT_FIELDS},

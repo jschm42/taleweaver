@@ -116,6 +116,9 @@ _hook(PROTAGONIST_KEYS, "on_status_change", "on_status_change")
 
 SCENE_KEYS: dict[str, FieldSpec] = {
     "decor": FieldSpec("decorative_objects", text_list),
+    # Background music file or /data/ path played while the player is in the scene.
+    "music": FieldSpec("music_url", text),
+    "music_url": FieldSpec("music_url", text),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
 }

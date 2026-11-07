@@ -468,6 +468,8 @@ class AdventureTemplateSummaryResponse(BaseModel):
     license_url: Optional[str] = None
     language: Optional[str] = None
     image_url: Optional[str] = None
+    # Background music of the scene a new session starts in (None without music).
+    entry_scene_music_url: Optional[str] = None
     is_ready: bool = True
     creation_status: Optional[str] = None
     creation_error: Optional[str] = None

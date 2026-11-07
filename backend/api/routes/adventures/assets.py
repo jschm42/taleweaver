@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.audio_upload import upload_scene_music
 from backend.api.routes.adventures.prompt_enhancer import enhance_image_prompt
 from backend.api.routes.adventures.schemas import (
     EnhancePromptRequest,
@@ -735,3 +736,29 @@ async def upload_visual(
     except Exception:
         logger.exception("Failed to upload visual for %s", template_id)
         raise HTTPException(status_code=500, detail="Visual upload failed.") from None
+
+
+@router.post("/upload-audio")
+async def upload_scene_audio(
+    template_id: str,
+    scene_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Uploads background music (.mp3, .ogg, .wav, max 25 MB) for a scene of the template."""
+    if not template_id or sanitize_path_component(template_id) != template_id:
+        raise HTTPException(status_code=400, detail="Invalid template ID format.")
+
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Adventure template not found")
+
+    try:
+        music_url = await upload_scene_music(db, adv, scene_id, file)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to upload scene audio for %s", template_id)
+        raise HTTPException(status_code=500, detail="Audio upload failed.") from None
+    return {"status": "uploaded", "music_url": music_url}

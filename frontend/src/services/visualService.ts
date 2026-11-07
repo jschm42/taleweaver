@@ -179,6 +179,22 @@ export const visualService = {
     if (!res.ok) throw new Error('Upload failed.')
   },
 
+  /** Uploads background music (.mp3, .ogg, .wav) for a scene; returns the new music_url. */
+  async uploadSceneMusic(adventureId: string, sceneId: string, file: File): Promise<string> {
+    const payload = new FormData()
+    payload.append('scene_id', sceneId)
+    payload.append('file', file)
+
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/visuals/upload-audio`, {
+      method: 'POST',
+      headers: authHeaders(false),
+      body: payload,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || 'Music upload failed.')
+    return String(data.music_url || '')
+  },
+
   getImageDimensions(file: File): Promise<{ width: number; height: number }> {
     const objectUrl = URL.createObjectURL(file)
     return new Promise<{ width: number; height: number }>((resolve, reject) => {

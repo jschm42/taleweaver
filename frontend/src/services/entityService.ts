@@ -38,6 +38,8 @@ export interface EntityEditData {
   is_hidden?: boolean | null
   spatial_position?: string | null
   reveals_item_id?: string | null
+  /** Scenes: background music file (/data URL); an empty string removes it. */
+  music_url?: string
   pickup_trigger_mode?: string
   pickup_trigger_cue?: string
   switch_states?: string[] | null

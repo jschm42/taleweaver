@@ -28,6 +28,7 @@ class WorldScene(Base, TimestampMixin):
     label = Column(String(100), nullable=False)  # Human readable name
     description = Column(String(2000), nullable=False)  # Atmospheric description
     image_url = Column(String(255), nullable=True)  # Scene visual link
+    music_url = Column(String(500), nullable=True)  # Background music file for the scene
     decorative_objects = Column(JSON, nullable=True)  # Static, non-interactable background details
     on_enter_scene_script = Column(String(5000), nullable=True)
     on_enter_scene_text = Column(String(5000), nullable=True)

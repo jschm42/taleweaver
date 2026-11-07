@@ -45,6 +45,7 @@ import { useSheetSkin } from '@/skins/useSheetSkin'
 import { provideDialogSkin } from '@/skins/dialogSkin'
 import WorldMemoriesModal from '@/components/game/WorldMemoriesModal.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
+import { musicService } from '@/services/musicService'
 import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
@@ -457,6 +458,7 @@ const handleDialogChoice = async (index: number): Promise<void> => {
   try {
     const result = await api.chooseDialogOption(props.id, dialog.id, index, language.value)
     continueStory = Boolean(result?.continue_story)
+    if (result?.audio_events?.length) musicService.handleAudioEvents(result.audio_events)
   } catch (error: any) {
     dialogChoiceError.value = error?.message || 'Your choice could not be applied.'
   } finally {

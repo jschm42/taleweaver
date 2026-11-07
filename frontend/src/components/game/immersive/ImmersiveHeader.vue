@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { formatEntityRefs, resolveEntityRefsText } from '@/utils/entityRefs'
 import { configState } from '@/store/config'
 import { audioService } from '@/services/audioService'
+import { musicService } from '@/services/musicService'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { findBableFishLanguage } from '@/components/game/settings/bableFishLanguages'
@@ -20,6 +21,7 @@ import {
   Scroll,
   AudioLines,
   VolumeX,
+  Volume2,
   Sliders,
   LogOut,
   Image as ImageIcon,
@@ -231,6 +233,19 @@ const sequenceOrder = computed(() => {
         aria-label="Stop speech"
       >
         <VolumeX class="w-4 h-4" />
+      </button>
+
+      <!-- Background music mute toggle -->
+      <button
+        type="button"
+        @click="musicService.toggleMute()"
+        class="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900/80 border border-slate-700/60 text-slate-400 hover:text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/10 transition-all shadow-lg active:scale-95 shrink-0 cursor-pointer"
+        :title="musicService.isMuted.value ? 'Unmute Music' : 'Mute Music'"
+        :aria-label="musicService.isMuted.value ? 'Unmute background music' : 'Mute background music'"
+        :aria-pressed="musicService.isMuted.value"
+      >
+        <VolumeX v-if="musicService.isMuted.value" class="w-4 h-4" />
+        <Volume2 v-else class="w-4 h-4" />
       </button>
 
       <!-- Full Scene Artwork Viewer Button -->

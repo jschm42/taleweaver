@@ -81,7 +81,7 @@ fields are rejected (no silent typos).
 
 ### Field mapping of `update` (editor naming)
 
-- **scene**: `name` sets the label; `description`, `decorative_objects`, `on_enter_scene_script/_text`,
+- **scene**: `name` sets the label; `description`, `decorative_objects`, `music_url` (empty clears it), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
   `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,

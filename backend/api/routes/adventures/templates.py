@@ -21,6 +21,7 @@ from backend.api.routes.adventures.manifest_export import (
     normalize_protagonist_items,
     serialize_exit,
 )
+from backend.api.routes.adventures.scene_music import entry_scene_music_urls
 from backend.api.routes.adventures.schemas import (
     AdventureTemplateResponse,
     AdventureTemplateSummaryResponse,
@@ -518,6 +519,7 @@ async def list_templates(
     available_files = scan_available_adventure_files()
     # Cached index only: the list must not wait for the remote library.
     library = LibraryService().peek_library()
+    entry_music = await entry_scene_music_urls(db, [template.id for template in templates])
 
     response = []
     for template in templates:
@@ -537,6 +539,7 @@ async def list_templates(
                 license=template.license,
                 license_url=template.license_url,
                 image_url=template.image_url,
+                entry_scene_music_url=entry_music.get(template.id),
                 is_ready=template.is_ready,
                 creation_status=template.creation_status,
                 creation_error=template.creation_error,

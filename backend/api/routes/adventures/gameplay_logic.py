@@ -366,6 +366,13 @@ class GameTurnManager:
         self._turn_anchor: tuple[Any, Any] | None = None
         # True while the player's message still owes its narration tick (game_clock_flow).
         self.clock_tick_pending = False
+        # tw.audio commands of this message, sent to the client in the final event.
+        self.pending_audio_events: list[dict[str, Any]] = []
+
+    def _pop_pending_audio_events(self) -> list[dict[str, Any]]:
+        """Returns and clears the queued tw.audio commands."""
+        events, self.pending_audio_events = self.pending_audio_events, []
+        return events
 
     def _queue_checkpoint(
         self, reason: str, *, scene_label: str | None = None, label: str | None = None
@@ -792,6 +799,10 @@ class GameTurnManager:
                 ),
                 "entities": await AdventureLogic.build_session_entities(self.db, self.state),
                 "combat": AdventureLogic.get_combat_snapshot(self.state),
+                "music_url": await AdventureLogic.resolve_scene_music(
+                    self.db, self.state, self.state.current_scene_id
+                ),
+                "audio_events": self._pop_pending_audio_events(),
                 **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 "status": "success",
@@ -2250,6 +2261,10 @@ class GameTurnManager:
                 "image_url": await AdventureLogic.resolve_scene_image(
                     self.db, self.state, self.state.current_scene_id
                 ),
+                "music_url": await AdventureLogic.resolve_scene_music(
+                    self.db, self.state, self.state.current_scene_id
+                ),
+                "audio_events": self._pop_pending_audio_events(),
                 "adventure_image": AdventureLogic.resolve_session_asset(
                     self.state, "cover", adventure.image_url if adventure else None
                 ),
@@ -3076,6 +3091,7 @@ class GameTurnManager:
 
         store_pending_dialog(entity_states, changeset.pending_dialog)
         store_gm_directions(entity_states, changeset.gm_directions, changeset.after_narration)
+        self.pending_audio_events.extend(changeset.audio_commands)
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")

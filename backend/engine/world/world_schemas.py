@@ -35,6 +35,10 @@ class WorldSceneSchema(WorldBaseSchema):
     source_asset_id: Optional[str] = Field(
         None, description="Optional source scene ID to reuse an old cover asset image."
     )
+    music_url: Optional[str] = Field(
+        default="",
+        description="Optional background music file or path for the scene (e.g. MP3, OGG, WAV).",
+    )
     decorative_objects: list[str] = Field(
         default=[],
         description="A list of up to 7 simple, non-interactable decorative objects, furniture, or background features present in the scene (e.g. ['metal table', 'faint light fixture']). These are not interactable entities and won't have images/stats, but describe the room better.",
