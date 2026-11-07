@@ -21,6 +21,8 @@ from backend.utils.path_security import validate_provider_url
 MAX_AUDIO_BYTES = 96 * 1024 * 1024
 AUDIO_EXTENSIONS = {"flac", "mp3", "wav", "ogg", "opus"}
 POLL_SECONDS = 1.0
+# Per HTTP request. Queueing the prompt can be slow while ComfyUI loads a model.
+REQUEST_TIMEOUT_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -100,7 +102,13 @@ async def _run(
         raise ValueError("ComfyUI did not return a valid job ID.")
     submitted.append(prompt_id)
     while True:
-        history = await _request_json(client, "GET", f"/history/{prompt_id}")
+        try:
+            history = await _request_json(client, "GET", f"/history/{prompt_id}")
+        except httpx.TimeoutException:
+            # ComfyUI answers slowly while it loads a large model; keep waiting (the overall
+            # generation timeout still applies).
+            await asyncio.sleep(POLL_SECONDS)
+            continue
         found = audio_parameters(history.get(prompt_id) or {}, output_node_id)
         if found:
             parameters, extension = found
@@ -114,7 +122,9 @@ async def render_music(
     """Run the already filled ``graph`` on ComfyUI and return the audio file."""
     url = validate_provider_url(comfyui_url).rstrip("/") + "/"
     submitted: list[str] = []
-    async with httpx.AsyncClient(base_url=url, timeout=30, follow_redirects=False) as client:
+    async with httpx.AsyncClient(
+        base_url=url, timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=False
+    ) as client:
         try:
             return await asyncio.wait_for(_run(client, graph, output_node_id, submitted), timeout)
         except (TimeoutError, asyncio.CancelledError) as exc:

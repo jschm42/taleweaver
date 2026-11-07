@@ -118,7 +118,9 @@ works, for example the ACE-Step templates that ship with ComfyUI.
    `links`) is rejected.
 5. Open **Admin → Music (Experimental)**, upload the JSON file, enter the ComfyUI
    server URL, switch music generation on and save. Use **Generate test clip** to
-   render one clip and listen to it.
+   render one clip and listen to it. The test runs in the background and shows the
+   elapsed time; the first run can take several minutes while ComfyUI loads the
+   model. It is bounded only by the **Timeout** setting (default 900 s).
 
 Placeholders are replaced value by value in the parsed graph, so prompt text can
 never change the graph structure. The limits in the admin section (default and

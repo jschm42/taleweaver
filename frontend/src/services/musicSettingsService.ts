@@ -53,13 +53,28 @@ export const musicSettingsService = {
     return readJson<MusicSettings>(await apiFetch('/settings/music/workflow', { method: 'DELETE' }))
   },
 
-  /** Renders one clip with the stored workflow; resolves when ComfyUI finished. */
-  async test(prompt: string, duration?: number): Promise<{ url: string; bytes: number }> {
+  /** Starts rendering one clip with the stored workflow; poll `testStatus` for the result. */
+  async startTest(prompt: string, duration?: number): Promise<MusicTestRun> {
     const res = await apiFetch('/settings/music/test', {
       method: 'POST',
       includeJson: true,
       body: JSON.stringify({ prompt, duration }),
     })
-    return readJson<{ url: string; bytes: number }>(res)
+    return readJson<MusicTestRun>(res)
   },
+
+  async testStatus(id: string): Promise<MusicTestRun> {
+    return readJson<MusicTestRun>(await apiFetch(`/settings/music/test/${encodeURIComponent(id)}`))
+  },
+}
+
+/** A background test render; it can take minutes while ComfyUI loads the model. */
+export interface MusicTestRun {
+  id: string
+  status: 'running' | 'done' | 'failed'
+  /** Seconds since the run started (until it finished). */
+  elapsed: number
+  url?: string
+  bytes?: number
+  error?: string
 }

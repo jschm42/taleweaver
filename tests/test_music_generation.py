@@ -1,5 +1,6 @@
 """Music generation: settings, ComfyUI workflow filling and transport, tw.music, session state."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -300,3 +301,68 @@ async def test_admin_test_run_without_workflow_is_a_clear_error(auth_client, set
     # Assert
     assert response.status_code == 400
     assert "workflow" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_admin_test_run_renders_in_background_and_is_polled(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    # Arrange
+    from backend.engine.audio import music_test_runs
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    release = asyncio.Event()
+
+    async def slow_render(track, _settings):
+        await release.wait()
+        return b"fLaC", "flac"
+
+    monkeypatch.setattr(music_test_runs, "render_exclusive", slow_render)
+    upload = {"file": ("wf.json", json.dumps(WORKFLOW), "application/json")}
+    await auth_client.post("/api/settings/music/workflow", files=upload)
+
+    # Act
+    started = (await auth_client.post("/api/settings/music/test", json={"prompt": "harp"})).json()
+    running = (await auth_client.get(f"/api/settings/music/test/{started['id']}")).json()
+    release.set()
+    await music_test_runs._tasks[started["id"]]
+    finished = (await auth_client.get(f"/api/settings/music/test/{started['id']}")).json()
+    unknown = await auth_client.get("/api/settings/music/test/0123456789abcdef")
+
+    # Assert
+    assert started["status"] == "running" and running["status"] == "running"
+    assert finished["status"] == "done" and finished["bytes"] == 4
+    assert finished["url"].startswith("/data/scratch/music_test/")
+    assert unknown.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_slow_status_poll_while_loading_model_is_retried(monkeypatch):
+    # Arrange
+    polls = {"count": 0}
+
+    async def handler(request):
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "job-2"})
+        if request.url.path == "/history/job-2":
+            polls["count"] += 1
+            if polls["count"] == 1:
+                raise httpx.ReadTimeout("model loading", request=request)
+            entry = {"filename": "a.flac", "subfolder": "", "type": "output"}
+            return httpx.Response(200, json={"job-2": {"outputs": {"4": {"audio": [entry]}}}})
+        return httpx.Response(200, content=b"fLaC")
+
+    factory = httpx.AsyncClient
+    monkeypatch.setattr(
+        comfyui_music.httpx,
+        "AsyncClient",
+        lambda **kwargs: factory(**kwargs, transport=httpx.MockTransport(handler)),
+    )
+    monkeypatch.setattr(comfyui_music, "POLL_SECONDS", 0)
+    monkeypatch.setattr(settings, "ALLOW_PRIVATE_NETWORK_MODELS", True)
+
+    # Act
+    result = await render_music(WORKFLOW, comfyui_url="http://comfy.example:8188", timeout=10)
+
+    # Assert
+    assert result.data == b"fLaC" and polls["count"] == 2

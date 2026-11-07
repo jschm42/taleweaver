@@ -102,11 +102,16 @@ async def render_track(track: dict[str, Any], settings: dict[str, Any]) -> tuple
     return result.data, result.extension
 
 
+async def render_exclusive(track: dict[str, Any], settings: dict[str, Any]) -> tuple[bytes, str]:
+    """``render_track`` behind the shared lock: one music job at a time on the server."""
+    async with _gpu_lock:
+        return await render_track(track, settings)
+
+
 async def _generate(session_id: str, track_id: str, track: dict, settings: dict) -> None:
     key = f"{session_id}:{track_id}"
     try:
-        async with _gpu_lock:
-            data, extension = await render_track(track, settings)
+        data, extension = await render_exclusive(track, settings)
         _write_track(session_id, track_id, data, extension)
         logger.info("Music track %s of session %s is ready.", track_id, session_id)
     except (ValueError, TimeoutError, OSError) as exc:

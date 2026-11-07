@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import secrets
 from typing import Any, Optional
 
-import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,13 +20,8 @@ from backend.core.music_settings import (
     public_music_settings,
     validate_music_workflow,
 )
-from backend.engine.audio.music_generation import render_track
+from backend.engine.audio.music_test_runs import music_test_status, start_test_run
 from backend.models.user import User
-from backend.utils.path_security import (
-    assert_within_data_dir,
-    local_path_to_data_url,
-    safe_data_path,
-)
 
 router = APIRouter(prefix="/settings/music", tags=["Settings"])
 
@@ -106,23 +99,31 @@ async def delete_music_workflow(
 
 
 @router.post("/test")
-async def test_music_generation(
+async def start_music_test(
     payload: MusicTestPayload,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> dict[str, Any]:
-    """Render one clip with the stored workflow and return its URL (waits for ComfyUI)."""
+    """Start rendering one clip with the stored workflow; poll ``GET /test/{id}`` for the result.
+
+    The render runs in the background because it can take minutes (model loading on the first
+    run), much longer than a browser request may stay open.
+    """
     settings = normalize_music_settings((await read_server_settings(db)).music_settings)
     track = {"prompt": payload.prompt, "duration": payload.duration}
     try:
-        data, extension = await render_track(track, settings)
-    except (ValueError, TimeoutError) as exc:
+        return start_test_run(track, settings)
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"ComfyUI is not reachable: {exc}") from exc
-    folder = safe_data_path("scratch", "music_test")
-    os.makedirs(folder, exist_ok=True)
-    target = assert_within_data_dir(os.path.join(folder, f"{secrets.token_hex(8)}.{extension}"))
-    with open(target, "wb") as handle:
-        handle.write(data)
-    return {"url": local_path_to_data_url(target), "bytes": len(data)}
+
+
+@router.get("/test/{run_id}")
+async def get_music_test(
+    run_id: str = Path(..., pattern=r"^[a-f0-9]{16}$"),
+    _admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    """Status of a test run: running, done (url, bytes) or failed (error); plus elapsed seconds."""
+    status = music_test_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Test run not found (the server restarted?).")
+    return status

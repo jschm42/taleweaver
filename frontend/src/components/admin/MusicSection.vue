@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { musicSettingsService, type MusicSettings } from '@/services/musicSettingsService'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { musicSettingsService, type MusicSettings, type MusicTestRun } from '@/services/musicSettingsService'
+
+const POLL_MS = 2000
 
 const settings = ref<MusicSettings | null>(null)
 const isSaving = ref(false)
 const isTesting = ref(false)
+const testElapsed = ref(0)
+let pollTimer: ReturnType<typeof setInterval> | undefined
 const message = ref('')
 const error = ref('')
 const testPrompt = ref('slow dark ambient, low strings, distant choir, mysterious dungeon')
@@ -72,19 +76,53 @@ async function removeWorkflow(): Promise<void> {
   }
 }
 
+function finishTest(run: MusicTestRun): void {
+  stopPolling()
+  isTesting.value = false
+  if (run.status === 'failed') {
+    report(new Error(`${run.error || 'Music generation failed.'} (after ${run.elapsed} s)`))
+    return
+  }
+  testUrl.value = run.url || ''
+  done(`Test clip rendered in ${run.elapsed} s (${Math.round((run.bytes || 0) / 1024)} KiB).`)
+}
+
+function stopPolling(): void {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = undefined
+}
+
+async function poll(id: string): Promise<void> {
+  try {
+    const run = await musicSettingsService.testStatus(id)
+    testElapsed.value = run.elapsed
+    if (run.status !== 'running') finishTest(run)
+  } catch (err) {
+    // One failed poll (e.g. a slow request) is not fatal; a missing run is.
+    if (err instanceof Error && err.message.includes('not found')) {
+      stopPolling()
+      isTesting.value = false
+      report(err)
+    }
+  }
+}
+
 async function runTest(): Promise<void> {
   isTesting.value = true
   testUrl.value = ''
+  testElapsed.value = 0
+  message.value = ''
+  error.value = ''
   try {
-    const result = await musicSettingsService.test(testPrompt.value, settings.value?.default_duration)
-    testUrl.value = result.url
-    done(`Test clip rendered (${Math.round(result.bytes / 1024)} KiB).`)
+    const run = await musicSettingsService.startTest(testPrompt.value, settings.value?.default_duration)
+    pollTimer = setInterval(() => poll(run.id), POLL_MS)
   } catch (err) {
-    report(err)
-  } finally {
     isTesting.value = false
+    report(err)
   }
 }
+
+onBeforeUnmount(stopPolling)
 </script>
 
 <template>
@@ -180,7 +218,10 @@ async function runTest(): Promise<void> {
 
       <section class="space-y-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
         <h3 class="font-bold text-white">Test run</h3>
-        <p class="text-xs text-slate-500">Renders one clip with the saved workflow. Save your changes first.</p>
+        <p class="text-xs text-slate-500">
+          Renders one clip with the saved workflow. Save your changes first. The first run can take
+          several minutes while ComfyUI loads the model; it is limited by the timeout above.
+        </p>
         <textarea v-model="testPrompt" rows="2" maxlength="1000"
           class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-white"></textarea>
         <div class="flex flex-wrap items-center gap-4">
@@ -190,7 +231,7 @@ async function runTest(): Promise<void> {
             class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-amber-500 disabled:opacity-50"
             @click="runTest"
           >
-            {{ isTesting ? 'Composing…' : 'Generate test clip' }}
+            {{ isTesting ? `Composing… ${testElapsed} s` : 'Generate test clip' }}
           </button>
           <audio v-if="testUrl" :src="testUrl" controls class="h-9"></audio>
         </div>
