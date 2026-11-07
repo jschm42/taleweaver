@@ -351,6 +351,7 @@ async def test_music_library_survives_adz_export_and_import(
             )
         ).scalar_one()
         scene.music_track_id = "calm"
+        (await db.get(AdventureTemplate, "music-export")).title_track_id = "calm"
         await db.commit()
 
         # Act
@@ -375,6 +376,7 @@ async def test_music_library_survives_adz_export_and_import(
     # Assert
     by_id = {t["id"]: t for t in imported.music_tracks}
     assert crypt.music_track_id == "calm"
+    assert imported.title_track_id == "calm"
     assert by_id["PLANNED"]["url"] is None and by_id["PLANNED"]["source"] == "planned"
     assert by_id["calm"]["url"].startswith(f"/data/adventures/library/{imported.id}/")
     with open(tmp_path / by_id["calm"]["url"].removeprefix("/data/"), "rb") as handle:
@@ -411,6 +413,7 @@ def test_world_builder_plans_tracks_and_scenes_reference_them():
     manifest = WorldManifesto.model_json_schema()
     scene = WorldSceneSchema(id="CRYPT", name="Crypt", description="Cold.", music_track_id="DRONE")
     blueprint, missing = analyze_blueprint(
+        "[World]\ntitle_music: DRONE\n"
         "[Music: DRONE] Crypt Drone\nprompt: dark cello drone, 60 bpm\n"
         "[Scene: CRYPT] Crypt\nCold.\nmusic: DRONE\n"
     )
@@ -421,6 +424,8 @@ def test_world_builder_plans_tracks_and_scenes_reference_them():
     assert not [i for i in blueprint.issues if i.severity == "error"] and missing == []
     assert blueprint.first("music").fields["prompt"].value == "dark cello drone, 60 bpm"
     assert blueprint.first("scene").fields["music_track_id"].value == "DRONE"
+    assert blueprint.first("world").fields["title_track_id"].value == "DRONE"
+    assert "title_track_id" in manifest["properties"]
 
 
 def test_blueprint_merge_recreates_dropped_tracks():
@@ -455,3 +460,39 @@ async def test_manifest_apply_merges_tracks_and_keeps_rendered_audio(
     by_id = {t["id"]: t for t in adventure.music_tracks}
     assert by_id["CALM"]["url"] == url and by_id["CALM"]["name"] == "Calm v2"
     assert by_id["NEW"]["source"] == "planned"
+
+
+@pytest.mark.asyncio
+async def test_title_song_is_the_library_tile_preview_and_is_cleared_on_delete(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    # Arrange
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    url = save_library_music("music-adv", "calm", "aa", b"ID3", "mp3")
+    await _seed(await _owner_id(), tracks=[{"id": "calm", "name": "Calm", "url": url}])
+    async with TestSessionLocal() as db:
+        for scene in (await db.execute(select(WorldScene))).scalars():
+            scene.music_track_id = "calm"  # scene music alone must not make the tile play
+        await db.commit()
+    base = "/api/adventures/music-adv/music"
+
+    def tile(templates: list) -> dict:
+        return next(t for t in templates if t["template_id"] == "music-adv")
+
+    # Act
+    no_title = tile((await auth_client.get("/api/adventures/templates")).json())
+    unknown = await auth_client.post(f"{base}/title", json={"track_id": "nope"})
+    await auth_client.post(f"{base}/title", json={"track_id": "calm"})
+    with_title = tile((await auth_client.get("/api/adventures/templates")).json())
+    library = (await auth_client.get(base)).json()
+    await auth_client.delete(f"{base}/tracks/calm")
+    after_delete = tile((await auth_client.get("/api/adventures/templates")).json())
+
+    # Assert
+    assert no_title["preview_music_url"] is None
+    assert unknown.status_code == 404
+    assert with_title["preview_music_url"] == url
+    assert library["title_track_id"] == "calm"
+    assert after_delete["preview_music_url"] is None
+    async with TestSessionLocal() as db:
+        assert (await db.get(AdventureTemplate, "music-adv")).title_track_id is None

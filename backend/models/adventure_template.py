@@ -71,6 +71,8 @@ class AdventureTemplate(Base, TimestampMixin):
     narrator_voice: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # Music library: generated or uploaded tracks that scenes pick (engine/audio/music_library.py).
     music_tracks: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Optional title song: a library track played while the adventure's library tile is hovered.
+    title_track_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Author switch for scene music; script music (tw.music) is not affected.
     music_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"

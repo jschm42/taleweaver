@@ -100,7 +100,7 @@ def _job_overview(template_id: str) -> dict[str, dict[str, Any]]:
 
 
 async def _library(db: AsyncSession, adventure: AdventureTemplate) -> dict[str, Any]:
-    await db.refresh(adventure, ["music_tracks", "music_enabled"])
+    await db.refresh(adventure, ["music_tracks", "music_enabled", "title_track_id"])
     settings = normalize_music_settings((await read_server_settings(db)).music_settings)
     usage: dict[str, list[str]] = {}
     for scene in await template_scenes(db, adventure.id):
@@ -111,6 +111,7 @@ async def _library(db: AsyncSession, adventure: AdventureTemplate) -> dict[str, 
         "scene_usage": usage,
         "jobs": _job_overview(adventure.id),
         "music_enabled": bool(adventure.music_enabled),
+        "title_track_id": adventure.title_track_id,
         "generation": {"enabled": settings["enabled"], "provider": settings["provider"]},
     }
 
@@ -308,6 +309,9 @@ async def delete_track(
 
     await update_tracks(db, template_id, change)
     await release_track(db, adventure, track_id)
+    if adventure.title_track_id == track_id:
+        adventure.title_track_id = None
+        await db.commit()
     return await _library(db, adventure)
 
 
@@ -337,3 +341,19 @@ async def set_scene_track(
     adventure = await _owned_adventure(db, template_id, current_user)
     scene = await assign_scene_track(db, adventure, scene_id, payload.track_id)
     return {"scene_id": scene.id, "music_track_id": scene.music_track_id}
+
+
+@router.post("/title")
+async def set_title_track(
+    template_id: str,
+    payload: SceneTrackPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Choose the title song played on the library tile (``null`` = no title song)."""
+    adventure = await _owned_adventure(db, template_id, current_user)
+    if payload.track_id:
+        require_track(normalize_tracks(adventure.music_tracks, template_id), payload.track_id)
+    adventure.title_track_id = payload.track_id or None
+    await db.commit()
+    return {"title_track_id": adventure.title_track_id}

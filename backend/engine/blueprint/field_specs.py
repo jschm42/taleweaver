@@ -87,6 +87,9 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "intro": FieldSpec("intro_text"),
     "teaser": FieldSpec("teaser"),
     "cover": FieldSpec("cover_appearance"),
+    # Title song: a [Music: ID] track, played as the library tile preview.
+    "title_music": _ref("title_track_id"),
+    "title_song": _ref("title_track_id"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
     "win_guard": _expr("completed_guard_expression"),

@@ -31,6 +31,7 @@ from backend.api.routes.adventures.schemas import (
     TemplateFieldGenerationRequest,
     TemplateFieldGenerationResponse,
 )
+from backend.api.routes.adventures.template_music_preview import title_song_urls
 from backend.api.routes.adventures.template_reset import rebuild_template_world
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
@@ -516,6 +517,7 @@ async def list_templates(
     from backend.services.adventure_library.updates import merge_library_update
 
     available_files = scan_available_adventure_files()
+    music_previews = title_song_urls(templates)
     # Cached index only: the list must not wait for the remote library.
     library = LibraryService().peek_library()
 
@@ -549,6 +551,7 @@ async def list_templates(
                 active_game_id=(game_session.id if game_session else None),
                 has_active_session=(game_session is not None),
                 last_played_at=(game_session.last_played_at if game_session else None),
+                preview_music_url=music_previews.get(template.id),
                 scene_id=(state.current_scene_id if state else None),
                 current_scene_name=(scene_label if scene_label else None),
                 origin_id=template.origin_id,

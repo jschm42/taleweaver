@@ -781,6 +781,13 @@ class WorldManifesto(WorldBaseSchema):
             "audio is rendered later in the editor."
         ),
     )
+    title_track_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the `music_tracks` entry that is the adventure's title song "
+            "(played as a preview in the adventure library). Use empty string for none."
+        ),
+    )
     cover_appearance: str = Field(
         default="",
         description="Comma-separated English visual keywords for the cover image (key motif, setting, colors, mood), max 100 characters.",

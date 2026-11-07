@@ -84,3 +84,9 @@ def track_id_or_none(value: Any) -> Optional[str]:
     """A scene's ``music_track_id`` value: a valid id or None."""
     text = str(value or "").strip()
     return text if TRACK_ID_RE.fullmatch(text) else None
+
+
+def title_track_or_none(value: Any, tracks: Any) -> Optional[str]:
+    """``value`` when it names a track of ``tracks`` (the title song), else None."""
+    track_id = track_id_or_none(value)
+    return track_id if find_track(tracks, track_id) else None

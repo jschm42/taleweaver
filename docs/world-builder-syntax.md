@@ -40,7 +40,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_music`/`title_song` (ID of a `[Music]` track: the title song played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).

@@ -9,7 +9,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 
 from backend.core.ui_theme import normalize_ui_theme
-from backend.engine.audio.music_library import normalize_tracks
+from backend.engine.audio.music_library import normalize_tracks, title_track_or_none
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
@@ -148,6 +148,11 @@ def _apply_music_tracks(ctx: ApplyContext, adventure: AdventureTemplate) -> None
             {**track, "url": existing["url"], "source": existing["source"]} if keep_audio else track
         )
     adventure.music_tracks = list(current.values())  # type: ignore[assignment]
+    title = title_track_or_none(
+        adventure_field(ctx.manifest, "title_track_id"), adventure.music_tracks
+    )
+    if title:
+        adventure.title_track_id = title  # type: ignore[assignment]
 
 
 def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:

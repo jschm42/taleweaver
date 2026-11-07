@@ -30,6 +30,8 @@ export interface MusicLibrary {
   /** track id -> latest render job */
   jobs: Record<string, MusicJob>
   music_enabled: boolean
+  /** Track played on the adventure's library tile; null = no title song. */
+  title_track_id: string | null
   generation: { enabled: boolean; provider: 'comfyui' | 'lyria' }
 }
 
@@ -109,6 +111,11 @@ export const editorMusicService = {
   /** The scene's track; null makes the scene silent (the previous music fades out). */
   async setSceneTrack(adventureId: string, sceneId: string, trackId: string | null): Promise<void> {
     await readJson(await send(`${base(adventureId)}/scenes/${encodeURIComponent(sceneId)}/track`, 'POST', { track_id: trackId }))
+  },
+
+  /** The adventure's title song (library tile preview); null removes it. */
+  async setTitleTrack(adventureId: string, trackId: string | null): Promise<void> {
+    await readJson(await send(`${base(adventureId)}/title`, 'POST', { track_id: trackId }))
   },
 
   /** Author switch for scene music (script music via tw.music is not affected). */

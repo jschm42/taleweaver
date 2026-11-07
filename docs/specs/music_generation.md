@@ -131,16 +131,20 @@ its `music/` folder.
 
 ### Editor (Music tab)
 
-* **Generate**: name, optional **reference scene**, prompt, length. **AI Prompt** asks the small
-  model for a prompt from the adventure's tone, title and teaser plus the reference scene's name and
+* **Generate Track** (header button, or **Generate Variant…** in a track's context menu, which
+  prefills name, prompt and reference scene) opens a modal: name, optional **reference scene**
+  (dropdown with the scenes' thumbnails), prompt, length. **AI Prompt** asks the small model for a
+  prompt from the adventure's tone, title and teaser plus the reference scene's name and
   description (or the plot when no scene is chosen); `ensure_loopable` always appends the
   seamless-loop instruction. Rendering is a background job (`MusicJobs`) the tab polls.
-* **Upload**: MP3, WAV, OGG/Opus, FLAC, M4A up to 50 MB; the type is decided by the file content,
-  the stored name is random.
-* **Table**: play/stop, name and prompt (editable), source, scenes using the track, status
-  (ready, composing with elapsed seconds, failed, no audio), render again, delete (scenes using it
-  become silent).
+* **Upload Track** (header button) opens a modal with a drop zone: MP3, WAV, OGG/Opus, FLAC, M4A
+  up to 50 MB; the type is decided by the file content, the stored name is random.
+* **Table**: play/stop, name and prompt, source, scenes using the track, status (ready,
+  composing with elapsed seconds, failed, no audio). Each row has a context menu ("⋮" or right
+  click): Play, Rename / Edit Prompt, Render Again, Generate Variant…, **Download** (saved as
+  `<track name>.<ext>`), Delete (scenes using it become silent).
 * **Scene dialog**: a dropdown of the library tracks with preview.
+  Components: `components/editor/MusicTab.vue`, `components/editor/music/*`.
 
 All library writes go through `editor_music_tracks.update_tracks` under a per-adventure lock, so a
 finishing render cannot overwrite an edit. Library and scene choices are mirrored into
@@ -159,6 +163,17 @@ The snapshot comes with every `GET /chat` and with the `scene_transition` stream
 music changes on arrival, before the arrival narration. Session scene copies prefer their own
 `music_track_id` and fall back to the template scene, and tracks are read from the live template,
 so newly rendered music reaches running sessions.
+
+### Library preview
+
+Each adventure may name a **title song** (`AdventureTemplate.title_track_id`, a library track;
+set in the Music tab header or a track's context menu, World-Builder `title_track_id`, blueprint
+`[World] title_music: ID`). `GET /adventures/templates` returns it as `preview_music_url`
+(`api/routes/adventures/template_music_preview.py`; only when the file exists). Without a title
+song the tile stays silent; scene music is never used for the preview. Deleting the track clears
+the title song. The tile plays it while the mouse hovers (`composables/useHoverMusicPreview.ts`: one
+shared player, 250 ms delay, fade in/out, mouse only, the in-game music mute and volume apply).
+Browsers allow it only after the first click or key press on the page.
 
 ### Import/export
 
@@ -192,9 +207,12 @@ still being experimental. Only worth it after Phases 1–2 are used.
   prompts across sessions reuse one file (`data/music_cache/`).
 * **Licensing:** exported adventures carry an "AI-generated music (Google Lyria / local model)"
   note in their license block (`adventures/license_defaults`).
-* **Accessibility & player control:** music volume and mute are per player (localStorage
-  today; Phase 2 moves them into the player-owned `User.game_settings` so they follow the user
-  across devices). Music ducks while TTS speaks (`speechWait.ts` already knows when speech plays).
+* **Accessibility & player control:** music volume and mute are per player and set in the
+  in-game settings (**Sound** tab, *Background Music*) or the music toggle; they apply at once
+  and also drive the library hover preview (`store/musicPreferences.ts`, localStorage). Speech
+  plays at full volume, so the default music volume of 50% is about half as loud as the voices.
+  Open: storing them in the player-owned `User.game_settings` so they follow the user across
+  devices, and ducking the music while TTS speaks (`speechWait.ts` knows when speech plays).
 * **Security:** downloaded audio is size-limited (96 MiB), file names are generated
   (`uuid4().hex`), all paths go through `backend.utils.path_security`. Provider URLs use
   `validate_provider_url`.

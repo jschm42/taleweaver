@@ -199,6 +199,7 @@ def _create_cloned_template_entity(
         narrator_voice=deepcopy(original.narrator_voice),
         music_tracks=clone_music_tracks(original.music_tracks, original.id, new_id),
         music_enabled=original.music_enabled,
+        title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
         quests=deepcopy(original.quests) if original.quests else None,

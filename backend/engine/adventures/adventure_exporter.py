@@ -490,6 +490,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "narrator_voice": adv.narrator_voice,
         "music_tracks": deepcopy(adv.music_tracks or []),
         "music_enabled": bool(getattr(adv, "music_enabled", True)),
+        "title_track_id": adv.title_track_id,
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
         "generate_scene_images": adv.generate_scene_images,

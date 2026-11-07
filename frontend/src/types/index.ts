@@ -465,6 +465,8 @@ export interface AdventureTemplateSummary {
   has_active_session?: boolean
   /** Last time the session behind active_game_id was opened. */
   last_played_at?: string | null
+  /** The adventure's title song (optional), played while the library tile is hovered. */
+  preview_music_url?: string | null
   is_paused?: boolean
   scene_id?: string | null
   current_scene_name?: string | null

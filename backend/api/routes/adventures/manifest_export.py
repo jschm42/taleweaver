@@ -41,6 +41,7 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     manifest["narrator_voice"] = adventure.narrator_voice
     manifest["music_tracks"] = adventure.music_tracks or []
     manifest["music_enabled"] = adventure.music_enabled
+    manifest["title_track_id"] = adventure.title_track_id
 
 
 def _register_object(objects: list[dict[str, Any]], obj_dict: Any) -> None:

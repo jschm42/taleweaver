@@ -3,39 +3,21 @@
  *
  * The server decides what should play; this composable only follows it: it cross-fades to a
  * new track once its file is rendered, keeps the previous track while the next one is still
- * generating, and fades out on `tw.music.stop()`. Mute and volume belong to the player and are
- * kept in localStorage.
+ * generating, and fades out on `tw.music.stop()`. Mute and volume belong to the player
+ * (store/musicPreferences, also set in the in-game settings) and apply at once when changed.
  *
  * Looping tracks are not looped by the audio element: shortly before the end a second copy
  * starts and the two cross-fade, because generated clips rarely have a seamless loop point.
  */
-import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, onBeforeUnmount, watch, type ComputedRef, type Ref } from 'vue'
 import type { MusicSnapshot } from '@/types'
+import { musicMuted, musicVolume, setMusicVolume } from '@/store/musicPreferences'
 
-const MUTED_KEY = 'game_music_muted'
-const VOLUME_KEY = 'game_music_volume'
-const DEFAULT_VOLUME = 0.4
 const FADE_STEP_MS = 50
 const STOP_FADE_SECONDS = 2
 /** Cross-fade at the loop point; tracks shorter than three times this loop natively. */
 const LOOP_OVERLAP_SECONDS = 1.5
 const UNLOCK_EVENTS = ['pointerdown', 'keydown'] as const
-
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function writeStored(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    // Storage blocked: the choice lasts for this page view only.
-  }
-}
 
 interface Channel {
   audio: HTMLAudioElement
@@ -80,8 +62,8 @@ export interface GameMusicControls {
 }
 
 export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControls {
-  const muted = ref(readStored(MUTED_KEY) === '1')
-  const playerVolume = ref(Number(readStored(VOLUME_KEY) ?? DEFAULT_VOLUME) || DEFAULT_VOLUME)
+  const muted = musicMuted
+  const playerVolume = musicVolume
   let current: Channel | null = null
   let unlockPending = false
 
@@ -164,9 +146,7 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
     if (!muted.value) startChannel(current, now.fade)
   }
 
-  function toggleMuted(): void {
-    muted.value = !muted.value
-    writeStored(MUTED_KEY, muted.value ? '1' : '0')
+  function applyMuted(): void {
     if (!current) return
     if (muted.value) {
       const channel = current
@@ -176,11 +156,19 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
     startChannel(current, 1)
   }
 
-  function setVolume(value: number): void {
-    playerVolume.value = Math.min(1, Math.max(0, value))
-    writeStored(VOLUME_KEY, String(playerVolume.value))
-    if (current && !muted.value) current.audio.volume = targetVolume()
+  function toggleMuted(): void {
+    muted.value = !muted.value
   }
+
+  function setVolume(value: number): void {
+    setMusicVolume(value)
+  }
+
+  // Mute and volume may also change in the in-game settings.
+  watch(muted, applyMuted)
+  watch(playerVolume, () => {
+    if (current && !muted.value && !current.timer) current.audio.volume = targetVolume()
+  })
 
   watch(
     () => [music.value?.rev, music.value?.now?.status, music.value?.now?.url],

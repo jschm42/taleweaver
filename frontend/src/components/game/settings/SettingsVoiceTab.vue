@@ -4,6 +4,7 @@ import type { AutoSpeakSettings } from '@/types/tts'
 import AutoSpeakChannelTable from './AutoSpeakChannelTable.vue'
 import SettingCard from './SettingCard.vue'
 import SettingToggle from './SettingToggle.vue'
+import MusicVolumeSetting from './MusicVolumeSetting.vue'
 
 const autoSpeech = defineModel<boolean>('autoSpeech', { required: true })
 const autoSpeakSettings = defineModel<AutoSpeakSettings>('autoSpeakSettings', { required: true })
@@ -49,5 +50,7 @@ const props = defineProps<{
         <AutoSpeakChannelTable v-model="autoSpeakSettings" />
       </div>
     </template>
+
+    <MusicVolumeSetting />
   </div>
 </template>
