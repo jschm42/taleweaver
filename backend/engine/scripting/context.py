@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.gm_directions import clean_direction
+from backend.engine.scripting.image_proxy import ImageGenerator, ImageProxy
 from backend.engine.scripting.item_ops import ItemMover
 from backend.engine.scripting.item_proxies import ItemHolderMixin, ItemManagerMixin, ItemOpsMixin
 from backend.engine.scripting.item_transfer import inventory_entry, take_from_inventory
@@ -1148,9 +1149,15 @@ class VarsProxy:
 class StoryProxy:
     """Safe proxy for narrative messages and action rejections."""
 
-    def __init__(self, changeset: ScriptChangeset, is_debug_enabled: bool = False):
+    def __init__(
+        self,
+        changeset: ScriptChangeset,
+        is_debug_enabled: bool = False,
+        image: Optional[ImageProxy] = None,
+    ):
         self._changeset = changeset
         self._is_debug_enabled = is_debug_enabled
+        self._image = image or ImageProxy(None, changeset, is_debug_enabled=is_debug_enabled)
 
     def narrate(self, message: str) -> None:
         """Emits GM narration as if told by the Game Master."""
@@ -1172,6 +1179,21 @@ class StoryProxy:
     def system_message(self, message: str) -> None:
         """Emits a system notification message."""
         self._changeset.system_messages.append(str(message).strip())
+
+    def show_image(self, image_url: str, caption: str = "") -> None:
+        """Shortcut for tw.image.show(). Posts an image to the story feed."""
+        self._image.show(image_url, caption)
+
+    def generate_image(
+        self,
+        prompt: str,
+        model: str = "simple",
+        apply_style: bool = True,
+        show_in_chat: bool = True,
+        caption: str = "",
+    ) -> str:
+        """Shortcut for tw.image.generate(). Returns the image URL or ""."""
+        return self._image.generate(prompt, model, apply_style, show_in_chat, caption)
 
     def system(self, message: str) -> None:
         """Alias for system_message()."""
@@ -1543,6 +1565,7 @@ class GameContext:
         variables: Optional[dict[str, Any]] = None,
         is_debug_enabled: bool = False,
         llm_asker: Optional[LlmAsker] = None,
+        image_generator: Optional[ImageGenerator] = None,
         clock: Optional[dict[str, Any]] = None,
         active_sequence_id: Optional[str] = None,
         sequences: Optional[list[dict[str, Any]]] = None,
@@ -1581,7 +1604,14 @@ class GameContext:
         self.exits = ExitProxy(exit_states or {}, self.changeset)
         self.vars = VarsProxy(raw_vars, self.changeset, story_flags=story_flags)
         self.flags = StoryFlagsProxy(story_flags or {}, self.changeset)
-        self.story = StoryProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
+        # Without a generator (guards, hard rules, session init) tw.image.generate returns "".
+        self.image = ImageProxy(
+            image_generator, self.changeset, is_debug_enabled=self.is_debug_enabled
+        )
+        self.media = self.image
+        self.story = StoryProxy(
+            self.changeset, is_debug_enabled=self.is_debug_enabled, image=self.image
+        )
         self.log = LogProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.console = self.log
         self.memories = MemoriesProxy(self.changeset)
@@ -1622,6 +1652,21 @@ class GameContext:
     def system(self, message: str) -> None:
         """Shortcut for tw.story.system_message(). Emits system notification."""
         self.story.system_message(message)
+
+    def generate_image(
+        self,
+        prompt: str,
+        model: str = "simple",
+        apply_style: bool = True,
+        show_in_chat: bool = True,
+        caption: str = "",
+    ) -> str:
+        """Shortcut for tw.image.generate(). Returns the image URL or ""."""
+        return self.image.generate(prompt, model, apply_style, show_in_chat, caption)
+
+    def show_image(self, image_url: str, caption: str = "") -> None:
+        """Shortcut for tw.image.show(). Posts an image to the story feed."""
+        self.image.show(image_url, caption)
 
     def save(self, label: str = "") -> None:
         """Creates a save state (checkpoint) of the game, e.g. before an important decision."""

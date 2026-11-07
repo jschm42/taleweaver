@@ -118,6 +118,31 @@
   text-shadow: var(--tw-dropcap-shadow);
 }
 
+/* Script image in the story feed (tw.image.show / tw.image.generate, see utils/storyImages.ts). */
+.tw-story-image {
+  display: block;
+  margin: 0.75rem 0;
+  text-align: center;
+}
+
+.tw-story-image__img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 28rem;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 0.35);
+}
+
+.tw-story-image__caption {
+  margin-top: 0.4rem;
+  font-size: 0.85em;
+  font-style: italic;
+  opacity: 0.8;
+}
+
 /* Paragraph break inside rendered text (renderFormattedHtml): less than a full empty line. */
 .tw-para-break {
   display: block;

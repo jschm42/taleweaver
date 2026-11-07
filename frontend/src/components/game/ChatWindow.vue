@@ -12,6 +12,7 @@ import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocke
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { formatEntityRefs } from '@/utils/entityRefs'
+import { extractStoryImages, STORY_IMAGE_ATTRS, STORY_IMAGE_TAGS } from '@/utils/storyImages'
 import { Compass, SendHorizontal, Mic } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -670,16 +671,16 @@ function displayMessageContent(msg: ChatMessage): string {
 }
 
 function renderMessageHtml(text: string, isSystemMessage: boolean): string {
-  const normalized = normalizeLineBreaks(text)
-  const escaped = escapeHtml(normalized)
+  const images = extractStoryImages(normalizeLineBreaks(text))
+  const escaped = escapeHtml(images.tokenized)
   const withVoiceTags = formatVoiceTags(escaped)
   const withBolds = formatBolds(withVoiceTags)
   const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">$1</span>')
   const enriched = isSystemMessage ? colorizeStatNames(withObjectIds) : withObjectIds
 
-  return DOMPurify.sanitize(enriched, {
-    ALLOWED_TAGS: ['span', 'strong', 'img', 'div', 'br'],
-    ALLOWED_ATTR: ['class', 'data-npc-name', 'src', 'alt'],
+  return DOMPurify.sanitize(images.restore(enriched), {
+    ALLOWED_TAGS: ['span', 'strong', 'div', 'br', ...STORY_IMAGE_TAGS],
+    ALLOWED_ATTR: ['data-npc-name', ...STORY_IMAGE_ATTRS],
   })
 }
 

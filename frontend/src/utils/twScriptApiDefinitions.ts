@@ -168,6 +168,8 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'system', kind: 'method', signature: '(text: str)', snippet: 'system("${1:System note}")', doc: 'Emits technical system notification in feed.' },
       { name: 'system_message', kind: 'method', signature: '(text: str)', snippet: 'system_message("${1:System note}")', doc: 'Alias for tw.story.system().' },
       { name: 'log', kind: 'method', signature: '(text: str)', snippet: 'log("${1:Log text}")', doc: 'Appends debug log visible in developer console.' },
+      { name: 'generate_image', kind: 'method', signature: '(prompt: str, model: str = "simple", apply_style: bool = True, show_in_chat: bool = True, caption: str = "") -> str', snippet: 'generate_image("${1:Image prompt}")', doc: 'Shortcut for tw.image.generate(). Generates an image and shows it in the story feed.' },
+      { name: 'show_image', kind: 'method', signature: '(image_url: str, caption: str = "")', snippet: 'show_image("${1:/data/...}")', doc: 'Shortcut for tw.image.show(). Shows an image in the story feed.' },
     ],
   },
   dialog: {
@@ -302,6 +304,17 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'available', kind: 'property', signature: 'bool', doc: 'Whether LLM querying is permitted in current context.' },
     ],
   },
+  image: {
+    name: 'image',
+    doc: 'In-game image generation shown in the story feed (alias tw.media)',
+    items: [
+      { name: 'generate', kind: 'method', signature: '(prompt: str, model: str = "simple", apply_style: bool = True, show_in_chat: bool = True, caption: str = "") -> str', snippet: 'generate("${1:Image prompt}", model="${2:simple}")', doc: 'Generates an image (models: "simple", "hq"/"advanced"); returns the URL or "". apply_style adds the adventure image style.' },
+      { name: 'generate_simple', kind: 'method', signature: '(prompt: str, apply_style: bool = True, show_in_chat: bool = True, caption: str = "") -> str', snippet: 'generate_simple("${1:Image prompt}")', doc: 'Generates an image with the simple (fast) image model.' },
+      { name: 'generate_hq', kind: 'method', signature: '(prompt: str, apply_style: bool = True, show_in_chat: bool = True, caption: str = "") -> str', snippet: 'generate_hq("${1:Image prompt}")', doc: 'Generates an image with the high-quality (advanced) image model.' },
+      { name: 'show', kind: 'method', signature: '(image_url: str, caption: str = "")', snippet: 'show("${1:/data/...}", "${2:Caption}")', doc: 'Shows an existing image (/data/... or http(s) URL) in the story feed.' },
+      { name: 'available', kind: 'property', signature: 'bool', doc: 'Whether image generation is permitted in current context.' },
+    ],
+  },
   json: {
     name: 'json',
     doc: 'Safe sandboxed JSON serialization and validation',
@@ -326,6 +339,7 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
 // Aliases
 TW_NAMESPACES.items = TW_NAMESPACES.objects
 TW_NAMESPACES.console = TW_NAMESPACES.log
+TW_NAMESPACES.media = TW_NAMESPACES.image
 
 /** Top-level members on the `tw` context object itself */
 export const TW_ROOT_ITEMS: TwApiItem[] = [
@@ -350,6 +364,8 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'dice', kind: 'namespace', doc: 'Deterministic pseudo-random dice rolls.' },
   { name: 'memories', kind: 'namespace', doc: 'Episodic memory bank for LLM storytelling context.' },
   { name: 'llm', kind: 'namespace', doc: 'Language model prompts and structured JSON generation.' },
+  { name: 'image', kind: 'namespace', doc: 'In-game image generation shown in the story feed.' },
+  { name: 'media', kind: 'namespace', doc: 'Alias for tw.image.' },
   { name: 'json', kind: 'namespace', doc: 'Safe sandboxed JSON serialization and validation.' },
   { name: 'log', kind: 'namespace', doc: 'Server console logging.' },
   { name: 'console', kind: 'namespace', doc: 'Alias for tw.log.' },
@@ -361,6 +377,8 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'switch', kind: 'method', signature: '(switch_id: str) -> SwitchProxy', snippet: 'switch("${1:SWITCH_ID}")', doc: 'Shortcut for tw.switches.get(switch_id).' },
   { name: 'save', kind: 'method', signature: '(label: str = "")', snippet: 'save("${1:checkpoint}")', doc: 'Creates a checkpoint save state with optional timeline label.' },
   { name: 'debug', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'debug(${1:msg})', doc: 'Emits an in-game debug notification and logs to server.' },
+  { name: 'generate_image', kind: 'method', signature: '(prompt: str, model: str = "simple", apply_style: bool = True, show_in_chat: bool = True, caption: str = "") -> str', snippet: 'generate_image("${1:Image prompt}")', doc: 'Shortcut for tw.image.generate().' },
+  { name: 'show_image', kind: 'method', signature: '(image_url: str, caption: str = "")', snippet: 'show_image("${1:/data/...}")', doc: 'Shortcut for tw.image.show().' },
 ]
 
 /** Common methods/properties on dynamic proxy instances */

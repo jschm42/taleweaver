@@ -30,6 +30,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
    - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
+   - [tw.image & tw.media (In-Game Image Generation)](#twimage--twmedia-in-game-image-generation)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -108,7 +109,7 @@ To ensure player safety and server reliability:
 - **No System Calls or Imports**: Statements like `import`, `from ... import`, `open()`, `eval()`, or `exec()` are rejected at parse time.
 - **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden. Variables starting with an underscore cannot be assigned either; the only exception is the bare throwaway name `_` (e.g. `for item_id, _ in ITEMS:` or `first, _ = pair`).
 - **No Introspection Escapes**: `str.format`, `format_map` and `mro` are blocked (format strings could otherwise walk `{0.__globals__}`), as are frame/generator/code attributes (`f_*`, `gi_*`, `cr_*`, `ag_*`, `tb_*`, `co_*`). Use f-strings or `+` for text.
-- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` does not count against the 2 seconds. Loading the definitions of `init_script` and all helper blocks before a run has its own budget of the same size, so large helper blocks (e.g. dialogue-tree constants) do not eat into the script's steps.
+- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` or `tw.image.generate` does not count against the 2 seconds. Loading the definitions of `init_script` and all helper blocks before a run has its own budget of the same size, so large helper blocks (e.g. dialogue-tree constants) do not eat into the script's steps.
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
 - **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `print`, `range`, `reversed`, `round`, `set`, `sorted`, `str`, `sum`, `tuple`, `zip`. Set literals (`{1, 2, 3}`) and set comprehensions are supported.
 - **Inline conditionals**: `a if condition else b` is supported.
@@ -146,10 +147,14 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **Wearables & Weapons** | `on_equip_script`, `on_equip_text` | Executes when the player equips a WEAPON or WEARABLE. |
 | | `on_unequip_script`, `on_unequip_text` | Executes when the player unequips a WEAPON or WEARABLE. |
 | **Readable Items** | `on_read_script`, `on_read_text` | Executes when the player inspects or reads this item. |
-| **Container Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
+| **Container & Container-Switch Items** | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when attempting to unlock. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this container is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this container fails or is blocked by guard. |
 | | `on_items_added_script`, `..._text` | Executes once after the player put one or more items into this container (container panel → **Put In**, or `/container_put_items`). `added_items` (list of dicts) and `added_item_ids` (list of IDs) are in scope. |
+| | `on_items_removed_script`, `..._text` | Executes once after the player takes or drops one or more items out of this container (`Take`, `Take All`, or `Drop in Scene`). `removed_items` (list of dicts) and `removed_item_ids` (list of IDs) are in scope. |
+| **Switches & Container-Switches** | `gates.expression` *(Guard)* | Deterministic Python boolean condition required for a specific transition. |
+| | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
+| | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
 | **Constructable Recipes** | `craft_guard_expression` *(Guard)* | Optional Python boolean expression evaluated in addition to ingredients. If false, crafting fails. |
 | | `on_craft_success_script`, `..._text` | Executes when this recipe is successfully crafted (its `result_item_ids` are revealed). The script runs with the recipe as its entity. The text replaces the default craft message. |
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
@@ -165,9 +170,6 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `unlock_expression` *(Guard)* | Deterministic Python boolean expression evaluated when unlocking. If false, unlocking fails. |
 | | `on_unlock_success_script`, `..._text` | Executes immediately when this exit is successfully unlocked. |
 | | `on_unlock_failure_script`, `..._text` | Executes when unlocking this exit fails or is blocked by guard. |
-| **Switches** | `gates.expression` *(Guard)* | Deterministic Python boolean condition required for a specific transition. |
-| | `on_success_script` | Executes when any state transition succeeds on this switch (or transition-specific). |
-| | `on_failure_script` | Executes when any state transition fails on this switch (or transition-specific). |
 | **NPC combat** *(metadata)* | `attack_mode: ATTACK_ON_SIGHT` | The NPC starts turn-based combat as soon as the protagonist enters its scene. |
 | | `combat_group`, `assist_mode` (`GROUP` / `ANYONE` / `NEVER`) | Not a trigger: decide which NPCs in the scene join a fight they were not attacked in. NPCs sharing a `combat_group` fight together; NPCs without one are bystanders by default. See [Combat groups](world-builder-syntax.md#npc-id-name). |
 | | `attack_trigger` *(Hard Rules + Guard)* | `required_item_id`, `required_scene_id`, `required_defeated_npc_id`, `guard_expression`: the NPC attacks once when all are met while the protagonist shares its scene. |
@@ -489,16 +491,17 @@ Manages world objects and inventory items. Every world item is held by exactly *
 - `tw.objects.contents(holder_id: str) -> list[ObjectProxy]`: The items held by `"player"`, an NPC or a container.
 - `tw.objects.location(item_id: str) -> dict`: Where an item is: `{"type": "player"|"npc"|"container"|"scene"|"destroyed"|"unknown", "id": "<holder or scene ID>"}`.
 
-**Creating, destroying and hiding items**
+**Creating, destroying, hiding, and locking items**
 - `tw.objects.clone(item_id: str, scene_id: str = None, hidden: bool = None) -> ObjectProxy | None`: Creates a copy of the item with a new ID (`<ID>_1`, `<ID>_2`, ...; cloning a clone counts on from the original). The copy has the original's name, description, image, type, effects and scripts. Without `scene_id` it lies where the original lies when that is a scene, otherwise in the protagonist's scene; `"current"` puts it in the protagonist's scene. It keeps the original's hidden flag unless `hidden` is given. A cloned container starts empty. At most 20 clones per script run; returns `None` for an unknown ID. The copy is a new entity of the current game only (the adventure template is not changed) and is usable right away in the same script.
 - `tw.objects.destroy(item_id: str) -> bool`: Removes the item from the game for good: it leaves its holder and is moved to the internal scene `__DESTROYED__`.
 - `tw.objects.hide(item_id: str)` / `tw.objects.reveal(item_id: str)`: Hides an item until revealed again, or reveals it. A hidden item can also be discovered by searching or by its reveal condition, unless its reveal rule is `script`.
+- `tw.objects.lock(item_id: str) -> bool` / `tw.objects.unlock(item_id: str) -> bool` / `tw.objects.is_locked(item_id: str) -> bool`: Locks or unlocks an item or container, or checks whether it is currently locked. For `CONTAINER` and `CONTAINER_SWITCH` entities, locking prevents opening the container until unlocked. For all other item types, locking makes the item **take-locked**: it remains visible and inspectable in the scene or inside an open container (marked with a lock icon), but the player cannot pick it up until unlocked via `tw.objects.unlock(item_id)` or a switch outcome (`unlock_item`). Moving an item directly into the player's inventory via script (`tw.player.take_item(item_id)` or `tw.objects.add_to_player(item_id)`) automatically unlocks it.
 
 **`ObjectProxy`** (`tw.objects.get(item_id)`):
-- `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.location`
+- `.clone(scene_id=None, hidden=None)`, `.destroy()`, `.is_destroyed`, `.hide()`, `.reveal()`, `.is_hidden`, `.lock()`, `.unlock()`, `.is_locked`, `.location`
 - `.move_to(target)`, `.give_to_player()`, `.put_into(container_id)`, `.move_to_scene(scene_id)`, `.give_to_npc(npc_id)`
-- For containers: `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`
-- For switch items: `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, and `.toggle()`.
+- For containers (`CONTAINER` and `CONTAINER_SWITCH`): `.items` *(list[ObjectProxy])*, `.item_ids` *(list[str])*, `.contains(item_id)`, `.put_item(item_id)`, `.take_item(item_id, to="player")`, `.min_items` *(int | None)*, `.max_items` *(int | None)*, `.is_full` *(bool)*, `.has_min_items` *(bool)*
+- For switch items (`SWITCH` and `CONTAINER_SWITCH`): `.state`, `.switch_state`, `.get_state()`, `.set_state()`, `.is_state()`, `.flip()`, `.toggle()`, `.disabled_states`, `.is_state_enabled(state)`, `.is_state_disabled(state)`, `.enable_state(*states)`, `.disable_state(*states)`, `.set_state_enabled(state, enabled)`, `.status_text`, `.set_status_text(text)`, and `.clear_status_text()`.
 
 ```python
 # Potion dispenser: copy a hidden template potion and hand the copy over
@@ -520,6 +523,9 @@ Inspects and manipulates interactive switches, levers, buttons, and puzzle mecha
 - `tw.switches.is_state(switch_id: str, state: str) -> bool`: Returns `True` if the switch currently matches `state`.
 - `tw.switches.flip(switch_id: str, apply_outcomes: bool = True) -> str`: Cycles or toggles the switch to its next configured state, returning the new state.
 - `tw.switches.toggle(switch_id: str, apply_outcomes: bool = True) -> str`: Alias for `flip()`.
+- `tw.switches.enable_state(switch_id: str, *states: str) -> list[str]` / `tw.switches.disable_state(switch_id: str, *states: str) -> list[str]`: Enables or disables specific switch state buttons on `switch_id` (e.g. `tw.switches.disable_state('MICROWAVE', 'DEFROST', 'COOK')`), returning the updated list of disabled state IDs. Disabled states are shown with a lock icon and cannot be clicked by the player until re-enabled.
+- `tw.switches.is_state_enabled(switch_id: str, state: str) -> bool` / `tw.switches.is_state_disabled(switch_id: str, state: str) -> bool` / `tw.switches.disabled_states(switch_id: str) -> list[str]`: Checks whether a specific state on `switch_id` is enabled/disabled, or returns all currently disabled state IDs.
+- `tw.switches.get_status_text(switch_id: str) -> str` / `tw.switches.set_status_text(switch_id: str, text: str) -> str` / `tw.switches.clear_status_text(switch_id: str) -> str`: Gets, sets, or clears the optional status/hint message displayed inside the switch or container-switch dialog (e.g. `"The microwave needs some electrical power first."`).
 - `tw.switch(switch_id: str) -> SwitchProxy`: Convenience shortcut for `tw.switches.get(switch_id)`.
 
 #### `SwitchProxy` and `ObjectProxy` Switch Attributes
@@ -533,6 +539,11 @@ When interacting with a `SwitchProxy` or an `ObjectProxy` for a switch entity:
 - `.flip(apply_outcomes: bool = True) -> str`: Cycles to the next state in sequence.
 - `.toggle(apply_outcomes: bool = True) -> str`: Alias for `flip()`.
 - `.states` *(list[str])*: List of declared switch state IDs (1-15 characters: `A-Z`, `0-9`, `_`, `-`).
+- `.disabled_states` *(list[str])*: List of currently disabled (locked) state IDs on this switch.
+- `.is_state_enabled(state: str) -> bool` / `.is_state_disabled(state: str) -> bool`: Checks whether `state` is currently enabled or disabled.
+- `.enable_state(*states: str) -> list[str]` / `.disable_state(*states: str) -> list[str]` / `.set_state_enabled(state: str, enabled: bool) -> list[str]`: Enables or disables one or more state IDs on this switch.
+- `.status_text` *(str)*: Gets or sets the status/hint message shown inside the switch or container-switch panel.
+- `.set_status_text(text: str) -> str` / `.clear_status_text() -> str`: Sets or clears the status/hint message.
 - `.initial_state` *(str)*: Configured initial state.
 - `.is_switch` *(bool)*: `True` if the object is a switch.
 
@@ -551,6 +562,7 @@ Injects narrative messages or system notifications into the turn stream:
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`). System messages and narration calls (`narrate`, `narrate_raw`) are rendered in the exact chronological order in which the script executed them.
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
+- `tw.story.generate_image(...)` / `tw.story.show_image(...)`: Shortcuts for `tw.image.generate(...)` and `tw.image.show(...)`, see [tw.image & tw.media](#twimage--twmedia-in-game-image-generation).
 
 ### `tw.save` (Save States)
 - `tw.save(label: str = "")`: Saves the game as a checkpoint, for example right before an important decision. The player can return to it from the **Chronicles Timeline** in the game.
@@ -620,6 +632,43 @@ Directly manipulates adventure quest entries:
 ### `tw.awards`
 Awards achievements to the player's profile:
 - `tw.awards.grant(award_key: str)`: Grants the award, exactly like an award the Game Master grants: it is added to the player's earned awards (once per adventure), the chat shows `Award Achievement: <title>`, a checkpoint is saved, and the game shows the award in a short overlay. The key is matched case-insensitively against the adventure's award keys; an unknown key is ignored (see the server log).
+
+### `tw.sequences` & `tw.sequence`
+Controls adventure story chapters and sequences. In TaleWeaver, **only one sequence can be active at a time** (`state.active_sequence_id`). Both `tw.sequences` and `tw.sequence` provide the same API.
+
+#### Starting & Ending Sequences
+- `tw.sequences.start(sequence_id: str)`: Immediately switches to and activates the specified sequence. Sets it as the active sequence, logs a system notification (`Sequence started: <title>`), and executes the sequence's `on_start_sequence_script` / `on_start_sequence_text` if defined.
+- `tw.sequences.end(sequence_id: Optional[str] = None, advance: bool = True)`: Ends the currently active sequence (or `sequence_id` if specified).
+  - When `advance=True` (default): triggers `on_end_sequence_script` / text, awards sequence completion XP, and advances to the next chapter in order (or completes the adventure if no chapters remain).
+  - When `advance=False`: triggers `on_end_sequence_script` / text, awards sequence completion XP, and clears the active sequence (`active_sequence_id = None`) without advancing.
+- `tw.sequences.complete(sequence_id: Optional[str] = None)`: Convenience alias for `tw.sequences.end(sequence_id, advance=True)`.
+- `tw.sequences.complete_current()`: Convenience alias for `tw.sequences.end(None, advance=True)`.
+- `tw.sequences.advance()`: Advances to the next sequence in the adventure.
+
+#### Determining the Active Sequence
+- `tw.sequences.get_active() -> Optional[dict]`: Returns the dictionary definition of the currently active sequence (e.g. `{"id": "...", "title": "...", "order": 1}`), or `None` if no sequence is active.
+- `tw.sequences.get_active_id() -> Optional[str]`: Returns the ID string of the currently active sequence (e.g. `"CHAPTER_1"`), or `None`.
+- `tw.sequences.is_active(sequence_id: str) -> bool`: Returns `True` if `sequence_id` matches the currently active sequence (case-insensitive).
+- `tw.sequences.is_completed(sequence_id: str) -> bool`: Returns `True` if the specified sequence has already been completed in this playthrough.
+- `tw.sequences.active_id`: Property returning the active sequence ID (or `None`).
+- `tw.sequences.active` / `tw.sequences.current`: Property returning the active sequence dictionary (or `None`).
+- `tw.sequence.id`: Property returning the active sequence ID.
+- `tw.sequence.title`: Property returning the active sequence title.
+- `tw.sequences.all() -> list[dict]`: Returns a list of all sequences defined in the adventure.
+
+```python
+# Check which sequence is active
+if tw.sequences.is_active("HEIST_PHASE"):
+    tw.narrate("Security remains on high alert!")
+
+# Retrieve active sequence properties
+current_id = tw.sequence.id
+if current_id == "RIDDLE_TOWER":
+    tw.sequences.end()  # Complete and advance to next sequence
+
+# Jump directly to a specific sequence
+tw.sequences.start("VAULT_SHOWDOWN")
+```
 
 ### `tw.dice`
 Provides deterministic, seeded random number generation:
@@ -728,6 +777,48 @@ quiz = tw.llm.ask_json(
 if quiz:
     tw.vars.set("current_quiz", quiz)
     tw.dialog.choose(quiz["question"], quiz["options"], on_choice="on_quiz_answer", speaker="Examiner")
+```
+
+### `tw.image` & `tw.media` (In-Game Image Generation)
+
+Scripts can generate an image during play and show it in the story feed. `tw.media` is the same object as `tw.image`.
+
+- `tw.image.generate(prompt, model="simple", apply_style=True, show_in_chat=True, caption="") -> str`: Generates an image with the image model from the player's **Visual Preferences** and returns its URL (`/data/adventures/sessions/<game_id>/script_images/...`), or `""` on failure.
+  - `model="simple"` uses the **simple image model** (`simple_model` / `simple_model_provider` and the `simple_*` quality settings). `model="hq"` uses the **advanced image model** (`advanced_model` / `advanced_model_provider` and the `advanced_*` settings); `"advanced"` is accepted as an alias for `"hq"`. Any other value is a script error.
+  - `apply_style=True` adds the adventure's image style (the first entry of its selected image styles, resolved against the player's style catalog) to the prompt, so the image matches the cover and scene art. Pass `apply_style=False` for a neutral look, e.g. a photo-like document.
+  - `show_in_chat=True` posts the image to the story feed as a Game Master block, with `caption` shown below it. With `show_in_chat=False` only the URL is returned, e.g. to show it later with `tw.image.show(url)` or to keep it in `tw.vars`.
+- `tw.image.generate_simple(prompt, apply_style=True, show_in_chat=True, caption="") -> str`: Same as `generate(prompt, model="simple", ...)`.
+- `tw.image.generate_hq(prompt, apply_style=True, show_in_chat=True, caption="") -> str`: Same as `generate(prompt, model="hq", ...)`.
+- `tw.image.show(image_url, caption="")`: Shows an existing image in the story feed. Only TaleWeaver asset URLs (`/data/...`) and `http(s)://` URLs are accepted; others are skipped (with a `[DEBUG]` note in debug mode).
+- `tw.image.available -> bool`: `False` where images cannot be generated (see below).
+- Shortcuts: `tw.generate_image(...)` and `tw.story.generate_image(...)` call `tw.image.generate(...)`; `tw.show_image(url, caption="")` and `tw.story.show_image(url, caption="")` call `tw.image.show(...)`.
+
+How the image appears: the call adds a line `![caption](url)` to the script's narration. The story feed renders this markdown image syntax as an image block (rounded, scaled to the feed width, limited in height, caption below), in `tw.story.narrate(...)` and `tw.story.narrate_raw(...)` text alike. You can therefore also write `tw.narrate("![The old map](/data/...)")` yourself. Text-to-speech reads only the caption.
+
+Rules and limits:
+
+- **Never raises for provider problems**: when no image model or API key is configured, the provider fails or blocks the prompt, or generation takes longer than **60 seconds**, `generate()` returns `""` and shows nothing. Keep a text fallback: `if not tw.image.generate_simple("A torn map"): tw.narrate("The map is too faded to make out.")`
+- **At most 2 images** per script context (one trigger pass, shared across all `generate*` calls and shortcuts); further calls return `""`. Prompts are cut at 1,500 characters, captions at 200. `show()` has no limit.
+- **Only in scripts run by a chat turn** (soft rules, entity triggers and scripts the turn loop fires). Not available in guard expressions, in the session's `init_script` run, or in scripts fired directly by UI buttons outside a turn; there `generate()` returns `""` without calling the model.
+- **The call blocks** the turn until the image is saved. The player sees the turn spinner and cannot send input meanwhile. Waiting does not count against the script's 2-second time budget. Image generation is slow and may cost money, so use it for key moments, not on every turn.
+- Images are stored in the session's own folder, never in the adventure template.
+- In debug mode, skipped or failed calls show a `[DEBUG]` system message.
+
+```python
+# Object on_examine: show the treasure map once, in the adventure's art style.
+if not tw.vars.get("map_url"):
+    url = tw.image.generate_hq(
+        "An old hand-drawn treasure map of a small island, a red X near a skull-shaped rock",
+        caption="The map from the sea chest",
+    )
+    tw.vars.set("map_url", url)
+    if not url:
+        tw.narrate("The map shows a small island and a red X near a skull-shaped rock.")
+else:
+    tw.image.show(tw.vars.get("map_url"), "The map from the sea chest")
+
+# A quick sketch without the adventure style, kept for later instead of shown right away.
+sketch = tw.media.generate("A pencil sketch of a stranger's face", apply_style=False, show_in_chat=False)
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)
@@ -1241,3 +1332,11 @@ The **World-Builder** prompt at the top of the Adventure Editor can also write i
 - **Syntax check**: every proposed script and guard runs through the sandbox syntax check. Proposals with invalid code are discarded and the reason is shown instead.
 - **Existing logic**: the World-Builder sees the hooks that already exist and reuses their `tw.vars` flags.
 - **Language**: proposal titles, summaries and notes are always English. Narrative texts (descriptions, `..._text` fields) follow the adventure's language setting, or English when none is set, never the language the instruction was typed in.
+
+### Interactive Autocomplete & IntelliSense
+The in-browser CodeMirror Python script editor provides VS Code-style autocomplete for the entire `tw` scripting API:
+- **Namespace Exploration**: Typing `tw.` immediately opens an interactive dropdown listing all available sub-namespaces (`story`, `player`, `npcs`, `objects`, `switches`, `scene`, `exits`, `vars`, `dialog`, `time`, etc.) and top-level shortcuts (`narrate`, `system`, `direct`, `save`, `switch`, `debug`).
+- **Method & Signature Inspection**: Typing a dot after any sub-namespace (e.g. `tw.story.`, `tw.player.`, `tw.switches.`) or chained proxy (`tw.npcs.get(...).`, `tw.switch(...).`) filters available methods and properties, showing parameter signatures, return types, and doc summaries.
+- **Manual Trigger**: Press `Ctrl+Space` anywhere inside the editor to open or refresh completion suggestions.
+- **Smart Call Insertion**: Selecting a method automatically inserts its call syntax (e.g. `narrate()`) and places the cursor between the parentheses when arguments are expected.
+- **Synchronization**: The autocomplete registry (`frontend/src/utils/twScriptApiDefinitions.ts`) is kept in direct sync with the engine backend and this guide.

@@ -4,6 +4,7 @@ import type { ChatMessage } from '@/types'
 import { buildComicPages, type ComicTurn, type DialogueSegment } from './comicPages'
 import { renderEntityRefsHtml } from '@/utils/entityRefs'
 import { extractCodePlaceholders } from '@/utils/codeMarkup'
+import { extractStoryImages, STORY_IMAGE_ATTRS, STORY_IMAGE_TAGS } from '@/utils/storyImages'
 import { attachCueToSpeech } from './comicTagOnlyLines'
 
 export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
@@ -392,11 +393,12 @@ export function parseAssistantContent(
 const PAUSE_TAG = /\s*\[(?:short |medium |long )?pause\]\s*/gi
 const QUOTE_CHARS = /["„“”«»]/
 
-/** Escapes the text and renders voice tags, bold text and object ids as markup. */
+/** Escapes the text and renders voice tags, bold text, object ids and `![caption](url)` images. */
 export function renderFormattedHtml(text: string): string {
   if (!text) return ''
   // Pauses only shape the speech output and are not shown.
-  const { tokenized, restore } = extractCodePlaceholders(text)
+  const images = extractStoryImages(text)
+  const { tokenized, restore } = extractCodePlaceholders(images.tokenized)
   const displayText = normalizeTagSyntax(tokenized).replace(PAUSE_TAG, ' ').trim()
   const escaped = displayText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const withVoiceTags = escaped.replace(/(\[[^\]\n]+\])/g, (match, tag) => {
@@ -412,22 +414,27 @@ export function renderFormattedHtml(text: string): string {
     .replace(/\n{2,}/g, '<span class="tw-para-break"></span>')
     .replace(/\n/g, '<br>')
 
-  return DOMPurify.sanitize(restore(withObjectIds), {
-    ALLOWED_TAGS: ['span', 'strong', 'em', 'br', 'div', 'pre', 'code'],
-    ALLOWED_ATTR: ['class'],
+  return DOMPurify.sanitize(images.restore(restore(withObjectIds)), {
+    ALLOWED_TAGS: ['span', 'strong', 'em', 'br', 'div', 'pre', 'code', ...STORY_IMAGE_TAGS],
+    ALLOWED_ATTR: ['class', ...STORY_IMAGE_ATTRS],
   })
 }
 
-/** Verbatim text (tw.story.narrate_raw): only escaped, line breaks kept, no markup parsing. */
+/** Verbatim text (tw.story.narrate_raw): only escaped, line breaks and `![caption](url)` images kept. */
 export function renderPlainHtml(text: string): string {
   if (!text) return ''
-  return text
+  const images = extractStoryImages(text)
+  const escaped = images.tokenized
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/\n{2,}/g, '<span class="tw-para-break"></span>')
     .replace(/\n/g, '<br>')
+  return DOMPurify.sanitize(images.restore(escaped), {
+    ALLOWED_TAGS: ['span', 'br', ...STORY_IMAGE_TAGS],
+    ALLOWED_ATTR: ['class', ...STORY_IMAGE_ATTRS],
+  })
 }
 
 /**
