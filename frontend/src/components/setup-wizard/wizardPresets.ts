@@ -65,6 +65,8 @@ export const TTS_MODELS: Record<string, { id: string; name: string }[]> = {
     { id: 'eleven_v4_turbo', name: 'Eleven v4 Turbo' },
     { id: 'eleven_multilingual_v2', name: 'Multilingual v2' },
   ],
+  // Free model id, entered in OpenAICompatibleTtsFields.
+  custom_openai: [],
 }
 
 /** Returns the preset for a provider, falling back to the first/last listed models. */

@@ -137,7 +137,11 @@ const handleTestVision = async (payload: any) => {
   )
 }
 
-const handleTestTTS = async () => {
+// The backend tests the saved settings, so the form is saved first; otherwise a provider
+// switched in the form would still be tested with the previous one.
+const handleTestTTS = async (payload: any): Promise<void> => {
+  await settingsService.saveTTSSettings(payload)
+  if (settingsService.statusMessage.value?.type === 'error') return
   await testService.testTTS()
 }
 

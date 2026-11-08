@@ -4,6 +4,8 @@ Use any hosted OpenAI-compatible provider (e.g. OpenRouter, Groq, Together, Deep
 
 Configure OpenAI-compatible endpoints directly within the Intelligence settings cards for Pass 1 (Mechanics), Pass 2 (Narration), Worldbuilder Generator, Autonomous Play Agent, or History Compression. Each pass can either inherit the global base URL or specify its own dedicated endpoint (e.g. `http://localhost:8001/v1` for mechanics and `https://openrouter.ai/api/v1` for narration). Detection is optional: you can detect models from the endpoint's `/models` route or enter any custom model ID manually.
 
+For speech, see [OpenAI-Compatible Speech (TTS)](openai-compatible-tts.md); it uses the same Base URL rules and vault key.
+
 ## Authentication and headers
 
 Store optional API keys in the Provider Vault under **OpenAI-Compatible API Key**. When pointing an OpenAI-compatible endpoint to OpenRouter (`https://openrouter.ai/api/v1`) without a custom OpenAI key, TaleWeaver automatically falls back to your saved OpenRouter vault key. TaleWeaver sends the key as `Authorization: Bearer <key>`. Endpoints that do not require authentication can leave the vault key empty. TaleWeaver sets standard headers for hosted gateways.

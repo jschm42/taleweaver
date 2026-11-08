@@ -25,6 +25,7 @@ from backend.api.routes.settings_normalization import (
 from backend.api.routes.settings_normalization import (
     normalize_tts_settings as _normalize_tts_settings,
 )
+from backend.api.routes.tts_api import test_tts_connection_v2
 from backend.core.api_keys import PersonalKeyRequiredError, has_api_key, resolve_api_key
 from backend.core.auth import get_current_admin, get_current_user
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
@@ -49,6 +50,7 @@ from backend.core.models_config import (
 )
 from backend.core.security import encryption_util
 from backend.core.turn_key_preflight import missing_turn_keys
+from backend.engine.audio.openai_compatible_tts import OPENAI_COMPATIBLE_PROVIDER
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
@@ -564,6 +566,10 @@ class TTSSettingsPayload(BaseModel):
     selected_model: str = "gemini-3.8-flash-tts"
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
+    custom_openai_url: str = Field(default="", max_length=500)
+    custom_openai_voice: str = Field(default="", max_length=200)
+    custom_openai_format: str = Field(default="mp3", max_length=8)
+    custom_openai_instructions: str = Field(default="", max_length=2000)
     use_vocal_tags: bool = True
     use_streaming: bool = False
     auto_speak: bool = True
@@ -1083,10 +1089,15 @@ async def test_tts_connection(
     current_user: User = Depends(get_current_user),
 ):
     """Generates a short test sentence to verify TTS configuration."""
-    user = current_user
-    tts_settings = user.tts_settings or {}
+    provider = str((current_user.tts_settings or {}).get("provider", "google")).lower()
+    if provider == OPENAI_COMPATIBLE_PROVIDER:
+        return await test_tts_connection_v2(db=db, current_user=current_user)
+    return await _test_keyed_tts_provider(current_user, provider)
 
-    provider = tts_settings.get("provider", "google").lower()
+
+async def _test_keyed_tts_provider(user: User, provider: str) -> dict:
+    """Test sentence for the providers that need an API key (Gemini, ElevenLabs)."""
+    tts_settings = user.tts_settings or {}
     api_key = None
     if provider != "qwen":
         try:

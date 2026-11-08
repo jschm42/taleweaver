@@ -156,7 +156,7 @@ Domain logic lives in subpackages; new modules go into the matching one instead 
 | `combat/` | Turn-based combat rules: initiative, special/area attacks, weapons. |
 | `scripting/` | Sandboxed scripting engine and the `tw` API. |
 | `media/` | Image generation, image prompts, BFL payloads. |
-| `audio/` | TTS engine and helpers, voice casting, ElevenLabs. |
+| `audio/` | TTS engine and helpers, voice casting, ElevenLabs, OpenAI-compatible speech servers (`openai_compatible_tts.py`). |
 | `debug_commands/` | `/debug` commands and the debug engine. |
 
 ---

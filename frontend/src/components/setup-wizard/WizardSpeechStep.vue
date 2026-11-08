@@ -4,6 +4,7 @@ import { settingsService } from '@/services/settingsService'
 import { testService } from '@/services/testService'
 import WizardTestResult from './WizardTestResult.vue'
 import ElevenLabsVoiceField from '@/components/common/ElevenLabsVoiceField.vue'
+import OpenAICompatibleTtsFields from '@/components/common/OpenAICompatibleTtsFields.vue'
 import { TTS_MODELS, needsKey, wizardStyles } from './wizardPresets'
 
 const ttsForm = settingsService.ttsForm
@@ -12,6 +13,7 @@ const configuredKeys = computed(() => settingsService.configuredKeys.value)
 const PROVIDERS = [
   { id: 'google', name: 'Google Gemini TTS' },
   { id: 'elevenlabs', name: 'ElevenLabs' },
+  { id: 'custom_openai', name: 'OpenAI-Compatible (local or hosted)' },
 ]
 
 const enabled = ref(ttsForm.value.enabled)
@@ -19,6 +21,11 @@ const provider = ref(ttsForm.value.provider || 'google')
 const model = ref(ttsForm.value.selected_model)
 const voice = ref(ttsForm.value.selected_voice)
 const elevenLabsVoiceId = ref(ttsForm.value.elevenlabs_voice_id)
+const compatUrl = ref(ttsForm.value.custom_openai_url || '')
+const compatVoice = ref(ttsForm.value.custom_openai_voice || '')
+const compatFormat = ref(ttsForm.value.custom_openai_format || 'mp3')
+const compatInstructions = ref(ttsForm.value.custom_openai_instructions || '')
+const isCompatible = computed((): boolean => provider.value === 'custom_openai')
 const errorMessage = ref('')
 
 const models = computed(() => TTS_MODELS[provider.value] ?? [])
@@ -26,6 +33,10 @@ const voices = computed(() => ttsForm.value.voice_catalog)
 const providerNeedsKey = computed((): boolean => needsKey(provider.value, configuredKeys.value))
 
 watch(provider, () => {
+  if (isCompatible.value) {
+    if (/^(gemini-|eleven_)/.test(model.value)) model.value = ''
+    return
+  }
   if (!models.value.some((entry) => entry.id === model.value)) {
     model.value = models.value[0]?.id ?? ''
   }
@@ -37,6 +48,10 @@ async function save(): Promise<boolean> {
     errorMessage.value = 'Choose a narrator voice, or turn narration off.'
     return false
   }
+  if (enabled.value && isCompatible.value && !(compatUrl.value.trim() && model.value.trim())) {
+    errorMessage.value = 'Enter the Base URL and model of the speech server, or turn narration off.'
+    return false
+  }
   await settingsService.saveTTSSettings({
     ...ttsForm.value,
     enabled: enabled.value,
@@ -44,6 +59,10 @@ async function save(): Promise<boolean> {
     selected_model: model.value,
     selected_voice: voice.value,
     elevenlabs_voice_id: elevenLabsVoiceId.value.trim(),
+    custom_openai_url: compatUrl.value.trim(),
+    custom_openai_voice: compatVoice.value.trim(),
+    custom_openai_format: compatFormat.value,
+    custom_openai_instructions: compatInstructions.value.trim(),
   })
   if (settingsService.statusMessage.value?.type === 'error') {
     errorMessage.value = settingsService.statusMessage.value.text
@@ -66,7 +85,7 @@ defineExpose({ save })
     <div>
       <h3 class="text-lg font-black text-white mb-2">Voice narration</h3>
       <p :class="wizardStyles.hint">
-        Optional: let the Game Master read the story aloud. This uses a cloud TTS provider.
+        Optional: let the Game Master read the story aloud, with a cloud provider or any OpenAI-compatible speech server (for example a local Kokoro server).
       </p>
     </div>
 
@@ -85,7 +104,7 @@ defineExpose({ save })
             </option>
           </select>
         </div>
-        <div>
+        <div v-if="!isCompatible">
           <label :class="wizardStyles.label" for="wizard-tts-model">Model</label>
           <select id="wizard-tts-model" v-model="model" :class="wizardStyles.input">
             <option v-for="entry in models" :key="entry.id" :value="entry.id" class="bg-slate-900">
@@ -107,6 +126,17 @@ defineExpose({ save })
           </option>
         </select>
       </div>
+      <OpenAICompatibleTtsFields
+        v-else-if="isCompatible"
+        v-model:base-url="compatUrl"
+        v-model:model="model"
+        v-model:voice="compatVoice"
+        v-model:format="compatFormat"
+        v-model:instructions="compatInstructions"
+        id-prefix="wizard-tts-compat"
+        :input-class="wizardStyles.input"
+        :show-advanced="false"
+      />
       <div v-else>
         <label :class="wizardStyles.label" for="wizard-tts-eleven">Narrator voice</label>
         <ElevenLabsVoiceField v-model="elevenLabsVoiceId" input-id="wizard-tts-eleven" :input-class="wizardStyles.input" />

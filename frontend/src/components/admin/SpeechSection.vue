@@ -2,6 +2,7 @@
 import { ref, watch, computed, onMounted } from 'vue'
 import { api } from '@/composables/useApi'
 import ElevenLabsVoiceField from '@/components/common/ElevenLabsVoiceField.vue'
+import OpenAICompatibleTtsFields from '@/components/common/OpenAICompatibleTtsFields.vue'
 
 const props = defineProps<{
   ttsForm: any
@@ -12,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'save', payload: any): void
-  (e: 'test'): void
+  (e: 'test', payload: any): void
   (e: 'switchSection', section: string): void
 }>()
 
@@ -58,8 +59,12 @@ const vocalTagsSupported = computed(() => {
   return false
 })
 
+const isCompatible = computed((): boolean => localForm.value.provider === 'custom_openai')
+
+// The OpenAI-compatible provider works without a key (local servers), so it never warns.
 const isTtsKeyMissing = computed(() => {
   const provider = localForm.value.provider
+  if (provider === 'custom_openai') return false
   return !props.configuredKeys[provider]
 })
 
@@ -79,6 +84,8 @@ watch(() => localForm.value.provider, (newProvider) => {
     }
   } else if (newProvider === 'google' && !localForm.value.selected_model.startsWith('gemini-')) {
     localForm.value.selected_model = 'gemini-3.8-flash-tts'
+  } else if (newProvider === 'custom_openai' && /^(gemini-|eleven_)/.test(localForm.value.selected_model)) {
+    localForm.value.selected_model = ''
   }
 })
 
@@ -93,7 +100,7 @@ const handleSave = () => {
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-3xl font-extrabold text-white tracking-tight">Speech Generation (TTS)</h1>
-        <p class="text-slate-400 text-sm mt-1">Configure high-quality narration using Gemini models.</p>
+        <p class="text-slate-400 text-sm mt-1">Narration with Gemini, ElevenLabs or any OpenAI-compatible speech server (local or hosted).</p>
       </div>
 
       <button 
@@ -132,7 +139,7 @@ const handleSave = () => {
         <div class="flex items-center gap-6">
           <button 
             v-if="localForm.enabled"
-            @click="emit('test')"
+            @click="emit('test', localForm)"
             :disabled="testResults['tts']?.status === 'loading'"
             class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 text-xs font-bold rounded-lg border border-blue-600/30 transition-all flex items-center gap-2"
           >
@@ -165,6 +172,7 @@ const handleSave = () => {
             <select v-model="localForm.provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
               <option value="google">Google Cloud TTS</option>
               <option value="elevenlabs">ElevenLabs</option>
+              <option value="custom_openai">OpenAI-Compatible (local or hosted)</option>
             </select>
           </div>
           
@@ -191,8 +199,24 @@ const handleSave = () => {
           </template>
         </div>
 
+        <!-- OPENAI-COMPATIBLE SETTINGS -->
+        <div v-if="isCompatible" class="space-y-3">
+          <OpenAICompatibleTtsFields
+            v-model:base-url="localForm.custom_openai_url"
+            v-model:model="localForm.selected_model"
+            v-model:voice="localForm.custom_openai_voice"
+            v-model:format="localForm.custom_openai_format"
+            v-model:instructions="localForm.custom_openai_instructions"
+            id-prefix="admin-tts-compat"
+            input-class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+          <p class="text-[11px] text-slate-500">
+            Everything is read in the narrator voice; vocal tags are removed before synthesis.
+          </p>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
+          <div v-if="!isCompatible" class="space-y-2">
              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                {{ localForm.provider === 'google' ? 'Gemini Model' : 'ElevenLabs Model' }}
              </label>
@@ -205,7 +229,7 @@ const handleSave = () => {
                </template>
              </select>
           </div>
-          <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5" :class="{'opacity-50': !vocalTagsSupported}">
+          <div v-if="!isCompatible" class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5" :class="{'opacity-50': !vocalTagsSupported}">
             <div>
               <div class="text-xs font-bold text-white uppercase tracking-wider">Vocal Tags</div>
               <div class="text-[10px] text-slate-500">

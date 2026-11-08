@@ -14,6 +14,12 @@ from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.global_settings import read_server_settings
 from backend.engine.audio.elevenlabs_voices import load_voice_catalog, looks_like_voice_id
+from backend.engine.audio.openai_compatible_tts import (
+    OPENAI_COMPATIBLE_PROVIDER,
+    SpeechEndpoint,
+    normalize_response_format,
+    resolve_speech_api_key,
+)
 from backend.engine.audio.tts_engine import (
     TTSEngine,
     TTSModelSwitchSuggestionError,
@@ -55,6 +61,7 @@ class ResolvedTTSConfig:
     use_vocal_tags: bool
     use_streaming: bool
     model: str
+    speech_endpoint: Optional[SpeechEndpoint] = None
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -67,6 +74,8 @@ def _coerce_bool(value: Any, default: bool) -> bool:
 
 
 def _resolve_model(provider: str, raw_model: Any) -> str:
+    if provider == OPENAI_COMPATIBLE_PROVIDER:
+        return str(raw_model or "").strip()
     default = DEFAULT_ELEVENLABS_MODEL if provider == "elevenlabs" else DEFAULT_TTS_MODEL
     model = str(raw_model or default).strip()
     model = TTS_MODEL_ALIASES.get(model, model)
@@ -92,6 +101,23 @@ def _resolve_api_key(provider: str, user: User) -> str:
     return api_key
 
 
+def _speech_endpoint(tts_settings: dict, model: str, user: User) -> SpeechEndpoint:
+    """Server, model, voice and (optional) key for the OpenAI-compatible provider."""
+    base_url = str(tts_settings.get("custom_openai_url") or "").strip()
+    try:
+        api_key = resolve_speech_api_key(user.encrypted_api_keys, base_url)
+    except PersonalKeyRequiredError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    return SpeechEndpoint(
+        base_url=base_url,
+        model=model,
+        voice=str(tts_settings.get("custom_openai_voice") or "").strip(),
+        api_key=api_key,
+        response_format=normalize_response_format(tts_settings.get("custom_openai_format")),
+        instructions=str(tts_settings.get("custom_openai_instructions") or "").strip(),
+    )
+
+
 async def _resolve_tts_settings_source(db: AsyncSession) -> ServerSettings:
     """TTS configuration and keys are server-wide."""
     return await read_server_settings(db)
@@ -106,14 +132,18 @@ async def _resolve_tts_config(
     if require_enabled and not _coerce_bool(tts_settings.get("enabled"), False):
         raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
     provider = str(tts_settings.get("provider", "google")).lower()
+    model = _resolve_model(provider, tts_settings.get("selected_model"))
+    is_compatible = provider == OPENAI_COMPATIBLE_PROVIDER
+    endpoint = _speech_endpoint(tts_settings, model, current_user) if is_compatible else None
     return ResolvedTTSConfig(
         provider=provider,
-        api_key=_resolve_api_key(provider, current_user),
+        api_key=endpoint.api_key if endpoint else _resolve_api_key(provider, current_user),
         voice=tts_settings.get("selected_voice", "Puck"),
         elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
         use_vocal_tags=_coerce_bool(tts_settings.get("use_vocal_tags"), True),
         use_streaming=_coerce_bool(tts_settings.get("use_streaming"), False),
-        model=_resolve_model(provider, tts_settings.get("selected_model")),
+        model=model,
+        speech_endpoint=endpoint,
     )
 
 
@@ -289,6 +319,7 @@ async def generate_tts(
             model_name=config.model,
             language=payload.language,
             use_streaming=config.use_streaming,
+            speech_endpoint=config.speech_endpoint,
         )
     except TTSTimeoutError as exc:
         raise HTTPException(
@@ -331,6 +362,7 @@ async def test_tts_connection_v2(
             use_vocal_tags=config.use_vocal_tags,
             api_key=config.api_key,
             model_name=config.model,
+            speech_endpoint=config.speech_endpoint,
         )
     except TTSModelSwitchSuggestionError:
         return {

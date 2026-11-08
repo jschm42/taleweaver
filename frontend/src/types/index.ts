@@ -711,6 +711,22 @@ export interface TtsVoice {
   good_for: string[]
 }
 
+/** Model ids of an OpenAI-compatible speech server (GET {base}/models). */
+export interface SpeechModelList {
+  base_url: string
+  models: string[]
+}
+
+/**
+ * Voices of an OpenAI-compatible speech server. `suggested` = OpenAI's voice names (OpenAI
+ * models only); `none` = no list, leave the voice empty for the model's default voice.
+ */
+export interface SpeechVoiceList {
+  base_url: string
+  source: 'server' | 'model' | 'suggested' | 'none'
+  voices: string[]
+}
+
 export interface TtsVoiceList {
   provider: string
   /** Only ElevenLabs gives characters their own voices; Gemini uses the narrator voice. */

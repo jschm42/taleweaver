@@ -40,6 +40,7 @@ from backend.api.routes import (
     setup_wizard_api,
     stt_api,
     tts_api,
+    tts_openai_compatible_api,
     tts_stream_api,
     users_api,
 )
@@ -210,6 +211,7 @@ app.include_router(leaderboard_api.router, prefix="/api")
 app.include_router(api_keys_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
 app.include_router(tts_stream_api.router, prefix="/api")
+app.include_router(tts_openai_compatible_api.router, prefix="/api")
 app.include_router(stt_api.router, prefix="/api")
 
 

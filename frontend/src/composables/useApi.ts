@@ -19,6 +19,8 @@ import type {
   GeneratorSurprisePresetPayload,
   GeneratorSurprisePresetResponse,
   TtsVoiceList,
+  SpeechModelList,
+  SpeechVoiceList,
   LeaderboardResponse,
   EarnedAward,
 } from '@/types'
@@ -825,6 +827,21 @@ export const api = {
   getTtsVoices(provider?: string): Promise<TtsVoiceList> {
     const query = provider ? `?provider=${encodeURIComponent(provider)}` : ''
     return request(`/tts/voices${query}`, { method: 'GET' })
+  },
+
+  /** Models of the OpenAI-compatible speech server (admin); `baseUrl` checks one before saving. */
+  getSpeechModels(baseUrl?: string): Promise<SpeechModelList> {
+    const query = baseUrl ? `?base_url=${encodeURIComponent(baseUrl)}` : ''
+    return request(`/tts/openai-compatible/models${query}`, { method: 'GET', timeoutMs: 20000 })
+  },
+
+  /** Voices of the OpenAI-compatible speech server for `model` (admin). */
+  getSpeechVoices(baseUrl?: string, model?: string): Promise<SpeechVoiceList> {
+    const params = new URLSearchParams()
+    if (baseUrl) params.set('base_url', baseUrl)
+    if (model) params.set('model', model)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return request(`/tts/openai-compatible/voices${query}`, { method: 'GET', timeoutMs: 20000 })
   },
 
   getElevenLabsModels(): Promise<Array<{ model_id: string, name: string }>> {
