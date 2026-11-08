@@ -44,11 +44,11 @@ function onVolume(event: Event): void {
       <AudioLines v-else class="w-4 h-4" />
     </button>
     <button
-      v-if="playing && !muted"
+      v-if="!muted"
       type="button"
       class="p-1 text-slate-300 hover:text-rose-300 transition-colors"
-      title="Stop the current track (the next track plays again)"
-      aria-label="Stop the current audio track"
+      title="Stop background audio"
+      aria-label="Stop background audio"
       @click.stop="emit('stop')"
     >
       <Square class="w-3.5 h-3.5 fill-current" />

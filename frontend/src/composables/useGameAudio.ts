@@ -163,6 +163,7 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     channel.handedOff = true
     const next = openChannel(channel.url, true)
     current = next
+    isPlaying.value = true
     if (!muted.value) startChannel(next, LOOP_OVERLAP_SECONDS)
     fade(channel, 0, LOOP_OVERLAP_SECONDS, () => release(channel))
   }
@@ -198,6 +199,7 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     stoppedUrl = ''
     if (current?.url === now.url) {
       current.loop = now.loop
+      isPlaying.value = true
       if (!muted.value) fade(current, targetVolume(), 0.5)
       return
     }
@@ -214,9 +216,13 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   }
 
   function stopCurrent(): void {
-    if (!current) return
-    stoppedUrl = current.url
+    stoppedUrl = current?.url || audio.value?.now?.url || ''
     fadeOutCurrent(0.5)
+    for (const ch of Array.from(activeChannels)) {
+      release(ch)
+    }
+    activeChannels.clear()
+    isPlaying.value = false
   }
 
   function applyMuted(): void {
