@@ -1664,6 +1664,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
   speechDeferred: isSceneTransitioning,
+  // tw.audio.stop_speech(): no auto-speech until the player's next action.
+  speechHeld: gameAudio.speechHeld,
   playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
 })
 

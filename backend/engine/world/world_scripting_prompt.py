@@ -201,7 +201,7 @@ TW_API_REFERENCE = (
     "- tw.audio (experimental, only when the server has audio generation on): "
     "generate(prompt, name=None, duration=None, play=True, loop=True) -> track id, "
     "play(name or audio library track id, volume=1.0), stop() (silences scene audio too), "
-    "release() (back to the scene's own audio), stop_speech(fade=0.5) (fades out the TTS), "
+    "release() (back to the scene's own audio), stop_speech(fade=0.5) (fades out the TTS and holds it until the next action), "
     "set_volume(0..1), has(name), current, is_playing. The prompt describes "
     "the audio (genre, instruments, mood, tempo), e.g. 'slow dark ambient, low strings, dripping "
     "water'. Rendering takes seconds to minutes and runs in the background; the old audio keeps "

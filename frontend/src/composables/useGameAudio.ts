@@ -61,6 +61,8 @@ export interface GameAudioControls {
   isPlaying: Ref<boolean>
   toggleMuted: () => void
   setVolume: (value: number) => void
+  /** True after tw.audio.stop_speech() until the player's next action: no auto-speech. */
+  speechHeld: Ref<boolean>
   /** Fade out the current track; it stays off until another track is due. */
   stopCurrent: () => void
   stopAll: () => void
@@ -193,15 +195,19 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   })
 
   // tw.audio.stop_speech(): the first snapshot only sets the baseline, so reloading the page
-  // never replays an old stop request.
+  // never replays an old stop request. Afterwards auto-speech is held until the player acts
+  // again, so the script's own lines (narrate, NPC speech) are not read over the audio.
   let speechStopRev: number | null = null
+  const speechHeld = ref(false)
   watch(
     () => audio.value?.speech_stop?.rev,
     (rev) => {
       if (rev === undefined) return
       const fresh = speechStopRev !== null && rev > speechStopRev
       speechStopRev = rev
-      if (fresh) void audioService.fadeOutAndStop(audio.value?.speech_stop?.fade ?? 0.5)
+      if (!fresh) return
+      speechHeld.value = true
+      void audioService.fadeOutAndStop(audio.value?.speech_stop?.fade ?? 0.5)
     },
     { immediate: true },
   )
@@ -228,6 +234,7 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     isGenerating,
     lastError,
     isPlaying,
+    speechHeld,
     toggleMuted,
     setVolume,
     stopCurrent,
