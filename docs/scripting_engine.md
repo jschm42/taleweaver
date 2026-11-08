@@ -671,6 +671,7 @@ Scripts compose background audio on the fly from a text prompt. A call only reco
 - `tw.audio.play(name, loop=True, fade=2.0, volume=1.0)`: plays a track. `volume` (0..1) applies to this playback only; it multiplies with `tw.audio.set_volume` and the player's own volume. It looks first for a track this session generated (by its `name` or the id `generate` returned), then for a track of the adventure's **audio library** (by the track ID shown in the editor's **Audio** tab, or its exact name). Returns `False` if there is none and shows a script error in the chat (`Script error in 'tw.audio.play': no audio track '...'`), so a typo is visible.
 - `tw.audio.stop(fade=2.0)`: fades all audio out, scene and theme audio too.
 - `tw.audio.release()`: ends the script audio; the current scene's library track plays again.
+- `tw.audio.stop_speech(fade=0.5)`: fades out the text-to-speech that plays right now (`fade` in seconds, 0 to 5) and drops its queued lines, e.g. before a track starts that must not be talked over. During a turn it reaches the player before the turn's narration; combine it with `tw.story.skip_narration()` so that narration does not start new speech. Without speech playing it does nothing.
 - `tw.audio.set_volume(value)`: script volume `0..1`, multiplied with the player's own audio volume.
 - `tw.audio.forget(name)`: drops the name, so the next `generate` with it renders a new track.
 
@@ -703,8 +704,9 @@ tw.audio.play("boss")
 tw.audio.play("CRYPT_THEME")
 
 # A recorded speech at 80% volume that the narration must not talk over:
+tw.audio.stop_speech(fade=0.5)   # end the GM's current speech with a short fade
 tw.audio.play("KINGS_SPEECH", loop=False, volume=0.8)
-tw.story.skip_narration()
+tw.story.skip_narration()        # and no new narration (or TTS) this turn
 
 # After the fight: back to the scene's own audio from the editor.
 tw.audio.release()

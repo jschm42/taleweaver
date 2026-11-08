@@ -38,10 +38,20 @@ MAX_TRACKS = 100
 MAX_PROMPT_CHARS = 1000
 MAX_NAME_CHARS = 64
 MAX_FADE_SECONDS = 30.0
+MAX_SPEECH_FADE_SECONDS = 5.0
 
 
 def empty_audio_state() -> dict[str, Any]:
-    return {"rev": 0, "volume": 1.0, "now": None, "silenced": False, "tracks": {}, "library": {}}
+    return {
+        "rev": 0,
+        "volume": 1.0,
+        "now": None,
+        "silenced": False,
+        "tracks": {},
+        "library": {},
+        # tw.audio.stop_speech(): the client fades out the TTS when ``rev`` changes.
+        "speech_stop": {"rev": 0, "fade": 0.5},
+    }
 
 
 def read_audio_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -54,6 +64,11 @@ def read_audio_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
     state["rev"] = int(raw.get("rev") or 0)
     state["volume"] = clamp_volume(raw.get("volume", 1.0))
     state["silenced"] = bool(raw.get("silenced", False))
+    stop = raw.get("speech_stop") if isinstance(raw.get("speech_stop"), dict) else {}
+    state["speech_stop"] = {
+        "rev": int(stop.get("rev") or 0),
+        "fade": clamp_speech_fade(stop.get("fade", 0.5)),
+    }
     state["tracks"] = {
         str(k): dict(v)
         for k, v in (raw.get("tracks") or {}).items()
@@ -140,6 +155,21 @@ def _op_stop(state: dict[str, Any], op: dict[str, Any]) -> None:
     state["silenced"] = True
 
 
+def clamp_speech_fade(value: Any) -> float:
+    try:
+        return min(MAX_SPEECH_FADE_SECONDS, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.5
+
+
+def _op_stop_speech(state: dict[str, Any], op: dict[str, Any]) -> None:
+    previous = state.get("speech_stop") or {}
+    state["speech_stop"] = {
+        "rev": int(previous.get("rev") or 0) + 1,
+        "fade": clamp_speech_fade(op.get("fade", 0.5)),
+    }
+
+
 def _op_release(state: dict[str, Any], op: dict[str, Any]) -> None:
     del op
     state["now"] = None
@@ -160,6 +190,7 @@ _OPS = {
     "play_library": _op_play_library,
     "stop": _op_stop,
     "release": _op_release,
+    "stop_speech": _op_stop_speech,
     "volume": _op_volume,
     "forget": _op_forget,
 }

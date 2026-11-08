@@ -357,6 +357,8 @@ export interface AudioSnapshot {
   /** Script volume 0..1, multiplied with the player's own audio volume. */
   volume: number
   now: AudioNowPlaying | null
+  /** tw.audio.stop_speech(): fade out the TTS when `rev` changes (`fade` in seconds). */
+  speech_stop?: { rev: number; fade: number }
 }
 
 export interface MapNode {

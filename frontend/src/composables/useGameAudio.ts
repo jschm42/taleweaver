@@ -12,6 +12,7 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { AudioSnapshot } from '@/types'
 import { audioMuted, audioVolume, setAudioVolume } from '@/store/audioPreferences'
+import { audioService } from '@/services/audioService'
 
 const FADE_STEP_MS = 50
 const STOP_FADE_SECONDS = 2
@@ -190,6 +191,20 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   watch(playerVolume, () => {
     if (current && !muted.value && !current.timer) current.audio.volume = targetVolume()
   })
+
+  // tw.audio.stop_speech(): the first snapshot only sets the baseline, so reloading the page
+  // never replays an old stop request.
+  let speechStopRev: number | null = null
+  watch(
+    () => audio.value?.speech_stop?.rev,
+    (rev) => {
+      if (rev === undefined) return
+      const fresh = speechStopRev !== null && rev > speechStopRev
+      speechStopRev = rev
+      if (fresh) void audioService.fadeOutAndStop(audio.value?.speech_stop?.fade ?? 0.5)
+    },
+    { immediate: true },
+  )
 
   watch(
     () => [audio.value?.rev, audio.value?.now?.status, audio.value?.now?.url],

@@ -94,6 +94,7 @@ from backend.api.routes.adventures.interaction_hooks import fire_interact_trigge
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
+from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
 from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.scripting.narration_skip import (
     no_narration,
@@ -1792,6 +1793,8 @@ class GameTurnManager:
                 "world_rumors": self.state.world_rumors or [],
                 "scene_id": self.state.current_scene_id,
                 "sequence_id": self.state.active_sequence_id,
+                # Audio a script started (or speech it stopped) applies before the narration.
+                "audio": await build_audio_snapshot(self.db, self.state, None, self.user),
                 **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 "status": "success",

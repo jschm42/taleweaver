@@ -172,11 +172,13 @@ async def build_audio_snapshot(
     has_library = False
     if now is None and not audio["silenced"]:
         now, has_library = await _scene_audio(db, state)
-    if now is None and not (audio["tracks"] or audio["silenced"] or has_library):
+    speech_stopped = audio["speech_stop"]["rev"] > 0
+    if now is None and not (audio["tracks"] or audio["silenced"] or has_library or speech_stopped):
         return None
     return {
         "enabled": enabled,
         "rev": audio["rev"],
         "volume": audio["volume"],
         "now": now,
+        "speech_stop": audio["speech_stop"],
     }

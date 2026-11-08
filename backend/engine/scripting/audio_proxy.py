@@ -204,6 +204,15 @@ class AudioProxy:
         """Ends script audio; the current scene's library track plays again."""
         self._record({"op": "release"})
 
+    def stop_speech(self, fade: float = 0.5) -> None:
+        """Fades out the text-to-speech that plays now (and drops its queued lines).
+
+        E.g. before a track starts that must not be talked over; combine with
+        ``tw.story.skip_narration()`` so the turn's narration does not start new speech.
+        ``fade`` is in seconds (0..5).
+        """
+        self._record({"op": "stop_speech", "fade": fade})
+
     def set_volume(self, value: float) -> None:
         """Sets the script audio volume 0..1 (multiplied with the player's own volume)."""
         self._record({"op": "volume", "value": clamp_volume(value)})

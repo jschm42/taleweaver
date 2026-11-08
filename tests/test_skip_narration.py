@@ -106,3 +106,50 @@ def test_playback_volume_is_recorded_for_this_playback_only():
         "fade": 2.0,
         "volume": 0.4,
     }
+
+
+def test_stop_speech_requests_count_up_with_a_clamped_fade():
+    # Arrange
+    ctx = GameContext()
+    states: dict = {}
+
+    # Act
+    ctx.audio.stop_speech()
+    ctx.audio.stop_speech(fade=12)
+    apply_audio_ops(states, ctx.changeset.audio_ops)
+
+    # Assert
+    assert read_audio_state(states)["speech_stop"] == {"rev": 2, "fade": 5.0}
+    assert read_audio_state({})["speech_stop"] == {"rev": 0, "fade": 0.5}
+
+
+@pytest.mark.asyncio
+async def test_speech_stop_reaches_the_client_before_the_narration(setup_test_db, monkeypatch):
+    # Arrange
+    llm = MagicMock()
+    llm.aexecute_complex_task = AsyncMock(return_value=GameEvent(narrative_description="Bram."))
+
+    async def stream(*_args, **_kwargs):
+        yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Bram grumbles at you."))])
+
+    llm.stream_simple_task = AsyncMock(side_effect=stream)
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *a, **k: llm
+    )
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+        manager = GameTurnManager(db, "session-1", user)
+        await manager.initialize()
+        await manager._execute_inline_script(
+            "tw.audio.stop_speech(fade=1)", "on_receive_item", "BRAM"
+        )
+        await db.commit()
+
+        # Act
+        events = [event async for event in manager.process_turn("look at Bram")]
+
+    # Assert: the early state event carries the request, ahead of the narration chunks.
+    streamed = "".join(events)
+    state_at = streamed.index('"speech_stop": {"rev": 1, "fade": 1.0}')
+    assert state_at < streamed.index("Bram grumbles at you.")
