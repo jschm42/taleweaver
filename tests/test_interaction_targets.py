@@ -107,3 +107,42 @@ async def test_resolver_merges_reported_ids_and_skips_unreachable_entities():
 
         # Assert
         assert ids == ["TICKING_BOMB", "DOOR_1"]
+
+
+@pytest.mark.asyncio
+async def test_resolver_excludes_unmentioned_npcs_when_object_is_targeted():
+    async with TestSessionLocal() as db:
+        # Arrange: room with an object and an NPC
+        _user, _adv, _avatar, state = await _seed_game_context(db)
+        db.add_all(
+            [
+                WorldEntity(
+                    id="TIME_MACHINE",
+                    session_id=state.session_id,
+                    entity_type="OBJECT",
+                    name="Chronos-5000 Time Machine",
+                    description="A time machine.",
+                    current_scene_id="START",
+                ),
+                WorldEntity(
+                    id="PROF_CHRONOS",
+                    session_id=state.session_id,
+                    entity_type="NPC",
+                    name="Professor Timothy Chronos",
+                    description="A scientist.",
+                    current_scene_id="START",
+                ),
+            ]
+        )
+        await db.commit()
+
+        # Act: player inspects the time machine, but GM updated both PROF_CHRONOS and TIME_MACHINE
+        ids = await interacted_entity_ids(
+            db,
+            state,
+            "Inspect Chronos-5000 Time Machine",
+            ["PROF_CHRONOS", "TIME_MACHINE"],
+        )
+
+        # Assert: Only TIME_MACHINE was interacted with; unmentioned PROF_CHRONOS is excluded
+        assert ids == ["TIME_MACHINE"]
