@@ -17,7 +17,7 @@ import { reactive } from 'vue'
 export const BACKEND_ONLINE_EVENT = 'taleweaver:backend-online'
 
 const HEALTH_URL = '/api/health'
-const PROBE_TIMEOUT_MS = 8000
+const PROBE_TIMEOUT_MS = 10000
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 10000]
 const HEARTBEAT_MS = 30000
 const RESTORED_NOTICE_MS = 3500
@@ -40,6 +40,11 @@ let retryTimer: ReturnType<typeof setTimeout> | undefined
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let restoredTimer: ReturnType<typeof setTimeout> | undefined
 let failedProbes = 0
+let inFlightCount = 0
+
+export function getInFlightCount(): number {
+  return inFlightCount
+}
 
 function isApiRequest(input: RequestInfo | URL): boolean {
   const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -116,6 +121,12 @@ async function runProbe(): Promise<void> {
       }
     }
 
+    // If an API request is actively in flight, the backend is working on it.
+    // A slow or delayed health check while processing a heavy turn/generation must not raise a false offline alarm.
+    if (inFlightCount > 0) {
+      return
+    }
+
     markOffline()
   } finally {
     backendStatus.checking = false
@@ -149,6 +160,10 @@ export function installBackendWatch(): void {
   originalFetch = window.fetch.bind(window)
   const base = originalFetch
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const isApi = isApiRequest(input)
+    if (isApi) {
+      inFlightCount++
+    }
     try {
       const response = await base(input, init)
       observe(input, response)
@@ -163,10 +178,16 @@ export function installBackendWatch(): void {
         observe(input, error)
       }
       throw error
+    } finally {
+      if (isApi) {
+        inFlightCount = Math.max(0, inFlightCount - 1)
+      }
     }
   }
   heartbeatTimer = setInterval(() => {
-    if (backendStatus.online && document.visibilityState === 'visible') void probeBackend()
+    if (backendStatus.online && document.visibilityState === 'visible' && inFlightCount === 0) {
+      void probeBackend()
+    }
   }, HEARTBEAT_MS)
   window.addEventListener('online', () => void probeBackend())
 }
@@ -175,6 +196,7 @@ export function installBackendWatch(): void {
 export function uninstallBackendWatch(): void {
   if (originalFetch) window.fetch = originalFetch
   originalFetch = null
+  inFlightCount = 0
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (retryTimer) clearTimeout(retryTimer)
   if (restoredTimer) clearTimeout(restoredTimer)

@@ -1,7 +1,7 @@
 import { authState } from '@/store/auth'
 
 export const API_BASE = '/api'
-const DEFAULT_API_TIMEOUT_MS = 15000
+const DEFAULT_API_TIMEOUT_MS = 45000
 
 export function authHeaders(includeJson = false): Record<string, string> {
   const headers: Record<string, string> = {

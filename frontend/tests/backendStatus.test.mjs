@@ -7,6 +7,7 @@ import ts from 'typescript'
 const events = []
 let healthy = true
 let apiStatus = 200
+let pendingApiPromise = null
 globalThis.window = {
   location: { href: 'http://localhost:5173/game', origin: 'http://localhost:5173' },
   addEventListener: () => {},
@@ -17,6 +18,9 @@ globalThis.window = {
     if (url.endsWith('/api/health')) {
       if (!healthy) throw new TypeError('Failed to fetch')
       return new Response(JSON.stringify({ status: 'ok' }), { status: 200 })
+    }
+    if (pendingApiPromise) {
+      await pendingApiPromise
     }
     return new Response('{}', { status: apiStatus })
   },
@@ -29,7 +33,7 @@ const js = ts.transpileModule(source, {
 }).outputText
 const tempFile = new URL('./__temp_backendStatus.mjs', import.meta.url)
 writeFileSync(tempFile, js)
-const { backendStatus, installBackendWatch, uninstallBackendWatch, probeBackend, BACKEND_ONLINE_EVENT } =
+const { backendStatus, installBackendWatch, uninstallBackendWatch, probeBackend, getInFlightCount, BACKEND_ONLINE_EVENT } =
   await import(tempFile.href)
 installBackendWatch()
 after(() => {
@@ -76,5 +80,35 @@ test('requests the page cancelled itself are ignored', async () => {
   // No health probe was started for the cancelled request.
   assert.equal(backendStatus.checking, false)
   assert.equal(backendStatus.online, true)
+  healthy = true
+})
+
+test('active in-flight requests prevent false-positive offline marking while probe is delayed', async () => {
+  assert.equal(backendStatus.online, true)
+  healthy = false
+  apiStatus = 200
+
+  let finishInFlightRequest
+  pendingApiPromise = new Promise((resolve) => {
+    finishInFlightRequest = resolve
+  })
+
+  // Start an in-flight API request that is taking longer
+  const fetchPromise = window.fetch('/api/adventures/slow/chat')
+
+  // In-flight count should be 1
+  assert.equal(getInFlightCount(), 1)
+
+  // A background probe triggers while the request is in flight and health check fails
+  await probeBackend()
+
+  // Must NOT mark the backend offline because an API request is actively in flight
+  assert.equal(backendStatus.online, true)
+
+  // Finish the in-flight request
+  finishInFlightRequest()
+  pendingApiPromise = null
+  await fetchPromise
+  assert.equal(getInFlightCount(), 0)
   healthy = true
 })

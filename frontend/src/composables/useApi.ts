@@ -88,6 +88,8 @@ export interface PlayerSessionPage {
 }
 
 export type KeyPolicy = 'server' | 'user_optional' | 'user_required' | 'disabled'
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 45000
 export type KeySource = 'server' | 'personal' | 'missing' | 'disabled'
 export type KeyPolicyMap = Record<string, KeyPolicy>
 
@@ -212,7 +214,7 @@ async function request<T>(path: string, init?: ApiFetchInit): Promise<T> {
     const res = await apiFetch(path, {
       ...init,
       headers,
-      timeoutMs: init?.timeoutMs ?? 20000,
+      timeoutMs: init?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     })
     
     // If we get here, the server at least responded
@@ -271,7 +273,7 @@ async function requestBlob(path: string, init?: ApiFetchInit): Promise<Blob> {
     const res = await apiFetch(path, {
       ...init,
       headers,
-      timeoutMs: init?.timeoutMs ?? 20000,
+      timeoutMs: init?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     })
     
     configState.isBackendReachable = true
@@ -614,12 +616,12 @@ export const api = {
 
   /** Creates a new adventure and returns the generated IDs. */
   createAdventure(payload: CreateAdventurePayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
-    return request('/adventures/', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/adventures/', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 180000 })
   },
 
   /** Checks the Story Idea blueprint tags (syntax, scripts, references) before generation. */
   validateStoryBlueprint(text: string): Promise<BlueprintValidationResult> {
-    return request('/adventures/blueprint/validate', { method: 'POST', body: JSON.stringify({ text }) })
+    return request('/adventures/blueprint/validate', { method: 'POST', body: JSON.stringify({ text }), timeoutMs: 60000 })
   },
 
   /** Generates or improves title and story idea from user input. */
@@ -643,7 +645,7 @@ export const api = {
 
   /** Import an adventure JSON payload (parsed .adv) and open creation flow on the server. */
   importAdventure(payload: AdventureImportPayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
-    return request('/adventures/import', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/adventures/import', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 120000 })
   },
 
   /** Duplicates an existing adventure template and its world blueprint. */
@@ -1013,7 +1015,7 @@ export const api = {
   },
 
   generateMyBio(): Promise<{ bio: string }> {
-    return request('/users/me/bio/generate', { method: 'POST' })
+    return request('/users/me/bio/generate', { method: 'POST', timeoutMs: 60000 })
   },
 
   async generateMyProfileImage(bio?: string): Promise<any> {
