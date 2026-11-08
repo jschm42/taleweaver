@@ -35,7 +35,7 @@ from backend.models.world_entity import WorldScene
 from backend.utils.path_security import data_url_to_local_path
 
 LIMIT_MESSAGE = "This session reached its audio generation limit."
-SCENE_FADE_SECONDS = 3.0
+SCENE_FADE_SECONDS = 1.0
 
 
 def _start_missing_tracks(

@@ -24,10 +24,15 @@ interface Channel {
   audio: HTMLAudioElement
   url: string
   loop: boolean
+  cancelled?: boolean
   /** True once the next loop copy took over (only one hand-off per channel). */
   handedOff?: boolean
   timer?: ReturnType<typeof setInterval>
+  onTimeUpdate?: () => void
+  onLoadedMetadata?: () => void
 }
+
+const activeChannels = new Set<Channel>()
 
 function fade(channel: Channel, target: number, seconds: number, onDone?: () => void): void {
   if (channel.timer) clearInterval(channel.timer)
@@ -46,9 +51,22 @@ function fade(channel: Channel, target: number, seconds: number, onDone?: () => 
 }
 
 function release(channel: Channel): void {
-  if (channel.timer) clearInterval(channel.timer)
+  channel.cancelled = true
+  if (channel.timer) {
+    clearInterval(channel.timer)
+    channel.timer = undefined
+  }
+  if (channel.onTimeUpdate) {
+    channel.audio.removeEventListener('timeupdate', channel.onTimeUpdate)
+    channel.onTimeUpdate = undefined
+  }
+  if (channel.onLoadedMetadata) {
+    channel.audio.removeEventListener('loadedmetadata', channel.onLoadedMetadata)
+    channel.onLoadedMetadata = undefined
+  }
   channel.audio.pause()
   channel.audio.src = ''
+  activeChannels.delete(channel)
 }
 
 export interface GameAudioControls {
@@ -95,8 +113,16 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     try {
       await channel.audio.play()
       removeUnlock()
+      if (channel.cancelled || channel !== current) {
+        release(channel)
+        return
+      }
       fade(channel, targetVolume(), seconds)
     } catch {
+      if (channel.cancelled || channel !== current) {
+        release(channel)
+        return
+      }
       // Autoplay is blocked until the player interacts with the page.
       if (unlockPending) return
       unlockPending = true
@@ -105,21 +131,33 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   }
 
   function retryPlayback(): void {
-    if (current && current.audio.paused && !muted.value) startChannel(current, 1)
+    if (current && current.audio.paused && !muted.value && !current.cancelled) startChannel(current, 1)
   }
 
-  function fadeOutCurrent(seconds: number): void {
+  function fadeOutCurrent(seconds: number, onDone?: () => void): void {
     const old = current
     current = null
     isPlaying.value = false
-    if (!old) return
-    fade(old, 0, seconds, () => release(old))
+    if (!old) {
+      onDone?.()
+      return
+    }
+    old.cancelled = true
+    if (seconds <= 0) {
+      release(old)
+      onDone?.()
+      return
+    }
+    fade(old, 0, seconds, () => {
+      release(old)
+      onDone?.()
+    })
   }
 
   function handOffLoop(channel: Channel): void {
     const el = channel.audio
     const duration = el.duration
-    if (channel !== current || channel.handedOff || !channel.loop) return
+    if (channel !== current || channel.handedOff || !channel.loop || channel.cancelled) return
     if (!Number.isFinite(duration) || duration < LOOP_OVERLAP_SECONDS * 3) return
     if (duration - el.currentTime > LOOP_OVERLAP_SECONDS) return
     channel.handedOff = true
@@ -133,11 +171,16 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     const audio = new Audio(url)
     audio.volume = 0
     const channel: Channel = { audio, url, loop }
-    audio.addEventListener('loadedmetadata', () => {
+    activeChannels.add(channel)
+    const onLoadedMetadata = () => {
       // Short clips cannot overlap themselves; let the element loop them.
       audio.loop = loop && audio.duration < LOOP_OVERLAP_SECONDS * 3
-    })
-    audio.addEventListener('timeupdate', () => handOffLoop(channel))
+    }
+    const onTimeUpdate = () => handOffLoop(channel)
+    channel.onLoadedMetadata = onLoadedMetadata
+    channel.onTimeUpdate = onTimeUpdate
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    audio.addEventListener('timeupdate', onTimeUpdate)
     return channel
   }
 
@@ -145,7 +188,7 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     const now = snapshot?.now ?? null
     if (!now) {
       stoppedUrl = ''
-      fadeOutCurrent(STOP_FADE_SECONDS)
+      fadeOutCurrent(0.5)
       return
     }
     // Still generating or failed: keep whatever plays now.
@@ -158,16 +201,23 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
       if (!muted.value) fade(current, targetVolume(), 0.5)
       return
     }
-    fadeOutCurrent(now.fade)
-    current = openChannel(now.url, now.loop)
-    isPlaying.value = true
-    if (!muted.value) startChannel(current, now.fade)
+    // Switching scenes/tracks: fade out previous audio quickly and cleanly before starting new track
+    const targetUrl = now.url
+    const targetLoop = now.loop
+    const targetFade = Math.min(now.fade, 1.5)
+    fadeOutCurrent(0.3, () => {
+      if (audio.value?.now?.url !== targetUrl) return
+      current = openChannel(targetUrl, targetLoop)
+      isPlaying.value = true
+      if (!muted.value) startChannel(current, targetFade)
+    })
   }
 
   function stopCurrent(): void {
     if (!current) return
     stoppedUrl = current.url
-    fadeOutCurrent(1)
+    fadeOutCurrent(0.5)
+  }
   }
 
   function applyMuted(): void {
@@ -220,7 +270,10 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
 
   function stopAll(): void {
     removeUnlock()
-    if (current) release(current)
+    for (const ch of Array.from(activeChannels)) {
+      release(ch)
+    }
+    activeChannels.clear()
     current = null
     isPlaying.value = false
   }

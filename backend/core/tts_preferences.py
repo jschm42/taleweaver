@@ -15,7 +15,7 @@ DEFAULT_TTS_PREFERENCES: dict[str, bool] = {
     "protagonist": True,
     "npcs": True,
     "system": False,
-    "readables": True,
+    "readables": False,
 }
 
 # game_settings keys that belong to one player; they stay in User.game_settings, never in ServerSettings.

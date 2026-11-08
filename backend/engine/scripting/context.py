@@ -1153,21 +1153,47 @@ class VarsProxy:
 
     def get(self, key: str, default: Any = None) -> Any:
         if key in self._changeset.var_updates:
-            return self._changeset.var_updates[key]
+            val = self._changeset.var_updates[key]
+            return default if val is None else val
         if key in self._vars:
-            return self._vars[key]
+            val = self._vars[key]
+            return default if val is None else val
         if key in self._story_flags:
-            return self._story_flags[key]
+            val = self._story_flags[key]
+            return default if val is None else val
         return default
 
     def set(self, key: str, val: Any) -> None:
         self._changeset.var_updates[key] = val
+
+    def has(self, key: str) -> bool:
+        if key in self._changeset.var_updates:
+            return self._changeset.var_updates[key] is not None
+        if key in self._vars:
+            return self._vars[key] is not None
+        if key in self._story_flags:
+            return self._story_flags[key] is not None
+        return False
+
+    def delete(self, key: str) -> None:
+        self.set(key, None)
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        val = self.get(key, default)
+        self.delete(key)
+        return val
+
+    def __contains__(self, key: str) -> bool:
+        return self.has(key)
 
     def __getitem__(self, key: str) -> Any:
         return self.get(key)
 
     def __setitem__(self, key: str, val: Any) -> None:
         self.set(key, val)
+
+    def __delitem__(self, key: str) -> None:
+        self.delete(key)
 
 
 class StoryProxy:

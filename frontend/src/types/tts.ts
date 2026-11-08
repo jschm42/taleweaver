@@ -12,7 +12,7 @@ export const DEFAULT_AUTO_SPEAK_SETTINGS: AutoSpeakSettings = {
   protagonist: true,
   npcs: true,
   system: false,
-  readables: true,
+  readables: false,
 }
 
 /** Profile defaults for new sessions: the voice channels plus the master switch. */

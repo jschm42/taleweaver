@@ -26,7 +26,7 @@ def test_default_auto_speak_settings():
         "protagonist": True,
         "npcs": True,
         "system": False,
-        "readables": True,
+        "readables": False,
     }
 
 

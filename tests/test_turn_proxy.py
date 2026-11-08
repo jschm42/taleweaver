@@ -30,3 +30,16 @@ tw.vars.set("captured_var", player_message)
     assert ctx.changeset.var_updates["captured_message"] == "draw a tiny elephant"
     assert ctx.changeset.var_updates["captured_alias"] == "draw a tiny elephant"
     assert ctx.changeset.var_updates["captured_var"] == "draw a tiny elephant"
+
+
+def test_vars_proxy_has_and_delete():
+    ctx = GameContext()
+    ctx.vars.set("test_key", "test_val")
+    assert ctx.vars.get("test_key") == "test_val"
+    assert ctx.vars.has("test_key") is True
+    assert "test_key" in ctx.vars
+
+    ctx.vars.delete("test_key")
+    assert ctx.vars.get("test_key") is None
+    assert ctx.vars.has("test_key") is False
+    assert ("test_key" in ctx.vars) is False
