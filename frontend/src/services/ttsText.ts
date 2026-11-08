@@ -2,7 +2,9 @@
  * Pure text helpers that turn assistant markdown into TTS segment requests.
  */
 
-export type SpeechSegment = { speaker?: string, text: string }
+import { uniqueShortNameMatch } from '@/utils/speakerNames'
+
+export type SpeechSegment ={ speaker?: string, text: string }
 export type SegmentRequest = { requestText: string, voiceOverride?: string, speaker?: string }
 
 const SPEAKER_PATTERN = /^(?:\*\*([^*:\n]+)\*\*|([^:\n]+)):\s*([\s\S]*)$/
@@ -143,23 +145,16 @@ function findSpeakerEntry(speaker: string | undefined, npcMetadata: Record<strin
   if (exact && typeof exact === 'object') return exact
 
   const loweredSpeaker = speaker.trim().toLowerCase()
-  const shortNameMatches: Record<string, any>[] = []
+  const entries: Record<string, any>[] = []
   for (const [key, value] of Object.entries(npcMetadata)) {
     if (!value || typeof value !== 'object') continue
     const name = String(value.name || '').trim().toLowerCase()
     if (key.toLowerCase() === loweredSpeaker || name === loweredSpeaker) return value
-    if (isShortNameOf(loweredSpeaker, name)) shortNameMatches.push(value)
+    entries.push(value)
   }
 
-  // The narrator often shortens names ("Grimsby" for "Grimsby the Gargoyle"); only an
-  // unambiguous match is used, so two "Captain ..." NPCs never swap voices.
-  return shortNameMatches.length === 1 ? shortNameMatches[0] : undefined
-}
-
-/** True when one name is the other's leading whole words ("grimsby" / "grimsby the gargoyle"). */
-function isShortNameOf(speaker: string, name: string): boolean {
-  if (!speaker || !name) return false
-  return name.startsWith(`${speaker} `) || speaker.startsWith(`${name} `)
+  // The narrator often shortens names ("Pip Fenwick" for "Professor Pip Fenwick").
+  return uniqueShortNameMatch(speaker, entries, (entry) => String(entry.name || ''))
 }
 
 export function resolveNpcVoice(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): string | undefined {

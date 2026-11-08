@@ -313,8 +313,10 @@ class AudioService {
     })
   }
 
-  private async playAudioBufferWithWebAudio(context: AudioContext, blob: Blob): Promise<void> {
+  private async playAudioBufferWithWebAudio(context: AudioContext, blob: Blob, token: number): Promise<void> {
     const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
+    // stop() during decoding (e.g. a scene change) must not let the old clip start afterwards.
+    if (token !== this.playbackToken) return
 
     await new Promise<void>((resolve, reject) => {
       const source = context.createBufferSource()
@@ -343,18 +345,20 @@ class AudioService {
     })
   }
 
-  private async playAudioBlob(blob: Blob): Promise<void> {
+  private async playAudioBlob(blob: Blob, token: number): Promise<void> {
+    if (token !== this.playbackToken) return
     const context = this.audioContext
     if (context?.state === 'running') {
       // Prefer Web Audio: avoids HTMLAudioElement autoplay restrictions and
       // resamples 24 kHz WAV correctly.
       try {
-        await this.playAudioBufferWithWebAudio(context, blob)
+        await this.playAudioBufferWithWebAudio(context, blob, token)
         return
       } catch (err) {
         this.logDebug('WebAudio decode failed; falling back to HTMLAudio', { error: String(err), blobType: blob.type })
       }
     }
+    if (token !== this.playbackToken) return
     await this.playAudioBlobWithHtmlAudio(blob)
   }
 
@@ -390,6 +394,11 @@ class AudioService {
       if (token !== this.playbackToken) return null
       const element = await prepareStreamElement(segment.request.requestText, segment.request.voiceOverride)
       this.streamingAvailable = true
+      // stop() ran while the stream was prepared: free it instead of letting it keep downloading.
+      if (token !== this.playbackToken) {
+        releaseStreamElement(element)
+        return null
+      }
       this.streamElements.add(element)
       return element
     } catch (err) {
@@ -412,7 +421,7 @@ class AudioService {
       // A failed stream (e.g. rate limit) is retried once as a whole clip.
       this.logDebug('TTS stream playback failed; retrying as whole clip', { error: String(err) })
       const blob = token === this.playbackToken ? await this.fetchSegmentAudio(segment, token) : null
-      if (blob && token === this.playbackToken) await this.playAudioBlob(blob)
+      if (blob) await this.playAudioBlob(blob, token)
     } finally {
       this.streamElements.delete(element)
       releaseStreamElement(element)
@@ -428,7 +437,7 @@ class AudioService {
       await this.playStream(playable, segment, token)
       return
     }
-    await this.playAudioBlob(playable)
+    await this.playAudioBlob(playable, token)
   }
 
   /** Starts generating queued segments until the lookahead window is full. Streams start

@@ -6,6 +6,7 @@ import { renderEntityRefsHtml } from '@/utils/entityRefs'
 import { extractCodePlaceholders } from '@/utils/codeMarkup'
 import { extractStoryImages, STORY_IMAGE_ATTRS, STORY_IMAGE_TAGS } from '@/utils/storyImages'
 import { attachCueToSpeech } from './comicTagOnlyLines'
+import { uniqueShortNameMatch } from '@/utils/speakerNames'
 
 export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
 
@@ -44,7 +45,16 @@ export function resolveNpc(name: string, entities: any[] = [], metadataMap?: Rec
     )
   }
 
-  const meta = resolveNpcMetadata(name, metadataMap) || (foundEntity ? resolveNpcMetadata(foundEntity.id, metadataMap) || resolveNpcMetadata(foundEntity.name, metadataMap) : null)
+  // Shortened names ("Pip Fenwick" for "Professor Pip Fenwick"), only when unambiguous.
+  if (!foundEntity) {
+    const npcs = (entities || []).filter((e) => e.entity_type === 'NPC' && e.name)
+    foundEntity = uniqueShortNameMatch(name, npcs, (e) => String(e.name))
+  }
+
+  const shortMeta = !foundEntity && metadataMap
+    ? uniqueShortNameMatch(name, Object.values(metadataMap).filter((v) => v && typeof v === 'object' && v.name), (v: any) => String(v.name))
+    : null
+  const meta = resolveNpcMetadata(name, metadataMap) || shortMeta || (foundEntity ? resolveNpcMetadata(foundEntity.id, metadataMap) || resolveNpcMetadata(foundEntity.name, metadataMap) : null)
 
   if (foundEntity || meta) {
     return {

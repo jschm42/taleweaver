@@ -466,7 +466,9 @@ GM_DIALOGUE_FORMAT_REMINDER = (
     'Every spoken line stands alone, separated by blank lines, and starts with the speaker\'s name: Name: "Dialogue" '
     '(or Name: [tag] "Dialogue"). WRONG: Pip leans closer. "Careful now." '
     'RIGHT: the paragraph Pip leans closer. then a blank line, then the line Pip: "Careful now." '
-    "Fix any paragraph that still contains a quotation mark by moving the speech to its own Name: line."
+    "Fix any paragraph that still contains a quotation mark by moving the speech to its own Name: line. "
+    "Before the colon, write the speaker's full name exactly as listed under PRESENT NPCs, never a shortened "
+    "or altered form (prose may still use short names)."
 )
 """
 Dialogue format reminder, placed last in the Pass 2 turn message where small models weigh it most.

@@ -369,6 +369,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   watch(() => status.value, (newStatus, oldStatus) => {
     const isBusy = (value: string): boolean => value === 'connecting' || value === 'loading'
     if (!isBusy(newStatus) || isBusy(oldStatus)) return
+    // Everything shown so far belongs to earlier actions. Silent commands (an exit click sends
+    // /traverse_exit) add no player message, so without this the previous scene's narration
+    // would still count as part of this turn and be read again after the travel overlay.
+    seedExistingMessagesAsSpoken()
     actionSpokenHashes.clear()
     // The player acts again: a tw.audio.stop_speech() hold of the last action ends.
     if (options.speechHeld) options.speechHeld.value = false
