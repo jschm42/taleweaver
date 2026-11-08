@@ -81,3 +81,10 @@ def test_unknown_commands_are_rejected() -> None:
     second_response = CommandParser.parse_command(_avatar(), "/legacy_command")
     assert "Unknown command" in first_response
     assert "Unknown command" in second_response
+
+
+def test_greet_command_returns_trigger_and_is_listed_in_help() -> None:
+    response = CommandParser.parse_command(_avatar(), "/greet Bram")
+    help_text = CommandParser.parse_command(_avatar(), "/help")
+    assert response == "[TRIGGER_GREET] Bram"
+    assert "/greet" in help_text
