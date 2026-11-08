@@ -6,7 +6,7 @@ POST /api/adventures/{template_id}/map/visit    — register a scene visit (inte
 POST /api/adventures/{template_id}/map/exit     — register an exit between scenes
 
 All endpoints require authentication and are scoped to the owner of the
-AdventureTemplate (admins always allowed).
+AdventureTemplate and, with ``session_id``, of that session (admins always allowed).
 """
 
 import logging
@@ -55,6 +55,21 @@ async def _get_owned_adventure_or_404(
     return adv
 
 
+async def _authorize_map_access(
+    db: AsyncSession, template_id: str, session_id: Optional[str], user: User
+) -> None:
+    """Owner (or admin) of the template, and of the session's map when one is named."""
+    is_admin = user.role == "admin"
+    await _get_owned_adventure_or_404(db, template_id, user.id, is_admin)
+    if not session_id:
+        return
+    state = await AdventureLogic.resolve_session_state(
+        db, session_id, user_id=None if is_admin else user.id
+    )
+    if not state or state.session_id != session_id or state.template_id != template_id:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+
 # _get_or_create_map moved to AdventureLogic.get_or_create_map
 
 
@@ -69,9 +84,7 @@ async def get_map(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Return the raw scene-graph JSON (nodes + edges) for an owned template."""
-    await _get_owned_adventure_or_404(
-        db, template_id, current_user.id, current_user.role == "admin"
-    )
+    await _authorize_map_access(db, template_id, session_id, current_user)
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     if not world_map:
         return {"nodes": {}, "edges": [], "current_scene_id": None}
@@ -106,9 +119,7 @@ async def post_visit(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Register a scene visit — upserts the node and sets it as current (owner only)."""
-    await _get_owned_adventure_or_404(
-        db, template_id, current_user.id, current_user.role == "admin"
-    )
+    await _authorize_map_access(db, template_id, session_id, current_user)
 
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_visit(
@@ -127,9 +138,7 @@ async def post_exit(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Register a directed exit between two scenes (owner only)."""
-    await _get_owned_adventure_or_404(
-        db, template_id, current_user.id, current_user.role == "admin"
-    )
+    await _authorize_map_access(db, template_id, session_id, current_user)
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_exit(
         world_map, payload.from_scene, payload.to_scene, payload.exit_label or ""

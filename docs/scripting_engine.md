@@ -161,7 +161,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
 | | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
-| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction. |
+| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction, unless the script opened a choice dialog (`tw.dialog.choose` / `tw.dialog.tree`): then the player's answer drives what happens next and no GM reaction runs. |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
 | | `helpers_script` *(definitions)* | Not a trigger: functions and constants every script can call. See [Scene Helpers](#scene-helpers-helpers_script). |
@@ -424,17 +424,17 @@ tw.story.direct("The floor gives way. The player tumbles down into the cellar.")
 ```
 
 ### `tw.exits`
-Queries and manipulates passage exits:
-- `tw.exits.lock(exit_id: str, reason: str = "")`: Locks the exit. If the player attempts to traverse it, `reason` explains why it is blocked.
-- `tw.exits.unlock(exit_id: str)`: Unlocks a previously locked passage.
-- `tw.exits.hide(exit_id: str)`: Hides the exit from the player's map and navigation choices.
-- `tw.exits.reveal(exit_id: str)`: Reveals a hidden exit or secret door.
-- `tw.exits.is_locked(exit_id: str) -> bool`: Returns `True` if the exit is currently locked.
+Queries and locks/unlocks passage exits. Exits are addressed by their route (`from_scene_id`, `to_scene_id`), not by the generated exit ID; a bidirectional exit can be named from either side. `"FROM:TO"` in one string works as well.
+- `tw.exits.lock(from_scene_id: str, to_scene_id: str, reason: str = None)`: Locks the exit. If the player attempts to traverse it, `reason` explains why it is blocked.
+- `tw.exits.unlock(from_scene_id: str, to_scene_id: str)`: Unlocks a previously locked passage.
+- `tw.exits.is_locked(from_scene_id: str, to_scene_id: str) -> bool`: Returns `True` if the exit is currently locked.
+
+Exits cannot be hidden: every exit of a scene is listed. For a secret door, lock the exit and unlock it from a script, or set `is_revealed` on the exit to show its destination on the map before the player has been there.
 
 ### `tw.npcs`
 Inspects, dialogues with, moves, and manages Non-Player Characters:
-- `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. The GM's narration of the same turn treats the line as already shown to the player: it continues from it and does not repeat or paraphrase it, so a clue spoken here is said once. Also available as `tw.npcs.get(npc_id).say(text)`.
-- `tw.npcs.say_directed(npc_id: str, direction: str)`: Lets the NPC speak in the next GM narration, worded by the GM instead of a fixed text: the direction says *what* the NPC says or does with their voice (`tw.npcs.say_directed("BRAM", "sings Yellow Submarine")`), and the GM writes the actual line in character and in the scene's language. It works like [`tw.story.direct`](#twstory): a soft direction, used once by the next narration (max. 500 characters, at most the 5 newest directions are kept). The GM is asked to write the line as a separate `Name: "..."` dialogue line, so it shows up as the NPC's own speech bubble (also in the narration of a choice dialog with `narrate=True`); as with every direction, the GM may still word it freely. Also available as `tw.npcs.get(npc_id).say_directed(direction)`.
+- `tw.npcs.say(npc_id: str, text: str)`: Makes an NPC speak dialogue text. Appears in the narrative feed as `NPC Name: "text"`. An NPC outside the player's current scene stays silent (the speech bubble is suppressed), so timer or background scripts running while the player is elsewhere do not create confusing dialogue bubbles. The GM's narration of the same turn treats the line as already shown to the player: it continues from it and does not repeat or paraphrase it, so a clue spoken here is said once. Also available as `tw.npcs.get(npc_id).say(text)`.
+- `tw.npcs.say_directed(npc_id: str, direction: str, after=None, after_args=None)`: Lets the NPC speak in the next GM narration, worded by the GM instead of a fixed text: the direction says *what* the NPC says or does with their voice (`tw.npcs.say_directed("BRAM", "sings Yellow Submarine")`), and the GM writes the actual line in character and in the scene's language. An NPC outside the player's current scene does not speak (the direction is dropped), but any `after=` callback still executes. It works like [`tw.story.direct`](#twstory): a soft direction, used once by the next narration (max. 500 characters, at most the 5 newest directions are kept). The GM is asked to write the line as a separate `Name: "..."` dialogue line, so it shows up as the NPC's own speech bubble (also in the narration of a choice dialog with `narrate=True`); as with every direction, the GM may still word it freely. With `after=` a callback runs once that narration is done, see [Running code after the narration](#running-code-after-the-narration-after). Also available as `tw.npcs.get(npc_id).say_directed(direction, after=None, after_args=None)`.
 - `tw.npcs.move(npc_id: str, target_scene_id: str, spatial_position: str = "")`: Moves an NPC to another scene. Accepts `"current"`, `"here"`, or `"player"` to move them into the protagonist's current location.
 - `tw.npcs.move_to_player(npc_id: str, spatial_position: str = "")`: Convenience shortcut to move an NPC directly into the player's current scene.
 - `tw.npcs.drop_item(npc_id: str, item_id: str, scene_id: str = None, spatial_position: str = "")`: Transfers an item from an NPC's inventory into a scene. If `scene_id` is omitted, it drops into the NPC's current scene; passing `"current"` drops it into the player's scene.
@@ -451,8 +451,8 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.set_combat_group(npc_id: str, group: str)`: Moves the NPC into another combat group (any tag, normalized to an upper-case ID). NPCs in the same group fight together: when one of them fights, the others in its scene join. An empty text removes the NPC from every group, which makes it a bystander unless its assist mode says otherwise. Example (a bribed guard stops helping his squad): `tw.npcs.set_combat_group('GATE_GUARD', '')`.
 - `tw.npcs.set_assist_mode(npc_id: str, mode: str)`: Sets when the NPC joins a fight it was not attacked in: `'GROUP'` (a member of its group fights), `'ANYONE'` (any fight in its scene) or `'NEVER'` (bystander; it only fights when attacked directly). An empty text restores the automatic mode (`GROUP` with a group, `NEVER` without). Other values raise an error. Both changes apply to the current game only and take effect when the next fight starts.
 - `tw.npcs.get(npc_id: str) -> NPCProxy`: Returns an `NPCProxy` instance. The ID is matched exactly, then case-insensitively, then against the NPC's name. An unknown ID does not raise: it returns a detached proxy whose changes have no effect, and the server log shows `[Script Warning] Unknown entity ID '...'`, so check the log when a change seems to be ignored. Available properties and methods on `NPCProxy`:
-  - `.name`, `.hp`, `.mana`, `.stamina`, `.is_defeated`, `.current_scene_id`, `.inventory`
-  - `.say(text: str)` / `.say_directed(direction: str)`
+  - `.name`, `.hp`, `.mana`, `.stamina`, `.is_defeated`, `.current_scene_id`, `.is_with_player`, `.inventory`
+  - `.say(text: str)` / `.say_directed(direction: str, after=None, after_args=None)`
   - `.move_to(target_scene_id: str, spatial_position: str = "")` (supports `"current"`)
   - `.move_to_player(spatial_position: str = "")`
   - `.drop_item(item_id: str, scene_id: str = None, spatial_position: str = "")`
@@ -558,11 +558,43 @@ A persistent key-value store saved into the session state under `__script_vars__
 Injects narrative messages or system notifications into the turn stream:
 - `tw.story.narrate(text: str)` (shortcut `tw.narrate(text)`): Emits Game Master narration (`role: "assistant"`), displayed with the Game Master avatar and styled exactly like standard storytelling turns. The text is parsed like LLM narration: `Name: "..."` lines become NPC speech bubbles, `[tags]` become voice tags, `**bold**` is highlighted (e.g. `tw.story.narrate('You take the piece of chocolate. Maybe it will help with the persuasion.')`).
 - `tw.story.narrate_raw(text: str)` (shortcut `tw.narrate_raw(text)`): Emits Game Master narration that is shown **verbatim**, as one Game Master block: no speaker detection, no voice tags, no bold or `##ID` formatting. Line breaks are kept. Use it for text that must not be interpreted, e.g. LLM output from `tw.llm.ask(...)` that may contain colons or quotes (`tw.story.narrate_raw(news or "Just static noise.")`).
-- `tw.story.direct(instruction: str)` (shortcut `tw.direct(instruction)`): Gives the Game Master a **soft stage direction** instead of fixed text, e.g. `tw.story.direct("Let BRAM sing a sailor song")`. Nothing is shown right away. The direction is stored in the session (`entity_states["__gm_directions__"]`) and handed to the **next GM narration**: the narration of the current turn when the script runs during a turn (e.g. a soft rule in Pass 1.5), otherwise the next turn's narration, or the outcome narration of a choice dialog opened with `narrate=True`. That narration works it in naturally and drops it afterwards, so every direction is used once. The GM treats it as a wish, not as a fact: it never overrides game rules or the technical outcome, and it does not change any state (use the other `tw.*` calls for that). Whitespace is collapsed to a single line, each direction is cut at 500 characters, and at most the 5 newest directions wait at a time.
+- `tw.story.direct(instruction: str, after=None, after_args=None)` (shortcut `tw.direct(...)`): Gives the Game Master a **soft stage direction** instead of fixed text, e.g. `tw.story.direct("Let BRAM sing a sailor song")`. Nothing is shown right away. The direction is stored in the session (`entity_states["__gm_directions__"]`) and handed to the **next GM narration**: the narration of the current turn when the script runs during a turn (e.g. a soft rule in Pass 1.5), otherwise the next turn's narration, or the outcome narration of a choice dialog opened with `narrate=True`. That narration works it in naturally and drops it afterwards, so every direction is used once. The GM treats it as a wish, not as a fact: it never overrides game rules or the technical outcome, and it does not change any state (use the other `tw.*` calls for that). Whitespace is collapsed to a single line, each direction is cut at 500 characters, and at most the 5 newest directions wait at a time. With `after=` a callback runs once that narration is done (see below).
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`). System messages and narration calls (`narrate`, `narrate_raw`) are rendered in the exact chronological order in which the script executed them.
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
 - `tw.story.generate_image(...)` / `tw.story.show_image(...)`: Shortcuts for `tw.image.generate(...)` and `tw.image.show(...)`, see [tw.image & tw.media](#twimage--twmedia-in-game-image-generation).
+
+#### Running code after the narration (`after=`)
+
+Everything a script does takes effect right away, but a direction only becomes text in the **next** narration. So in
+
+```python
+tw.npcs.say_directed('BRAM', 'grumbles and returns the teacup')
+tw.story.system('Bram gives the teacup back to you.')
+tw.npcs.give_to_player('BRAM', 'TEACUP')
+```
+
+the system message and the item appear *before* Bram's line. To run code after the narration instead, pass a callback:
+
+```python
+# Script that reacts (e.g. Bram's on_receive_item):
+tw.npcs.say_directed('BRAM', 'grumbles and returns the teacup',
+                     after='give_back',
+                     after_args={'npc_id': 'BRAM', 'item_id': 'TEACUP'})
+
+# Global init_script (or a sequence/scene helper block):
+def give_back(npc_id, item_id):
+    npc = tw.npcs.get(npc_id)
+    tw.story.system(npc.name + ' gives ' + tw.objects.get(item_id).name + ' back to you.')
+    npc.give_to_player(item_id)
+```
+
+- `after` names a function of the **global `init_script`** or of a sequence/scene helper block (a string or the function itself). Like a dialog's `on_choice` handler it runs in a later step, where the reacting script's local variables no longer exist, so pass what it needs in `after_args`.
+- `after_args` is a dict of plain values (text, numbers, booleans, lists, dicts; at most 4000 characters as JSON). Each key becomes a keyword argument of the callback, so keys must be valid parameter names.
+- The callback runs right after the narration that used the direction: after the turn's narration (before `on_narration_done`), or after the outcome narration of a choice dialog with `narrate=True`. Its messages and state changes appear below the narration. A callback queued by `on_narration_done` or by another callback waits for the next narration.
+- After a choice dialog without `narrate=True`, the scene goes on by itself: when a callback waits and no new dialog is open, the client sends `/continue_story` (with auto-speech on, once the lines before it have been read aloud), a narration-only step (no mechanics pass, no interaction triggers, no clock tick, no player message). Its narration uses the direction, then the callback runs. Use this for beats that should follow a choice right away, e.g. a character bursting in only after the scream that summoned them.
+- If no narration comes (e.g. the GM call failed), the callback waits for the next one, together with its direction. At most 10 callbacks wait at a time; they are stored in `entity_states["__gm_after_narration__"]`.
+- An unusable `after`/`after_args` is reported as a visible `Script error: direction callback ignored: ...` message; the direction itself is still used. A callback name that no definition block defines is reported as `Script error in 'after_<name>'` when it should run, and the editor validation warns about it (`direction_callback_missing`).
 
 ### `tw.save` (Save States)
 - `tw.save(label: str = "")`: Saves the game as a checkpoint, for example right before an important decision. The player can return to it from the **Chronicles Timeline** in the game.
@@ -586,10 +618,13 @@ Directly writes into the avatar's episodic memory bank:
 - `tw.memories.add(memory_text: str)`: Injects a factual memory into the avatar context that the Game Master LLM references in subsequent turns.
 
 ### `tw.game`
-Controls session outcome conditions:
-- `tw.game.win(message: str)`: Ends the adventure in victory and displays `message`.
-- `tw.game.game_over(reason: str)`: Ends the adventure in defeat with `reason`.
+Controls session outcome conditions (alias: `tw.session`):
+- `tw.game.win(message: str = None)` / `tw.game.game_won(message: str = None)`: Ends the adventure in victory and displays `message`.
+- `tw.game.game_over(reason: str = None)`: Ends the adventure in defeat with `reason`.
 - `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
+
+> [!NOTE]
+> In both linear and dynamic modes, completing the final sequence does **not** automatically end the adventure in victory. The session concludes only when the adventure's winning condition (`completed_guard_expression` or `completed_condition`) evaluates to true or when a script explicitly calls `tw.game.win()` / `tw.game.game_won()`.
 
 ### `tw.time` (In-Game Clock)
 The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
@@ -638,23 +673,34 @@ Controls adventure story chapters and sequences. In TaleWeaver, **only one seque
 
 #### Starting & Ending Sequences
 - `tw.sequences.start(sequence_id: str)`: Immediately switches to and activates the specified sequence. Sets it as the active sequence, logs a system notification (`Sequence started: <title>`), and executes the sequence's `on_start_sequence_script` / `on_start_sequence_text` if defined.
-- `tw.sequences.end(sequence_id: Optional[str] = None, advance: bool = True)`: Ends the currently active sequence (or `sequence_id` if specified).
-  - When `advance=True` (default): triggers `on_end_sequence_script` / text, awards sequence completion XP, and advances to the next chapter in order (or completes the adventure if no chapters remain).
+- `tw.sequences.end(sequence_id: Optional[str] = None, advance: Optional[bool] = None)`: Ends the currently active sequence (or `sequence_id` if specified).
+  - When `advance=True`: triggers `on_end_sequence_script` / text, awards sequence completion XP, and advances to the next chapter in order (or completes the adventure if no chapters remain).
   - When `advance=False`: triggers `on_end_sequence_script` / text, awards sequence completion XP, and clears the active sequence (`active_sequence_id = None`) without advancing.
-- `tw.sequences.complete(sequence_id: Optional[str] = None)`: Convenience alias for `tw.sequences.end(sequence_id, advance=True)`.
-- `tw.sequences.complete_current()`: Convenience alias for `tw.sequences.end(None, advance=True)`.
-- `tw.sequences.advance()`: Advances to the next sequence in the adventure.
+  - When `advance` is omitted: defaults to `True` in `linear` mode, and `False` in `dynamic` mode.
+- `tw.sequences.complete(sequence_id: Optional[str] = None, advance: Optional[bool] = None)`: Convenience alias for `tw.sequences.end(sequence_id, advance=advance)`.
+- `tw.sequences.complete_current(advance: Optional[bool] = None)`: Convenience alias for `tw.sequences.end(None, advance=advance)`.
+- `tw.sequences.advance()`: Advances to the next sequence in linear order.
+- `tw.sequences.clear()`: Clears the active sequence without marking it completed or advancing.
 
 #### Determining the Active Sequence
 - `tw.sequences.get_active() -> Optional[dict]`: Returns the dictionary definition of the currently active sequence (e.g. `{"id": "...", "title": "...", "order": 1}`), or `None` if no sequence is active.
 - `tw.sequences.get_active_id() -> Optional[str]`: Returns the ID string of the currently active sequence (e.g. `"CHAPTER_1"`), or `None`.
 - `tw.sequences.is_active(sequence_id: str) -> bool`: Returns `True` if `sequence_id` matches the currently active sequence (case-insensitive).
 - `tw.sequences.is_completed(sequence_id: str) -> bool`: Returns `True` if the specified sequence has already been completed in this playthrough.
+- `tw.sequences.progression_mode`: Property returning the adventure's progression mode (`"linear"` or `"dynamic"`).
 - `tw.sequences.active_id`: Property returning the active sequence ID (or `None`).
 - `tw.sequences.active` / `tw.sequences.current`: Property returning the active sequence dictionary (or `None`).
 - `tw.sequence.id`: Property returning the active sequence ID.
 - `tw.sequence.title`: Property returning the active sequence title.
 - `tw.sequences.all() -> list[dict]`: Returns a list of all sequences defined in the adventure.
+
+#### Progression Modes: Linear vs. Dynamic
+Adventures configure `sequence_progression_mode` in their manifest or template:
+- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence does not end the adventure (see the note under `tw.game`).
+- **`"dynamic"`**: Ideal for hubs, sandboxes, QA workbenches, and open-world investigations:
+  - Sequences do not auto-advance to the next array index on completion.
+  - Completing a sequence clears `active_sequence_id = None` without finishing the entire adventure.
+  - Sequences are activated explicitly via `tw.sequences.start(seq_id)` or automatically via their `activation_scene_id` upon entering a designated room.
 
 ```python
 # Check which sequence is active
@@ -685,7 +731,7 @@ Shows the player a multiple-choice dialog for NPC conversations, riddles and dil
   - `options`: up to 8 entries, each a label string (up to 500 characters) or `{"label": "...", "visible_if": "<guard expression>"}`. Supports fenced code blocks, inline code, `**bold**`, and multi-line indentation. Hidden options keep their position, so indices stay stable.
   - `on_choice`: name of the handler function (a string, or the function itself). **The handler must be defined in the global `init_script` or in a [scene](#scene-helpers-helpers_script) or [sequence](#sequence-helpers) helper block.**
   - `speaker`: optional NPC name shown as the dialog title.
-  - `narrate`: when `True`, the small model narrates the outcome after the handler ran (it is told the handler's messages are binding facts). It also receives the current character and goal of the visible NPCs in the player's scene (including changes the handler just made, e.g. `npc.character = "Very angry"`) and any pending `tw.story.direct(...)` directions, which this narration then uses up. Default `False`: only the handler's own messages appear, which is instant and deterministic; directions then wait for the next turn's narration.
+  - `narrate`: when `True`, the small model narrates the outcome after the handler ran. The handler's notices (e.g. "Mom moved to ...") are binding facts; its `tw.story.narrate` / `tw.npcs.say` lines count as already read, so the narration continues after them instead of retelling them. It also receives the current character and goal of the visible NPCs in the player's scene (including changes the handler just made, e.g. `npc.character = "Very angry"`) and any pending `tw.story.direct(...)` directions, which this narration then uses up. Default `False`: only the handler's own messages appear, which is instant and deterministic; directions then wait for the next turn's narration.
   - Returns `False` (and emits a debug note) when no dialog was opened: another dialog is already open this turn, the handler name is invalid, or no option is visible.
 
 **How it works.** Scripts run to completion inside one request, so `choose()` does not wait for the answer. It stores a *pending dialog* in the session state (`entity_states["__pending_dialog__"]`) and the client shows a modal that cannot be dismissed. Free-text input is rejected (HTTP 409) until the player answers. The answer goes to `POST /adventures/{game_id}/dialog/choice`, which:
@@ -889,11 +935,11 @@ Target: `SCENE_CASTLE_GATES`
 # Check if the player possesses the royal seal
 if not tw.player.has_item("ROYAL_SIGNET"):
     # Lock the inner courtyard exit
-    tw.exits.lock("EXIT_TO_COURTYARD", "The armored sentry lowers his halberd: 'Halt! Only bearers of the Royal Signet may enter.'")
+    tw.exits.lock("SCENE_CASTLE_GATES", "SCENE_COURTYARD", "The armored sentry lowers his halberd: 'Halt! Only bearers of the Royal Signet may enter.'")
     tw.story.narrate("The castle guard steps forward, barring the iron gate.")
 else:
     # Unlock and allow passage
-    tw.exits.unlock("EXIT_TO_COURTYARD")
+    tw.exits.unlock("SCENE_CASTLE_GATES", "SCENE_COURTYARD")
     tw.story.narrate("The guard notices the Royal Signet ring, salutes respectfully, and raises the heavy portcullis.")
 ```
 
@@ -915,7 +961,7 @@ g = tw.vars.get("lever_gold", False)
 if b and r and g:
     if not tw.vars.get("vault_unlocked", False):
         tw.vars.set("vault_unlocked", True)
-        tw.exits.unlock("EXIT_VAULT_DOOR")
+        tw.exits.unlock("SCENE_VAULT_HALL", "SCENE_VAULT")
         tw.story.narrate("With a resonant chime, all three mechanisms lock into place and the massive vault door unseals!")
         tw.awards.grant("PUZZLE_MASTER")
 ```
@@ -1001,7 +1047,7 @@ Target: `LEVER_POWER_GRID`
 # Check state of another mechanism before powering the main grid
 if tw.switches.is_state("VALVE_COOLANT", "OPEN"):
     tw.switches.set_state("LEVER_POWER_GRID", "ONLINE")
-    tw.exits.unlock("EXIT_VAULT_DOOR")
+    tw.exits.unlock("SCENE_VAULT_HALL", "SCENE_VAULT")
     tw.story.narrate("Coolant surges into the coils. The main power grid hums online and the vault unseals!")
 else:
     tw.story.narrate("The lever clicks, but nothing happens. A red warning light blinks: 'Coolant valve must be opened first!'")

@@ -1,7 +1,7 @@
 """Setup wizard state: whether the guided first-run configuration is pending, skipped,
 dismissed for good, or completed.
 
-The state is stored per user and is not part of the broadcast global settings, so one
+The state is stored per user and is not part of the server-wide settings, so one
 admin dismissing the wizard does not hide it for another admin.
 """
 

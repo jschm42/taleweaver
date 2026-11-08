@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.history_compression_window import CHOICE_MESSAGE_PREFIX
 from backend.models.chat import ChatMessage
 
 RECENT_NARRATION_MAX_CHARS = 400
@@ -142,19 +143,38 @@ def _resolve_max_turns(state: Any, adventure: Any) -> int:
     return max(0, int(max_turns))
 
 
+async def _load_choice_only_history(db: AsyncSession, session_id: str) -> list[ChatMessage]:
+    """Before the first typed player message only dialog choices exist; keep them from the first."""
+    msg_res = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+    )
+    messages = list(msg_res.scalars().all())
+    first_user = next((i for i, m in enumerate(messages) if m.role == "user"), None)
+    return [] if first_user is None else messages[first_user:]
+
+
 async def _load_memory_window(
     db: AsyncSession, session_id: str, max_turns: int
 ) -> list[ChatMessage]:
-    """Loads only the messages of the last `max_turns` turns plus the current one."""
+    """Loads only the messages of the last `max_turns` turns plus the current one.
+
+    Dialog choices belong to the turn they answer and do not count as turns.
+    """
     marker_res = await db.execute(
         select(ChatMessage.id, ChatMessage.created_at)
-        .where(ChatMessage.session_id == session_id, ChatMessage.role == "user")
+        .where(
+            ChatMessage.session_id == session_id,
+            ChatMessage.role == "user",
+            ~ChatMessage.content.startswith(CHOICE_MESSAGE_PREFIX, autoescape=True),
+        )
         .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(max_turns + 1)
     )
     markers = list(marker_res.all())
     if not markers:
-        return []
+        return await _load_choice_only_history(db, session_id)
 
     start_id, start_created_at = markers[-1]
     msg_res = await db.execute(
@@ -165,6 +185,27 @@ async def _load_memory_window(
     window = list(msg_res.scalars().all())
     start_idx = next((i for i, m in enumerate(window) if m.id == start_id), 0)
     return window[start_idx:]
+
+
+def _since_scene_entry(window: list[ChatMessage], scene_id: str | None) -> list[ChatMessage]:
+    """Drops the earlier turns that were played in another scene.
+
+    The GM tends to carry characters along from the history, so NPCs of a scene the player
+    left would keep talking. The history starts at the player action that led into this scene
+    (providers expect a user message first); the current turn always stays. Messages without
+    scene info (legacy) are kept.
+    """
+    current_turn_idx = max((i for i, m in enumerate(window) if m.role == "user"), default=-1)
+    if not scene_id or current_turn_idx <= 0:
+        return window
+    earlier = window[:current_turn_idx]
+    left_at = max(
+        (i for i, m in enumerate(earlier) if m.scene_id and m.scene_id != scene_id), default=-1
+    )
+    start = left_at + 1
+    while 0 < start < current_turn_idx and window[start].role != "user":
+        start -= 1
+    return window[start:]
 
 
 def _current_turn_entry(role: str, content: str) -> str | None:
@@ -203,11 +244,13 @@ async def build_narration_messages(
       stat changes, debug lines) were already narrated and would only cost tokens.
     - The current turn keeps its system events as `[Game Event: ...]` annotations and its
       script output as `[Already shown to the player this turn: ...]` annotations.
+    - Only turns played in the current scene are replayed (see `_since_scene_entry`).
     - `turn_context` (CURRENT STATE + TURN RESOLUTION) is prepended to the final user message.
     Returns (messages, max_turns_configured).
     """
     max_turns = _resolve_max_turns(state, adventure)
     window = await _load_memory_window(db, state.session_id, max_turns)
+    window = _since_scene_entry(window, getattr(state, "current_scene_id", None))
     current_turn_idx = max((i for i, m in enumerate(window) if m.role == "user"), default=-1)
 
     messages: list[dict[str, str]] = [{"role": "system", "content": narration_prompt}]

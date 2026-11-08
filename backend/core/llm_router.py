@@ -26,7 +26,6 @@ from backend.core.llm_provider_config import (
 )
 from backend.core.llm_request_tuning import apply_prompt_cache_markers
 from backend.core.llm_stream_filters import clean_stream_thinking, clean_stream_voice_tags
-from backend.core.security import encryption_util
 from backend.core.voice_tags import VOICE_TAG_SET
 from backend.models.user import User
 
@@ -62,6 +61,10 @@ UNBRACKETED_RE = re.compile(
 )
 
 
+_OPENING_QUOTES = ('"', "“", "„", "«")
+_CLOSING_QUOTES = ('"', "”", "»", "“")
+
+
 def _clean_dialogue_voice_body(raw_body: str) -> str:
     return (
         raw_body.rstrip('"')
@@ -92,7 +95,14 @@ def _normalize_dialogue_line(
     canon_tag = GameMasterLLM._to_canonical_voice_tag(raw_tag)
     if canon_tag not in VOICE_TAG_SET:
         return line
-    body = _clean_dialogue_voice_body(tag_match.group("body").strip())
+    raw_body = tag_match.group("body").strip()
+    body = _clean_dialogue_voice_body(raw_body)
+    # A streamed prefix can end inside the quote ('"P'); closing it there splits the word.
+    after_tag = speech_part[speech_part.find("]") + 1 : tag_match.start("body")]
+    is_opened = '"' in after_tag or raw_body.startswith(_OPENING_QUOTES)
+    is_closed = len(raw_body) > 1 and raw_body.endswith(_CLOSING_QUOTES)
+    if is_opened and not is_closed:
+        return f'{speaker_part}[{canon_tag}] "{body}'
     return f'{speaker_part}[{canon_tag}] "{body}"'
 
 
@@ -842,19 +852,14 @@ class GameMasterLLM:
         kwargs["extra_body"] = extra_body
 
     def _get_decrypted_key(self, provider: str) -> str:
-        from backend.core.config import settings
+        from backend.core.api_keys import resolve_api_key
 
-        # 1. Check environment variables first (precedence)
-        env_key = settings.get_env_api_key(provider)
-        if env_key:
-            return env_key
-
-        # 2. Fallback to database
-        if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
+        # Personal key, env key or stored server key, as the key policy says; raises
+        # PersonalKeyRequiredError when the provider is unavailable for this user.
+        api_key = resolve_api_key(self.user.encrypted_api_keys, provider)
+        if not api_key:
             raise ValueError(f"No API key configured for provider: {provider}")
-
-        encrypted_key = self.user.encrypted_api_keys[provider]
-        return encryption_util.decrypt_key(encrypted_key)
+        return api_key
 
     def _validate_ollama_model(self, model: str) -> None:
         """Ensure local Ollama mode never silently routes to cloud models."""

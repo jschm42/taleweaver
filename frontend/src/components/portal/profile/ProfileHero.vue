@@ -24,9 +24,11 @@ const statTiles = computed(() => [
   { label: 'Adventures', value: props.stats.adventures, icon: 'ra ra-scroll-unfurled', tone: 'text-sky-300' },
   { label: 'Victories', value: props.stats.victories, icon: 'ra ra-crown', tone: 'text-amber-300' },
   { label: 'Defeats', value: props.stats.defeats, icon: 'ra ra-skull', tone: 'text-red-300' },
-  { label: 'Total XP', value: props.stats.totalXp, icon: 'ra ra-lightning-bolt', tone: 'text-aether-primary' },
   { label: 'Awards', value: props.stats.awards, icon: 'ra ra-trophy', tone: 'text-aether-secondary' },
 ])
+const formattedXp = computed(() => props.stats.totalXp.toLocaleString('en-US'))
+const isBioExpanded = ref(false)
+const isLongBio = computed(() => (user.value?.bio || '').length > 180)
 
 // --- Avatar ---
 const avatarInput = ref<HTMLInputElement | null>(null)
@@ -101,14 +103,13 @@ async function generateBio() {
   <header class="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0a1120]">
     <!-- Decorative backdrop -->
     <div class="pointer-events-none absolute inset-0">
-      <div class="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-aether-primary/10 blur-3xl"></div>
-      <div class="absolute -right-16 top-10 h-64 w-64 rounded-full bg-aether-secondary-container/20 blur-3xl"></div>
-      <div class="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-aether-primary/40 to-transparent"></div>
+      <div class="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-aether-primary/10 blur-3xl"></div>
+      <div class="absolute -right-20 top-24 h-56 w-56 rounded-full bg-aether-secondary-container/20 blur-3xl"></div>
     </div>
 
-    <div class="relative flex flex-col gap-6 p-5 sm:p-8 lg:flex-row lg:items-center">
+    <div class="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-start lg:flex-col lg:items-stretch">
       <!-- Avatar -->
-      <div class="group relative mx-auto h-32 w-32 shrink-0 lg:mx-0">
+      <div class="group relative mx-auto h-28 w-28 shrink-0 sm:mx-0 lg:mx-auto">
         <img :src="avatarUrl" alt="Profile portrait" class="h-full w-full rounded-full border-2 border-aether-primary/40 object-cover shadow-ambient-emerald" />
         <div v-if="isGeneratingAvatar" class="absolute inset-0 flex items-center justify-center rounded-full bg-black/60">
           <i class="ra ra-crystal-ball animate-spin text-3xl text-white"></i>
@@ -132,28 +133,41 @@ async function generateBio() {
       </div>
 
       <!-- Identity & bio -->
-      <div class="min-w-0 flex-1 text-center lg:text-left">
-        <div class="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-          <h2 class="truncate font-display text-3xl text-white sm:text-4xl">{{ user?.username || 'Adventurer' }}</h2>
-          <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-widest text-slate-400">
-            {{ user?.role === 'admin' ? 'Game Master' : 'Player' }}
-          </span>
-        </div>
+      <div class="min-w-0 flex-1 text-center sm:text-left lg:text-center">
+        <h2 class="truncate font-display text-3xl text-white" :title="user?.username">{{ user?.username || 'Adventurer' }}</h2>
+        <span class="mt-1.5 inline-block rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-widest text-slate-400">
+          {{ user?.role === 'admin' ? 'Game Master' : 'Player' }}
+        </span>
 
         <div v-if="!isEditingBio" class="mt-3">
-          <p v-if="user?.bio" class="font-narrative text-base italic leading-relaxed text-slate-300">“{{ user.bio }}”</p>
+          <p
+            v-if="user?.bio"
+            class="font-narrative text-[15px] italic leading-relaxed text-slate-300"
+            :class="{ 'line-clamp-4': isLongBio && !isBioExpanded }"
+          >“{{ user.bio }}”</p>
           <p v-else class="text-sm italic text-slate-500">No chronicle entry yet.</p>
-          <button type="button" class="mt-2 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-aether-primary" @click="startEditBio">
-            <i class="ra ra-quill-ink"></i> {{ user?.bio ? 'Edit biography' : 'Write biography' }}
-          </button>
+          <div class="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 sm:justify-start lg:justify-center">
+            <button
+              v-if="isLongBio"
+              type="button"
+              class="text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-white"
+              :aria-expanded="isBioExpanded"
+              @click="isBioExpanded = !isBioExpanded"
+            >
+              {{ isBioExpanded ? 'Show less' : 'Read more' }}
+            </button>
+            <button type="button" class="text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-aether-primary" @click="startEditBio">
+              <i class="ra ra-quill-ink"></i> {{ user?.bio ? 'Edit biography' : 'Write biography' }}
+            </button>
+          </div>
         </div>
 
         <div v-else class="mt-3 space-y-2 text-left">
           <textarea
             v-model="bioDraft"
-            rows="3"
+            rows="5"
             maxlength="1000"
-            class="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-slate-200 outline-none focus:border-aether-primary/50"
+            class="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-aether-primary/50"
             placeholder="Tell your story..."
           ></textarea>
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -171,16 +185,18 @@ async function generateBio() {
     </div>
 
     <!-- Stats -->
-    <div class="relative grid grid-cols-2 border-t border-white/5 sm:grid-cols-5">
-      <div
-        v-for="tile in statTiles"
-        :key="tile.label"
-        class="flex items-center gap-3 border-white/5 px-5 py-4 [&:not(:last-child)]:border-b sm:[&:not(:last-child)]:border-b-0 sm:[&:not(:last-child)]:border-r"
-      >
-        <i :class="[tile.icon, tile.tone, 'text-xl']"></i>
-        <div>
-          <p class="font-display text-2xl leading-none text-white tabular-nums">{{ tile.value }}</p>
-          <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{{ tile.label }}</p>
+    <div class="relative border-t border-white/5 p-4">
+      <div class="mb-3 flex items-baseline justify-between rounded-2xl border border-aether-primary/20 bg-aether-primary/5 px-4 py-3">
+        <span class="text-[10px] font-black uppercase tracking-widest text-slate-400"><i class="ra ra-lightning-bolt text-aether-primary"></i> Total XP</span>
+        <span class="font-display text-2xl leading-none text-white tabular-nums">{{ formattedXp }}</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2 lg:grid-cols-2">
+        <div v-for="tile in statTiles" :key="tile.label" class="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] px-2 py-2.5 lg:flex-row lg:gap-2.5 lg:px-3">
+          <i :class="[tile.icon, tile.tone, 'text-base']"></i>
+          <div class="min-w-0 text-center lg:text-left">
+            <p class="font-display text-xl leading-none text-white tabular-nums">{{ tile.value }}</p>
+            <p class="mt-1 truncate text-[9px] font-black uppercase tracking-widest text-slate-500">{{ tile.label }}</p>
+          </div>
         </div>
       </div>
     </div>

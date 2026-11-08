@@ -50,6 +50,7 @@ import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
+import { useSessionAutoSpeakSettings } from '@/composables/useSessionAutoSpeakSettings'
 import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
 import { useGameInteractionState } from '@/composables/useGameInteractionState'
 import { useGameSessionLifecycle } from '@/composables/useGameSessionLifecycle'
@@ -60,6 +61,7 @@ import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
+import { waitForSpeechToFinish } from '@/services/speechWait'
 import { type GameSettings } from '@/services/gameViewService'
 import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
@@ -165,9 +167,6 @@ const settingsInitialTab = ref<SettingsTabId>('memory')
 const showMemoriesModal = ref(false)
 const isSavingSettings = ref(false)
 
-const autoSpeakNarration = ref(localStorage.getItem('tw_autoSpeakNarration') !== 'false')
-const autoSpeakDialogues = ref(localStorage.getItem('tw_autoSpeakDialogues') !== 'false')
-
 const skinPreference = computed(() => skinPreferenceOf(sheet.value?.ui_skin))
 const { textDensity } = useTextDensity()
 const { textScale } = useTextScale()
@@ -183,10 +182,7 @@ const openSettingsModal = (tab: SettingsTabId = 'memory') => {
 
 const saveSessionSettings = async (payload: SessionSettingsPayload) => {
   isSavingSettings.value = true
-  localStorage.setItem('tw_autoSpeakNarration', String(payload.autoSpeakNarration))
-  localStorage.setItem('tw_autoSpeakDialogues', String(payload.autoSpeakDialogues))
-  autoSpeakNarration.value = payload.autoSpeakNarration
-  autoSpeakDialogues.value = payload.autoSpeakDialogues
+  const ttsAutoSpeak = applyAutoSpeakSettings(payload.autoSpeakSettings, payload.autoSpeech)
   language.value = payload.language
   textDensity.value = payload.density
   textScale.value = payload.textScale
@@ -202,8 +198,10 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
       enable_history_compression: payload.enableCompression,
       narration_style: payload.narrationStyle,
       ui_skin: payload.skin,
+      tts_auto_speak: ttsAutoSpeak,
     })
     if (sheet.value) {
+      sheet.value.tts_auto_speak = ttsAutoSpeak
       sheet.value.max_memory_turns = payload.turns
       sheet.value.enable_history_compression = payload.enableCompression
       sheet.value.narration_style = payload.narrationStyle
@@ -269,7 +267,11 @@ const {
   cancelTurnError,
   isLegacyFormat,
   language,
+  hasOlderMessages,
+  sequenceTitles,
+  loadOlderMessages,
 } = useGameSocket()
+const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
 // Scene changes without an exit (script teleport, GM move) get the travel curtain too.
 const { arrivalTarget, isArriving } = useSceneArrivalCurtain(
@@ -451,14 +453,29 @@ const handleDialogChoice = async (index: number): Promise<void> => {
   if (!dialog || dialogChoiceBusy.value) return
   dialogChoiceBusy.value = true
   dialogChoiceError.value = ''
+  let continueStory = false
   try {
-    await api.chooseDialogOption(props.id, dialog.id, index, language.value)
+    const result = await api.chooseDialogOption(props.id, dialog.id, index, language.value)
+    continueStory = Boolean(result?.continue_story)
   } catch (error: any) {
     dialogChoiceError.value = error?.message || 'Your choice could not be applied.'
   } finally {
     await refreshSession(true)
     dialogChoiceBusy.value = false
   }
+  if (continueStory) await continueStoryAfterSpeech()
+}
+
+/**
+ * The handler queued a follow-up beat (tw.story.direct(..., after=...)). It is played once the
+ * lines that led to it have been read aloud, so a character entering in that beat does not show
+ * up while the previous lines are still being spoken.
+ */
+const continueStoryAfterSpeech = async (): Promise<void> => {
+  const idle = (): boolean => status.value === 'connected' && !isDialogOpen.value
+  await waitForSpeechToFinish(idle)
+  // The player acted meanwhile: that turn's narration runs the waiting callback instead.
+  if (idle()) await sendMessage('/continue_story')
 }
 
 const handleEntityClick = async (entity: any) => {
@@ -1635,12 +1652,12 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   sheet,
   npcMetadata,
   sessionId: computed(() => props.id),
-  autoSpeakNarration,
-  autoSpeakDialogues,
+  autoSpeakSettings,
   // A choice dialog no longer silences speech: it usually opens at the end of the turn whose
   // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
   speechDeferred: isSceneTransitioning,
+  playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
 })
 
 const handleTrackQuest = (questId: string | null) => {
@@ -1885,6 +1902,10 @@ usePlayAgentAutoLoop()
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
+      :has-older-messages="hasOlderMessages"
+      :load-older-messages="loadOlderMessages"
+      :scene-nodes="nodes"
+      :sequence-titles="sequenceTitles"
       :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"
@@ -2050,6 +2071,7 @@ usePlayAgentAutoLoop()
           :image-url="activeTextLog?.imageUrl || null"
           :can-take="canTakeTextLog"
           :is-taking="isTakingTextLog"
+          :auto-speak="autoSpeakSettings.readables"
           @take="handleTextLogTake"
           @close="closeTextLogModal"
         />
@@ -2109,8 +2131,7 @@ usePlayAgentAutoLoop()
       :initial-narration-style="sheet?.narration_style"
       :initial-compression="sheet?.enable_history_compression ?? true"
       :initial-auto-speech="audioService.autoSpeechEnabled.value"
-      :initial-auto-speak-narration="autoSpeakNarration"
-      :initial-auto-speak-dialogues="autoSpeakDialogues"
+      :initial-auto-speak-settings="autoSpeakSettings"
       :initial-language="language"
       :initial-tab="settingsInitialTab"
       :initial-skin="skinPreference"

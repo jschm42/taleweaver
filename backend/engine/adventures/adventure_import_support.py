@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.adventure_format import validate_manifest_version
 from backend.core.auth import get_password_hash
 from backend.core.config import settings
+from backend.core.global_settings import apply_global_settings
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
@@ -186,7 +187,7 @@ async def load_owner(db: AsyncSession, owner_id: Optional[str]) -> Optional[User
     if not owner_id:
         return None
     user_res = await db.execute(select(User).where(User.id == owner_id))
-    return user_res.scalars().first()
+    return await apply_global_settings(db, user_res.scalars().first())
 
 
 def build_local_default_user() -> User:
@@ -204,9 +205,9 @@ async def resolve_import_user(db: AsyncSession, owner_id: Optional[str]) -> User
     res = await db.execute(query)
     user = res.scalars().first()
     if user:
-        return user
+        return await apply_global_settings(db, user)
 
     user = build_local_default_user()
     db.add(user)
     await db.flush()
-    return user
+    return await apply_global_settings(db, user)

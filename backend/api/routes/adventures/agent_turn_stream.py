@@ -13,6 +13,11 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 
 from backend.api.routes.adventures.agent_actions import execute_agent_action
+from backend.api.routes.adventures.agent_change_log import (
+    WorldSnapshot,
+    describe_changes,
+    take_snapshot,
+)
 from backend.api.routes.adventures.agent_combat import decide_combat_turn
 from backend.api.routes.adventures.agent_dialog import decide_dialog_option
 from backend.api.routes.adventures.agent_logic import AgentService
@@ -128,8 +133,19 @@ async def _final_event(db, manager: GameTurnManager) -> str:
     return _sse("final", final_data)
 
 
+async def _change_log_events(
+    db, manager: GameTurnManager, before: WorldSnapshot
+) -> AsyncGenerator[str, None]:
+    """Posts what the agent's turn changed (items, switches, locks, location) as a system note."""
+    msg = await describe_changes(db, manager.game_id, before)
+    if not msg:
+        return
+    await manager._save_chat_message("system", msg)
+    yield _sse("system", {"role": "system", "content": msg})
+
+
 async def _agent_action_events(
-    db, manager: GameTurnManager, decision: Any
+    db, manager: GameTurnManager, decision: Any, before: WorldSnapshot
 ) -> AsyncGenerator[str, None]:
     """Announces the agent's decision and plays it as a regular turn."""
     yield _sse("thought", {"content": decision.thoughts})
@@ -148,6 +164,8 @@ async def _agent_action_events(
         await db.commit()
         await manager._save_chat_message("system", outcome.message or "")
         yield _sse("system", {"role": "system", "content": outcome.message or ""})
+        async for event in _change_log_events(db, manager, before):
+            yield event
         yield await _final_event(db, manager)
         return
 
@@ -159,12 +177,14 @@ async def _agent_action_events(
         await db.rollback()
         raise
 
+    async for event in _change_log_events(db, manager, before):
+        yield event
     async for event in _agent_finish_events(db, manager):
         yield event
 
 
 async def _agent_dialog_events(
-    db, manager: GameTurnManager, dialog: dict[str, Any]
+    db, manager: GameTurnManager, dialog: dict[str, Any], before: WorldSnapshot
 ) -> AsyncGenerator[str, None]:
     """Answers an open choice dialog instead of playing a free-text turn."""
     thoughts, option = await decide_dialog_option(manager, dialog)
@@ -178,6 +198,8 @@ async def _agent_dialog_events(
         messages = [f"Choice failed: {exc.detail}"]
     for msg in messages:
         yield _sse("system", {"role": "system", "content": msg})
+    async for event in _change_log_events(db, manager, before):
+        yield event
     yield await _final_event(db, manager)
     async for event in _agent_finish_events(db, manager):
         yield event
@@ -205,16 +227,17 @@ async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[
         manager = GameTurnManager(db, game_id, current_user)
         await manager.initialize()
         try:
+            before = await take_snapshot(db, game_id, manager.avatar.id)
             dialog = pending_dialog(manager.state.entity_states)
             if dialog is not None:
-                async for event in _agent_dialog_events(db, manager, dialog):
+                async for event in _agent_dialog_events(db, manager, dialog, before):
                     yield event
                 return
             decision, decision_failed = await _decide(db, game_id, current_user, manager)
             if not decision or decision.is_stuck_or_bug:
                 events = _agent_issue_events(db, game_id, manager, decision, decision_failed)
             else:
-                events = _agent_action_events(db, manager, decision)
+                events = _agent_action_events(db, manager, decision, before)
             async for event in events:
                 yield event
         except asyncio.CancelledError:

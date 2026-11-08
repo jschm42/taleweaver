@@ -3,17 +3,19 @@ import os
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.agent_actions import (
-    container_lock_hint,
     format_exits_for_agent,
     load_scene_exits,
 )
 from backend.api.routes.adventures.agent_persona import format_protagonist_profile
-from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.agent_world_view import (
+    format_room_objects,
+    load_room_entities,
+    opened_container_ids,
+)
 from backend.api.routes.adventures.turn_context_helpers import (
     _find_active_sequence,
     resolve_sequence_guidance,
@@ -28,7 +30,6 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity
 from backend.utils.path_security import (
     ensure_within_data_dir,
     safe_data_path,
@@ -36,6 +37,9 @@ from backend.utils.path_security import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Upper bound of the configurable pause between two auto-mode turns.
+MAX_STEP_DELAY_SECONDS = 300
 
 
 def _resolve_session_issue_log_path(session_id: str) -> str:
@@ -130,43 +134,6 @@ def build_player_perception_context(
             parts.append(f"SCENARIO CONTEXT:\n{fallback}")
 
     return "\n\n".join(parts)
-
-
-def _collect_visible_scene_item_names(
-    scene_entities: list[WorldEntity],
-    states: dict[str, Any],
-    current_scene_id: str | None,
-) -> list[str]:
-    container_payloads = [
-        {
-            "item_type": states.get(e.id, {}).get("item_type", e.item_type)
-            if isinstance(states, dict)
-            else e.item_type,
-            "inventory": states.get(e.id, {}).get("inventory", e.inventory)
-            if isinstance(states, dict)
-            else e.inventory,
-        }
-        for e in scene_entities
-    ]
-    contained_ids = AdventureLogic.collect_container_item_ids(container_payloads)
-
-    visible_names: list[str] = []
-    for entity in scene_entities:
-        e_state = states.get(entity.id, {}) if isinstance(states, dict) else {}
-        if e_state.get("current_scene_id", entity.current_scene_id) != current_scene_id:
-            continue
-        if bool(e_state.get("is_hidden", entity.is_hidden)):
-            continue
-        if bool(e_state.get("is_in_inventory", entity.is_in_inventory)):
-            continue
-        if str(entity.id or "") in contained_ids:
-            continue
-        if not entity.name:
-            continue
-        is_container = str(entity.item_type or "").upper() == "CONTAINER"
-        hint = container_lock_hint(entity, states) if is_container else ""
-        visible_names.append(f"{entity.name}{hint}")
-    return visible_names
 
 
 def _build_agent_objective_and_walkthrough(
@@ -276,6 +243,8 @@ class AgentService:
             ("step_by_step", False),
             ("personality", "casual"),
             ("custom_personality", ""),
+            ("step_delay", 0),
+            ("wait_for_tts", False),
         ):
             if key not in agent_state:
                 agent_state[key] = default
@@ -335,6 +304,22 @@ class AgentService:
         """Enable/disable step-by-step confirmation mode for the play-agent."""
         agent_state = AgentService.get_agent_state(state)
         agent_state["step_by_step"] = enabled
+        state.entity_states["__agent__"] = agent_state
+        flag_modified(state, "entity_states")
+
+    @staticmethod
+    def set_step_delay(state: SessionState, seconds: int) -> None:
+        """Pause in seconds between two agent turns in auto mode."""
+        agent_state = AgentService.get_agent_state(state)
+        agent_state["step_delay"] = max(0, min(int(seconds), MAX_STEP_DELAY_SECONDS))
+        state.entity_states["__agent__"] = agent_state
+        flag_modified(state, "entity_states")
+
+    @staticmethod
+    def set_wait_for_tts(state: SessionState, enabled: bool) -> None:
+        """In auto mode, start the next turn only after the narration was read aloud."""
+        agent_state = AgentService.get_agent_state(state)
+        agent_state["wait_for_tts"] = enabled
         state.entity_states["__agent__"] = agent_state
         flag_modified(state, "entity_states")
 
@@ -405,21 +390,10 @@ class AgentService:
         builder = TurnLlmContextBuilder(manager)
         ctx = await builder.build_context(user_msg="", language=None)
 
-        scene_items_res = await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.session_id == game_id,
-                WorldEntity.entity_type == "OBJECT",
-            )
-        )
-        scene_entities = list(scene_items_res.scalars().all())
-        states = state.entity_states or {}
-
-        visible_item_names = _collect_visible_scene_item_names(
-            scene_entities, states, state.current_scene_id
-        )
-        visible_scene_items_text = ", ".join(visible_item_names) if visible_item_names else "None"
-
         agent_state = AgentService.get_agent_state(state)
+        visible_scene_items_text = format_room_objects(
+            await load_room_entities(db, state), opened_container_ids(agent_state)
+        )
         objective_block, walkthrough_text = _build_agent_objective_and_walkthrough(
             adventure, state, agent_state
         )

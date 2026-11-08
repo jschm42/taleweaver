@@ -11,31 +11,30 @@ from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.user import User
 from tests.conftest import TestSessionLocal
+from tests.server_settings_helpers import seed_server_settings
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _enable_tts_for_test_user(api_key: str = "test-api-key", **overrides: object) -> None:
-    """Enable TTS for the seeded test user with valid settings (Gemini unless overridden)."""
+    """Enable TTS server-wide with valid settings (Gemini unless overridden)."""
+    tts_settings = {
+        "enabled": True,
+        "provider": "google",
+        "selected_model": "gemini-3.8-flash-tts",
+        "selected_voice": "Puck",
+        "use_vocal_tags": True,
+        "speech_rate": 1.0,
+        "elevenlabs_voice_id": "",
+        **overrides,
+    }
+    provider = str(tts_settings["provider"])
     async with TestSessionLocal() as session:
-        user = (
-            (await session.execute(select(User).where(User.username == "test_user")))
-            .scalars()
-            .first()
+        await seed_server_settings(
+            session,
+            tts_settings=tts_settings,
+            encrypted_api_keys={provider: encryption_util.encrypt_key(api_key)},
         )
-        assert user is not None
-        user.tts_settings = {
-            "enabled": True,
-            "provider": "google",
-            "selected_model": "gemini-3.8-flash-tts",
-            "selected_voice": "Puck",
-            "use_vocal_tags": True,
-            "speech_rate": 1.0,
-            "elevenlabs_voice_id": "",
-            **overrides,
-        }
-        provider = str(user.tts_settings["provider"])
-        user.encrypted_api_keys = {provider: encryption_util.encrypt_key(api_key)}
         await session.commit()
 
 

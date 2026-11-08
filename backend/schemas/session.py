@@ -61,6 +61,8 @@ class GameSessionUpdate(BaseModel):
     narration_style: Optional[NarrationStyle] = None
     # "auto" clears the choice so the adventure's own skin applies again
     ui_skin: Optional[str] = None
+    # Auto-Speak flags of this session (enabled, gm, protagonist, npcs, system, readables)
+    tts_auto_speak: Optional[dict[str, Any]] = None
 
     @field_validator("ui_skin")
     @classmethod

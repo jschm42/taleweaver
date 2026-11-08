@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from backend.api.routes.adventures.agent_logic import AgentService
+from backend.api.routes.adventures.agent_logic import MAX_STEP_DELAY_SECONDS, AgentService
 from backend.models.session_state import SessionState
 
 PERSONALITY_LABELS: dict[str, str] = {
@@ -34,6 +34,8 @@ class AgentSettingsUpdate(BaseModel):
     custom_personality: Optional[str] = None
     allow_walkthrough: Optional[bool] = None
     monkey_mode: Optional[bool] = None
+    step_delay: Optional[int] = Field(default=None, ge=0, le=MAX_STEP_DELAY_SECONDS)
+    wait_for_tts: Optional[bool] = None
 
 
 def normalize_personality(value: str | None) -> str | None:
@@ -82,6 +84,10 @@ def apply_settings_update(
         AgentService.set_walkthrough_allowed(state, update.allow_walkthrough)
     if update.monkey_mode is not None:
         AgentService.set_monkey_mode(state, update.monkey_mode)
+    if update.step_delay is not None:
+        AgentService.set_step_delay(state, update.step_delay)
+    if update.wait_for_tts is not None:
+        AgentService.set_wait_for_tts(state, update.wait_for_tts)
     if update.personality is None and update.custom_personality is None:
         return
 
@@ -102,4 +108,6 @@ def build_agent_snapshot(state: SessionState) -> dict[str, Any]:
         "agent_step_by_step": bool(agent_state.get("step_by_step", False)),
         "agent_personality": str(agent_state.get("personality", "casual")),
         "agent_custom_personality": str(agent_state.get("custom_personality", "")),
+        "agent_step_delay": int(agent_state.get("step_delay", 0) or 0),
+        "agent_wait_for_tts": bool(agent_state.get("wait_for_tts", False)),
     }

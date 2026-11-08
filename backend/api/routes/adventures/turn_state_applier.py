@@ -9,6 +9,11 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.award_granting import grant_awards
+from backend.api.routes.adventures.container_detach import (
+    detach_from_containers,
+    load_session_containers,
+)
+from backend.api.routes.adventures.entity_state_merge import merge_entity_states
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.quest_completion import (
     announce_completed_quests,
@@ -610,7 +615,8 @@ class TurnStateApplier:
                     logger.error(f"Map update failed during turn: {e}")
 
         # Entity State Overrides (Movement, Stats, Visibility)
-        states = dict(self.state.entity_states or {})
+        base_states = self.state.entity_states or {}
+        states = dict(base_states)
 
         if event.moved_entities:
             for move in event.moved_entities:
@@ -855,6 +861,12 @@ class TurnStateApplier:
                             await self._save_chat_message("system", meta["on_pickup_text"])
                             system_messages.append(meta["on_pickup_text"])
 
+        granted_ids = [item.id for item in event.new_inventory_items or [] if item.id]
+        if granted_ids:
+            containers = await load_session_containers(self.db, self.game_id)
+            if detach_from_containers(states, containers, granted_ids):
+                state_dirty = True
+
         if event.removed_inventory_item_ids:
             for item_id in event.removed_inventory_item_ids:
                 if item_id:
@@ -959,10 +971,6 @@ class TurnStateApplier:
                     self.state.active_sequence_id,
                 )
             )
-            if getattr(self.state, "is_completed", False):
-                event.game_completed = True
-                if not event.status_note:
-                    event.status_note = "Congratulations! You have completed the final sequence."
 
         raw_win_guard = getattr(self.state, "completed_guard_expression", None) or getattr(
             self.adventure, "completed_guard_expression", None
@@ -1152,7 +1160,9 @@ class TurnStateApplier:
             state_dirty = True
 
         if state_dirty:
-            self.state.entity_states = states
+            self.state.entity_states = merge_entity_states(
+                base_states, states, self.state.entity_states
+            )
             flag_modified(self.state, "entity_states")
 
         await self._apply_adventure_generator_tools(event)

@@ -4474,6 +4474,9 @@ async def test_session_debug_endpoint_guard_and_payload(setup_test_db, monkeypat
         user, adv, avatar, state = await _seed_game_context(db)
 
         # 1. When debug is disabled, ensure 403 HTTPException is raised
+        from backend.core.config import settings
+
+        monkeypatch.setattr(settings, "TALEWEAVER_DEBUG_ENABLED", False)
         state.is_debug_enabled = False
         await db.commit()
 

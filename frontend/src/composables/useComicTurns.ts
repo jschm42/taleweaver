@@ -1,4 +1,4 @@
-import { ref, computed, watch, type Ref } from 'vue'
+import { computed, type Ref } from 'vue'
 import DOMPurify from 'dompurify'
 import type { ChatMessage } from '@/types'
 import { buildComicPages, type ComicTurn, type DialogueSegment } from './comicPages'
@@ -451,8 +451,7 @@ export function renderDialogueHtml(text: string): string {
 
 export function useComicTurns(options: UseComicTurnsOptions) {
   const { messages, entities, npcMetadata, sheet } = options
-  const viewingTurnIndex = ref<number | null>(null)
-
+  // Pages (one per scene + sequence) only mark where the endless story feed shows a divider.
   const gameTurns = computed<ComicTurn[]>(() =>
     buildComicPages(messages.value || [], {
       parseUser: (msg) => parseUserMessage(msg, entities.value, npcMetadata.value),
@@ -461,34 +460,10 @@ export function useComicTurns(options: UseComicTurnsOptions) {
     })
   )
 
-  const activeTurnIndex = computed(() => {
-    if (viewingTurnIndex.value !== null && viewingTurnIndex.value >= 0 && viewingTurnIndex.value < gameTurns.value.length) {
-      return viewingTurnIndex.value
-    }
-    return Math.max(0, gameTurns.value.length - 1)
-  })
+  /** Index of the newest page; the character stage reveals its speakers when it changes. */
+  const activeTurnIndex = computed(() => Math.max(0, gameTurns.value.length - 1))
 
-  const activeTurn = computed<ComicTurn | null>(() => {
-    if (!gameTurns.value.length) return null
-    return gameTurns.value[activeTurnIndex.value] || null
-  })
-
-  watch(
-    () => messages.value.length,
-    () => {
-      if (viewingTurnIndex.value === null || viewingTurnIndex.value >= gameTurns.value.length - 2) {
-        viewingTurnIndex.value = null
-      }
-    }
-  )
-
-  function goToTurn(idx: number) {
-    viewingTurnIndex.value = Math.max(0, Math.min(gameTurns.value.length - 1, idx))
-  }
-
-  function goToLatestTurn() {
-    viewingTurnIndex.value = null
-  }
+  const activeTurn = computed<ComicTurn | null>(() => gameTurns.value[activeTurnIndex.value] || null)
 
   const activeSpeakers = computed<Set<string>>(() => {
     const speakers = new Set<string>()
@@ -586,11 +561,8 @@ export function useComicTurns(options: UseComicTurnsOptions) {
     gameTurns,
     activeTurnIndex,
     activeTurn,
-    viewingTurnIndex,
     activeSpeakers,
     npcs,
-    goToTurn,
-    goToLatestTurn,
     isNpcSpeaking,
     getEntityForHover,
     renderFormattedHtml,

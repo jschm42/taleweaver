@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.core.global_settings import read_server_settings
 from backend.models.user import User
 
 router = APIRouter(prefix="/stt", tags=["STT"])
@@ -88,13 +89,10 @@ async def get_stt_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Gets the load status of the configured Whisper model."""
-    from backend.api.routes.config_api import (
-        _normalize_game_settings,
-        _resolve_global_settings_owner,
-    )
+    from backend.api.routes.config_api import _normalize_game_settings
 
-    settings_owner = await _resolve_global_settings_owner(db, current_user)
-    game_settings = _normalize_game_settings(settings_owner.game_settings)
+    server = await read_server_settings(db)
+    game_settings = _normalize_game_settings(server.game_settings)
     model_name = game_settings.get("whisper_model", "tiny")
 
     with _state_lock:
@@ -110,13 +108,10 @@ async def preload_stt_model(
     db: AsyncSession = Depends(get_db),
 ):
     """Starts preloading the configured Whisper model in a background thread."""
-    from backend.api.routes.config_api import (
-        _normalize_game_settings,
-        _resolve_global_settings_owner,
-    )
+    from backend.api.routes.config_api import _normalize_game_settings
 
-    settings_owner = await _resolve_global_settings_owner(db, current_user)
-    game_settings = _normalize_game_settings(settings_owner.game_settings)
+    server = await read_server_settings(db)
+    game_settings = _normalize_game_settings(server.game_settings)
     model_name = game_settings.get("whisper_model", "tiny")
 
     with _state_lock:
@@ -194,13 +189,10 @@ async def transcribe_audio(
     db: AsyncSession = Depends(get_db),
 ):
     """Transcribes an uploaded WAV file using a local faster-whisper model."""
-    from backend.api.routes.config_api import (
-        _normalize_game_settings,
-        _resolve_global_settings_owner,
-    )
+    from backend.api.routes.config_api import _normalize_game_settings
 
-    settings_owner = await _resolve_global_settings_owner(db, current_user)
-    game_settings = _normalize_game_settings(settings_owner.game_settings)
+    server = await read_server_settings(db)
+    game_settings = _normalize_game_settings(server.game_settings)
     model_name = game_settings.get("whisper_model", "tiny")
 
     content = await file.read()

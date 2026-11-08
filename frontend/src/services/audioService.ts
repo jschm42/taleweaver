@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue'
 import { api } from '@/composables/useApi'
+import { describePlaybackError } from '@/services/audioErrors'
 import {
   buildSafeRetryText,
   buildSegmentRequests,
@@ -173,17 +174,10 @@ class AudioService {
 
   private setPlaybackError(err: unknown): void {
     const rawMessage = err instanceof Error ? err.message : String(err)
-    const normalized = rawMessage.toLowerCase()
-    if (
-      normalized.includes('notallowederror')
-      || normalized.includes('user didn\'t interact')
-      || normalized.includes('audiocontext was not allowed to start')
-      || normalized.includes('suspended')
-    ) {
-      this.lastError.value = 'Audio blocked by browser autoplay policy. Click once in the game to unlock voice playback.'
-      return
-    }
-    this.lastError.value = rawMessage
+    const message = describePlaybackError(rawMessage)
+    // Keep the technical cause for debugging when the toast shows a friendlier text.
+    if (message !== rawMessage) console.warn('[TTS] Playback error:', rawMessage)
+    this.lastError.value = message
   }
 
   private getSafeSpeechRate(): number {

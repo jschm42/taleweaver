@@ -20,6 +20,8 @@ const props = defineProps<{
   imageUrl?: string | null
   canTake?: boolean
   isTaking?: boolean
+  /** Read the text aloud as soon as the panel opens (only while Auto-Speak is on). */
+  autoSpeak?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -94,6 +96,16 @@ const handleSpeakTextLog = () => {
     title: props.title,
   })
 }
+
+// Queued behind any narration that is still playing instead of cutting it off.
+watch(
+  () => props.open,
+  (open) => {
+    if (!open || !props.autoSpeak || !canSpeak.value) return
+    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
+    void audioService.enqueueSpeak(activeContent.value, { title: props.title })
+  },
+)
 
 watch(
   () => [props.open, props.content, targetLanguage.value],

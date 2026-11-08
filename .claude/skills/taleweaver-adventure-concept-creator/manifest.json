@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "name": "taleweaver-adventure-concept-creator",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "b0eab63384a9045f7784bca86ef1cf5f7c185275622215a2787d7499a83ff024",
+      "size": 33485
+    },
+    {
+      "path": "docs/scripting-enginge.md",
+      "sha256": "8d4f279fade807a8754d0e4f62cb197caf4e63b8978a1cbe8c41bb5c006e191a",
+      "size": 116267
+    },
+    {
+      "path": "docs/scripting_engine.md",
+      "sha256": "8d4f279fade807a8754d0e4f62cb197caf4e63b8978a1cbe8c41bb5c006e191a",
+      "size": 116267
+    },
+    {
+      "path": "docs/specs/adventure_format.md",
+      "sha256": "46141204a7f56050fec1bc23cf22d57505868c59232e6a171fe56464d4288eec",
+      "size": 19691
+    },
+    {
+      "path": "docs/world-builder-blueprint-manual.md",
+      "sha256": "28d90bf0858eeb35a9ae8abd1929128e43925712b5764c010e8b3f046e1e747e",
+      "size": 21483
+    },
+    {
+      "path": "docs/world-builder-syntax.md",
+      "sha256": "48543cc1e71a83a30236a81a93db3ebc6946f09fa05e5a9b40e4e216fa360d7b",
+      "size": 23148
+    },
+    {
+      "path": "package.json",
+      "sha256": "455e817fb45e0e2f95e27ea7df71e3b3a9417dca8dcf703357b3fbf5694da36a",
+      "size": 2214
+    }
+  ],
+  "documentation": [
+    {
+      "path": "docs/world-builder-blueprint-manual.md",
+      "source": "docs/world-builder-blueprint-manual.md",
+      "description": "Story Idea blueprint manual: workflow, tag overview and design advice."
+    },
+    {
+      "path": "docs/world-builder-syntax.md",
+      "source": "docs/world-builder-syntax.md",
+      "description": "Full key reference for the World-Builder blueprint syntax."
+    },
+    {
+      "path": "docs/scripting_engine.md",
+      "source": "docs/scripting_engine.md",
+      "description": "Scripting engine (`tw.*` API) used by on_start, guard, Rule and Script blocks."
+    },
+    {
+      "path": "docs/scripting-enginge.md",
+      "source": "docs/scripting_engine.md",
+      "description": "Alias of docs/scripting_engine.md for references using the misspelled name.",
+      "alias_of": "docs/scripting_engine.md"
+    },
+    {
+      "path": "docs/specs/adventure_format.md",
+      "source": "docs/specs/adventure_format.md",
+      "description": "Adventure file format specification (adventure.adv / .adz)."
+    }
+  ],
+  "compatibility": {
+    "taleweaver": ">=0.7.0-beta",
+    "agents": [
+      "claude-code",
+      "claude-skills",
+      "antigravity",
+      "github-copilot"
+    ],
+    "formats": [
+      "world-builder-blueprint",
+      "adventure.adv",
+      "adventure.adz"
+    ]
+  }
+}

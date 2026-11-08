@@ -55,6 +55,7 @@ class SequenceSchema(BaseModel):
     required_item_id: Optional[str] = ""
     required_scene_id: Optional[str] = ""
     required_defeated_npc_id: Optional[str] = ""
+    activation_scene_id: Optional[str] = ""
     guard_expression: Optional[str] = ""
     completion_guard_expression: Optional[str] = ""
     exp_reward: Optional[int] = 50
@@ -92,6 +93,7 @@ class AdventureTemplateBase(BaseModel):
     license_url: Optional[str] = Field(None, max_length=500)
     original_prompt: Optional[str] = Field(None, max_length=ORIGINAL_PROMPT_MAX_LENGTH)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = "linear"
     generation_strictness: Optional[Literal["strict", "creative"]] = "creative"
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
@@ -166,6 +168,7 @@ class AdventureTemplateUpdate(BaseModel):
     license_url: Optional[str] = Field(None, max_length=500)
     original_prompt: Optional[str] = Field(None, max_length=ORIGINAL_PROMPT_MAX_LENGTH)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
+    sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = None
     generation_strictness: Optional[Literal["strict", "creative"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None

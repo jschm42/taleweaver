@@ -6,7 +6,7 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   itemIds?: string[]
-  /** Scene/sequence the message belongs to; the story feed shows one page per scene/sequence. */
+  /** Scene/sequence the message belongs to; the story feed puts a divider where they change. */
   scene_id?: string | null
   sequence_id?: string | null
   /** Script narration shown verbatim (tw.story.narrate_raw): no dialogue or voice-tag parsing. */
@@ -53,6 +53,7 @@ export interface CharacterSheet {
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
+  sequence_progression_mode?: 'linear' | 'dynamic'
   adventure_tone?: string | { id?: string; name?: string } | null
   /** Author-defined dialog skin (validated server-side). */
   ui_theme?: { skin?: string | null; accent?: string | null } | null
@@ -64,6 +65,10 @@ export interface CharacterSheet {
   agent_monkey_mode?: boolean
   agent_allow_walkthrough?: boolean
   agent_step_by_step?: boolean
+  /** Pause in seconds between two Play-Agent steps in Auto mode. */
+  agent_step_delay?: number
+  /** In Auto mode, the next Play-Agent step waits until text-to-speech has finished. */
+  agent_wait_for_tts?: boolean
   agent_personality?: string
   agent_custom_personality?: string
   max_memory_turns?: number
@@ -378,6 +383,7 @@ export interface GameSession {
   narration_style?: 'terse' | 'dialogue' | 'balanced' | 'rich' | 'epic' | string
   is_legacy_format?: boolean
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat' | string
+  sequence_progression_mode?: 'linear' | 'dynamic'
   selected_image_styles?: CatalogTile[] | any[]
   selected_tone?: CatalogTile | string | null
 }
@@ -428,6 +434,7 @@ export interface AdventureTemplateSummary {
   selected_tone?: CatalogTile | string | null
   selected_image_styles?: CatalogTile[] | any[]
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat' | string
+  sequence_progression_mode?: 'linear' | 'dynamic'
   progress?: number
   quest_count?: number
   completed_quest_count?: number
@@ -633,6 +640,26 @@ export interface EarnedAward extends Award {
   adventure_title: string
   session_id: string
   earned_at: string
+}
+
+/** One ranked player on the leaderboard (backend/api/routes/leaderboard_api.py). */
+export interface LeaderboardEntry {
+  id: string
+  username: string
+  profile_image_url?: string | null
+  bio?: string | null
+  rank: number
+  total_xp: number
+  completed_quests: number
+  failed_quests: number
+  total_awards: number
+  adventure_count: number
+  earned_awards: EarnedAward[]
+}
+
+export interface LeaderboardResponse {
+  players: LeaderboardEntry[]
+  total_players: number
 }
 
 

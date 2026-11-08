@@ -1,6 +1,6 @@
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, BeforeValidator, ConfigDict, Field
 
 from backend.models.avatar import Avatar
 
@@ -13,6 +13,28 @@ class GameOverError(Exception):
 
 # Backward-compatible alias for modules not yet migrated to GameOverError
 GameOverException = GameOverError
+
+
+_NOTE_TEXT_KEYS = ("content", "text", "note", "value")
+
+
+def _note_text(entry: Any) -> str:
+    if not isinstance(entry, dict):
+        return str(entry)
+    for key in _NOTE_TEXT_KEYS:
+        if isinstance(entry.get(key), str):
+            return entry[key]
+    return str(entry)
+
+
+def _coerce_note_texts(value: Any) -> Any:
+    """Some models wrap notes as objects (``{"type": "note", "content": ...}``); keep the text."""
+    if not isinstance(value, list):
+        return value
+    return [_note_text(entry) for entry in value]
+
+
+NoteTexts = Annotated[list[str], BeforeValidator(_coerce_note_texts)]
 
 
 class InventoryItem(BaseModel):
@@ -201,8 +223,8 @@ class AdventureGeneratorToolIntent(BaseModel):
     completed_quest_ids: Optional[list[str]] = None
     sequence_completed: bool = False
     earned_award_keys: Optional[list[str]] = None
-    remember_notes: Optional[list[str]] = None
-    forget_notes: Optional[list[str]] = None
+    remember_notes: Optional[NoteTexts] = None
+    forget_notes: Optional[NoteTexts] = None
     clear_notes: bool = False
     new_world_memories: Optional[list[WorldMemoryUpdate]] = None
     new_status_effects: Optional[list[str]] = None
@@ -316,8 +338,8 @@ class GameEvent(BaseModel):
     )
 
     # Notes Tool
-    remember_notes: Optional[list[str]] = None
-    forget_notes: Optional[list[str]] = None
+    remember_notes: Optional[NoteTexts] = None
+    forget_notes: Optional[NoteTexts] = None
     clear_notes: bool = False
     new_world_memories: Optional[list[WorldMemoryUpdate]] = None
 

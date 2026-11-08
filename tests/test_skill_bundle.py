@@ -29,10 +29,10 @@ def repo_skill():
 @pytest.fixture
 def tmp_skill(tmp_path):
     """Isolated repo copy with the skill entry and its doc sources, not yet bundled."""
-    skill_dir = tmp_path / ".agents" / "skills" / SKILL_NAME
+    skill_dir = tmp_path / ".claude" / "skills" / SKILL_NAME
     skill_dir.mkdir(parents=True)
     shutil.copyfile(
-        REPO_ROOT / ".agents" / "skills" / SKILL_NAME / "SKILL.md", skill_dir / "SKILL.md"
+        REPO_ROOT / ".claude" / "skills" / SKILL_NAME / "SKILL.md", skill_dir / "SKILL.md"
     )
     for doc in bundle_skill.BUNDLES[SKILL_NAME]:
         source = tmp_path / doc.source

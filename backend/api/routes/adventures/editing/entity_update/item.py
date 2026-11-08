@@ -120,8 +120,14 @@ def _apply_type_change(item: WorldEntity, payload: EntityUpdateRequest) -> Optio
     return new_type
 
 
-def _update_metadata(item: WorldEntity, payload: EntityUpdateRequest, item_type: str) -> None:
+def _update_metadata(
+    item: WorldEntity, payload: EntityUpdateRequest, item_type: str, type_changed: bool
+) -> None:
     metadata_json = dict(item.metadata_json or {})
+    if type_changed:
+        # Imported switches store "not listed in discoveries"; drop it so the
+        # new type's default applies (e.g. a CONTAINER_SWITCH must be listed).
+        metadata_json.pop("discovery_visibility", None)
     item_metadata.update_container(item, metadata_json, payload, item_type in CONTAINER_ITEM_TYPES)
     if given(payload, "inventory"):
         item.inventory = payload.inventory
@@ -195,7 +201,7 @@ async def update_item(
             status_code=400,
             detail="description must be at most 200 characters for READABLE objects.",
         )
-    _update_metadata(item, payload, item_type)
+    _update_metadata(item, payload, item_type, new_type is not None)
     _update_columns(item, payload)
     _update_visibility(item, payload, new_type is not None)
     await hide_recipe_results(db, template_id, item)

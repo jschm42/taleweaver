@@ -38,6 +38,7 @@ const props = defineProps<{
   mode?: 'rpg' | 'story' | 'chat'
   debugMode?: boolean
   hasSceneImage?: boolean
+  progressionMode?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -83,7 +84,15 @@ const sequenceDescription = computed(() => {
   ).trim()
 })
 
+const isDynamic = computed(() => {
+  return (
+    props.progressionMode === 'dynamic' ||
+    props.activeSequence?.progression_mode === 'dynamic'
+  )
+})
+
 const sequenceOrder = computed(() => {
+  if (isDynamic.value) return null
   return props.activeSequence?.order ?? null
 })
 </script>

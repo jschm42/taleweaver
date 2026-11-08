@@ -116,6 +116,7 @@ def blueprint_sequences(blueprint: Blueprint) -> list[dict[str, Any]]:
                 "required_item_id": values.get("required_item_id", ""),
                 "required_scene_id": values.get("required_scene_id", ""),
                 "required_defeated_npc_id": values.get("required_defeated_npc_id", ""),
+                "activation_scene_id": values.get("activation_scene_id", ""),
                 "exp_reward": values.get("exp_reward", 100),
             }
         )

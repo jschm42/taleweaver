@@ -1,5 +1,7 @@
 """Script-driven choice dialogs: tw.dialog.choose opens, the choice endpoint runs the handler."""
 
+import json
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -248,6 +250,33 @@ async def test_narrated_choice_saves_llm_outcome(monkeypatch):
 
         # Assert
         assert result["messages"][-1] == "The red wire parts with a soft snip."
+
+
+@pytest.mark.asyncio
+async def test_narrated_choice_does_not_get_shown_lines_as_facts(monkeypatch):
+    captured: dict = {}
+
+    class FakeLLM:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def aexecute_simple_task(self, system, user_prompt, _model, **_kwargs):
+            captured["system"] = system
+            captured["payload"] = json.loads(user_prompt)
+            return "The timer dies with a last, tired beep."
+
+    async with TestSessionLocal() as db:
+        # Arrange: the handler narrates 'You disarmed the trap.' itself
+        monkeypatch.setattr(dialog_service, "GameMasterLLM", FakeLLM)
+        manager = await _manager(db, narrate=True)
+
+        # Act
+        await DialogChoiceResolver(manager).resolve(_dialog(manager)["id"], 0, None)
+
+        # Assert: the line is marked as already read, so the narration continues after it
+        assert "You disarmed the trap." in captured["payload"]["already_shown"]
+        assert "You disarmed the trap." not in captured["payload"]["outcome_facts"]
+        assert "never repeat" in captured["system"]
 
 
 def test_validator_flags_handler_missing_from_init_script():

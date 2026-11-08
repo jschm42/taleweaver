@@ -17,7 +17,13 @@ from backend.api.routes.adventures.agent_commands import (
     PLAYAGENT_COMMANDS,
     handle_playagent_command,
 )
+from backend.api.routes.adventures.after_narration import run_after_narration
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
+from backend.api.routes.adventures.history_compression_window import messages_to_compress
+from backend.api.routes.adventures.story_continuation import (
+    CONTINUE_STORY_COMMAND,
+    continue_story,
+)
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
 from backend.api.routes.adventures.talent_use import resolve_talent_request, stream_talent_turn
@@ -60,6 +66,7 @@ from backend.api.routes.adventures.turn_prompt_layout import (
     build_pass1_user_prompt,
 )
 from backend.core import prompts
+from backend.core.api_keys import PersonalKeyRequiredError, key_source
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
@@ -220,6 +227,8 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
 
     lower_text = str(exc or "").lower()
 
+    if isinstance(exc, PersonalKeyRequiredError):
+        return str(exc)
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
@@ -822,6 +831,19 @@ class GameTurnManager:
             await self._generate_prompt_suggestions(last_response)
             await self.db.commit()
             yield await self._command_final_event()
+            return
+
+        if user_msg.lower() == CONTINUE_STORY_COMMAND:
+            try:
+                async for chunk in continue_story(self, language):
+                    yield chunk
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                detail = (
+                    _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
+                )
+                yield f"event: error\ndata: {json.dumps({'detail': detail, 'retryable': True})}\n\n"
             return
 
         cmd_parts = user_msg.strip().split(None, 1)
@@ -1808,7 +1830,12 @@ class GameTurnManager:
         narration_prompt = "\n\n".join(part for part in narration_prompt_parts if part)
 
         reminders: list[str] = [
-            narration_style_reminder(getattr(self.state, "narration_style", None))
+            narration_style_reminder(getattr(self.state, "narration_style", None)),
+            (
+                "STRICT SEPARATION: Keep prose narration and character speech strictly separated. "
+                'NEVER embed quotes in prose. Every spoken line MUST start on its own line as Character Name: "Dialogue" '
+                "(separated from prose by blank lines)."
+            ),
         ]
         if use_vocal_tags:
             reminders.append(vocal_tag_reminder())
@@ -1891,6 +1918,8 @@ class GameTurnManager:
             operation="chat_turn",
             phase="narration",
             model=complex_model,
+            # Who pays for this narration: the server or the player's own key.
+            key_source=key_source(self.user.encrypted_api_keys, complex_model_provider),
             memory_turns=memory_turns,
             history_messages_count=len(narration_messages),
             **token_usage,
@@ -1975,7 +2004,10 @@ class GameTurnManager:
         if isinstance(game_event, GameEvent):
             reveal_event = GameEvent()
             post_reveal_messages = await self._enforce_hidden_entity_reveal(
-                reveal_event, user_msg, draft_narration=response_text
+                reveal_event,
+                user_msg,
+                draft_narration=response_text,
+                moved=scene_changed_this_turn,
             )
             if post_reveal_messages and reveal_event.updated_entities:
                 await self._apply_game_event(reveal_event)
@@ -1991,6 +2023,15 @@ class GameTurnManager:
             session_id=self.state.session_id, role="assistant", content=response_text
         )
         self.db.add(assistant_chat)
+
+        # Callbacks attached to this narration's directions (direct/say_directed after=...).
+        # Before on_narration_done: callbacks queued there belong to the next narration.
+        after_msgs, after_ended = await run_after_narration(self)
+        for sm in after_msgs:
+            yield sse_role_message(sm)
+        if after_ended and isinstance(game_event, GameEvent):
+            game_event.game_over = True
+            game_event.status_note = getattr(self.state.session, "status_note", None)
 
         # Post-narration scripts (on_narration_done)
         if script_runner.scripts:
@@ -2259,17 +2300,6 @@ class GameTurnManager:
             .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
         )
         all_msgs = list(res.scalars().all())
-        user_indices = [i for i, m in enumerate(all_msgs) if m.role == "user"]
-
-        if len(user_indices) <= max_turns:
-            return
-
-        cutoff_user_idx = len(user_indices) - max_turns
-        cutoff_msg_idx = user_indices[cutoff_user_idx]
-
-        msgs_outside_memory = all_msgs[:cutoff_msg_idx]
-        if not msgs_outside_memory:
-            return
 
         compressed_data = self.state.compressed_history
         current_summary = ""
@@ -2280,16 +2310,10 @@ class GameTurnManager:
         elif isinstance(compressed_data, str):
             current_summary = compressed_data
 
-        start_idx = 0
-        if last_compressed_msg_id:
-            for idx, msg in enumerate(msgs_outside_memory):
-                if msg.id == last_compressed_msg_id:
-                    start_idx = idx + 1
-                    break
-
-        new_msgs_to_compress = msgs_outside_memory[start_idx:]
+        new_msgs_to_compress = messages_to_compress(all_msgs, last_compressed_msg_id, max_turns)
         if not new_msgs_to_compress:
             return
+        msgs_outside_memory = new_msgs_to_compress
 
         formatted_lines = []
         for m in new_msgs_to_compress:
@@ -2871,6 +2895,9 @@ class GameTurnManager:
             image_generator=make_script_image_generator(self.user, self.adventure, self.game_id),
             active_sequence_id=self.state.active_sequence_id,
             sequences=getattr(self.adventure, "sequences", None),
+            sequence_progression_mode=getattr(
+                self.adventure, "sequence_progression_mode", "linear"
+            ),
         )
 
     def _get_script_runner(self) -> ScriptRunner:
@@ -3050,7 +3077,7 @@ class GameTurnManager:
             entity_states["__switch_story_flags__"] = story_flags
 
         store_pending_dialog(entity_states, changeset.pending_dialog)
-        store_gm_directions(entity_states, changeset.gm_directions)
+        store_gm_directions(entity_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
@@ -3177,10 +3204,6 @@ class GameTurnManager:
             message_saver=self._save_chat_message,
         )
         system_messages.extend(seq_msgs)
-        if getattr(self.state, "is_completed", False):
-            await self._finalize_session(
-                "completed", "Congratulations! You have completed the final sequence."
-            )
 
         # Last, so the save state holds everything this script changed.
         for save_msg in await SessionCheckpointService.save_from_script(

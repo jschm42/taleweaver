@@ -29,9 +29,17 @@ def _ordered_sequences(adventure: Any) -> list[dict[str, Any]]:
     return sorted((s for s in raw if isinstance(s, dict)), key=lambda s: s.get("order", 1))
 
 
-def _active_index(sequences: list[dict[str, Any]], active_seq_id: Optional[str]) -> int:
+def _active_index(
+    sequences: list[dict[str, Any]],
+    active_seq_id: Optional[str],
+    progression_mode: str = "linear",
+) -> int:
+    clean = str(active_seq_id or "").strip()
+    if not clean:
+        return 0 if (progression_mode == "linear" and sequences) else -1
+    norm = clean.upper()
     for index, seq in enumerate(sequences):
-        if seq.get("id") == active_seq_id or (not active_seq_id and index == 0):
+        if str(seq.get("id") or "").strip().upper() == norm:
             return index
     return -1
 
@@ -61,7 +69,68 @@ def _award_completion(seq: dict[str, Any], index: int, avatar: Avatar) -> str:
     return f"Sequence completed: {title} (+{xp_reward} XP)"
 
 
-def _advance(sequences: list[dict[str, Any]], index: int, state: SessionState) -> list[str]:
+def _progression_mode(adventure: Any) -> str:
+    """Returns 'linear' or 'dynamic'."""
+    mode = getattr(adventure, "sequence_progression_mode", None)
+    if not mode and isinstance(adventure, dict):
+        mode = adventure.get("sequence_progression_mode") or adventure.get("sequence_progression")
+    if not mode:
+        manifest = getattr(adventure, "original_manifest", None)
+        if isinstance(manifest, dict):
+            mode = manifest.get("sequence_progression_mode") or manifest.get("sequence_progression")
+    cleaned = str(mode or "linear").strip().lower()
+    return cleaned if cleaned in {"linear", "dynamic"} else "linear"
+
+
+def _is_sequence_completed_in_state(state: SessionState, sequence_id: str) -> bool:
+    clean = str(sequence_id or "").strip().upper()
+    if not clean:
+        return False
+    ent_states = getattr(state, "entity_states", None) or {}
+    script_vars = ent_states.get("__script_vars__", {}) if isinstance(ent_states, dict) else {}
+    return bool(script_vars.get(f"__seq_completed_{clean}__", False))
+
+
+def _record_sequence_completed(state: SessionState, seq: dict[str, Any]) -> None:
+    seq_id = str(seq.get("id") or "").strip().upper()
+    if not seq_id:
+        return
+    if state.entity_states is None:
+        state.entity_states = {}
+    ent_states = dict(state.entity_states)
+    script_vars = dict(ent_states.get("__script_vars__", {}))
+    script_vars[f"__seq_completed_{seq_id}__"] = True
+    ent_states["__script_vars__"] = script_vars
+    state.entity_states = ent_states
+    _flag(state, "entity_states")
+
+
+def _advance(
+    sequences: list[dict[str, Any]],
+    index: int,
+    state: SessionState,
+    progression_mode: str = "linear",
+    target_scene_id: Optional[str] = None,
+) -> list[str]:
+    if progression_mode == "dynamic":
+        target = (
+            str(target_scene_id or getattr(state, "current_scene_id", "") or "").strip().upper()
+        )
+        if target:
+            for s in sequences:
+                act_scene = str(s.get("activation_scene_id") or "").strip().upper()
+                if act_scene and act_scene == target:
+                    s_id = str(s.get("id") or "")
+                    if not _is_sequence_completed_in_state(state, s_id):
+                        state.active_sequence_id = s.get("id")
+                        state.active_sequence_order = s.get("order", 1)
+                        _flag(state, "active_sequence_id", "active_sequence_order")
+                        return [f"New Sequence unlocked: {s.get('title') or s.get('id')}"]
+        state.active_sequence_id = None
+        state.active_sequence_order = 0
+        _flag(state, "active_sequence_id", "active_sequence_order")
+        return []
+
     next_index = index + 1
     if next_index < len(sequences):
         next_seq = sequences[next_index]
@@ -69,9 +138,29 @@ def _advance(sequences: list[dict[str, Any]], index: int, state: SessionState) -
         state.active_sequence_order = next_seq.get("order", next_index + 1)
         _flag(state, "active_sequence_id", "active_sequence_order")
         return [f"New Sequence unlocked: {next_seq.get('title') or next_seq.get('id')}"]
-    if hasattr(state, "is_completed"):
-        state.is_completed = True
-        _flag(state, "is_completed")
+    state.active_sequence_id = None
+    state.active_sequence_order = 0
+    _flag(state, "active_sequence_id", "active_sequence_order")
+    return []
+
+
+def _try_activate_scene_sequence(
+    sequences: list[dict[str, Any]],
+    state: SessionState,
+    target_scene_id: Optional[str],
+) -> list[str]:
+    target = str(target_scene_id or getattr(state, "current_scene_id", "") or "").strip().upper()
+    if not target:
+        return []
+    for s in sequences:
+        act_scene = str(s.get("activation_scene_id") or "").strip().upper()
+        if act_scene and act_scene == target:
+            s_id = str(s.get("id") or "")
+            if not _is_sequence_completed_in_state(state, s_id):
+                state.active_sequence_id = s.get("id")
+                state.active_sequence_order = s.get("order", 1)
+                _flag(state, "active_sequence_id", "active_sequence_order")
+                return [f"New Sequence unlocked: {s.get('title') or s.get('id')}"]
     return []
 
 
@@ -95,9 +184,15 @@ def evaluate_sequence_progress(
     if getattr(state, "is_completed", False) is True:
         return []
     sequences = _ordered_sequences(adventure)
-    index = _active_index(sequences, getattr(state, "active_sequence_id", None))
+    prog_mode = _progression_mode(adventure)
+    active_id = getattr(state, "active_sequence_id", None)
+    index = _active_index(sequences, active_id, progression_mode=prog_mode)
+
     if index < 0:
+        if prog_mode == "dynamic":
+            return _try_activate_scene_sequence(sequences, state, new_scene_id)
         return []
+
     current = sequences[index]
     completed = _sequence_completed(
         current,
@@ -111,7 +206,17 @@ def evaluate_sequence_progress(
     )
     if not completed:
         return []
-    return [_award_completion(current, index, avatar), *_advance(sequences, index, state)]
+
+    _record_sequence_completed(state, current)
+    award_msg = _award_completion(current, index, avatar)
+    adv_msgs = _advance(
+        sequences,
+        index,
+        state,
+        progression_mode=prog_mode,
+        target_scene_id=new_scene_id,
+    )
+    return [award_msg, *adv_msgs]
 
 
 async def _execute_script_or_text(
@@ -134,13 +239,18 @@ async def _execute_script_or_text(
 
 
 def _resolve_sequence_index(
-    sequences: list[dict[str, Any]], target_id: Optional[str], current_active_id: Optional[str]
+    sequences: list[dict[str, Any]],
+    target_id: Optional[str],
+    current_active_id: Optional[str],
+    progression_mode: str = "linear",
 ) -> int:
     if target_id:
         norm = target_id.strip().upper()
         for i, s in enumerate(sequences):
             if str(s.get("id", "")).strip().upper() == norm:
                 return i
+    if not current_active_id and progression_mode == "dynamic":
+        return -1
     for i, s in enumerate(sequences):
         if s.get("id") == current_active_id or (not current_active_id and i == 0):
             return i
@@ -156,9 +266,9 @@ async def _advance_and_trigger(
 ) -> list[str]:
     next_index = index + 1
     if next_index >= len(sequences):
-        if hasattr(state, "is_completed"):
-            state.is_completed = True
-            _flag(state, "is_completed")
+        state.active_sequence_id = None
+        state.active_sequence_order = 0
+        _flag(state, "active_sequence_id", "active_sequence_order")
         return []
 
     next_seq = sequences[next_index]
@@ -192,10 +302,14 @@ async def _handle_sequence_completion(
     changeset: Any,
     script_executor: Optional[Any],
     message_saver: Optional[Any],
+    progression_mode: str = "linear",
 ) -> list[str]:
     target_end_id = getattr(changeset, "sequence_end_id", None)
     idx = _resolve_sequence_index(
-        sequences, target_end_id, getattr(state, "active_sequence_id", None)
+        sequences,
+        target_end_id,
+        getattr(state, "active_sequence_id", None),
+        progression_mode=progression_mode,
     )
     if idx < 0:
         return []
@@ -230,7 +344,7 @@ async def _handle_sequence_completion(
             await message_saver("system", comp_msg)
         messages.append(comp_msg)
 
-    advance = getattr(changeset, "sequence_advance", True)
+    advance = getattr(changeset, "sequence_advance", True) and (progression_mode != "dynamic")
     if not advance:
         state.active_sequence_id = None
         state.active_sequence_order = 0
@@ -299,11 +413,18 @@ async def apply_sequence_changeset(
         return []
 
     sequences = _ordered_sequences(adventure)
+    prog_mode = _progression_mode(adventure)
     messages: list[str] = []
 
     if has_completion:
         end_msgs = await _handle_sequence_completion(
-            sequences, state, avatar, changeset, script_executor, message_saver
+            sequences,
+            state,
+            avatar,
+            changeset,
+            script_executor,
+            message_saver,
+            progression_mode=prog_mode,
         )
         messages.extend(end_msgs)
 

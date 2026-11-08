@@ -23,6 +23,7 @@ from backend.core.generation_error_log import (
     format_creation_error,
     record_generation_error,
 )
+from backend.core.global_settings import apply_global_settings
 from backend.engine.adventures.license_defaults import default_license_fields
 from backend.engine.world.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
@@ -451,6 +452,7 @@ async def _record_generation_failure(
 
 async def _generate_and_finalize(db: AsyncSession, job: GenerationJob) -> None:
     user = (await db.execute(select(User).where(User.id == job.user_id))).scalars().first()
+    await apply_global_settings(db, user)
 
     adv = await _load_template(db, job.template_id)
     if adv:

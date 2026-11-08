@@ -7,7 +7,7 @@
  * - Top header with scene details, tracked quest, clock, and speech controls
  * - Left character stage with portrait cards and active speaker auras
  * - Center story area with tabs (Story, Passages, Discoveries, System) and scene switches;
- *   the Story tab holds the comic feed (dialogue bubbles, narration boxes, turn history)
+ *   the Story tab holds the comic feed: one page per scene, endless within it (chapter dividers)
  * - Dialog skin (data-skin) resolved from player preference, adventure theme and tone
  * - Bottom action bar and user input with speech-to-text voice recording
  * - "story-end" slot rendered after the latest exchange (e.g. an inline choice dialog)
@@ -45,6 +45,13 @@ import AwardUnlockedOverlay from './immersive/AwardUnlockedOverlay.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
+  /** The server has older messages than the loaded ones (the feed loads them on scroll). */
+  hasOlderMessages?: boolean
+  loadOlderMessages?: () => Promise<void>
+  /** Scene id -> scene metadata, for the feed's scene dividers. */
+  sceneNodes?: Record<string, any>
+  /** Sequence id -> title, for the feed's chapter dividers. */
+  sequenceTitles?: Record<string, string>
   /** The adventure's awards (title, tier, description) for the award-unlocked overlay. */
   awards?: any[]
   status: ConnectionStatus
@@ -173,12 +180,8 @@ const canSendInput = computed(() => {
 const {
   gameTurns,
   activeTurnIndex,
-  activeTurn,
-  viewingTurnIndex,
   activeSpeakers,
   npcs,
-  goToTurn,
-  goToLatestTurn,
   getEntityForHover,
 } = useComicTurns({
   messages: toRef(props, 'messages'),
@@ -220,14 +223,14 @@ const {
 watch(() => props.status, (status, previous) => {
   if (status !== 'connecting' || previous === 'connecting') return
   showStory()
-  goToLatestTurn()
+  storyFeedRef.value?.showLatest()
 })
 
-// Choice dialogs and unlock prompts are answered inline in the story feed, so bring the latest story page into view.
+// Choice dialogs and unlock prompts are answered inline at the end of the latest scene.
 watch(() => props.hasInlinePrompt, (pending) => {
   if (!pending) return
   showStory()
-  goToLatestTurn()
+  storyFeedRef.value?.showLatest()
 })
 
 function handleTraverseExit(exit: any) {
@@ -243,8 +246,7 @@ const storyFeedRef = ref<InstanceType<typeof ImmersiveStoryFeed> | null>(null)
 useGameShortcuts({
   scrollToLatestMessage: () => {
     showStory()
-    goToLatestTurn()
-    // Wait for a page switch to render (and reset its scroll) before jumping.
+    // Wait for the story tab to render before jumping.
     void nextTick(() => requestAnimationFrame(() => storyFeedRef.value?.scrollToLatestExchange()))
   },
   focusInput: () => inputBarRef.value?.focus(),
@@ -253,7 +255,7 @@ useGameShortcuts({
 function handleSend(content: string) {
   showStory()
   emit('send', content)
-  goToLatestTurn()
+  storyFeedRef.value?.showLatest()
 }
 
 function handleNpcClick(npc: any) {
@@ -328,6 +330,7 @@ defineExpose({
         :mode="props.mode"
         :debug-mode="!!props.sheet?.debug_mode"
         :has-scene-image="Boolean(activeSceneImageUrl)"
+        :progression-mode="props.sheet?.sequence_progression_mode || props.activeSequence?.progression_mode"
         @view-scene-image="showSceneImage = true"
         @open-chronicles="emit('openChronicles')"
         @open-quests="emit('openQuests')"
@@ -393,10 +396,11 @@ defineExpose({
         <ImmersiveStoryFeed
           ref="storyFeedRef"
           v-show="activeStoryTab === 'story'"
-          :game-turns="gameTurns"
-          :active-turn="activeTurn"
-          :active-turn-index="activeTurnIndex"
-          :viewing-turn-index="viewingTurnIndex"
+          :pages="gameTurns"
+          :has-older-messages="props.hasOlderMessages"
+          :load-older-messages="props.loadOlderMessages"
+          :scene-nodes="props.sceneNodes"
+          :sequence-titles="props.sequenceTitles"
           :is-evaluating="isGmWorking"
           :status-text="props.statusText"
           :sheet="props.sheet"
@@ -405,8 +409,6 @@ defineExpose({
           :npc-metadata="props.npcMetadata"
           :game-id="props.gameId"
           :turn-error="props.turnError"
-          @go-to-turn="goToTurn"
-          @go-to-latest-turn="goToLatestTurn"
           @retry-turn="emit('retryTurn')"
           @cancel-turn-error="emit('cancelTurnError')"
           @open-sheet="emit('openSheet', 'hero')"
@@ -516,10 +518,11 @@ defineExpose({
       :background-image-url="transitionSceneImageUrl"
     />
 
-    <!-- 6. CINEMATIC SEQUENCE TITLE OVERLAY (full window, above the travel curtain) -->
+    <!-- 6. CINEMATIC SEQUENCE TITLE BAND (translucent, above the travel curtain) -->
     <CinematicSequenceOverlay
       :active-sequence="props.activeSequence"
       :adventure-title="props.adventureTitle"
+      :progression-mode="props.sheet?.sequence_progression_mode || props.activeSequence?.progression_mode"
     />
 
     <SceneImageViewer

@@ -171,10 +171,12 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - object (every item type): name, description, is_portable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_pickup_script, on_pickup_text, on_drop_script,
       on_drop_text, on_interact_script, on_interact_text
-    - object (CONTAINER only): locked, code_to_unlock, item_to_unlock, rule_to_unlock,
-      unlock_expression, on_unlock_success_script, on_unlock_success_text,
+    - object (CONTAINER / CONTAINER_SWITCH only): code_to_unlock, item_to_unlock,
+      rule_to_unlock, unlock_expression, on_unlock_success_script, on_unlock_success_text,
       on_unlock_failure_script, on_unlock_failure_text, on_items_added_script,
-      on_items_added_text
+      on_items_added_text, on_items_removed_script, on_items_removed_text
+    - object `locked`: on a CONTAINER / CONTAINER_SWITCH it must be unlocked to open; on any
+      other item it is take-locked (visible, cannot be picked up until unlocked by a script)
     - object (READABLE only): text_log_content, text_log_format, on_read_script, on_read_text
     - object (WEAPON/WEARABLE only): on_equip_script, on_equip_text, on_unequip_script,
       on_unequip_text

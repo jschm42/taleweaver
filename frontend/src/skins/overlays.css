@@ -1,5 +1,5 @@
 /*
- * Skinned full-area overlays: scene transition ("Traveling to") and sequence/chapter intro.
+ * Skinned overlays: full-area scene transition ("Traveling to") and the translucent sequence/chapter intro band.
  * Defaults reproduce the classic look; skins override the --tw-overlay-* tokens.
  */
 
@@ -26,6 +26,28 @@
 
 .tw-overlay--translucent {
   background: color-mix(in srgb, var(--tw-overlay-bg) 90%, transparent);
+}
+
+/* Horizontal translucent band (sequence intro). The center stays dense enough for the
+   text to read over any scene; the edges fade out so the game remains visible. */
+.tw-overlay-band {
+  color: var(--tw-overlay-ink);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tw-overlay-bg) 35%, transparent),
+    color-mix(in srgb, var(--tw-overlay-bg) 82%, transparent) 22%,
+    color-mix(in srgb, var(--tw-overlay-bg) 82%, transparent) 78%,
+    color-mix(in srgb, var(--tw-overlay-bg) 35%, transparent)
+  );
+  backdrop-filter: blur(10px) saturate(0.8);
+  -webkit-backdrop-filter: blur(10px) saturate(0.8);
+  border-block: 1px solid color-mix(in srgb, var(--tw-overlay-accent) 35%, transparent);
+  box-shadow: 0 0 60px 10px color-mix(in srgb, var(--tw-overlay-bg) 45%, transparent);
+}
+
+.tw-overlay-band .tw-overlay-muted,
+.tw-overlay-band .tw-overlay-eyebrow {
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
 }
 
 .tw-overlay-veil {

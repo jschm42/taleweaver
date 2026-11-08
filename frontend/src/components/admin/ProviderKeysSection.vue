@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import KeyPolicySelect from './KeyPolicySelect.vue'
+import { useKeyPolicy } from './useKeyPolicy'
 
 const props = defineProps<{
   configuredKeys: Record<string, { masked: string; is_env: boolean }>
@@ -118,6 +120,9 @@ const PROVIDERS: ProviderMeta[] = [
     description: 'Self-hosted open models running entirely on your local hardware.'
   }
 ]
+
+// Who pays per provider (server key, personal keys, disabled)
+const keyPolicy = useKeyPolicy()
 
 // Filter state
 const activeFilter = ref<'all' | 'configured' | 'missing'>('all')
@@ -269,6 +274,7 @@ const handleDelete = (providerId: string) => {
               <th class="px-5 py-3.5">Provider</th>
               <th class="px-5 py-3.5">Capabilities</th>
               <th class="px-5 py-3.5">Status</th>
+              <th class="px-5 py-3.5" title="Who pays for this provider: the server key or the players' own keys">Who pays</th>
               <th class="px-5 py-3.5 text-right">Actions</th>
             </tr>
           </thead>
@@ -348,6 +354,18 @@ const handleDelete = (providerId: string) => {
                 </span>
               </td>
 
+              <!-- Key policy -->
+              <td class="px-5 py-3.5 align-middle whitespace-nowrap">
+                <KeyPolicySelect
+                  v-if="provider.id !== 'ollama'"
+                  :model-value="keyPolicy.policyFor(provider.id)"
+                  :provider-name="provider.name"
+                  :disabled="keyPolicy.isSaving.value"
+                  @update:model-value="(value) => value && keyPolicy.setPolicy(provider.id, value)"
+                />
+                <span v-else class="text-[11px] text-slate-500">Local</span>
+              </td>
+
               <!-- Actions -->
               <td class="px-5 py-3.5 align-middle text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-2">
@@ -391,6 +409,13 @@ const handleDelete = (providerId: string) => {
         </table>
       </div>
     </div>
+
+    <p v-if="keyPolicy.error.value" class="text-xs text-rose-300">{{ keyPolicy.error.value }}</p>
+    <p class="text-[11px] text-slate-500">
+      <span class="font-bold text-slate-400">Who pays:</span> with "Own key optional" or "Own key required",
+      players enter their own key in their profile. "Required" blocks a provider for players without a key,
+      also for model passes that use it. Single users can get an exception in User Management.
+    </p>
 
     <!-- Empty State -->
     <div

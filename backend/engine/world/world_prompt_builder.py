@@ -192,13 +192,16 @@ def _build_sequences_requirement(
 
     seq_text += "\nUser-Provided Sequences:\n"
     for s in sequences:
-        reqs = []
-        if s.get("required_item_id"):
-            reqs.append(f"required_item_id='{s['required_item_id']}'")
-        if s.get("required_scene_id"):
-            reqs.append(f"required_scene_id='{s['required_scene_id']}'")
-        if s.get("required_defeated_npc_id"):
-            reqs.append(f"required_defeated_npc_id='{s['required_defeated_npc_id']}'")
+        reqs = [
+            f"{key}='{s[key]}'"
+            for key in (
+                "required_item_id",
+                "required_scene_id",
+                "required_defeated_npc_id",
+                "activation_scene_id",
+            )
+            if s.get(key)
+        ]
         req_info = f" [Hard Rules: {', '.join(reqs)}]" if reqs else ""
         end_cond = f" [End Condition: {s.get('end_condition')}]" if s.get("end_condition") else ""
         seq_text += f"[{s.get('order', 0)}] {s.get('title', 'Unknown')}: {s.get('description', '')}{end_cond}{req_info}\n"

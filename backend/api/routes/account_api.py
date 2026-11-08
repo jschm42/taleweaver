@@ -1,12 +1,13 @@
 """Self-service account endpoints: credentials, recovery codes, preferences, session history."""
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.auth_api import UserResponse
 from backend.core.account_recovery import issue_recovery_codes, set_new_password
@@ -18,11 +19,16 @@ from backend.core.auth import (
     validate_username,
 )
 from backend.core.database import get_db
-from backend.crud.crud_profile import (
-    PlayerSessionSummary,
-    build_user_profile_data,
+from backend.core.global_settings import personal_game_settings
+from backend.core.tts_preferences import DEFAULT_TTS_PREFERENCES, TTS_PREFERENCES_KEY
+from backend.crud.crud_player_sessions import (
+    MAX_PAGE_SIZE,
+    PlayerSessionPage,
+    SessionListQuery,
+    SessionSort,
     list_player_sessions,
 )
+from backend.crud.crud_profile import build_user_profile_data
 from backend.models.user import User
 
 router = APIRouter(prefix="/users/me", tags=["Account"])
@@ -54,6 +60,12 @@ class RecoveryCodesResponse(BaseModel):
 
 class PreferencesUpdateRequest(BaseModel):
     default_language: Optional[str] = Field(default=None, max_length=20)
+    tts_preferences: Optional[dict[str, Any]] = None
+
+
+def _clean_tts_preferences(raw: dict[str, Any]) -> dict[str, bool]:
+    """Keep only known Auto-Speak flags; missing flags fall back to their defaults."""
+    return {key: bool(raw.get(key, default)) for key, default in DEFAULT_TTS_PREFERENCES.items()}
 
 
 async def _require_current_password(user: User, current_password: str) -> None:
@@ -143,14 +155,33 @@ async def update_my_preferences(
     current_user: User = USER_DEP,
     db: AsyncSession = DB_DEP,
 ):
-    """Players may update their own preferences (the generic user update is admin-only)."""
-    current_user.default_language = (request.default_language or "").strip() or None
+    """Players may update their own preferences (the generic user update is admin-only).
+
+    Only the fields present in the request change, so each profile section saves on its own.
+    """
+    if "default_language" in request.model_fields_set:
+        current_user.default_language = (request.default_language or "").strip() or None
+    if request.tts_preferences is not None:
+        current_user.game_settings = {
+            **personal_game_settings(current_user.game_settings),
+            TTS_PREFERENCES_KEY: _clean_tts_preferences(request.tts_preferences),
+        }
+        flag_modified(current_user, "game_settings")
     await db.commit()
     await db.refresh(current_user)
     return await build_user_profile_data(db, current_user)
 
 
-@router.get("/sessions", response_model=list[PlayerSessionSummary])
-async def list_my_sessions(current_user: User = USER_DEP, db: AsyncSession = DB_DEP):
-    """Adventure history for the profile page: status, XP and sequence progress."""
-    return await list_player_sessions(db, current_user)
+@router.get("/sessions", response_model=PlayerSessionPage)
+async def list_my_sessions(
+    status: Optional[str] = Query(default=None, pattern="^(active|completed|game_over|archived)$"),
+    search: str = Query(default="", max_length=100),
+    sort: SessionSort = "recent",
+    limit: int = Query(default=20, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = USER_DEP,
+    db: AsyncSession = DB_DEP,
+):
+    """One page of the profile's adventure history, with per-status counts for the filters."""
+    params = SessionListQuery(status=status, search=search, sort=sort, limit=limit, offset=offset)
+    return await list_player_sessions(db, current_user, params)

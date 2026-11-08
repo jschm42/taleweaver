@@ -19,6 +19,7 @@ from backend.api.routes.adventures.session_adventure import (
 from backend.api.routes.adventures.session_start_settings import resolve_start_datetime
 from backend.core.config import settings
 from backend.core.narration_styles import DEFAULT_NARRATION_STYLE
+from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY
 from backend.core.ui_theme import UI_SKIN_AUTO, normalize_ui_theme
 from backend.engine.rules.item_logic import get_item_slot, normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
@@ -37,6 +38,7 @@ _AGENT_FLAGS = {
     "agent_monkey_mode": ("monkey_mode", False),
     "agent_allow_walkthrough": ("allow_walkthrough", True),
     "agent_step_by_step": ("step_by_step", False),
+    "agent_wait_for_tts": ("wait_for_tts", False),
 }
 
 
@@ -254,6 +256,7 @@ def _agent_fields(state: SessionState) -> dict[str, Any]:
     }
     fields["agent_personality"] = str(agent.get("personality", "casual"))
     fields["agent_custom_personality"] = str(agent.get("custom_personality", ""))
+    fields["agent_step_delay"] = _as_int(agent.get("step_delay")) or 0
     return fields
 
 
@@ -282,6 +285,9 @@ def _adventure_fields(state: SessionState, ctx: _SheetContext) -> dict[str, Any]
         "time_per_turn": ctx.get("time_per_turn", 5),
         "max_time_per_turn": ctx.get("max_time_per_turn"),
         "max_memory_turns": _memory_turns(state, ctx.adventure),
+        "sequence_progression_mode": getattr(ctx.adventure, "sequence_progression_mode", "linear")
+        if ctx.adventure
+        else "linear",
     }
 
 
@@ -343,6 +349,7 @@ async def build_sheet_snapshot(
         "enable_history_compression": bool(getattr(state, "enable_history_compression", True)),
         "narration_style": getattr(state, "narration_style", None) or DEFAULT_NARRATION_STYLE,
         "ui_skin": getattr(state, "ui_skin", None) or UI_SKIN_AUTO,
+        "tts_auto_speak": (state.entity_states or {}).get(TTS_AUTO_SPEAK_KEY),
         "compressed_history": getattr(state, "compressed_history", None),
         **_agent_fields(state),
         "is_debug_enabled": bool(state.is_debug_enabled),

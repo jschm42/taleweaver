@@ -92,6 +92,8 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "win_guard": _expr("completed_guard_expression"),
     "lose_guard": _expr("gameover_guard_expression"),
     "init_script": _script("init_script"),
+    "progression": FieldSpec("sequence_progression_mode", choice("linear", "dynamic")),
+    "sequence_progression": FieldSpec("sequence_progression_mode", choice("linear", "dynamic")),
 }
 
 PROTAGONIST_KEYS: dict[str, FieldSpec] = {
@@ -282,7 +284,11 @@ SEQUENCE_KEYS: dict[str, FieldSpec] = {
     **_GOAL_KEYS,
     "end": FieldSpec("end_condition"),
     "walkthrough": FieldSpec("walkthrough"),
+    # Entering this scene starts the sequence (mainly for dynamic progression).
+    "activation": _ref("activation_scene_id"),
 }
+for _alias in ("activation_scene", "activation_scene_id", "start_in"):
+    SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["activation"]
 # Legacy line prefixes understood by the original sequence parser.
 for _alias in ("required_item", "required_item_id", "key_item", "item", "item_id"):
     SEQUENCE_KEYS[_alias] = _GOAL_KEYS["goal_item"]

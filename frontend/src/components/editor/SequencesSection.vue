@@ -20,6 +20,7 @@ import {
   Sparkles,
   Code2,
   MessageSquareQuote,
+  Milestone,
 } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -40,8 +41,19 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'update-sequences', sequences: any[]): void
+  (e: 'update-progression-mode', mode: 'linear' | 'dynamic'): void
   (e: 'notify', message: string, type?: 'error' | 'success' | 'info'): void
 }>()
+
+const progressionMode = computed<'linear' | 'dynamic'>(() => {
+  const mode = props.adventure?.sequence_progression_mode || props.adventure?.original_manifest?.sequence_progression_mode
+  return mode === 'dynamic' ? 'dynamic' : 'linear'
+})
+
+function setProgressionMode(mode: 'linear' | 'dynamic') {
+  if (mode === progressionMode.value || props.isSaving) return
+  emit('update-progression-mode', mode)
+}
 
 const sequences = computed<any[]>(() => {
   const raw = props.adventure?.sequences
@@ -107,6 +119,7 @@ const modalSequence = ref<any>({
   required_item_id: '',
   required_scene_id: '',
   required_defeated_npc_id: '',
+  activation_scene_id: '',
   guard_expression: '',
   exp_reward: 50,
   on_start_sequence_script: '',
@@ -140,6 +153,7 @@ function openAddModal() {
     required_item_id: '',
     required_scene_id: '',
     required_defeated_npc_id: '',
+    activation_scene_id: '',
     guard_expression: '',
     exp_reward: 50,
     on_start_sequence_script: '',
@@ -166,6 +180,7 @@ function openEditModal(seq: any) {
     required_item_id: seq.required_item_id || '',
     required_scene_id: seq.required_scene_id || '',
     required_defeated_npc_id: seq.required_defeated_npc_id || '',
+    activation_scene_id: seq.activation_scene_id || '',
     guard_expression: seq.guard_expression || seq.completion_guard_expression || '',
     exp_reward: seq.exp_reward ?? 50,
     on_start_sequence_script: seq.on_start_sequence_script || '',
@@ -273,25 +288,59 @@ function confirmDelete() {
         <div class="flex items-center gap-2">
           <BookOpen class="w-5 h-5 text-amber-400" />
           <h3 class="text-sm font-black text-white uppercase tracking-widest">
-            Story Sequences (Linear Chapters)
+            Story Sequences
           </h3>
           <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-mono font-bold">
             {{ sequences.length }} / 15
           </span>
+          <span
+            :class="progressionMode === 'dynamic' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'"
+            class="px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold uppercase"
+          >
+            {{ progressionMode }} mode
+          </span>
         </div>
         <p class="text-xs text-slate-400 max-w-2xl">
-          Chronological chapters forming the main story arc. Each sequence has its own dedicated walkthrough, narrative backdrop, and completion trigger.
+          {{ progressionMode === 'dynamic'
+            ? 'Dynamic sequences for hubs, sandboxes, and workbenches. Sequences are activated via room entry or scripts without auto-advancing linearly.'
+            : 'Chronological chapters forming the main story arc. Automatically advances to the next chapter upon sequence completion.' }}
         </p>
       </div>
 
-      <button
-        @click="openAddModal"
-        :disabled="sequences.length >= 15 || isSaving"
-        class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black uppercase text-xs tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-      >
-        <Plus class="w-4 h-4" />
-        <span>Add Sequence</span>
-      </button>
+      <div class="flex items-center gap-3 shrink-0">
+        <!-- Progression Mode Toggle -->
+        <div class="flex items-center bg-black/60 p-1 rounded-xl border border-white/10 text-xs">
+          <button
+            type="button"
+            @click="setProgressionMode('linear')"
+            :disabled="isSaving"
+            :class="progressionMode === 'linear' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-white border-transparent'"
+            class="px-3 py-1.5 rounded-lg border font-bold text-[11px] tracking-wide uppercase transition-all flex items-center gap-1.5"
+            title="Sequences advance in order 1 -> 2 -> 3"
+          >
+            <span>Linear</span>
+          </button>
+          <button
+            type="button"
+            @click="setProgressionMode('dynamic')"
+            :disabled="isSaving"
+            :class="progressionMode === 'dynamic' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm' : 'text-slate-400 hover:text-white border-transparent'"
+            class="px-3 py-1.5 rounded-lg border font-bold text-[11px] tracking-wide uppercase transition-all flex items-center gap-1.5"
+            title="Sequences activate via room entry or scripts (no auto index advance)"
+          >
+            <span>Dynamic</span>
+          </button>
+        </div>
+
+        <button
+          @click="openAddModal"
+          :disabled="sequences.length >= 15 || isSaving"
+          class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black uppercase text-xs tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+        >
+          <Plus class="w-4 h-4" />
+          <span>Add Sequence</span>
+        </button>
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -304,7 +353,9 @@ function confirmDelete() {
       </div>
       <h4 class="text-sm font-bold text-slate-300">No story sequences defined yet</h4>
       <p class="text-xs text-slate-500 max-w-md mx-auto">
-        Break down your adventure into ordered chapters with dedicated GM walkthroughs and completion conditions.
+        {{ progressionMode === 'dynamic'
+          ? 'Define dynamic story sequences and objectives with dedicated GM walkthroughs and completion conditions.'
+          : 'Break down your adventure into ordered chapters with dedicated GM walkthroughs and completion conditions.' }}
       </p>
       <button
         @click="openAddModal"
@@ -324,9 +375,19 @@ function confirmDelete() {
       >
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div class="flex items-start gap-3 flex-1 min-w-0">
-            <!-- Order Number Badge -->
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-900/30 border border-amber-500/30 flex items-center justify-center shrink-0">
+            <!-- Order Number Badge (Hidden in Dynamic Mode) -->
+            <div
+              v-if="progressionMode !== 'dynamic'"
+              class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-900/30 border border-amber-500/30 flex items-center justify-center shrink-0"
+            >
               <span class="text-xs font-black text-amber-400 font-mono">{{ idx + 1 }}</span>
+            </div>
+            <div
+              v-else
+              class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-900/30 border border-cyan-500/30 flex items-center justify-center shrink-0 text-cyan-400"
+              title="Dynamic Sequence (Room/Script Triggered)"
+            >
+              <Milestone class="w-4.5 h-4.5" />
             </div>
 
             <!-- Sequence Content -->
@@ -387,6 +448,7 @@ function confirmDelete() {
           <!-- Actions -->
           <div class="flex items-center gap-1 shrink-0 self-end sm:self-start">
             <button
+              v-if="progressionMode !== 'dynamic'"
               @click="moveUp(idx)"
               :disabled="idx === 0 || isSaving"
               class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent"
@@ -395,6 +457,7 @@ function confirmDelete() {
               <ChevronUp class="w-4 h-4" />
             </button>
             <button
+              v-if="progressionMode !== 'dynamic'"
               @click="moveDown(idx)"
               :disabled="idx === sequences.length - 1 || isSaving"
               class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent"
@@ -442,7 +505,7 @@ function confirmDelete() {
                   {{ isNewSequence ? 'Add New Sequence' : 'Edit Sequence' }}
                 </h3>
                 <p class="text-[11px] text-slate-400">
-                  Configure narrative goals and completion triggers for this chapter.
+                  Configure narrative goals and completion triggers for this {{ progressionMode === 'dynamic' ? 'sequence' : 'chapter' }}.
                 </p>
               </div>
             </div>
@@ -546,6 +609,50 @@ function confirmDelete() {
               />
             </div>
 
+            <!-- Optional Activation Trigger (Dynamic Mode) -->
+            <div class="space-y-2 p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/20">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <MapPin class="w-4 h-4 text-cyan-400" />
+                  <label class="block text-xs font-black text-cyan-400 uppercase tracking-widest">
+                    Activation Scene (Dynamic Mode Room Trigger)
+                  </label>
+                </div>
+                <button
+                  v-if="modalSequence.activation_scene_id"
+                  type="button"
+                  @click="modalSequence.activation_scene_id = ''"
+                  class="text-[10px] text-slate-400 hover:text-rose-400 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-400">
+                Optional: Automatically activates this sequence when the protagonist enters this scene (if not already completed).
+              </p>
+              <select
+                v-model="modalSequence.activation_scene_id"
+                class="w-full bg-black/60 border border-white/10 focus:border-cyan-500/60 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+              >
+                <option value="" class="bg-slate-900 text-slate-400">-- None (Manually activated via script) --</option>
+                <option
+                  v-for="scene in availableScenes"
+                  :key="scene.id"
+                  :value="scene.id"
+                  class="bg-slate-900 text-white"
+                >
+                  {{ scene.name }} ({{ scene.id }})
+                </option>
+                <option
+                  v-if="modalSequence.activation_scene_id && !availableScenes.some(s => s.id === modalSequence.activation_scene_id)"
+                  :value="modalSequence.activation_scene_id"
+                  class="bg-slate-900 text-amber-300"
+                >
+                  {{ modalSequence.activation_scene_id }} (Custom ID)
+                </option>
+              </select>
+            </div>
+
             <!-- Hard Rules: Deterministic Triggers -->
             <div class="space-y-3.5 p-4 rounded-2xl bg-black/40 border border-white/5">
               <div class="flex items-center justify-between">
@@ -608,7 +715,7 @@ function confirmDelete() {
                   <div class="flex items-center justify-between">
                     <span class="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
                       <MapPin class="w-3.5 h-3.5 text-sky-400" />
-                      Enter Scene
+                      Goal Scene (Enter to Finish)
                     </span>
                     <button
                       v-if="modalSequence.required_scene_id"
@@ -641,7 +748,7 @@ function confirmDelete() {
                       {{ modalSequence.required_scene_id }} (Custom ID)
                     </option>
                   </select>
-                  <span class="block text-[10px] text-slate-500">Protagonist enters Scene X</span>
+                  <span class="block text-[10px] text-slate-500">Protagonist reaches Goal Scene X</span>
                 </div>
 
                 <!-- NPC Defeat Hard Rule (prot besiegt NPC X) -->
@@ -738,7 +845,7 @@ function confirmDelete() {
                 <textarea
                   v-model="modalSequence.on_start_sequence_text"
                   rows="2"
-                  placeholder="e.g. Chapter 2 begins: The sky darkens as thunder rumbles in the distance."
+                  :placeholder="progressionMode === 'dynamic' ? 'e.g. Workshop phase begins: Alex inspects the workbench.' : 'e.g. Chapter 2 begins: The sky darkens as thunder rumbles in the distance.'"
                   class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
                 ></textarea>
               </div>
@@ -754,7 +861,7 @@ function confirmDelete() {
                 <textarea
                   v-model="modalSequence.on_end_sequence_text"
                   rows="2"
-                  placeholder="e.g. Chapter Complete! You catch your breath as the dungeon gates seal shut behind you."
+                  :placeholder="progressionMode === 'dynamic' ? 'e.g. Sequence complete! The casket trial is solved.' : 'e.g. Chapter Complete! You catch your breath as the dungeon gates seal shut behind you.'"
                   class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
                 ></textarea>
               </div>
@@ -764,7 +871,7 @@ function confirmDelete() {
               <ScriptEditor
                 v-model="modalSequence.helpers_script"
                 label="Sequence Helpers"
-                help-text="Functions and constants (def, NAME = value) for this chapter, e.g. its dialog handlers. Like the global init script they are loaded on every script run, whichever chapter is active. Other statements never run; use the start/end scripts for those."
+                :help-text="`Functions and constants (def, NAME = value) for this ${progressionMode === 'dynamic' ? 'sequence' : 'chapter'}, e.g. its dialog handlers. Like the global init script they are loaded on every script run, whichever sequence is active. Other statements never run; use the start/end scripts for those.`"
                 context="init_script"
                 placeholder="def trial_score_answer(answ):&#10;    tw.vars.set('trial_score', tw.vars.get('trial_score', 0) + answ)"
                 min-height="140px"
@@ -814,7 +921,9 @@ function confirmDelete() {
         <div class="bg-slate-900 border border-rose-500/20 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
           <h4 class="text-sm font-black text-white uppercase tracking-wider">Delete Sequence?</h4>
           <p class="text-xs text-slate-400">
-            Are you sure you want to remove this sequence chapter? Remaining sequences will be re-ordered.
+            {{ progressionMode === 'dynamic'
+              ? 'Are you sure you want to remove this sequence?'
+              : 'Are you sure you want to remove this sequence chapter? Remaining sequences will be re-ordered.' }}
           </p>
           <div class="flex items-center justify-end gap-3 pt-2">
             <button @click="cancelDelete" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-bold text-slate-300">

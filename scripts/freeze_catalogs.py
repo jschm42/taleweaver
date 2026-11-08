@@ -11,6 +11,7 @@ DEFAULTS_FILE = os.path.join(BASE_DIR, "backend", "core", "catalog_defaults.py")
 STATIC_ASSETS_DIR = os.path.join(BASE_DIR, "backend", "static", "assets", "catalog")
 DATA_CATALOG_DIR = os.path.join(BASE_DIR, "data", "catalog")
 
+
 def freeze():
     if not os.path.exists(DB_PATH):
         print(f"Error: Database not found at {DB_PATH}")
@@ -21,25 +22,20 @@ def freeze():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # Find the admin user
-    cursor.execute("SELECT id, image_styles_catalog, tone_catalog FROM users WHERE role = 'admin' LIMIT 1")
+    # The catalogs are server-wide settings (single row in server_settings).
+    cursor.execute("SELECT image_styles_catalog, tone_catalog FROM server_settings WHERE id = 1")
     admin = cursor.fetchone()
 
     if not admin:
-        # Fallback to the first user if no admin found
-        cursor.execute("SELECT id, image_styles_catalog, tone_catalog FROM users LIMIT 1")
-        admin = cursor.fetchone()
-
-    if not admin:
-        print("Error: No user found in database to extract catalogs from.")
+        print("Error: No server settings found in database to extract catalogs from.")
         conn.close()
         return
 
-    print(f"[*] Extracting catalogs from user {admin['id']}")
-    
+    print("[*] Extracting catalogs from the server settings")
+
     try:
-        styles = json.loads(admin['image_styles_catalog']) if admin['image_styles_catalog'] else []
-        tones = json.loads(admin['tone_catalog']) if admin['tone_catalog'] else []
+        styles = json.loads(admin["image_styles_catalog"]) if admin["image_styles_catalog"] else []
+        tones = json.loads(admin["tone_catalog"]) if admin["tone_catalog"] else []
     except Exception as e:
         print(f"Error parsing catalogs: {e}")
         conn.close()
@@ -63,7 +59,7 @@ def freeze():
                     item["image_url"] = f"/assets/catalog/{subfolder}/{filename}"
                 else:
                     print(f"Warning: Image file not found at {src_path}")
-            
+
             processed.append(item)
         return processed
 
@@ -86,6 +82,7 @@ DEFAULT_TONES: list[dict[str, Any]] = {pformat(final_tones, indent=4)}
 
     print("[+] Successfully frozen catalogs as defaults!")
     conn.close()
+
 
 if __name__ == "__main__":
     freeze()
