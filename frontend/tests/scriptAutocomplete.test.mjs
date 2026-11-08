@@ -63,6 +63,8 @@ test('TW_NAMESPACES covers all primary scripting engine domains', () => {
     'dice',
     'memories',
     'llm',
+    'image',
+    'media',
     'json',
     'log',
     'console',
@@ -85,6 +87,10 @@ test('TW_ROOT_ITEMS contains shortcuts and sub-namespaces', () => {
   assert.ok(names.includes('switch'))
   assert.ok(names.includes('save'))
   assert.ok(names.includes('debug'))
+  assert.ok(names.includes('image'))
+  assert.ok(names.includes('media'))
+  assert.ok(names.includes('generate_image'))
+  assert.ok(names.includes('show_image'))
 })
 
 test('resolveCompletionsForLine resolves tw. root items', () => {

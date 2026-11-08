@@ -30,6 +30,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
    - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
+   - [tw.image & tw.media (In-Game Image Generation)](#twimage--twmedia-in-game-image-generation)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -108,7 +109,7 @@ To ensure player safety and server reliability:
 - **No System Calls or Imports**: Statements like `import`, `from ... import`, `open()`, `eval()`, or `exec()` are rejected at parse time.
 - **No Private or Dunder Identifiers**: Accessing attributes or defining functions starting with an underscore (e.g. `_internal`, `__class__`, `__subclasses__`, `__globals__`, or `__dict__`) is strictly forbidden. Variables starting with an underscore cannot be assigned either; the only exception is the bare throwaway name `_` (e.g. `for item_id, _ in ITEMS:` or `first, _ = pair`).
 - **No Introspection Escapes**: `str.format`, `format_map` and `mro` are blocked (format strings could otherwise walk `{0.__globals__}`), as are frame/generator/code attributes (`f_*`, `gi_*`, `cr_*`, `ag_*`, `tb_*`, `co_*`). Use f-strings or `+` for text.
-- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` does not count against the 2 seconds. Loading the definitions of `init_script` and all helper blocks before a run has its own budget of the same size, so large helper blocks (e.g. dialogue-tree constants) do not eat into the script's steps.
+- **Instruction & Time Budget**: Each script execution is capped at **10,000 steps** and **2 seconds** (`ScriptTimeoutError`), preventing infinite loops and CPU exhaustion. Time spent waiting for `tw.llm.ask` or `tw.image.generate` does not count against the 2 seconds. Loading the definitions of `init_script` and all helper blocks before a run has its own budget of the same size, so large helper blocks (e.g. dialogue-tree constants) do not eat into the script's steps.
 - **Memory Protections**: Strings, lists, tuples and dicts are capped at **100,000** elements/characters (repetition, concatenation, `join`, padding methods and call results are all checked), `range()` at 100,000 elements, and integers at 10,000 bits (`ScriptSecurityError`).
 - **Safe Builtins**: Available built-ins are restricted to `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `print`, `range`, `reversed`, `round`, `set`, `sorted`, `str`, `sum`, `tuple`, `zip`. Set literals (`{1, 2, 3}`) and set comprehensions are supported.
 - **Inline conditionals**: `a if condition else b` is supported.
@@ -561,6 +562,7 @@ Injects narrative messages or system notifications into the turn stream:
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`). System messages and narration calls (`narrate`, `narrate_raw`) are rendered in the exact chronological order in which the script executed them.
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
+- `tw.story.generate_image(...)` / `tw.story.show_image(...)`: Shortcuts for `tw.image.generate(...)` and `tw.image.show(...)`, see [tw.image & tw.media](#twimage--twmedia-in-game-image-generation).
 
 #### Running code after the narration (`after=`)
 
@@ -821,6 +823,48 @@ quiz = tw.llm.ask_json(
 if quiz:
     tw.vars.set("current_quiz", quiz)
     tw.dialog.choose(quiz["question"], quiz["options"], on_choice="on_quiz_answer", speaker="Examiner")
+```
+
+### `tw.image` & `tw.media` (In-Game Image Generation)
+
+Scripts can generate an image during play and show it in the story feed. `tw.media` is the same object as `tw.image`.
+
+- `tw.image.generate(prompt, model="simple", apply_style=True, show_in_chat=True, caption="") -> str`: Generates an image with the image model from the player's **Visual Preferences** and returns its URL (`/data/adventures/sessions/<game_id>/script_images/...`), or `""` on failure.
+  - `model="simple"` uses the **simple image model** (`simple_model` / `simple_model_provider` and the `simple_*` quality settings). `model="hq"` uses the **advanced image model** (`advanced_model` / `advanced_model_provider` and the `advanced_*` settings); `"advanced"` is accepted as an alias for `"hq"`. Any other value is a script error.
+  - `apply_style=True` adds the adventure's image style (the first entry of its selected image styles, resolved against the player's style catalog) to the prompt, so the image matches the cover and scene art. Pass `apply_style=False` for a neutral look, e.g. a photo-like document.
+  - `show_in_chat=True` posts the image to the story feed as a Game Master block, with `caption` shown below it. With `show_in_chat=False` only the URL is returned, e.g. to show it later with `tw.image.show(url)` or to keep it in `tw.vars`.
+- `tw.image.generate_simple(prompt, apply_style=True, show_in_chat=True, caption="") -> str`: Same as `generate(prompt, model="simple", ...)`.
+- `tw.image.generate_hq(prompt, apply_style=True, show_in_chat=True, caption="") -> str`: Same as `generate(prompt, model="hq", ...)`.
+- `tw.image.show(image_url, caption="")`: Shows an existing image in the story feed. Only TaleWeaver asset URLs (`/data/...`) and `http(s)://` URLs are accepted; others are skipped (with a `[DEBUG]` note in debug mode).
+- `tw.image.available -> bool`: `False` where images cannot be generated (see below).
+- Shortcuts: `tw.generate_image(...)` and `tw.story.generate_image(...)` call `tw.image.generate(...)`; `tw.show_image(url, caption="")` and `tw.story.show_image(url, caption="")` call `tw.image.show(...)`.
+
+How the image appears: the call adds a line `![caption](url)` to the script's narration. The story feed renders this markdown image syntax as an image block (rounded, scaled to the feed width, limited in height, caption below), in `tw.story.narrate(...)` and `tw.story.narrate_raw(...)` text alike. You can therefore also write `tw.narrate("![The old map](/data/...)")` yourself. Text-to-speech reads only the caption.
+
+Rules and limits:
+
+- **Never raises for provider problems**: when no image model or API key is configured, the provider fails or blocks the prompt, or generation takes longer than **60 seconds**, `generate()` returns `""` and shows nothing. Keep a text fallback: `if not tw.image.generate_simple("A torn map"): tw.narrate("The map is too faded to make out.")`
+- **At most 2 images** per script context (one trigger pass, shared across all `generate*` calls and shortcuts); further calls return `""`. Prompts are cut at 1,500 characters, captions at 200. `show()` has no limit.
+- **Only in scripts run by a chat turn** (soft rules, entity triggers and scripts the turn loop fires). Not available in guard expressions, in the session's `init_script` run, or in scripts fired directly by UI buttons outside a turn; there `generate()` returns `""` without calling the model.
+- **The call blocks** the turn until the image is saved. The player sees the turn spinner and cannot send input meanwhile. Waiting does not count against the script's 2-second time budget. Image generation is slow and may cost money, so use it for key moments, not on every turn.
+- Images are stored in the session's own folder, never in the adventure template.
+- In debug mode, skipped or failed calls show a `[DEBUG]` system message.
+
+```python
+# Object on_examine: show the treasure map once, in the adventure's art style.
+if not tw.vars.get("map_url"):
+    url = tw.image.generate_hq(
+        "An old hand-drawn treasure map of a small island, a red X near a skull-shaped rock",
+        caption="The map from the sea chest",
+    )
+    tw.vars.set("map_url", url)
+    if not url:
+        tw.narrate("The map shows a small island and a red X near a skull-shaped rock.")
+else:
+    tw.image.show(tw.vars.get("map_url"), "The map from the sea chest")
+
+# A quick sketch without the adventure style, kept for later instead of shown right away.
+sketch = tw.media.generate("A pencil sketch of a stranger's face", apply_style=False, show_in_chat=False)
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)

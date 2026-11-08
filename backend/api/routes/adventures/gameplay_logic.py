@@ -27,6 +27,7 @@ from backend.api.routes.adventures.story_continuation import (
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.npc_give import typed_give_command
 from backend.api.routes.adventures.talent_use import resolve_talent_request, stream_talent_turn
+from backend.api.routes.adventures.script_image import make_script_image_generator
 from backend.api.routes.adventures.script_llm import make_script_llm_asker
 from backend.api.routes.adventures.session_adventure import SessionAdventure, load_session_adventure
 from backend.core.narration_budget import log_narration_budget
@@ -2891,6 +2892,7 @@ class GameTurnManager:
                 adventure_id=self.state.template_id,
                 language=self.turn_language,
             ),
+            image_generator=make_script_image_generator(self.user, self.adventure, self.game_id),
             active_sequence_id=self.state.active_sequence_id,
             sequences=getattr(self.adventure, "sequences", None),
             sequence_progression_mode=getattr(
