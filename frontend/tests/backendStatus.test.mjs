@@ -6,6 +6,7 @@ import ts from 'typescript'
 // Minimal browser globals for the watcher.
 const events = []
 let healthy = true
+let healthSlow = false
 let apiStatus = 200
 let pendingApiPromise = null
 globalThis.window = {
@@ -16,6 +17,8 @@ globalThis.window = {
     if (init?.signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
     const url = String(input)
     if (url.endsWith('/api/health')) {
+      // Simulates the probe's own timeout firing (request queued or worker busy).
+      if (healthSlow) throw new DOMException('The operation was aborted.', 'AbortError')
       if (!healthy) throw new TypeError('Failed to fetch')
       return new Response(JSON.stringify({ status: 'ok' }), { status: 200 })
     }
@@ -111,4 +114,30 @@ test('active in-flight requests prevent false-positive offline marking while pro
   await fetchPromise
   assert.equal(getInFlightCount(), 0)
   healthy = true
+})
+
+test('a health probe that only times out does not raise the banner at once', async () => {
+  assert.equal(backendStatus.online, true)
+  healthSlow = true
+  await probeBackend()
+  assert.equal(backendStatus.online, true)
+  await probeBackend()
+  assert.equal(backendStatus.online, true)
+
+  healthSlow = false
+  await probeBackend()
+  assert.equal(backendStatus.online, true)
+  assert.deepEqual(events, [])
+})
+
+test('several slow rounds in a row mark the backend offline', async () => {
+  healthSlow = true
+  await probeBackend()
+  await probeBackend()
+  await probeBackend()
+  assert.equal(backendStatus.online, false)
+
+  healthSlow = false
+  await probeBackend()
+  assert.equal(backendStatus.online, true)
 })

@@ -8,6 +8,10 @@
  * - a network error, a timeout, or a 500/502/503/504 for an `/api` request starts a health probe
  *   (`GET /api/health`); only a failed probe marks the backend offline, so an ordinary server
  *   error does not trigger the banner (a dev proxy answers 500/502 when the backend is down);
+ * - a probe that fails fast (connection refused, proxy 502/503/504) means "down"; a probe that only
+ *   times out means "slow": the request may just be queued behind the browser's per-host connection
+ *   limit (audio, images, streamed narration) or hit a busy worker. Slow probes are retried quickly
+ *   and only `SLOW_ROUNDS_BEFORE_OFFLINE` slow rounds in a row raise the banner;
  * - while offline, the probe repeats with backoff; the first answer marks it online again and
  *   dispatches `BACKEND_ONLINE_EVENT`, so views can reload their data;
  * - while online and the tab is visible, a slow heartbeat catches an outage during idle time.
@@ -19,6 +23,8 @@ export const BACKEND_ONLINE_EVENT = 'taleweaver:backend-online'
 const HEALTH_URL = '/api/health'
 const PROBE_TIMEOUT_MS = 10000
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 10000]
+const SLOW_RETRY_MS = 5000
+const SLOW_ROUNDS_BEFORE_OFFLINE = 3
 const HEARTBEAT_MS = 30000
 const RESTORED_NOTICE_MS = 3500
 const SUSPICIOUS_STATUS = new Set([500, 502, 503, 504])
@@ -40,6 +46,7 @@ let retryTimer: ReturnType<typeof setTimeout> | undefined
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let restoredTimer: ReturnType<typeof setTimeout> | undefined
 let failedProbes = 0
+let slowRounds = 0
 let inFlightCount = 0
 
 export function getInFlightCount(): number {
@@ -60,6 +67,7 @@ export function markOnline(): void {
   if (retryTimer) clearTimeout(retryTimer)
   retryTimer = undefined
   failedProbes = 0
+  slowRounds = 0
   backendStatus.nextRetryAt = null
   if (backendStatus.online) return
   backendStatus.online = true
@@ -85,40 +93,52 @@ function markOffline(): void {
   retryTimer = setTimeout(() => void probeBackend(), delay)
 }
 
+type ProbeResult = 'ok' | 'down' | 'slow'
+
+function isTimeout(error: unknown): boolean {
+  const name = (error as { name?: string } | null)?.name
+  return name === 'AbortError' || name === 'TimeoutError'
+}
+
+async function probeOnce(fetcher: typeof window.fetch): Promise<ProbeResult> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
+  try {
+    const response = await fetcher(HEALTH_URL, { cache: 'no-store', signal: controller.signal })
+    const body = response.ok ? await response.json().catch(() => null) : null
+    return body?.status === 'ok' ? 'ok' : 'down'
+  } catch (error) {
+    // Only our own timer aborts the probe, so an abort is a timeout, not a refused connection.
+    return isTimeout(error) ? 'slow' : 'down'
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** A probe that only timed out: retry soon, and give up only after several slow rounds. */
+function handleSlowProbe(): void {
+  slowRounds += 1
+  if (!backendStatus.online || slowRounds >= SLOW_ROUNDS_BEFORE_OFFLINE) {
+    markOffline()
+    return
+  }
+  if (retryTimer) clearTimeout(retryTimer)
+  retryTimer = setTimeout(() => void probeBackend(), SLOW_RETRY_MS)
+}
+
 async function runProbe(): Promise<void> {
   const fetcher = originalFetch ?? window.fetch.bind(window)
   backendStatus.checking = true
 
-  const probeOnce = async (): Promise<boolean> => {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
-    try {
-      const response = await fetcher(HEALTH_URL, { cache: 'no-store', signal: controller.signal })
-      const body = response.ok ? await response.json().catch(() => null) : null
-      return body?.status === 'ok'
-    } catch {
-      return false
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-
   try {
-    const firstOk = await probeOnce()
-    if (firstOk) {
+    let result = await probeOnce(fetcher)
+    // When currently marked online, confirm with an immediate second probe before alarming the player.
+    if (result !== 'ok' && backendStatus.online) {
+      result = await probeOnce(fetcher)
+    }
+    if (result === 'ok') {
       markOnline()
       return
-    }
-
-    // When currently marked online, confirm with an immediate second probe before alarming the player.
-    // Heavy turn processing (LLM narration, assets) or temporary local socket contention shouldn't
-    // trigger a false-positive offline banner on a single delayed probe.
-    if (backendStatus.online) {
-      const secondOk = await probeOnce()
-      if (secondOk) {
-        markOnline()
-        return
-      }
     }
 
     // If an API request is actively in flight, the backend is working on it.
@@ -127,6 +147,10 @@ async function runProbe(): Promise<void> {
       return
     }
 
+    if (result === 'slow') {
+      handleSlowProbe()
+      return
+    }
     markOffline()
   } finally {
     backendStatus.checking = false
@@ -197,6 +221,7 @@ export function uninstallBackendWatch(): void {
   if (originalFetch) window.fetch = originalFetch
   originalFetch = null
   inFlightCount = 0
+  slowRounds = 0
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (retryTimer) clearTimeout(retryTimer)
   if (restoredTimer) clearTimeout(restoredTimer)
