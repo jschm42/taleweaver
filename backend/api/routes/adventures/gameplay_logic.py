@@ -832,6 +832,7 @@ class GameTurnManager:
             if normalized_user_msg != user_msg:
                 user_msg = normalized_user_msg
                 actual_user_input = normalized_user_msg
+        self.current_user_message = actual_user_input
 
         if user_msg.lower() in {"/shuffle", "/suggest", "/suggestions"}:
             last_response = await self._load_last_assistant_message()
@@ -2891,6 +2892,8 @@ class GameTurnManager:
             settings.TALEWEAVER_DEBUG_ENABLED
             or (self.state and getattr(self.state, "is_debug_enabled", False))
         )
+        user_msg = getattr(self, "current_user_message", "")
+        turn_lang = getattr(self, "turn_language", None)
         return GameContext(
             avatar_data=avatar_dict,
             current_scene_id=self.state.current_scene_id,
@@ -2908,7 +2911,7 @@ class GameTurnManager:
                 self.user,
                 game_id=self.game_id,
                 adventure_id=self.state.template_id,
-                language=self.turn_language,
+                language=turn_lang,
             ),
             image_generator=make_script_image_generator(self.user, self.adventure, self.game_id),
             active_sequence_id=self.state.active_sequence_id,
@@ -2916,6 +2919,8 @@ class GameTurnManager:
             sequence_progression_mode=getattr(
                 self.adventure, "sequence_progression_mode", "linear"
             ),
+            player_message=user_msg,
+            language=turn_lang,
         )
 
     def _get_script_runner(self) -> ScriptRunner:
@@ -2942,7 +2947,12 @@ class GameTurnManager:
             return []
         context = await self._build_script_context()
         runner = self._get_script_runner()
-        scope = {**(extra_scope or {}), "tw": context, "game": context}
+        scope = {
+            "player_message": getattr(self, "current_user_message", ""),
+            **(extra_scope or {}),
+            "tw": context,
+            "game": context,
+        }
         runner.execute_code(code, scope, script_id=f"inline_{trigger_name}_{target_id}")
         applied_messages = await self._apply_script_changeset(context.changeset)
         if context.is_debug_enabled:

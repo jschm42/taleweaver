@@ -1367,6 +1367,33 @@ class GameProxy:
         self._changeset.gameover_guard_expression_override = str(expression).strip()
 
 
+class TurnProxy:
+    """Safe proxy for current turn details (``tw.turn``)."""
+
+    def __init__(
+        self,
+        player_message: str = "",
+        language: Optional[str] = None,
+    ):
+        self._player_message = str(player_message or "").strip()
+        self._language = str(language or "").strip() if language else None
+
+    @property
+    def player_message(self) -> str:
+        """The verbatim or normalized text of the player's message in the current turn."""
+        return self._player_message
+
+    @property
+    def message(self) -> str:
+        """Alias for ``player_message``."""
+        return self._player_message
+
+    @property
+    def language(self) -> Optional[str]:
+        """The language code of the current turn (e.g. 'en', 'de'), if set."""
+        return self._language
+
+
 class QuestsProxy:
     """Safe proxy for quest state."""
 
@@ -1628,10 +1655,14 @@ class GameContext:
         sequence_progression_mode: str = "linear",
         audio: Optional[dict[str, Any]] = None,
         audio_library: Optional[list[dict[str, Any]]] = None,
+        player_message: str = "",
+        language: Optional[str] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
         self.changeset = ScriptChangeset()
+        self.turn = TurnProxy(player_message=player_message, language=language)
+        self.player_turn = self.turn
         self.player = PlayerProxy(avatar_data or {}, self.changeset)
         entity_dict = entities or {}
         npc_entities = {
@@ -1753,3 +1784,8 @@ class GameContext:
     def debug_message(self, *args: Any, sep: str = " ") -> None:
         """Alias for tw.debug()."""
         self.debug(*args, sep=sep)
+
+    @property
+    def player_message(self) -> str:
+        """Shortcut for tw.turn.player_message: the player's message in the current turn."""
+        return self.turn.player_message

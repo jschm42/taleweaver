@@ -166,7 +166,12 @@ class DialogChoiceResolver:
 
         context = await self.manager._build_script_context()
         choice = {"index": option["index"], "label": option["label"], "dialog_id": dialog["id"]}
-        scope = {"tw": context, "game": context, "dialog_choice": choice}
+        scope = {
+            "tw": context,
+            "game": context,
+            "dialog_choice": choice,
+            "player_message": str(option.get("label") or ""),
+        }
         runner.execute_code(
             f"{handler}(dialog_choice['index'])", scope, script_id=f"dialog_{handler}"
         )

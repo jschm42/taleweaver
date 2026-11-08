@@ -358,6 +358,15 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'error', kind: 'method', signature: '(*args, sep: str = " ")', snippet: 'error(${1:msg})', doc: 'Logs error to server console.' },
     ],
   },
+  turn: {
+    name: 'turn',
+    doc: 'Current turn information and player input',
+    items: [
+      { name: 'player_message', kind: 'property', signature: 'str', snippet: 'player_message', doc: 'Verbatim or normalized player input in the current turn.' },
+      { name: 'message', kind: 'property', signature: 'str', snippet: 'message', doc: 'Alias for tw.turn.player_message.' },
+      { name: 'language', kind: 'property', signature: 'str | None', snippet: 'language', doc: 'Turn language code (e.g. "en", "de"), if set.' },
+    ],
+  },
 }
 
 // Aliases
@@ -395,6 +404,8 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'json', kind: 'namespace', doc: 'Safe sandboxed JSON serialization and validation.' },
   { name: 'log', kind: 'namespace', doc: 'Server console logging.' },
   { name: 'console', kind: 'namespace', doc: 'Alias for tw.log.' },
+  { name: 'turn', kind: 'namespace', doc: 'Current turn details (player_message, language).' },
+  { name: 'player_message', kind: 'property', signature: 'str', snippet: 'player_message', doc: 'Shortcut for tw.turn.player_message.' },
   // Direct shortcuts
   { name: 'narrate', kind: 'method', signature: '(message: str)', snippet: 'narrate("${1:message}")', doc: 'Shortcut for tw.story.narrate(). Emits GM narration.' },
   { name: 'narrate_raw', kind: 'method', signature: '(message: str)', snippet: 'narrate_raw("${1:message}")', doc: 'Shortcut for tw.story.narrate_raw(). Emits verbatim GM text.' },

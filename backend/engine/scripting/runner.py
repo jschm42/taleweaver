@@ -145,6 +145,8 @@ class ScriptRunner:
             f"[ScriptRunner] Executing script '{script_id}' on trigger '{trigger}' (target={target_id})"
         )
         scope = {**(extra_scope or {}), "tw": context, "game": context}
+        if hasattr(context, "player_message"):
+            scope.setdefault("player_message", context.player_message)
         self.load_init_definitions(scope)
         try:
             self.interpreter.execute(code, scope)
@@ -196,6 +198,9 @@ class ScriptRunner:
 
     def execute_code(self, code: str, scope: dict[str, Any], script_id: str = "INLINE") -> None:
         """Executes a single inline code block directly."""
+        tw = scope.get("tw") or scope.get("game")
+        if tw and hasattr(tw, "player_message"):
+            scope.setdefault("player_message", getattr(tw, "player_message", ""))
         self.load_init_definitions(scope)
         try:
             self.interpreter.execute(code, scope)

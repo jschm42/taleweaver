@@ -446,7 +446,7 @@ def test_generator_calls_media_engine_with_tier_settings_and_style(media_calls):
     assert (call["provider"], call["model"], call["api_key"]) == ("openai", "gpt-image-1", "sk")
     assert call["adventure_id"] == "adv1"
     assert call["style_instruction"] == "Ink style"
-    assert call["target_dir"].endswith("adventures/sessions/g1/script_images")
+    assert call["target_dir"].replace("\\", "/").endswith("adventures/sessions/g1/script_images")
 
 
 def test_generator_skips_style_when_apply_style_is_false(media_calls):
