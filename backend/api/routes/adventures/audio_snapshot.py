@@ -52,7 +52,7 @@ def _start_missing_tracks(
 
 def _script_payload(session_id: str, audio: dict[str, Any]) -> Optional[dict[str, Any]]:
     now = audio.get("now")
-    if not now:
+    if not now or now.get("library_id"):
         return None
     status, detail = track_status(session_id, now["id"])
     track = audio["tracks"].get(now["id"]) or {}
@@ -64,6 +64,7 @@ def _script_payload(session_id: str, audio: dict[str, Any]) -> Optional[dict[str
         "error": detail if status == "failed" else None,
         "loop": bool(now.get("loop", True)),
         "fade": float(now.get("fade", 2.0)),
+        "volume": float(now.get("volume", 1.0)),
         "source": "script",
     }
 
@@ -73,7 +74,7 @@ def _existing(url: Optional[str]) -> Optional[str]:
     return url if path and os.path.isfile(path) else None
 
 
-async def _scene_track_id(db: AsyncSession, state: SessionState) -> Optional[str]:
+async def _scene_track_id(db: AsyncSession, state: SessionState, known: set[str]) -> Optional[str]:
     """Track of the current scene: the session copy's choice, else the template scene's.
 
     Sessions started before a scene got its track keep NULL in their copy; the template scene
@@ -89,7 +90,9 @@ async def _scene_track_id(db: AsyncSession, state: SessionState) -> Optional[str
         )
     ).scalars()
     ordered = sorted(rows, key=lambda row: row.session_id is None)
-    return next((row.audio_track_id for row in ordered if row.audio_track_id), None)
+    # An id the library no longer knows (track renamed or deleted after the session started) is
+    # skipped, so the template scene's current choice applies.
+    return next((row.audio_track_id for row in ordered if row.audio_track_id in known), None)
 
 
 def _track_payload(track: dict[str, Any], url: str) -> dict[str, Any]:
@@ -102,7 +105,37 @@ def _track_payload(track: dict[str, Any], url: str) -> dict[str, Any]:
         "error": None,
         "loop": True,
         "fade": SCENE_FADE_SECONDS,
+        "volume": 1.0,
         "source": "scene",
+    }
+
+
+async def _library_payload(
+    db: AsyncSession, state: SessionState, now: dict[str, Any]
+) -> dict[str, Any]:
+    """A library track a script chose (``tw.audio.play(<track id>)``)."""
+    template = await db.get(AdventureTemplate, state.template_id) if state.template_id else None
+    tracks = normalize_tracks(getattr(template, "audio_tracks", None), state.template_id)
+    track = find_track(tracks, now["library_id"])
+    url = _existing(track.get("url")) if track else None
+    if track and url:
+        payload = _track_payload(track, url)
+        payload.update(
+            loop=bool(now.get("loop", True)),
+            fade=float(now.get("fade", 2.0)),
+            volume=float(now.get("volume", 1.0)),
+            source="script",
+        )
+        return payload
+    return {
+        "id": f"track:{now['library_id']}",
+        "name": track.get("name") if track else None,
+        "status": "failed",
+        "url": None,
+        "error": f"The audio library track '{now['library_id']}' has no audio file.",
+        "loop": True,
+        "fade": float(now.get("fade", 2.0)),
+        "source": "script",
     }
 
 
@@ -112,7 +145,7 @@ async def _scene_audio(db: AsyncSession, state: SessionState) -> tuple[Optional[
     tracks = normalize_tracks(getattr(template, "audio_tracks", None), state.template_id)
     if not tracks or not getattr(template, "audio_enabled", True):
         return None, False
-    track = find_track(tracks, await _scene_track_id(db, state))
+    track = find_track(tracks, await _scene_track_id(db, state, {t["id"] for t in tracks}))
     url = _existing(track.get("url")) if track else None
     return (_track_payload(track, url) if track and url else None), True
 
@@ -134,6 +167,8 @@ async def build_audio_snapshot(
         api_key = audio_api_key(user, normalize_audio_settings(raw))
         _start_missing_tracks(state.session_id, audio["tracks"], raw, api_key)
     now = _script_payload(state.session_id, audio)
+    if audio["now"] and audio["now"].get("library_id"):
+        now = await _library_payload(db, state, audio["now"])
     has_library = False
     if now is None and not audio["silenced"]:
         now, has_library = await _scene_audio(db, state)

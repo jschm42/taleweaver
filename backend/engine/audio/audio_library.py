@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any, Optional
 
@@ -90,3 +91,36 @@ def title_track_or_none(value: Any, tracks: Any) -> Optional[str]:
     """``value`` when it names a track of ``tracks`` (the title track), else None."""
     track_id = track_id_or_none(value)
     return track_id if find_track(tracks, track_id) else None
+
+
+# IDs the author types or that are suggested: letters, digits and underscores, max 30
+# characters, stored in upper case (e.g. CRYPT_THEME). Older random or World-Builder ids stay
+# valid (TRACK_ID_RE) until the author changes them.
+EDITABLE_ID_RE = re.compile(r"^[A-Z0-9_]{1,30}$")
+MAX_EDITABLE_ID_CHARS = 30
+
+
+def suggest_track_id(text: Any, taken: set[str]) -> str:
+    """Upper-case id from a name or file name, unique among ``taken`` (``crypt theme.mp3`` ->
+    ``CRYPT_THEME``; ``CRYPT_THEME_2`` when that is taken)."""
+    plain = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^A-Za-z0-9]+", "_", plain).strip("_").upper()[:MAX_EDITABLE_ID_CHARS]
+    base = base or "TRACK"
+    candidate, number = base, 2
+    while candidate in taken:
+        suffix = f"_{number}"
+        candidate = base[: MAX_EDITABLE_ID_CHARS - len(suffix)].rstrip("_") + suffix
+        number += 1
+    return candidate
+
+
+def check_track_id(value: Any, taken: set[str]) -> str:
+    """The id the author typed, upper-cased; ``ValueError`` when invalid or already used."""
+    track_id = str(value or "").strip().upper()
+    if not EDITABLE_ID_RE.fullmatch(track_id):
+        raise ValueError(
+            "Track IDs use only letters, digits and underscores, at most 30 characters."
+        )
+    if track_id in taken:
+        raise ValueError(f"The track ID '{track_id}' is already used in this adventure.")
+    return track_id

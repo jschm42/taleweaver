@@ -46,6 +46,26 @@ export function dividerBefore(
   }
 }
 
+/**
+ * Sequence id of the chapter that begins with `page`, or null.
+ *
+ * A chapter begins where the sequence differs from the previous page's, also together with a
+ * scene change. The very first page counts only when it is the real start of the history
+ * (`isHistoryStart`), not merely the oldest page loaded so far.
+ */
+export function chapterStartingAt(
+  previous: ComicTurn | undefined,
+  page: ComicTurn,
+  isHistoryStart: boolean
+): string | null {
+  const now = splitKey(page.sceneKey)
+  if (!now?.sequence) return null
+  if (!previous) return isHistoryStart ? now.sequence : null
+  const before = splitKey(previous.sceneKey)
+  if (!before) return null
+  return before.sequence !== now.sequence ? now.sequence : null
+}
+
 /** All pages played in one scene: the story feed shows one segment at a time. */
 export interface SceneSegment {
   /** Scene id, or null for legacy messages without scene info. */

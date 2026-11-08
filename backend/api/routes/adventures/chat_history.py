@@ -84,12 +84,10 @@ async def load_history_page(
     return HistoryPage([row.to_client_dict() for row in rows], has_more)
 
 
-async def visited_sequence_titles(
-    db: AsyncSession, session_id: str, adventure: Any
-) -> dict[str, str]:
-    """Sequence id -> title for every sequence the chat already reached (feed chapter dividers).
+async def _visited_sequences(db: AsyncSession, session_id: str, adventure: Any) -> list[dict]:
+    """The adventure's sequences that already appear in the chat history.
 
-    Only sequences that appear in the history are listed, so later chapters are not revealed.
+    Only these are sent to the client, so later chapters are not revealed.
     """
     res = await db.execute(
         select(ChatMessage.sequence_id)
@@ -98,10 +96,32 @@ async def visited_sequence_titles(
     )
     visited = {seq_id for (seq_id,) in res.all()}
     sequences = getattr(adventure, "sequences", None) or []
+    return [seq for seq in sequences if isinstance(seq, dict) and seq.get("id") in visited]
+
+
+async def visited_sequence_titles(
+    db: AsyncSession, session_id: str, adventure: Any
+) -> dict[str, str]:
+    """Sequence id -> title for every sequence the chat already reached."""
     return {
         str(seq["id"]): str(seq.get("title") or seq["id"])
-        for seq in sequences
-        if isinstance(seq, dict) and seq.get("id") in visited
+        for seq in await _visited_sequences(db, session_id, adventure)
+    }
+
+
+async def visited_sequence_details(
+    db: AsyncSession, session_id: str, adventure: Any
+) -> dict[str, dict[str, Any]]:
+    """Sequence id -> what the chat's chapter banner shows (title, number, description)."""
+    dynamic = getattr(adventure, "sequence_progression_mode", "linear") == "dynamic"
+    return {
+        str(seq["id"]): {
+            "title": str(seq.get("title") or seq["id"]),
+            "order": seq.get("order"),
+            "description": str(seq.get("description") or ""),
+            "dynamic": dynamic or seq.get("progression_mode") == "dynamic",
+        }
+        for seq in await _visited_sequences(db, session_id, adventure)
     }
 
 

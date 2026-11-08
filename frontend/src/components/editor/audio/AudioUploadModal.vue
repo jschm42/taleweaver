@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /** Modal: add an own audio file to the adventure's audio library (click or drop the file). */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Upload, X, FileAudio } from 'lucide-vue-next'
 import { editorAudioService } from '@/services/editorAudioService'
 import { notificationService } from '@/services/notificationService'
+import { cleanTrackIdInput, suggestTrackId, trackIdError, TRACK_ID_MAX } from '@/utils/trackIds'
 
 const props = defineProps<{
   show: boolean
   adventureId: string
+  /** IDs already used in the library (the new ID must differ). */
+  takenIds: string[]
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +21,22 @@ const emit = defineEmits<{
 const MAX_BYTES = 50 * 1024 * 1024
 
 const name = ref('')
+// The ID follows the file name until the author types one.
+const typedId = ref('')
+const idTouched = ref(false)
+const trackId = computed((): string => {
+  if (idTouched.value) return typedId.value
+  const stem = file.value ? file.value.name.replace(/\.[^.]+$/, '') : name.value
+  return suggestTrackId(stem, props.takenIds)
+})
+const idError = computed((): string => (file.value ? trackIdError(trackId.value, props.takenIds) : ''))
+
+function onIdInput(event: Event): void {
+  const input = event.target as HTMLInputElement
+  typedId.value = cleanTrackIdInput(input.value)
+  input.value = typedId.value
+  idTouched.value = true
+}
 const file = ref<File | null>(null)
 const isUploading = ref(false)
 const isDragging = ref(false)
@@ -29,6 +48,8 @@ watch(
     if (!show) return
     name.value = ''
     file.value = null
+    typedId.value = ''
+    idTouched.value = false
   },
 )
 
@@ -55,7 +76,7 @@ async function upload(): Promise<void> {
   if (!file.value) return
   isUploading.value = true
   try {
-    const track = await editorAudioService.upload(props.adventureId, file.value, name.value)
+    const track = await editorAudioService.upload(props.adventureId, file.value, name.value, trackId.value)
     notificationService.add(`${track.name} added to the audio library.`, 'success')
     emit('uploaded')
     emit('close')
@@ -108,12 +129,22 @@ async function upload(): Promise<void> {
               <input v-model="name" maxlength="100" placeholder="Track name"
                 class="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50" />
             </label>
+            <label class="block space-y-1.5">
+              <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Track ID</span>
+              <input :value="trackId" :maxlength="TRACK_ID_MAX" spellcheck="false"
+                class="w-full bg-slate-950/80 border rounded-xl px-3 py-2 font-mono text-xs text-slate-200 focus:outline-none"
+                :class="idError ? 'border-rose-500/60' : 'border-white/10 focus:border-emerald-500/50'"
+                @input="onIdInput" />
+              <span class="block text-[10px]" :class="idError ? 'text-rose-400' : 'text-slate-500'">
+                {{ idError || 'Suggested from the file name. Used by scripts (tw.audio.play) and blueprints (audio: ID).' }}
+              </span>
+            </label>
             <p class="text-[10px] text-slate-500">Only use audio you may share with this adventure; it is bundled in exports.</p>
           </div>
 
           <div class="flex justify-end gap-2 p-6 pt-4 border-t border-white/5">
             <button type="button" class="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-white" @click="emit('close')">Cancel</button>
-            <button type="button" :disabled="isUploading || !file"
+            <button type="button" :disabled="isUploading || !file || !!idError"
               class="inline-flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-[10px] uppercase tracking-wider rounded-xl"
               @click="upload">
               <Upload class="w-3 h-3" /> {{ isUploading ? 'Uploading...' : 'Upload' }}

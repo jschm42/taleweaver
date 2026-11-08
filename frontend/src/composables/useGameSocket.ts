@@ -18,7 +18,7 @@ import {
   prependOlderPage,
   visibleServerMessages,
 } from '@/composables/historyWindow'
-import type { ChatMessage, CharacterSheet, CombatState, AudioSnapshot, PendingDialog } from '@/types'
+import type { ChatMessage, CharacterSheet, CombatState, AudioSnapshot, PendingDialog, SequenceDetail } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
@@ -53,6 +53,8 @@ export interface UseGameSocket {
   hasOlderMessages: Ref<boolean>
   /** Sequence id -> title of the chapters the chat reached (story feed chapter dividers). */
   sequenceTitles: Ref<Record<string, string>>
+  /** Sequence id -> number and description of the chapters the chat reached (chapter banners). */
+  sequenceDetails: Ref<Record<string, SequenceDetail>>
   sheet: Ref<CharacterSheet | null>
   mapData: Ref<any | null>
   nodes: Ref<Record<string, any>>
@@ -140,6 +142,7 @@ export function useGameSocket(): UseGameSocket {
   const activeSequence = ref<any | null>(null)
   const hasOlderMessages = ref(false)
   const sequenceTitles = ref<Record<string, string>>({})
+  const sequenceDetails = ref<Record<string, SequenceDetail>>({})
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
   const isLegacyFormat = ref(false)
@@ -313,6 +316,7 @@ export function useGameSocket(): UseGameSocket {
       if (!merged.keptOlder) hasOlderMessages.value = !!data.has_more_messages
     }
     if (data.sequence_titles) sequenceTitles.value = data.sequence_titles
+    if (data.sequence_details) sequenceDetails.value = data.sequence_details
 
     if (data.scene_id !== undefined) updateCurrentScene(data.scene_id || null, announcedScene)
     if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
@@ -428,6 +432,7 @@ export function useGameSocket(): UseGameSocket {
     messages.value = []
     hasOlderMessages.value = false
     sequenceTitles.value = {}
+    sequenceDetails.value = {}
     stopSyncTimer()
     
     try {
@@ -469,6 +474,7 @@ export function useGameSocket(): UseGameSocket {
     messages.value = []
     hasOlderMessages.value = false
     sequenceTitles.value = {}
+    sequenceDetails.value = {}
     sheet.value = null
     mapData.value = null
     nodes.value = {}
@@ -1101,6 +1107,7 @@ export function useGameSocket(): UseGameSocket {
     messages,
     hasOlderMessages,
     sequenceTitles,
+    sequenceDetails,
     loadOlderMessages,
     sheet,
     mapData,

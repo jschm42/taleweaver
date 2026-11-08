@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { AudioLines, Sparkles, Upload, Play, Pause, Check, X, Star } from 'lucide-vue-next'
+import { AudioLines, Sparkles, Upload, Play, Pause, Check, X, Star, Copy } from 'lucide-vue-next'
 import { editorAudioService, type AudioLibrary, type AudioTrack } from '@/services/editorAudioService'
 import { notificationService } from '@/services/notificationService'
+import { cleanTrackIdInput, trackIdError, TRACK_ID_MAX } from '@/utils/trackIds'
 import AudioGenerateModal, { type GenerateDraft } from '@/components/editor/audio/AudioGenerateModal.vue'
 import AudioUploadModal from '@/components/editor/audio/AudioUploadModal.vue'
 import AudioTrackMenu, { type TrackAction } from '@/components/editor/audio/AudioTrackMenu.vue'
@@ -32,6 +33,16 @@ const isDeleting = ref(false)
 
 const editingId = ref('')
 const editName = ref('')
+const editId = ref('')
+const takenIds = computed((): string[] => tracks.value.map((t) => t.id))
+/** IDs of the other tracks (the edited one may keep its own). */
+const otherIds = computed((): string[] => takenIds.value.filter((id) => id !== editingId.value))
+const editIdError = computed((): string => {
+  const current = tracks.value.find((t) => t.id === editingId.value)
+  // An older id (random or longer) may stay as it is; a changed one must follow the rules.
+  if (!editingId.value || editId.value === current?.id) return ''
+  return trackIdError(editId.value, otherIds.value)
+})
 const editPrompt = ref('')
 const playingId = ref('')
 let player: HTMLAudioElement | null = null
@@ -146,13 +157,23 @@ async function rerender(track: AudioTrack): Promise<void> {
 
 function startEdit(track: AudioTrack): void {
   editingId.value = track.id
+  editId.value = track.id
   editName.value = track.name
   editPrompt.value = track.prompt
 }
 
+function onEditIdInput(event: Event): void {
+  const input = event.target as HTMLInputElement
+  editId.value = cleanTrackIdInput(input.value)
+  input.value = editId.value
+}
+
 async function saveEdit(track: AudioTrack): Promise<void> {
   try {
-    await editorAudioService.update(props.adventureId, track.id, { name: editName.value, prompt: editPrompt.value })
+    const changes: Partial<Pick<AudioTrack, 'id' | 'name' | 'prompt'>> = { name: editName.value, prompt: editPrompt.value }
+    if (editId.value !== track.id) changes.id = editId.value
+    await editorAudioService.update(props.adventureId, track.id, changes)
+    if (changes.id) notificationService.add(`Track ID changed to ${changes.id}. Scenes and the title track follow; update scripts or blueprints that use '${track.id}'.`, 'info')
     editingId.value = ''
     await reload()
   } catch (err) {
@@ -190,6 +211,15 @@ async function setTitle(trackId: string | null): Promise<void> {
     await reload()
   } catch (err) {
     report(err)
+  }
+}
+
+async function copyId(track: AudioTrack): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(track.id)
+    notificationService.add(`Copied track ID ${track.id}.`, 'success')
+  } catch {
+    notificationService.add(`Copy failed. Track ID: ${track.id}`, 'info')
   }
 }
 
@@ -331,12 +361,19 @@ onBeforeUnmount((): void => {
             </td>
             <td class="p-3 min-w-[16rem]">
               <template v-if="editingId === track.id">
-                <input v-model="editName" maxlength="100"
+                <input v-model="editName" maxlength="100" aria-label="Track name"
                   class="w-full mb-2 bg-slate-950/80 border border-orange-500/40 rounded-lg px-2 py-1 text-xs text-white" />
+                <input :value="editId" :maxlength="TRACK_ID_MAX" spellcheck="false" aria-label="Track ID"
+                  class="w-full bg-slate-950/80 border rounded-lg px-2 py-1 font-mono text-[11px] text-slate-200"
+                  :class="editIdError ? 'border-rose-500/60' : 'border-orange-500/40'"
+                  @input="onEditIdInput" />
+                <p class="mb-2 mt-0.5 text-[10px]" :class="editIdError ? 'text-rose-400' : 'text-slate-500'">
+                  {{ editIdError || 'Track ID: letters, digits, underscores (max. 30).' }}
+                </p>
                 <textarea v-model="editPrompt" rows="3" maxlength="1000" placeholder="Prompt (needed to render again)"
                   class="w-full bg-slate-950/80 border border-orange-500/40 rounded-lg px-2 py-1 text-[11px] text-slate-200"></textarea>
                 <div class="mt-1.5 flex gap-1">
-                  <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600 text-white text-[10px] font-bold" @click="saveEdit(track)"><Check class="w-3 h-3" /> Save</button>
+                  <button type="button" :disabled="!!editIdError" class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600 text-white text-[10px] font-bold disabled:opacity-40" @click="saveEdit(track)"><Check class="w-3 h-3" /> Save</button>
                   <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800 text-slate-300 text-[10px] font-bold" @click="editingId = ''"><X class="w-3 h-3" /> Cancel</button>
                 </div>
               </template>
@@ -348,6 +385,14 @@ onBeforeUnmount((): void => {
                     title="Plays on the adventure's library tile">
                     <Star class="w-2.5 h-2.5" /> Title Track
                   </span>
+                </div>
+                <div class="mt-0.5 flex items-center gap-1.5">
+                  <code class="rounded bg-slate-950/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-400"
+                    title="Track ID: use it in scripts (tw.audio.play), blueprints (audio: ID) and AI fixes">{{ track.id }}</code>
+                  <button type="button" class="p-0.5 text-slate-500 hover:text-white" :aria-label="`Copy track ID ${track.id}`"
+                    title="Copy track ID" @click.stop="copyId(track)">
+                    <Copy class="w-3 h-3" />
+                  </button>
                 </div>
                 <div v-if="track.prompt" class="text-[11px] text-slate-500 line-clamp-2" :title="track.prompt">{{ track.prompt }}</div>
                 <div v-if="track.reference_scene_id" class="text-[10px] text-slate-600">Reference: {{ sceneLabels[track.reference_scene_id] || track.reference_scene_id }}</div>
@@ -390,6 +435,7 @@ onBeforeUnmount((): void => {
       :show="showGenerate"
       :adventure-id="adventureId"
       :scenes="scenes"
+      :taken-ids="takenIds"
       :generation-on="generationOn"
       :provider-label="providerLabel"
       :draft="generateDraft"
@@ -409,6 +455,7 @@ onBeforeUnmount((): void => {
     <AudioUploadModal
       :show="showUpload"
       :adventure-id="adventureId"
+      :taken-ids="takenIds"
       @close="showUpload = false"
       @uploaded="reload"
     />

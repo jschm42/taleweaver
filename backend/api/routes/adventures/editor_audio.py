@@ -18,11 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.editor_audio_tracks import (
     MAX_UPLOAD_BYTES,
+    add_track_change,
     assign_scene_track,
+    new_track_id_for,
     release_track,
+    rename_track_references,
+    renamed_track_id,
     replace_file,
     require_track,
     sniff_audio,
+    taken_track_ids,
     template_scenes,
     update_tracks,
 )
@@ -34,9 +39,9 @@ from backend.core.llm_router import GameMasterLLM
 from backend.engine.audio.audio_assets import save_library_audio
 from backend.engine.audio.audio_jobs import AudioJobs
 from backend.engine.audio.audio_library import (
+    MAX_EDITABLE_ID_CHARS,
     MAX_NAME_CHARS,
     MAX_PROMPT_CHARS,
-    new_track_id,
     normalize_tracks,
     now_iso,
 )
@@ -64,6 +69,8 @@ class SuggestPayload(BaseModel):
 
 
 class TrackPayload(BaseModel):
+    # Optional: suggested from the name when empty (e.g. CRYPT_THEME).
+    id: Optional[str] = Field(default=None, max_length=MAX_EDITABLE_ID_CHARS)
     name: str = Field(default="", max_length=MAX_NAME_CHARS)
     prompt: str = Field(default="", max_length=MAX_PROMPT_CHARS)
     reference_scene_id: Optional[str] = Field(default=None, max_length=50)
@@ -71,6 +78,7 @@ class TrackPayload(BaseModel):
 
 
 class TrackUpdate(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=MAX_EDITABLE_ID_CHARS)
     name: Optional[str] = Field(default=None, max_length=MAX_NAME_CHARS)
     prompt: Optional[str] = Field(default=None, max_length=MAX_PROMPT_CHARS)
     reference_scene_id: Optional[str] = Field(default=None, max_length=50)
@@ -204,21 +212,23 @@ async def create_generated_track(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Add a track and start rendering it; poll ``GET /jobs/{id}``."""
-    await _owned_adventure(db, template_id, current_user)
+    adventure = await _owned_adventure(db, template_id, current_user)
     prompt = payload.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Enter a prompt first.")
+    name = payload.name.strip() or prompt[:40]
+    track_id = new_track_id_for(payload.id, name, taken_track_ids(adventure))
     settings, api_key = await _render_settings(db, current_user)
     track = {
-        "id": new_track_id(),
-        "name": payload.name.strip() or prompt[:40],
+        "id": track_id,
+        "name": name,
         "prompt": prompt,
         "url": None,
         "source": "generated",
         "reference_scene_id": payload.reference_scene_id or None,
         "created_at": now_iso(),
     }
-    await update_tracks(db, template_id, lambda tracks: tracks.append(track))
+    await update_tracks(db, template_id, add_track_change(track, bool(payload.id), name))
     job = _start_render(template_id, track["id"], prompt, payload.duration, settings, api_key)
     return {"track": track, "job": job}
 
@@ -247,28 +257,30 @@ async def upload_track(
     template_id: str,
     file: UploadFile = File(...),
     name: str = Form(default="", max_length=MAX_NAME_CHARS),
+    track_id: str = Form(default="", max_length=MAX_EDITABLE_ID_CHARS),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Add an uploaded audio file (MP3, WAV, OGG/Opus, FLAC, M4A; max 50 MB) to the library."""
-    await _owned_adventure(db, template_id, current_user)
+    adventure = await _owned_adventure(db, template_id, current_user)
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=400, detail="The audio file is larger than 50 MB.")
     original = os.path.basename(file.filename or "upload")
     extension = sniff_audio(data, original)
-    track_id = new_track_id()
-    url = save_library_audio(template_id, track_id, secrets.token_hex(4), data, extension)
+    stem = os.path.splitext(original)[0]
+    new_id = new_track_id_for(track_id, stem, taken_track_ids(adventure))
+    url = save_library_audio(template_id, new_id, secrets.token_hex(4), data, extension)
     track = {
-        "id": track_id,
-        "name": name.strip() or os.path.splitext(original)[0][:MAX_NAME_CHARS] or track_id,
+        "id": new_id,
+        "name": name.strip() or stem[:MAX_NAME_CHARS] or new_id,
         "prompt": "",
         "url": url,
         "source": "uploaded",
         "reference_scene_id": None,
         "created_at": now_iso(),
     }
-    await update_tracks(db, template_id, lambda tracks: tracks.append(track))
+    await update_tracks(db, template_id, add_track_change(track, bool(track_id.strip()), stem))
     return {"track": track}
 
 
@@ -280,16 +292,26 @@ async def update_track(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    await _owned_adventure(db, template_id, current_user)
+    adventure = await _owned_adventure(db, template_id, current_user)
     changes = payload.model_dump(exclude_unset=True)
+    new_id = renamed_track_id(
+        editor_jobs, template_id, track_id, changes.pop("id", None), taken_track_ids(adventure)
+    )
 
     def change(tracks: list[dict[str, Any]]) -> dict[str, Any]:
         track = require_track(tracks, track_id)
         for field, value in changes.items():
             track[field] = (value or "").strip() or (None if field != "name" else track["name"])
+        if new_id and any(t["id"] == new_id for t in tracks):
+            raise HTTPException(status_code=409, detail=f"The track ID '{new_id}' is already used.")
+        if new_id:
+            track["id"] = new_id
         return dict(track)
 
-    return {"track": await update_tracks(db, template_id, change)}
+    track = await update_tracks(db, template_id, change)
+    if new_id:
+        await rename_track_references(db, adventure, track_id, new_id)
+    return {"track": track}
 
 
 @router.delete("/tracks/{track_id}")

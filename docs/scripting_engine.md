@@ -559,6 +559,7 @@ Injects narrative messages or system notifications into the turn stream:
 - `tw.story.narrate(text: str)` (shortcut `tw.narrate(text)`): Emits Game Master narration (`role: "assistant"`), displayed with the Game Master avatar and styled exactly like standard storytelling turns. The text is parsed like LLM narration: `Name: "..."` lines become NPC speech bubbles, `[tags]` become voice tags, `**bold**` is highlighted (e.g. `tw.story.narrate('You take the piece of chocolate. Maybe it will help with the persuasion.')`).
 - `tw.story.narrate_raw(text: str)` (shortcut `tw.narrate_raw(text)`): Emits Game Master narration that is shown **verbatim**, as one Game Master block: no speaker detection, no voice tags, no bold or `##ID` formatting. Line breaks are kept. Use it for text that must not be interpreted, e.g. LLM output from `tw.llm.ask(...)` that may contain colons or quotes (`tw.story.narrate_raw(news or "Just static noise.")`).
 - `tw.story.direct(instruction: str, after=None, after_args=None)` (shortcut `tw.direct(...)`): Gives the Game Master a **soft stage direction** instead of fixed text, e.g. `tw.story.direct("Let BRAM sing a sailor song")`. Nothing is shown right away. The direction is stored in the session (`entity_states["__gm_directions__"]`) and handed to the **next GM narration**: the narration of the current turn when the script runs during a turn (e.g. a soft rule in Pass 1.5), otherwise the next turn's narration, or the outcome narration of a choice dialog opened with `narrate=True`. That narration works it in naturally and drops it afterwards, so every direction is used once. The GM treats it as a wish, not as a fact: it never overrides game rules or the technical outcome, and it does not change any state (use the other `tw.*` calls for that). Whitespace is collapsed to a single line, each direction is cut at 500 characters, and at most the 5 newest directions wait at a time. With `after=` a callback runs once that narration is done (see below).
+- `tw.story.skip_narration()` (shortcut `tw.skip_narration()`): the **next GM narration is skipped**, so no narration text and no TTS for it. Use it when a script starts an audio track (music or recorded speech) that must not be talked over. Like `direct`, the request waits in the session and applies to the next narration pass: the current turn's when the script runs during a turn (e.g. `on_logic_pass_done`, an interaction trigger), otherwise the next turn's (the opening narration when the init script calls it). It is used once. Script messages (`narrate`, `system`), system events, `on_narration_done` and the clock tick still happen.
 - *Deprecated aliases:* `tw.story.show_message(text)`, `tw.story.message(text)` and `tw.show_message(text)` behave exactly like `tw.story.narrate(text)`. They remain for existing adventures; new scripts should use `narrate`.
 - `tw.story.system_message(text: str)` / `tw.story.system(text: str)` / `tw.system(text: str)`: Emits a technical system notification (`role: "system"`). System messages and narration calls (`narrate`, `narrate_raw`) are rendered in the exact chronological order in which the script executed them.
 - `tw.story.log(text: str)`: Appends an internal log message visible during debugging.
@@ -665,9 +666,9 @@ Scripts compose background audio on the fly from a text prompt. A call only reco
 **What plays**: a script track (`tw.audio`) beats the track the current scene selected from the adventure's audio library (editor: **Audio** tab and the scene dialog). Scenes with the same library track keep it playing when the player walks between them; a scene without a track fades the audio out. `tw.audio.stop()` silences scene audio too until the next `play`/`generate`; `tw.audio.release()` ends the script audio and hands back to the scene's track.
 
 **Changing**
-- `tw.audio.generate(prompt, name=None, duration=None, play=True, loop=True, negative_prompt="", seed=None, regenerate=False, fade=2.0)`: requests a new track and returns its id (`None` if the prompt is empty or the session already holds 100 tracks). The prompt describes the audio, not the scene: genre, instruments, mood, tempo (e.g. `"slow dark ambient, low strings, dripping water, 60 bpm"`). `duration` is in seconds (default and maximum come from the admin settings). With `play=False` the track is rendered in advance and played later.
+- `tw.audio.generate(prompt, name=None, duration=None, play=True, loop=True, negative_prompt="", seed=None, regenerate=False, fade=2.0, volume=1.0)`: requests a new track and returns its id (`None` if the prompt is empty or the session already holds 100 tracks). The prompt describes the audio, not the scene: genre, instruments, mood, tempo (e.g. `"slow dark ambient, low strings, dripping water, 60 bpm"`). `duration` is in seconds (default and maximum come from the admin settings). With `play=False` the track is rendered in advance and played later.
 - A **name** makes a track reusable: `generate` with a name that already exists plays the stored track instead of rendering a new one (pass `regenerate=True` to render it again). Always name audio that comes back, such as scene themes or battle audio, so it is rendered once per session.
-- `tw.audio.play(name, loop=True, fade=2.0)`: plays a track generated before, by name or id. Returns `False` if there is none.
+- `tw.audio.play(name, loop=True, fade=2.0, volume=1.0)`: plays a track. `volume` (0..1) applies to this playback only; it multiplies with `tw.audio.set_volume` and the player's own volume. It looks first for a track this session generated (by its `name` or the id `generate` returned), then for a track of the adventure's **audio library** (by the track ID shown in the editor's **Audio** tab, or its exact name). Returns `False` if there is none and shows a script error in the chat (`Script error in 'tw.audio.play': no audio track '...'`), so a typo is visible.
 - `tw.audio.stop(fade=2.0)`: fades all audio out, scene and theme audio too.
 - `tw.audio.release()`: ends the script audio; the current scene's library track plays again.
 - `tw.audio.set_volume(value)`: script volume `0..1`, multiplied with the player's own audio volume.
@@ -677,7 +678,16 @@ Scripts compose background audio on the fly from a text prompt. A call only reco
 - `tw.audio.current`: name (or id) of the track that should play now, else `None`.
 - `tw.audio.is_playing`: `True` while a script track is set to play, also while it is still rendering.
 - `tw.audio.is_silenced`: `True` after `stop()`, until `play`, `generate` or `release`.
-- `tw.audio.has(name)`, `tw.audio.tracks` (list of names), `tw.audio.volume`.
+- `tw.audio.has(name)`, `tw.audio.tracks` (names of this session's generated tracks), `tw.audio.library` (track IDs of the adventure's audio library), `tw.audio.volume`.
+
+**Two kinds of tracks and IDs**
+
+| | Library tracks | Script tracks |
+| --- | --- | --- |
+| Made in | the editor's **Audio** tab (generated or uploaded), or planned by the World-Builder | a script, with `tw.audio.generate(...)` during play |
+| ID | shown under the track name in the Audio tab (copy button) and editable there: letters, digits and underscores, max. 30, upper case (e.g. `CRYPT_THEME`); suggested from the track or file name | random 32-character id returned by `generate`; give the track a `name` instead |
+| Lives in | the adventure (exported with it) | the play session only |
+| Played by | scenes (their track choice), the title track, `tw.audio.play("<track id>")` | `tw.audio.play("<name>")` |
 
 ```python
 # Scene on_enter_scene: each place gets its own theme, rendered only on the first visit.
@@ -688,6 +698,13 @@ tw.audio.generate("epic orchestral battle, taiko drums, brass, 140 bpm", name="b
 
 # Later, e.g. in the boss NPC's on_interact_script:
 tw.audio.play("boss")
+
+# Or play a track from the editor's Audio tab by its track ID:
+tw.audio.play("CRYPT_THEME")
+
+# A recorded speech at 80% volume that the narration must not talk over:
+tw.audio.play("KINGS_SPEECH", loop=False, volume=0.8)
+tw.story.skip_narration()
 
 # After the fight: back to the scene's own audio from the editor.
 tw.audio.release()

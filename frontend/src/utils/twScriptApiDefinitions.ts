@@ -162,6 +162,7 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
     items: [
       { name: 'narrate', kind: 'method', signature: '(text: str)', snippet: 'narrate("${1:Narration text}")', doc: 'Emits GM narration block in the story feed.' },
       { name: 'narrate_raw', kind: 'method', signature: '(text: str)', snippet: 'narrate_raw("${1:Verbatim text}")', doc: 'Emits verbatim GM narration without speaker parsing.' },
+      { name: 'skip_narration', kind: 'method', signature: '()', snippet: 'skip_narration()', doc: 'No GM narration (and no TTS) in the next narration pass, e.g. while an audio track plays. Used once.' },
       { name: 'direct', kind: 'method', signature: '(instruction: str, after=None, after_args=None)', snippet: 'direct("${1:instruction}")', doc: 'Gives the GM a soft stage direction for next narration. Optional after="init_fn" (+ after_args={...}) runs that init_script function once the narration is done.' },
       { name: 'system', kind: 'method', signature: '(text: str)', snippet: 'system("${1:System note}")', doc: 'Emits technical system notification in feed.' },
       { name: 'system_message', kind: 'method', signature: '(text: str)', snippet: 'system_message("${1:System note}")', doc: 'Alias for tw.story.system().' },
@@ -211,8 +212,8 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
     name: 'audio',
     doc: 'Background audio composed on the fly (experimental, needs server audio generation)',
     items: [
-      { name: 'generate', kind: 'method', signature: '(prompt: str, name: str = None, duration: int = None, play: bool = True, loop: bool = True, negative_prompt: str = "", seed: int = None, regenerate: bool = False, fade: float = 2.0) -> str | None', snippet: 'generate("${1:slow dark ambient, low strings}", name="${2:theme}")', doc: 'Requests a new track (rendered in the background). A known name replays the stored track unless regenerate=True.' },
-      { name: 'play', kind: 'method', signature: '(name: str, loop: bool = True, fade: float = 2.0) -> bool', snippet: 'play("${1:theme}")', doc: 'Plays a track generated before (by name or id). False if unknown.' },
+      { name: 'generate', kind: 'method', signature: '(prompt: str, name: str = None, duration: int = None, play: bool = True, loop: bool = True, negative_prompt: str = "", seed: int = None, regenerate: bool = False, fade: float = 2.0, volume: float = 1.0) -> str | None', snippet: 'generate("${1:slow dark ambient, low strings}", name="${2:theme}")', doc: 'Requests a new track (rendered in the background). A known name replays the stored track unless regenerate=True.' },
+      { name: 'play', kind: 'method', signature: '(name: str, loop: bool = True, fade: float = 2.0, volume: float = 1.0) -> bool', snippet: 'play("${1:theme}")', doc: 'Plays a track: a session track (by name or id), else an audio library track (track ID from the Audio tab, or its name). Unknown: False and a script error in the chat.' },
       { name: 'stop', kind: 'method', signature: '(fade: float = 2.0)', snippet: 'stop()', doc: 'Fades all audio out (scene and theme audio too) until play/generate/release.' },
       { name: 'release', kind: 'method', signature: '()', snippet: 'release()', doc: 'Ends script audio; the current scene\'s library track plays again.' },
       { name: 'set_volume', kind: 'method', signature: '(value: float)', snippet: 'set_volume(${1:0.5})', doc: 'Script audio volume 0..1 (multiplied with the player volume).' },
@@ -223,6 +224,7 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'is_silenced', kind: 'property', signature: 'bool', doc: 'True after stop(), until play/generate/release.' },
       { name: 'volume', kind: 'property', signature: 'float', doc: 'Current script audio volume.' },
       { name: 'tracks', kind: 'property', signature: 'list[str]', doc: 'Names of all named tracks of the session.' },
+      { name: 'library', kind: 'property', signature: 'list[str]', doc: 'Track IDs of the adventure audio library (editor Audio tab).' },
     ],
   },
   game: {
@@ -380,6 +382,7 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'narrate', kind: 'method', signature: '(message: str)', snippet: 'narrate("${1:message}")', doc: 'Shortcut for tw.story.narrate(). Emits GM narration.' },
   { name: 'narrate_raw', kind: 'method', signature: '(message: str)', snippet: 'narrate_raw("${1:message}")', doc: 'Shortcut for tw.story.narrate_raw(). Emits verbatim GM text.' },
   { name: 'system', kind: 'method', signature: '(message: str)', snippet: 'system("${1:message}")', doc: 'Shortcut for tw.story.system(). Emits system alert.' },
+  { name: 'skip_narration', kind: 'method', signature: '()', snippet: 'skip_narration()', doc: 'Shortcut for tw.story.skip_narration(): no GM narration in the next pass.' },
   { name: 'direct', kind: 'method', signature: '(instruction: str, after=None, after_args=None)', snippet: 'direct("${1:instruction}")', doc: 'Shortcut for tw.story.direct(). Soft direction for GM narration. Optional after="init_fn" (+ after_args={...}) runs that init_script function once the narration is done.' },
   { name: 'switch', kind: 'method', signature: '(switch_id: str) -> SwitchProxy', snippet: 'switch("${1:SWITCH_ID}")', doc: 'Shortcut for tw.switches.get(switch_id).' },
   { name: 'save', kind: 'method', signature: '(label: str = "")', snippet: 'save("${1:checkpoint}")', doc: 'Creates a checkpoint save state with optional timeline label.' },

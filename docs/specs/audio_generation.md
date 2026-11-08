@@ -139,7 +139,13 @@ its `audio/` folder.
   seamless-loop instruction. Rendering is a background job (`AudioJobs`) the tab polls.
 * **Upload Track** (header button) opens a modal with a drop zone: MP3, WAV, OGG/Opus, FLAC, M4A
   up to 50 MB; the type is decided by the file content, the stored name is random.
-* **Table**: play/stop, name and prompt, source, scenes using the track, status (ready,
+* **Track IDs** are suggested from the track name (generate) or the file name (upload) in upper
+  case with underscores (`crypt theme.mp3` -> `CRYPT_THEME`, `_2` when taken) and can be edited:
+  letters, digits and underscores, max 30 (`audio_library.suggest_track_id` / `check_track_id`,
+  mirrored in `frontend/src/utils/trackIds.ts`). Renaming updates the scenes, the title track and
+  the manifest; sessions holding the old id fall back to the template scene's choice. Scripts and
+  blueprints that use the old id must be updated by hand. Renaming waits until a render finished.
+* **Table**: play/stop, name, ID (copy button) and prompt, source, scenes using the track, status (ready,
   composing with elapsed seconds, failed, no audio). Each row has a context menu ("⋮" or right
   click): Play, Rename / Edit Prompt, Render Again, Generate Variant…, **Download** (saved as
   `<track name>.<ext>`), Delete (scenes using it become silent).
@@ -207,6 +213,9 @@ still being experimental. Only worth it after Phases 1–2 are used.
   prompts across sessions reuse one file (`data/audio_cache/`).
 * **Licensing:** exported adventures carry an "AI-generated audio (Google Lyria / local model)"
   note in their license block (`adventures/license_defaults`).
+* **Stop button:** the in-game audio control has a stop button next to mute. It fades the
+  current track out and keeps it off while the same track is due (also across scenes sharing it);
+  the next different track plays normally. Speech has its own stop button in the header.
 * **Accessibility & player control:** audio volume and mute are per player and set in the
   in-game settings (**Sound** tab, *Background Audio*) or the audio toggle; they apply at once
   and also drive the library hover preview (`store/audioPreferences.ts`, localStorage). Speech

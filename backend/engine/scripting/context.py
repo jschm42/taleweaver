@@ -128,6 +128,8 @@ class ScriptChangeset:
     save_requests: list[str] = field(default_factory=list)
     # Ordered tw.time operations, replayed by game_clock.apply_clock_ops.
     clock_ops: list[dict[str, Any]] = field(default_factory=list)
+    # tw.story.skip_narration(): the next Pass 2 produces no narration (narration_skip.py).
+    skip_narration: bool = False
     # Ordered tw.audio operations, replayed by audio_state.apply_audio_ops.
     audio_ops: list[dict[str, Any]] = field(default_factory=list)
 
@@ -186,6 +188,7 @@ class ScriptChangeset:
             or self.cloned_entities
             or self.clock_ops
             or self.audio_ops
+            or self.skip_narration
         )
 
 
@@ -1206,6 +1209,14 @@ class StoryProxy:
         """
         queue_direction(self._changeset, clean_direction(instruction), after, after_args)
 
+    def skip_narration(self) -> None:
+        """No automatic GM narration (and no TTS for it) in the next narration pass.
+
+        E.g. while an audio track plays that must not be talked over. Script messages
+        (``narrate``, ``system``) are still shown.
+        """
+        self._changeset.skip_narration = True
+
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active."""
         if not self._is_debug_enabled:
@@ -1593,6 +1604,7 @@ class GameContext:
         sequences: Optional[list[dict[str, Any]]] = None,
         sequence_progression_mode: str = "linear",
         audio: Optional[dict[str, Any]] = None,
+        audio_library: Optional[list[dict[str, Any]]] = None,
     ):
         raw_vars = dict(script_vars if script_vars is not None else (variables or {}))
         self.is_debug_enabled = bool(is_debug_enabled)
@@ -1649,7 +1661,7 @@ class GameContext:
         self.dice = DiceProxy()
         self.dialog = DialogProxy(self.changeset, self)
         # tw.audio: the session's audio state (audio_state.read_audio_state), else empty.
-        self.audio = AudioProxy(self.changeset, audio, self)
+        self.audio = AudioProxy(self.changeset, audio, self, library=audio_library)
         # Former name, kept so scripts written before the rename keep working.
         self.music = self.audio
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
@@ -1684,6 +1696,10 @@ class GameContext:
     def direct(self, instruction: str, after: Any = None, after_args: Any = None) -> None:
         """Shortcut for tw.story.direct(). Gives the GM a soft direction."""
         self.story.direct(instruction, after=after, after_args=after_args)
+
+    def skip_narration(self) -> None:
+        """Shortcut for tw.story.skip_narration(): no GM narration in the next pass."""
+        self.story.skip_narration()
 
     def debug(self, *args: Any, sep: str = " ") -> None:
         """Emits an in-game debug notification if debug mode is active and logs to console."""

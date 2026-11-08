@@ -36,6 +36,7 @@ from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
+from backend.engine.scripting.narration_skip import store_skip_narration
 from backend.engine.scripting.scene_helpers import runner_for_manifest
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -246,6 +247,7 @@ def _run_init_scripts(
         script_vars={},
         in_game_time=0,
         clock=clock_view(SimpleNamespace(in_game_time=0, entity_states={}), adventure),
+        audio_library=getattr(adventure, "audio_tracks", None),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
         active_sequence_id=str(first_seq.get("id") or "") if first_seq else None,
@@ -276,6 +278,7 @@ def _run_init_scripts(
     store_pending_dialog(entity_states, changes.pending_dialog)
     store_gm_directions(entity_states, changes.gm_directions, changes.after_narration)
     apply_audio_ops(entity_states, changes.audio_ops)
+    store_skip_narration(entity_states, changes.skip_narration)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):

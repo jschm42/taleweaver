@@ -9,7 +9,7 @@
  * Looping tracks are not looped by the audio element: shortly before the end a second copy
  * starts and the two cross-fade, because generated clips rarely have a seamless loop point.
  */
-import { computed, onBeforeUnmount, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { AudioSnapshot } from '@/types'
 import { audioMuted, audioVolume, setAudioVolume } from '@/store/audioPreferences'
 
@@ -56,8 +56,12 @@ export interface GameAudioControls {
   hasAudio: ComputedRef<boolean>
   isGenerating: ComputedRef<boolean>
   lastError: ComputedRef<string>
+  /** True while a track plays (or fades in). */
+  isPlaying: Ref<boolean>
   toggleMuted: () => void
   setVolume: (value: number) => void
+  /** Fade out the current track; it stays off until another track is due. */
+  stopCurrent: () => void
   stopAll: () => void
 }
 
@@ -65,6 +69,9 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   const muted = audioMuted
   const playerVolume = audioVolume
   let current: Channel | null = null
+  // URL of the track the player stopped (cleared when another track is due).
+  let stoppedUrl = ''
+  const isPlaying = ref(false)
   let unlockPending = false
 
   /** True when the session has audio (script, scene or theme); the toggle is shown only then. */
@@ -72,7 +79,9 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   const isGenerating = computed(() => audio.value?.now?.status === 'pending')
   const lastError = computed(() => audio.value?.now?.error || '')
 
-  const targetVolume = (): number => (muted.value ? 0 : playerVolume.value * (audio.value?.volume ?? 1))
+  // Player volume x script volume (tw.audio.set_volume) x this playback (tw.audio.play(volume=...)).
+  const targetVolume = (): number =>
+    muted.value ? 0 : playerVolume.value * (audio.value?.volume ?? 1) * (audio.value?.now?.volume ?? 1)
 
   function removeUnlock(): void {
     UNLOCK_EVENTS.forEach((evt) => window.removeEventListener(evt, retryPlayback))
@@ -99,6 +108,7 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   function fadeOutCurrent(seconds: number): void {
     const old = current
     current = null
+    isPlaying.value = false
     if (!old) return
     fade(old, 0, seconds, () => release(old))
   }
@@ -131,11 +141,15 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   function follow(snapshot: AudioSnapshot | null): void {
     const now = snapshot?.now ?? null
     if (!now) {
+      stoppedUrl = ''
       fadeOutCurrent(STOP_FADE_SECONDS)
       return
     }
     // Still generating or failed: keep whatever plays now.
     if (now.status !== 'ready' || !now.url) return
+    // The player stopped this track: stay silent until another one is due.
+    if (now.url === stoppedUrl) return
+    stoppedUrl = ''
     if (current?.url === now.url) {
       current.loop = now.loop
       if (!muted.value) fade(current, targetVolume(), 0.5)
@@ -143,7 +157,14 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     }
     fadeOutCurrent(now.fade)
     current = openChannel(now.url, now.loop)
+    isPlaying.value = true
     if (!muted.value) startChannel(current, now.fade)
+  }
+
+  function stopCurrent(): void {
+    if (!current) return
+    stoppedUrl = current.url
+    fadeOutCurrent(1)
   }
 
   function applyMuted(): void {
@@ -180,9 +201,21 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     removeUnlock()
     if (current) release(current)
     current = null
+    isPlaying.value = false
   }
 
   onBeforeUnmount(stopAll)
 
-  return { muted, playerVolume, hasAudio, isGenerating, lastError, toggleMuted, setVolume, stopAll }
+  return {
+    muted,
+    playerVolume,
+    hasAudio,
+    isGenerating,
+    lastError,
+    isPlaying,
+    toggleMuted,
+    setVolume,
+    stopCurrent,
+    stopAll,
+  }
 }

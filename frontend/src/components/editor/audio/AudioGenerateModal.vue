@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /** Modal: compose a new library track from a prompt (optionally suggested from a reference scene). */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Sparkles, X } from 'lucide-vue-next'
 import { editorAudioService } from '@/services/editorAudioService'
 import { notificationService } from '@/services/notificationService'
+import { cleanTrackIdInput, suggestTrackId, trackIdError, TRACK_ID_MAX } from '@/utils/trackIds'
 import SceneReferencePicker, { type ReferenceScene } from './SceneReferencePicker.vue'
 
 export interface GenerateDraft {
@@ -18,6 +19,8 @@ const props = defineProps<{
   scenes: ReferenceScene[]
   generationOn: boolean
   providerLabel: string
+  /** IDs already used in the library (the new ID must differ). */
+  takenIds: string[]
   /** Prefill, e.g. "Generate variant" of an existing track. */
   draft?: GenerateDraft | null
 }>()
@@ -28,6 +31,20 @@ const emit = defineEmits<{
 }>()
 
 const name = ref('')
+// The ID follows the name until the author types one.
+const typedId = ref('')
+const idTouched = ref(false)
+const trackId = computed((): string =>
+  idTouched.value ? typedId.value : suggestTrackId(name.value || prompt.value.slice(0, 40), props.takenIds),
+)
+const idError = computed((): string => trackIdError(trackId.value, props.takenIds))
+
+function onIdInput(event: Event): void {
+  const input = event.target as HTMLInputElement
+  typedId.value = cleanTrackIdInput(input.value)
+  input.value = typedId.value
+  idTouched.value = true
+}
 const referenceScene = ref('')
 const prompt = ref('')
 const duration = ref<number | null>(null)
@@ -39,6 +56,8 @@ watch(
   (show) => {
     if (!show) return
     name.value = props.draft?.name ?? ''
+    typedId.value = ''
+    idTouched.value = false
     prompt.value = props.draft?.prompt ?? ''
     referenceScene.value = props.draft?.reference_scene_id ?? ''
     duration.value = null
@@ -71,6 +90,7 @@ async function generate(): Promise<void> {
   isStarting.value = true
   try {
     await editorAudioService.generate(props.adventureId, {
+      id: trackId.value,
       name: name.value,
       prompt: prompt.value,
       reference_scene_id: referenceScene.value || null,
@@ -108,6 +128,16 @@ async function generate(): Promise<void> {
               <input v-model="name" maxlength="100" placeholder="e.g. Crypt Theme"
                 class="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-orange-500/50" />
             </label>
+            <label class="block space-y-1.5">
+              <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Track ID</span>
+              <input :value="trackId" :maxlength="TRACK_ID_MAX" spellcheck="false"
+                class="w-full bg-slate-950/80 border rounded-xl px-3 py-2 font-mono text-xs text-slate-200 focus:outline-none"
+                :class="idError ? 'border-rose-500/60' : 'border-white/10 focus:border-orange-500/50'"
+                @input="onIdInput" />
+              <span class="block text-[10px]" :class="idError ? 'text-rose-400' : 'text-slate-500'">
+                {{ idError || 'Used by scripts (tw.audio.play), blueprints (audio: ID) and AI fixes. Suggested from the name.' }}
+              </span>
+            </label>
             <div class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Reference scene</span>
               <SceneReferencePicker v-model="referenceScene" :scenes="scenes" />
@@ -137,7 +167,7 @@ async function generate(): Promise<void> {
 
           <div class="flex justify-end gap-2 p-6 pt-4 border-t border-white/5">
             <button type="button" class="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-white" @click="emit('close')">Cancel</button>
-            <button type="button" :disabled="isStarting || !prompt.trim() || !generationOn"
+            <button type="button" :disabled="isStarting || !prompt.trim() || !generationOn || !!idError"
               class="px-5 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white font-black text-[10px] uppercase tracking-wider rounded-xl"
               @click="generate">
               {{ isStarting ? 'Starting...' : 'Generate' }}

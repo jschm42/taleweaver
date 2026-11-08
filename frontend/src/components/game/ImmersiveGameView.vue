@@ -13,7 +13,7 @@
  * - "story-end" slot rendered after the latest exchange (e.g. an inline choice dialog)
  */
 import { ref, computed, toRef, watch, nextTick } from 'vue'
-import type { ChatMessage } from '@/types'
+import type { ChatMessage, SequenceDetail } from '@/types'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getImageUrl } from '@/utils/game_icons'
 import { useComicTurns } from '@/composables/useComicTurns'
@@ -29,7 +29,6 @@ import ImmersiveActionBar from './immersive/ImmersiveActionBar.vue'
 import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
 import TalentMenu from '@/components/game/TalentMenu.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
-import CinematicSequenceOverlay from './immersive/CinematicSequenceOverlay.vue'
 import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
 import SceneSidebar from './immersive/SceneSidebar.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
@@ -52,6 +51,7 @@ const props = defineProps<{
   sceneNodes?: Record<string, any>
   /** Sequence id -> title, for the feed's chapter dividers. */
   sequenceTitles?: Record<string, string>
+  sequenceDetails?: Record<string, SequenceDetail>
   /** The adventure's awards (title, tier, description) for the award-unlocked overlay. */
   awards?: any[]
   status: ConnectionStatus
@@ -401,6 +401,7 @@ defineExpose({
           :load-older-messages="props.loadOlderMessages"
           :scene-nodes="props.sceneNodes"
           :sequence-titles="props.sequenceTitles"
+          :sequence-details="props.sequenceDetails"
           :is-evaluating="isGmWorking"
           :status-text="props.statusText"
           :sheet="props.sheet"
@@ -516,13 +517,6 @@ defineExpose({
       :exit-label="props.sceneTransitionTarget?.label"
       :status-text="props.statusText"
       :background-image-url="transitionSceneImageUrl"
-    />
-
-    <!-- 6. CINEMATIC SEQUENCE TITLE BAND (translucent, above the travel curtain) -->
-    <CinematicSequenceOverlay
-      :active-sequence="props.activeSequence"
-      :adventure-title="props.adventureTitle"
-      :progression-mode="props.sheet?.sequence_progression_mode || props.activeSequence?.progression_mode"
     />
 
     <SceneImageViewer

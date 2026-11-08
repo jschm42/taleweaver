@@ -36,6 +36,8 @@ export interface AudioLibrary {
 }
 
 export interface NewTrack {
+  /** Empty: suggested from the name. */
+  id?: string
   name: string
   prompt: string
   reference_scene_id?: string | null
@@ -86,16 +88,17 @@ export const editorAudioService = {
     return readJson<AudioJob>(res)
   },
 
-  async upload(adventureId: string, file: File, name: string): Promise<AudioTrack> {
+  async upload(adventureId: string, file: File, name: string, trackId = ''): Promise<AudioTrack> {
     const body = new FormData()
     body.append('file', file)
     body.append('name', name)
+    body.append('track_id', trackId)
     // Uploads of large files can take longer than the default request timeout.
     const res = await apiFetch(`${base(adventureId)}/tracks/upload`, { method: 'POST', body, timeoutMs: 300000 })
     return (await readJson<{ track: AudioTrack }>(res)).track
   },
 
-  async update(adventureId: string, trackId: string, changes: Partial<Pick<AudioTrack, 'name' | 'prompt'>>): Promise<AudioTrack> {
+  async update(adventureId: string, trackId: string, changes: Partial<Pick<AudioTrack, 'id' | 'name' | 'prompt'>>): Promise<AudioTrack> {
     const res = await send(`${base(adventureId)}/tracks/${encodeURIComponent(trackId)}`, 'PATCH', changes)
     return (await readJson<{ track: AudioTrack }>(res)).track
   },

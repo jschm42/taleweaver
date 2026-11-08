@@ -573,6 +573,8 @@ class ChatResponse(BaseModel):
     has_more_messages: bool = False
     # Sequence id -> title of the chapters the chat reached (chapter dividers in the story feed).
     sequence_titles: dict[str, str] = Field(default_factory=dict)
+    # Same chapters with what the chat's chapter banner shows: {title, order, description, dynamic}.
+    sequence_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     sheet: dict[str, Any]
     combat: Optional[dict[str, Any]] = None
     map_data: Optional[dict[str, Any]] = None

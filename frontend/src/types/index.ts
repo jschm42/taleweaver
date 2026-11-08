@@ -326,6 +326,14 @@ export interface PendingDialog {
   options: DialogOption[]
 }
 
+/** What a chapter banner in the story feed shows (`sequence_details` of `GET /chat`). */
+export interface SequenceDetail {
+  title: string
+  order?: number | null
+  description?: string | null
+  dynamic?: boolean
+}
+
 /** Script audio (`tw.audio`) of the session, from `GET /chat`. */
 export interface AudioNowPlaying {
   id: string
@@ -336,6 +344,8 @@ export interface AudioNowPlaying {
   loop: boolean
   /** Cross-fade length in seconds. */
   fade: number
+  /** Volume of this playback only (0..1), from tw.audio.play(volume=...). */
+  volume?: number
   /** Who chose the track: a script (tw.audio), the scene's loop or the main theme. */
   source?: 'script' | 'scene' | 'theme'
 }

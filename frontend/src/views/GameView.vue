@@ -272,11 +272,12 @@ const {
   language,
   hasOlderMessages,
   sequenceTitles,
+  sequenceDetails,
   loadOlderMessages,
 } = useGameSocket()
 
 const gameAudio = useGameAudio(audio)
-const { muted: audioMuted, playerVolume: audioVolume, hasAudio, isGenerating: isAudioGenerating, lastError: audioError } = gameAudio
+const { muted: audioMuted, playerVolume: audioVolume, hasAudio, isGenerating: isAudioGenerating, lastError: audioError, isPlaying: isAudioPlaying } = gameAudio
 const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
 // Scene changes without an exit (script teleport, GM move) get the travel curtain too.
@@ -1912,7 +1913,9 @@ usePlayAgentAutoLoop()
       :volume="audioVolume"
       :generating="isAudioGenerating"
       :error="audioError"
+      :playing="isAudioPlaying"
       @toggle="gameAudio.toggleMuted()"
+      @stop="gameAudio.stopCurrent()"
       @volume="gameAudio.setVolume"
     />
 
@@ -1923,6 +1926,7 @@ usePlayAgentAutoLoop()
       :load-older-messages="loadOlderMessages"
       :scene-nodes="nodes"
       :sequence-titles="sequenceTitles"
+      :sequence-details="sequenceDetails"
       :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"

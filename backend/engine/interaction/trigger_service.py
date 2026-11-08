@@ -21,6 +21,7 @@ from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
 from backend.engine.scripting.llm_proxy import LlmAsker
+from backend.engine.scripting.narration_skip import store_skip_narration
 from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
 from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.scripting.scene_helpers import runner_for_manifest
@@ -99,6 +100,7 @@ class TriggerService:
             in_game_time=state.in_game_time,
             clock=clock_view(state),
             audio=read_audio_state(state.entity_states),
+            audio_library=getattr(adventure, "audio_tracks", None) if adventure else None,
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -259,6 +261,7 @@ class TriggerService:
             or changeset.after_narration
             or changeset.clock_ops
             or changeset.audio_ops
+            or changeset.skip_narration
         ):
             return
         cur_states = dict(state.entity_states or {})
@@ -284,6 +287,7 @@ class TriggerService:
         store_gm_directions(cur_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(state, cur_states, changeset.clock_ops)
         apply_audio_ops(cur_states, changeset.audio_ops)
+        store_skip_narration(cur_states, changeset.skip_narration)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
 

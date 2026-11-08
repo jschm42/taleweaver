@@ -546,3 +546,167 @@ def test_manifests_with_former_music_fields_are_imported(monkeypatch, tmp_path):
     assert adventure.audio_tracks[0]["id"] == "OLD"
     content = scene_content_from_dict({"id": "CRYPT", "music_track_id": "OLD"})
     assert content["audio_track_id"] == "OLD"
+
+
+# --- scripts and the adventure's audio library ------------------------------------------------
+
+
+def test_scripts_play_library_tracks_and_report_unknown_ones():
+    # Arrange
+    library = [{"id": "CRYPT_THEME", "name": "Crypt Theme"}, {"id": "a1b2c3d4e5f6", "name": "Rain"}]
+    ctx = GameContext(audio_library=library)
+
+    # Act
+    by_id = ctx.audio.play("CRYPT_THEME")
+    current_after_id = ctx.audio.current
+    by_name = ctx.audio.play("Rain")
+    missing = ctx.audio.play("NOPE")
+
+    # Assert
+    assert by_id and by_name and not missing
+    assert current_after_id == "CRYPT_THEME"
+    assert ctx.audio.current == "a1b2c3d4e5f6"
+    assert ctx.audio.library == ["CRYPT_THEME", "a1b2c3d4e5f6"]
+    errors = [m for m in ctx.changeset.system_messages if m.startswith("Script error")]
+    assert errors == [
+        "Script error in 'tw.audio.play': no audio track 'NOPE'. Use the id or name of a track "
+        "from the editor's Audio tab, or the name of a track this session generated with "
+        "tw.audio.generate(name=...)."
+    ]
+
+
+@pytest.mark.asyncio
+async def test_script_chosen_library_track_reaches_the_client(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    # Arrange
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    url = save_library_audio("audio-adv", "calm", "aa", b"ID3", "mp3")
+    await _seed(
+        await _owner_id(),
+        tracks=[{"id": "calm", "name": "Calm", "url": url}, {"id": "silent", "name": "Silent"}],
+    )
+    server = SimpleNamespace(audio_settings={"enabled": False})
+    monkeypatch.setattr(audio_snapshot, "read_server_settings", AsyncMock(return_value=server))
+    states: dict = {}
+    state = SimpleNamespace(
+        session_id="s", template_id="audio-adv", current_scene_id="HALL", entity_states=states
+    )
+    ctx = GameContext(audio_library=[{"id": "calm"}, {"id": "silent"}])
+    ctx.audio.play("calm", fade=1)
+    apply_audio_ops(states, ctx.changeset.audio_ops)
+
+    # Act
+    async with TestSessionLocal() as db:
+        playing = await audio_snapshot.build_audio_snapshot(db, state)
+        ctx2 = GameContext(audio_library=[{"id": "calm"}, {"id": "silent"}])
+        ctx2.audio.play("silent")
+        apply_audio_ops(states, ctx2.changeset.audio_ops)
+        no_file = await audio_snapshot.build_audio_snapshot(db, state)
+
+    # Assert
+    assert playing["now"]["url"] == url and playing["now"]["source"] == "script"
+    assert playing["now"]["id"] == "track:calm" and playing["now"]["fade"] == 1.0
+    assert no_file["now"]["status"] == "failed" and "silent" in no_file["now"]["error"]
+
+
+# --- editable track ids -------------------------------------------------------------------------
+
+
+def test_track_id_suggestions_and_rules():
+    from backend.engine.audio.audio_library import check_track_id, suggest_track_id
+
+    assert suggest_track_id("crypt theme", set()) == "CRYPT_THEME"
+    assert suggest_track_id("Früh – Nebel!", set()) == "FRUH_NEBEL"
+    assert suggest_track_id("crypt theme", {"CRYPT_THEME"}) == "CRYPT_THEME_2"
+    assert suggest_track_id("!!!", set()) == "TRACK"
+    assert len(suggest_track_id("a" * 40, {"A" * 30})) <= 30
+    assert check_track_id("crypt_theme", set()) == "CRYPT_THEME"
+    for bad in ("CRYPT-THEME", "A" * 31, "", "ÄRGER"):
+        with pytest.raises(ValueError):
+            check_track_id(bad, set())
+    with pytest.raises(ValueError, match="already used"):
+        check_track_id("CALM", {"CALM"})
+
+
+@pytest.mark.asyncio
+async def test_ids_are_suggested_validated_and_renamed_everywhere(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    # Arrange
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    await _seed(await _owner_id())
+    base = "/api/adventures/audio-adv/audio"
+    wav = b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 32
+
+    def upload(name: str, track_id: str = ""):
+        return auth_client.post(
+            f"{base}/tracks/upload",
+            files={"file": (name, wav, "audio/wav")},
+            data={"track_id": track_id},
+        )
+
+    # Act
+    suggested = (await upload("harbor bells.wav")).json()["track"]
+    again = (await upload("harbor bells.wav")).json()["track"]
+    typed = (await upload("x.wav", "my_theme")).json()["track"]
+    invalid = await upload("x.wav", "NOT-VALID")
+    duplicate = await upload("x.wav", "MY_THEME")
+    await auth_client.post(f"{base}/scenes/HALL/track", json={"track_id": "HARBOR_BELLS"})
+    await auth_client.post(f"{base}/title", json={"track_id": "HARBOR_BELLS"})
+    renamed = await auth_client.patch(f"{base}/tracks/HARBOR_BELLS", json={"id": "harbor"})
+    clash = await auth_client.patch(f"{base}/tracks/HARBOR", json={"id": "MY_THEME"})
+    library = (await auth_client.get(base)).json()
+
+    # Assert
+    assert (suggested["id"], again["id"], typed["id"]) == (
+        "HARBOR_BELLS",
+        "HARBOR_BELLS_2",
+        "MY_THEME",
+    )
+    assert invalid.status_code == 400 and duplicate.status_code == 400
+    assert renamed.status_code == 200 and renamed.json()["track"]["id"] == "HARBOR"
+    assert clash.status_code == 400
+    assert library["scene_usage"] == {"HARBOR": ["HALL"]}
+    assert library["title_track_id"] == "HARBOR"
+    async with TestSessionLocal() as db:
+        adventure = await db.get(AdventureTemplate, "audio-adv")
+        manifest_scene = next(s for s in adventure.original_manifest["scenes"] if s["id"] == "HALL")
+        assert manifest_scene["audio_track_id"] == "HARBOR"
+        assert "HARBOR" in {t["id"] for t in adventure.original_manifest["audio_tracks"]}
+
+
+@pytest.mark.asyncio
+async def test_sessions_with_a_stale_track_id_follow_the_renamed_track(
+    auth_client, setup_test_db, monkeypatch, tmp_path
+):
+    # Arrange: the session's scene copy still holds the id from before a rename.
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    url = save_library_audio("audio-adv", "harbor", "aa", b"ID3", "mp3")
+    await _seed(await _owner_id(), tracks=[{"id": "HARBOR", "name": "Harbor", "url": url}])
+    async with TestSessionLocal() as db:
+        hall = (await db.execute(select(WorldScene).where(WorldScene.id == "HALL"))).scalar_one()
+        hall.audio_track_id = "HARBOR"
+        db.add(
+            WorldScene(
+                id="HALL",
+                session_id="sess",
+                template_id=None,
+                label="Hall",
+                description=".",
+                audio_track_id="OLD_ID",
+            )
+        )
+        await db.commit()
+    server = SimpleNamespace(audio_settings={"enabled": False})
+    monkeypatch.setattr(audio_snapshot, "read_server_settings", AsyncMock(return_value=server))
+    state = SimpleNamespace(
+        session_id="sess", template_id="audio-adv", current_scene_id="HALL", entity_states={}
+    )
+
+    # Act
+    async with TestSessionLocal() as db:
+        snapshot = await audio_snapshot.build_audio_snapshot(db, state)
+
+    # Assert
+    assert snapshot["now"]["url"] == url

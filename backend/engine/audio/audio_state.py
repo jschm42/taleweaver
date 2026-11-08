@@ -15,6 +15,7 @@ Shape::
         "rev": 3,                      # bumped by every op, so clients notice replays
         "volume": 1.0,                 # script volume 0..1 (multiplied with the player's volume)
         "now": {"id": "...", "loop": True, "fade": 2.0} | None,   # script track to play
+               # or {"library_id": "CRYPT_THEME", ...}: a track of the adventure library
         "silenced": False,             # tw.audio.stop(): no scene audio either
         "tracks": {"<id>": {"name", "prompt", "negative_prompt", "duration", "seed"}},
         "library": {"<name>": "<id>"},
@@ -31,6 +32,8 @@ AUDIO_STATE_KEY = "__audio__"
 # Sessions saved before the rename to "audio" keep their state under this key.
 LEGACY_STATE_KEY = "__music__"
 TRACK_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+# Ids of the adventure's audio library (engine/audio/audio_library.py).
+LIBRARY_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,50}$")
 MAX_TRACKS = 100
 MAX_PROMPT_CHARS = 1000
 MAX_NAME_CHARS = 64
@@ -60,7 +63,12 @@ def read_audio_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
         str(k): str(v) for k, v in (raw.get("library") or {}).items() if v in state["tracks"]
     }
     now = raw.get("now")
-    if isinstance(now, dict) and now.get("id") in state["tracks"]:
+    if (
+        isinstance(now, dict)
+        and now.get("id") in state["tracks"]
+        or isinstance(now, dict)
+        and LIBRARY_ID_RE.fullmatch(str(now.get("library_id") or ""))
+    ):
         state["now"] = dict(now)
     return state
 
@@ -80,7 +88,13 @@ def clamp_fade(value: Any) -> float:
 
 
 def _now_entry(op: dict[str, Any]) -> dict[str, Any]:
-    return {"id": op["id"], "loop": bool(op.get("loop", True)), "fade": clamp_fade(op.get("fade"))}
+    return {
+        "id": op["id"],
+        "loop": bool(op.get("loop", True)),
+        "fade": clamp_fade(op.get("fade")),
+        # Volume of this playback only (0..1), on top of the script and player volume.
+        "volume": clamp_volume(op.get("volume", 1.0)),
+    }
 
 
 def _op_generate(state: dict[str, Any], op: dict[str, Any]) -> None:
@@ -107,6 +121,19 @@ def _op_play(state: dict[str, Any], op: dict[str, Any]) -> None:
         state["silenced"] = False
 
 
+def _op_play_library(state: dict[str, Any], op: dict[str, Any]) -> None:
+    library_id = str(op.get("library_id") or "")
+    if not LIBRARY_ID_RE.fullmatch(library_id):
+        return
+    state["now"] = {
+        "library_id": library_id,
+        "loop": bool(op.get("loop", True)),
+        "fade": clamp_fade(op.get("fade")),
+        "volume": clamp_volume(op.get("volume", 1.0)),
+    }
+    state["silenced"] = False
+
+
 def _op_stop(state: dict[str, Any], op: dict[str, Any]) -> None:
     del op
     state["now"] = None
@@ -130,6 +157,7 @@ def _op_forget(state: dict[str, Any], op: dict[str, Any]) -> None:
 _OPS = {
     "generate": _op_generate,
     "play": _op_play,
+    "play_library": _op_play_library,
     "stop": _op_stop,
     "release": _op_release,
     "volume": _op_volume,

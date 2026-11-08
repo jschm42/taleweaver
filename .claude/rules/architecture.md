@@ -111,6 +111,7 @@ graph TD
 * Arrival narrations (after an exit) and the empty opening prologue run with `manager.arrival_narration = True`: GM scene changes are ignored and no `on_interact` trigger fires, because those turns only describe the scene.
 * The narration view of the location never contains lock secrets (codes, key items, unlock rules); unlocks are resolved by Pass 1 and the guardrails.
 * **Enforcement**: This forces the creative model to narrate failure accurately rather than hallucinating success.
+* **Skipped narration**: `tw.story.skip_narration()` records `ScriptChangeset.skip_narration`; every changeset applier stores it in `entity_states["__skip_narration__"]`, and the next Pass 2 takes it once (`engine/scripting/narration_skip.py`): no LLM call, no assistant message, no TTS. Script messages, `on_narration_done` and the clock tick still run.
 
 ### Post-Message: Persistence & Checkpoints
 * Updates committed to SQLite `SessionState`.

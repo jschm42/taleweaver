@@ -11,18 +11,18 @@
     },
     {
       "path": "docs/scripting-enginge.md",
-      "sha256": "640fa6c104b615bb91c76e7aa68ab221752a55a24ed7bf1d010ce220bfb37c4b",
-      "size": 115341
+      "sha256": "9815b920f1b2202c4eb25180e906c4e5835a9498b49a266c29aab1488e08977c",
+      "size": 117489
     },
     {
       "path": "docs/scripting_engine.md",
-      "sha256": "640fa6c104b615bb91c76e7aa68ab221752a55a24ed7bf1d010ce220bfb37c4b",
-      "size": 115341
+      "sha256": "9815b920f1b2202c4eb25180e906c4e5835a9498b49a266c29aab1488e08977c",
+      "size": 117489
     },
     {
       "path": "docs/specs/adventure_format.md",
-      "sha256": "9beadf6a8652fbe81c22094c7955b0010695f2ef9487d1a5b3e989b50f6246f6",
-      "size": 20743
+      "sha256": "5455f27b621b6b6e9b5db1ee3a0b8872ce5ddd6be4b0e4d6e232bcb08d48edaa",
+      "size": 20862
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",

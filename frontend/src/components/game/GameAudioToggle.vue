@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AudioLines, VolumeX, Loader2 } from 'lucide-vue-next'
+import { AudioLines, VolumeX, Loader2, Square } from 'lucide-vue-next'
 
 const props = defineProps<{
   muted: boolean
   volume: number
   generating: boolean
   error?: string
+  /** A track is playing right now (the stop button is shown). */
+  playing?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'toggle'): void
+  (e: 'stop'): void
   (e: 'volume', value: number): void
 }>()
 
@@ -39,6 +42,16 @@ function onVolume(event: Event): void {
       <Loader2 v-if="generating && !muted" class="w-4 h-4 animate-spin" />
       <VolumeX v-else-if="muted" class="w-4 h-4" />
       <AudioLines v-else class="w-4 h-4" />
+    </button>
+    <button
+      v-if="playing && !muted"
+      type="button"
+      class="p-1 text-slate-300 hover:text-rose-300 transition-colors"
+      title="Stop the current track (the next track plays again)"
+      aria-label="Stop the current audio track"
+      @click.stop="emit('stop')"
+    >
+      <Square class="w-3.5 h-3.5 fill-current" />
     </button>
     <input
       v-if="!muted"
