@@ -6,6 +6,7 @@ from backend.api.routes.adventures import dialog_service
 from backend.api.routes.adventures.dialog_service import DialogChoiceResolver
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.turn_prompt_layout import build_narration_turn_block
+from backend.core import prompts
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import pending_dialog
 from backend.engine.scripting.gm_directions import (
@@ -78,6 +79,25 @@ def test_narration_turn_block_contains_author_directions():
     assert "AUTHOR DIRECTIONS" in block
     assert "- Let Bram sing a sailor song" in block
     assert format_gm_directions([]) == ""
+
+
+def test_narration_turn_block_ends_with_dialogue_format_reminder():
+    # Arrange
+    directions = format_gm_directions(["Let Bram sing a sailor song"])
+
+    # Act
+    block = build_narration_turn_block(
+        "STATE",
+        "draft",
+        "{}",
+        ["reverted"],
+        reminders=("LENGTH: short.",),
+        author_directions=directions,
+    )
+
+    # Assert
+    assert block.endswith(prompts.GM_DIALOGUE_FORMAT_REMINDER)
+    assert block.count("DIALOGUE FORMAT") == 1
 
 
 async def _manager(db) -> GameTurnManager:

@@ -432,6 +432,8 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     '  (or with a tone tag: Character Name: [tag] "Dialogue")\n'
     '- FORBIDDEN (novel style): `She swings her legs off the bed, folding her arms. "What is it?"` '
     "(This traps character dialogue inside the Game Master box!).\n"
+    '- ALSO FORBIDDEN (name opens the paragraph, quote at the end): `Tina hops off the bed and grins. "Let\'s go!"` '
+    "Naming the speaker in the prose does NOT attribute the line; only a `Name:` line start does.\n"
     "- REQUIRED FORMAT:\n"
     "  She swings her legs off the bed and folds her arms, one eyebrow climbing.\n\n"
     '  Tina: "What is it, squirt?"\n\n'
@@ -457,6 +459,18 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "NO SUMMARIES OR SEPARATORS: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'. Do NOT use horizontal rules or lines like '---' in your output.\n\n"
     "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
 )
+
+
+GM_DIALOGUE_FORMAT_REMINDER = (
+    "DIALOGUE FORMAT (UI CONTRACT, CHECK BEFORE YOU FINISH): Prose paragraphs contain ZERO quotation marks. "
+    'Every spoken line stands alone, separated by blank lines, and starts with the speaker\'s name: Name: "Dialogue" '
+    '(or Name: [tag] "Dialogue"). WRONG: Pip leans closer. "Careful now." '
+    'RIGHT: the paragraph Pip leans closer. then a blank line, then the line Pip: "Careful now." '
+    "Fix any paragraph that still contains a quotation mark by moving the speech to its own Name: line."
+)
+"""
+Dialogue format reminder, placed last in the Pass 2 turn message where small models weigh it most.
+"""
 
 
 def get_vocal_direction_prompt(provider: str = "google") -> str:

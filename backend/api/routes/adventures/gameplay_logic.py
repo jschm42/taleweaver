@@ -1841,13 +1841,9 @@ class GameTurnManager:
         ]
         narration_prompt = "\n\n".join(part for part in narration_prompt_parts if part)
 
+        # The dialogue format reminder is appended last by build_narration_turn_block.
         reminders: list[str] = [
-            narration_style_reminder(getattr(self.state, "narration_style", None)),
-            (
-                "STRICT SEPARATION: Keep prose narration and character speech strictly separated. "
-                'NEVER embed quotes in prose. Every spoken line MUST start on its own line as Character Name: "Dialogue" '
-                "(separated from prose by blank lines)."
-            ),
+            narration_style_reminder(getattr(self.state, "narration_style", None))
         ]
         if use_vocal_tags:
             reminders.append(vocal_tag_reminder())
@@ -1882,6 +1878,7 @@ class GameTurnManager:
             f"(memory_turns={memory_turns}, messages={len(narration_messages)})"
         )
         stream_usage: Any = None
+        finish_reason: Any = None
         # tw.story.skip_narration(): no narration (and no TTS) this time.
         narration_skipped = take_skip_narration(self.state)
         try:
@@ -1902,6 +1899,7 @@ class GameTurnManager:
                 choices = getattr(chunk, "choices", None)
                 if not choices:
                     continue
+                finish_reason = getattr(choices[0], "finish_reason", None) or finish_reason
                 delta = choices[0].delta.content or ""
                 if delta:
                     response_text += delta
@@ -1975,6 +1973,15 @@ class GameTurnManager:
         )
 
         if not (response_text or "").strip() and not narration_skipped:
+            # Typical cause: a thinking model spent the whole max_tokens budget on thinking.
+            logger.warning(
+                "[Turn %s] Narration returned no text (model=%s, finish_reason=%s, "
+                "completion_tokens=%s); using fallback narration.",
+                self.game_id,
+                complex_model,
+                finish_reason,
+                token_usage.get("completion_tokens"),
+            )
             if run_generator_tool_intent_pass:
                 fallback = (
                     "The Architect inclines his head, the Construct awaiting your next directive."

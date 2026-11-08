@@ -10,6 +10,7 @@ from typing import Any, Optional, TypeVar
 import litellm
 from pydantic import BaseModel, ValidationError
 
+from backend.core.claude_thinking import apply_claude_thinking, claude_thinking_profile
 from backend.core.llm_errors import LLMTruncatedResponseError, build_truncation_error
 from backend.core.llm_json_repair import (
     attempt_repair_truncated_json,
@@ -823,11 +824,36 @@ class GameMasterLLM:
             )
             return
 
+        profile = claude_thinking_profile(str(kwargs.get("model") or ""))
+        if profile is not None and not profile.budget_tokens:
+            # Claude 5.x: thinks by default and rejects budget_tokens.
+            apply_claude_thinking(
+                kwargs,
+                profile,
+                enable_thinking=self.enable_thinking,
+                thinking_tokens=self.max_thinking_tokens,
+                via_openrouter=self._uses_openrouter(),
+            )
+            return
+
         if not self.enable_thinking:
             return
 
         # LiteLLM maps 'thinking' to provider-specific params (budget_tokens for Anthropic, etc.)
         kwargs["thinking"] = {"type": "enabled", "budget_tokens": self.max_thinking_tokens}
+
+    def _suppress_default_thinking(self, kwargs: dict) -> None:
+        """JSON-mode requests run without thinking; Claude 5.x thinks unless told otherwise."""
+        profile = claude_thinking_profile(str(kwargs.get("model") or ""))
+        if profile is None or profile.budget_tokens or not profile.on_by_default:
+            return
+        apply_claude_thinking(
+            kwargs,
+            profile,
+            enable_thinking=False,
+            thinking_tokens=self.max_thinking_tokens,
+            via_openrouter=self._uses_openrouter(),
+        )
 
     def _uses_openrouter(self) -> bool:
         if self.provider == "custom_openai":
@@ -1171,6 +1197,8 @@ class GameMasterLLM:
             kwargs["response_format"] = response_format
         if not json_mode:
             self._apply_thinking_settings(kwargs)
+        else:
+            self._suppress_default_thinking(kwargs)
         if self.provider == "ollama":
             self._validate_ollama_model(model)
         apply_provider_endpoint(

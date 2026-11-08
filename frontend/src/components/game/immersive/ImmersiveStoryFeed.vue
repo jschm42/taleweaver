@@ -69,7 +69,7 @@ function latestExchangeElement(): HTMLElement | undefined {
 
 // Follow new content (streamed narration, engine events, choice dialogs) down the feed, but
 // never past the start of the newest exchange: a long narration stays readable from its top.
-const { hasContentBelow, isFollowing, scrollToLatest, resumeFollowing } = useScrollToLatest(storyContainerRef, {
+const { hasContentBelow, isFollowing, scrollToLatest, scrollToTop: scrollToContainerTop, resumeFollowing } = useScrollToLatest(storyContainerRef, {
   canFollow: () => viewingKey.value === null,
   maxFollowTop: () => {
     const latest = latestExchangeElement()
@@ -165,7 +165,7 @@ const canGoBack = computed(() => activeIndex.value > 0 || Boolean(props.hasOlder
 
 function scrollToTop() {
   nextTick(() => {
-    if (storyContainerRef.value) storyContainerRef.value.scrollTop = 0
+    scrollToContainerTop()
   })
 }
 

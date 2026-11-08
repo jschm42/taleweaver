@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.history_compression_window import CHOICE_MESSAGE_PREFIX
+from backend.core import prompts
 from backend.models.chat import ChatMessage
 
 RECENT_NARRATION_MAX_CHARS = 400
@@ -131,6 +132,8 @@ def build_narration_turn_block(
         "CRITICAL SPEAKER RESTRICTION: Only NPCs explicitly listed under 'PRESENT NPCs' in the CURRENT LOCATION "
         "above are physically present and permitted to speak or react. Hidden, absent, or unlisted NPCs must never speak, react, or be mentioned."
     )
+    # Last line on purpose: small models (e.g. Haiku) drift into novel-style speech otherwise.
+    lines.append(prompts.GM_DIALOGUE_FORMAT_REMINDER)
     return "\n".join(line for line in lines if line)
 
 
