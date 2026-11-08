@@ -96,7 +96,7 @@ function formatSceneTitle(name?: string | null): string {
             <img
               :src="handPointingRightUrl"
               alt=""
-              class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 inline-block not-italic object-contain drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]"
+              class="w-10 h-10 sm:w-12 sm:h-12 -my-2 shrink-0 inline-block not-italic object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)]"
               aria-hidden="true"
             />
             <span class="tw-overlay-highlight font-semibold not-italic">"{{ props.exitLabel }}"</span>
