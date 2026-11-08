@@ -69,6 +69,7 @@ from backend.core import prompts
 from backend.core.api_keys import PersonalKeyRequiredError, key_source
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
+from backend.core.llm_request_tuning import bind_llm_session
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.interaction.command_parser import CommandParser
 from backend.engine.interaction.map_engine import MapEngine
@@ -727,6 +728,7 @@ class GameTurnManager:
         if not self.state:
             logger.warning(f"[Turn {self.game_id}] Initialization failed: Session state not found.")
             return False
+        bind_llm_session(self.state.session_id)
 
         # The session plays from its own adventure copy, never from the live template.
         if not self.adventure:

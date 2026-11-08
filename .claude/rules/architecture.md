@@ -61,6 +61,7 @@ graph TD
 
 ### Prompt Layout (Token Efficiency)
 * System prompts are **static** (persona, adventure frame, rules, formatting, voice direction) so providers can cache them across messages; Anthropic models get explicit `cache_control` breakpoints (`backend/core/llm_request_tuning.py`).
+* **Session cache routing**: `GameTurnManager.initialize()` calls `bind_llm_session(session_id)` (context variable). `GameMasterLLM._apply_request_routing` then adds a per-session key (`tw-<sha256 prefix>-<model category>`, `apply_session_cache_routing`) so all calls of a session reach the endpoint holding the warm prompt cache: OpenRouter gets `extra_body.session_id` (sticky routing), direct OpenAI gets `prompt_cache_key`; other providers cache by prefix and get nothing. Without it OpenRouter keys stickiness on the first system + first non-system message, which changes every turn here because the first user message holds the CURRENT STATE. A configured provider order (`openrouter_provider`) pins the provider anyway.
 * Everything volatile (CURRENT STATE block: time, location, NPCs, character sheet, notes, memories, compressed history; quests/awards; outcome; violations; reminders) goes into the **latest user message**.
 * Pass 2 history contains only player/GM messages of previous turns; system events are kept for the current message only, and `[DEBUG` lines are never sent. It starts at the player action that led into the current scene (`turn_prompt_layout._since_scene_entry`), so NPCs of a scene the player left are not carried along.
 

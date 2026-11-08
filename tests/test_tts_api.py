@@ -457,3 +457,47 @@ async def test_tts_provider_error_propagates_to_http_502(auth_client: AsyncClien
     resp = await auth_client.post("/api/tts/generate", json={"text": "Fail test", "language": "de"})
     assert resp.status_code == 502
     assert "Google TTS error" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_google_tts_daily_quota_falls_back_to_lite(monkeypatch):
+    """When gemini-3.8-flash-tts hits rate limit/quota, it automatically falls back to flash-lite."""
+    from backend.engine.audio.tts_engine import TTSEngine, TTSRateLimitError
+
+    attempted_models = []
+
+    async def fake_post(client, url, payload, timeout, model_name, text_length):
+        attempted_models.append(model_name)
+        if model_name == "gemini-3.8-flash-tts":
+            raise TTSRateLimitError("Quota exceeded", retry_after_seconds=50000)
+        import httpx
+
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"inlineData": {"data": "UklGRg==", "mimeType": "audio/wav"}}]
+                        }
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(TTSEngine, "_post_google_with_retries", fake_post)
+    monkeypatch.setattr(
+        "backend.engine.audio.tts_engine._write_audio_file",
+        lambda bytes_, adv, sess, ext: "/mock/audio.wav",
+    )
+
+    result = await TTSEngine._synthesize_google(
+        text="Hello world",
+        voice="Puck",
+        api_key="mock_key",
+        adventure_id="adv1",
+        session_id="sess1",
+        model_name="gemini-3.8-flash-tts",
+    )
+    assert result == "/mock/audio.wav"
+    assert attempted_models == ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"]

@@ -24,7 +24,10 @@ from backend.core.llm_provider_config import (
     normalize_model,
     uses_json_mode_fallback,
 )
-from backend.core.llm_request_tuning import apply_prompt_cache_markers
+from backend.core.llm_request_tuning import (
+    apply_prompt_cache_markers,
+    apply_session_cache_routing,
+)
 from backend.core.llm_stream_filters import clean_stream_thinking, clean_stream_voice_tags
 from backend.core.voice_tags import VOICE_TAG_SET
 from backend.models.user import User
@@ -826,15 +829,29 @@ class GameMasterLLM:
         # LiteLLM maps 'thinking' to provider-specific params (budget_tokens for Anthropic, etc.)
         kwargs["thinking"] = {"type": "enabled", "budget_tokens": self.max_thinking_tokens}
 
-    def _apply_openrouter_provider_routing(self, kwargs: dict) -> None:
-        """Inject provider routing ordering into OpenRouter requests if configured."""
+    def _uses_openrouter(self) -> bool:
         if self.provider == "custom_openai":
-            return
-        if self.provider != "openrouter" and not (
+            return False
+        return self.provider == "openrouter" or (
             isinstance(self.api_key, str) and self.api_key.startswith("sk-or-v1")
-        ):
-            return
+        )
 
+    def _apply_request_routing(self, kwargs: dict) -> None:
+        """Session cache-routing key (OpenRouter / OpenAI) plus OpenRouter provider order."""
+        via_openrouter = self._uses_openrouter()
+        apply_session_cache_routing(
+            kwargs,
+            self.provider,
+            getattr(self, "model_category", "") or "",
+            via_openrouter=via_openrouter,
+        )
+        if via_openrouter:
+            self._apply_openrouter_provider_routing(kwargs)
+
+    def _apply_openrouter_provider_routing(self, kwargs: dict) -> None:
+        """Inject the configured provider order into OpenRouter requests."""
+        if not self._uses_openrouter():
+            return
         if not self.openrouter_provider:
             return
 
@@ -927,7 +944,7 @@ class GameMasterLLM:
             minimax_api_base=self.minimax_api_base,
         )
 
-        self._apply_openrouter_provider_routing(kwargs)
+        self._apply_request_routing(kwargs)
 
         log_structured_event(
             "gm.turn.request",
@@ -1005,7 +1022,7 @@ class GameMasterLLM:
             minimax_api_base=self.minimax_api_base,
         )
 
-        self._apply_openrouter_provider_routing(kwargs)
+        self._apply_request_routing(kwargs)
 
         log_structured_event(
             "gm.turn.request",
@@ -1090,7 +1107,7 @@ class GameMasterLLM:
             minimax_api_base=self.minimax_api_base,
         )
 
-        self._apply_openrouter_provider_routing(kwargs)
+        self._apply_request_routing(kwargs)
 
         log_structured_event(
             "gm.turn.stream.request",
@@ -1164,7 +1181,7 @@ class GameMasterLLM:
             kimi_api_base=self.kimi_api_base,
             minimax_api_base=self.minimax_api_base,
         )
-        self._apply_openrouter_provider_routing(kwargs)
+        self._apply_request_routing(kwargs)
         self._prepare_cacheable_messages(kwargs, normalized_model)
         return _StructuredRequest(kwargs, normalized_model, json_mode, system_prompt)
 

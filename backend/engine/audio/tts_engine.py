@@ -185,6 +185,23 @@ class TTSEngine:
 
             if response.status_code == 429:
                 delay = _compute_429_retry_delay_seconds(response, attempt)
+                resp_text = (response.text or "").lower()
+                is_daily_quota = (
+                    "per_day" in resp_text
+                    or "generaterequestsperday" in resp_text
+                    or (delay is not None and delay > 60)
+                )
+                if is_daily_quota:
+                    logger.warning(
+                        "Gemini TTS daily quota exhausted for %s (delay=%.1fs); aborting retries.",
+                        model_name,
+                        delay or 0.0,
+                    )
+                    raise TTSRateLimitError(
+                        f"Gemini TTS daily quota reached for '{model_name}'.",
+                        retry_after_seconds=delay,
+                    )
+
                 logger.warning(
                     "Gemini TTS rate-limited (429), attempt %d/%d, retrying in %.1fs (model=%s, chars=%d).",
                     attempt,
@@ -268,9 +285,24 @@ class TTSEngine:
             audio_bytes, ext = decoded
             return _write_audio_file(audio_bytes, adventure_id, session_id, ext)
 
+        except TTSRateLimitError:
+            if model_name == "gemini-3.8-flash-tts":
+                logger.info(
+                    "Attempting automatic fallback to gemini-3.8-flash-lite-tts after rate limit / quota exhaustion."
+                )
+                return await TTSEngine._synthesize_google(
+                    text=text,
+                    voice=voice,
+                    api_key=api_key,
+                    adventure_id=adventure_id,
+                    session_id=session_id,
+                    model_name="gemini-3.8-flash-lite-tts",
+                    language=language,
+                    use_streaming=use_streaming,
+                )
+            raise
         except (
             TTSTimeoutError,
-            TTSRateLimitError,
             TTSModelSwitchSuggestionError,
             TTSProviderError,
         ):
