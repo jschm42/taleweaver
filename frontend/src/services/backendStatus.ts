@@ -38,6 +38,8 @@ export const backendStatus = reactive({
   nextRetryAt: null as number | null,
   /** True for a few seconds after the connection came back. */
   justRestored: false,
+  /** Why the last health probe failed (timeout, HTTP status or network error), for diagnosis. */
+  lastFailure: null as string | null,
 })
 
 let originalFetch: typeof window.fetch | null = null
@@ -100,16 +102,27 @@ function isTimeout(error: unknown): boolean {
   return name === 'AbortError' || name === 'TimeoutError'
 }
 
+function recordFailure(result: ProbeResult, reason: string): ProbeResult {
+  backendStatus.lastFailure = reason
+  console.warn(`[backendStatus] health probe failed (${result}): ${reason}`, {
+    inFlight: inFlightCount,
+    visibility: document.visibilityState,
+  })
+  return result
+}
+
 async function probeOnce(fetcher: typeof window.fetch): Promise<ProbeResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
   try {
     const response = await fetcher(HEALTH_URL, { cache: 'no-store', signal: controller.signal })
     const body = response.ok ? await response.json().catch(() => null) : null
-    return body?.status === 'ok' ? 'ok' : 'down'
+    if (body?.status === 'ok') return 'ok'
+    return recordFailure('down', response.ok ? 'Unexpected health answer' : `HTTP ${response.status}`)
   } catch (error) {
     // Only our own timer aborts the probe, so an abort is a timeout, not a refused connection.
-    return isTimeout(error) ? 'slow' : 'down'
+    if (isTimeout(error)) return recordFailure('slow', `No answer within ${PROBE_TIMEOUT_MS / 1000} s`)
+    return recordFailure('down', `Network error: ${(error as Error | null)?.message ?? String(error)}`)
   } finally {
     clearTimeout(timer)
   }

@@ -47,6 +47,9 @@ onBeforeUnmount(() => {
             <template v-if="backendStatus.checking">Checking…</template>
             <template v-else-if="secondsToRetry">Next try in {{ secondsToRetry }} s.</template>
           </p>
+          <p v-if="backendStatus.lastFailure" class="mt-0.5 text-[11px] text-rose-200/60">
+            Last check: {{ backendStatus.lastFailure }}
+          </p>
         </div>
         <button
           type="button"
