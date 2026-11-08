@@ -970,6 +970,13 @@ class GameTurnManager:
             elif response.startswith("[TRIGGER_SAY]"):
                 user_msg = f'Say out loud: "{response[13:].strip()}"'
                 # Continue turn as normal
+            elif response.startswith("[TRIGGER_GREET]"):
+                greet_target = response[15:].strip()
+                if greet_target:
+                    user_msg = f"You greet {greet_target} with a short, friendly greeting."
+                else:
+                    user_msg = "You greet the people around you with a short, friendly greeting."
+                # Continue turn as normal
             elif response.startswith("[TRIGGER_INSPECT]"):
                 user_msg = f"Inspect {response[17:].strip()}"
                 # Continue turn as normal

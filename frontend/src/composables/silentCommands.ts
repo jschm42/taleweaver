@@ -48,7 +48,7 @@ const SILENT_COMMANDS = new Set([
  * Commands the backend saves (the GM needs them as the player's action) but that the story feed
  * hides: they are mostly sent by clicks, and the GM's narration already tells what happened.
  */
-const HIDDEN_NARRATED_COMMANDS = new Set(['/inspect'])
+const HIDDEN_NARRATED_COMMANDS = new Set(['/inspect', '/greet'])
 
 /** True when a player message must not be shown in the story feed (live or reloaded). */
 export function isHiddenPlayerMessage(content: string): boolean {
