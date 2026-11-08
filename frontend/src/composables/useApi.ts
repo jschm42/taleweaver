@@ -898,6 +898,10 @@ export const api = {
     })
   },
 
+  register(payload: { username: string; email: string; password: string }): Promise<{ message: string }> {
+    return request('/auth/register', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
   getMe(): Promise<any> {
     return request('/auth/me')
   },
@@ -985,6 +989,10 @@ export const api = {
 
   updateUser(userId: string, payload: any): Promise<any> {
     return request(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(payload) })
+  },
+
+  activateUser(userId: string): Promise<any> {
+    return request(`/users/${userId}/activate`, { method: 'POST' })
   },
 
   deleteUser(userId: string): Promise<void> {

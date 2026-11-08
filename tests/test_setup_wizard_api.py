@@ -1,4 +1,4 @@
-"""Setup wizard state endpoints: per-user, admin-only, merged partial updates."""
+"""Setup wizard state endpoints: per-user, open to every user, merged partial updates."""
 
 import pytest
 
@@ -41,15 +41,19 @@ async def test_rejects_unknown_state(auth_client):
     assert response.status_code == 422
 
 
-async def test_non_admin_is_forbidden(client):
+async def test_regular_user_has_own_state(client, auth_client):
     # Arrange
     async with TestSessionLocal() as session:
         session.add(User(username="player", hashed_password=get_password_hash("pw"), role="user"))
         await session.commit()
     player_headers = {"Authorization": f"Bearer {create_access_token({'sub': 'player'})}"}
 
+    await auth_client.put(URL, json={"state": "dismissed"})
+
     # Act
-    response = await client.get(URL, headers=player_headers)
+    response = await client.put(URL, json={"state": "skipped"}, headers=player_headers)
 
     # Assert
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["state"] == "skipped"
+    assert (await auth_client.get(URL)).json()["state"] == "dismissed"

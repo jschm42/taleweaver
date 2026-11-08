@@ -156,7 +156,8 @@ async def get_current_user(
 
     result = await db.execute(select(User).filter(User.username == username))
     user = result.scalars().first()
-    if user is None or not _token_matches_user(payload, user):
+    # Deactivated accounts lose access immediately, not only at their next login.
+    if user is None or user.is_active is False or not _token_matches_user(payload, user):
         raise credentials_exception
     # Server-wide settings live only in the owner's row; every request reads them live.
     await apply_global_settings(db, user)

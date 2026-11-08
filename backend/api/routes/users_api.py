@@ -7,12 +7,18 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.account_api import router as account_router
 from backend.api.routes.auth_api import UserResponse
+from backend.api.routes.user_account_checks import (
+    ensure_active_admin_remains,
+    ensure_admin_remains,
+    ensure_email_available,
+    ensure_username_available,
+)
 from backend.core.account_recovery import (
     RESET_TOKEN_TTL,
     issue_password_reset_token,
@@ -59,6 +65,8 @@ class UserCreateRequest(BaseModel):
     username: str
     password: str
     role: str = "user"
+    email: Optional[EmailStr] = None
+    is_active: bool = True
 
 
 class UserUpdateRequest(BaseModel):
@@ -67,6 +75,8 @@ class UserUpdateRequest(BaseModel):
     password: Optional[str] = None
     bio: Optional[str] = None
     default_language: Optional[str] = None
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
 
 
 class BioUpdateRequest(BaseModel):
@@ -128,23 +138,40 @@ def _validated_role(role: str) -> str:
     return role
 
 
-async def _ensure_username_available(db: AsyncSession, username: str) -> None:
-    taken = await db.execute(select(User.id).where(User.username == username))
-    if taken.first() is not None:
-        raise HTTPException(status_code=400, detail="Username already registered")
+async def _get_user_or_404(db: AsyncSession, user_id: str) -> User:
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
-async def _ensure_admin_remains(db: AsyncSession, user: User, new_role: str, admin: User) -> None:
-    """Block demotions that would lock everyone out of administration."""
-    if user.role != "admin" or new_role == "admin":
-        return
-    if user.id == admin.id:
-        raise HTTPException(status_code=400, detail="You cannot remove your own admin role.")
-    other_admins = await db.execute(
-        select(User.id).where(User.role == "admin", User.id != user.id).limit(1)
-    )
-    if other_admins.first() is None:
-        raise HTTPException(status_code=400, detail="At least one administrator must remain.")
+async def _apply_identity_changes(db: AsyncSession, user: User, request: UserUpdateRequest) -> None:
+    """Apply username and e-mail changes after checking they are not taken by someone else."""
+    if request.username:
+        username = _validated_username(request.username)
+        await ensure_username_available(db, username, exclude_user_id=user.id)
+        user.username = username
+    if request.email is not None:
+        await ensure_email_available(db, request.email, exclude_user_id=user.id)
+        user.email = request.email
+
+
+async def _apply_access_changes(
+    db: AsyncSession, user: User, request: UserUpdateRequest, admin: User
+) -> None:
+    """Apply role, activation and password changes without locking out administration."""
+    if request.role:
+        new_role = _validated_role(request.role)
+        await ensure_admin_remains(db, user, new_role, admin)
+        user.role = new_role
+    if request.is_active is False:
+        await ensure_active_admin_remains(db, user, admin)
+    if request.is_active is not None:
+        user.is_active = request.is_active
+    if request.password:
+        # Also revokes the user's existing sessions.
+        await set_new_password(user, _validated_password(request.password))
 
 
 def _resolve_provider_api_key(
@@ -169,12 +196,16 @@ async def create_user(
     db: AsyncSession = DB_DEP,
 ):
     username = _validated_username(request.username)
-    await _ensure_username_available(db, username)
+    await ensure_username_available(db, username)
+    if request.email is not None:
+        await ensure_email_available(db, request.email)
 
     new_user = User(
         username=username,
+        email=request.email,
         hashed_password=await aget_password_hash(_validated_password(request.password)),
         role=_validated_role(request.role),
+        is_active=request.is_active,
     )
     db.add(new_user)
     await db.commit()
@@ -189,24 +220,9 @@ async def update_user(
     admin: User = ADMIN_DEP,
     db: AsyncSession = DB_DEP,
 ):
-    result = await db.execute(select(User).filter(User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if request.username:
-        username = _validated_username(request.username)
-        if username != user.username:
-            await _ensure_username_available(db, username)
-        user.username = username
-
-    if request.role:
-        new_role = _validated_role(request.role)
-        await _ensure_admin_remains(db, user, new_role, admin)
-        user.role = new_role
-    if request.password:
-        # Also revokes the user's existing sessions.
-        await set_new_password(user, _validated_password(request.password))
+    user = await _get_user_or_404(db, user_id)
+    await _apply_identity_changes(db, user, request)
+    await _apply_access_changes(db, user, request, admin)
     if request.bio is not None:
         user.bio = request.bio
     if request.default_language is not None:
@@ -214,6 +230,17 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
+    return user
+
+
+@router.post("/users/{user_id}/activate", response_model=UserResponse)
+async def activate_user(user_id: str, _admin: User = ADMIN_DEP, db: AsyncSession = DB_DEP):
+    """Approve a pending (self-registered or deactivated) account so it can log in."""
+    user = await _get_user_or_404(db, user_id)
+    user.is_active = True
+    await db.commit()
+    await db.refresh(user)
+    logger.info("Admin activated user %s", user.id)
     return user
 
 

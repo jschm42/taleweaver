@@ -6,10 +6,14 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.user_account_checks import (
+    ensure_email_available,
+    ensure_username_available,
+)
 from backend.core.account_recovery import (
     consume_recovery_code,
     find_user_by_reset_token,
@@ -22,10 +26,11 @@ from backend.core.auth import (
     create_user_access_token,
     get_current_user,
     validate_password_strength,
+    validate_username,
 )
 from backend.core.config import settings
 from backend.core.database import get_db
-from backend.core.login_throttle import login_throttle, recovery_throttle
+from backend.core.login_throttle import login_throttle, recovery_throttle, register_throttle
 from backend.crud.crud_profile import build_user_profile_data
 from backend.models.user import User
 
@@ -70,6 +75,13 @@ def _validate_new_password(password: str) -> None:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _validated_username(username: str) -> str:
+    try:
+        return validate_username(username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -78,6 +90,8 @@ class Token(BaseModel):
 class UserResponse(BaseModel):
     id: str
     username: str
+    email: Optional[str] = None
+    is_active: bool = True
     role: str
     profile_image_url: Optional[str] = None
     bio: Optional[str] = None
@@ -99,6 +113,13 @@ class SetupRootRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     # Length and complexity are checked by validate_password_strength, which honours
     # STRICT_PASSWORD_POLICY; a fixed min_length here would reject relaxed passwords.
+    password: str = Field(max_length=256)
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: EmailStr
+    # Length and complexity are checked by validate_password_strength (see SetupRootRequest).
     password: str = Field(max_length=256)
 
 
@@ -159,8 +180,51 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is pending administrator approval.",
+        )
+
     login_throttle.reset(client_ip, form_data.username)
     return {"access_token": create_user_access_token(user), "token_type": "bearer"}
+
+
+@router.post("/auth/register", status_code=status.HTTP_201_CREATED)
+async def register_user(
+    http_request: Request,
+    request: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create an inactive user account that an administrator has to activate."""
+    client_ip = _client_ip(http_request)
+    if register_throttle.is_blocked(client_ip, "register"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts. Please try again later.",
+        )
+    register_throttle.record_failure(client_ip, "register")
+
+    username = _validated_username(request.username)
+    _validate_new_password(request.password)
+    await ensure_username_available(db, username)
+    await ensure_email_available(db, request.email)
+
+    db.add(
+        User(
+            username=username,
+            email=request.email,
+            hashed_password=await aget_password_hash(request.password),
+            role="user",
+            is_active=False,
+        )
+    )
+    await db.commit()
+    logger.info("New account %r registered and awaiting approval", username)
+    return {
+        "message": "Registration successful. Your account is pending administrator "
+        "approval before you can log in."
+    }
 
 
 @router.post("/auth/recover", response_model=Token)

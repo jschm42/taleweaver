@@ -70,3 +70,7 @@ login_throttle = FailureThrottle(
 recovery_throttle = FailureThrottle(
     max_failures_per_account=5, max_failures_per_ip=10, window_seconds=900
 )
+# Self-registration counts every attempt (not only failures): 10 per IP in 15 minutes.
+register_throttle = FailureThrottle(
+    max_failures_per_account=10, max_failures_per_ip=10, window_seconds=900
+)

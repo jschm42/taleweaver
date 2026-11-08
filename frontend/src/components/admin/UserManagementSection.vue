@@ -10,6 +10,7 @@ const emit = defineEmits<{
   (e: 'addUser'): void
   (e: 'editUser', user: any): void
   (e: 'removeUser', user: any): void
+  (e: 'activateUser', user: any): void
 }>()
 
 type ResetLink = { username: string, url: string, expiresInHours: number }
@@ -89,6 +90,7 @@ async function copyResetLink() {
           <tr class="border-b border-slate-800 bg-slate-950/50">
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">User</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Role</th>
+            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Status</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Recovery codes</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest" title="Personal API keys (names only) and key policy exceptions">Own keys</th>
             <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
@@ -104,13 +106,26 @@ async function copyResetLink() {
                     <i class="ra ra-hood"></i>
                   </div>
                 </div>
-                <span class="font-bold text-white">{{ user.username }}</span>
+                <div class="min-w-0">
+                  <span class="block font-bold text-white">{{ user.username }}</span>
+                  <span v-if="user.email" class="block text-xs text-slate-500 truncate">{{ user.email }}</span>
+                </div>
               </div>
             </td>
             <td class="px-6 py-4">
               <span :class="['px-2 py-0.5 rounded text-xxs font-black uppercase tracking-tighter', user.role === 'admin' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400']">
                 {{ user.role }}
               </span>
+            </td>
+            <td class="px-6 py-4">
+              <span
+                v-if="user.is_active === false"
+                class="px-2 py-0.5 rounded text-xxs font-black uppercase tracking-tighter bg-amber-500/10 text-amber-400"
+              >Pending approval</span>
+              <span
+                v-else
+                class="px-2 py-0.5 rounded text-xxs font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-400"
+              >Active</span>
             </td>
             <td class="px-6 py-4">
               <span :class="['text-xs font-bold', user.recovery_codes_remaining ? 'text-emerald-400' : 'text-slate-600']">
@@ -137,6 +152,14 @@ async function copyResetLink() {
             </td>
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-2">
+                <button
+                  v-if="user.is_active === false"
+                  class="p-2 text-slate-500 hover:text-emerald-400 transition-colors"
+                  title="Approve account"
+                  @click="emit('activateUser', user)"
+                >
+                  <i class="ra ra-check"></i>
+                </button>
                 <button @click="emit('editUser', user)" class="p-2 text-slate-500 hover:text-white transition-colors" title="Edit">
                   <i class="ra ra-quill-ink"></i>
                 </button>

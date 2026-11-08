@@ -2,7 +2,7 @@
 dismissed for good, or completed.
 
 The state is stored per user and is not part of the server-wide settings, so one
-admin dismissing the wizard does not hide it for another admin.
+user dismissing the wizard does not hide it for another user.
 """
 
 from typing import Any, Literal, Optional
@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.auth import get_current_admin
+from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.models.user import User
 
@@ -38,8 +38,8 @@ def _read_state(user: User) -> SetupWizardResponse:
 
 
 @router.get("", response_model=SetupWizardResponse)
-async def get_setup_wizard(current_user: User = Depends(get_current_admin)):
-    """Return the wizard state of the current admin."""
+async def get_setup_wizard(current_user: User = Depends(get_current_user)):
+    """Return the wizard state of the current user."""
     return _read_state(current_user)
 
 
@@ -47,9 +47,9 @@ async def get_setup_wizard(current_user: User = Depends(get_current_admin)):
 async def update_setup_wizard(
     payload: SetupWizardPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_current_user),
 ):
-    """Merge the given fields into the wizard state of the current admin."""
+    """Merge the given fields into the wizard state of the current user."""
     current = _read_state(current_user).model_dump()
     changes = payload.model_dump(exclude_none=True)
     current_user.setup_wizard = {**current, **changes}

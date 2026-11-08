@@ -21,6 +21,8 @@ function loadAccessToken(): string | null {
 export interface User {
   id: string
   username: string
+  email?: string | null
+  is_active?: boolean
   role: string
   profile_image_url?: string | null
   bio?: string | null

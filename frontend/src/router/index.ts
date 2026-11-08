@@ -54,6 +54,11 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue'),
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/RegisterView.vue'),
+    },
+    {
       path: '/reset-password',
       name: 'reset-password',
       component: () => import('@/views/ResetPasswordView.vue'),
@@ -71,7 +76,7 @@ const router = createRouter({
   ],
 })
 
-const PUBLIC_ROUTE_NAMES = new Set(['login', 'setup', 'error', 'reset-password'])
+const PUBLIC_ROUTE_NAMES = new Set(['login', 'register', 'setup', 'error', 'reset-password'])
 
 export function isPublicRoute(name: unknown): boolean {
   return typeof name === 'string' && PUBLIC_ROUTE_NAMES.has(name)

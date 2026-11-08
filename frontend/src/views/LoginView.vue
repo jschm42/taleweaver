@@ -59,13 +59,22 @@ async function handleLogin() {
     const res = await api.login(username.value, password.value)
     await completeSignIn(res.access_token)
   } catch (err: any) {
-    error.value = err?.status === 429
-      ? 'Too many failed attempts. Please wait a minute and try again.'
-      : 'Invalid credentials. Please try again.'
+    error.value = loginErrorMessage(err)
     console.error('Login failed:', err)
   } finally {
     isLoggingIn.value = false
   }
+}
+
+function loginErrorMessage(err: any): string {
+  if (err?.status === 403 && err.message) {
+    // Self-registered accounts stay inactive until an admin approves them.
+    return err.message
+  }
+  if (err?.status === 429) {
+    return 'Too many failed attempts. Please wait a minute and try again.'
+  }
+  return 'Invalid credentials. Please try again.'
 }
 
 async function completeSignIn(token: string) {
@@ -218,6 +227,14 @@ async function handleRecovered(token: string, recoveredUsername: string) {
           @click="isRecovering = true; error = ''"
         >
           Forgot your password?
+        </button>
+
+        <button
+          type="button"
+          class="w-full text-xxs font-black uppercase tracking-widest text-slate-500 hover:text-aether-primary transition-colors"
+          @click="router.push('/register')"
+        >
+          No account yet? Create one
         </button>
       </form>
 

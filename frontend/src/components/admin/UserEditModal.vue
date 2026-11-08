@@ -14,17 +14,21 @@ const emit = defineEmits<{
   (e: 'save', user: any): void
 }>()
 
-const editingUser = ref({ ...props.user })
+// New accounts created by an admin are active unless unchecked.
+const toEditable = (user: any) => ({ ...user, email: user?.email ?? '', is_active: user?.is_active ?? true })
+
+const editingUser = ref(toEditable(props.user))
 const showPassword = ref(false)
 
 watch(() => props.user, (newUser) => {
-  editingUser.value = { ...newUser }
+  editingUser.value = toEditable(newUser)
   showPassword.value = false
 }, { deep: true })
 
 const handleSubmit = () => {
   if (!editingUser.value.username?.trim()) return
-  emit('save', editingUser.value)
+  // The backend rejects an empty string as email; null leaves it unchanged.
+  emit('save', { ...editingUser.value, email: editingUser.value.email?.trim() || null })
 }
 </script>
 
@@ -59,6 +63,17 @@ const handleSubmit = () => {
               minlength="3"
               placeholder="e.g. Jean"
               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-rose-500/50" 
+            />
+          </div>
+
+          <!-- Email -->
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Email</label>
+            <input
+              v-model="editingUser.email"
+              type="email"
+              placeholder="Optional, e.g. jean@example.com"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-rose-500/50"
             />
           </div>
 
@@ -126,6 +141,19 @@ const handleSubmit = () => {
               </button>
             </div>
           </div>
+
+          <!-- Account Active -->
+          <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-800 bg-slate-950 cursor-pointer">
+            <input
+              v-model="editingUser.is_active"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-900 accent-rose-500 cursor-pointer"
+            />
+            <span>
+              <span class="block text-xs font-bold text-white">Account active</span>
+              <span class="block text-[11px] text-slate-400 leading-tight">Inactive accounts cannot log in. Self-registered accounts stay inactive until approved.</span>
+            </span>
+          </label>
 
           <UserKeyPolicyEditor
             v-if="isEditingExisting && editingUser.id"
