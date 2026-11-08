@@ -218,7 +218,6 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
     stoppedUrl = current.url
     fadeOutCurrent(0.5)
   }
-  }
 
   function applyMuted(): void {
     if (!current) return
