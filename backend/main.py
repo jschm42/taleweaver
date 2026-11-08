@@ -295,6 +295,25 @@ BACKEND_ASSETS_DIR = BACKEND_DIR / "static" / "assets"
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend_dist"
 BACKEND_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+# Defined before the SPA catch-all below: Starlette matches routes in order, so a
+# later definition would be shadowed by ``/{catchall:path}`` and answer index.html.
+@app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
+async def health_check() -> dict:
+    """Liveness signal for load balancers and the frontend's backend status banner.
+
+    Under ``/api`` too, so the frontend reaches it through the same proxy as every API call.
+    No auth and no database access: it must answer fast while the rest of the app is busy.
+    """
+    return {"status": "ok"}
+
+
+@app.post("/api/ping")
+async def ping():
+    return {"message": "pong"}
+
+
 # Serve frontend if available (Production/Docker mode)
 if FRONTEND_DIST_DIR.is_dir():
     # First, define a route for assets that checks both backend and frontend folders
@@ -315,6 +334,10 @@ if FRONTEND_DIST_DIR.is_dir():
     # Catch-all for SPA client-side routing
     @app.get("/{catchall:path}")
     async def serve_spa(catchall: str):
+        # Unknown API endpoints must fail as API errors, never as the SPA's index.html
+        if catchall == "api" or catchall.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+
         # Check if the specific file exists in frontend_dist (e.g. favicon.ico)
         full_path = _safe_join(str(FRONTEND_DIST_DIR), catchall)
         if catchall and full_path and os.path.isfile(full_path):
@@ -335,22 +358,6 @@ else:
             "frontend_dev_url": "http://localhost:5173",
             "message": "Backend is running. In development mode, start and open the frontend on http://localhost:5173 ('cd frontend; npm run dev') or run 'npm run build' in /frontend to serve the web UI directly on port 8000.",
         }
-
-
-@app.get("/health", tags=["Health"])
-@app.get("/api/health", tags=["Health"])
-async def health_check() -> dict:
-    """Liveness signal for load balancers and the frontend's backend status banner.
-
-    Under ``/api`` too, so the frontend reaches it through the same proxy as every API call.
-    No auth and no database access: it must answer fast while the rest of the app is busy.
-    """
-    return {"status": "ok"}
-
-
-@app.post("/api/ping")
-async def ping():
-    return {"message": "pong"}
 
 
 def start() -> None:
