@@ -8,7 +8,7 @@ import { ref, watch, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
-import { BACKEND_ONLINE_EVENT } from '@/services/backendStatus'
+import { BACKEND_ONLINE_EVENT, backendStatus, markOnline } from '@/services/backendStatus'
 import { registerEntityNames } from '@/utils/entityRefs'
 import { newMessageKey } from '@/composables/messageKeys'
 import { isHiddenPlayerMessage } from '@/composables/silentCommands'
@@ -681,6 +681,10 @@ export function useGameSocket(): UseGameSocket {
 
           if (!data) continue
 
+          if (!backendStatus.online) {
+            markOnline()
+          }
+
           if (event === 'status') {
             statusText.value = data.content
             debugLogs.value.push({
@@ -949,6 +953,10 @@ export function useGameSocket(): UseGameSocket {
           }
 
           if (!data) continue
+
+          if (!backendStatus.online) {
+            markOnline()
+          }
 
           if (event === 'status') {
             statusText.value = data.content

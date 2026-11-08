@@ -36,7 +36,7 @@ export function extractCodePlaceholders(text: string): {
   })
 
   const restore = (formatted: string): string => {
-    let result = formatted
+    const result = formatted
       .replace(
         /(?:<span class="tw-para-break"><\/span>|<br>)*\uE000CODEBLOCK_(\d+)\uE000(?:<span class="tw-para-break"><\/span>|<br>)*/g,
         (_m, i: string) => blocks[Number(i)] ?? ''

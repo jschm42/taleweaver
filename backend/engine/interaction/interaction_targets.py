@@ -53,8 +53,8 @@ def _unique_name_words(candidates: list[tuple[str, str]]) -> dict[str, set[str]]
 
 def mentioned_entity_ids(user_msg: str, candidates: list[tuple[str, str]]) -> list[str]:
     """IDs of ``(id, name)`` candidates whose name, ID or a unique name word is in ``user_msg``."""
-    text = (user_msg or "").lower()
-    if not text:
+    text = (user_msg or "").lower().strip()
+    if not text or text.startswith("/give_items"):
         return []
     unique_words = _unique_name_words(candidates)
     return [

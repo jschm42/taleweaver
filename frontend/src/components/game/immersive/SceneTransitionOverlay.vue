@@ -8,6 +8,7 @@
  * (--tw-overlay-* tokens, see src/skins/overlays.css).
  */
 import { ref, watch } from 'vue'
+import handPointingRightUrl from '@/assets/svg/hand-pointing-right.svg'
 
 const props = defineProps<{
   active: boolean
@@ -89,12 +90,20 @@ function formatSceneTitle(name?: string | null): string {
           {{ formatSceneTitle(props.targetSceneName) || 'New Location' }}
         </h2>
 
-        <p class="tw-overlay-muted text-xs sm:text-sm italic mt-2 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
+        <p class="tw-overlay-muted text-xs sm:text-sm italic mt-2 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)] flex items-center justify-center gap-1.5 flex-wrap">
           <template v-if="props.exitLabel">
-            Passing through <span class="tw-overlay-highlight font-semibold not-italic">"{{ props.exitLabel }}"</span>...
+            <span>Passing through</span>
+            <img
+              :src="handPointingRightUrl"
+              alt=""
+              class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 inline-block not-italic object-contain drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]"
+              aria-hidden="true"
+            />
+            <span class="tw-overlay-highlight font-semibold not-italic">"{{ props.exitLabel }}"</span>
+            <span>...</span>
           </template>
           <template v-else>
-            The path unfolds into the unknown...
+            <span>The path unfolds into the unknown...</span>
           </template>
         </p>
 

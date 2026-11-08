@@ -17,7 +17,7 @@ import { reactive } from 'vue'
 export const BACKEND_ONLINE_EVENT = 'taleweaver:backend-online'
 
 const HEALTH_URL = '/api/health'
-const PROBE_TIMEOUT_MS = 4000
+const PROBE_TIMEOUT_MS = 8000
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 10000]
 const HEARTBEAT_MS = 30000
 const RESTORED_NOTICE_MS = 3500
@@ -51,7 +51,7 @@ function isApiRequest(input: RequestInfo | URL): boolean {
   }
 }
 
-function markOnline(): void {
+export function markOnline(): void {
   if (retryTimer) clearTimeout(retryTimer)
   retryTimer = undefined
   failedProbes = 0
@@ -82,18 +82,42 @@ function markOffline(): void {
 
 async function runProbe(): Promise<void> {
   const fetcher = originalFetch ?? window.fetch.bind(window)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
   backendStatus.checking = true
+
+  const probeOnce = async (): Promise<boolean> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
+    try {
+      const response = await fetcher(HEALTH_URL, { cache: 'no-store', signal: controller.signal })
+      const body = response.ok ? await response.json().catch(() => null) : null
+      return body?.status === 'ok'
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   try {
-    const response = await fetcher(HEALTH_URL, { cache: 'no-store', signal: controller.signal })
-    const body = response.ok ? await response.json().catch(() => null) : null
-    if (body?.status === 'ok') markOnline()
-    else markOffline()
-  } catch {
+    const firstOk = await probeOnce()
+    if (firstOk) {
+      markOnline()
+      return
+    }
+
+    // When currently marked online, confirm with an immediate second probe before alarming the player.
+    // Heavy turn processing (LLM narration, assets) or temporary local socket contention shouldn't
+    // trigger a false-positive offline banner on a single delayed probe.
+    if (backendStatus.online) {
+      const secondOk = await probeOnce()
+      if (secondOk) {
+        markOnline()
+        return
+      }
+    }
+
     markOffline()
   } finally {
-    clearTimeout(timer)
     backendStatus.checking = false
   }
 }
@@ -129,9 +153,13 @@ export function installBackendWatch(): void {
       const response = await base(input, init)
       observe(input, response)
       return response
-    } catch (error) {
+    } catch (error: any) {
       // A request the page cancelled itself says nothing about the backend.
-      if (!(error instanceof DOMException && error.name === 'AbortError' && init?.signal?.reason !== 'request-timeout')) {
+      const isAbort =
+        error?.name === 'AbortError' ||
+        (error instanceof DOMException && error.name === 'AbortError')
+      const isClientCancel = isAbort && init?.signal?.reason !== 'request-timeout'
+      if (!isClientCancel) {
         observe(input, error)
       }
       throw error

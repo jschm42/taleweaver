@@ -39,6 +39,20 @@ def test_partial_words_and_short_names_do_not_match():
     assert ids == []
 
 
+def test_give_items_command_does_not_trigger_on_interact():
+    # Act
+    ids = mentioned_entity_ids(
+        "/give_items NPC_CHIMP_ARTIST | ITEM_RIPE_BANANA",
+        [
+            ("NPC_CHIMP_ARTIST", "Babu the Chimp Prodigy"),
+            ("ITEM_RIPE_BANANA", "Bunch of Ripe Bananas"),
+        ],
+    )
+
+    # Assert
+    assert ids == []
+
+
 def test_a_unique_word_of_a_name_matches():
     # Arrange
     candidates = [
