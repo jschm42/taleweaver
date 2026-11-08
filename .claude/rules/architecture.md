@@ -111,6 +111,7 @@ graph TD
 * Arrival narrations (after an exit) and the empty opening prologue run with `manager.arrival_narration = True`: GM scene changes are ignored and no `on_interact` trigger fires, because those turns only describe the scene.
 * The narration view of the location never contains lock secrets (codes, key items, unlock rules); unlocks are resolved by Pass 1 and the guardrails.
 * **Enforcement**: This forces the creative model to narrate failure accurately rather than hallucinating success.
+* **Skipped narration**: `tw.story.skip_narration()` records `ScriptChangeset.skip_narration`; every changeset applier stores it in `entity_states["__skip_narration__"]`, and the next Pass 2 takes it once (`engine/scripting/narration_skip.py`): no LLM call, no assistant message, no TTS. Script messages, `on_narration_done` and the clock tick still run.
 
 ### Post-Message: Persistence & Checkpoints
 * Updates committed to SQLite `SessionState`.
@@ -126,6 +127,7 @@ graph TD
   * `entity_states`: JSON dictionary recording dynamic per-entity mutations (e.g., current HP, lock states, spatial position, visibility).
   * `avatar.inventory`: Live item list carried by the player.
   * `current_scene_id`: Active player location.
+  * `entity_states["__audio__"]`: script audio (`tw.audio`, `engine/audio/audio_state.py`): what should play and the named tracks. `ScriptChangeset.audio_ops` are replayed by every changeset applier with `apply_audio_ops`. Tracks render in the background (`engine/audio/audio_generation.py` -> `audio_providers.render_exclusive`: Google Lyria or a ComfyUI workflow, `server_settings.audio_settings`); a track is ready once its file exists in the session's `audio/` folder, so background tasks never write session state. `GET /chat` and the `scene_transition` stream event expose `audio` (`api/routes/adventures/audio_snapshot.py`): script track > the track the scene selected (`WorldScene.audio_track_id`) from the template's audio library (`AdventureTemplate.audio_tracks`, `engine/audio/audio_library.py`; off with `audio_enabled`) > silence. The payload id is the track id, so scenes sharing a track keep it playing. `tw.audio.stop()` silences all, `release()` hands back. Library tracks are generated or uploaded in the editor's Audio tab only (`editor_audio.py`, `editor_audio_tracks.py` with a per-template lock, background `AudioJobs`), stored in `adventures/library/<template>/audio/`, mirrored into `original_manifest` and bundled as `.adz` assets. Design notes: `docs/specs/audio_generation.md`.
 * **Exit Resolution Rule**:
   * Always resolve session-scoped exits by preferring session records over template records to respect dynamic in-game unlocking.
 

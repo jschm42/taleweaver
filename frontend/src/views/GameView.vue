@@ -9,6 +9,7 @@ import { ref, watch, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
+import GameAudioToggle from '@/components/game/GameAudioToggle.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
 import GameOverScreen from '@/components/game/GameOverScreen.vue'
@@ -50,6 +51,7 @@ import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
+import { useGameAudio } from '@/composables/useGameAudio'
 import { useSessionAutoSpeakSettings } from '@/composables/useSessionAutoSpeakSettings'
 import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
 import { useGameInteractionState } from '@/composables/useGameInteractionState'
@@ -240,6 +242,7 @@ const {
   inputLocked,
   pendingTerminalEpilogue,
   pendingDialog,
+  audio,
   promptSuggestions,
   worldMemories,
   worldRumors,
@@ -269,8 +272,12 @@ const {
   language,
   hasOlderMessages,
   sequenceTitles,
+  sequenceDetails,
   loadOlderMessages,
 } = useGameSocket()
+
+const gameAudio = useGameAudio(audio)
+const { muted: audioMuted, playerVolume: audioVolume, hasAudio, isGenerating: isAudioGenerating, lastError: audioError, isPlaying: isAudioPlaying } = gameAudio
 const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
 // Scene changes without an exit (script teleport, GM move) get the travel curtain too.
@@ -1657,6 +1664,8 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
   speechDeferred: isSceneTransitioning,
+  // tw.audio.stop_speech(): no auto-speech until the player's next action.
+  speechHeld: gameAudio.speechHeld,
   playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
 })
 
@@ -1899,6 +1908,19 @@ usePlayAgentAutoLoop()
       </div>
     </div>
 
+    <GameAudioToggle
+      v-if="hasAudio"
+      class="absolute top-16 right-4 sm:right-6 z-40"
+      :muted="audioMuted"
+      :volume="audioVolume"
+      :generating="isAudioGenerating"
+      :error="audioError"
+      :playing="isAudioPlaying"
+      @toggle="gameAudio.toggleMuted()"
+      @stop="gameAudio.stopCurrent()"
+      @volume="gameAudio.setVolume"
+    />
+
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
@@ -1906,6 +1928,7 @@ usePlayAgentAutoLoop()
       :load-older-messages="loadOlderMessages"
       :scene-nodes="nodes"
       :sequence-titles="sequenceTitles"
+      :sequence-details="sequenceDetails"
       :awards="awards"
       :status="status"
       :npc-metadata="npcMetadata"

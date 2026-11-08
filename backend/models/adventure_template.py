@@ -69,6 +69,14 @@ class AdventureTemplate(Base, TimestampMixin):
     selected_tone: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # How the GM narrates: {id, name, instruction, sample} (see core/narrator_voices.py)
     narrator_voice: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # Audio library: generated or uploaded tracks that scenes pick (engine/audio/audio_library.py).
+    audio_tracks: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Optional title track: a library track played while the adventure's library tile is hovered.
+    title_track_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Author switch for scene audio; script audio (tw.audio) is not affected.
+    audio_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
     # Dialog skin chosen by the author: {"skin": <id>, "accent": "#rrggbb"} (see core/ui_theme.py)
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 

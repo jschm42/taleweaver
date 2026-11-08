@@ -69,6 +69,9 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "sidequest": ("sidequest", ""),
     "quest": ("sidequest", ""),
     "award": ("award", ""),
+    "audio": ("audio", ""),
+    "track": ("audio", ""),
+    "music": ("audio", ""),
     "ability": ("ability", ""),
     "talent": ("talent", ""),
 }
@@ -80,6 +83,7 @@ _NAME_FIELDS = {
     "sequence": "title",
     "sidequest": "title",
     "award": "title",
+    "audio": "name",
     "script": "name",
     "ability": "name",
     "talent": "name",

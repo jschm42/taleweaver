@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.engine.audio.audio_library import track_id_or_none
 from backend.engine.manifest_apply.assets import needs_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import (
@@ -105,6 +106,9 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                 decorative_objects=clean_decorative_objects(scene.get("decorative_objects"))
                 or None,
                 **{key: scene.get(key) or None for key in SCENE_SCRIPT_FIELDS},
+                audio_track_id=track_id_or_none(
+                    scene.get("audio_track_id") or scene.get("music_track_id")
+                ),
             )
         )
 

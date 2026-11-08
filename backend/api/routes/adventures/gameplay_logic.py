@@ -95,6 +95,13 @@ from backend.api.routes.adventures.interaction_hooks import fire_interact_trigge
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
+from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
+from backend.engine.scripting.narration_skip import (
+    no_narration,
+    store_skip_narration,
+    take_skip_narration,
+)
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.interaction.script_item_apply import insert_cloned_entities
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -1787,6 +1794,8 @@ class GameTurnManager:
                 "world_rumors": self.state.world_rumors or [],
                 "scene_id": self.state.current_scene_id,
                 "sequence_id": self.state.active_sequence_id,
+                # Audio a script started (or speech it stopped) applies before the narration.
+                "audio": await build_audio_snapshot(self.db, self.state, None, self.user),
                 **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 "status": "success",
@@ -1870,13 +1879,19 @@ class GameTurnManager:
             f"(memory_turns={memory_turns}, messages={len(narration_messages)})"
         )
         stream_usage: Any = None
+        # tw.story.skip_narration(): no narration (and no TTS) this time.
+        narration_skipped = take_skip_narration(self.state)
         try:
-            stream = await llm.stream_simple_task(
-                narration_prompt,
-                user_msg,
-                complex_model,
-                messages=narration_messages,
-                max_tokens=narration_max_tokens(getattr(self.state, "narration_style", None)),
+            stream = (
+                no_narration()
+                if narration_skipped
+                else await llm.stream_simple_task(
+                    narration_prompt,
+                    user_msg,
+                    complex_model,
+                    messages=narration_messages,
+                    max_tokens=narration_max_tokens(getattr(self.state, "narration_style", None)),
+                )
             )
 
             async for chunk in stream:
@@ -1956,7 +1971,7 @@ class GameTurnManager:
             duration_ms=round((time.perf_counter() - cycle_start) * 1000, 2),
         )
 
-        if not (response_text or "").strip():
+        if not (response_text or "").strip() and not narration_skipped:
             if run_generator_tool_intent_pass:
                 fallback = (
                     "The Architect inclines his head, the Construct awaiting your next directive."
@@ -2022,7 +2037,8 @@ class GameTurnManager:
         assistant_chat = ChatMessage(
             session_id=self.state.session_id, role="assistant", content=response_text
         )
-        self.db.add(assistant_chat)
+        if not narration_skipped:
+            self.db.add(assistant_chat)
 
         # Callbacks attached to this narration's directions (direct/say_directed after=...).
         # Before on_narration_done: callbacks queued there belong to the next narration.
@@ -2884,6 +2900,8 @@ class GameTurnManager:
             script_vars=script_vars,
             in_game_time=self.state.in_game_time,
             clock=clock_view(self.state, self.adventure),
+            audio=read_audio_state(self.state.entity_states),
+            audio_library=getattr(self.adventure, "audio_tracks", None),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3079,6 +3097,8 @@ class GameTurnManager:
         store_pending_dialog(entity_states, changeset.pending_dialog)
         store_gm_directions(entity_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
+        apply_audio_ops(entity_states, changeset.audio_ops)
+        store_skip_narration(entity_states, changeset.skip_narration)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
 

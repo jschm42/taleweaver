@@ -326,6 +326,41 @@ export interface PendingDialog {
   options: DialogOption[]
 }
 
+/** What a chapter banner in the story feed shows (`sequence_details` of `GET /chat`). */
+export interface SequenceDetail {
+  title: string
+  order?: number | null
+  description?: string | null
+  dynamic?: boolean
+}
+
+/** Script audio (`tw.audio`) of the session, from `GET /chat`. */
+export interface AudioNowPlaying {
+  id: string
+  name?: string | null
+  status: 'pending' | 'ready' | 'failed'
+  url?: string | null
+  error?: string | null
+  loop: boolean
+  /** Cross-fade length in seconds. */
+  fade: number
+  /** Volume of this playback only (0..1), from tw.audio.play(volume=...). */
+  volume?: number
+  /** Who chose the track: a script (tw.audio), the scene's loop or the main theme. */
+  source?: 'script' | 'scene' | 'theme'
+}
+
+export interface AudioSnapshot {
+  /** False when the admin switched audio generation off; rendered audio still plays. */
+  enabled: boolean
+  rev: number
+  /** Script volume 0..1, multiplied with the player's own audio volume. */
+  volume: number
+  now: AudioNowPlaying | null
+  /** tw.audio.stop_speech(): fade out the TTS when `rev` changes (`fade` in seconds). */
+  speech_stop?: { rev: number; fade: number }
+}
+
 export interface MapNode {
   id: string
   label: string
@@ -442,6 +477,8 @@ export interface AdventureTemplateSummary {
   has_active_session?: boolean
   /** Last time the session behind active_game_id was opened. */
   last_played_at?: string | null
+  /** The adventure's title track (optional), played while the library tile is hovered. */
+  preview_audio_url?: string | null
   is_paused?: boolean
   scene_id?: string | null
   current_scene_name?: string | null

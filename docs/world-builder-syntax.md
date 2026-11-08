@@ -40,14 +40,14 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
 Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: ID] Name` blocks define non-combat talents (see below).
 
 ### `[Scene: ID] Name`
-`decor` (up to 7 decorative objects, comma-separated), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
+`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
@@ -169,6 +169,9 @@ Requires **Event Scripts** to be enabled in the generator settings.
 
 ### `[Sidequest: ID] Title`
 `goal`, `impact`, `goal_item`, `goal_scene`, `defeat`, `guard`, `xp`.
+
+### `[Audio: ID] Name`
+A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the English prompt for the music model: genre, instruments, tempo, mood; instrumental, no artist names or lyrics; ideally ending with a seamless-loop request. Scenes pick a track with `audio: ID`. The World-Builder only stores the prompt; the track is rendered in the editor's **Audio** tab.
 
 ### `[Award: KEY] Title`
 `tier` (bronze, silver, gold, negative), `requires`, `goal_item`, `goal_scene`, `defeat`, `guard`.

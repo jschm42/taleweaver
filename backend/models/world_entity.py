@@ -28,6 +28,8 @@ class WorldScene(Base, TimestampMixin):
     label = Column(String(100), nullable=False)  # Human readable name
     description = Column(String(2000), nullable=False)  # Atmospheric description
     image_url = Column(String(255), nullable=True)  # Scene visual link
+    # Track of the adventure's audio library (AdventureTemplate.audio_tracks) for this scene.
+    audio_track_id = Column(String(50), nullable=True)
     decorative_objects = Column(JSON, nullable=True)  # Static, non-interactable background details
     on_enter_scene_script = Column(String(5000), nullable=True)
     on_enter_scene_text = Column(String(5000), nullable=True)

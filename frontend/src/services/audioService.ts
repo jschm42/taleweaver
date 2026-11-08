@@ -134,6 +134,10 @@ class AudioService {
   private currentAudio: HTMLAudioElement | null = null
   private currentObjectUrl: string | null = null
   private currentBufferSource: AudioBufferSourceNode | null = null
+  /** Gain of the Web Audio segment that plays now, so it can fade out. */
+  private currentGain: GainNode | null = null
+  /** Set by fadeOutAndStop(): no further segment starts while the current one fades. */
+  private fadingOut = false
   private resolveCurrentPlayback: (() => void) | null = null
   private playbackToken = 0
   private lastTtsRequestAt = 0
@@ -320,10 +324,14 @@ class AudioService {
       const isWav = (blob.type || '').toLowerCase().includes('wav')
       const requestedRate = this.getSafeSpeechRate()
       source.playbackRate.value = isWav ? Math.min(1.1, Math.max(1.0, requestedRate)) : requestedRate
-      source.connect(context.destination)
+      const gain = context.createGain()
+      source.connect(gain)
+      gain.connect(context.destination)
       this.currentBufferSource = source
+      this.currentGain = gain
       source.onended = () => {
         this.currentBufferSource = null
+        if (this.currentGain === gain) this.currentGain = null
         resolve()
       }
       try {
@@ -454,7 +462,7 @@ class AudioService {
         }
         // Paused between lines: hold the next one until the player continues.
         await this.waitWhilePaused()
-        if (token !== this.playbackToken) return
+        if (token !== this.playbackToken || this.fadingOut) return
         if (playable) {
           await this.playPrepared(playable, segment, token).catch((err) => {
             this.logDebug('TTS segment playback failed; continuing', { error: String(err) })
@@ -614,7 +622,50 @@ class AudioService {
     this.streamingAvailable = null
   }
 
+  /**
+   * Fades the speech that plays now out, then stops it and drops the queue (script
+   * `tw.audio.stop_speech(fade)`, e.g. before an audio track starts). Without speech: no-op.
+   */
+  fadeOutAndStop(seconds = 0.5): Promise<void> {
+    const ms = Math.round(Math.min(5, Math.max(0, seconds)) * 1000)
+    if (!this.isPlaying.value && !this.isGenerating.value) return Promise.resolve()
+    // Nothing new starts while the current line fades.
+    this.segmentQueue = []
+    this.fadingOut = true
+    const token = this.playbackToken
+    if (ms === 0) {
+      this.stop()
+      return Promise.resolve()
+    }
+    const element = this.currentAudio
+    if (element) {
+      const start = element.volume
+      const began = performance.now()
+      const step = (): void => {
+        if (this.currentAudio !== element) return
+        const progress = Math.min(1, (performance.now() - began) / ms)
+        element.volume = Math.max(0, start * (1 - progress))
+        if (progress < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }
+    const gain = this.currentGain
+    const context = this.audioContext
+    if (gain && context) {
+      gain.gain.setValueAtTime(gain.gain.value, context.currentTime)
+      gain.gain.linearRampToValueAtTime(0, context.currentTime + ms / 1000)
+    }
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        if (token === this.playbackToken) this.stop()
+        else this.fadingOut = false
+        resolve()
+      }, ms)
+    })
+  }
+
   stop() {
+    this.fadingOut = false
     this.playbackToken += 1
     this.segmentQueue = []
     // A paused queue is dropped too; release it and leave the audio context usable.
@@ -630,6 +681,7 @@ class AudioService {
       try { this.currentBufferSource.stop() } catch { /* already stopped */ }
       this.currentBufferSource = null
     }
+    this.currentGain = null
     if (this.currentAudio) {
       this.currentAudio.pause()
       this.currentAudio = null

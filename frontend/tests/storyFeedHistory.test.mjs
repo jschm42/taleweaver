@@ -106,3 +106,16 @@ test('legacy pages without scene info are their own segments', () => {
   const { groupSceneSegments } = loaded.storyDividers
   assert.equal(groupSceneSegments([page(null), page(null)]).length, 2)
 })
+
+test('a chapter banner marks every chapter start, also with a scene change', () => {
+  const { chapterStartingAt } = loaded.storyDividers
+  // First chapter: only at the real start of the history, not the oldest loaded page.
+  assert.equal(chapterStartingAt(undefined, page('HALL|SEQ_1'), true), 'SEQ_1')
+  assert.equal(chapterStartingAt(undefined, page('HALL|SEQ_1'), false), null)
+  assert.equal(chapterStartingAt(page('HALL|SEQ_1'), page('LAB|SEQ_1'), false), null)
+  assert.equal(chapterStartingAt(page('HALL|SEQ_1'), page('HALL|SEQ_2'), false), 'SEQ_2')
+  assert.equal(chapterStartingAt(page('HALL|SEQ_2'), page('LAB|SEQ_3'), false), 'SEQ_3')
+  // No sequence or legacy pages: nothing to announce.
+  assert.equal(chapterStartingAt(page('HALL|SEQ_1'), page('HALL|'), false), null)
+  assert.equal(chapterStartingAt(page(null), page('HALL|SEQ_1'), false), null)
+})

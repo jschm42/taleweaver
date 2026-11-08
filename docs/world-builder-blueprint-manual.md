@@ -469,6 +469,29 @@ guard: not tw.vars.get('anyone_defeated', False)
 
 ---
 
+### Scene audio
+
+Declare the tracks of the audio library with `[Audio: ID] Name` and let scenes pick one with `audio: ID`. The `prompt` describes the sound, not the place: genre, lead instruments, tempo, mood. Instrumental only; audio models block artist names and lyrics. Scenes that share a track keep it playing when the player walks between them; a scene without `audio` fades the audio out.
+
+```text
+[Audio: HARBOR_THEME] Harbor Theme
+prompt: Melancholic folk, solo fiddle over soft harp, 75 bpm. Seamless loop: no intro, no fade-out ending.
+
+[Audio: CRYPT_DRONE] Crypt Drone
+prompt: Dark ambient drone, low cello, dripping water, 60 bpm. Seamless loop: no intro, no fade-out ending.
+
+[Scene: PIER] The Pier
+audio: HARBOR_THEME
+
+[Scene: FISH_MARKET] Fish Market
+audio: HARBOR_THEME
+
+[Scene: CRYPT] The Crypt
+audio: CRYPT_DRONE
+```
+
+The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
+
 ## 7. Strict Adherence or Creative Expansion
 
 Choose the builder mode below the Story Idea field:

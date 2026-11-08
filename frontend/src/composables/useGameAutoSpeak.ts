@@ -24,6 +24,9 @@ type AutoSpeakOptions = {
   autoSpeakSettings?: Ref<AutoSpeakSettings>
   /** While true (e.g. a choice dialog waits for the player), nothing is spoken and running speech stops. */
   speechSuppressed?: Ref<boolean>
+  /** While true (tw.audio.stop_speech() until the next action), new text is not read and is not
+   *  replayed later; unlike speechSuppressed, running speech is left to its own fade-out. */
+  speechHeld?: Ref<boolean>
   /** While true (e.g. the travel overlay is shown), new text waits and is spoken once it turns false. */
   speechDeferred?: Ref<boolean>
   /** True while the player walks through an exit: that overlay only stops speech, nothing is replayed. */
@@ -192,11 +195,15 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     for (const { index, message } of pending) speakWholeMessage(message, index)
   }
 
+  function isSilenced(): boolean {
+    return Boolean(options.speechSuppressed?.value || options.speechHeld?.value)
+  }
+
   /** Reads one message, skipping the lines already spoken while it was streaming. */
   function speakWholeMessage(message: { id?: string; content: string; raw?: boolean }, index: number): void {
     markMessageAsSpoken(message, index)
-    // Text that arrives while speech is suppressed is skipped, not replayed later.
-    if (options.speechSuppressed?.value) return
+    // Text that arrives while speech is suppressed or held is skipped, not replayed later.
+    if (isSilenced()) return
     const alreadyStreamed = streamedSegmentCounts.get(message) ?? 0
     const parsed = message.raw
       ? rawAssistantContent(message.content)
@@ -232,7 +239,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   }
 
   function enqueueDialogues(dialogues: DialogueSegment[]): void {
-    if (options.speechSuppressed?.value) return
+    if (isSilenced()) return
     for (const dlg of dialogues) {
       if (!dlg.text.trim() || !isVoiceEnabled(dlg)) continue
       const isNpcLine = Boolean(dlg.speaker) && dlg.speaker !== 'Game Master'
@@ -242,7 +249,7 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
   function canSpeakNow(): boolean {
     if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return false
-    return !isCombatActive.value && !options.speechSuppressed?.value
+    return !isCombatActive.value && !isSilenced()
   }
 
   /** The player's own spoken line (/say or quoted speech), read in the protagonist's voice. */
@@ -361,7 +368,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
   // A new request is a new action: lines of the previous one are never replayed.
   watch(() => status.value, (newStatus, oldStatus) => {
     const isBusy = (value: string): boolean => value === 'connecting' || value === 'loading'
-    if (isBusy(newStatus) && !isBusy(oldStatus)) actionSpokenHashes.clear()
+    if (!isBusy(newStatus) || isBusy(oldStatus)) return
+    actionSpokenHashes.clear()
+    // The player acts again: a tw.audio.stop_speech() hold of the last action ends.
+    if (options.speechHeld) options.speechHeld.value = false
   })
 
   // Leaving the scene silences the old narration; the new scene is read once the overlay is gone.

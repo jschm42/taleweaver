@@ -9,6 +9,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 
 from backend.core.ui_theme import normalize_ui_theme
+from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
@@ -54,6 +55,7 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("can_damage_npcs", None, False),
     ("npcs_can_damage_protagonist", None, False),
     ("game_over_rules", None, False),
+    ("audio_enabled", bool, False),
     ("selected_image_styles", None, True),
     ("selected_tone", None, True),
     ("sequence_progression_mode", None, True),
@@ -133,9 +135,33 @@ def _apply_quests_awards_sequences(
     return quests, awards
 
 
+def _apply_audio_tracks(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
+    """Merge the manifest's audio library: known ids keep their audio, new ones are added."""
+    raw = adventure_field(ctx.manifest, "audio_tracks") or adventure_field(
+        ctx.manifest, "music_tracks"
+    )
+    incoming = normalize_tracks(raw, ctx.template_id)
+    if not incoming:
+        return
+    current = {t["id"]: t for t in normalize_tracks(adventure.audio_tracks, ctx.template_id)}
+    for track in incoming:
+        existing = current.get(track["id"])
+        keep_audio = existing and existing.get("url") and not track.get("url")
+        current[track["id"]] = (
+            {**track, "url": existing["url"], "source": existing["source"]} if keep_audio else track
+        )
+    adventure.audio_tracks = list(current.values())  # type: ignore[assignment]
+    title = title_track_or_none(
+        adventure_field(ctx.manifest, "title_track_id"), adventure.audio_tracks
+    )
+    if title:
+        adventure.title_track_id = title  # type: ignore[assignment]
+
+
 def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
     for key in _NARRATIVE_FIELDS:
         setattr(adventure, key, adventure_field(ctx.manifest, key) or getattr(adventure, key))
+    _apply_audio_tracks(ctx, adventure)
     adventure.cover_appearance = clean_appearance(adventure.cover_appearance)  # type: ignore[assignment]
 
     # Legacy manifests with a walkthrough but no sequences get a single main sequence.

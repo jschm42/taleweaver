@@ -8,6 +8,7 @@ import { ref, watch, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
+import { BACKEND_ONLINE_EVENT } from '@/services/backendStatus'
 import { registerEntityNames } from '@/utils/entityRefs'
 import { newMessageKey } from '@/composables/messageKeys'
 import { isHiddenPlayerMessage } from '@/composables/silentCommands'
@@ -17,7 +18,7 @@ import {
   prependOlderPage,
   visibleServerMessages,
 } from '@/composables/historyWindow'
-import type { ChatMessage, CharacterSheet, CombatState, PendingDialog } from '@/types'
+import type { ChatMessage, CharacterSheet, CombatState, AudioSnapshot, PendingDialog, SequenceDetail } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
@@ -52,6 +53,8 @@ export interface UseGameSocket {
   hasOlderMessages: Ref<boolean>
   /** Sequence id -> title of the chapters the chat reached (story feed chapter dividers). */
   sequenceTitles: Ref<Record<string, string>>
+  /** Sequence id -> number and description of the chapters the chat reached (chapter banners). */
+  sequenceDetails: Ref<Record<string, SequenceDetail>>
   sheet: Ref<CharacterSheet | null>
   mapData: Ref<any | null>
   nodes: Ref<Record<string, any>>
@@ -73,6 +76,7 @@ export interface UseGameSocket {
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
   pendingDialog: Ref<PendingDialog | null>
+  audio: Ref<AudioSnapshot | null>
   promptSuggestions: Ref<string[]>
   worldMemories: Ref<any[]>
   worldRumors: Ref<any[]>
@@ -138,6 +142,7 @@ export function useGameSocket(): UseGameSocket {
   const activeSequence = ref<any | null>(null)
   const hasOlderMessages = ref(false)
   const sequenceTitles = ref<Record<string, string>>({})
+  const sequenceDetails = ref<Record<string, SequenceDetail>>({})
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
   const isLegacyFormat = ref(false)
@@ -148,6 +153,7 @@ export function useGameSocket(): UseGameSocket {
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
   const pendingDialog = ref<PendingDialog | null>(null)
+  const audio = ref<AudioSnapshot | null>(null)
   const promptSuggestions = ref<string[]>([])
   const worldMemories = ref<any[]>([])
   const worldRumors = ref<any[]>([])
@@ -310,6 +316,7 @@ export function useGameSocket(): UseGameSocket {
       if (!merged.keptOlder) hasOlderMessages.value = !!data.has_more_messages
     }
     if (data.sequence_titles) sequenceTitles.value = data.sequence_titles
+    if (data.sequence_details) sequenceDetails.value = data.sequence_details
 
     if (data.scene_id !== undefined) updateCurrentScene(data.scene_id || null, announcedScene)
     if (data.sequence_id !== undefined) currentSequenceId = data.sequence_id || null
@@ -349,6 +356,9 @@ export function useGameSocket(): UseGameSocket {
     }
     if (data.pending_dialog !== undefined) {
       pendingDialog.value = data.pending_dialog || null
+    }
+    if (data.audio !== undefined) {
+      audio.value = data.audio || null
     }
     if (data.awards !== undefined) {
       awards.value = data.awards || []
@@ -406,8 +416,15 @@ export function useGameSocket(): UseGameSocket {
    * Loads the current session state and history.
    * If history is empty, triggers the initial world description.
    */
+  /** Backend reachable again: reload the session, the story may have moved on server side. */
+  function onBackendOnline(): void {
+    if (currentGameId) void refreshSession(true)
+  }
+
   async function connect(gameId: string): Promise<void> {
     currentGameId = gameId
+    window.removeEventListener(BACKEND_ONLINE_EVENT, onBackendOnline)
+    window.addEventListener(BACKEND_ONLINE_EVENT, onBackendOnline)
     currentSceneId = null
     language.value = localStorage.getItem(sessionLanguageKey(gameId)) || ''
     localStorage.setItem(ACTIVE_LANGUAGE_KEY, language.value)
@@ -415,6 +432,7 @@ export function useGameSocket(): UseGameSocket {
     messages.value = []
     hasOlderMessages.value = false
     sequenceTitles.value = {}
+    sequenceDetails.value = {}
     stopSyncTimer()
     
     try {
@@ -443,6 +461,7 @@ export function useGameSocket(): UseGameSocket {
 
   function disconnect(): void {
     currentGameId = ''
+    window.removeEventListener(BACKEND_ONLINE_EVENT, onBackendOnline)
     status.value = 'disconnected'
     stopSyncTimer()
     if (checkpointPulseTimer !== null) {
@@ -455,6 +474,7 @@ export function useGameSocket(): UseGameSocket {
     messages.value = []
     hasOlderMessages.value = false
     sequenceTitles.value = {}
+    sequenceDetails.value = {}
     sheet.value = null
     mapData.value = null
     nodes.value = {}
@@ -472,6 +492,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked.value = false
     pendingTerminalEpilogue.value = false
     pendingDialog.value = null
+    audio.value = null
     promptSuggestions.value = []
     worldMemories.value = []
     worldRumors.value = []
@@ -1086,6 +1107,7 @@ export function useGameSocket(): UseGameSocket {
     messages,
     hasOlderMessages,
     sequenceTitles,
+    sequenceDetails,
     loadOlderMessages,
     sheet,
     mapData,
@@ -1109,6 +1131,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked,
     pendingTerminalEpilogue,
     pendingDialog,
+    audio,
     promptSuggestions,
     worldMemories,
     worldRumors,

@@ -81,7 +81,8 @@ fields are rejected (no silent typos).
 
 ### Field mapping of `update` (editor naming)
 
-- **scene**: `name` sets the label; `description`, `decorative_objects`, `on_enter_scene_script/_text`,
+- **scene**: `name` sets the label; `description`, `decorative_objects`, `audio_track_id` (a track id of
+  the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
   `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
@@ -103,6 +104,7 @@ fields are rejected (no silent typos).
 
 - Function names must not start with `_` (`Cannot define private function`).
 - `tw.dialog.choose` shows at most 8 options; extra options are silently dropped.
+- `tw.audio.generate(prompt, name=...)` only records a request; the track renders in the background (experimental, needs audio generation in the admin settings). Name repeating themes: a known name replays the stored track instead of rendering a new one.
 
 ### Referencing exits
 

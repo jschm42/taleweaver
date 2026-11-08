@@ -13,7 +13,12 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.api.routes.adventures.chat_history import MAX_PAGE_SIZE, visited_sequence_titles
+from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.chat_history import (
+    MAX_PAGE_SIZE,
+    visited_sequence_details,
+    visited_sequence_titles,
+)
 from backend.api.routes.adventures.chat_snapshot import (
     apply_pending_sequence_progress,
     build_awards_for_snapshot,
@@ -182,6 +187,7 @@ async def get_chat_history(
         messages=history.messages,
         has_more_messages=history.has_more,
         sequence_titles=await visited_sequence_titles(db, state.session_id, adventure),
+        sequence_details=await visited_sequence_details(db, state.session_id, adventure),
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
         combat=AdventureLogic.get_combat_snapshot(state),
         map_data=map_dict,
@@ -216,6 +222,7 @@ async def get_chat_history(
         pending_dialog=None
         if session_status in {"completed", "game_over"}
         else client_dialog(pending_dialog(state.entity_states)),
+        audio=await build_audio_snapshot(db, state, adventure, current_user),
     )
 
 

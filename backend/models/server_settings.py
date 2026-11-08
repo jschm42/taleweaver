@@ -36,3 +36,5 @@ class ServerSettings(Base, TimestampMixin):
     api_key_policy: Mapped[Optional[dict[str, str]]] = mapped_column(JSON, nullable=True)
     # Shared game settings; player-owned keys stay in ``User.game_settings``.
     game_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # Audio generation (experimental ComfyUI workflow); see backend/core/audio_settings.py.
+    audio_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)

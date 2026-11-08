@@ -43,7 +43,7 @@ const emit = defineEmits<{
 
 const TABS: { id: SettingsTabId; label: string }[] = [
   { id: 'memory', label: 'Narrator' },
-  { id: 'voice', label: 'Voice' },
+  { id: 'voice', label: 'Sound' },
   { id: 'translation', label: 'Translation' },
   { id: 'display', label: 'Display' },
 ]

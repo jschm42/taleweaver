@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
 import { X, Play, AlertTriangle } from 'lucide-vue-next'
 import LicenseInfoPopup from '@/components/common/LicenseInfoPopup.vue'
@@ -9,6 +9,7 @@ import { useCardTilt } from '@/composables/useCardTilt'
 import { resolveGenreAccent, toneToLabel } from '@/composables/useGenreAccent'
 import { setAmbientAccent } from '@/store/portalAmbient'
 import { formatRelative } from '@/utils/relativeTime'
+import { startHoverAudio, stopHoverAudio } from '@/composables/useHoverAudioPreview'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
@@ -74,14 +75,19 @@ function openLicenseInfo(): void {
   })
 }
 
-function onEnter(): void {
+function onEnter(event: PointerEvent): void {
   setAmbientAccent(accent.value.rgb)
+  // Mouse only: a tap on a touch screen should not start audio.
+  if (event.pointerType === 'mouse') startHoverAudio(props.template.preview_audio_url)
 }
 
 // The ambient tint is deliberately kept on leave: resetting it would flicker while moving between cards.
 function onLeave(): void {
   onPointerLeave()
+  stopHoverAudio()
 }
+
+onBeforeUnmount(stopHoverAudio)
 
 /** Spawns an ink burst at the click position, then continues or starts the session. */
 function primaryAction(event: MouseEvent): void {

@@ -174,3 +174,27 @@ async def test_sequence_titles_list_only_reached_chapters(setup_test_db):
         titles = await visited_sequence_titles(db, "s-1", adventure)
 
     assert titles == {"SEQ_1": "Arrival", "SEQ_2": "SEQ_2"}
+
+
+async def test_sequence_details_feed_the_chapter_banners(setup_test_db):
+    from types import SimpleNamespace
+
+    from backend.api.routes.adventures.chat_history import visited_sequence_details
+
+    async with TestSessionLocal() as db:
+        db.add(ChatMessage(session_id="s-2", role="system", content="x", sequence_id="SEQ_1"))
+        await db.commit()
+        adventure = SimpleNamespace(
+            sequence_progression_mode="linear",
+            sequences=[
+                {"id": "SEQ_1", "title": "Arrival", "order": 1, "description": "The fog lifts."},
+                {"id": "SEQ_2", "title": "The Twist", "order": 2},
+            ],
+        )
+
+        details = await visited_sequence_details(db, "s-2", adventure)
+
+    # Only reached chapters, so the banner never reveals later ones.
+    assert details == {
+        "SEQ_1": {"title": "Arrival", "order": 1, "description": "The fog lifts.", "dynamic": False}
+    }

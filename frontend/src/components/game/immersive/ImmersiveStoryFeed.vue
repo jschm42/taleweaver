@@ -15,7 +15,9 @@ import ThinkingIndicator from '@/components/game/immersive/ThinkingIndicator.vue
 import { Sparkles, ChevronLeft, ChevronRight, ChevronsDown, Compass, Loader2 } from 'lucide-vue-next'
 import { useScrollToLatest } from './useScrollToLatest'
 import { useLoadOlderOnScroll } from './useLoadOlderOnScroll'
-import { dividerBefore, groupSceneSegments, segmentSceneLabel, type SceneSegment, type StoryDivider } from './storyDividers'
+import { chapterStartingAt, groupSceneSegments, segmentSceneLabel, type SceneSegment, type StoryDivider } from './storyDividers'
+import ChapterBanner from './ChapterBanner.vue'
+import type { SequenceDetail } from '@/types'
 
 const props = defineProps<{
   pages: ComicTurn[]
@@ -33,8 +35,10 @@ const props = defineProps<{
   loadOlderMessages?: () => Promise<void>
   /** Scene id -> scene metadata (label) for the dividers. */
   sceneNodes?: Record<string, any>
-  /** Sequence id -> title for the chapter dividers. */
+  /** Sequence id -> title for the chapter banners. */
   sequenceTitles?: Record<string, string>
+  /** Sequence id -> number and description for the chapter banners. */
+  sequenceDetails?: Record<string, SequenceDetail>
 }>()
 
 const emit = defineEmits<{
@@ -210,6 +214,7 @@ type Exchange = ComicTurn['exchanges'][number]
 /** One flat row of the feed; keys stay stable when older pages are prepended. */
 type FeedItem =
   | { kind: 'divider'; key: string; divider: StoryDivider }
+  | { kind: 'chapter'; key: string; sequenceId: string }
   | { kind: 'license'; key: string; message: any }
   | { kind: 'exchange'; key: string; exchange: Exchange }
 
@@ -218,24 +223,31 @@ function exchangeKey(exchange: Exchange): string | undefined {
   return first?._key || first?.id
 }
 
+/** Position of each page in the whole loaded history (chapters can begin across scenes). */
+const globalIndex = computed(() => new Map(props.pages.map((page, index) => [page, index])))
+
+function chapterInfo(sequenceId: string): SequenceDetail {
+  const detail = props.sequenceDetails?.[sequenceId]
+  return detail ?? { title: props.sequenceTitles?.[sequenceId] || 'New chapter' }
+}
+
 const feedItems = computed<FeedItem[]>(() => {
   const items: FeedItem[] = []
   const pages = activeSegment.value?.pages ?? []
-  // A chapter that starts on entering the scene needs no divider: the new page shows the cut.
-  let hasStory = false
   pages.forEach((page, pageIdx) => {
     const firstKey = page.exchanges[0] ? exchangeKey(page.exchanges[0]) : undefined
-    // Within a scene only chapter changes are marked; the scene itself is the segment.
-    const divider = dividerBefore(pages[pageIdx - 1], page, props.sceneNodes || {}, props.sequenceTitles || {})
-    if (divider?.chapter && hasStory) {
-      items.push({ kind: 'divider', key: `divider-${firstKey ?? pageIdx}`, divider: { scene: null, chapter: divider.chapter } })
-    }
+    const index = globalIndex.value.get(page) ?? 0
+    const isHistoryStart = index === 0 && !props.hasOlderMessages
+    const chapter = chapterStartingAt(props.pages[index - 1], page, isHistoryStart)
+    // Credits open the adventure; the first chapter follows them.
     if (page.licenseMessage) {
       items.push({ kind: 'license', key: `license-${page.licenseMessage._key ?? pageIdx}`, message: page.licenseMessage })
     }
+    if (chapter) {
+      items.push({ kind: 'chapter', key: `chapter-${chapter}-${firstKey ?? pageIdx}`, sequenceId: chapter })
+    }
     page.exchanges.forEach((exchange, exIdx) => {
       items.push({ kind: 'exchange', key: exchangeKey(exchange) ?? `p${pageIdx}-e${exIdx}`, exchange })
-      hasStory = hasStory || Boolean(exchange.userMessage || exchange.assistantMessage)
     })
   })
   return items
@@ -284,6 +296,15 @@ const feedItems = computed<FeedItem[]>(() => {
             </span>
             <span class="story-feed-divider-rule"></span>
           </div>
+
+          <!-- CHAPTER BANNER (a sequence begins) -->
+          <ChapterBanner
+            v-else-if="item.kind === 'chapter'"
+            :title="chapterInfo(item.sequenceId).title"
+            :order="chapterInfo(item.sequenceId).order"
+            :description="chapterInfo(item.sequenceId).description"
+            :dynamic="chapterInfo(item.sequenceId).dynamic"
+          />
 
           <!-- LICENSE & CREDITS BANNER (start of the adventure) -->
           <LicenseInfoBlock v-else-if="item.kind === 'license'" :msg="item.message" class="shrink-0 max-w-2xl" />

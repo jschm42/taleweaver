@@ -26,6 +26,21 @@ from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
 from backend.engine.world.world_object_schema import WorldObjectSchema
 
 
+class AudioTrackSchema(WorldBaseSchema):
+    id: str = Field(..., description="Uppercase slug, e.g. CRYPT_THEME")
+    name: str = Field(..., description="Short track name, e.g. 'Crypt Theme'")
+    prompt: str = Field(
+        ...,
+        description=(
+            "English prompt for the music model: genre, instruments, tempo in BPM, mood; "
+            "instrumental, no artist names, no lyrics; ends with a seamless loop request. "
+            "Max 400 characters."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class WorldSceneSchema(WorldBaseSchema):
     id: str = Field(..., description="Unique slug for the scene, e.g., CASTLE_GATES")
     name: str = Field(..., description="Human-readable name")
@@ -54,6 +69,13 @@ class WorldSceneSchema(WorldBaseSchema):
     on_leave_scene_text: Optional[str] = Field(
         default="",
         description="Optional text output when the protagonist leaves the scene. Use empty string for none.",
+    )
+    audio_track_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the entry in `audio_tracks` that plays in this scene. "
+            "Use empty string for a silent scene."
+        ),
     )
     helpers_script: Optional[str] = Field(
         default="",
@@ -751,6 +773,20 @@ class WorldManifesto(WorldBaseSchema):
     protagonist: ProtagonistSchema
     teaser: str = Field(
         ..., description="A short, atmospheric teaser text for the adventure, max 100 characters."
+    )
+    audio_tracks: list[AudioTrackSchema] = Field(
+        default=[],
+        description=(
+            "Optional audio library (2-6 tracks). Scenes pick one via `audio_track_id`; the "
+            "audio is rendered later in the editor."
+        ),
+    )
+    title_track_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the `audio_tracks` entry that is the adventure's title track "
+            "(played as a preview in the adventure library). Use empty string for none."
+        ),
     )
     cover_appearance: str = Field(
         default="",
