@@ -110,10 +110,10 @@ def clone_disk_assets(old_template_id: str, new_template_id: str) -> None:
         os.makedirs(new_dir, exist_ok=True)
 
 
-def clone_music_tracks(
+def clone_audio_tracks(
     tracks: Optional[list[dict[str, Any]]], old_id: str, new_id: str
 ) -> Optional[list[dict[str, Any]]]:
-    """Copy the music library with its file URLs pointing at the clone's folder."""
+    """Copy the audio library with its file URLs pointing at the clone's folder."""
     if not tracks:
         return None
     cloned = deepcopy(tracks)
@@ -197,8 +197,8 @@ def _create_cloned_template_entity(
         ),
         selected_tone=(deepcopy(original.selected_tone) if original.selected_tone else None),
         narrator_voice=deepcopy(original.narrator_voice),
-        music_tracks=clone_music_tracks(original.music_tracks, original.id, new_id),
-        music_enabled=original.music_enabled,
+        audio_tracks=clone_audio_tracks(original.audio_tracks, original.id, new_id),
+        audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
@@ -306,7 +306,7 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_leave_scene_script=s.on_leave_scene_script,
             on_leave_scene_text=s.on_leave_scene_text,
             helpers_script=s.helpers_script,
-            music_track_id=s.music_track_id,
+            audio_track_id=s.audio_track_id,
         )
         db.add(cloned)
 

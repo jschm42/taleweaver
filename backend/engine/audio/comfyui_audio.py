@@ -1,4 +1,4 @@
-"""ComfyUI music transport (experimental): submit one filled workflow, wait, download its audio.
+"""ComfyUI audio transport (experimental): submit one filled workflow, wait, download its audio.
 
 Mirrors the image transport in ``backend.engine.media.comfyui``: only our own job is polled,
 and on timeout only our own queued job is deleted, never another running workflow.
@@ -116,7 +116,7 @@ async def _run(
         await asyncio.sleep(POLL_SECONDS)
 
 
-async def render_music(
+async def render_audio(
     graph: dict[str, Any], *, comfyui_url: str, timeout: int, output_node_id: str = ""
 ) -> AudioResult:
     """Run the already filled ``graph`` on ComfyUI and return the audio file."""
@@ -135,6 +135,6 @@ async def render_music(
                     )
             if isinstance(exc, TimeoutError):
                 raise TimeoutError(
-                    f"ComfyUI exceeded the {timeout}-second music generation timeout."
+                    f"ComfyUI exceeded the {timeout}-second audio generation timeout."
                 ) from exc
             raise

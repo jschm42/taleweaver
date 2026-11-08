@@ -13,6 +13,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
 from backend.api.routes.adventures.chat_history import MAX_PAGE_SIZE, visited_sequence_titles
 from backend.api.routes.adventures.chat_snapshot import (
     apply_pending_sequence_progress,
@@ -28,7 +29,6 @@ from backend.api.routes.adventures.gameplay_logic import (
     GameTurnManager,
 )
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.api.routes.adventures.music_snapshot import build_music_snapshot
 from backend.api.routes.adventures.schemas import (
     ChatRequest,
     ChatResponse,
@@ -217,7 +217,7 @@ async def get_chat_history(
         pending_dialog=None
         if session_status in {"completed", "game_over"}
         else client_dialog(pending_dialog(state.entity_states)),
-        music=await build_music_snapshot(db, state, adventure, current_user),
+        audio=await build_audio_snapshot(db, state, adventure, current_user),
     )
 
 

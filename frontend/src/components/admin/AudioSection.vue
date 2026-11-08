@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { musicSettingsService, type MusicSettings, type MusicTestRun } from '@/services/musicSettingsService'
+import { audioSettingsService, type AudioSettings, type AudioTestRun } from '@/services/audioSettingsService'
 
 const POLL_MS = 2000
 
-const settings = ref<MusicSettings | null>(null)
+const settings = ref<AudioSettings | null>(null)
 const isSaving = ref(false)
 const isTesting = ref(false)
 const testElapsed = ref(0)
@@ -26,7 +26,7 @@ function done(text: string): void {
 
 onMounted(async (): Promise<void> => {
   try {
-    settings.value = await musicSettingsService.load()
+    settings.value = await audioSettingsService.load()
   } catch (err) {
     report(err)
   }
@@ -37,7 +37,7 @@ async function save(): Promise<void> {
   isSaving.value = true
   try {
     const s = settings.value
-    settings.value = await musicSettingsService.save({
+    settings.value = await audioSettingsService.save({
       enabled: s.enabled,
       comfyui_url: s.comfyui_url,
       comfyui_timeout: s.comfyui_timeout,
@@ -51,7 +51,7 @@ async function save(): Promise<void> {
       lyria_timeout: s.lyria_timeout,
       lyria_wav: s.lyria_wav,
     })
-    done('Music settings saved.')
+    done('Audio settings saved.')
   } catch (err) {
     report(err)
   } finally {
@@ -65,7 +65,7 @@ async function onWorkflowFile(event: Event): Promise<void> {
   input.value = ''
   if (!file) return
   try {
-    settings.value = await musicSettingsService.uploadWorkflow(file)
+    settings.value = await audioSettingsService.uploadWorkflow(file)
     done(`Workflow "${file.name}" stored.`)
   } catch (err) {
     report(err)
@@ -74,18 +74,18 @@ async function onWorkflowFile(event: Event): Promise<void> {
 
 async function removeWorkflow(): Promise<void> {
   try {
-    settings.value = await musicSettingsService.removeWorkflow()
+    settings.value = await audioSettingsService.removeWorkflow()
     done('Workflow removed.')
   } catch (err) {
     report(err)
   }
 }
 
-function finishTest(run: MusicTestRun): void {
+function finishTest(run: AudioTestRun): void {
   stopPolling()
   isTesting.value = false
   if (run.status === 'failed') {
-    report(new Error(`${run.error || 'Music generation failed.'} (after ${run.elapsed} s)`))
+    report(new Error(`${run.error || 'Audio generation failed.'} (after ${run.elapsed} s)`))
     return
   }
   testUrl.value = run.url || ''
@@ -99,7 +99,7 @@ function stopPolling(): void {
 
 async function poll(id: string): Promise<void> {
   try {
-    const run = await musicSettingsService.testStatus(id)
+    const run = await audioSettingsService.testStatus(id)
     testElapsed.value = run.elapsed
     if (run.status !== 'running') finishTest(run)
   } catch (err) {
@@ -119,7 +119,7 @@ async function runTest(): Promise<void> {
   message.value = ''
   error.value = ''
   try {
-    const run = await musicSettingsService.startTest(testPrompt.value, settings.value?.default_duration)
+    const run = await audioSettingsService.startTest(testPrompt.value, settings.value?.default_duration)
     pollTimer = setInterval(() => poll(run.id), POLL_MS)
   } catch (err) {
     isTesting.value = false
@@ -135,10 +135,10 @@ onBeforeUnmount(stopPolling)
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-3xl font-extrabold text-white tracking-tight">
-          Music <span class="ml-2 align-middle text-xs font-bold text-amber-400">Experimental</span>
+          Audio <span class="ml-2 align-middle text-xs font-bold text-amber-400">Experimental</span>
         </h1>
         <p class="text-slate-400 text-sm mt-1">
-          Background music that adventure scripts compose during play with <code>tw.music.generate()</code>.
+          Generated audio (music) for the adventures' audio libraries and for scripts that compose it during play with <code>tw.audio.generate()</code>.
         </p>
       </div>
       <button
@@ -147,7 +147,7 @@ onBeforeUnmount(stopPolling)
         class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 self-start sm:self-auto cursor-pointer"
         @click="save"
       >
-        {{ isSaving ? 'Saving...' : 'Save Music Settings' }}
+        {{ isSaving ? 'Saving...' : 'Save Audio Settings' }}
       </button>
     </div>
 
@@ -158,8 +158,8 @@ onBeforeUnmount(stopPolling)
       <section class="space-y-4 rounded-3xl border border-slate-800 bg-slate-900 p-6">
         <label class="flex items-center justify-between gap-4">
           <span>
-            <span class="block text-sm font-bold text-white">Enable music generation</span>
-            <span class="block text-xs text-slate-500">Off: nothing is rendered (scripts, editor). Music rendered earlier still plays.</span>
+            <span class="block text-sm font-bold text-white">Enable audio generation</span>
+            <span class="block text-xs text-slate-500">Off: nothing is rendered (scripts, editor). Audio rendered earlier still plays.</span>
           </span>
           <input v-model="settings.enabled" type="checkbox" class="h-5 w-5 accent-emerald-500" />
         </label>
@@ -213,7 +213,7 @@ onBeforeUnmount(stopPolling)
       <section v-if="settings.provider === 'comfyui'" class="space-y-4 rounded-3xl border border-amber-500/30 bg-slate-900 p-6">
         <h3 class="font-bold text-white">ComfyUI workflow</h3>
         <p class="text-xs leading-relaxed text-slate-400">
-          Build a text-to-music workflow in ComfyUI (for example an ACE-Step template) and export it with
+          Build a text-to-audio workflow in ComfyUI (for example an ACE-Step template) and export it with
           <strong>Workflow &gt; Export (API)</strong>. Before exporting, write <code v-pre>{{prompt}}</code> into the
           prompt/tags text field. Optional placeholders: <code v-pre>{{negative_prompt}}</code>,
           <code v-pre>{{seed}}</code> and <code v-pre>{{duration}}</code> (seconds; a field holding only the

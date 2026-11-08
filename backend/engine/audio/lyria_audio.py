@@ -1,4 +1,4 @@
-"""Google Lyria music transport (Gemini Interactions API).
+"""Google Lyria audio transport (Gemini Interactions API).
 
 ``POST /v1beta/interactions`` with ``{"model", "input"}``; the response lists ``steps`` whose
 ``model_output`` content holds base64 audio blocks. Lyria 3 Clip always returns 30-second MP3
@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 import httpx
 
-from backend.engine.audio.comfyui_music import MAX_AUDIO_BYTES, AudioResult
+from backend.engine.audio.comfyui_audio import MAX_AUDIO_BYTES, AudioResult
 
 INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 API_REVISION = "2026-05-20"

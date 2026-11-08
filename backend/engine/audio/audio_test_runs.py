@@ -1,4 +1,4 @@
-"""Admin test renders of the music settings, run in the background and polled by id."""
+"""Admin test renders of the audio settings, run in the background and polled by id."""
 
 from __future__ import annotations
 
@@ -6,19 +6,19 @@ import os
 import secrets
 from typing import Any, Optional
 
-from backend.engine.audio.music_jobs import MusicJobs
-from backend.engine.audio.music_providers import render_exclusive
+from backend.engine.audio.audio_jobs import AudioJobs
+from backend.engine.audio.audio_providers import render_exclusive
 from backend.utils.path_security import (
     assert_within_data_dir,
     local_path_to_data_url,
     safe_data_path,
 )
 
-test_jobs = MusicJobs(max_remembered=10)
+test_jobs = AudioJobs(max_remembered=10)
 
 
 def _save(data: bytes, extension: str) -> str:
-    folder = safe_data_path("scratch", "music_test")
+    folder = safe_data_path("scratch", "audio_test")
     os.makedirs(folder, exist_ok=True)
     target = assert_within_data_dir(os.path.join(folder, f"{secrets.token_hex(8)}.{extension}"))
     with open(target, "wb") as handle:
@@ -33,7 +33,7 @@ def check_provider_ready(settings: dict[str, Any], api_key: Optional[str]) -> No
             raise ValueError("Lyria needs a Google (Gemini) API key in the Provider Vault.")
         return
     if not settings.get("comfyui_workflow"):
-        raise ValueError("No ComfyUI music workflow is uploaded.")
+        raise ValueError("No ComfyUI audio workflow is uploaded.")
 
 
 def start_test_run(
@@ -49,5 +49,5 @@ def start_test_run(
     return test_jobs.start(work)
 
 
-def music_test_status(run_id: str) -> Optional[dict[str, Any]]:
+def audio_test_status(run_id: str) -> Optional[dict[str, Any]]:
     return test_jobs.status(run_id)

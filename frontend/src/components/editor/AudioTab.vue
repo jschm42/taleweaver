@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Music, Sparkles, Upload, Play, Pause, Check, X, Star } from 'lucide-vue-next'
-import { editorMusicService, type MusicLibrary, type MusicTrack } from '@/services/editorMusicService'
+import { AudioLines, Sparkles, Upload, Play, Pause, Check, X, Star } from 'lucide-vue-next'
+import { editorAudioService, type AudioLibrary, type AudioTrack } from '@/services/editorAudioService'
 import { notificationService } from '@/services/notificationService'
-import MusicGenerateModal, { type GenerateDraft } from '@/components/editor/music/MusicGenerateModal.vue'
-import MusicUploadModal from '@/components/editor/music/MusicUploadModal.vue'
-import MusicTrackMenu, { type TrackAction } from '@/components/editor/music/MusicTrackMenu.vue'
-import MusicDeleteModal from '@/components/editor/music/MusicDeleteModal.vue'
-import type { ReferenceScene } from '@/components/editor/music/SceneReferencePicker.vue'
+import AudioGenerateModal, { type GenerateDraft } from '@/components/editor/audio/AudioGenerateModal.vue'
+import AudioUploadModal from '@/components/editor/audio/AudioUploadModal.vue'
+import AudioTrackMenu, { type TrackAction } from '@/components/editor/audio/AudioTrackMenu.vue'
+import AudioDeleteModal from '@/components/editor/audio/AudioDeleteModal.vue'
+import type { ReferenceScene } from '@/components/editor/audio/SceneReferencePicker.vue'
 
 const props = defineProps<{
   adventureId: string
@@ -20,14 +20,14 @@ const emit = defineEmits<{
 
 const POLL_MS = 2000
 
-const library = ref<MusicLibrary | null>(null)
+const library = ref<AudioLibrary | null>(null)
 const isLoading = ref(false)
 
 const showGenerate = ref(false)
 const generateDraft = ref<GenerateDraft | null>(null)
 const showUpload = ref(false)
-const menu = ref<{ track: MusicTrack; x: number; y: number } | null>(null)
-const deleting = ref<MusicTrack | null>(null)
+const menu = ref<{ track: AudioTrack; x: number; y: number } | null>(null)
+const deleting = ref<AudioTrack | null>(null)
 const isDeleting = ref(false)
 
 const editingId = ref('')
@@ -37,7 +37,7 @@ const playingId = ref('')
 let player: HTMLAudioElement | null = null
 let pollTimer: ReturnType<typeof setInterval> | undefined
 
-const tracks = computed((): MusicTrack[] => library.value?.tracks ?? [])
+const tracks = computed((): AudioTrack[] => library.value?.tracks ?? [])
 const generationOn = computed((): boolean => !!library.value?.generation.enabled)
 const providerLabel = computed((): string =>
   library.value?.generation.provider === 'lyria' ? 'Google Lyria' : 'ComfyUI',
@@ -56,7 +56,7 @@ function report(err: unknown): void {
 async function reload(): Promise<void> {
   try {
     const previous = library.value
-    library.value = await editorMusicService.load(props.adventureId)
+    library.value = await editorAudioService.load(props.adventureId)
     announceFinishedJobs(previous)
     ensurePolling()
   } catch (err) {
@@ -64,13 +64,13 @@ async function reload(): Promise<void> {
   }
 }
 
-function announceFinishedJobs(previous: MusicLibrary | null): void {
+function announceFinishedJobs(previous: AudioLibrary | null): void {
   if (!previous || !library.value) return
   for (const [trackId, job] of Object.entries(library.value.jobs)) {
     if (previous.jobs[trackId]?.status !== 'running' || job.status === 'running') continue
     const name = library.value.tracks.find((t) => t.id === trackId)?.name || 'Track'
     if (job.status === 'done') notificationService.add(`${name} rendered in ${job.elapsed} s.`, 'success')
-    else notificationService.add(`${name}: ${job.error || 'Music generation failed.'}`, 'error')
+    else notificationService.add(`${name}: ${job.error || 'Audio generation failed.'}`, 'error')
   }
 }
 
@@ -85,11 +85,11 @@ function ensurePolling(): void {
   }
 }
 
-function isRendering(track: MusicTrack): boolean {
+function isRendering(track: AudioTrack): boolean {
   return library.value?.jobs[track.id]?.status === 'running'
 }
 
-function trackStatus(track: MusicTrack): { label: string; tone: string } {
+function trackStatus(track: AudioTrack): { label: string; tone: string } {
   const job = library.value?.jobs[track.id]
   if (job?.status === 'running') return { label: `Composing… ${job.elapsed} s`, tone: 'text-amber-300' }
   if (job?.status === 'failed' && !track.url) return { label: `Failed: ${job.error || ''}`, tone: 'text-rose-400' }
@@ -97,7 +97,7 @@ function trackStatus(track: MusicTrack): { label: string; tone: string } {
   return { label: 'No audio yet', tone: 'text-slate-500' }
 }
 
-function usedBy(track: MusicTrack): string {
+function usedBy(track: AudioTrack): string {
   const ids = library.value?.scene_usage[track.id] ?? []
   return ids.map((id) => sceneLabels.value[id] || id).join(', ') || '—'
 }
@@ -109,16 +109,16 @@ function openGenerate(draft: GenerateDraft | null = null): void {
   showGenerate.value = true
 }
 
-function openMenu(track: MusicTrack, event: MouseEvent): void {
+function openMenu(track: AudioTrack, event: MouseEvent): void {
   menu.value = { track, x: event.clientX, y: event.clientY }
 }
 
-function openMenuFromButton(track: MusicTrack, event: MouseEvent): void {
+function openMenuFromButton(track: AudioTrack, event: MouseEvent): void {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   menu.value = { track, x: rect.right - 208, y: rect.bottom + 4 }
 }
 
-const actions: Record<TrackAction, (track: MusicTrack) => void> = {
+const actions: Record<TrackAction, (track: AudioTrack) => void> = {
   play: (track) => togglePlay(track),
   edit: (track) => startEdit(track),
   render: (track) => rerender(track),
@@ -135,24 +135,24 @@ function onMenuAction(action: TrackAction): void {
 
 // --- track actions ------------------------------------------------------------------------
 
-async function rerender(track: MusicTrack): Promise<void> {
+async function rerender(track: AudioTrack): Promise<void> {
   try {
-    await editorMusicService.render(props.adventureId, track.id)
+    await editorAudioService.render(props.adventureId, track.id)
     await reload()
   } catch (err) {
     report(err)
   }
 }
 
-function startEdit(track: MusicTrack): void {
+function startEdit(track: AudioTrack): void {
   editingId.value = track.id
   editName.value = track.name
   editPrompt.value = track.prompt
 }
 
-async function saveEdit(track: MusicTrack): Promise<void> {
+async function saveEdit(track: AudioTrack): Promise<void> {
   try {
-    await editorMusicService.update(props.adventureId, track.id, { name: editName.value, prompt: editPrompt.value })
+    await editorAudioService.update(props.adventureId, track.id, { name: editName.value, prompt: editPrompt.value })
     editingId.value = ''
     await reload()
   } catch (err) {
@@ -160,11 +160,11 @@ async function saveEdit(track: MusicTrack): Promise<void> {
   }
 }
 
-function remove(track: MusicTrack): void {
+function remove(track: AudioTrack): void {
   deleting.value = track
 }
 
-function scenesUsing(track: MusicTrack): string[] {
+function scenesUsing(track: AudioTrack): string[] {
   return (library.value?.scene_usage[track.id] ?? []).map((id) => sceneLabels.value[id] || id)
 }
 
@@ -174,7 +174,7 @@ async function confirmDelete(): Promise<void> {
   isDeleting.value = true
   try {
     if (playingId.value === track.id) stopPlayer()
-    library.value = await editorMusicService.remove(props.adventureId, track.id)
+    library.value = await editorAudioService.remove(props.adventureId, track.id)
     emit('refresh-world')
     deleting.value = null
   } catch (err) {
@@ -186,14 +186,14 @@ async function confirmDelete(): Promise<void> {
 
 async function setTitle(trackId: string | null): Promise<void> {
   try {
-    await editorMusicService.setTitleTrack(props.adventureId, trackId)
+    await editorAudioService.setTitleTrack(props.adventureId, trackId)
     await reload()
   } catch (err) {
     report(err)
   }
 }
 
-function download(track: MusicTrack): void {
+function download(track: AudioTrack): void {
   if (!track.url) return
   const extension = track.url.split('?')[0].split('.').pop() || 'mp3'
   const base = track.name.replace(/[^\p{L}\p{N} _-]+/gu, '').trim().replace(/\s+/g, '_') || track.id
@@ -207,7 +207,7 @@ function download(track: MusicTrack): void {
 
 async function toggleEnabled(event: Event): Promise<void> {
   try {
-    await editorMusicService.setEnabled(props.adventureId, (event.target as HTMLInputElement).checked)
+    await editorAudioService.setEnabled(props.adventureId, (event.target as HTMLInputElement).checked)
     await reload()
   } catch (err) {
     report(err)
@@ -220,7 +220,7 @@ function stopPlayer(): void {
   playingId.value = ''
 }
 
-function togglePlay(track: MusicTrack): void {
+function togglePlay(track: AudioTrack): void {
   if (playingId.value === track.id) {
     stopPlayer()
     return
@@ -251,20 +251,20 @@ onBeforeUnmount((): void => {
     <section class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-slate-900/40 p-5 sm:p-6 rounded-2xl border border-white/5 shadow-xl">
       <div class="flex items-center gap-4">
         <div class="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shrink-0">
-          <Music class="w-5 h-5 text-orange-400" />
+          <AudioLines class="w-5 h-5 text-orange-400" />
         </div>
         <div>
-          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Music Library <span class="ml-1 normal-case tracking-normal text-[10px] text-amber-400">Experimental</span></h3>
+          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Audio Library <span class="ml-1 normal-case tracking-normal text-[10px] text-amber-400">Experimental</span></h3>
           <p class="text-xs text-slate-500">
             Tracks of this adventure. Each scene picks one in its scene dialog; walking between scenes with
-            the same track keeps it playing, a scene without a track fades the music out.
+            the same track keeps it playing, a scene without a track fades the audio out.
           </p>
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2 shrink-0">
         <label v-if="library" class="flex items-center gap-2 mr-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider"
-          title="Played while the mouse is over this adventure's tile in the library. Without a title song the tile stays silent.">
-          <Star class="w-3.5 h-3.5 text-amber-400" /> Title song
+          title="Played while the mouse is over this adventure's tile in the library. Without a title track the tile stays silent.">
+          <Star class="w-3.5 h-3.5 text-amber-400" /> Title track
           <select :value="library.title_track_id || ''"
             class="normal-case tracking-normal font-normal bg-slate-950/80 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 max-w-[12rem]"
             @change="setTitle(($event.target as HTMLSelectElement).value || null)">
@@ -275,12 +275,12 @@ onBeforeUnmount((): void => {
           </select>
         </label>
         <label v-if="library" class="flex items-center gap-2 mr-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-          <input type="checkbox" :checked="library.music_enabled" class="accent-orange-500" @change="toggleEnabled" />
-          Scene music on
+          <input type="checkbox" :checked="library.audio_enabled" class="accent-orange-500" @change="toggleEnabled" />
+          Scene audio on
         </label>
         <button type="button"
           class="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl"
-          :title="generationOn ? `Compose a track with ${providerLabel}` : 'Music generation is switched off (Admin → Music)'"
+          :title="generationOn ? `Compose a track with ${providerLabel}` : 'Audio generation is switched off (Admin → Audio)'"
           @click="openGenerate()">
           <Sparkles class="w-3.5 h-3.5" /> Generate Track
         </button>
@@ -346,7 +346,7 @@ onBeforeUnmount((): void => {
                   <span v-if="library?.title_track_id === track.id"
                     class="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-300"
                     title="Plays on the adventure's library tile">
-                    <Star class="w-2.5 h-2.5" /> Title Song
+                    <Star class="w-2.5 h-2.5" /> Title Track
                   </span>
                 </div>
                 <div v-if="track.prompt" class="text-[11px] text-slate-500 line-clamp-2" :title="track.prompt">{{ track.prompt }}</div>
@@ -372,7 +372,7 @@ onBeforeUnmount((): void => {
       </table>
     </section>
 
-    <MusicTrackMenu
+    <AudioTrackMenu
       v-if="menu"
       :key="`${menu.track.id}-${menu.x}-${menu.y}`"
       :track="menu.track"
@@ -386,7 +386,7 @@ onBeforeUnmount((): void => {
       @close="menu = null"
     />
 
-    <MusicGenerateModal
+    <AudioGenerateModal
       :show="showGenerate"
       :adventure-id="adventureId"
       :scenes="scenes"
@@ -397,7 +397,7 @@ onBeforeUnmount((): void => {
       @started="reload"
     />
 
-    <MusicDeleteModal
+    <AudioDeleteModal
       v-if="deleting"
       :track-name="deleting.name"
       :scenes="scenesUsing(deleting)"
@@ -406,7 +406,7 @@ onBeforeUnmount((): void => {
       @confirm="confirmDelete"
     />
 
-    <MusicUploadModal
+    <AudioUploadModal
       :show="showUpload"
       :adventure-id="adventureId"
       @close="showUpload = false"

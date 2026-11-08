@@ -1,11 +1,11 @@
-"""Session music state (``entity_states["__music__"]``) and the replay of ``tw.music`` ops.
+"""Session audio state (``entity_states["__audio__"]``) and the replay of ``tw.audio`` ops.
 
-Scripts never generate audio themselves. ``tw.music`` records ordered operations in
-``ScriptChangeset.music_ops``; every changeset applier replays them with ``apply_music_ops``.
-Without a script track (``now`` is None) the track the current scene selected from the music
-library plays, unless a script silenced the music (``tw.music.stop()``; ``tw.music.release()`` hands
-control back to scene music). The state only says *what* should play; the generation service
-(``backend.engine.audio.music_generation``) renders missing tracks in the background and the
+Scripts never generate audio themselves. ``tw.audio`` records ordered operations in
+``ScriptChangeset.audio_ops``; every changeset applier replays them with ``apply_audio_ops``.
+Without a script track (``now`` is None) the track the current scene selected from the audio
+library plays, unless a script silenced the audio (``tw.audio.stop()``; ``tw.audio.release()`` hands
+control back to scene audio). The state only says *what* should play; the generation service
+(``backend.engine.audio.audio_generation``) renders missing tracks in the background and the
 client plays them once their file exists. Because the state lives in ``entity_states`` it is part
 of every checkpoint.
 
@@ -15,7 +15,7 @@ Shape::
         "rev": 3,                      # bumped by every op, so clients notice replays
         "volume": 1.0,                 # script volume 0..1 (multiplied with the player's volume)
         "now": {"id": "...", "loop": True, "fade": 2.0} | None,   # script track to play
-        "silenced": False,             # tw.music.stop(): no scene music either
+        "silenced": False,             # tw.audio.stop(): no scene audio either
         "tracks": {"<id>": {"name", "prompt", "negative_prompt", "duration", "seed"}},
         "library": {"<name>": "<id>"},
     }
@@ -27,7 +27,9 @@ import copy
 import re
 from typing import Any, Optional
 
-MUSIC_STATE_KEY = "__music__"
+AUDIO_STATE_KEY = "__audio__"
+# Sessions saved before the rename to "audio" keep their state under this key.
+LEGACY_STATE_KEY = "__music__"
 TRACK_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 MAX_TRACKS = 100
 MAX_PROMPT_CHARS = 1000
@@ -35,14 +37,15 @@ MAX_NAME_CHARS = 64
 MAX_FADE_SECONDS = 30.0
 
 
-def empty_music_state() -> dict[str, Any]:
+def empty_audio_state() -> dict[str, Any]:
     return {"rev": 0, "volume": 1.0, "now": None, "silenced": False, "tracks": {}, "library": {}}
 
 
-def read_music_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """Return a normalized copy of the session's music state."""
-    raw = (entity_states or {}).get(MUSIC_STATE_KEY)
-    state = empty_music_state()
+def read_audio_state(entity_states: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Return a normalized copy of the session's audio state."""
+    states = entity_states or {}
+    raw = states.get(AUDIO_STATE_KEY, states.get(LEGACY_STATE_KEY))
+    state = empty_audio_state()
     if not isinstance(raw, dict):
         return state
     state["rev"] = int(raw.get("rev") or 0)
@@ -134,8 +137,8 @@ _OPS = {
 }
 
 
-def apply_music_op_list(state: dict[str, Any], ops: list[dict[str, Any]]) -> dict[str, Any]:
-    """Return a new music state with ``ops`` applied in order (unknown ops are skipped)."""
+def apply_audio_op_list(state: dict[str, Any], ops: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return a new audio state with ``ops`` applied in order (unknown ops are skipped)."""
     result = copy.deepcopy(state)
     for op in ops:
         handler = _OPS.get(str(op.get("op") or ""))
@@ -146,9 +149,10 @@ def apply_music_op_list(state: dict[str, Any], ops: list[dict[str, Any]]) -> dic
     return result
 
 
-def apply_music_ops(entity_states: dict[str, Any], ops: list[dict[str, Any]]) -> bool:
-    """Replay ``tw.music`` ops into ``entity_states`` in place; True when anything changed."""
+def apply_audio_ops(entity_states: dict[str, Any], ops: list[dict[str, Any]]) -> bool:
+    """Replay ``tw.audio`` ops into ``entity_states`` in place; True when anything changed."""
     if not ops:
         return False
-    entity_states[MUSIC_STATE_KEY] = apply_music_op_list(read_music_state(entity_states), ops)
+    entity_states[AUDIO_STATE_KEY] = apply_audio_op_list(read_audio_state(entity_states), ops)
+    entity_states.pop(LEGACY_STATE_KEY, None)
     return True

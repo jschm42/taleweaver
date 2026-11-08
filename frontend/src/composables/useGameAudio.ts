@@ -1,17 +1,17 @@
 /**
- * useGameMusic — plays the script music of a session (`tw.music`, `music` field of GET /chat).
+ * useGameAudio — plays the script audio of a session (`tw.audio`, `audio` field of GET /chat).
  *
  * The server decides what should play; this composable only follows it: it cross-fades to a
  * new track once its file is rendered, keeps the previous track while the next one is still
- * generating, and fades out on `tw.music.stop()`. Mute and volume belong to the player
- * (store/musicPreferences, also set in the in-game settings) and apply at once when changed.
+ * generating, and fades out on `tw.audio.stop()`. Mute and volume belong to the player
+ * (store/audioPreferences, also set in the in-game settings) and apply at once when changed.
  *
  * Looping tracks are not looped by the audio element: shortly before the end a second copy
  * starts and the two cross-fade, because generated clips rarely have a seamless loop point.
  */
 import { computed, onBeforeUnmount, watch, type ComputedRef, type Ref } from 'vue'
-import type { MusicSnapshot } from '@/types'
-import { musicMuted, musicVolume, setMusicVolume } from '@/store/musicPreferences'
+import type { AudioSnapshot } from '@/types'
+import { audioMuted, audioVolume, setAudioVolume } from '@/store/audioPreferences'
 
 const FADE_STEP_MS = 50
 const STOP_FADE_SECONDS = 2
@@ -50,10 +50,10 @@ function release(channel: Channel): void {
   channel.audio.src = ''
 }
 
-export interface GameMusicControls {
+export interface GameAudioControls {
   muted: Ref<boolean>
   playerVolume: Ref<number>
-  hasMusic: ComputedRef<boolean>
+  hasAudio: ComputedRef<boolean>
   isGenerating: ComputedRef<boolean>
   lastError: ComputedRef<string>
   toggleMuted: () => void
@@ -61,18 +61,18 @@ export interface GameMusicControls {
   stopAll: () => void
 }
 
-export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControls {
-  const muted = musicMuted
-  const playerVolume = musicVolume
+export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControls {
+  const muted = audioMuted
+  const playerVolume = audioVolume
   let current: Channel | null = null
   let unlockPending = false
 
-  /** True when the session has music (script, scene or theme); the toggle is shown only then. */
-  const hasMusic = computed(() => !!music.value)
-  const isGenerating = computed(() => music.value?.now?.status === 'pending')
-  const lastError = computed(() => music.value?.now?.error || '')
+  /** True when the session has audio (script, scene or theme); the toggle is shown only then. */
+  const hasAudio = computed(() => !!audio.value)
+  const isGenerating = computed(() => audio.value?.now?.status === 'pending')
+  const lastError = computed(() => audio.value?.now?.error || '')
 
-  const targetVolume = (): number => (muted.value ? 0 : playerVolume.value * (music.value?.volume ?? 1))
+  const targetVolume = (): number => (muted.value ? 0 : playerVolume.value * (audio.value?.volume ?? 1))
 
   function removeUnlock(): void {
     UNLOCK_EVENTS.forEach((evt) => window.removeEventListener(evt, retryPlayback))
@@ -128,7 +128,7 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
     return channel
   }
 
-  function follow(snapshot: MusicSnapshot | null): void {
+  function follow(snapshot: AudioSnapshot | null): void {
     const now = snapshot?.now ?? null
     if (!now) {
       fadeOutCurrent(STOP_FADE_SECONDS)
@@ -161,7 +161,7 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
   }
 
   function setVolume(value: number): void {
-    setMusicVolume(value)
+    setAudioVolume(value)
   }
 
   // Mute and volume may also change in the in-game settings.
@@ -171,8 +171,8 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
   })
 
   watch(
-    () => [music.value?.rev, music.value?.now?.status, music.value?.now?.url],
-    () => follow(music.value),
+    () => [audio.value?.rev, audio.value?.now?.status, audio.value?.now?.url],
+    () => follow(audio.value),
     { immediate: true },
   )
 
@@ -184,5 +184,5 @@ export function useGameMusic(music: Ref<MusicSnapshot | null>): GameMusicControl
 
   onBeforeUnmount(stopAll)
 
-  return { muted, playerVolume, hasMusic, isGenerating, lastError, toggleMuted, setVolume, stopAll }
+  return { muted, playerVolume, hasAudio, isGenerating, lastError, toggleMuted, setVolume, stopAll }
 }

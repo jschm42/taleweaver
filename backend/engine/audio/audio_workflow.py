@@ -1,4 +1,4 @@
-"""Fills the placeholders of an uploaded ComfyUI music workflow.
+"""Fills the placeholders of an uploaded ComfyUI audio workflow.
 
 Supported placeholders, written into node inputs of the API-format graph:
 
@@ -37,7 +37,7 @@ def _fill_value(value: Any, values: dict[str, Any]) -> Any:
     return value
 
 
-def fill_music_workflow(
+def fill_audio_workflow(
     workflow: dict[str, Any],
     *,
     prompt: str,

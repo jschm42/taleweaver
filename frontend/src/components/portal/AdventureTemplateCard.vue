@@ -9,7 +9,7 @@ import { useCardTilt } from '@/composables/useCardTilt'
 import { resolveGenreAccent, toneToLabel } from '@/composables/useGenreAccent'
 import { setAmbientAccent } from '@/store/portalAmbient'
 import { formatRelative } from '@/utils/relativeTime'
-import { startHoverMusic, stopHoverMusic } from '@/composables/useHoverMusicPreview'
+import { startHoverAudio, stopHoverAudio } from '@/composables/useHoverAudioPreview'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
@@ -77,17 +77,17 @@ function openLicenseInfo(): void {
 
 function onEnter(event: PointerEvent): void {
   setAmbientAccent(accent.value.rgb)
-  // Mouse only: a tap on a touch screen should not start music.
-  if (event.pointerType === 'mouse') startHoverMusic(props.template.preview_music_url)
+  // Mouse only: a tap on a touch screen should not start audio.
+  if (event.pointerType === 'mouse') startHoverAudio(props.template.preview_audio_url)
 }
 
 // The ambient tint is deliberately kept on leave: resetting it would flicker while moving between cards.
 function onLeave(): void {
   onPointerLeave()
-  stopHoverMusic()
+  stopHoverAudio()
 }
 
-onBeforeUnmount(stopHoverMusic)
+onBeforeUnmount(stopHoverAudio)
 
 /** Spawns an ink burst at the click position, then continues or starts the session. */
 function primaryAction(event: MouseEvent): void {

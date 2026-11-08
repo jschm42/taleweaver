@@ -1,8 +1,8 @@
-"""Music prompts for scene loops and the main theme, suggested by the small LLM.
+"""Prompts for generated audio tracks (scene loops, title tracks), suggested by the small LLM.
 
 The suggestion is built from the adventure's tone (``selected_tone``), title and teaser plus the
 scene's name and description. Every suggested prompt ends with a loop instruction
-(``ensure_loopable``), because scene music repeats for as long as the player stays.
+(``ensure_loopable``), because scene audio repeats for as long as the player stays.
 Music models block artist names and lyrics, so the system prompt forbids both.
 """
 
@@ -11,14 +11,14 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-MAX_MUSIC_PROMPT_CHARS = 1000
+MAX_AUDIO_PROMPT_CHARS = 1000
 
 LOOP_INSTRUCTION = (
     "Seamless loop: no intro, no fade-out ending, steady energy, so the end flows straight "
     "back into the start."
 )
 
-MUSIC_PROMPT_SYSTEM_PROMPT = """You write prompts for an instrumental music generation model \
+AUDIO_PROMPT_SYSTEM_PROMPT = """You write prompts for an instrumental music generation model \
 (Google Lyria, ACE-Step) that creates background music for an interactive text adventure.
 
 Write ONE prompt of 2-4 short sentences in English that describes the music itself:
@@ -29,11 +29,11 @@ Write ONE prompt of 2-4 short sentences in English that describes the music itse
 Rules:
 - Instrumental only. No vocals, no lyrics, no singing.
 - Never name artists, bands, composers, songs, films or games.
-- Do not describe the plot or the scene; describe only how the music sounds.
-- The music will loop, so ask for a seamless loop without intro or ending.
+- Do not describe the plot or the scene; describe only how the audio sounds.
+- The audio will loop, so ask for a seamless loop without intro or ending.
 - Output only the prompt text, no quotes, no labels."""
 
-MUSIC_PROMPT_USER_TEMPLATE = """Adventure: {title}
+AUDIO_PROMPT_USER_TEMPLATE = """Adventure: {title}
 Tone: {tone}
 Premise: {teaser}
 
@@ -51,8 +51,8 @@ def ensure_loopable(prompt: str) -> str:
     if not text:
         return ""
     if _LOOP_WORD_RE.search(text):
-        return text[:MAX_MUSIC_PROMPT_CHARS]
-    room = MAX_MUSIC_PROMPT_CHARS - len(LOOP_INSTRUCTION) - 1
+        return text[:MAX_AUDIO_PROMPT_CHARS]
+    room = MAX_AUDIO_PROMPT_CHARS - len(LOOP_INSTRUCTION) - 1
     return f"{text[:room].rstrip()} {LOOP_INSTRUCTION}"
 
 
@@ -64,12 +64,12 @@ def tone_text(selected_tone: Optional[dict[str, Any]]) -> str:
     return text[:400] or "Neutral"
 
 
-def build_music_prompt_request(
+def build_audio_prompt_request(
     adventure: Any, *, target_kind: str, name: str, description: str
 ) -> str:
     """User prompt for the suggestion LLM (``target_kind``: ``scene`` or ``main theme``)."""
     is_scene = target_kind == "scene"
-    return MUSIC_PROMPT_USER_TEMPLATE.format(
+    return AUDIO_PROMPT_USER_TEMPLATE.format(
         title=str(getattr(adventure, "title", "") or "")[:200],
         tone=tone_text(getattr(adventure, "selected_tone", None)),
         teaser=str(getattr(adventure, "teaser", "") or "")[:600],

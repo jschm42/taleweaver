@@ -14,15 +14,15 @@ SCENE_SCRIPT_FIELDS = (
     "on_leave_scene_text",
     "helpers_script",
 )
-# The scene's track of the adventure's music library travels with the scene.
-SCENE_MUSIC_FIELDS = ("music_track_id",)
+# The scene's track of the adventure's audio library travels with the scene.
+SCENE_AUDIO_FIELDS = ("audio_track_id",)
 SCENE_CONTENT_FIELDS = (
     "id",
     "label",
     "description",
     "decorative_objects",
     *SCENE_SCRIPT_FIELDS,
-    *SCENE_MUSIC_FIELDS,
+    *SCENE_AUDIO_FIELDS,
 )
 
 
@@ -36,4 +36,6 @@ def scene_content_from_dict(data: dict[str, Any]) -> dict[str, Any]:
     content = {field: deepcopy(data.get(field)) for field in SCENE_CONTENT_FIELDS}
     content["label"] = data.get("label") or data.get("name") or data.get("id")
     content["description"] = data.get("description") or ""
+    # Session exports written before the rename to audio.
+    content["audio_track_id"] = data.get("audio_track_id") or data.get("music_track_id")
     return content

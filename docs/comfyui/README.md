@@ -92,17 +92,17 @@ not require a GPU or contact an external ComfyUI server. A live checkpoint smoke
 test on the target ComfyUI installation remains recommended before relying on the
 experimental provider for a full adventure.
 
-# ComfyUI music provider (Experimental)
+# ComfyUI audio provider (Experimental)
 
-Adventure scripts can compose background music during play (`tw.music`, see
-[scripting_engine.md](../scripting_engine.md#twmusic-generated-background-music)).
-The music is rendered by a ComfyUI workflow that the admin uploads. Unlike the
+Adventure scripts can compose background audio during play (`tw.audio`, see
+[scripting_engine.md](../scripting_engine.md#twaudio-generated-background-audio)).
+The audio is rendered by a ComfyUI workflow that the admin uploads. Unlike the
 image provider, TaleWeaver does not build this graph: any text-to-audio workflow
 works, for example the ACE-Step templates that ship with ComfyUI.
 
 ## Setup
 
-1. In ComfyUI, open a text-to-music template (e.g. *ACE-Step 1.5: Text to Music*),
+1. In ComfyUI, open a text-to-audio template (e.g. *ACE-Step 1.5: Text to Music*),
    install its models and check that it renders.
 2. Write the placeholder `{{prompt}}` into the prompt/tags text field. Optional
    placeholders, each in any node input:
@@ -116,9 +116,9 @@ works, for example the ACE-Step templates that ship with ComfyUI.
    the output of the node set as **Output node ID**.
 4. Export it with **Workflow → Export (API)**. The editor format (with `nodes` and
    `links`) is rejected.
-5. Open **Admin → Music (Experimental)**, choose the provider **ComfyUI workflow**
+5. Open **Admin → Audio (Experimental)**, choose the provider **ComfyUI workflow**
    (the alternative is Google Lyria with a Gemini key), upload the JSON file, enter the ComfyUI
-   server URL, switch music generation on and save. Use **Generate test clip** to
+   server URL, switch audio generation on and save. Use **Generate test clip** to
    render one clip and listen to it. The test runs in the background and shows the
    elapsed time; the first run can take several minutes while ComfyUI loads the
    model. It is bounded only by the **Timeout** setting (default 900 s).

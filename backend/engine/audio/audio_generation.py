@@ -1,10 +1,10 @@
-"""Background rendering of session music tracks (ComfyUI or Lyria, see music_providers).
+"""Background rendering of session audio tracks (ComfyUI or Lyria, see audio_providers).
 
-A track is *ready* once ``adventures/sessions/<session>/music/<track_id>.<ext>`` exists, so the
+A track is *ready* once ``adventures/sessions/<session>/audio/<track_id>.<ext>`` exists, so the
 state in ``entity_states`` never has to be written from a background task (no lost updates
 against a running turn). Running jobs and their errors are kept in process memory: after a
 restart a missing track is simply rendered again. Concurrency per provider is limited in
-``music_providers.render_exclusive``.
+``audio_providers.render_exclusive``.
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ import logging
 import os
 from typing import Any, Literal, Optional
 
-from backend.core.music_settings import normalize_music_settings
-from backend.engine.audio.comfyui_music import AUDIO_EXTENSIONS
-from backend.engine.audio.music_providers import render_exclusive
-from backend.engine.audio.music_state import TRACK_ID_RE
+from backend.core.audio_settings import normalize_audio_settings
+from backend.engine.audio.audio_providers import render_exclusive
+from backend.engine.audio.audio_state import TRACK_ID_RE
+from backend.engine.audio.comfyui_audio import AUDIO_EXTENSIONS
 from backend.utils.path_security import (
     assert_within_data_dir,
     local_path_to_data_url,
@@ -33,22 +33,24 @@ _jobs: dict[str, asyncio.Task] = {}
 _errors: dict[str, str] = {}
 
 
-def music_dir(session_id: str) -> str:
+def audio_dir(session_id: str) -> str:
     safe_session = sanitize_path_component(session_id)
     if not safe_session:
-        raise ValueError("Invalid session id for music storage.")
-    return safe_data_path("adventures", "sessions", safe_session, "music")
+        raise ValueError("Invalid session id for audio storage.")
+    return safe_data_path("adventures", "sessions", safe_session, "audio")
 
 
 def track_path(session_id: str, track_id: str) -> Optional[str]:
     """Return the local file of a rendered track, or None."""
     if not TRACK_ID_RE.fullmatch(track_id):
         return None
-    folder = music_dir(session_id)
-    for extension in sorted(AUDIO_EXTENSIONS):
-        candidate = os.path.join(folder, f"{track_id}.{extension}")
-        if os.path.isfile(candidate):
-            return assert_within_data_dir(candidate)
+    # Tracks rendered before the rename to audio live in the session's music/ folder.
+    folders = (audio_dir(session_id), os.path.join(os.path.dirname(audio_dir(session_id)), "music"))
+    for folder in folders:
+        for extension in sorted(AUDIO_EXTENSIONS):
+            candidate = os.path.join(folder, f"{track_id}.{extension}")
+            if os.path.isfile(candidate):
+                return assert_within_data_dir(candidate)
     return None
 
 
@@ -64,7 +66,7 @@ def track_status(session_id: str, track_id: str) -> tuple[TrackStatus, Optional[
 
 
 def _write_track(session_id: str, track_id: str, data: bytes, extension: str) -> None:
-    folder = music_dir(session_id)
+    folder = audio_dir(session_id)
     os.makedirs(folder, exist_ok=True)
     target = assert_within_data_dir(os.path.join(folder, f"{track_id}.{extension}"))
     partial = assert_within_data_dir(target + ".part")
@@ -81,13 +83,13 @@ async def _generate(
     try:
         data, extension = await render_exclusive(track, settings, api_key)
         _write_track(session_id, track_id, data, extension)
-        logger.info("Music track %s of session %s is ready.", track_id, session_id)
+        logger.info("Audio track %s of session %s is ready.", track_id, session_id)
     except (ValueError, TimeoutError, OSError) as exc:
         _errors[key] = str(exc)
-        logger.warning("Music track %s of session %s failed: %s", track_id, session_id, exc)
+        logger.warning("Audio track %s of session %s failed: %s", track_id, session_id, exc)
     except Exception as exc:  # httpx and provider errors: keep the message for the client
-        _errors[key] = f"Music generation failed: {exc}"
-        logger.exception("Music track %s of session %s failed.", track_id, session_id)
+        _errors[key] = f"Audio generation failed: {exc}"
+        logger.exception("Audio track %s of session %s failed.", track_id, session_id)
     finally:
         _jobs.pop(key, None)
 
@@ -103,7 +105,7 @@ def ensure_generation(
     key = f"{session_id}:{track_id}"
     if key in _jobs or key in _errors or track_path(session_id, track_id):
         return
-    settings = normalize_music_settings(raw_settings)
+    settings = normalize_audio_settings(raw_settings)
     _jobs[key] = asyncio.create_task(
         _generate(session_id, track_id, dict(track), settings, api_key)
     )

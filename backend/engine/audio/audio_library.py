@@ -1,7 +1,7 @@
-"""An adventure's music library (``AdventureTemplate.music_tracks``) and its track entries.
+"""An adventure's audio library (``AdventureTemplate.audio_tracks``) and its track entries.
 
-Tracks are generated (from a prompt) or uploaded in the editor's Music tab; scenes pick one with
-``WorldScene.music_track_id``. A track without ``url`` is planned but has no audio yet (the
+Tracks are generated (from a prompt) or uploaded in the editor's Audio tab; scenes pick one with
+``WorldScene.audio_track_id``. A track without ``url`` is planned but has no audio yet (the
 World-Builder writes such tracks with a prompt, the editor renders them later).
 
 Track entry::
@@ -18,7 +18,7 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any, Optional
 
-from backend.engine.audio.music_assets import local_music_url
+from backend.engine.audio.audio_assets import local_audio_url
 
 TRACK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,50}$")
 TRACK_SOURCES = ("generated", "uploaded", "planned")
@@ -46,7 +46,7 @@ def normalize_track(raw: Any, template_id: Optional[str]) -> Optional[dict[str, 
     track_id = str(raw.get("id") or "").strip()
     if not TRACK_ID_RE.fullmatch(track_id):
         return None
-    url = local_music_url(raw.get("url"), template_id)
+    url = local_audio_url(raw.get("url"), template_id)
     source = str(raw.get("source") or "").strip().lower()
     if source not in TRACK_SOURCES:
         source = "generated" if url else "planned"
@@ -81,12 +81,12 @@ def find_track(tracks: Any, track_id: Optional[str]) -> Optional[dict[str, Any]]
 
 
 def track_id_or_none(value: Any) -> Optional[str]:
-    """A scene's ``music_track_id`` value: a valid id or None."""
+    """A scene's ``audio_track_id`` value: a valid id or None."""
     text = str(value or "").strip()
     return text if TRACK_ID_RE.fullmatch(text) else None
 
 
 def title_track_or_none(value: Any, tracks: Any) -> Optional[str]:
-    """``value`` when it names a track of ``tracks`` (the title song), else None."""
+    """``value`` when it names a track of ``tracks`` (the title track), else None."""
     track_id = track_id_or_none(value)
     return track_id if find_track(tracks, track_id) else None

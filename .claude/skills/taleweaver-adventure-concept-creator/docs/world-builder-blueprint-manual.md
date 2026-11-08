@@ -469,28 +469,28 @@ guard: not tw.vars.get('anyone_defeated', False)
 
 ---
 
-### Scene music
+### Scene audio
 
-Declare the tracks of the music library with `[Music: ID] Name` and let scenes pick one with `music: ID`. The `prompt` describes the sound, not the place: genre, lead instruments, tempo, mood. Instrumental only; music models block artist names and lyrics. Scenes that share a track keep it playing when the player walks between them; a scene without `music` fades the music out.
+Declare the tracks of the audio library with `[Audio: ID] Name` and let scenes pick one with `audio: ID`. The `prompt` describes the sound, not the place: genre, lead instruments, tempo, mood. Instrumental only; audio models block artist names and lyrics. Scenes that share a track keep it playing when the player walks between them; a scene without `audio` fades the audio out.
 
 ```text
-[Music: HARBOR_THEME] Harbor Theme
+[Audio: HARBOR_THEME] Harbor Theme
 prompt: Melancholic folk, solo fiddle over soft harp, 75 bpm. Seamless loop: no intro, no fade-out ending.
 
-[Music: CRYPT_DRONE] Crypt Drone
+[Audio: CRYPT_DRONE] Crypt Drone
 prompt: Dark ambient drone, low cello, dripping water, 60 bpm. Seamless loop: no intro, no fade-out ending.
 
 [Scene: PIER] The Pier
-music: HARBOR_THEME
+audio: HARBOR_THEME
 
 [Scene: FISH_MARKET] Fish Market
-music: HARBOR_THEME
+audio: HARBOR_THEME
 
 [Scene: CRYPT] The Crypt
-music: CRYPT_DRONE
+audio: CRYPT_DRONE
 ```
 
-The generator only stores the prompts. Render the tracks in the editor's **Music** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
+The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
 ## 7. Strict Adherence or Creative Expansion
 

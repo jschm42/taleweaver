@@ -15,7 +15,7 @@ import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
-import SceneMusicSelect from '@/components/editor/SceneMusicSelect.vue'
+import SceneAudioSelect from '@/components/editor/SceneAudioSelect.vue'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -62,7 +62,7 @@ const emit = defineEmits<{
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'refresh'): void
-  (e: 'open-music-library'): void
+  (e: 'open-audio-library'): void
   (e: 'scene-id-changed', oldId: string, newId: string): void
 }>()
 
@@ -731,15 +731,15 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           </div>
         </div>
 
-        <!-- Scene background music: a track of the adventure's music library -->
-        <SceneMusicSelect
+        <!-- Scene background audio: a track of the adventure's audio library -->
+        <SceneAudioSelect
           v-if="routeSceneDetails"
-          :key="`music-${routeSceneDetails.id}`"
+          :key="`audio-${routeSceneDetails.id}`"
           :adventure-id="adventureId"
           :scene-id="String(routeSceneDetails.id)"
-          :track-id="routeSceneDetails.music_track_id"
+          :track-id="routeSceneDetails.audio_track_id"
           @refresh="emit('refresh')"
-          @open-library="emit('open-music-library')"
+          @open-library="emit('open-audio-library')"
         />
       </div>
     </div>

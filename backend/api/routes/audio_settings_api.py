@@ -1,4 +1,4 @@
-"""Admin settings for music generation (experimental ComfyUI workflow upload) and a test run."""
+"""Admin settings for audio generation (experimental ComfyUI workflow upload) and a test run."""
 
 from __future__ import annotations
 
@@ -10,24 +10,24 @@ from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.audio_settings import (
+    MAX_WORKFLOW_BYTES,
+    AudioSettings,
+    audio_api_key,
+    normalize_audio_settings,
+    public_audio_settings,
+    validate_audio_workflow,
+)
 from backend.core.auth import get_current_admin
 from backend.core.database import get_db
 from backend.core.global_settings import get_server_settings_for_update, read_server_settings
-from backend.core.music_settings import (
-    MAX_WORKFLOW_BYTES,
-    MusicSettings,
-    music_api_key,
-    normalize_music_settings,
-    public_music_settings,
-    validate_music_workflow,
-)
-from backend.engine.audio.music_test_runs import music_test_status, start_test_run
+from backend.engine.audio.audio_test_runs import audio_test_status, start_test_run
 from backend.models.user import User
 
-router = APIRouter(prefix="/settings/music", tags=["Settings"])
+router = APIRouter(prefix="/settings/audio", tags=["Settings"])
 
 
-class MusicSettingsPayload(BaseModel):
+class AudioSettingsPayload(BaseModel):
     """Everything except the workflow, which has its own upload endpoint."""
 
     enabled: bool = False
@@ -44,32 +44,32 @@ class MusicSettingsPayload(BaseModel):
     lyria_wav: bool = False
 
 
-class MusicTestPayload(BaseModel):
+class AudioTestPayload(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=1000)
     duration: Optional[int] = Field(default=None, ge=5, le=600)
 
 
 async def _store(db: AsyncSession, values: dict[str, Any]) -> dict[str, Any]:
     server = await get_server_settings_for_update(db)
-    merged = {**normalize_music_settings(server.music_settings), **values}
+    merged = {**normalize_audio_settings(server.audio_settings), **values}
     try:
-        server.music_settings = MusicSettings.model_validate(merged).model_dump()
+        server.audio_settings = AudioSettings.model_validate(merged).model_dump()
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc.errors()[0]["msg"])) from exc
     await db.commit()
-    return public_music_settings(server.music_settings)
+    return public_audio_settings(server.audio_settings)
 
 
 @router.get("")
-async def get_music_settings(
+async def get_audio_settings(
     db: AsyncSession = Depends(get_db), _admin: User = Depends(get_current_admin)
 ) -> dict[str, Any]:
-    return public_music_settings((await read_server_settings(db)).music_settings)
+    return public_audio_settings((await read_server_settings(db)).audio_settings)
 
 
 @router.post("")
-async def update_music_settings(
-    payload: MusicSettingsPayload,
+async def update_audio_settings(
+    payload: AudioSettingsPayload,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> dict[str, Any]:
@@ -77,7 +77,7 @@ async def update_music_settings(
 
 
 @router.post("/workflow")
-async def upload_music_workflow(
+async def upload_audio_workflow(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(get_current_admin),
@@ -88,7 +88,7 @@ async def upload_music_workflow(
         raise HTTPException(status_code=400, detail="The workflow is larger than 512 KiB.")
     try:
         workflow = json.loads(raw.decode("utf-8"))
-        validate_music_workflow(workflow)
+        validate_audio_workflow(workflow)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail="The file is not valid JSON.") from exc
     except ValueError as exc:
@@ -98,15 +98,15 @@ async def upload_music_workflow(
 
 
 @router.delete("/workflow")
-async def delete_music_workflow(
+async def delete_audio_workflow(
     db: AsyncSession = Depends(get_db), _admin: User = Depends(get_current_admin)
 ) -> dict[str, Any]:
     return await _store(db, {"comfyui_workflow": None, "comfyui_workflow_name": ""})
 
 
 @router.post("/test")
-async def start_music_test(
-    payload: MusicTestPayload,
+async def start_audio_test(
+    payload: AudioTestPayload,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> dict[str, Any]:
@@ -115,21 +115,21 @@ async def start_music_test(
     The render runs in the background because it can take minutes (model loading on the first
     run), much longer than a browser request may stay open.
     """
-    settings = normalize_music_settings((await read_server_settings(db)).music_settings)
+    settings = normalize_audio_settings((await read_server_settings(db)).audio_settings)
     track = {"prompt": payload.prompt, "duration": payload.duration}
     try:
-        return start_test_run(track, settings, music_api_key(admin, settings))
+        return start_test_run(track, settings, audio_api_key(admin, settings))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/test/{run_id}")
-async def get_music_test(
+async def get_audio_test(
     run_id: str = Path(..., pattern=r"^[a-f0-9]{16}$"),
     _admin: User = Depends(get_current_admin),
 ) -> dict[str, Any]:
     """Status of a test run: running, done (url, bytes) or failed (error); plus elapsed seconds."""
-    status = music_test_status(run_id)
+    status = audio_test_status(run_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Test run not found (the server restarted?).")
     return status

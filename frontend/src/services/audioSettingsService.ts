@@ -1,7 +1,7 @@
 import { apiFetch } from '@/services/http'
 
-/** Admin music generation settings. Mirrors backend/core/music_settings.py (workflow summarized). */
-export interface MusicSettings {
+/** Admin audio generation settings. Mirrors backend/core/audio_settings.py (workflow summarized). */
+export interface AudioSettings {
   enabled: boolean
   provider: 'comfyui' | 'lyria'
   lyria_clip_model: string
@@ -19,8 +19,8 @@ export interface MusicSettings {
   workflow_node_count: number
 }
 
-export type MusicSettingsUpdate = Omit<
-  MusicSettings,
+export type AudioSettingsUpdate = Omit<
+  AudioSettings,
   'comfyui_workflow_name' | 'has_workflow' | 'workflow_node_count'
 >
 
@@ -32,48 +32,48 @@ async function readJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export const musicSettingsService = {
-  async load(): Promise<MusicSettings> {
-    return readJson<MusicSettings>(await apiFetch('/settings/music'))
+export const audioSettingsService = {
+  async load(): Promise<AudioSettings> {
+    return readJson<AudioSettings>(await apiFetch('/settings/audio'))
   },
 
-  async save(values: MusicSettingsUpdate): Promise<MusicSettings> {
-    const res = await apiFetch('/settings/music', {
+  async save(values: AudioSettingsUpdate): Promise<AudioSettings> {
+    const res = await apiFetch('/settings/audio', {
       method: 'POST',
       includeJson: true,
       body: JSON.stringify(values),
     })
-    return readJson<MusicSettings>(res)
+    return readJson<AudioSettings>(res)
   },
 
   /** Uploads an API-format ComfyUI workflow JSON that contains a {{prompt}} placeholder. */
-  async uploadWorkflow(file: File): Promise<MusicSettings> {
+  async uploadWorkflow(file: File): Promise<AudioSettings> {
     const body = new FormData()
     body.append('file', file)
-    return readJson<MusicSettings>(await apiFetch('/settings/music/workflow', { method: 'POST', body }))
+    return readJson<AudioSettings>(await apiFetch('/settings/audio/workflow', { method: 'POST', body }))
   },
 
-  async removeWorkflow(): Promise<MusicSettings> {
-    return readJson<MusicSettings>(await apiFetch('/settings/music/workflow', { method: 'DELETE' }))
+  async removeWorkflow(): Promise<AudioSettings> {
+    return readJson<AudioSettings>(await apiFetch('/settings/audio/workflow', { method: 'DELETE' }))
   },
 
   /** Starts rendering one clip with the stored workflow; poll `testStatus` for the result. */
-  async startTest(prompt: string, duration?: number): Promise<MusicTestRun> {
-    const res = await apiFetch('/settings/music/test', {
+  async startTest(prompt: string, duration?: number): Promise<AudioTestRun> {
+    const res = await apiFetch('/settings/audio/test', {
       method: 'POST',
       includeJson: true,
       body: JSON.stringify({ prompt, duration }),
     })
-    return readJson<MusicTestRun>(res)
+    return readJson<AudioTestRun>(res)
   },
 
-  async testStatus(id: string): Promise<MusicTestRun> {
-    return readJson<MusicTestRun>(await apiFetch(`/settings/music/test/${encodeURIComponent(id)}`))
+  async testStatus(id: string): Promise<AudioTestRun> {
+    return readJson<AudioTestRun>(await apiFetch(`/settings/audio/test/${encodeURIComponent(id)}`))
   },
 }
 
 /** A background test render; it can take minutes while ComfyUI loads the model. */
-export interface MusicTestRun {
+export interface AudioTestRun {
   id: string
   status: 'running' | 'done' | 'failed'
   /** Seconds since the run started (until it finished). */

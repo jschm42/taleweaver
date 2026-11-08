@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.config import settings
-from backend.engine.audio.music_state import apply_music_ops, read_music_state
+from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.interaction.script_item_apply import (
     apply_player_inventory,
     insert_cloned_entities,
@@ -98,7 +98,7 @@ class TriggerService:
             script_vars=script_vars,
             in_game_time=state.in_game_time,
             clock=clock_view(state),
-            music=read_music_state(state.entity_states),
+            audio=read_audio_state(state.entity_states),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -258,7 +258,7 @@ class TriggerService:
             or changeset.gm_directions
             or changeset.after_narration
             or changeset.clock_ops
-            or changeset.music_ops
+            or changeset.audio_ops
         ):
             return
         cur_states = dict(state.entity_states or {})
@@ -283,7 +283,7 @@ class TriggerService:
         store_pending_dialog(cur_states, changeset.pending_dialog)
         store_gm_directions(cur_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(state, cur_states, changeset.clock_ops)
-        apply_music_ops(cur_states, changeset.music_ops)
+        apply_audio_ops(cur_states, changeset.audio_ops)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
 

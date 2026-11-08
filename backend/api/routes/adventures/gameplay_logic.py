@@ -94,7 +94,7 @@ from backend.api.routes.adventures.interaction_hooks import fire_interact_trigge
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
-from backend.engine.audio.music_state import apply_music_ops, read_music_state
+from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.interaction.script_item_apply import insert_cloned_entities
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -2884,7 +2884,7 @@ class GameTurnManager:
             script_vars=script_vars,
             in_game_time=self.state.in_game_time,
             clock=clock_view(self.state, self.adventure),
-            music=read_music_state(self.state.entity_states),
+            audio=read_audio_state(self.state.entity_states),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3079,7 +3079,7 @@ class GameTurnManager:
         store_pending_dialog(entity_states, changeset.pending_dialog)
         store_gm_directions(entity_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
-        apply_music_ops(entity_states, changeset.music_ops)
+        apply_audio_ops(entity_states, changeset.audio_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
 

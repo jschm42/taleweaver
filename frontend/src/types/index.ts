@@ -326,8 +326,8 @@ export interface PendingDialog {
   options: DialogOption[]
 }
 
-/** Script music (`tw.music`) of the session, from `GET /chat`. */
-export interface MusicNowPlaying {
+/** Script audio (`tw.audio`) of the session, from `GET /chat`. */
+export interface AudioNowPlaying {
   id: string
   name?: string | null
   status: 'pending' | 'ready' | 'failed'
@@ -336,17 +336,17 @@ export interface MusicNowPlaying {
   loop: boolean
   /** Cross-fade length in seconds. */
   fade: number
-  /** Who chose the track: a script (tw.music), the scene's loop or the main theme. */
+  /** Who chose the track: a script (tw.audio), the scene's loop or the main theme. */
   source?: 'script' | 'scene' | 'theme'
 }
 
-export interface MusicSnapshot {
-  /** False when the admin switched music generation off; rendered music still plays. */
+export interface AudioSnapshot {
+  /** False when the admin switched audio generation off; rendered audio still plays. */
   enabled: boolean
   rev: number
-  /** Script volume 0..1, multiplied with the player's own music volume. */
+  /** Script volume 0..1, multiplied with the player's own audio volume. */
   volume: number
-  now: MusicNowPlaying | null
+  now: AudioNowPlaying | null
 }
 
 export interface MapNode {
@@ -465,8 +465,8 @@ export interface AdventureTemplateSummary {
   has_active_session?: boolean
   /** Last time the session behind active_game_id was opened. */
   last_played_at?: string | null
-  /** The adventure's title song (optional), played while the library tile is hovered. */
-  preview_music_url?: string | null
+  /** The adventure's title track (optional), played while the library tile is hovered. */
+  preview_audio_url?: string | null
   is_paused?: boolean
   scene_id?: string | null
   current_scene_name?: string | null

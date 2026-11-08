@@ -1,9 +1,9 @@
-"""``tw.music``: background music generated on the fly by scripts.
+"""``tw.audio``: background audio generated on the fly by scripts.
 
-Calls only record ordered ops in ``changeset.music_ops`` (see ``engine/audio/music_state.py``)
+Calls only record ordered ops in ``changeset.audio_ops`` (see ``engine/audio/audio_state.py``)
 and mirror them on a local copy, so a script reads its own changes back
-(``tw.music.generate("...", name="storm"); tw.music.has("storm")`` is True). Rendering happens
-later in the background; until the track is ready, the previous music keeps playing.
+(``tw.audio.generate("...", name="storm"); tw.audio.has("storm")`` is True). Rendering happens
+later in the background; until the track is ready, the previous audio keeps playing.
 """
 
 from __future__ import annotations
@@ -12,28 +12,28 @@ import secrets
 from typing import Any, Optional
 from uuid import uuid4
 
-from backend.engine.audio.music_state import (
+from backend.engine.audio.audio_state import (
     MAX_NAME_CHARS,
     MAX_PROMPT_CHARS,
     MAX_TRACKS,
-    apply_music_op_list,
+    apply_audio_op_list,
     clamp_fade,
     clamp_volume,
-    empty_music_state,
+    empty_audio_state,
 )
 
 
-class MusicProxy:
-    """Safe proxy exposed to scripts as ``tw.music``."""
+class AudioProxy:
+    """Safe proxy exposed to scripts as ``tw.audio``."""
 
     def __init__(self, changeset: Any, state: Optional[dict[str, Any]], context: Any = None):
         self._changeset = changeset
-        self._state = state or empty_music_state()
+        self._state = state or empty_audio_state()
         self._context = context
 
     def _record(self, op: dict[str, Any]) -> None:
-        self._changeset.music_ops.append(op)
-        self._state = apply_music_op_list(self._state, [op])
+        self._changeset.audio_ops.append(op)
+        self._state = apply_audio_op_list(self._state, [op])
 
     def _debug(self, message: str) -> None:
         if self._context is not None:
@@ -61,7 +61,7 @@ class MusicProxy:
 
     @property
     def is_silenced(self) -> bool:
-        """True after ``stop()``: no scene music until ``play``/``release``."""
+        """True after ``stop()``: no scene audio until ``play``/``release``."""
         return bool(self._state.get("silenced"))
 
     @property
@@ -98,7 +98,7 @@ class MusicProxy:
         """
         text = str(prompt or "").strip()[:MAX_PROMPT_CHARS]
         if not text:
-            self._debug("tw.music.generate ignored: the prompt is empty.")
+            self._debug("tw.audio.generate ignored: the prompt is empty.")
             return None
         track_name = self._name(name)
         if track_name and self.has(track_name) and not regenerate:
@@ -106,7 +106,7 @@ class MusicProxy:
                 self.play(track_name, loop=loop, fade=fade)
             return self._state["library"][track_name]
         if len(self._state["tracks"]) >= MAX_TRACKS:
-            self._debug(f"tw.music.generate ignored: a session holds at most {MAX_TRACKS} tracks.")
+            self._debug(f"tw.audio.generate ignored: a session holds at most {MAX_TRACKS} tracks.")
             return None
         track_id = uuid4().hex
         self._record(
@@ -130,21 +130,21 @@ class MusicProxy:
         key = str(name or "").strip()
         track_id = self._state["library"].get(key) or (key if key in self._state["tracks"] else "")
         if not track_id:
-            self._debug(f"tw.music.play ignored: no track named '{key}'.")
+            self._debug(f"tw.audio.play ignored: no track named '{key}'.")
             return False
         self._record({"op": "play", "id": track_id, "loop": bool(loop), "fade": clamp_fade(fade)})
         return True
 
     def stop(self, fade: float = 2.0) -> None:
-        """Fades all music out, scene music too (silence until play/generate/release)."""
+        """Fades all audio out, scene audio too (silence until play/generate/release)."""
         self._record({"op": "stop", "fade": clamp_fade(fade)})
 
     def release(self) -> None:
-        """Ends script music; the current scene's library track plays again."""
+        """Ends script audio; the current scene's library track plays again."""
         self._record({"op": "release"})
 
     def set_volume(self, value: float) -> None:
-        """Sets the script music volume 0..1 (multiplied with the player's own volume)."""
+        """Sets the script audio volume 0..1 (multiplied with the player's own volume)."""
         self._record({"op": "volume", "value": clamp_volume(value)})
 
     def forget(self, name: str) -> None:

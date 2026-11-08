@@ -488,8 +488,8 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "clock_enabled": adv.clock_enabled,
         "selected_tone": adv.selected_tone,
         "narrator_voice": adv.narrator_voice,
-        "music_tracks": deepcopy(adv.music_tracks or []),
-        "music_enabled": bool(getattr(adv, "music_enabled", True)),
+        "audio_tracks": deepcopy(adv.audio_tracks or []),
+        "audio_enabled": bool(getattr(adv, "audio_enabled", True)),
         "title_track_id": adv.title_track_id,
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
@@ -612,8 +612,8 @@ def _localize_manifest_images(
         record["image_url"] = _localize_asset_path(
             record.get("image_url"), adventure_dir, asset_mapping
         )
-    # The music library's files travel as assets/ files too.
-    for track in adventure.get("music_tracks") or []:
+    # The audio library's files travel as assets/ files too.
+    for track in adventure.get("audio_tracks") or []:
         if isinstance(track, dict) and track.get("url"):
             track["url"] = _localize_asset_path(track["url"], adventure_dir, asset_mapping)
 

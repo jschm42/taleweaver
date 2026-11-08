@@ -73,7 +73,7 @@ def _default_award(block: BlueprintBlock) -> dict[str, Any]:
     }
 
 
-def _default_music(block: BlueprintBlock) -> dict[str, Any]:
+def _default_audio(block: BlueprintBlock) -> dict[str, Any]:
     return {
         "id": block.ref,
         "name": block.name or block.ref.replace("_", " ").title(),
@@ -90,7 +90,7 @@ _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[s
     "exit": (_default_exit, ("from_scene_id", "to_scene_id")),
     "sidequest": (_default_quest, ()),
     "award": (_default_award, ()),
-    "music": (_default_music, ()),
+    "audio": (_default_audio, ()),
 }
 _CHILD_COLLECTIONS = {
     "rule": "soft_rules",

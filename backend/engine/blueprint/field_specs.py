@@ -87,9 +87,10 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "intro": FieldSpec("intro_text"),
     "teaser": FieldSpec("teaser"),
     "cover": FieldSpec("cover_appearance"),
-    # Title song: a [Music: ID] track, played as the library tile preview.
-    "title_music": _ref("title_track_id"),
+    # Title track: a [Audio: ID] track, played as the library tile preview.
+    "title_audio": _ref("title_track_id"),
     "title_song": _ref("title_track_id"),
+    "title_music": _ref("title_track_id"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
     "win_guard": _expr("completed_guard_expression"),
@@ -119,8 +120,9 @@ _hook(PROTAGONIST_KEYS, "on_status_change", "on_status_change")
 
 SCENE_KEYS: dict[str, FieldSpec] = {
     "decor": FieldSpec("decorative_objects", text_list),
-    # Track of the music library ([Music: ID]) that plays in this scene.
-    "music": _ref("music_track_id"),
+    # Track of the audio library ([Audio: ID]) that plays in this scene.
+    "audio": _ref("audio_track_id"),
+    "music": _ref("audio_track_id"),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
 }
@@ -354,8 +356,8 @@ AWARD_KEYS: dict[str, FieldSpec] = {
     "requires": FieldSpec("requirement"),
 }
 
-# [Music: ID] Name - a track of the music library; the body text is a hint for its prompt.
-MUSIC_KEYS: dict[str, FieldSpec] = {
+# [Audio: ID] Name - a track of the audio library; the body text is a hint for its prompt.
+AUDIO_KEYS: dict[str, FieldSpec] = {
     "prompt": FieldSpec("prompt"),
 }
 
@@ -413,7 +415,7 @@ KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "script": SCRIPT_KEYS,
     "sidequest": SIDEQUEST_KEYS,
     "award": AWARD_KEYS,
-    "music": MUSIC_KEYS,
+    "audio": AUDIO_KEYS,
     "ability": ABILITY_KEYS,
     "talent": TALENT_KEYS,
 }

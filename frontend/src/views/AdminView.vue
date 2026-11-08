@@ -12,7 +12,7 @@ import { restartSetupWizard } from '@/store/setupWizard'
 const router = useRouter()
 
 // ============ NAVIGATION & UI STATE ============
-type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'stt' | 'music' | 'styles' | 'tones' | 'voices' | 'game' | 'users'
+type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'game' | 'users'
 const activeSection = ref<Section>('keys')
 
 // ============ MODAL STATE (UI only, not shared with services) ============
@@ -38,7 +38,7 @@ import IntelligenceSection from '@/components/admin/IntelligenceSection.vue'
 import VisualsSection from '@/components/admin/VisualsSection.vue'
 import SpeechSection from '@/components/admin/SpeechSection.vue'
 import SpeechToTextSection from '@/components/admin/SpeechToTextSection.vue'
-import MusicSection from '@/components/admin/MusicSection.vue'
+import AudioSection from '@/components/admin/AudioSection.vue'
 import CatalogSection from '@/components/admin/CatalogSection.vue'
 import NarratorVoicesSection from '@/components/admin/NarratorVoicesSection.vue'
 import GameSettingsSection from '@/components/admin/GameSettingsSection.vue'
@@ -278,8 +278,8 @@ const navCategories: NavCategory[] = [
         iconColor: 'text-teal-400'
       },
       {
-        id: 'music',
-        label: 'Music (Experimental)',
+        id: 'audio',
+        label: 'Audio (Experimental)',
         icon: 'ra-horn-call',
         activeClass: 'bg-orange-500/15 text-orange-400 border-orange-500/30 shadow-sm shadow-orange-950/20',
         iconColor: 'text-orange-400'
@@ -475,7 +475,7 @@ const navCategories: NavCategory[] = [
           @save="handleSaveGameSettings"
         />
 
-        <MusicSection v-if="activeSection === 'music'" />
+        <AudioSection v-if="activeSection === 'audio'" />
 
         <CatalogSection 
           v-if="activeSection === 'styles' || activeSection === 'tones'"

@@ -16,8 +16,8 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_new_id,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
-from backend.engine.audio.music_library import track_id_or_none
-from backend.engine.world.scene_fields import SCENE_MUSIC_FIELDS, SCENE_SCRIPT_FIELDS
+from backend.engine.audio.audio_library import track_id_or_none
+from backend.engine.world.scene_fields import SCENE_AUDIO_FIELDS, SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -115,7 +115,7 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
     if entry is None:
         entry = {"id": scene.id, "name": scene.label, "description": scene.description}
         scenes.append(entry)
-    entry.update({f: getattr(scene, f) for f in (*SCENE_SCRIPT_FIELDS, *SCENE_MUSIC_FIELDS)})
+    entry.update({f: getattr(scene, f) for f in (*SCENE_SCRIPT_FIELDS, *SCENE_AUDIO_FIELDS)})
     manifest["scenes"] = scenes
     adv.original_manifest = manifest
     flag_modified(adv, "original_manifest")
@@ -137,8 +137,8 @@ async def update_scene(
     if given(payload, "decorative_objects"):
         scene.decorative_objects = _decorative_objects(payload.decorative_objects or [])
         flag_modified(scene, "decorative_objects")
-    if given(payload, "music_track_id"):
-        scene.music_track_id = track_id_or_none(payload.music_track_id)
+    if given(payload, "audio_track_id"):
+        scene.audio_track_id = track_id_or_none(payload.audio_track_id)
     copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
     _sync_scene_manifest(adv, scene)
 

@@ -1,8 +1,8 @@
-"""Music providers: one ``render`` entry point for ComfyUI workflows and Google Lyria.
+"""Audio providers: one ``render`` entry point for ComfyUI workflows and Google Lyria.
 
-Every render (session music, editor scene music, admin test) goes through ``render_exclusive``,
+Every render (session audio, editor scene audio, admin test) goes through ``render_exclusive``,
 which limits how many renders run at once per provider: ComfyUI one (a local GPU), Lyria a few
-parallel API calls. Each render is logged as ``music.render`` for the telemetry tools.
+parallel API calls. Each render is logged as ``audio.render`` for the telemetry tools.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ import time
 from typing import Any, Optional
 
 from backend.core.llm_logger import log_structured_event
-from backend.engine.audio.comfyui_music import AudioResult, render_music
-from backend.engine.audio.lyria_music import CLIP_SECONDS, lyria_prompt, render_lyria
-from backend.engine.audio.music_workflow import fill_music_workflow
+from backend.engine.audio.audio_workflow import fill_audio_workflow
+from backend.engine.audio.comfyui_audio import AudioResult, render_audio
+from backend.engine.audio.lyria_audio import CLIP_SECONDS, lyria_prompt, render_lyria
 
 LYRIA_PARALLEL_RENDERS = 2
 
@@ -36,15 +36,15 @@ def track_duration(track: dict[str, Any], settings: dict[str, Any]) -> int:
 async def _render_comfyui(track: dict[str, Any], settings: dict[str, Any]) -> AudioResult:
     workflow = settings.get("comfyui_workflow")
     if not workflow:
-        raise ValueError("No ComfyUI music workflow is uploaded.")
-    graph = fill_music_workflow(
+        raise ValueError("No ComfyUI audio workflow is uploaded.")
+    graph = fill_audio_workflow(
         workflow,
         prompt=str(track.get("prompt") or ""),
         negative_prompt=str(track.get("negative_prompt") or ""),
         seed=int(track.get("seed") or secrets.randbelow(2**31)),
         duration=track_duration(track, settings),
     )
-    return await render_music(
+    return await render_audio(
         graph,
         comfyui_url=settings["comfyui_url"],
         timeout=int(settings["comfyui_timeout"]),
@@ -104,7 +104,7 @@ async def render_exclusive(
             return data, extension
         finally:
             log_structured_event(
-                "music.render",
+                "audio.render",
                 provider=provider,
                 seconds=round(time.monotonic() - started, 2),
                 bytes=size,

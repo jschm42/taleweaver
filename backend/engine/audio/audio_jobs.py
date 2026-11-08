@@ -1,4 +1,4 @@
-"""In-memory registry of background music renders that a UI polls by id.
+"""In-memory registry of background audio renders that a UI polls by id.
 
 A render can take minutes (model loading on the first ComfyUI run), far longer than an HTTP
 request may stay open, so routes start a job and the UI polls its status. Jobs live in process
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 JobWork = Callable[[], Awaitable[dict[str, Any]]]
 
 
-class MusicJobs:
+class AudioJobs:
     """Starts renders as asyncio tasks and keeps their public status."""
 
     def __init__(self, max_remembered: int = 20):
@@ -40,10 +40,10 @@ class MusicJobs:
         except (ValueError, TimeoutError, OSError) as exc:
             self._finish(job, status="failed", error=str(exc))
         except httpx.HTTPError as exc:
-            self._finish(job, status="failed", error=f"Music provider is not reachable: {exc}")
+            self._finish(job, status="failed", error=f"Audio provider is not reachable: {exc}")
         except Exception as exc:  # keep any provider error visible in the UI
-            logger.exception("Music job %s failed.", job_id)
-            self._finish(job, status="failed", error=f"Music generation failed: {exc}")
+            logger.exception("Audio job %s failed.", job_id)
+            self._finish(job, status="failed", error=f"Audio generation failed: {exc}")
         finally:
             self.tasks.pop(job_id, None)
 

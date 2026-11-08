@@ -2,7 +2,7 @@
 /** Modal: compose a new library track from a prompt (optionally suggested from a reference scene). */
 import { ref, watch } from 'vue'
 import { Sparkles, X } from 'lucide-vue-next'
-import { editorMusicService } from '@/services/editorMusicService'
+import { editorAudioService } from '@/services/editorAudioService'
 import { notificationService } from '@/services/notificationService'
 import SceneReferencePicker, { type ReferenceScene } from './SceneReferencePicker.vue'
 
@@ -57,7 +57,7 @@ function report(err: unknown): void {
 async function suggest(): Promise<void> {
   isSuggesting.value = true
   try {
-    const suggested = await editorMusicService.suggestPrompt(props.adventureId, referenceScene.value || null)
+    const suggested = await editorAudioService.suggestPrompt(props.adventureId, referenceScene.value || null)
     if (suggested) prompt.value = suggested
     if (!name.value && referenceScene.value) name.value = `${sceneLabel(referenceScene.value)} Theme`
   } catch (err) {
@@ -70,7 +70,7 @@ async function suggest(): Promise<void> {
 async function generate(): Promise<void> {
   isStarting.value = true
   try {
-    await editorMusicService.generate(props.adventureId, {
+    await editorAudioService.generate(props.adventureId, {
       name: name.value,
       prompt: prompt.value,
       reference_scene_id: referenceScene.value || null,
@@ -90,7 +90,7 @@ async function generate(): Promise<void> {
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="show" class="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-950/60" @click.self="emit('close')">
-        <div class="modal-content w-full max-w-xl bg-slate-900 border border-white/10 rounded-[2rem] shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-label="Generate music track">
+        <div class="modal-content w-full max-w-xl bg-slate-900 border border-white/10 rounded-[2rem] shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-label="Generate audio track">
           <div class="flex items-center justify-between p-6 pb-4 border-b border-white/5">
             <div>
               <h3 class="text-xs font-black text-orange-400 uppercase tracking-widest">Generate Track</h3>
@@ -101,7 +101,7 @@ async function generate(): Promise<void> {
 
           <div class="p-6 space-y-4 overflow-y-auto">
             <p v-if="!generationOn" class="text-[11px] text-amber-400">
-              Music generation is switched off. An admin turns it on under Admin → Music.
+              Audio generation is switched off. An admin turns it on under Admin → Audio.
             </p>
             <label class="block space-y-1.5">
               <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Name</span>

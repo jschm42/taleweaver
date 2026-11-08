@@ -1,6 +1,6 @@
-"""Read-modify-write of an adventure's music library, scene assignment and upload checks.
+"""Read-modify-write of an adventure's audio library, scene assignment and upload checks.
 
-``music_tracks`` is a JSON column, and background renders finish while the author keeps
+``audio_tracks`` is a JSON column, and background renders finish while the author keeps
 editing, so every change goes through ``update_tracks`` under a per-adventure lock (one backend
 process). The library and the scenes' track ids are mirrored into ``original_manifest``, so a
 template reset or a World-Builder re-apply keeps them.
@@ -18,8 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.engine.audio.music_assets import delete_library_music
-from backend.engine.audio.music_library import find_track, normalize_tracks
+from backend.engine.audio.audio_assets import delete_library_audio
+from backend.engine.audio.audio_library import find_track, normalize_tracks
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldScene
 
@@ -38,7 +38,7 @@ def _mirror_tracks(adventure: AdventureTemplate) -> None:
     if not isinstance(adventure.original_manifest, dict):
         return
     manifest = deepcopy(adventure.original_manifest)
-    manifest["music_tracks"] = deepcopy(adventure.music_tracks or [])
+    manifest["audio_tracks"] = deepcopy(adventure.audio_tracks or [])
     adventure.original_manifest = manifest  # type: ignore[assignment]
     flag_modified(adventure, "original_manifest")
 
@@ -49,11 +49,11 @@ async def update_tracks(db: AsyncSession, template_id: str, change: TrackChange)
         adventure = await db.get(AdventureTemplate, template_id)
         if adventure is None:
             raise HTTPException(status_code=404, detail="Adventure template not found")
-        await db.refresh(adventure, ["music_tracks", "original_manifest"])
-        tracks = normalize_tracks(adventure.music_tracks, template_id)
+        await db.refresh(adventure, ["audio_tracks", "original_manifest"])
+        tracks = normalize_tracks(adventure.audio_tracks, template_id)
         result = change(tracks)
-        adventure.music_tracks = tracks  # type: ignore[assignment]
-        flag_modified(adventure, "music_tracks")
+        adventure.audio_tracks = tracks  # type: ignore[assignment]
+        flag_modified(adventure, "audio_tracks")
         _mirror_tracks(adventure)
         await db.commit()
         return result
@@ -81,7 +81,7 @@ def _mirror_scene(adventure: AdventureTemplate, scene: WorldScene) -> None:
     manifest = deepcopy(adventure.original_manifest)
     for entry in manifest.get("scenes") or []:
         if isinstance(entry, dict) and entry.get("id") == scene.id:
-            entry["music_track_id"] = scene.music_track_id
+            entry["audio_track_id"] = scene.audio_track_id
     adventure.original_manifest = manifest  # type: ignore[assignment]
     flag_modified(adventure, "original_manifest")
 
@@ -94,10 +94,10 @@ async def assign_scene_track(
         raise HTTPException(status_code=404, detail="Scene not found")
     if (
         track_id
-        and find_track(normalize_tracks(adventure.music_tracks, adventure.id), track_id) is None
+        and find_track(normalize_tracks(adventure.audio_tracks, adventure.id), track_id) is None
     ):
         raise HTTPException(status_code=404, detail="Track not found")
-    scene.music_track_id = track_id or None
+    scene.audio_track_id = track_id or None
     _mirror_scene(adventure, scene)
     await db.commit()
     return scene
@@ -106,18 +106,18 @@ async def assign_scene_track(
 async def release_track(db: AsyncSession, adventure: AdventureTemplate, track_id: str) -> None:
     """Unassign a deleted track from every template scene."""
     for scene in await template_scenes(db, adventure.id):
-        if scene.music_track_id == track_id:
-            scene.music_track_id = None
+        if scene.audio_track_id == track_id:
+            scene.audio_track_id = None
             _mirror_scene(adventure, scene)
     await db.commit()
 
 
 def replace_file(track: dict[str, Any], url: str, template_id: str) -> None:
-    """Point ``track`` at a new file and delete the old one (own music folder only)."""
+    """Point ``track`` at a new file and delete the old one (own audio folder only)."""
     old = track.get("url")
     track["url"] = url
     if old and old != url:
-        delete_library_music(old, template_id)
+        delete_library_audio(old, template_id)
 
 
 def sniff_audio(data: bytes, filename: str) -> str:

@@ -26,7 +26,7 @@ from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
 from backend.engine.world.world_object_schema import WorldObjectSchema
 
 
-class MusicTrackSchema(WorldBaseSchema):
+class AudioTrackSchema(WorldBaseSchema):
     id: str = Field(..., description="Uppercase slug, e.g. CRYPT_THEME")
     name: str = Field(..., description="Short track name, e.g. 'Crypt Theme'")
     prompt: str = Field(
@@ -70,10 +70,10 @@ class WorldSceneSchema(WorldBaseSchema):
         default="",
         description="Optional text output when the protagonist leaves the scene. Use empty string for none.",
     )
-    music_track_id: Optional[str] = Field(
+    audio_track_id: Optional[str] = Field(
         default="",
         description=(
-            "Optional `id` of the entry in `music_tracks` that plays in this scene. "
+            "Optional `id` of the entry in `audio_tracks` that plays in this scene. "
             "Use empty string for a silent scene."
         ),
     )
@@ -774,17 +774,17 @@ class WorldManifesto(WorldBaseSchema):
     teaser: str = Field(
         ..., description="A short, atmospheric teaser text for the adventure, max 100 characters."
     )
-    music_tracks: list[MusicTrackSchema] = Field(
+    audio_tracks: list[AudioTrackSchema] = Field(
         default=[],
         description=(
-            "Optional music library (2-6 tracks). Scenes pick one via `music_track_id`; the "
+            "Optional audio library (2-6 tracks). Scenes pick one via `audio_track_id`; the "
             "audio is rendered later in the editor."
         ),
     )
     title_track_id: Optional[str] = Field(
         default="",
         description=(
-            "Optional `id` of the `music_tracks` entry that is the adventure's title song "
+            "Optional `id` of the `audio_tracks` entry that is the adventure's title track "
             "(played as a preview in the adventure library). Use empty string for none."
         ),
     )

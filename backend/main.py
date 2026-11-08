@@ -27,6 +27,7 @@ import backend.models.world_map
 from backend.api.routes import (
     adventures,
     api_keys_api,
+    audio_settings_api,
     auth_api,
     avatars,
     characters,
@@ -35,7 +36,6 @@ from backend.api.routes import (
     leaderboard_api,
     map_api,
     model_discovery_api,
-    music_settings_api,
     narrator_voices_api,
     setup_wizard_api,
     stt_api,
@@ -195,7 +195,7 @@ async def add_security_headers(request, call_next):
 
 
 app.include_router(narrator_voices_api.router, prefix="/api")
-app.include_router(music_settings_api.router, prefix="/api")
+app.include_router(audio_settings_api.router, prefix="/api")
 app.include_router(config_api.router, prefix="/api")
 app.include_router(setup_wizard_api.router, prefix="/api")
 app.include_router(model_discovery_api.router, prefix="/api")
@@ -338,8 +338,13 @@ else:
 
 
 @app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 async def health_check() -> dict:
-    """Returns a simple liveness signal for load-balancer health checks."""
+    """Liveness signal for load balancers and the frontend's backend status banner.
+
+    Under ``/api`` too, so the frontend reaches it through the same proxy as every API call.
+    No auth and no database access: it must answer fast while the rest of the app is busy.
+    """
     return {"status": "ok"}
 
 

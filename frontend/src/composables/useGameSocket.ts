@@ -8,6 +8,7 @@ import { ref, watch, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
+import { BACKEND_ONLINE_EVENT } from '@/services/backendStatus'
 import { registerEntityNames } from '@/utils/entityRefs'
 import { newMessageKey } from '@/composables/messageKeys'
 import { isHiddenPlayerMessage } from '@/composables/silentCommands'
@@ -17,7 +18,7 @@ import {
   prependOlderPage,
   visibleServerMessages,
 } from '@/composables/historyWindow'
-import type { ChatMessage, CharacterSheet, CombatState, MusicSnapshot, PendingDialog } from '@/types'
+import type { ChatMessage, CharacterSheet, CombatState, AudioSnapshot, PendingDialog } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
@@ -73,7 +74,7 @@ export interface UseGameSocket {
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
   pendingDialog: Ref<PendingDialog | null>
-  music: Ref<MusicSnapshot | null>
+  audio: Ref<AudioSnapshot | null>
   promptSuggestions: Ref<string[]>
   worldMemories: Ref<any[]>
   worldRumors: Ref<any[]>
@@ -149,7 +150,7 @@ export function useGameSocket(): UseGameSocket {
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
   const pendingDialog = ref<PendingDialog | null>(null)
-  const music = ref<MusicSnapshot | null>(null)
+  const audio = ref<AudioSnapshot | null>(null)
   const promptSuggestions = ref<string[]>([])
   const worldMemories = ref<any[]>([])
   const worldRumors = ref<any[]>([])
@@ -352,8 +353,8 @@ export function useGameSocket(): UseGameSocket {
     if (data.pending_dialog !== undefined) {
       pendingDialog.value = data.pending_dialog || null
     }
-    if (data.music !== undefined) {
-      music.value = data.music || null
+    if (data.audio !== undefined) {
+      audio.value = data.audio || null
     }
     if (data.awards !== undefined) {
       awards.value = data.awards || []
@@ -411,8 +412,15 @@ export function useGameSocket(): UseGameSocket {
    * Loads the current session state and history.
    * If history is empty, triggers the initial world description.
    */
+  /** Backend reachable again: reload the session, the story may have moved on server side. */
+  function onBackendOnline(): void {
+    if (currentGameId) void refreshSession(true)
+  }
+
   async function connect(gameId: string): Promise<void> {
     currentGameId = gameId
+    window.removeEventListener(BACKEND_ONLINE_EVENT, onBackendOnline)
+    window.addEventListener(BACKEND_ONLINE_EVENT, onBackendOnline)
     currentSceneId = null
     language.value = localStorage.getItem(sessionLanguageKey(gameId)) || ''
     localStorage.setItem(ACTIVE_LANGUAGE_KEY, language.value)
@@ -448,6 +456,7 @@ export function useGameSocket(): UseGameSocket {
 
   function disconnect(): void {
     currentGameId = ''
+    window.removeEventListener(BACKEND_ONLINE_EVENT, onBackendOnline)
     status.value = 'disconnected'
     stopSyncTimer()
     if (checkpointPulseTimer !== null) {
@@ -477,7 +486,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked.value = false
     pendingTerminalEpilogue.value = false
     pendingDialog.value = null
-    music.value = null
+    audio.value = null
     promptSuggestions.value = []
     worldMemories.value = []
     worldRumors.value = []
@@ -1115,7 +1124,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked,
     pendingTerminalEpilogue,
     pendingDialog,
-    music,
+    audio,
     promptSuggestions,
     worldMemories,
     worldRumors,

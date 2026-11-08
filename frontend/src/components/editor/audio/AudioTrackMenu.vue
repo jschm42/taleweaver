@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * MusicTrackMenu — context menu of one library track, opened from its "⋮" button or a right
+ * AudioTrackMenu — context menu of one library track, opened from its "⋮" button or a right
  * click on the row. Teleported and fixed, so the table's scroll container cannot clip it.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { MusicTrack } from '@/services/editorMusicService'
+import type { AudioTrack } from '@/services/editorAudioService'
 
 export type TrackAction = 'play' | 'edit' | 'render' | 'variant' | 'title' | 'download' | 'delete'
 
 const props = defineProps<{
-  track: MusicTrack
+  track: AudioTrack
   x: number
   y: number
   isPlaying: boolean
@@ -40,7 +40,7 @@ const items = computed(() => [
   { action: 'variant' as const, label: 'Generate Variant…', show: true, disabled: !props.generationOn, tone: 'hover:bg-cyan-500' },
   {
     action: 'title' as const,
-    label: props.isTitle ? 'Remove as Title Song' : 'Set as Title Song',
+    label: props.isTitle ? 'Remove as Title Track' : 'Set as Title Track',
     show: true,
     tone: 'hover:bg-amber-500',
   },

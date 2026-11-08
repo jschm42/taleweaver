@@ -1,13 +1,13 @@
 /**
- * useHoverMusicPreview — plays a library tile's start-scene music while the mouse is over it.
+ * useHoverAudioPreview — plays a library tile's start-scene audio while the mouse is over it.
  *
  * One shared player for all tiles: hovering the next tile replaces the previous preview.
- * A short delay keeps a mouse that only passes over a tile from starting music, and the player's
- * in-game music settings (mute, volume; see useGameMusic) apply here too. Browsers only allow
+ * A short delay keeps a mouse that only passes over a tile from starting audio, and the player's
+ * in-game audio settings (mute, volume; see useGameAudio) apply here too. Browsers only allow
  * audio after the first click or key press on the page, so previews stay silent until then.
  */
 
-import { musicMuted, musicVolume } from '@/store/musicPreferences'
+import { audioMuted, audioVolume } from '@/store/audioPreferences'
 
 const START_DELAY_MS = 250
 const FADE_MS = 600
@@ -20,7 +20,7 @@ let startTimer: ReturnType<typeof setTimeout> | undefined
 const fadeTimers = new WeakMap<HTMLAudioElement, ReturnType<typeof setInterval>>()
 
 function targetVolume(): number {
-  return musicVolume.value
+  return audioVolume.value
 }
 
 function fadeTo(el: HTMLAudioElement, target: number, onDone?: () => void): void {
@@ -75,14 +75,14 @@ function start(url: string): void {
 }
 
 /** Start the preview for ``url`` after a short hover delay. */
-export function startHoverMusic(url: string | null | undefined): void {
+export function startHoverAudio(url: string | null | undefined): void {
   if (startTimer) clearTimeout(startTimer)
-  if (!url || musicMuted.value || url === currentUrl) return
+  if (!url || audioMuted.value || url === currentUrl) return
   startTimer = setTimeout(() => start(url), START_DELAY_MS)
 }
 
 /** Fade the preview out (the mouse left the tile). */
-export function stopHoverMusic(): void {
+export function stopHoverAudio(): void {
   if (startTimer) clearTimeout(startTimer)
   startTimer = undefined
   fadeOutCurrent()

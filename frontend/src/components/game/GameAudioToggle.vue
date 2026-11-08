@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Music, VolumeX, Loader2 } from 'lucide-vue-next'
+import { AudioLines, VolumeX, Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   muted: boolean
@@ -15,9 +15,9 @@ const emit = defineEmits<{
 }>()
 
 const title = computed((): string => {
-  if (props.error) return `Music: ${props.error}`
-  if (props.generating) return 'Composing new music…'
-  return props.muted ? 'Play background music' : 'Mute background music'
+  if (props.error) return `Audio: ${props.error}`
+  if (props.generating) return 'Composing new audio…'
+  return props.muted ? 'Play background audio' : 'Mute background audio'
 })
 
 function onVolume(event: Event): void {
@@ -38,7 +38,7 @@ function onVolume(event: Event): void {
     >
       <Loader2 v-if="generating && !muted" class="w-4 h-4 animate-spin" />
       <VolumeX v-else-if="muted" class="w-4 h-4" />
-      <Music v-else class="w-4 h-4" />
+      <AudioLines v-else class="w-4 h-4" />
     </button>
     <input
       v-if="!muted"
@@ -47,7 +47,7 @@ function onVolume(event: Event): void {
       max="1"
       step="0.05"
       :value="volume"
-      aria-label="Music volume"
+      aria-label="Audio volume"
       class="hidden w-20 accent-aether-primary group-hover:block group-focus-within:block"
       @input="onVolume"
     />

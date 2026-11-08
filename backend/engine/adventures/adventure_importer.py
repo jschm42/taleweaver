@@ -27,8 +27,8 @@ from backend.engine.adventures.adventure_import_support import (
 from backend.engine.adventures.adventure_import_support import (
     ensure_within_data_dir as _ensure_within_data_dir,
 )
-from backend.engine.audio.music_assets import map_imported_music
-from backend.engine.audio.music_library import normalize_tracks, title_track_or_none
+from backend.engine.audio.audio_assets import map_imported_audio
+from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
@@ -468,13 +468,15 @@ class AdventureTemplateImporter:
                 os.makedirs(target_base_dir, exist_ok=True)
 
                 existing_images_mapping = extract_adz_assets(zip_file, target_base_dir)
-                map_imported_music(manifest_data, existing_images_mapping)
-                new_template.music_tracks = normalize_tracks(
-                    adv_data.get("music_tracks"), new_template_id
+                map_imported_audio(manifest_data, existing_images_mapping)
+                new_template.audio_tracks = normalize_tracks(
+                    adv_data.get("audio_tracks") or adv_data.get("music_tracks"), new_template_id
                 )
-                new_template.music_enabled = bool(adv_data.get("music_enabled", True))
+                new_template.audio_enabled = bool(
+                    adv_data.get("audio_enabled", adv_data.get("music_enabled", True))
+                )
                 new_template.title_track_id = title_track_or_none(
-                    adv_data.get("title_track_id"), new_template.music_tracks
+                    adv_data.get("title_track_id"), new_template.audio_tracks
                 )
 
                 # Reconstruct world

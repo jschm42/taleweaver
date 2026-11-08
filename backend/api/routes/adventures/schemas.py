@@ -329,9 +329,9 @@ class AdventureTemplateResponse(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
-    music_tracks: Optional[list[dict[str, Any]]] = None
+    audio_tracks: Optional[list[dict[str, Any]]] = None
     title_track_id: Optional[str] = None
-    music_enabled: bool = True
+    audio_enabled: bool = True
     ui_theme: Optional[dict[str, Any]] = None
     original_prompt: Optional[str] = None
     sequences: Optional[list[dict[str, Any]]] = None
@@ -481,8 +481,8 @@ class AdventureTemplateSummaryResponse(BaseModel):
     active_game_id: Optional[str] = None
     has_active_session: bool = False
     last_played_at: Optional[datetime] = None
-    # Title song (optional), played while the library tile is hovered.
-    preview_music_url: Optional[str] = None
+    # Title track (optional), played while the library tile is hovered.
+    preview_audio_url: Optional[str] = None
     scene_id: Optional[str] = None
     current_scene_name: Optional[str] = None
     origin_id: Optional[str] = None
@@ -602,8 +602,8 @@ class ChatResponse(BaseModel):
     full_world: Optional[AdventureTemplateDebugResponse] = None
     # Choice dialog opened by a script (tw.dialog.choose) that awaits the player's answer.
     pending_dialog: Optional[dict[str, Any]] = None
-    # Script music (tw.music): what to play now and whether its track is rendered yet.
-    music: Optional[dict[str, Any]] = None
+    # Script audio (tw.audio): what to play now and whether its track is rendered yet.
+    audio: Optional[dict[str, Any]] = None
 
 
 class AdventureTemplateImportPayload(BaseModel):
@@ -681,7 +681,7 @@ class AdventureTemplateUpdate(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
-    music_enabled: Optional[bool] = None
+    audio_enabled: Optional[bool] = None
     ui_theme: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None

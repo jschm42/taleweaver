@@ -26,14 +26,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 <template>
   <Teleport to="body">
     <div class="fixed inset-0 z-[210] flex items-center justify-center p-6 backdrop-blur-sm bg-black/60" @click.self="!isDeleting && emit('cancel')">
-      <div class="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl p-6 space-y-4 shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="music-delete-title">
+      <div class="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl p-6 space-y-4 shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="audio-delete-title">
         <div class="flex items-start gap-3">
           <div class="w-9 h-9 shrink-0 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
             <Trash2 class="w-4 h-4 text-red-400" />
           </div>
           <div class="space-y-1 min-w-0">
-            <h4 id="music-delete-title" class="text-sm font-black text-white break-words">Delete "{{ trackName }}"?</h4>
-            <p class="text-xs text-slate-400">The track and its audio file are removed from the music library. This cannot be undone.</p>
+            <h4 id="audio-delete-title" class="text-sm font-black text-white break-words">Delete "{{ trackName }}"?</h4>
+            <p class="text-xs text-slate-400">The track and its audio file are removed from the audio library. This cannot be undone.</p>
           </div>
         </div>
         <div v-if="scenes.length" class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">

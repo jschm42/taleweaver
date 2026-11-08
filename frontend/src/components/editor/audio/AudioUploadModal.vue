@@ -1,8 +1,8 @@
 <script setup lang="ts">
-/** Modal: add an own audio file to the adventure's music library (click or drop the file). */
+/** Modal: add an own audio file to the adventure's audio library (click or drop the file). */
 import { ref, watch } from 'vue'
 import { Upload, X, FileAudio } from 'lucide-vue-next'
-import { editorMusicService } from '@/services/editorMusicService'
+import { editorAudioService } from '@/services/editorAudioService'
 import { notificationService } from '@/services/notificationService'
 
 const props = defineProps<{
@@ -55,8 +55,8 @@ async function upload(): Promise<void> {
   if (!file.value) return
   isUploading.value = true
   try {
-    const track = await editorMusicService.upload(props.adventureId, file.value, name.value)
-    notificationService.add(`${track.name} added to the music library.`, 'success')
+    const track = await editorAudioService.upload(props.adventureId, file.value, name.value)
+    notificationService.add(`${track.name} added to the audio library.`, 'success')
     emit('uploaded')
     emit('close')
   } catch (err) {
@@ -71,7 +71,7 @@ async function upload(): Promise<void> {
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="show" class="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-950/60" @click.self="emit('close')">
-        <div class="modal-content w-full max-w-lg bg-slate-900 border border-white/10 rounded-[2rem] shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-label="Upload music track">
+        <div class="modal-content w-full max-w-lg bg-slate-900 border border-white/10 rounded-[2rem] shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-label="Upload audio track">
           <div class="flex items-center justify-between p-6 pb-4 border-b border-white/5">
             <div>
               <h3 class="text-xs font-black text-emerald-400 uppercase tracking-widest">Upload Track</h3>
@@ -108,7 +108,7 @@ async function upload(): Promise<void> {
               <input v-model="name" maxlength="100" placeholder="Track name"
                 class="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50" />
             </label>
-            <p class="text-[10px] text-slate-500">Only use music you may share with this adventure; it is bundled in exports.</p>
+            <p class="text-[10px] text-slate-500">Only use audio you may share with this adventure; it is bundled in exports.</p>
           </div>
 
           <div class="flex justify-end gap-2 p-6 pt-4 border-t border-white/5">

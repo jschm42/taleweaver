@@ -58,7 +58,7 @@ _FIX_SCENE_FIELDS = frozenset(
         "label",
         "description",
         "decorative_objects",
-        "music_track_id",
+        "audio_track_id",
         *SCENE_SCRIPT_FIELDS,
     }
 )

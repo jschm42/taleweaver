@@ -1,7 +1,7 @@
 import { apiFetch } from '@/services/http'
 
-/** A track of the adventure's music library. Mirrors backend/engine/audio/music_library.py. */
-export interface MusicTrack {
+/** A track of the adventure's audio library. Mirrors backend/engine/audio/audio_library.py. */
+export interface AudioTrack {
   id: string
   name: string
   prompt: string
@@ -13,7 +13,7 @@ export interface MusicTrack {
 }
 
 /** A background render; it can take minutes while the provider loads its model. */
-export interface MusicJob {
+export interface AudioJob {
   id: string
   status: 'running' | 'done' | 'failed'
   elapsed: number
@@ -23,14 +23,14 @@ export interface MusicJob {
   track_id?: string
 }
 
-export interface MusicLibrary {
-  tracks: MusicTrack[]
+export interface AudioLibrary {
+  tracks: AudioTrack[]
   /** track id -> ids of the scenes that play it */
   scene_usage: Record<string, string[]>
   /** track id -> latest render job */
-  jobs: Record<string, MusicJob>
-  music_enabled: boolean
-  /** Track played on the adventure's library tile; null = no title song. */
+  jobs: Record<string, AudioJob>
+  audio_enabled: boolean
+  /** Track played on the adventure's library tile; null = no title track. */
   title_track_id: string | null
   generation: { enabled: boolean; provider: 'comfyui' | 'lyria' }
 }
@@ -51,7 +51,7 @@ async function readJson<T>(res: Response): Promise<T> {
 }
 
 function base(adventureId: string): string {
-  return `/adventures/${encodeURIComponent(adventureId)}/music`
+  return `/adventures/${encodeURIComponent(adventureId)}/audio`
 }
 
 function send(path: string, method: string, body?: unknown): Promise<Response> {
@@ -62,9 +62,9 @@ function send(path: string, method: string, body?: unknown): Promise<Response> {
   })
 }
 
-export const editorMusicService = {
-  async load(adventureId: string): Promise<MusicLibrary> {
-    return readJson<MusicLibrary>(await apiFetch(base(adventureId)))
+export const editorAudioService = {
+  async load(adventureId: string): Promise<AudioLibrary> {
+    return readJson<AudioLibrary>(await apiFetch(base(adventureId)))
   },
 
   /** AI prompt from the adventure tone and the reference scene (or the premise); always loopable. */
@@ -75,51 +75,51 @@ export const editorMusicService = {
     return (await readJson<{ suggested_prompt: string }>(res)).suggested_prompt
   },
 
-  async generate(adventureId: string, track: NewTrack): Promise<{ track: MusicTrack; job: MusicJob }> {
+  async generate(adventureId: string, track: NewTrack): Promise<{ track: AudioTrack; job: AudioJob }> {
     return readJson(await send(`${base(adventureId)}/tracks`, 'POST', track))
   },
 
-  async render(adventureId: string, trackId: string, duration?: number | null): Promise<MusicJob> {
+  async render(adventureId: string, trackId: string, duration?: number | null): Promise<AudioJob> {
     const res = await send(`${base(adventureId)}/tracks/${encodeURIComponent(trackId)}/render`, 'POST', {
       duration: duration || null,
     })
-    return readJson<MusicJob>(res)
+    return readJson<AudioJob>(res)
   },
 
-  async upload(adventureId: string, file: File, name: string): Promise<MusicTrack> {
+  async upload(adventureId: string, file: File, name: string): Promise<AudioTrack> {
     const body = new FormData()
     body.append('file', file)
     body.append('name', name)
     // Uploads of large files can take longer than the default request timeout.
     const res = await apiFetch(`${base(adventureId)}/tracks/upload`, { method: 'POST', body, timeoutMs: 300000 })
-    return (await readJson<{ track: MusicTrack }>(res)).track
+    return (await readJson<{ track: AudioTrack }>(res)).track
   },
 
-  async update(adventureId: string, trackId: string, changes: Partial<Pick<MusicTrack, 'name' | 'prompt'>>): Promise<MusicTrack> {
+  async update(adventureId: string, trackId: string, changes: Partial<Pick<AudioTrack, 'name' | 'prompt'>>): Promise<AudioTrack> {
     const res = await send(`${base(adventureId)}/tracks/${encodeURIComponent(trackId)}`, 'PATCH', changes)
-    return (await readJson<{ track: MusicTrack }>(res)).track
+    return (await readJson<{ track: AudioTrack }>(res)).track
   },
 
-  async remove(adventureId: string, trackId: string): Promise<MusicLibrary> {
-    return readJson<MusicLibrary>(await send(`${base(adventureId)}/tracks/${encodeURIComponent(trackId)}`, 'DELETE'))
+  async remove(adventureId: string, trackId: string): Promise<AudioLibrary> {
+    return readJson<AudioLibrary>(await send(`${base(adventureId)}/tracks/${encodeURIComponent(trackId)}`, 'DELETE'))
   },
 
-  async jobStatus(adventureId: string, jobId: string): Promise<MusicJob> {
-    return readJson<MusicJob>(await apiFetch(`${base(adventureId)}/jobs/${encodeURIComponent(jobId)}`))
+  async jobStatus(adventureId: string, jobId: string): Promise<AudioJob> {
+    return readJson<AudioJob>(await apiFetch(`${base(adventureId)}/jobs/${encodeURIComponent(jobId)}`))
   },
 
-  /** The scene's track; null makes the scene silent (the previous music fades out). */
+  /** The scene's track; null makes the scene silent (the previous audio fades out). */
   async setSceneTrack(adventureId: string, sceneId: string, trackId: string | null): Promise<void> {
     await readJson(await send(`${base(adventureId)}/scenes/${encodeURIComponent(sceneId)}/track`, 'POST', { track_id: trackId }))
   },
 
-  /** The adventure's title song (library tile preview); null removes it. */
+  /** The adventure's title track (library tile preview); null removes it. */
   async setTitleTrack(adventureId: string, trackId: string | null): Promise<void> {
     await readJson(await send(`${base(adventureId)}/title`, 'POST', { track_id: trackId }))
   },
 
-  /** Author switch for scene music (script music via tw.music is not affected). */
+  /** Author switch for scene audio (script audio via tw.audio is not affected). */
   async setEnabled(adventureId: string, enabled: boolean): Promise<void> {
-    await readJson(await send(`/adventures/${encodeURIComponent(adventureId)}`, 'PATCH', { music_enabled: enabled }))
+    await readJson(await send(`/adventures/${encodeURIComponent(adventureId)}`, 'PATCH', { audio_enabled: enabled }))
   },
 }
