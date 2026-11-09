@@ -91,3 +91,30 @@ async def test_open_exit_unlocks_row_and_route_override(setup_test_db):
         assert world_exit.is_locked is False
         assert state.exit_states["START:VAULT"]["is_locked"] is False
         assert state.exit_states["EXIT_VAULT"]["is_locked"] is False
+
+
+async def test_goto_runs_global_enter_scripts_without_a_target(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange: a global script like Kevin's stalker, without a target scene
+        user, adv, _avatar, state = await _seed_game_context(db)
+        await _seed_world(db, state)
+        adv.original_manifest = {
+            "scripts": [
+                {
+                    "id": "FOLLOWER",
+                    "trigger": "on_enter_scene",
+                    "code": "tw.vars.set('entered', tw.scene.id)\ntw.story.narrate('You feel watched.')",
+                }
+            ]
+        }
+        await db.commit()
+
+        # Act
+        chunks = await _play(GameTurnManager(db, state.session_id, user), "/debug goto VAULT")
+
+        # Assert
+        await db.refresh(state)
+        assert state.entity_states["__script_vars__"]["entered"] == "VAULT"
+        assert any("You feel watched." in c and "event: assistant" in c for c in chunks)

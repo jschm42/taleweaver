@@ -628,7 +628,9 @@ Controls session outcome conditions (alias: `tw.session`):
 - `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
 
 > [!NOTE]
-> In both linear and dynamic modes, completing the final sequence does **not** automatically end the adventure in victory. The session concludes only when the adventure's winning condition (`completed_guard_expression` or `completed_condition`) evaluates to true or when a script explicitly calls `tw.game.win()` / `tw.game.game_won()`.
+> **When finishing the last sequence ends the adventure** (linear and dynamic modes): if the adventure has a deterministic win guard (`completed_guard_expression`), completing the final sequence does **not** end it; only that guard or a script calling `tw.game.win()` / `tw.game.game_won()` does, and the player stays in the world until then (e.g. for a finale scripted at a later time). Without a win guard, completing every sequence ends the adventure in victory. The Game Master can additionally end it when the soft `completed_condition` is met.
+>
+> A sequence completes when its hard rules hold (`required_item_id`, `required_scene_id`, `required_defeated_npc_id`, and its guard). `completion_guard_expression` is an alias of `guard_expression`; set only one of them. If both are set, `guard_expression` is the one that counts.
 
 ### `tw.time` (In-Game Clock)
 The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
@@ -756,7 +758,7 @@ Controls adventure story chapters and sequences. In TaleWeaver, **only one seque
 
 #### Progression Modes: Linear vs. Dynamic
 Adventures configure `sequence_progression_mode` in their manifest or template:
-- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence does not end the adventure (see the note under `tw.game`).
+- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence ends the adventure only when it has no win guard (see the note under `tw.game`).
 - **`"dynamic"`**: Ideal for hubs, sandboxes, QA workbenches, and open-world investigations:
   - Sequences do not auto-advance to the next array index on completion.
   - Completing a sequence clears `active_sequence_id = None` without finishing the entire adventure.

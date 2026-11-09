@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.scene_scripts import run_global_scene_scripts
 from backend.engine.interaction.trigger_service import TriggerService
 from backend.models.world_entity import WorldScene
 
@@ -30,7 +31,7 @@ async def _load_scene(manager: Any, scene_id: str) -> WorldScene | None:
 
 
 async def stream_debug_arrival(manager: Any, scene_id: str) -> AsyncGenerator[str, None]:
-    """Fires ``on_enter_scene`` like an exit traversal does, without the arrival narration."""
+    """Fires the scene's and the global ``on_enter_scene`` scripts, without the arrival narration."""
     scene = await _load_scene(manager, scene_id)
     if scene is None:
         return
@@ -43,15 +44,22 @@ async def stream_debug_arrival(manager: Any, scene_id: str) -> AsyncGenerator[st
     }
     yield f"event: scene_transition\ndata: {json.dumps(transition)}\n\n"
 
-    if not (scene.on_enter_scene_script or scene.on_enter_scene_text):
-        return
-    messages = await TriggerService.execute_trigger(
-        manager.db,
-        manager.state,
-        "on_enter_scene",
-        scene.id,
-        script_code=scene.on_enter_scene_script,
-        narrative_text=scene.on_enter_scene_text,
-    )
-    for message in messages:
-        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': message})}\n\n"
+    if scene.on_enter_scene_script or scene.on_enter_scene_text:
+        messages = await TriggerService.execute_trigger(
+            manager.db,
+            manager.state,
+            "on_enter_scene",
+            scene.id,
+            script_code=scene.on_enter_scene_script,
+            narrative_text=scene.on_enter_scene_text,
+        )
+        for message in messages:
+            yield _sse(message)
+    for message in await run_global_scene_scripts(manager, "on_enter_scene", scene.id):
+        yield _sse(message)
+
+
+def _sse(message: Any) -> str:
+    """One script message as a stream event with its own role (speech stays speech)."""
+    role = str(getattr(message, "role", "system"))
+    return f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(message)})}\n\n"

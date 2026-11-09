@@ -35,6 +35,7 @@ from backend.api.routes.adventures.sequence_hooks import (
     run_sequence_transition_hooks,
 )
 from backend.api.routes.adventures.debug_arrival import stream_debug_arrival
+from backend.api.routes.adventures.scene_scripts import run_global_scene_scripts
 from backend.engine.debug_commands.debug_engine import DebugEngine
 from backend.engine.debug_commands.navigation_commands import DEBUG_GOTO_MARKER
 from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
@@ -270,6 +271,9 @@ class TurnInteractionsManager:
                 narrative_text=old_scene.on_leave_scene_text,
             )
             messages.extend(msgs)
+        messages.extend(
+            await run_global_scene_scripts(self.manager, "on_leave_scene", current_scene_id)
+        )
 
         if world_exit.on_open_exit_script or world_exit.on_open_exit_text:
             msgs = await TriggerService.execute_trigger(
@@ -354,7 +358,8 @@ class TurnInteractionsManager:
             return
 
         for m in await self._fire_traversal_triggers(current_scene_id, world_exit):
-            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+            role = getattr(m, "role", "system")
+            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         self.state.current_scene_id = scene.id
         await self._record_map_traversal(current_scene_id, scene, world_exit)
@@ -371,6 +376,9 @@ class TurnInteractionsManager:
             )
             for m in msgs:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+        for m in await run_global_scene_scripts(self.manager, "on_enter_scene", scene.id):
+            role = getattr(m, "role", "system")
+            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         # Signal frontend to clear old chat bubbles; audio switches to the new scene's track.
         transition = {

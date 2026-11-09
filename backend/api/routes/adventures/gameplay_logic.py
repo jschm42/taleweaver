@@ -2974,8 +2974,10 @@ class GameTurnManager:
         if context.is_debug_enabled:
             debug_msg = f"[DEBUG: Trigger fired] {trigger_name} on {target_id}"
             await self._save_chat_message("system", debug_msg)
+        # Keep the ScriptMessage objects: callers stream each message with its role, so an NPC
+        # line (tw.npcs.say) or narration stays "assistant" instead of turning into a system note.
         return [
-            str(m)
+            m
             for m in applied_messages
             if not str(getattr(m, "content", m)).strip().startswith("[DEBUG")
         ]
@@ -3054,7 +3056,7 @@ class GameTurnManager:
             for it in changeset.player_new_items:
                 inv.append(it)
                 system_messages.append(
-                    ScriptMessage(f"Acquired: {it.get('name', it.get('id'))}", role="system")
+                    await self._save_script_notice(f"Acquired: {it.get('name', it.get('id'))}")
                 )
             self.avatar.inventory = inv
 
