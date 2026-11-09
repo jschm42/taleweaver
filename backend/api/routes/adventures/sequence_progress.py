@@ -194,6 +194,8 @@ def evaluate_sequence_progress(
         return []
 
     current = sequences[index]
+    if _is_sequence_completed_in_state(state, current.get("id")):
+        return []
     completed = _sequence_completed(
         current,
         avatar,

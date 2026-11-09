@@ -46,6 +46,7 @@ def test_adventure_template_update_sequences():
 
 def _mock_db():
     db = AsyncMock()
+    db.get = AsyncMock(return_value=None)
     db.add = MagicMock()
     mock_res_avatar = MagicMock()
     mock_res_avatar.scalars.return_value.first.return_value = None

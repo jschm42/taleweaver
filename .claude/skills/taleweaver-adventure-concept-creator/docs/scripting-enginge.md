@@ -32,6 +32,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
    - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
    - [tw.image & tw.media (In-Game Image Generation)](#twimage--twmedia-in-game-image-generation)
+   - [tw.turn (Player Message & Turn Info)](#twturn-player-message--turn-info)
    - [tw.log & tw.debug (Logging & Diagnostics)](#twlog--twdebug-logging--diagnostics)
 6. [Practical Examples](#practical-examples)
    - [Example 1: Trapped Ancient Chest](#example-1-trapped-ancient-chest)
@@ -161,7 +162,7 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
-| | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
+| | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. The NPC context menu's **Greet** entry also counts as an interaction and fires it. |
 | | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction, unless the script opened a choice dialog (`tw.dialog.choose` / `tw.dialog.tree`): then the player's answer drives what happens next and no GM reaction runs. |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
@@ -923,6 +924,25 @@ else:
 
 # A quick sketch without the adventure style, kept for later instead of shown right away.
 sketch = tw.media.generate("A pencil sketch of a stranger's face", apply_style=False, show_in_chat=False)
+```
+
+### `tw.turn` (Player Message & Turn Info)
+
+Provides access to the current turn's player input and language context:
+
+- `tw.turn.player_message` (alias `tw.turn.message`, shortcut `tw.player_message` or bare `player_message`): The verbatim or normalized input string sent by the player during this turn. In choice dialog handlers, this holds the chosen option's label. In empty prologue turns, this defaults to `""`.
+- `tw.turn.language`: The language code configured for the current turn (e.g. `"en"`, `"de"`), or `None`.
+
+```python
+# Check if the player asked an NPC to draw or paint something specific
+msg = tw.turn.player_message.lower()
+if "paint" in msg or "draw" in msg:
+    # Use tw.llm.ask to synthesize an art prompt dynamically from the player's message
+    prompt = tw.llm.ask(
+        f"You are an artist. Turn the user request '{tw.turn.player_message}' into an image prompt. Output only the prompt.",
+        model="simple",
+    )
+    tw.image.generate(prompt, model="simple")
 ```
 
 ### `tw.log` & `tw.debug` (Logging & Diagnostics)

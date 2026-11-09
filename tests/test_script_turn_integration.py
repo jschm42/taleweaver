@@ -366,11 +366,11 @@ async def test_script_npc_operations_in_turn_manager(setup_test_db):
         manager.state = state
 
         script = """
-# 1. NPC Speech
-tw.npcs.say("NPC_MARA", "I arrived from the dungeon!")
-
-# 2. Move NPC to protagonist's current scene
+# 1. Move NPC to protagonist's current scene
 tw.npcs.move("NPC_MARA", "current")
+
+# 2. NPC Speech
+tw.npcs.say("NPC_MARA", "I arrived from the dungeon!")
 
 # 3. Item transfers
 tw.npcs.drop_item("NPC_MARA", "KEY_RUSTY")

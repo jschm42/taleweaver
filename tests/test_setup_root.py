@@ -13,6 +13,7 @@ URL = "/api/auth/setup-root"
 @pytest.fixture(autouse=True)
 def _allow_setup(monkeypatch):
     monkeypatch.setattr(settings, "ALLOW_REMOTE_SETUP", True)
+    monkeypatch.setattr(settings, "STRICT_PASSWORD_POLICY", True)
     auth_api._setup_root_attempts.clear()
 
 
