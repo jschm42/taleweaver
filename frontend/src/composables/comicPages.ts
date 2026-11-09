@@ -46,8 +46,15 @@ export interface ComicTurn {
   sceneKey: string | null
   exchanges: ComicExchange[]
   licenseMessage?: ChatMessage | null
+  /** Ending cards (win / game over) and the number of exchanges that come before each. */
+  endings: PageEnding[]
   /** All system messages of the page (for the SYSTEM tab). */
   systemMessages: ChatMessage[]
+}
+
+export interface PageEnding {
+  afterExchange: number
+  message: ChatMessage
 }
 
 export interface ComicPageParsers {
@@ -102,7 +109,7 @@ class PageBuilder {
   constructor(private readonly parsers: ComicPageParsers) {}
 
   newPage(sceneKey: string | null): ComicTurn {
-    return { index: 0, sceneKey, exchanges: [], licenseMessage: null, systemMessages: [] }
+    return { index: 0, sceneKey, exchanges: [], licenseMessage: null, endings: [], systemMessages: [] }
   }
 
   flushExchange(): void {
@@ -112,7 +119,7 @@ class PageBuilder {
 
   flushPage(): void {
     this.flushExchange()
-    if (this.page.exchanges.length || this.page.licenseMessage) {
+    if (this.page.exchanges.length || this.page.licenseMessage || this.page.endings.length) {
       this.page.index = this.pages.length
       this.page.systemMessages = this.page.exchanges.flatMap((ex) => [
         ...ex.systemMessages,
@@ -177,6 +184,12 @@ class PageBuilder {
   add(msg: ChatMessage): void {
     if (msg.role === 'license_info') {
       this.page.licenseMessage = msg
+      return
+    }
+    if (msg.role === 'adventure_ending') {
+      // The card closes the exchange before it; play after a win continues below it.
+      this.flushExchange()
+      this.page.endings.push({ afterExchange: this.page.exchanges.length, message: msg })
       return
     }
     const key = pageKeyOf(msg)

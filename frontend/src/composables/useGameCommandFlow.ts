@@ -63,6 +63,13 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     showDebug.value = true
   }
 
+  /** Runs a command from the debug inspector, then reloads its world data. */
+  const runDebugCommand = async (command: string) => {
+    await sendMessage(command)
+    if (!routeId.value || !showDebug.value) return
+    fullWorldDebug.value = await gameViewService.fetchFullWorldDebug(routeId.value)
+  }
+
   const loadWalkthrough = async () => {
     if (!routeId.value) return
 
@@ -173,6 +180,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     fullWorldDebug,
     goBack,
     openDebugInspector,
+    runDebugCommand,
     openWalkthroughPanel,
     revealWalkthrough,
     handlePlayerInput,

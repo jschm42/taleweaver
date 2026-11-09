@@ -5,6 +5,7 @@
  * Bundles all session debugging tools into a single cohesive interface:
  * 1. NPCs Overview: All NPCs with real-time stats, health bars, locations, and actions (heal, kill, unhide, drop).
  * 2. World Map: Complete DAGRE layout unmasked by fog-of-war, with NPC indicators/icons on every node where NPCs reside.
+ *    Clicking a scene teleports the hero there (/debug goto); lock badges on locked passages unlock them (/debug open_exit).
  * 3. Items Table: Full matrix of all items across player inventory, scenes, containers, and NPCs with states & locations.
  * 4. Diagnostics: Session runtime, exit locks, quick command triggers, and raw JSON tree.
  */
@@ -218,6 +219,7 @@ const mapLayoutData = ref<{
     points: Array<{ x: number; y: number }>
     label: string
     isLocked: boolean
+    exitId: string
   }>
   width: number
   height: number
@@ -267,6 +269,7 @@ function updateMapLayout() {
       g.setEdge(from, to, {
         label: e.label || '',
         isLocked: !!e.is_locked,
+        exitId: String(e.id || ''),
       })
     }
   })
@@ -306,6 +309,7 @@ function updateMapLayout() {
       points: edge.points || [],
       label: edge.label || '',
       isLocked: !!edge.isLocked,
+      exitId: edge.exitId || '',
     }
   })
 
@@ -342,14 +346,23 @@ function resetMapView() {
   centerOnCurrentScene()
 }
 
+// A pan that moved the map must not count as a click on a node or lock badge.
+const panStart = ref({ x: 0, y: 0 })
+const panMoved = ref(false)
+
 function startPan(e: MouseEvent) {
   if (e.button !== 0) return
   isPanning.value = true
+  panMoved.value = false
+  panStart.value = { x: e.clientX, y: e.clientY }
   lastMousePos.value = { x: e.clientX, y: e.clientY }
 }
 
 function onPan(e: MouseEvent) {
   if (!isPanning.value) return
+  if (Math.hypot(e.clientX - panStart.value.x, e.clientY - panStart.value.y) > 4) {
+    panMoved.value = true
+  }
   const dx = e.clientX - lastMousePos.value.x
   const dy = e.clientY - lastMousePos.value.y
   offset.value.x += dx
@@ -359,6 +372,31 @@ function onPan(e: MouseEvent) {
 
 function endPan() {
   isPanning.value = false
+}
+
+/** Clicking a scene teleports the hero there (`/debug goto`); the current scene only opens its details. */
+function onNodeClick(node: any) {
+  if (panMoved.value) return
+  selectedNode.value = node
+  if (node.isCurrent || commandBusy.value) return
+  void runCmd(`/debug goto ${node.rawId}`)
+}
+
+function edgeMidpoint(edge: { points: Array<{ x: number; y: number }> }): { x: number; y: number } {
+  const pts = edge.points
+  if (pts.length % 2 === 1) return pts[(pts.length - 1) / 2]
+  const a = pts[pts.length / 2 - 1]
+  const b = pts[pts.length / 2]
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
+const unlockableEdges = computed(() =>
+  (mapLayoutData.value?.edges || []).filter((edge) => edge.isLocked && edge.exitId && edge.points.length > 0)
+)
+
+function unlockEdge(edge: { exitId: string }) {
+  if (panMoved.value || commandBusy.value) return
+  void runCmd(`/debug open_exit ${edge.exitId}`)
 }
 
 function onWheel(e: WheelEvent) {
@@ -474,6 +512,15 @@ watch(
     }
   }
 )
+
+// Commands reload the world data; keep the map in sync with it.
+watch(sessionDebug, () => {
+  if (props.open && activeTab.value === 'map') {
+    nextTick(() => {
+      updateMapLayout()
+    })
+  }
+})
 
 watch(activeTab, (tab) => {
   if (tab === 'map') {
@@ -896,7 +943,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               <div class="absolute bottom-4 left-4 z-30 flex items-center gap-3 bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-800 text-xs text-slate-400 font-mono shadow-xl">
                 <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-400/40"></span> Hero Position</span>
                 <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> NPC(s) Present</span>
-                <span class="flex items-center gap-1.5"><Lock class="w-3 h-3 text-red-400" /> Locked Passage</span>
+                <span class="flex items-center gap-1.5"><Lock class="w-3 h-3 text-red-400" /> Locked Passage (click to unlock)</span>
+                <span class="hidden sm:inline text-slate-500">Click a scene to go there</span>
               </div>
 
               <!-- Selected Node Detail Popover -->
@@ -1027,7 +1075,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                         width: `${node.width}px`,
                         height: `${node.height}px`,
                       }"
-                      @click="selectedNode = node"
+                      :title="node.isCurrent ? node.label : `Go to ${node.label}`"
+                      @click="onNodeClick(node)"
                     >
                       <!-- CRITICAL: NPC Indicator Badge on Node -->
                       <div
@@ -1075,6 +1124,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                         </div>
                       </div>
                     </div>
+
+                    <!-- Unlock badges on locked passages -->
+                    <button
+                      v-for="edge in unlockableEdges"
+                      :key="`unlock-${edge.exitId}`"
+                      type="button"
+                      class="absolute z-20 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-full bg-slate-950 border-2 border-red-400 text-red-300 shadow-lg hover:bg-red-500 hover:text-white hover:border-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                      :style="{
+                        left: `${edgeMidpoint(edge).x + margin}px`,
+                        top: `${edgeMidpoint(edge).y + margin}px`,
+                      }"
+                      :disabled="commandBusy"
+                      :title="`Unlock ${edge.label || 'passage'} (${edge.exitId})`"
+                      @click.stop="unlockEdge(edge)"
+                    >
+                      <Lock class="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               </div>

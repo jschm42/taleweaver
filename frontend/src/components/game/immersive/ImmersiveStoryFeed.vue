@@ -17,6 +17,7 @@ import { useScrollToLatest } from './useScrollToLatest'
 import { useLoadOlderOnScroll } from './useLoadOlderOnScroll'
 import { chapterStartingAt, groupSceneSegments, segmentSceneLabel, type SceneSegment, type StoryDivider } from './storyDividers'
 import ChapterBanner from './ChapterBanner.vue'
+import AdventureEndingCard from './AdventureEndingCard.vue'
 import type { SequenceDetail } from '@/types'
 
 const props = defineProps<{
@@ -51,6 +52,8 @@ const emit = defineEmits<{
   npcHover: [entity: any, event: MouseEvent]
   npcLeave: []
   npcContextmenu: [entity: any, event: MouseEvent]
+  backToMenu: []
+  loadSave: []
 }>()
 
 const storyContainerRef = ref<HTMLElement | null>(null)
@@ -216,6 +219,7 @@ type FeedItem =
   | { kind: 'divider'; key: string; divider: StoryDivider }
   | { kind: 'chapter'; key: string; sequenceId: string }
   | { kind: 'license'; key: string; message: any }
+  | { kind: 'ending'; key: string; message: any }
   | { kind: 'exchange'; key: string; exchange: Exchange }
 
 function exchangeKey(exchange: Exchange): string | undefined {
@@ -246,8 +250,18 @@ const feedItems = computed<FeedItem[]>(() => {
     if (chapter) {
       items.push({ kind: 'chapter', key: `chapter-${chapter}-${firstKey ?? pageIdx}`, sequenceId: chapter })
     }
+    const pushEndings = (afterExchange: number) => {
+      page.endings
+        .filter((ending) => ending.afterExchange === afterExchange)
+        .forEach((ending, endIdx) => {
+          const key = ending.message._key ?? ending.message.id ?? `p${pageIdx}-end${afterExchange}-${endIdx}`
+          items.push({ kind: 'ending', key: `ending-${key}`, message: ending.message })
+        })
+    }
+    pushEndings(0)
     page.exchanges.forEach((exchange, exIdx) => {
       items.push({ kind: 'exchange', key: exchangeKey(exchange) ?? `p${pageIdx}-e${exIdx}`, exchange })
+      pushEndings(exIdx + 1)
     })
   })
   return items
@@ -308,6 +322,14 @@ const feedItems = computed<FeedItem[]>(() => {
 
           <!-- LICENSE & CREDITS BANNER (start of the adventure) -->
           <LicenseInfoBlock v-else-if="item.kind === 'license'" :msg="item.message" class="shrink-0 max-w-2xl" />
+
+          <!-- ENDING CARD (win / game over) -->
+          <AdventureEndingCard
+            v-else-if="item.kind === 'ending'"
+            :content="item.message.content"
+            @back-to-menu="emit('backToMenu')"
+            @load-save="emit('loadSave')"
+          />
 
           <ImmersiveStoryExchange
             v-else

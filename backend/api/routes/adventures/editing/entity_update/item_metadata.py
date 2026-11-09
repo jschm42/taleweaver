@@ -38,6 +38,7 @@ _UNLOCK_SCRIPT_FIELDS = (
 )
 _CONTAINER_CAPACITY_FIELDS = ("min_items", "max_items")
 _CONTAINER_KEYS = (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, *_CONTAINER_CAPACITY_FIELDS, "locked")
+_CONTAINER_KEYS_WITHOUT_LOCK = tuple(key for key in _CONTAINER_KEYS if key != "locked")
 _READABLE_SCRIPT_FIELDS = ("on_read_script", "on_read_text")
 _READABLE_KEYS = ("text_log_content", "text_log_format", *_READABLE_SCRIPT_FIELDS)
 _TEXT_LOG_FORMATS = {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}
@@ -114,10 +115,17 @@ def _update_container_capacity(metadata_json: dict[str, Any], payload: EntityUpd
 
 
 def update_container(
-    ent: WorldEntity, metadata_json: dict[str, Any], payload: EntityUpdateRequest, active: bool
+    ent: WorldEntity,
+    metadata_json: dict[str, Any],
+    payload: EntityUpdateRequest,
+    active: bool,
+    type_changed: bool = False,
 ) -> None:
     if not active:
-        _drop(metadata_json, _CONTAINER_KEYS)
+        # On a regular item `locked` is its take-lock and must survive unrelated edits; only a
+        # type change drops it (a former container's lock is no take-lock).
+        keys = _CONTAINER_KEYS if type_changed else _CONTAINER_KEYS_WITHOUT_LOCK
+        _drop(metadata_json, keys)
         if given(payload, "locked"):
             metadata_json["locked"] = bool(payload.locked)
         return

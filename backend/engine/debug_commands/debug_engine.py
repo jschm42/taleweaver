@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.engine.debug_commands import (
     entity_commands,
     inspect_commands,
+    navigation_commands,
     session_commands,
     time_commands,
     world_commands,
@@ -18,7 +19,7 @@ _USAGE = (
     "DEBUG USAGE: /debug [on/off | npc drop_items | item dynamic on/off | session | szene | heal "
     "| scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough "
     "| engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X "
-    "| kill NPC | open_exit ID | gen_item PROMPT | time [set|add|sub|tick|pause|resume|pace|gm|cancel]]"
+    "| kill NPC | open_exit ID | goto SCENE_ID | gen_item PROMPT | time [set|add|sub|tick|pause|resume|pace|gm|cancel]]"
 )
 
 # Sub-command -> handler. A handler returning None falls back to the usage text.
@@ -42,7 +43,8 @@ _HANDLERS: dict[str, DebugHandler] = {
     "game_won": session_commands.game_won,
     "game_over": session_commands.game_over,
     "quest_finished": session_commands.quest_finished,
-    "open_exit": session_commands.open_exit,
+    "open_exit": navigation_commands.open_exit,
+    "goto": navigation_commands.goto,
     "walkthrough": session_commands.walkthrough,
     "gen_item": session_commands.gen_item,
     "heal": entity_commands.heal,

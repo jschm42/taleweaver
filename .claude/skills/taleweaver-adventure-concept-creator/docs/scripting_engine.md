@@ -624,6 +624,7 @@ Directly writes into the avatar's episodic memory bank:
 Controls session outcome conditions (alias: `tw.session`):
 - `tw.game.win(message: str = None)` / `tw.game.game_won(message: str = None)`: Ends the adventure in victory and displays `message`.
 - `tw.game.game_over(reason: str = None)`: Ends the adventure in defeat with `reason`.
+- What the player sees: once the current turn (or dialog step) is done, the Game Master tells a short epilogue and an ending card follows in the story feed (**Victory** or **Game Over**, with `message` / `reason`, EXP, quests and awards). After a win the player can keep playing in the world; after a game over the input is locked and the card offers **Load a Save** (Chronicles). To let a character react before the end, end the game in an `after=` callback of a direction (see [Running code after the narration](#running-code-after-the-narration-after)).
 - `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
 
 > [!NOTE]

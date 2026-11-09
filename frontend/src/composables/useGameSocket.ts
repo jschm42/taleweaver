@@ -1065,6 +1065,14 @@ export function useGameSocket(): UseGameSocket {
       if (data.content) {
         _pushMessage('assistant', data.content)
       }
+      if (data.ending?.content) {
+        // The win / game-over card follows the epilogue in the story feed.
+        messages.value.push({
+          ...data.ending,
+          _key: newMessageKey(),
+          timestamp: new Date(),
+        } as ChatMessage)
+      }
       applySessionSnapshot(data, false)
     } catch (err) {
       console.error('[Session] Terminal epilogue error:', err)

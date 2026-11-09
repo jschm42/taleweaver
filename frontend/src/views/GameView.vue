@@ -12,8 +12,6 @@ import MapModal from '@/components/game/MapModal.vue'
 import GameAudioToggle from '@/components/game/GameAudioToggle.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
-import GameOverScreen from '@/components/game/GameOverScreen.vue'
-import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import ImmersiveGameView from '@/components/game/ImmersiveGameView.vue'
 import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
@@ -226,7 +224,6 @@ const {
   sheet,
   status,
   messages,
-  gameOverReason,
   statusNote,
   adventureImage,
   entities,
@@ -350,13 +347,9 @@ const confirmRestoreCheckpoint = async () => {
 }
 
 const {
-  showSuccess,
-  showGameOver,
   trackedQuestId,
   clockTick,
   gameTime,
-  continueCompletedGame,
-  continueGameOverReadOnly,
   setTrackedQuest,
 } = useGameProgressState({
   sheet,
@@ -1632,6 +1625,7 @@ const {
   fullWorldDebug,
   goBack,
   openDebugInspector,
+  runDebugCommand,
   openWalkthroughPanel,
   revealWalkthrough,
   handlePlayerInput: handlePlayerInputBase,
@@ -1977,6 +1971,7 @@ usePlayAgentAutoLoop()
       @traverse-exit="handleExitClick"
       @switch-flip="openSwitchStateModal"
       @exit-session="showExitModal = true"
+      @back-to-menu="goBack"
     >
       <template #header-audio>
         <GameAudioToggle
@@ -2189,19 +2184,6 @@ usePlayAgentAutoLoop()
       @close="closeRestoreConfirmModal"
       @confirm="confirmRestoreCheckpoint"
     />
-    <SuccessScreen 
-      :show="showSuccess" 
-      :total-exp="sheet?.exp || 0" 
-      :note="gameOverReason"
-      @continue="continueCompletedGame"
-      @close="goBack" 
-    />
-    <GameOverScreen 
-      :show="showGameOver" 
-      :reason="gameOverReason" 
-      @continue="continueGameOverReadOnly"
-      @close="goBack" 
-    />
     <DebugModal 
       :open="showDebug" 
       :data="{ 
@@ -2218,7 +2200,7 @@ usePlayAgentAutoLoop()
       }" 
       :map-data="mapData"
       :nodes="nodes"
-      @execute-command="sendMessage"
+      :execute-command="runDebugCommand"
       @close="showDebug = false" 
     />
 

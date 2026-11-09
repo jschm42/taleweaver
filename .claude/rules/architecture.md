@@ -117,6 +117,7 @@ graph TD
 ### Post-Message: Persistence & Checkpoints
 * Updates committed to SQLite `SessionState`.
 * Checkpoints are full save states (`engine/sessions/session_snapshot.py`: avatar, session state, session world rows). `TurnCheckpoints` (`turn_checkpoints.py`) writes them at the end of every turn when the scene or active sequence changed (`SCENE_CHANGE`, `SEQUENCE_CHANGE`), plus queued milestones (`QUEST_UPDATE`, `AWARD_GRANTED`) and `/save` (`MANUAL_SAVE`). `tw.save()` (`SCRIPT_SAVE`) is written immediately by both script apply paths. 5 automatic checkpoints and 10 saves are kept per session.
+* **Adventure end**: `tw.game.win` / `game_over` set the session status; the client then calls `POST /{game_id}/terminal-epilogue` on its own, which saves the epilogue narration plus an `adventure_ending` chat message (`api/routes/adventures/adventure_ending.py`, JSON: outcome, reason, tally). The story feed renders it as `AdventureEndingCard`; like `license_info` it never reaches the LLM. After a game over the input is locked.
 * Performance metrics logged via `log_structured_event` (p50/p90 latency monitoring); narration token usage (incl. cached prompt tokens) as `gm.turn.pipeline.tokens`.
 
 ---

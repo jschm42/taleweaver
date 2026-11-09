@@ -89,20 +89,6 @@ async def quest_finished(ctx: DebugContext) -> str:
     return f"DEBUG: Quest '{target.get('title') or target.get('id')}' marked as completed."
 
 
-async def open_exit(ctx: DebugContext) -> str:
-    parts = ctx.parts
-    if len(parts) < 2:
-        return "DEBUG ERROR: Usage: /debug open_exit [EXIT_ID]"
-    exit_id = parts[1]
-    overrides = dict(ctx.state.exit_states or {})
-    entry = dict(overrides.get(exit_id) or {})
-    entry["is_locked"] = False
-    overrides[exit_id] = entry
-    ctx.state.exit_states = overrides
-    flag_modified(ctx.state, "exit_states")
-    return f"DEBUG: Exit '{exit_id}' is now unlocked."
-
-
 async def walkthrough(ctx: DebugContext) -> str:
     steps = sequence_walkthrough_steps(
         getattr(ctx.adventure, "sequences", None), ctx.state.active_sequence_id

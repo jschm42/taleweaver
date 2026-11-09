@@ -550,6 +550,8 @@ class TerminalEpilogueRequest(BaseModel):
 
 class TerminalEpilogueResponse(BaseModel):
     content: Optional[str] = None
+    # The ending card chat message (role ``adventure_ending``), saved after the epilogue.
+    ending: Optional[dict[str, Any]] = None
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None

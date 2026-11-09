@@ -34,7 +34,9 @@ from backend.api.routes.adventures.sequence_hooks import (
     build_sequence_intro,
     run_sequence_transition_hooks,
 )
+from backend.api.routes.adventures.debug_arrival import stream_debug_arrival
 from backend.engine.debug_commands.debug_engine import DebugEngine
+from backend.engine.debug_commands.navigation_commands import DEBUG_GOTO_MARKER
 from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
@@ -430,6 +432,11 @@ class TurnInteractionsManager:
             async for chunk in self._handle_debug_gen_item(prompt):
                 yield chunk
             return
+        elif debug_info.startswith(DEBUG_GOTO_MARKER):
+            scene_id = debug_info[len(DEBUG_GOTO_MARKER) :].strip()
+            async for chunk in stream_debug_arrival(self.manager, scene_id):
+                yield chunk
+            debug_info = f"DEBUG: Teleported to '{scene_id}'."
         elif debug_info.startswith(TIME_CHANGED_MARKER):
             debug_info = debug_info[len(TIME_CHANGED_MARKER) :].strip()
             async for chunk in stream_time_events(self.manager):

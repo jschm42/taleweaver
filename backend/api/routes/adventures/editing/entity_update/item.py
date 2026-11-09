@@ -128,7 +128,9 @@ def _update_metadata(
         # Imported switches store "not listed in discoveries"; drop it so the
         # new type's default applies (e.g. a CONTAINER_SWITCH must be listed).
         metadata_json.pop("discovery_visibility", None)
-    item_metadata.update_container(item, metadata_json, payload, item_type in CONTAINER_ITEM_TYPES)
+    item_metadata.update_container(
+        item, metadata_json, payload, item_type in CONTAINER_ITEM_TYPES, type_changed
+    )
     if given(payload, "inventory"):
         item.inventory = payload.inventory
         flag_modified(item, "inventory")

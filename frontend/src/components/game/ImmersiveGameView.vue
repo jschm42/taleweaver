@@ -124,6 +124,7 @@ const emit = defineEmits<{
   traverseExit: [exit: any]
   switchFlip: [entity: any]
   exitSession: []
+  backToMenu: []
 }>()
 
 // --- State: Scene Image & Fallbacks ---
@@ -423,6 +424,8 @@ defineExpose({
           @npc-hover="(entity, event) => emit('npcHover', entity, event)"
           @npc-leave="emit('npcLeave')"
           @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
+          @back-to-menu="emit('backToMenu')"
+          @load-save="emit('openChronicles')"
         >
           <template #after-exchanges>
             <slot name="story-end" />
@@ -496,6 +499,7 @@ defineExpose({
         :can-send-input="canSendInput"
         :is-evaluating="isEvaluating"
         :status-text="props.statusText"
+        :locked-text="props.status === 'game_over' && props.inputLocked ? 'Game over: this story has ended. Load a save to play on.' : ''"
         :agent-active="props.sheet?.agent_active"
         :debug-mode="!!props.sheet?.debug_mode"
         :turn-error="props.turnError"

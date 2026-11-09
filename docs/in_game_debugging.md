@@ -37,7 +37,8 @@ All debug commands are prefixed with `/debug`.
 | `/debug exp [amount]` | Grants the specified amount of XP to the avatar. |
 | `/debug kill [NPC_NAME\|ID]` | Removes an NPC from the world. |
 | `/debug delete_item [ITEM_KEY\|ID]` | Removes an item from the world or inventory. |
-| `/debug open_exit [EXIT_ID]` | Unlocks a specific exit. |
+| `/debug open_exit [EXIT_ID]` | Unlocks a specific exit for this session (route override, session exit row and map edge, like `tw.exits.unlock`). No unlock hooks fire. |
+| `/debug goto [SCENE_ID]` | Teleports the hero into the scene, ignoring exits and locks. The scene's `on_enter_scene` script/text fires as on a normal arrival, but there is no arrival narration. |
 | `/debug szene` | Shows technical details of the current scene. |
 | `/debug map` | Shows summary counts of world elements. |
 | `/debug log on/off` | Toggles detailed engine logging in the console. |
@@ -74,7 +75,13 @@ If you need to force open a door but don't know the ID:
 (Then use the ID found)
 `user: /debug open_exit exit_42`
 
-### 4. Checking a Script Value
+### 4. Using the Debug World Map
+The **World Map** tab of the debug inspector (bug icon) shows every scene, unmasked by fog-of-war:
+- **Click a scene** to teleport there (`/debug goto`). Clicking the current scene only opens its details; dragging the map does not count as a click.
+- **Click the red lock badge** on a locked passage to unlock it (`/debug open_exit`).
+The inspector reloads its data after each action.
+
+### 5. Checking a Script Value
 To see whether a variable was set and how many HP an NPC has left:
 `user: /script tw.vars.get('alarm')`
 `user: /script tw.npcs.get('TEMPLE_GUARD').hp`

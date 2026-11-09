@@ -39,6 +39,7 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/debug heal', label: '/debug heal [npc_name] [amount]', description: 'Restore health of player or target NPC', category: 'debug' },
   { id: '/debug kill', label: '/debug kill <npc_name>', description: 'Instantly defeat an NPC', category: 'debug' },
   { id: '/debug open_exit', label: '/debug open_exit <exit_id>', description: 'Unlock a passage or door', category: 'debug' },
+  { id: '/debug goto', label: '/debug goto <scene_id>', description: 'Teleport the hero into a scene (ignores exits and locks)', category: 'debug' },
   { id: '/debug exp', label: '/debug exp <amount>', description: 'Grant experience points to the hero', category: 'debug' },
   { id: '/debug awards', label: '/debug awards', description: 'Instantly claim all adventure awards', category: 'debug' },
   { id: '/debug game_won', label: '/debug game_won', description: 'Trigger the adventure victory condition', category: 'debug' },

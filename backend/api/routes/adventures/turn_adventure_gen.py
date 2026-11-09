@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.adventure_ending import save_ending_card
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
     FINAL_REPORT_COMPLETED_FALLBACK,
@@ -591,11 +592,13 @@ class TurnAdventureGenManager:
         epilogue_text = await self.manager._generate_terminal_epilogue_text(language=language)
         if epilogue_text:
             await self.manager._save_chat_message("assistant", epilogue_text)
+        ending = await save_ending_card(self.manager)
 
         self.manager._set_terminal_epilogue_sent(self.manager.state.session.status, sent=True)
         await self.manager.db.commit()
 
         return {
             "content": epilogue_text,
+            "ending": ending.to_client_dict(),
             **self.manager._build_terminal_flags_payload(),
         }

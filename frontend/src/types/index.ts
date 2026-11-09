@@ -2,7 +2,8 @@ export interface ChatMessage {
   id?: string
   /** Client-side render key; stays the same when the history is reloaded after a turn. */
   _key?: string
-  role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info'
+  /** `adventure_ending`: the win / game-over card (JSON content, see AdventureEndingCard). */
+  role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info' | 'adventure_ending'
   content: string
   timestamp: Date
   itemIds?: string[]

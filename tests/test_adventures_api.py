@@ -784,6 +784,13 @@ async def test_terminal_epilogue_completed_updates_chat_flags(client: AsyncClien
         msg.get("role") == "assistant" and "final report" in (msg.get("content") or "").lower()
         for msg in chat_payload.get("messages", [])
     )
+    # The ending card follows the epilogue and carries the outcome.
+    roles = [msg.get("role") for msg in chat_payload.get("messages", [])]
+    assert roles[-2:] == ["assistant", "adventure_ending"]
+    card = json.loads(chat_payload["messages"][-1]["content"])
+    assert card["outcome"] == "won"
+    assert card["reason"] == "All main quests completed."
+    assert payload["ending"]["role"] == "adventure_ending"
 
 
 async def test_terminal_epilogue_game_over_locks_input(client: AsyncClient, monkeypatch):
@@ -836,6 +843,10 @@ async def test_terminal_epilogue_game_over_locks_input(client: AsyncClient, monk
     assert chat_payload["game_over"] is True
     assert chat_payload["pending_terminal_epilogue"] is False
     assert chat_payload["input_locked"] is True
+    card = json.loads(payload["ending"]["content"])
+    assert card["outcome"] == "lost"
+    assert card["reason"] == "The hero has fallen."
+    assert chat_payload["messages"][-1]["role"] == "adventure_ending"
 
 
 async def test_translate_text_endpoint_uses_bable_fish_language(client: AsyncClient, monkeypatch):
