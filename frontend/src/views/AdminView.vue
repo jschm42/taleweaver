@@ -12,7 +12,7 @@ import { restartSetupWizard } from '@/store/setupWizard'
 const router = useRouter()
 
 // ============ NAVIGATION & UI STATE ============
-type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'game' | 'users'
+type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'voice-map' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'game' | 'users'
 const activeSection = ref<Section>('keys')
 
 // ============ MODAL STATE (UI only, not shared with services) ============
@@ -38,6 +38,7 @@ import IntelligenceSection from '@/components/admin/IntelligenceSection.vue'
 import VisualsSection from '@/components/admin/VisualsSection.vue'
 import SpeechSection from '@/components/admin/SpeechSection.vue'
 import SpeechToTextSection from '@/components/admin/SpeechToTextSection.vue'
+import VoiceMappingSection from '@/components/admin/VoiceMappingSection.vue'
 import AudioSection from '@/components/admin/AudioSection.vue'
 import CatalogSection from '@/components/admin/CatalogSection.vue'
 import NarratorVoicesSection from '@/components/admin/NarratorVoicesSection.vue'
@@ -275,6 +276,13 @@ const navCategories: NavCategory[] = [
         iconColor: 'text-blue-400'
       },
       {
+        id: 'voice-map',
+        label: 'Character Voices',
+        icon: 'ra-speech-bubbles',
+        activeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30 shadow-sm shadow-sky-950/20',
+        iconColor: 'text-sky-400'
+      },
+      {
         id: 'stt',
         label: 'Voice Input (STT)',
         icon: 'ra-microphone',
@@ -471,6 +479,8 @@ const navCategories: NavCategory[] = [
           @test="handleTestTTS"
           @switch-section="(s) => activeSection = s as Section"
         />
+
+        <VoiceMappingSection v-if="activeSection === 'voice-map'" />
 
         <SpeechToTextSection 
           v-if="activeSection === 'stt'"

@@ -24,7 +24,7 @@ const VOICE_LIST = [
   'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
   'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome',
   'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux',
-  'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager'
+  'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat'
 ]
 
 const GEMINI_TTS_MODELS = [
@@ -211,7 +211,7 @@ const handleSave = () => {
             input-class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50"
           />
           <p class="text-[11px] text-slate-500">
-            Everything is read in the narrator voice; vocal tags are removed before synthesis.
+            Characters speak with the voices set under Character Voices (else the narrator voice); vocal tags are removed before synthesis.
           </p>
         </div>
 
@@ -281,6 +281,24 @@ const handleSave = () => {
               <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
+        </div>
+
+        <!-- Character voices: per-provider voice ids for the voice list -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/60 rounded-xl border border-white/5">
+          <div>
+            <div class="text-xs font-bold text-white uppercase tracking-wider">Character Voices</div>
+            <div class="text-[10px] text-slate-400 mt-1 pr-8">
+              NPCs and the protagonist get a voice from the voice list. ElevenLabs speaks it directly; for Google TTS and
+              OpenAI-compatible servers, assign the matching voices on the Character Voices page. Unassigned voices use the narrator voice.
+            </div>
+          </div>
+          <button
+            type="button"
+            class="shrink-0 px-4 py-2 rounded-xl border border-blue-500/40 bg-blue-500/10 text-blue-200 text-xs font-bold uppercase tracking-wider hover:bg-blue-500/20 cursor-pointer"
+            @click="emit('switchSection', 'voice-map')"
+          >
+            Character Voices →
+          </button>
         </div>
 
         <!-- Speech rate slider -->

@@ -1,7 +1,7 @@
 import logging
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -13,12 +13,17 @@ from backend.core.api_keys import PersonalKeyRequiredError
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.global_settings import read_server_settings
-from backend.engine.audio.elevenlabs_voices import load_voice_catalog, looks_like_voice_id
 from backend.engine.audio.openai_compatible_tts import (
     OPENAI_COMPATIBLE_PROVIDER,
     SpeechEndpoint,
     normalize_response_format,
     resolve_speech_api_key,
+)
+from backend.engine.audio.speaker_voice import (
+    NarratorVoices,
+    SpeakerVoices,
+    elevenlabs_speaker_voice,
+    resolve_speaker_voices,
 )
 from backend.engine.audio.tts_engine import (
     TTSEngine,
@@ -27,7 +32,8 @@ from backend.engine.audio.tts_engine import (
     TTSRateLimitError,
     TTSTimeoutError,
 )
-from backend.engine.audio.voice_casting import NPC_VOICE_PROVIDER, provider_api_key
+from backend.engine.audio.voice_casting import provider_api_key
+from backend.engine.audio.voice_provider_map import effective_voice_map
 from backend.models.game_session import GameSession
 from backend.models.server_settings import ServerSettings
 from backend.models.user import User
@@ -62,6 +68,8 @@ class ResolvedTTSConfig:
     use_streaming: bool
     model: str
     speech_endpoint: Optional[SpeechEndpoint] = None
+    # Voice-list id -> {provider: voice} (see engine/audio/voice_provider_map.py).
+    voice_map: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -144,18 +152,21 @@ async def _resolve_tts_config(
         use_streaming=_coerce_bool(tts_settings.get("use_streaming"), False),
         model=model,
         speech_endpoint=endpoint,
+        voice_map=effective_voice_map(settings_user.voice_provider_map),
     )
 
 
 def _resolve_elevenlabs_voice(config: ResolvedTTSConfig, voice_override: Optional[str]) -> str:
-    """Per-character voices are an ElevenLabs feature; Gemini always uses the narrator voice."""
-    if config.provider == NPC_VOICE_PROVIDER and looks_like_voice_id(voice_override):
-        return str(voice_override)
-    if voice_override:
-        logger.debug(
-            "Ignoring voice override '%s' for provider %s.", voice_override, config.provider
-        )
-    return config.elevenlabs_voice_id
+    """The ElevenLabs voice: the character's list or custom voice id, else the narrator voice."""
+    return elevenlabs_speaker_voice(config.provider, config.elevenlabs_voice_id, voice_override)
+
+
+def _resolve_speaker_voices(
+    config: ResolvedTTSConfig, voice_override: Optional[str]
+) -> SpeakerVoices:
+    """The character's voice for the active provider (voice mapping), else the narrator voice."""
+    narrator = NarratorVoices(config.voice, config.elevenlabs_voice_id, config.speech_endpoint)
+    return resolve_speaker_voices(config.provider, narrator, config.voice_map, voice_override)
 
 
 async def _normalize_session_ids(
@@ -306,12 +317,13 @@ async def generate_tts(
         len(payload.text),
     )
 
+    speaker = _resolve_speaker_voices(config, payload.voice_override)
     try:
         audio_url = await TTSEngine.generate_speech(
             text=payload.text,
             provider=config.provider,
-            voice=config.voice,
-            elevenlabs_voice_id=_resolve_elevenlabs_voice(config, payload.voice_override),
+            voice=speaker.voice,
+            elevenlabs_voice_id=speaker.elevenlabs_voice_id,
             use_vocal_tags=config.use_vocal_tags,
             api_key=config.api_key,
             adventure_id=adventure_id,
@@ -319,7 +331,7 @@ async def generate_tts(
             model_name=config.model,
             language=payload.language,
             use_streaming=config.use_streaming,
-            speech_endpoint=config.speech_endpoint,
+            speech_endpoint=speaker.speech_endpoint,
         )
     except TTSTimeoutError as exc:
         raise HTTPException(
@@ -391,25 +403,3 @@ async def test_tts_connection_v2(
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}
     return {"status": "success", "audio_url": audio_url}
-
-
-@router.get("/voices")
-async def list_tts_voices(
-    provider: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """The voice list for per-character speech.
-
-    The list is always returned so voices can be assigned in the editor at any time; they are
-    only spoken with ElevenLabs (``supports_npc_voices``). ``provider`` lets the settings form
-    ask about ElevenLabs before the provider is saved.
-    """
-    owner = await _resolve_tts_settings_source(db)
-    active = str((owner.tts_settings or {}).get("provider") or "google").lower()
-    requested = (provider or active).lower()
-    return {
-        "provider": requested,
-        "supports_npc_voices": requested == NPC_VOICE_PROVIDER,
-        "voices": load_voice_catalog(),
-    }

@@ -510,7 +510,7 @@ const configuredStyleName = computed(() => {
   return found?.name || styleId
 })
 const toneCatalog = ref<any[]>([])
-// Voice list for NPC voices (ElevenLabs only; Gemini speaks everything in the narrator voice).
+// Voice list for NPC voices (ElevenLabs directly; Google / OpenAI-compatible via the admin's voice mapping).
 const voiceList = ref<TtsVoiceList | null>(null)
 
 async function fetchVoiceList() {

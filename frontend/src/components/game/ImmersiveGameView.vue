@@ -338,7 +338,11 @@ defineExpose({
         @open-settings="(tab?: SettingsTabId) => emit('openSettings', tab)"
         @open-debug="emit('openDebug')"
         @exit-session="emit('exitSession')"
-      />
+      >
+        <template #audio>
+          <slot name="header-audio" />
+        </template>
+      </ImmersiveHeader>
     </HoverRevealHeader>
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->

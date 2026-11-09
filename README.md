@@ -100,7 +100,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Text-Log Discovery System:** Readable objects can contain structured text logs (document, scroll, book, sign) that can be opened directly from scene and inventory interactions.
 
 ### 🎧 The Playable Audiobook & Voice Input (Cinematic Audio)
-* **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth. With ElevenLabs, speech streams as it is generated and every character speaks with their own voice (see [Character Voices](#️-character-voices-elevenlabs-voice-list)). Any [OpenAI-compatible speech server](docs/openai-compatible-tts.md) works too: local and offline (e.g. Kokoro-82M via Kokoro-FastAPI) or hosted (OpenAI, OpenRouter), read in the narrator voice.
+* **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth. With ElevenLabs, speech streams as it is generated. Every character speaks with their own voice, with ElevenLabs directly and with Gemini or an OpenAI-compatible server through the admin's voice mapping (see [Character Voices](#️-character-voices-voice-list)). Any [OpenAI-compatible speech server](docs/openai-compatible-tts.md) works too: local and offline (e.g. Kokoro-82M via Kokoro-FastAPI) or hosted (OpenAI, OpenRouter).
 * **Granular In-Game Auto-Speak TTS Channels:** Players can toggle auto-narration per channel (**Game Master**, **Protagonist**, **NPCs**, **Readables**, and **System Messages**) via a compact table in the in-game settings, and configure default preferences in their user profile (default: all channels enabled except system messages).
 * **Speech-to-Text & Push-to-Talk (PTT):** True hands-free roleplaying! Hold down the interactive microphone UI button or hotkeys (`V`, `B`, or `T`) to record and speak directly to NPCs and the GM. Releases auto-transcribe and submit immediately. A voice activity filter trims silence before transcription, so the spoken language is detected from your speech rather than from microphone noise.
 * **In-Character Speech Shortcuts:** Hold down `B`, `T`, or `Shift` to automatically prepend `/say ` to your transcription, allowing seamless in-character dialogue.
@@ -354,9 +354,11 @@ Core server and security settings are configured in `.env` (refer to [`.env.exam
 | `ALLOW_REMOTE_SETUP` | Allow non-loopback clients to execute initial root bootstrap | `false` |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` | Optional default provider keys (can also be configured in the UI) | Encrypted at rest |
 
-### 🎙️ Character Voices (ElevenLabs Voice List)
+### 🎙️ Character Voices (Voice List)
 
-With **ElevenLabs** as speech provider, every NPC and the protagonist speak with their own voice (Gemini TTS reads everything in the narrator voice). The voices come from a curated list, **`backend/core/elevenlabs_voices.json`**. The world builder assigns voices only from this list, automatic casting picks from it (matching gender, never repeating the narrator's or another character's voice), and the editor's voice picker offers it.
+Every NPC and the protagonist get their own voice from a curated list, **`backend/core/elevenlabs_voices.json`**, whatever the speech provider. The world builder assigns voices only from this list, automatic casting picks from it (matching gender, never repeating the narrator's or another character's voice), and the editor's voice picker offers it.
+
+**ElevenLabs** speaks the listed voices directly (their ids are ElevenLabs voice ids). For **Google TTS** and **OpenAI-compatible** servers, an admin assigns the matching voice to each list voice under **Admin → Character Voices** (also linked from *Admin → Speech*): a table with the voice name, the ElevenLabs id, a Google voice (e.g. `Kore`) and an OpenAI-compatible voice id (e.g. Kokoro's `af_heart`). An empty cell means that voice is read in the narrator (GM) voice. Until a mapping is saved, the suggestions from the voice list (`google_voice`, `openai_compatible_voice`) are used; the bundled list suggests a Google voice for every entry, and *Use Suggestions* on that page fills empty cells with them. The table can be exported as CSV or JSON, edited in a spreadsheet and imported again; import matches rows by ElevenLabs id, else by name, and only fills the table until you save it. File columns: `name`, `description` (informational), `elevenlabs_id`, `google_voice`, `openai_compatible_voice` (CSV with `,`, `;` or tabs). The mapping is stored server-wide (`server_settings.voice_provider_map`); casting skips list voices that a provider would speak with the narrator voice.
 
 A dialogue line (`Name: "..."`, from the Game Master or a script) gets the voice of the NPC it names: by ID, by full name, or by a shortened name made of the leading words of exactly one NPC's name ("Grimsby" for "Grimsby the Gargoyle"). A short name that fits several NPCs falls back to the narrator voice. Each game copies the NPCs' voices when it starts, so a voice changed in the editor is heard in games started afterwards.
 
@@ -377,11 +379,12 @@ A dialogue line (`Name: "..."`, from the Game Master or a script) gets the voice
 | `name` | Shown in the editor; the world builder may also refer to a voice by name. |
 | `gender` | `female`, `male` or `null` – used to match voices to characters. |
 | `age`, `accent`, `description`, `good_for` | Hints for the world builder and for the editor's voice picker. |
+| `google_voice`, `openai_compatible_voice` | Optional suggested voice for Google TTS (e.g. `Kore`) / OpenAI-compatible servers (e.g. `af_heart`); used until an admin saves the mapping under *Admin → Character Voices*. |
 
 * **Without touching the code:** put your own list at `DATA_DIR/voices/elevenlabs_voices.json` (e.g. `data/voices/…`, or `data-docker/voices/…` with Docker). It replaces the bundled list completely.
 * **Fill the list from your ElevenLabs account:** `poetry run python scripts/sync_elevenlabs_voices.py --dry-run` shows the differences; without `--dry-run` it adds missing account voices (hand-written `good_for` hints are kept), `--prune` also removes listed voices your account does not have, and `--output data/voices/elevenlabs_voices.json` writes the override file instead.
 * **Removing a voice:** characters that used it fall back to the narrator voice until you pick a new one in the editor.
-* **A voice outside the list:** in the editor, choose *Own voice ID…* for a single character. Such voices are always used, whether or not they are in the list.
+* **A voice outside the list:** in the editor, choose *Own voice ID…* for a single character. Such voices are always used with ElevenLabs, whether or not they are in the list; other providers read that character in the narrator voice.
 
 ---
 

@@ -59,7 +59,7 @@ Kokoro-82M speaks English (US/UK), Spanish, French, Italian, Portuguese (BR), Hi
 
 ## Behavior and limits
 
-* **Narrator voice only.** Narrator, protagonist and NPCs share the narrator voice; per-character voices stay an ElevenLabs feature.
+* **Character voices via mapping.** The narrator uses the **Narrator Voice** above. NPCs and the protagonist speak with the voice an admin assigned to their list voice under **Admin → Character Voices** (column *OpenAI-compatible*, e.g. `am_michael`); list voices without an entry use the narrator voice. See [Character Voices](../README.md#️-character-voices-voice-list).
 * **No vocal tags.** Tags like `[whispering]` are removed before synthesis; use **Instructions** for the general delivery instead.
 * **Whole clips, no streaming playback.** Each line is generated as one file and played when ready.
 * Timeouts follow the regular TTS settings (`TTS_TIMEOUT_SECONDS`, `TTS_TIMEOUT_PER_1K_CHARS`, `TTS_TIMEOUT_MAX_SECONDS`).

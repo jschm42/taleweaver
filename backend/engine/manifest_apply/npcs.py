@@ -161,7 +161,7 @@ def _casting_candidate(npc: dict[str, Any], voices: list[VoiceOption]) -> Castin
 
 
 def _stored_voice(npc: dict[str, Any], cast: dict[str, Optional[str]]) -> Optional[str]:
-    """What to store: a custom voice as written, else the cast voice (imports keep theirs under Gemini)."""
+    """What to store: a custom voice as written, else the cast voice (or the written one)."""
     if custom_voice_id(npc.get("voice")):
         return npc["voice"]
     return cast.get(npc["id"]) or npc.get("voice")

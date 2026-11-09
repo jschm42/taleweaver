@@ -19,6 +19,10 @@ import type {
   GeneratorSurprisePresetPayload,
   GeneratorSurprisePresetResponse,
   TtsVoiceList,
+  VoiceMapFileFormat,
+  VoiceMapImportResult,
+  VoiceMapRow,
+  VoiceMapTable,
   SpeechModelList,
   SpeechVoiceList,
   LeaderboardResponse,
@@ -419,6 +423,10 @@ export const GENERATION_SAYINGS: string[] = [
   "Convincing the NPCs they have free will...",
   "Measuring the depth of the rabbit hole..."
 ]
+
+function toVoiceMapCells(items: VoiceMapRow[]): Array<Pick<VoiceMapRow, 'id' | 'google' | 'custom_openai'>> {
+  return items.map(({ id, google, custom_openai }) => ({ id, google, custom_openai }))
+}
 
 export const api = {
   /** Fetches all players ranked by XP, awards and quest outcomes. */
@@ -827,6 +835,30 @@ export const api = {
   getTtsVoices(provider?: string): Promise<TtsVoiceList> {
     const query = provider ? `?provider=${encodeURIComponent(provider)}` : ''
     return request(`/tts/voices${query}`, { method: 'GET' })
+  },
+
+  /** Admin table: Google / OpenAI-compatible voice per voice of the voice list. */
+  getVoiceMap(): Promise<VoiceMapTable> {
+    return request('/settings/voice-map', { method: 'GET' })
+  },
+
+  saveVoiceMap(items: VoiceMapRow[]): Promise<{ status: string; items: VoiceMapRow[] }> {
+    return request('/settings/voice-map', { method: 'PUT', body: JSON.stringify({ items: toVoiceMapCells(items) }) })
+  },
+
+  /** Lays an import file over the edited table; nothing is saved until `saveVoiceMap`. */
+  importVoiceMap(content: string, format: VoiceMapFileFormat, items: VoiceMapRow[]): Promise<VoiceMapImportResult> {
+    return request('/settings/voice-map/import', {
+      method: 'POST',
+      body: JSON.stringify({ content, format, items: toVoiceMapCells(items) }),
+    })
+  },
+
+  exportVoiceMap(format: VoiceMapFileFormat, items: VoiceMapRow[]): Promise<{ filename: string; content: string }> {
+    return request('/settings/voice-map/export', {
+      method: 'POST',
+      body: JSON.stringify({ format, items: toVoiceMapCells(items) }),
+    })
   },
 
   /** Models of the OpenAI-compatible speech server (admin); `baseUrl` checks one before saving. */

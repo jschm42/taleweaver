@@ -42,7 +42,9 @@ from backend.api.routes import (
     tts_api,
     tts_openai_compatible_api,
     tts_stream_api,
+    tts_voices_api,
     users_api,
+    voice_map_api,
 )
 from backend.core.config import settings
 from backend.core.database import run_db_migrations
@@ -196,6 +198,7 @@ async def add_security_headers(request, call_next):
 
 
 app.include_router(narrator_voices_api.router, prefix="/api")
+app.include_router(voice_map_api.router, prefix="/api")
 app.include_router(audio_settings_api.router, prefix="/api")
 app.include_router(config_api.router, prefix="/api")
 app.include_router(setup_wizard_api.router, prefix="/api")
@@ -211,6 +214,7 @@ app.include_router(leaderboard_api.router, prefix="/api")
 app.include_router(api_keys_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
 app.include_router(tts_stream_api.router, prefix="/api")
+app.include_router(tts_voices_api.router, prefix="/api")
 app.include_router(tts_openai_compatible_api.router, prefix="/api")
 app.include_router(stt_api.router, prefix="/api")
 

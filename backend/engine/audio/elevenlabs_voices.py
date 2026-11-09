@@ -30,6 +30,9 @@ class VoiceOption(TypedDict):
     accent: str
     description: str
     good_for: list[str]
+    # Suggested voices for the other providers (used until an admin saves the voice mapping).
+    google_voice: str
+    openai_compatible_voice: str
 
 
 _cache: dict[str, Any] = {"key": None, "voices": []}
@@ -79,6 +82,8 @@ def _to_option(raw: Any) -> Optional[VoiceOption]:
         accent=_text(raw, "accent"),
         description=_text(raw, "description"),
         good_for=[str(item) for item in good_for if item],
+        google_voice=_text(raw, "google_voice"),
+        openai_compatible_voice=_text(raw, "openai_compatible_voice"),
     )
 
 

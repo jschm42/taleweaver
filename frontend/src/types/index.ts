@@ -709,6 +709,9 @@ export interface TtsVoice {
   accent: string
   description: string
   good_for: string[]
+  /** Suggested voices for Google TTS / OpenAI-compatible servers (voice list defaults). */
+  google_voice?: string
+  openai_compatible_voice?: string
 }
 
 /** Model ids of an OpenAI-compatible speech server (GET {base}/models). */
@@ -729,7 +732,39 @@ export interface SpeechVoiceList {
 
 export interface TtsVoiceList {
   provider: string
-  /** Only ElevenLabs gives characters their own voices; Gemini uses the narrator voice. */
+  /** ElevenLabs always; Google / OpenAI-compatible once the admin mapped at least one voice. */
   supports_npc_voices: boolean
+  /** List voice id -> voice the provider speaks; missing voices use the narrator voice. */
+  provider_voices?: Record<string, string>
   voices: TtsVoice[]
 }
+
+/** One row of the admin voice mapping table (empty cell = narrator voice). */
+export interface VoiceMapRow {
+  id: string
+  name: string
+  gender: string | null
+  age: string
+  accent: string
+  description: string
+  elevenlabs: string
+  google: string
+  custom_openai: string
+  /** The voice list's suggestion for the cell ("" = none). */
+  suggested_google: string
+  suggested_custom_openai: string
+}
+
+export interface VoiceMapTable {
+  items: VoiceMapRow[]
+  google_voices: Array<{ name: string; gender?: string | null; description?: string | null }>
+}
+
+export interface VoiceMapImportResult {
+  items: VoiceMapRow[]
+  matched: number
+  unknown: string[]
+  errors: string[]
+}
+
+export type VoiceMapFileFormat = 'csv' | 'json'

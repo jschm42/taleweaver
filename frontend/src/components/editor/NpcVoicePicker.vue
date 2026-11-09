@@ -2,6 +2,8 @@
 /**
  * NpcVoicePicker — Voice of an NPC or the protagonist: automatic, a voice from the voice list
  * (backend/core/elevenlabs_voices.json) or an own ElevenLabs voice id, stored as "custom:<id>".
+ * Google TTS and OpenAI-compatible servers speak the voice the admin mapped to a list voice
+ * (Admin → Character Voices); unmapped voices use the narrator voice.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Play, Square } from 'lucide-vue-next'
@@ -29,6 +31,8 @@ const isCustomChosen = ref(false)
 
 const voices = computed(() => props.voiceList?.voices ?? [])
 const supportsNpcVoices = computed(() => Boolean(props.voiceList?.supports_npc_voices))
+const isElevenLabs = computed((): boolean => props.voiceList?.provider === 'elevenlabs')
+const providerVoices = computed((): Record<string, string> => props.voiceList?.provider_voices ?? {})
 const storedCustomId = computed(() =>
   (props.modelValue || '').startsWith(CUSTOM_PREFIX) ? (props.modelValue || '').slice(CUSTOM_PREFIX.length) : '',
 )
@@ -64,7 +68,10 @@ function onCustomInput(value: string): void {
 
 function voiceLabel(voice: TtsVoice): string {
   const details = [voice.gender, voice.age, voice.accent, voice.description].filter(Boolean).join(', ')
-  return details ? `${voice.name} — ${details}` : voice.name
+  const label = details ? `${voice.name} — ${details}` : voice.name
+  if (isElevenLabs.value || !supportsNpcVoices.value) return label
+  const mapped = providerVoices.value[voice.id]
+  return mapped ? `${label} (${mapped})` : `${label} (narrator voice)`
 }
 
 function stopPreview(): void {
@@ -90,7 +97,7 @@ async function togglePreview(): Promise<void> {
   previewError.value = ''
   previewHint.value = ''
   if (!supportsNpcVoices.value) {
-    previewHint.value = 'Previews need ElevenLabs: choose it under Admin → Speech and add an ElevenLabs API key.'
+    previewHint.value = 'No character voices yet: choose ElevenLabs or map voices under Admin → Character Voices.'
     return
   }
   if (!previewVoiceId.value) {
@@ -129,7 +136,7 @@ onBeforeUnmount(stopPreview)
         type="button"
         class="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/10 transition-all"
         :class="{ 'opacity-40 grayscale': !supportsNpcVoices }"
-        :title="isPreviewing ? 'Stop preview' : supportsNpcVoices ? 'Preview this voice' : 'Previews need ElevenLabs as speech provider'"
+        :title="isPreviewing ? 'Stop preview' : supportsNpcVoices ? 'Preview this voice' : 'No character voices with the current speech provider'"
         @click="togglePreview"
       >
         <Square v-if="isPreviewing" class="w-3.5 h-3.5" />
@@ -159,8 +166,12 @@ onBeforeUnmount(stopPreview)
       <template v-else-if="!selectedVoice && !isCustom">The game picks a fitting voice from the voice list that differs from the narrator and the other characters.</template>
     </p>
     <p v-if="!supportsNpcVoices" class="text-[11px] leading-snug text-amber-400/80">
-      Character voices are spoken with ElevenLabs. With the current speech provider, all lines use the narrator
-      voice; the choice made here takes effect once ElevenLabs is selected.
+      The current speech provider has no character voices yet, so all lines use the narrator voice. ElevenLabs
+      speaks the list voices directly; for other providers an admin maps them under Admin → Character Voices.
+      The choice made here takes effect then.
+    </p>
+    <p v-else-if="isCustom && !isElevenLabs" class="text-[11px] leading-snug text-amber-400/80">
+      Own voice IDs are ElevenLabs voices; with the current speech provider this character uses the narrator voice.
     </p>
     <p v-if="previewHint" class="text-[11px] text-amber-300">{{ previewHint }}</p>
     <p v-if="previewError" class="text-[11px] text-red-400">{{ previewError }}</p>

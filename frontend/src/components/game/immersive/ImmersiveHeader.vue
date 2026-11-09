@@ -6,6 +6,7 @@
  * tracked quest badge, in-game clock and experience counter (narrow screens only; wide screens
  * show them ornamented beside the dock cards), and a settings button that
  * shows indicators while Auto-Speak or the Bable Fish translation is active.
+ * The `audio` slot holds the background music controls.
  */
 import { ref, computed } from 'vue'
 import { formatEntityRefs, resolveEntityRefsText } from '@/utils/entityRefs'
@@ -220,6 +221,9 @@ const sequenceOrder = computed(() => {
           <span class="tabular-nums">{{ props.exp ?? 0 }} XP</span>
         </div>
       </div>
+
+      <!-- Background music controls (provided by the game view when the adventure has audio) -->
+      <slot name="audio" />
 
       <!-- Stop Speech (only while audio is playing) -->
       <button

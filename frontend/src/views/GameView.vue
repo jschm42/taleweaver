@@ -1908,19 +1908,6 @@ usePlayAgentAutoLoop()
       </div>
     </div>
 
-    <GameAudioToggle
-      v-if="hasAudio"
-      class="absolute top-16 right-4 sm:right-6 z-40"
-      :muted="audioMuted"
-      :volume="audioVolume"
-      :generating="isAudioGenerating"
-      :error="audioError"
-      :playing="isAudioPlaying"
-      @toggle="gameAudio.toggleMuted()"
-      @stop="gameAudio.stopCurrent()"
-      @volume="gameAudio.setVolume"
-    />
-
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
@@ -1991,6 +1978,19 @@ usePlayAgentAutoLoop()
       @switch-flip="openSwitchStateModal"
       @exit-session="showExitModal = true"
     >
+      <template #header-audio>
+        <GameAudioToggle
+          v-if="hasAudio"
+          :muted="audioMuted"
+          :volume="audioVolume"
+          :generating="isAudioGenerating"
+          :error="audioError"
+          :playing="isAudioPlaying"
+          @toggle="gameAudio.toggleMuted()"
+          @stop="gameAudio.stopCurrent()"
+          @volume="gameAudio.setVolume"
+        />
+      </template>
       <template #story-end>
         <DialogChoicePanel
           :open="isChoicePanelOpen"
