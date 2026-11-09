@@ -66,7 +66,7 @@ from backend.api.routes.adventures.turn_prompt_layout import (
     build_pass1_user_prompt,
 )
 from backend.core import prompts
-from backend.core.api_keys import PersonalKeyRequiredError, key_source
+from backend.core.api_keys import PersonalKeyRequiredError, key_source, personal_key_message
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_request_tuning import bind_llm_session
@@ -236,7 +236,7 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
     lower_text = str(exc or "").lower()
 
     if isinstance(exc, PersonalKeyRequiredError):
-        return str(exc)
+        return personal_key_message(exc.provider, exc.reason)
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):

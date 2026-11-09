@@ -194,8 +194,8 @@ async def _agent_dialog_events(
     try:
         result = await DialogChoiceResolver(manager).resolve(dialog["id"], option["index"], None)
         messages = result["messages"]
-    except HTTPException as exc:
-        messages = [f"Choice failed: {exc.detail}"]
+    except HTTPException:
+        messages = ["Choice failed: Selected option is not available."]
     for msg in messages:
         yield _sse("system", {"role": "system", "content": msg})
     async for event in _change_log_events(db, manager, before):

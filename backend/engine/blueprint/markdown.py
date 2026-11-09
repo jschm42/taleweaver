@@ -5,14 +5,13 @@ from __future__ import annotations
 import re
 import textwrap
 
-_MD_HEADING_RE = re.compile(r"^(\s*)(#{1,6})\s+(.+?)\s*$")
-_MD_TAG_BODY_RE = re.compile(r"^([A-Za-z][A-Za-z_ ]*?)(?:\s*:\s*(.*))?$")
-_MD_SPLIT_REF_RE = re.compile(r"^([A-Za-z0-9_]+)\s*(?:—|–|-|:)\s+(.*)$")
-_MD_EXIT_SPLIT_RE = re.compile(r"^([^<>\-]+?(?:<->|->)\s*[A-Za-z0-9_]+)(?:\s*(?:—|–|-|:)\s*(.*))?$")
+_MD_HEADING_RE = re.compile(r"^(\s*)(#{1,6})\s+(.*)$")
 _SINGLE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_]+$")
-_HR_OR_COMMENT_RE = re.compile(r"^\s*(?:---+|\*\*\*+|<!--.*-->)\s*$")
+_HR_RE = re.compile(r"^(?:---+|\*\*\*+)$")
 _FENCE_OPEN_RE = re.compile(r"^\s*```[A-Za-z0-9_\-]*\s*$")
 _FENCE_CLOSE_RE = re.compile(r"^\s*```\s*$")
+_EXIT_ROUTE_RE = re.compile(r"^([^<>\r\n]+?(?:<->|->)\s*[A-Za-z0-9_]+)(.*)$")
+_SEP_START_RE = re.compile(r"^(?:—|–|-|:)\s*(.*)$")
 
 
 def normalize_md_word(raw: str) -> str:
@@ -28,15 +27,21 @@ def match_markdown_heading_tag(
     heading_match = _MD_HEADING_RE.match(line)
     if not heading_match:
         return None
-    indent_str, hashes, body = heading_match.groups()
-    body_match = _MD_TAG_BODY_RE.match(body)
-    if not body_match:
+    indent_str, hashes, raw_body = heading_match.groups()
+    body = raw_body.strip()
+    if not body:
         return None
-    word = normalize_md_word(body_match.group(1))
-    if word not in kind_aliases:
+
+    if ":" in body:
+        raw_word, raw_tail = body.split(":", 1)
+        tail = raw_tail.strip()
+    else:
+        raw_word, tail = body, None
+
+    word = normalize_md_word(raw_word)
+    if not word or word not in kind_aliases:
         return None
     kind, preset_type = kind_aliases[word]
-    tail = body_match.group(2)
     if tail is None and kind not in singleton_kinds:
         return None
     raw_ref, rest = _split_md_tag_tail(kind, (tail or "").strip(), singleton_kinds)
@@ -44,19 +49,33 @@ def match_markdown_heading_tag(
     return kind, preset_type, raw_ref, rest, indent, len(hashes)
 
 
+def _split_exit_tail(tail: str) -> tuple[str, str]:
+    exit_match = _EXIT_ROUTE_RE.match(tail)
+    if not exit_match:
+        return tail, ""
+    route = exit_match.group(1).strip()
+    rem = exit_match.group(2).strip()
+    if not rem:
+        return route, ""
+    sep_match = _SEP_START_RE.match(rem)
+    return route, sep_match.group(1).strip() if sep_match else rem
+
+
 def _split_md_tag_tail(kind: str, tail: str, singleton_kinds: set[str]) -> tuple[str, str]:
     if not tail or kind in singleton_kinds:
         return "", tail
     if kind == "exit":
-        exit_match = _MD_EXIT_SPLIT_RE.match(tail)
-        if exit_match:
-            return exit_match.group(1).strip(), (exit_match.group(2) or "").strip()
-        return tail, ""
-    split_match = _MD_SPLIT_REF_RE.match(tail)
-    if split_match:
-        return split_match.group(1).strip(), split_match.group(2).strip()
-    if _SINGLE_TOKEN_RE.match(tail):
-        return tail, ""
+        return _split_exit_tail(tail)
+
+    parts = tail.split(None, 1)
+    first = parts[0]
+    if not _SINGLE_TOKEN_RE.match(first):
+        return "", tail
+    if len(parts) == 1:
+        return first, ""
+    sep_match = _SEP_START_RE.match(parts[1].strip())
+    if sep_match:
+        return first, sep_match.group(1).strip()
     return "", tail
 
 
@@ -70,7 +89,10 @@ def match_markdown_section_heading(line: str) -> tuple[int, str] | None:
 
 def is_markdown_noise(line: str) -> bool:
     """True for horizontal rules (``---``, ``***``) and single-line HTML comments."""
-    return bool(_HR_OR_COMMENT_RE.match(line))
+    stripped = line.strip()
+    if stripped.startswith("<!--") and stripped.endswith("-->"):
+        return True
+    return bool(_HR_RE.match(stripped))
 
 
 def strip_inline_code(raw: str) -> str:

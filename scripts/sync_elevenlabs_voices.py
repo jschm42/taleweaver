@@ -40,12 +40,23 @@ SHARED_VOICES_URL = f"{API_BASE}/shared-voices"
 TIMEOUT = 20.0
 
 
-def fetch_account_voices(api_key: str) -> list[dict[str, Any]]:
-    response = httpx.get(VOICES_URL, headers={"xi-api-key": api_key}, timeout=TIMEOUT)
-    response.raise_for_status()
-    return [
-        v for v in response.json().get("voices") or [] if looks_like_voice_id(v.get("voice_id"))
-    ]
+def _as_client(client: httpx.Client | str) -> tuple[httpx.Client, bool]:
+    if isinstance(client, httpx.Client):
+        return client, False
+    return httpx.Client(headers={"xi-api-key": client}, timeout=TIMEOUT), True
+
+
+def fetch_account_voices(client: httpx.Client | str) -> list[dict[str, Any]]:
+    http, close = _as_client(client)
+    try:
+        response = http.get(VOICES_URL)
+        response.raise_for_status()
+        return [
+            v for v in response.json().get("voices") or [] if looks_like_voice_id(v.get("voice_id"))
+        ]
+    finally:
+        if close:
+            http.close()
 
 
 def _labels_of_shared(voice: dict[str, Any]) -> dict[str, Any]:
@@ -54,27 +65,29 @@ def _labels_of_shared(voice: dict[str, Any]) -> dict[str, Any]:
     return {key: voice.get(key) for key in keys if voice.get(key)}
 
 
-def fetch_voice(api_key: str, voice_id: str) -> tuple[dict[str, Any] | None, str]:
+def fetch_voice(client: httpx.Client | str, voice_id: str) -> tuple[dict[str, Any] | None, str]:
     """``(voice, source)`` for one id: the account first, then the public Voice Library."""
-    headers = {"xi-api-key": api_key}
-    response = httpx.get(f"{VOICES_URL}/{voice_id}", headers=headers, timeout=TIMEOUT)
-    if response.status_code == httpx.codes.OK:
-        return response.json(), "account"
-    if response.status_code in (httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN):
-        response.raise_for_status()
+    http, close = _as_client(client)
+    try:
+        response = http.get(f"{VOICES_URL}/{voice_id}")
+        if response.status_code == httpx.codes.OK:
+            return response.json(), "account"
+        if response.status_code in (httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN):
+            response.raise_for_status()
 
-    # Not in the account: the Voice Library search also matches voice ids; only an exact hit counts.
-    response = httpx.get(
-        SHARED_VOICES_URL,
-        headers=headers,
-        params={"search": voice_id, "page_size": 20},
-        timeout=TIMEOUT,
-    )
-    response.raise_for_status()
-    for voice in response.json().get("voices") or []:
-        if voice.get("voice_id") == voice_id:
-            return {**voice, "labels": _labels_of_shared(voice)}, "voice library"
-    return None, ""
+        # Not in the account: the Voice Library search also matches voice ids; only an exact hit counts.
+        response = http.get(
+            SHARED_VOICES_URL,
+            params={"search": voice_id, "page_size": 20},
+        )
+        response.raise_for_status()
+        for voice in response.json().get("voices") or []:
+            if voice.get("voice_id") == voice_id:
+                return {**voice, "labels": _labels_of_shared(voice)}, "voice library"
+        return None, ""
+    finally:
+        if close:
+            http.close()
 
 
 def to_entry(voice: dict[str, Any]) -> dict[str, Any]:
@@ -116,34 +129,42 @@ def render(document: dict[str, Any]) -> str:
 
 
 def add_voices(
-    api_key: str, voice_ids: list[str], good_for: list[str] | None, listed: list[dict[str, Any]]
+    client: httpx.Client | str,
+    voice_ids: list[str],
+    good_for: list[str] | None,
+    listed: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], bool]:
     """``(voices, ok)``: ``listed`` with the requested voices added or refreshed."""
-    voices = list(listed)
-    ok = True
-    for voice_id in voice_ids:
-        if not looks_like_voice_id(voice_id):
-            print(f"! {voice_id!r} is not an ElevenLabs voice id (20 letters/digits)")
-            ok = False
-            continue
-        voice, source = fetch_voice(api_key, voice_id)
-        if voice is None:
-            print(f"! {voice_id} was found neither in your account nor in the Voice Library")
-            ok = False
-            continue
-        entry = to_entry(voice)
-        position = next((i for i, e in enumerate(voices) if e.get("id") == voice_id), None)
-        if position is None:
-            if good_for is not None:
-                entry["good_for"] = good_for
-            voices.append(entry)
-            print(f"+ {entry['name']} ({voice_id}) from the {source}: {_summary(entry)}")
-            continue
-        existing = voices[position]
-        entry["good_for"] = good_for if good_for is not None else existing.get("good_for") or []
-        voices[position] = {**existing, **entry}
-        print(f"~ {entry['name']} ({voice_id}) refreshed from the {source}: {_summary(entry)}")
-    return voices, ok
+    http, close = _as_client(client)
+    try:
+        voices = list(listed)
+        ok = True
+        for voice_id in voice_ids:
+            if not looks_like_voice_id(voice_id):
+                print(f"! {voice_id!r} is not an ElevenLabs voice id (20 letters/digits)")
+                ok = False
+                continue
+            voice, source = fetch_voice(http, voice_id)
+            if voice is None:
+                print(f"! {voice_id} was found neither in your account nor in the Voice Library")
+                ok = False
+                continue
+            entry = to_entry(voice)
+            position = next((i for i, e in enumerate(voices) if e.get("id") == voice_id), None)
+            if position is None:
+                if good_for is not None:
+                    entry["good_for"] = good_for
+                voices.append(entry)
+                print(f"+ {entry['name']} ({voice_id}) from the {source}: {_summary(entry)}")
+                continue
+            existing = voices[position]
+            entry["good_for"] = good_for if good_for is not None else existing.get("good_for") or []
+            voices[position] = {**existing, **entry}
+            print(f"~ {entry['name']} ({voice_id}) refreshed from the {source}: {_summary(entry)}")
+        return voices, ok
+    finally:
+        if close:
+            http.close()
 
 
 def _error_detail(response: httpx.Response) -> str:
@@ -177,20 +198,29 @@ def _summary(entry: dict[str, Any]) -> str:
     return text
 
 
-def sync_account(api_key: str, listed: list[dict[str, Any]], prune: bool) -> list[dict[str, Any]]:
-    account = {v["voice_id"]: v for v in fetch_account_voices(api_key)}
-    listed_ids = {entry.get("id") for entry in listed}
+def sync_account(
+    client: httpx.Client | str, listed: list[dict[str, Any]], prune: bool
+) -> list[dict[str, Any]]:
+    http, close = _as_client(client)
+    try:
+        account = {v["voice_id"]: v for v in fetch_account_voices(http)}
+        listed_ids = {entry.get("id") for entry in listed}
 
-    added = [to_entry(voice) for voice_id, voice in account.items() if voice_id not in listed_ids]
-    missing = [entry for entry in listed if entry.get("id") not in account]
-    for entry in added:
-        print(f"+ {entry['name']} ({entry['id']})")
-    for entry in missing:
-        print(
-            f"{'-' if prune else '!'} {entry.get('name')} ({entry.get('id')}) is not in the account"
-        )
-    kept = [entry for entry in listed if not (prune and entry in missing)]
-    return kept + added
+        added = [
+            to_entry(voice) for voice_id, voice in account.items() if voice_id not in listed_ids
+        ]
+        missing = [entry for entry in listed if entry.get("id") not in account]
+        for entry in added:
+            print(f"+ {entry['name']} ({entry['id']})")
+        for entry in missing:
+            print(
+                f"{'-' if prune else '!'} {entry.get('name')} ({entry.get('id')}) is not in the account"
+            )
+        kept = [entry for entry in listed if not (prune and entry in missing)]
+        return kept + added
+    finally:
+        if close:
+            http.close()
 
 
 def main() -> int:
@@ -226,10 +256,13 @@ def main() -> int:
     listed: list[dict[str, Any]] = list(document.get("voices") or [])
     ok = True
     try:
-        if args.add:
-            voices, ok = add_voices(api_key, args.add, parse_good_for(args.good_for), listed)
-        else:
-            voices = sync_account(api_key, listed, args.prune)
+        with httpx.Client(headers={"xi-api-key": api_key}, timeout=TIMEOUT) as http_client:
+            if args.add:
+                voices, ok = add_voices(
+                    http_client, args.add, parse_good_for(args.good_for), listed
+                )
+            else:
+                voices = sync_account(http_client, listed, args.prune)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         print(f"ElevenLabs answered HTTP {status}", file=sys.stderr)

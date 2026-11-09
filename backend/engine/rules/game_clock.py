@@ -31,8 +31,7 @@ MAX_TIMERS = 50
 MAX_TIME = 10_000_000
 
 _DURATION_UNITS = {"w": 10080, "d": 1440, "h": 60, "m": 1}
-_DURATION_PART = re.compile(r"(\d+)\s*([wdhm])", re.IGNORECASE)
-_DURATION_FULL = re.compile(r"^(\s*\d+\s*[wdhm]\s*)+$", re.IGNORECASE)
+_DURATION_TOKEN = re.compile(r"\s*(\d+)\s*([wdhm])", re.IGNORECASE)
 _HOURS_MINUTES = re.compile(r"^\s*(\d+):([0-5]\d)\s*$")
 
 
@@ -57,9 +56,23 @@ def _parse_time_text(text: str) -> Optional[int]:
     hours_minutes = _HOURS_MINUTES.match(text)
     if hours_minutes:
         return int(hours_minutes.group(1)) * 60 + int(hours_minutes.group(2))
-    if not _DURATION_FULL.match(text):
-        return None
-    return sum(int(n) * _DURATION_UNITS[u.lower()] for n, u in _DURATION_PART.findall(text))
+
+    idx = 0
+    total = 0
+    n = len(text)
+    matched = False
+    while idx < n:
+        m = _DURATION_TOKEN.match(text, idx)
+        if not m:
+            if text[idx:].isspace():
+                break
+            return None
+        matched = True
+        num, unit = m.group(1), m.group(2)
+        total += int(num) * _DURATION_UNITS[unit.lower()]
+        idx = m.end()
+
+    return total if matched else None
 
 
 def to_minutes(value: Any) -> Optional[int]:

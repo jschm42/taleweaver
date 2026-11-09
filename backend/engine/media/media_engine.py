@@ -255,8 +255,12 @@ def _write_binary_file(filepath: str, payload: bytes) -> None:
         os.path.join(safe_parent_dir, safe_filename), safe_parent_dir
     )
     # Re-verify containment at the sink so the taint analysis trusts the path.
-    data_root = os.path.realpath(settings.DATA_DIR)
-    if os.path.commonpath([os.path.realpath(safe_filepath), data_root]) != data_root:
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    safe_parent_dir = os.path.abspath(os.path.realpath(safe_parent_dir))
+    if not (safe_parent_dir == data_root or safe_parent_dir.startswith(data_root + os.sep)):
+        raise ValueError("Invalid parent directory: escapes DATA_DIR.")
+    safe_filepath = os.path.abspath(os.path.realpath(safe_filepath))
+    if not safe_filepath.startswith(data_root + os.sep):
         raise ValueError("Invalid filepath: escapes DATA_DIR.")
     os.makedirs(safe_parent_dir, exist_ok=True)
     with open(safe_filepath, "wb") as file_handle:
