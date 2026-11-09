@@ -22,7 +22,7 @@ BUNDLED_VOICE_LIST: Final = Path(__file__).resolve().parents[2] / "core" / "elev
 _VOICE_ID_PATTERN: Final = re.compile(r"^[A-Za-z0-9]{20}$")
 
 
-class VoiceOption(TypedDict):
+class VoiceOption(TypedDict, total=False):
     id: str
     name: str
     gender: Optional[str]
@@ -30,6 +30,7 @@ class VoiceOption(TypedDict):
     accent: str
     description: str
     good_for: list[str]
+    best_for: list[str]
     # Suggested voices for the other providers (used until an admin saves the voice mapping).
     google_voice: str
     openai_compatible_voice: str
@@ -73,7 +74,9 @@ def _to_option(raw: Any) -> Optional[VoiceOption]:
     if not isinstance(raw, dict) or not looks_like_voice_id(raw.get("id")):
         return None
     gender = _text(raw, "gender").lower()
-    good_for = raw.get("good_for") if isinstance(raw.get("good_for"), list) else []
+    raw_good_for = raw.get("good_for") or raw.get("best_for") or raw.get("best-for")
+    good_for = raw_good_for if isinstance(raw_good_for, list) else []
+    good_for_list = [str(item) for item in good_for if item]
     return VoiceOption(
         id=str(raw["id"]),
         name=_text(raw, "name") or str(raw["id"]),
@@ -81,7 +84,8 @@ def _to_option(raw: Any) -> Optional[VoiceOption]:
         age=_text(raw, "age"),
         accent=_text(raw, "accent"),
         description=_text(raw, "description"),
-        good_for=[str(item) for item in good_for if item],
+        good_for=good_for_list,
+        best_for=good_for_list,
         google_voice=_text(raw, "google_voice"),
         openai_compatible_voice=_text(raw, "openai_compatible_voice"),
     )

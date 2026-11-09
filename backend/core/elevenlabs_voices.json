@@ -502,7 +502,8 @@
         "child",
         "orphan",
         "village girl"
-      ]
+      ],
+      "google_voice": "Leda"
     },
     {
       "id": "S7IsvAvEoDfui6GSZK3A",
@@ -515,7 +516,8 @@
         "child",
         "street urchin",
         "page boy"
-      ]
+      ],
+      "google_voice": "Achird"
     },
     {
       "id": "TxGi1N29NQoCaYD4fcU5",
@@ -528,7 +530,8 @@
         "teenager",
         "apprentice",
         "runaway"
-      ]
+      ],
+      "google_voice": "Zephyr"
     },
     {
       "id": "Qbw4VpyUrHEG7NigKzty",
@@ -541,7 +544,8 @@
         "queen",
         "matriarch",
         "abbess"
-      ]
+      ],
+      "google_voice": "Gacrux"
     },
     {
       "id": "TxWZERZ5Hc6h9dGxVmXa",
@@ -554,7 +558,8 @@
         "knight",
         "mercenary captain",
         "guard captain"
-      ]
+      ],
+      "google_voice": "Alnilam"
     },
     {
       "id": "si0svtk05vPEuvwAW93c",
@@ -567,7 +572,8 @@
         "knight",
         "mercenary captain",
         "guard captain"
-      ]
+      ],
+      "google_voice": "Kore"
     },
     {
       "id": "weA4Q36twV5kwSaTEL0Q",
@@ -580,7 +586,8 @@
         "robot",
         "ship ai",
         "construct"
-      ]
+      ],
+      "google_voice": "Erinome"
     },
     {
       "id": "nPijfmaNgvm5OSN4xM8H",
@@ -593,7 +600,8 @@
         "robot",
         "ship ai",
         "construct"
-      ]
+      ],
+      "google_voice": "Orus"
     },
     {
       "id": "OTMqA7lryJHXgAnPIQYt",
@@ -606,7 +614,8 @@
         "imp",
         "kobold",
         "comic sidekick"
-      ]
+      ],
+      "google_voice": "Fenrir"
     }
   ]
 }

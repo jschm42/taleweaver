@@ -165,6 +165,8 @@ def mapping_rows(
             "age": voice["age"],
             "accent": voice["accent"],
             "description": voice["description"],
+            "good_for": list(voice.get("good_for") or voice.get("best_for") or []),
+            "best_for": list(voice.get("best_for") or voice.get("good_for") or []),
             "elevenlabs": voice["id"],
             **{p: (voice_map.get(voice["id"]) or {}).get(p, "") for p in MAPPED_PROVIDERS},
             **{f"suggested_{p}": _suggestion(voice, p) for p in MAPPED_PROVIDERS},

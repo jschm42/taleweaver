@@ -42,6 +42,8 @@ class VoiceMapRowPayload(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
     google: Optional[str] = Field(default=None, max_length=MAX_VOICE_ID_CHARS)
     custom_openai: Optional[str] = Field(default=None, max_length=MAX_VOICE_ID_CHARS)
+    good_for: Optional[list[str]] = None
+    best_for: Optional[list[str]] = None
 
 
 class VoiceMapPayload(BaseModel):

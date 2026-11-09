@@ -747,6 +747,8 @@ export interface VoiceMapRow {
   age: string
   accent: string
   description: string
+  good_for?: string[]
+  best_for?: string[]
   elevenlabs: string
   google: string
   custom_openai: string

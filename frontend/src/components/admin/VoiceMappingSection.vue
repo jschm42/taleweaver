@@ -22,11 +22,23 @@ const error = ref('')
 const notice = ref('')
 const importInput = ref<HTMLInputElement | null>(null)
 
+function bestForTags(row: VoiceMapRow): string[] {
+  const list = row.best_for ?? row.good_for
+  return Array.isArray(list) ? list : []
+}
+
 const filteredRows = computed((): VoiceMapRow[] => {
   const needle = filter.value.trim().toLowerCase()
   if (!needle) return rows.value
   return rows.value.filter((row) =>
-    [row.name, row.description, row.elevenlabs, row.google, row.custom_openai].some((text) => text?.toLowerCase().includes(needle)),
+    [
+      row.name,
+      row.description,
+      row.elevenlabs,
+      row.google,
+      row.custom_openai,
+      ...bestForTags(row),
+    ].some((text) => text?.toLowerCase().includes(needle)),
   )
 })
 const googleCount = computed((): number => rows.value.filter((row) => row.google).length)
@@ -203,6 +215,7 @@ async function onImportFile(event: Event): Promise<void> {
           <thead class="sticky top-0 bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500">
             <tr>
               <th class="text-left px-3 py-2 font-bold">Voice</th>
+              <th class="text-left px-3 py-2 font-bold">Best For</th>
               <th class="text-left px-3 py-2 font-bold">ElevenLabs ID</th>
               <th class="text-left px-3 py-2 font-bold">Google TTS</th>
               <th class="text-left px-3 py-2 font-bold">OpenAI-compatible</th>
@@ -213,6 +226,18 @@ async function onImportFile(event: Event): Promise<void> {
               <td class="px-3 py-2">
                 <div class="font-bold text-white">{{ row.name }}</div>
                 <div class="text-[11px] text-slate-500">{{ traits(row) }}</div>
+              </td>
+              <td class="px-3 py-2">
+                <div v-if="bestForTags(row).length" class="flex flex-wrap gap-1 max-w-xs">
+                  <span
+                    v-for="tag in bestForTags(row)"
+                    :key="tag"
+                    class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-medium border border-slate-700/50"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
+                <span v-else class="text-[11px] text-slate-600">—</span>
               </td>
               <td class="px-3 py-2 font-mono text-[11px] text-slate-400 whitespace-nowrap">{{ row.elevenlabs }}</td>
               <td class="px-3 py-2">
@@ -233,7 +258,7 @@ async function onImportFile(event: Event): Promise<void> {
               </td>
             </tr>
             <tr v-if="!filteredRows.length">
-              <td colspan="4" class="px-3 py-6 text-center text-slate-500">No voices match.</td>
+              <td colspan="5" class="px-3 py-6 text-center text-slate-500">No voices match.</td>
             </tr>
           </tbody>
         </table>

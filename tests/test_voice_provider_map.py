@@ -19,6 +19,7 @@ from backend.engine.audio.voice_provider_map import (
     build_voice_map,
     clean_provider_voice,
     effective_voice_map,
+    mapping_rows,
     normalize_voice_map,
     provider_voice,
     supports_character_voices,
@@ -130,6 +131,30 @@ def test_bundled_suggestions_are_valid_google_voices_and_avoid_the_default_narra
     # Assert
     assert len(suggested) == len(voices)
     assert all(entry["google"] != "Puck" for entry in suggested.values())
+
+
+def test_mapping_rows_includes_best_for_and_good_for():
+    # Arrange
+    voice = {
+        "id": ARIA,
+        "name": "Aria",
+        "gender": "female",
+        "age": "middle-aged",
+        "accent": "american",
+        "description": "expressive",
+        "good_for": ["adventurer", "rogue"],
+        "best_for": ["adventurer", "rogue"],
+        "google_voice": "Pulcherrima",
+        "openai_compatible_voice": "",
+    }
+
+    # Act
+    rows = mapping_rows([voice], {})
+
+    # Assert
+    assert len(rows) == 1
+    assert rows[0]["good_for"] == ["adventurer", "rogue"]
+    assert rows[0]["best_for"] == ["adventurer", "rogue"]
 
 
 def test_build_voice_map_reports_unknown_rows_and_rejects_invalid_cells():
