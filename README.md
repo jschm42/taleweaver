@@ -61,11 +61,13 @@ cinematic voice acting, comic-style narrative feeds, and deterministic Python me
 
 ## 1. The Vision
 
-Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
+Traditional text adventures trap players in static, predefined story branches. **TaleWeaver bridges generative AI storytelling with deterministic game engineering.**
+
+Guided by an adaptive AI Game Master, players explore living worlds that react dynamically to any choice or action. While the AI breathes life into narrative exposition, dramatic tension, and autonomous NPC personas, a robust server-side RPG engine and sandboxed Python scripts ensure that rules, combat, inventory, and world states remain grounded, fair, and consistent.
 
 ## 2. Core Features
 
-### 🧠 The Omniscient AI Gamemaster
+### 🧠 The Adaptive AI Game Master
 * **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
 * **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
 * **Narrator Voices:** Give each adventure its own Game Master voice: a hardboiled noir detective, a cozy fireside storyteller, a cold sci-fi chronicler and more. Admins curate the voice catalog (Admin → Narrator Voices); authors pick a voice or write their own in the editor's Tone tab. The voice changes how the narration is worded, not how long it is, and travels with the adventure's manifest.
@@ -173,7 +175,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 <tr>
 <td width="50%" valign="top">
 
-### 🧠 Omniscient Gamemaster
+### 🧠 Adaptive Game Master
 - **Infinite Generative Worlds** – plots, quests, puzzles, and explorable scenes generated dynamically on the fly
 - **Dynamic Living NPCs** – expressive multi-turn dialogue, autonomous scene movements, and individual motives
 - **Strict 2-Pass Rulebook** – decoupled game loop running mathematical mechanics first, followed by atmospheric narrative prose
