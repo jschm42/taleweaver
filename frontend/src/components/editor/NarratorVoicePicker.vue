@@ -70,8 +70,8 @@ const cardClass = (active: boolean) =>
           <i class="ra ra-speech-bubble text-fuchsia-400"></i>
         </div>
         <div>
-          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Narrator Voice</h3>
-          <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">How the Game Master speaks</p>
+          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Narrator Persona</h3>
+          <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">How the Game Master narrates</p>
         </div>
       </div>
       <div v-if="isDirty" class="flex items-center gap-2 animate-fade-in">
@@ -87,15 +87,15 @@ const cardClass = (active: boolean) =>
 
     <p class="text-xs text-slate-400 leading-relaxed">
       Sets word choice, sentence rhythm and attitude of the narration. The length of the narration stays
-      with the player's narration style, and NPCs keep their own way of speaking. The voice is saved with
+      with the player's narration style, and NPCs keep their own way of speaking. The persona is saved with
       the adventure and exported in its manifest.
     </p>
-    <p v-if="loadError" class="text-xs text-rose-400">Could not load the voice catalog: {{ loadError }}</p>
+    <p v-if="loadError" class="text-xs text-rose-400">Could not load the persona catalog: {{ loadError }}</p>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
       <button type="button" @click="pick(null)" class="text-left p-4 rounded-2xl border-2 bg-slate-950/40 transition-all" :class="cardClass(!selectedId)">
         <p class="text-xs font-black text-white uppercase tracking-wider">Engine default</p>
-        <p class="text-xs text-slate-500 mt-1">No special voice: a neutral, clear game master.</p>
+        <p class="text-xs text-slate-500 mt-1">No special persona: a neutral, clear game master.</p>
       </button>
       <button
         v-for="voice in voices"
@@ -111,7 +111,7 @@ const cardClass = (active: boolean) =>
         <p v-if="voice.sample" class="text-xs text-slate-400 italic mt-2 line-clamp-3">"{{ voice.sample }}"</p>
       </button>
       <button type="button" @click="pickCustom" class="text-left p-4 rounded-2xl border-2 bg-slate-950/40 transition-all" :class="cardClass(isCustom)">
-        <p class="text-xs font-black text-white uppercase tracking-wider">Custom voice</p>
+        <p class="text-xs font-black text-white uppercase tracking-wider">Custom persona</p>
         <p class="text-xs text-slate-500 mt-1">Write your own instruction for this adventure.</p>
       </button>
     </div>
@@ -137,7 +137,7 @@ const cardClass = (active: boolean) =>
           class="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-lg p-2.5"
         ></textarea>
         <span v-if="!modelValue.instruction.trim()" class="text-xs text-amber-400">
-          Without an instruction the GM narrates in the engine default voice.
+          Without an instruction the GM narrates in the engine default persona.
         </span>
       </label>
       <label class="block space-y-1">
@@ -147,7 +147,7 @@ const cardClass = (active: boolean) =>
           @input="updateCustom('sample', ($event.target as HTMLTextAreaElement).value)"
           :maxlength="VOICE_SAMPLE_MAX"
           rows="2"
-          placeholder="One or two sentences in this voice. The GM copies the voice, not the content."
+          placeholder="One or two sentences in this persona. The GM copies the style, not the content."
           class="w-full bg-slate-950 border border-slate-800 text-white text-sm italic rounded-lg p-2.5"
         ></textarea>
       </label>

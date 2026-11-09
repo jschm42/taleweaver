@@ -46,7 +46,7 @@ const save = async () => {
   try {
     const complete = voices.value.filter((voice) => voice.name.trim() && voice.instruction.trim())
     voices.value = copy(await narratorVoiceService.save(complete))
-    status.value = { type: 'success', text: 'Narrator voices saved.' }
+    status.value = { type: 'success', text: 'Narrator personas saved.' }
   } catch (err) {
     status.value = { type: 'error', text: (err as Error).message }
   } finally {
@@ -60,9 +60,9 @@ const save = async () => {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-extrabold text-white tracking-tight">Narrator Voices</h1>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Narrator Personas</h1>
         <p class="text-slate-400 text-sm mt-1">
-          How the Game Master narrates: word choice, sentence rhythm and attitude. Authors pick a voice
+          How the Game Master narrates: word choice, sentence rhythm and attitude. Authors pick a persona
           per adventure in the editor (Tone tab) or write their own. The narration length stays with the
           player's narration style.
         </p>
@@ -76,11 +76,11 @@ const save = async () => {
       >
         <i v-if="isSaving" class="ra ra-recycle animate-spin"></i>
         <i v-else class="ra ra-save"></i>
-        <span>{{ isSaving ? 'Saving...' : 'Save Narrator Voices' }}</span>
+        <span>{{ isSaving ? 'Saving...' : 'Save Narrator Personas' }}</span>
       </button>
     </div>
 
-    <div v-if="isLoading" class="text-slate-500 text-sm">Loading voices...</div>
+    <div v-if="isLoading" class="text-slate-500 text-sm">Loading personas...</div>
 
     <div v-else class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
       <div
@@ -104,7 +104,7 @@ const save = async () => {
               <input
                 v-model="voice.description"
                 maxlength="300"
-                placeholder="Genre and character of the voice"
+                placeholder="Genre and character of the persona"
                 class="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-lg p-2.5"
               />
             </label>
@@ -113,7 +113,7 @@ const save = async () => {
             type="button"
             @click="removeVoice(index)"
             class="mt-6 px-3 py-2 text-xs font-bold text-rose-400 hover:text-white hover:bg-rose-600 rounded-lg transition-colors"
-            title="Remove this voice"
+            title="Remove this persona"
           >
             Remove
           </button>
@@ -134,14 +134,14 @@ const save = async () => {
             v-model="voice.sample"
             :maxlength="VOICE_SAMPLE_MAX"
             rows="2"
-            placeholder="One or two sentences in this voice. The GM copies the voice, not the content."
+            placeholder="One or two sentences in this persona. The GM copies the style, not the content."
             class="w-full bg-slate-950 border border-slate-800 text-white text-sm italic rounded-lg p-2.5"
           ></textarea>
         </label>
       </div>
 
       <p v-if="!voices.length" class="text-sm text-slate-500">
-        No voices. Saving an empty list restores the built-in defaults.
+        No personas. Saving an empty list restores the built-in defaults.
       </p>
 
       <div class="flex flex-wrap gap-3">
@@ -150,13 +150,13 @@ const save = async () => {
           @click="addVoice"
           class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-xl"
         >
-          Add voice
+          Add persona
         </button>
         <button
           type="button"
           @click="restoreDefaults"
           class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold rounded-xl"
-          title="Replace the list with the built-in voices (not saved until you click Save)"
+          title="Replace the list with the built-in personas (not saved until you click Save)"
         >
           Restore defaults
         </button>

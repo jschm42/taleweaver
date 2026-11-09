@@ -70,7 +70,7 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 ### 🧠 The Adaptive AI Game Master
 * **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
 * **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
-* **Narrator Voices:** Give each adventure its own Game Master voice: a hardboiled noir detective, a cozy fireside storyteller, a cold sci-fi chronicler and more. Admins curate the voice catalog (Admin → Narrator Voices); authors pick a voice or write their own in the editor's Tone tab. The voice changes how the narration is worded, not how long it is, and travels with the adventure's manifest.
+* **Narrator Personas:** Give each adventure its own Game Master persona: a hardboiled noir detective, a cozy fireside storyteller, a cold sci-fi chronicler and more. Admins curate the persona catalog (Admin → Narrator Personas); authors pick a persona or write their own in the editor's Tone tab. The persona changes how the narration is worded, not how long it is, and travels with the adventure's manifest.
 * **Cover Mode (Sequels & Variations):** Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets.
 
 ### 🎭 Immersive In-Game Interface & Comic Story Feed
@@ -179,7 +179,7 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 - **Infinite Generative Worlds** – plots, quests, puzzles, and explorable scenes generated dynamically on the fly
 - **Dynamic Living NPCs** – expressive multi-turn dialogue, autonomous scene movements, and individual motives
 - **Strict 2-Pass Rulebook** – decoupled game loop running mathematical mechanics first, followed by atmospheric narrative prose
-- **Narrator Voices** – pick how the Game Master speaks per adventure (noir, fireside, gothic, epic historian, ...) or write your own
+- **Narrator Personas** – pick how the Game Master narrates per adventure (noir, fireside, gothic, epic historian, ...) or write your own
 - **Cover Mode** – generate sequels, alternate timelines, or spinoffs from existing adventure blueprints
 - **Tactical Encounters & Loot** – dedicated combat modal, locked container mechanics, item passcodes, and consumable handling
 

@@ -319,7 +319,7 @@ const navCategories: NavCategory[] = [
       },
       {
         id: 'voices',
-        label: 'Narrator Voices',
+        label: 'Narrator Personas',
         icon: 'ra-speech-bubble',
         activeClass: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30 shadow-sm shadow-fuchsia-950/20',
         iconColor: 'text-fuchsia-400'
