@@ -4,10 +4,10 @@
 
 # TaleWeaver
 
-**Weave Infinite Adventures. Direct and Star in Your Own Playable Audiobook.**
+**Weave Living Stories. Craft and Play Immersive AI Adventures.**
 
-A self-hosted, local-first generative AI roleplaying studio: combining an omniscient AI Gamemaster,
-cinematic voice acting, comic-style narrative feeds, and deterministic Python event scripting.
+An open-source, local-first generative AI roleplaying studio combining an adaptive AI Game Master,
+cinematic voice acting, comic-style narrative feeds, and deterministic Python mechanics.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-0ea5e9.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white)
