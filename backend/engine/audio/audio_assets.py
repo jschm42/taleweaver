@@ -13,6 +13,7 @@ import os
 import re
 from typing import Any, Optional
 
+from backend.core.config import settings
 from backend.utils.path_security import (
     assert_within_data_dir,
     data_url_to_local_path,
@@ -84,7 +85,14 @@ def save_library_audio(template_id: str, stem: str, token: str, data: bytes, ext
     folder = library_audio_dir(template_id)
     os.makedirs(folder, exist_ok=True)
     safe_stem = _SAFE_STEM_RE.sub("_", stem)[:60].strip("_") or "audio"
-    target = assert_within_data_dir(os.path.join(folder, f"{safe_stem}_{token}.{ext}"))
+    safe_token = _SAFE_STEM_RE.sub("", token)[:32] or "0"
+    safe_ext = _SAFE_STEM_RE.sub("", ext).lstrip(".")[:10] or "mp3"
+    filename = os.path.basename(f"{safe_stem}_{safe_token}.{safe_ext}")
+    target = os.path.abspath(os.path.realpath(os.path.join(folder, filename)))
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    if not target.startswith(data_root + os.sep):
+        raise ValueError("Target audio path escapes DATA_DIR.")
+    target = assert_within_data_dir(target)
     with open(target, "wb") as handle:
         handle.write(data)
     return local_path_to_data_url(target)

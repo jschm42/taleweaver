@@ -31,11 +31,9 @@ from backend.engine.blueprint.models import Blueprint, BlueprintBlock, Blueprint
 
 MAX_SEQUENCES = 15
 
-_TAG_RE = re.compile(
-    r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[\s*([A-Za-z][A-Za-z_ ]*?)\s*(?::\s*([^\]]*))?\]\s*(.*)$"
-)
+_TAG_RE = re.compile(r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[([^:\]]+)(?::([^\]]*))?\]\s*(.*)$")
 _KEY_RE = re.compile(
-    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_ \-]{0,40}?)(?:\*\*|__|`)?\s*:\s*(?:\*\*|__)?\s*(.*)$"
+    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_\-]{0,40}(?:\s+[A-Za-z0-9_\-]+)*?)(?:\*\*|__|`)?\s*:\s*(?:\*\*|__)?\s*(.*)$"
 )
 _TRAILING_ID_RE = re.compile(r"^(.*?)\s*\(([A-Za-z][A-Za-z0-9_]*)\)\s*$")
 _EXIT_REF_RE = re.compile(r"^\s*([^<>\-]+?)\s*(<->|->)\s*([^<>\-]+?)\s*$")
@@ -134,7 +132,7 @@ def _match_tag(
 ) -> tuple[str, str, str, str, int, int] | None:
     match = _TAG_RE.match(line)
     if match:
-        word = normalize_key(match.group(3))
+        word = normalize_key(match.group(3).strip())
         if word not in _KIND_ALIASES:
             return None
         kind, preset_type = _KIND_ALIASES[word]

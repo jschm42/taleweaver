@@ -238,6 +238,7 @@ async def test_tactician_plays_a_real_fight_round(setup_test_db, monkeypatch):
         manager = GameTurnManager(db, "session-combat", user)
         async for _ in manager.process_turn("/fight GOBLIN"):
             pass
+        manager.avatar.hp = manager.avatar.max_hp
         combat_before = copy.deepcopy(manager._read_combat_state())
 
         # Act

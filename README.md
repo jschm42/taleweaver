@@ -4,10 +4,10 @@
 
 # TaleWeaver
 
-**Weave Infinite Adventures. Direct and Star in Your Own Playable Audiobook.**
+**Weave Living Stories. Craft and Play Immersive AI Adventures.**
 
-A self-hosted, local-first generative AI roleplaying studio: combining an omniscient AI Gamemaster,
-cinematic voice acting, comic-style narrative feeds, and deterministic Python event scripting.
+An open-source, local-first generative AI roleplaying studio combining an adaptive AI Game Master,
+cinematic voice acting, comic-style narrative feeds, and deterministic Python mechanics.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-0ea5e9.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white)
@@ -61,11 +61,13 @@ cinematic voice acting, comic-style narrative feeds, and deterministic Python ev
 
 ## 1. The Vision
 
-Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
+Traditional text adventures trap players in static, predefined story branches. **TaleWeaver bridges generative AI storytelling with deterministic game engineering.**
+
+Guided by an adaptive AI Game Master, players explore living worlds that react dynamically to any choice or action. While the AI breathes life into narrative exposition, dramatic tension, and autonomous NPC personas, a robust server-side RPG engine and sandboxed Python scripts ensure that rules, combat, inventory, and world states remain grounded, fair, and consistent.
 
 ## 2. Core Features
 
-### 🧠 The Omniscient AI Gamemaster
+### 🧠 The Adaptive AI Game Master
 * **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
 * **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
 * **Narrator Voices:** Give each adventure its own Game Master voice: a hardboiled noir detective, a cozy fireside storyteller, a cold sci-fi chronicler and more. Admins curate the voice catalog (Admin → Narrator Voices); authors pick a voice or write their own in the editor's Tone tab. The voice changes how the narration is worded, not how long it is, and travels with the adventure's manifest.
@@ -75,7 +77,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Comic-Style Turn Presentation:** Dynamic turn rendering that separates narrator exposition from character dialogue using expressive comic speech bubbles, speaker avatars, and action markers.
 * **Scene-Paged Story Feed:** Every scene is its own page; the pager at the bottom browses earlier scenes. Within a scene the story is one continuous stream: a new chapter only adds a thin divider with its title. Long sessions open at the newest messages and load earlier ones as you scroll up.
 * **Dynamic Character Stage:** Visual character staging area led by the protagonist's portrait (click it to open the hero dialog), followed by the active scene NPCs, speaker portraits, status indicators, and voice-tag audio playback. An award earned during play (from the Game Master, a hard rule or a script) appears for a few seconds as a glowing card at the top of the story area, with its title, tier and description; click it to dismiss it. When a character's HP, Mana, Stamina or an attribute (STR, DEX, INT, WIS, CHA, AC) changes, the value floats up on its card (red `−5 HP` for losses, green `+15 HP` for gains), and an HP loss briefly flashes and shakes the card. In crowded scenes the stage stays readable: defeated characters move to the bottom, and all cards shrink to fit the column height — first to a compact card with the name only, then to a short strip with a skull badge for defeated characters. The column only scrolls when even the smallest cards no longer fit.
-* **Streamlined In-Game HUD:** Modernized HUD featuring a quickbar styled as a fanned hand of illustrated playing cards (Quests, Map, Hero, Log, Hints, Memories, Ideas), flanked on wide screens by an ornamental day/night In-Game Clock (sun and moon turn with the in-game time) and a gilded experience counter that counts up and announces gained XP, expandable Character Sheet, skin-styled inline prompts in the story feed for opened and locked containers, locked exits, switches, readables and a combine workbench for crafting, a Give dialog for handing inventory items to NPCs (NPC context menu → **Give**, or type `give <item> to <npc>`; the NPC's `on_receive_item` trigger fires and the Game Master narrates the reaction), a Talents menu (sparkle button next to the input) for the protagonist's non-combat talents such as Mind Reading (also in the NPC/item context menu, or type `use <talent> on <target>` / `cast <talent>`; the engine pays the Mana/Stamina cost, counts optional uses per adventure and runs the talent's script, then the Game Master narrates the effect), plus a dedicated combat modal.
+* **Streamlined In-Game HUD:** Modernized HUD featuring a quickbar styled as a fanned hand of illustrated playing cards (Quests, Map, Hero, Log, Hints, Memories, Ideas), flanked on wide screens by an ornamental day/night In-Game Clock (sun and moon turn with the in-game time) and a gilded experience counter that counts up and announces gained XP, expandable Character Sheet, skin-styled inline prompts in the story feed for opened and locked containers, locked exits, switches, readables and a combine workbench for crafting, a Give dialog for handing inventory items to NPCs (NPC context menu → **Give**, or type `give <item> to <npc>`; the NPC's `on_receive_item` trigger fires and the Game Master narrates the reaction), a **Greet** entry in the NPC context menu that sends a brief greeting and counts as an interaction (so `on_interact` scripts run), a Talents menu (sparkle button next to the input) for the protagonist's non-combat talents such as Mind Reading (also in the NPC/item context menu, or type `use <talent> on <target>` / `cast <talent>`; the engine pays the Mana/Stamina cost, counts optional uses per adventure and runs the talent's script, then the Game Master narrates the effect), plus a dedicated combat modal.
 
 ### 🛠️ Fully-Featured Adventure Editor & AI Validation
 * **Complete World Customization:** The Adventure Editor provides dedicated tabs to edit, refine, and build adventure templates: Scenes, Directed Map Routing, NPCs, Items, Switches, Containers, Quests, Awards, Tone, Visuals, and Scripts. NPCs get a configurable combat profile (STR/DEX/INT/WIS/CHA, armor class and a main attack such as a Longsword, Bow or Magic Missile, with no weapon item needed) next to their special attacks; NPCs and items can be duplicated, and exported/imported as `.twe` bundles.
@@ -173,7 +175,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 <tr>
 <td width="50%" valign="top">
 
-### 🧠 Omniscient Gamemaster
+### 🧠 Adaptive Game Master
 - **Infinite Generative Worlds** – plots, quests, puzzles, and explorable scenes generated dynamically on the fly
 - **Dynamic Living NPCs** – expressive multi-turn dialogue, autonomous scene movements, and individual motives
 - **Strict 2-Pass Rulebook** – decoupled game loop running mathematical mechanics first, followed by atmospheric narrative prose

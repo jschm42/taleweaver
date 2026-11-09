@@ -7,6 +7,7 @@ export interface GameCommand {
 
 export const GAME_COMMANDS: GameCommand[] = [
   { id: '/say', label: '/say <text>', description: 'Direct Speech (default)', category: 'game' },
+  { id: '/greet', label: '/greet <npc>', description: 'Greet an NPC briefly (counts as an interaction)', category: 'game' },
   { id: '/sheet', label: '/sheet', description: 'Open your character sheet', category: 'game' },
   { id: '/talent', label: '/talent <talent> | <target>', description: 'Use one of your talents (or type "use <talent> on <target>")', category: 'game' },
   { id: '/inventory', label: '/inventory', description: 'View your items and equipment', category: 'game' },

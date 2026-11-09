@@ -26,7 +26,12 @@ from backend.api.routes.settings_normalization import (
     normalize_tts_settings as _normalize_tts_settings,
 )
 from backend.api.routes.tts_api import test_tts_connection_v2
-from backend.core.api_keys import PersonalKeyRequiredError, has_api_key, resolve_api_key
+from backend.core.api_keys import (
+    PersonalKeyRequiredError,
+    has_api_key,
+    personal_key_message,
+    resolve_api_key,
+)
 from backend.core.auth import get_current_admin, get_current_user
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
 from backend.core.comfyui import ComfySettings, ComfyTestOptions, default_edge
@@ -1011,7 +1016,10 @@ def _resolve_vision_api_key(
     try:
         api_key = resolve_api_key(user.encrypted_api_keys, provider_key)
     except PersonalKeyRequiredError as exc:
-        return None, {"status": "error", "message": str(exc)}
+        return None, {
+            "status": "error",
+            "message": personal_key_message(exc.provider, exc.reason),
+        }
     if not api_key:
         return None, {"status": "error", "message": f"No API key configured for {provider_name}."}
     return api_key, None
@@ -1103,7 +1111,10 @@ async def _test_keyed_tts_provider(user: User, provider: str) -> dict:
         try:
             api_key = resolve_api_key(user.encrypted_api_keys, provider)
         except PersonalKeyRequiredError as exc:
-            return {"status": "error", "message": str(exc)}
+            return {
+                "status": "error",
+                "message": personal_key_message(exc.provider, exc.reason),
+            }
 
         if not api_key:
             return {

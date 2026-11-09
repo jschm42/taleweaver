@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.api_keys import PersonalKeyRequiredError
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.core.error_diagnostics import diagnose_provider_error
 from backend.core.global_settings import read_server_settings
 from backend.engine.audio.openai_compatible_tts import (
     OPENAI_COMPATIBLE_PROVIDER,
@@ -392,13 +393,12 @@ async def test_tts_connection_v2(
             config.model,
             exc,
         )
-        # The provider's own reason (e.g. ElevenLabs "quota_exceeded") tells the admin what to fix.
+        diag = diagnose_provider_error(
+            exc, provider=config.provider, model=config.model, context="tts"
+        )
         return {
             "status": "error",
-            "message": (
-                f"TTS provider error: {_safe_provider_reason(exc)}. "
-                "Please verify your TTS settings and API key."
-            ),
+            "message": diag,
         }
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}

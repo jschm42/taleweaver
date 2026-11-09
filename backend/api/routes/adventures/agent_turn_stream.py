@@ -134,9 +134,11 @@ async def _final_event(db, manager: GameTurnManager) -> str:
 
 
 async def _change_log_events(
-    db, manager: GameTurnManager, before: WorldSnapshot
+    db, manager: GameTurnManager, before: WorldSnapshot | None = None
 ) -> AsyncGenerator[str, None]:
     """Posts what the agent's turn changed (items, switches, locks, location) as a system note."""
+    if before is None:
+        return
     msg = await describe_changes(db, manager.game_id, before)
     if not msg:
         return
@@ -184,7 +186,10 @@ async def _agent_action_events(
 
 
 async def _agent_dialog_events(
-    db, manager: GameTurnManager, dialog: dict[str, Any], before: WorldSnapshot
+    db,
+    manager: GameTurnManager,
+    dialog: dict[str, Any],
+    before: WorldSnapshot | None = None,
 ) -> AsyncGenerator[str, None]:
     """Answers an open choice dialog instead of playing a free-text turn."""
     thoughts, option = await decide_dialog_option(manager, dialog)
@@ -194,8 +199,8 @@ async def _agent_dialog_events(
     try:
         result = await DialogChoiceResolver(manager).resolve(dialog["id"], option["index"], None)
         messages = result["messages"]
-    except HTTPException as exc:
-        messages = [f"Choice failed: {exc.detail}"]
+    except HTTPException:
+        messages = ["Choice failed: Selected option is not available."]
     for msg in messages:
         yield _sse("system", {"role": "system", "content": msg})
     async for event in _change_log_events(db, manager, before):

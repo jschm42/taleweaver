@@ -268,8 +268,10 @@ def test_npc_speech_movement_item_transfer_and_kill():
 
     runner = ScriptRunner([])
 
-    # 1. NPC speech test
+    # 1. NPC speech test (NPCs must be in player's scene to speak)
     speech_code = """
+tw.npcs.move("NPC_MARA", "current")
+tw.npcs.move("NPC_GOBLIN", "current")
 tw.npcs.say("NPC_MARA", "Greetings, traveler!")
 tw.npcs.get("NPC_GOBLIN").say("Get away from me!")
 """

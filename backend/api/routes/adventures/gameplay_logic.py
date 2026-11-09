@@ -66,7 +66,7 @@ from backend.api.routes.adventures.turn_prompt_layout import (
     build_pass1_user_prompt,
 )
 from backend.core import prompts
-from backend.core.api_keys import PersonalKeyRequiredError, key_source
+from backend.core.api_keys import PersonalKeyRequiredError, key_source, personal_key_message
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_request_tuning import bind_llm_session
@@ -236,7 +236,7 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
     lower_text = str(exc or "").lower()
 
     if isinstance(exc, PersonalKeyRequiredError):
-        return str(exc)
+        return personal_key_message(exc.provider, exc.reason)
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
@@ -969,6 +969,13 @@ class GameTurnManager:
                 yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
             elif response.startswith("[TRIGGER_SAY]"):
                 user_msg = f'Say out loud: "{response[13:].strip()}"'
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_GREET]"):
+                greet_target = response[15:].strip()
+                if greet_target:
+                    user_msg = f"You greet {greet_target} with a short, friendly greeting."
+                else:
+                    user_msg = "You greet the people around you with a short, friendly greeting."
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_INSPECT]"):
                 user_msg = f"Inspect {response[17:].strip()}"

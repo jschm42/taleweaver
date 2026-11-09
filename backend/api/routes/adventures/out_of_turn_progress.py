@@ -95,6 +95,20 @@ def _ending(manager: GameTurnManager, script_context: Any) -> Optional[tuple[str
     return None
 
 
+def _all_sequences_completed(manager: GameTurnManager) -> bool:
+    from backend.api.routes.adventures.sequence_progress import (
+        _is_sequence_completed_in_state,
+        _ordered_sequences,
+    )
+
+    sequences = _ordered_sequences(manager.adventure)
+    if not sequences:
+        return False
+    return manager.state.active_sequence_id is None and all(
+        _is_sequence_completed_in_state(manager.state, s.get("id")) for s in sequences
+    )
+
+
 async def apply_out_of_turn_progress(manager: GameTurnManager) -> tuple[list[Any], Optional[str]]:
     """Completes quests and awards, advances sequences and ends the adventure if a guard holds.
 
@@ -106,8 +120,12 @@ async def apply_out_of_turn_progress(manager: GameTurnManager) -> tuple[list[Any
     messages = await _quests_and_awards(manager, context)
     messages.extend(await _advance_sequences(manager, context))
     ending = _ending(manager, await manager._build_script_context())
-    if ending is None:
-        return messages, None
-    status, note = ending
-    await manager._finalize_session(status, note)
-    return messages, status
+    if ending is not None:
+        status, note = ending
+        await manager._finalize_session(status, note)
+        return messages, status
+    if getattr(manager.state, "is_completed", False) is True or _all_sequences_completed(manager):
+        status, note = "completed", "Victory achieved!"
+        await manager._finalize_session(status, note)
+        return messages, status
+    return messages, None

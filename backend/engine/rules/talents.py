@@ -25,7 +25,7 @@ MAX_TALENTS = 8
 MAX_TALENT_COST = 999
 
 _TYPED_VERBS = re.compile(
-    r"^\s*(?:i\s+)?(?:use|cast|activate|invoke|perform)\s+(?:my\s+|the\s+)?(?P<rest>.+?)[\s.!]*$",
+    r"^\s*(?:i\s+)?(?:use|cast|activate|invoke|perform)\s+(?:my\s+|the\s+)?(?P<rest>\S.*)$",
     re.I,
 )
 _TARGET_PREPOSITIONS = r"(?:on|at|against|upon|to|onto|toward|towards)"
@@ -137,7 +137,8 @@ def parse_typed_talent(talents: list[dict[str, Any]], user_msg: str) -> Optional
     match = _TYPED_VERBS.match(user_msg or "")
     if not match or not talents:
         return None
-    return match_talent(talents, match.group("rest"))
+    rest = match.group("rest").rstrip(" .!")
+    return match_talent(talents, rest)
 
 
 def uses_left(talent: dict[str, Any], uses: dict[str, Any]) -> Optional[int]:

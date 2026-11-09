@@ -27,9 +27,10 @@ from backend.engine.scripting.item_transfer import ref_id
 from backend.models.world_entity import WorldEntity
 
 GIVE_USAGE = "Usage: /give_items <npc> | <item>[, <item> ...]"
-_TYPED_GIVE = re.compile(r"^\s*(?:i\s+)?give\s+(?P<items>.+?)\s+to\s+(?P<npc>.+?)[\s.!]*$", re.I)
+_GIVE_PREFIX = re.compile(r"^\s*(?:i\s+)?give\s+", re.I)
+_TO_DELIMITER = re.compile(r"\s+to\s+", re.I)
+_AND_SEPARATOR = re.compile(r"\s+and\s+", re.I)
 _ARTICLE = re.compile(r"^(?:the|a|an|my|some)\s+", re.I)
-_ITEM_SEPARATOR = re.compile(r"\s*,\s*|\s+and\s+", re.I)
 
 
 @dataclass
@@ -48,16 +49,35 @@ def _item_label(entry: Any) -> str:
     return str(entry.get("name") or ref_id(entry)) if isinstance(entry, dict) else str(entry)
 
 
+def _parse_give_parts(user_msg: str) -> tuple[str, list[str]] | None:
+    clean_msg = (user_msg or "").strip().rstrip(" .!")
+    prefix_match = _GIVE_PREFIX.match(clean_msg)
+    if not prefix_match:
+        return None
+
+    rest = clean_msg[prefix_match.end() :].strip()
+    parts = _TO_DELIMITER.split(rest)
+    if len(parts) < 2:
+        return None
+
+    npc_hint = _strip_article(parts[-1].strip())
+    items_part = " to ".join(parts[:-1]).strip()
+    items_commas = _AND_SEPARATOR.sub(",", items_part)
+    refs = [_strip_article(ref) for ref in items_commas.split(",") if _strip_article(ref)]
+    if not npc_hint or not refs:
+        return None
+    return npc_hint, refs
+
+
 async def typed_give_command(manager: Any, user_msg: str) -> Optional[str]:
     """``/give_items`` command for a typed "give X to Y", or None if it is no real handover."""
-    match = _TYPED_GIVE.match(user_msg or "")
-    if not match:
+    parsed = _parse_give_parts(user_msg)
+    if not parsed:
         return None
-    npc = await manager._find_scene_npc_by_hint(_strip_article(match.group("npc")))
+    npc_hint, refs = parsed
+    npc = await manager._find_scene_npc_by_hint(npc_hint)
     if npc is None:
         return None
-    refs = [_strip_article(ref) for ref in _ITEM_SEPARATOR.split(match.group("items"))]
-    refs = [ref for ref in refs if ref]
     picked, _missing = pick_items(list(manager.avatar.inventory or []), refs, str(npc.id))
     if not picked:
         return None

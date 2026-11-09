@@ -180,6 +180,7 @@ export const gameCommandService = {
       items.push({ label: 'Rest', action: 'Rest' })
     } else if (entity?.entity_type === 'NPC') {
       items.push({ label: 'Talk', action: `${PREFILL_SAY_TO_PREFIX}${entity.name || ''}` })
+      items.push({ label: 'Greet', action: `/greet ${entity.name}` })
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
       if (!isDefeatedNpc) {

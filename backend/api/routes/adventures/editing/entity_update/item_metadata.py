@@ -117,7 +117,7 @@ def update_container(
     ent: WorldEntity, metadata_json: dict[str, Any], payload: EntityUpdateRequest, active: bool
 ) -> None:
     if not active:
-        _drop(metadata_json, (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, *_CONTAINER_CAPACITY_FIELDS))
+        _drop(metadata_json, _CONTAINER_KEYS)
         if given(payload, "locked"):
             metadata_json["locked"] = bool(payload.locked)
         return
