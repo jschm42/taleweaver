@@ -20,10 +20,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("server_settings", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("voice_provider_map", sa.JSON(), nullable=True))
+    insp = sa.inspect(op.get_bind())
+    existing = (
+        {c["name"] for c in insp.get_columns("server_settings")}
+        if "server_settings" in set(insp.get_table_names())
+        else set()
+    )
+    if "voice_provider_map" not in existing:
+        with op.batch_alter_table("server_settings", schema=None) as batch_op:
+            batch_op.add_column(sa.Column("voice_provider_map", sa.JSON(), nullable=True))
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("server_settings", schema=None) as batch_op:
-        batch_op.drop_column("voice_provider_map")
+    insp = sa.inspect(op.get_bind())
+    existing = (
+        {c["name"] for c in insp.get_columns("server_settings")}
+        if "server_settings" in set(insp.get_table_names())
+        else set()
+    )
+    if "voice_provider_map" in existing:
+        with op.batch_alter_table("server_settings", schema=None) as batch_op:
+            batch_op.drop_column("voice_provider_map")
