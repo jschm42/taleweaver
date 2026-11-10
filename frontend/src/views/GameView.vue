@@ -1864,6 +1864,20 @@ const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
   )
 }
 
+/**
+ * The protagonist fell: the adventure is over and the Game Over screen takes over (it waits
+ * until the combat dialog is closed). The server clears the fight with the final report.
+ * A debug "Lose fight" does not end the adventure, so that fight is closed the normal way.
+ */
+const handleCombatDefeatDismissed = async () => {
+  if (status.value !== 'game_over') {
+    await handleLootDone('done')
+    return
+  }
+  showLootPopup.value = false
+  isClosingCombat.value = true
+}
+
 const closeLootPopup = () => {
   showLootPopup.value = false
 }
@@ -2196,8 +2210,9 @@ usePlayAgentAutoLoop()
       @continue="continueCompletedGame"
       @close="goBack" 
     />
-    <GameOverScreen 
-      :show="showGameOver" 
+    <!-- A lost fight first plays out in the combat dialog; Game Over follows once it is closed. -->
+    <GameOverScreen
+      :show="showGameOver && !showCombatDialog"
       :reason="gameOverReason" 
       @continue="continueGameOverReadOnly"
       @close="goBack" 
@@ -2240,6 +2255,7 @@ usePlayAgentAutoLoop()
       @loot-leave="handleLootLeave"
       @loot-done="handleLootDone('done')"
       @loot-take-all="handleLootDone('take_all')"
+      @defeat-dismissed="handleCombatDefeatDismissed"
       @debug-win="handleCombatDebugWin"
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"

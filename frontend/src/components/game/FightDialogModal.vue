@@ -40,6 +40,8 @@ const emit = defineEmits<{
   lootTake: [item: InventoryItem]
   lootLeave: [item: InventoryItem]
   lootDone: []
+  /** A lost fight was acknowledged; the adventure is over, so nothing is sent to the server. */
+  defeatDismissed: []
   lootTakeAll: []
   entityHover: [entity: any, event: MouseEvent]
   entityLeave: []
@@ -162,6 +164,15 @@ const outcomeKind = computed<keyof typeof OUTCOME_TITLES>(() => {
   const outcome = props.combat?.outcome
   return outcome === 'defeat' || outcome === 'escaped' ? outcome : 'victory'
 })
+
+/** Closes a finished fight. A defeat hands over to the Game Over screen instead. */
+function finishFight(): void {
+  if (outcomeKind.value === 'defeat') {
+    emit('defeatDismissed')
+    return
+  }
+  emit('lootDone')
+}
 
 function asInt(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -354,7 +365,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="tw-dialog-button !px-8 !py-2"
                     :disabled="evaluating"
-                    @click="emit('lootDone')"
+                    @click="finishFight"
                   >Continue</button>
                 </div>
               </Transition>

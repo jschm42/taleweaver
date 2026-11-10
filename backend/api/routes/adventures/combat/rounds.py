@@ -186,11 +186,13 @@ class CombatRoundMixin:
     async def _handle_player_defeat(
         self, combat: dict[str, Any], note: str, log_outcome: bool = True
     ) -> None:
-        await self._finalize_session("game_over", f"{self.avatar.name} has fallen in battle.")
+        """Ends fight and adventure. The defeat card and the Game Over screen show the same note."""
+        fallen = f"{self.avatar.name} has fallen in battle."
+        await self._finalize_session("game_over", fallen if log_outcome else note)
         self._sync_combat_player_snapshot(combat)
         combat["active"] = False
         combat["outcome"] = "defeat"
-        combat["status_note"] = "Game Over" if log_outcome else note
+        combat["status_note"] = fallen if log_outcome else note
         if log_outcome:
             self._append_combat_log(combat, note, "outcome", {"kind": "game_over"})
         self._set_combat_state(combat)

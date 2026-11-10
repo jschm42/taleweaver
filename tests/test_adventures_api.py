@@ -4188,3 +4188,52 @@ async def test_patch_rule_mode_alone_updates_strict_rules(client: AsyncClient):
     assert to_chat.json()["strict_rules"] is False
     assert to_rpg.json()["rule_enforcement_mode"] == "rpg"
     assert to_rpg.json()["strict_rules"] is True
+
+
+async def test_terminal_epilogue_clears_the_fight_that_ended_the_adventure(
+    client: AsyncClient, monkeypatch
+):
+    """A lost fight must not reopen after the final report (and never blocks the locked story)."""
+    # Arrange
+    ids = await _create_adventure(client, "Fallen In Battle Quest")
+    lost_fight = {"active": False, "outcome": "defeat", "status_note": "Hero has fallen in battle."}
+    async with TestSessionLocal() as session:
+        game_session = await session.get(GameSession, ids["game_id"])
+        state_res = await session.execute(
+            select(SessionState).where(SessionState.session_id == ids["game_id"])
+        )
+        state = state_res.scalars().first()
+        assert game_session is not None and state is not None
+        game_session.status = "game_over"
+        game_session.status_note = "Hero has fallen in battle."
+        state.exit_states = {}
+        state.entity_states = {**(state.entity_states or {}), "__combat__": lost_fight}
+        await session.commit()
+
+    async def fake_epilogue(_self, language=None):
+        _ = language
+        return "The Game Master closes the tale of the fallen hero."
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.gameplay_logic.GameTurnManager._generate_terminal_epilogue_text",
+        fake_epilogue,
+    )
+    before = (await client.get(f"/api/adventures/{ids['game_id']}/chat")).json()
+
+    # Act
+    epilogue_resp = await client.post(
+        f"/api/adventures/{ids['game_id']}/terminal-epilogue", json={}
+    )
+    after = (await client.get(f"/api/adventures/{ids['game_id']}/chat")).json()
+
+    # Assert
+    assert before["combat"]["outcome"] == "defeat"
+    assert epilogue_resp.status_code == 200, epilogue_resp.text
+    assert after["input_locked"] is True
+    assert after["combat"] is None
+    async with TestSessionLocal() as session:
+        state_res = await session.execute(
+            select(SessionState).where(SessionState.session_id == ids["game_id"])
+        )
+        state = state_res.scalars().first()
+        assert "__combat__" not in (state.entity_states or {})
