@@ -4237,3 +4237,62 @@ async def test_terminal_epilogue_clears_the_fight_that_ended_the_adventure(
         )
         state = state_res.scalars().first()
         assert "__combat__" not in (state.entity_states or {})
+
+
+async def test_editor_sets_armor_class_and_attribute_bonuses_on_items(client: AsyncClient):
+    """Armor made in the editor must be able to grant AC and attribute bonuses, not only STR."""
+    # Arrange
+    ids = await _create_adventure(client, "Armory Quest")
+    adv_id = ids["adventure_id"]
+    scene_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={"scene_id": "ARMORY", "label": "Armory", "description": "Racks of gear."},
+    )
+    assert scene_resp.status_code == 200, scene_resp.text
+
+    # Act
+    created = await client.post(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "entity_id": "SUMO_SUIT",
+            "entity_type": "OBJECT",
+            "item_type": "WEARABLE",
+            "scene_id": "ARMORY",
+            "name": "Inflatable Sumo Suit",
+            "description": "Blows bounce off it.",
+            "wearable_slots": ["Chest"],
+            "stat_modifier_armor_class": 3,
+            "stat_modifier_dexterity": -3,
+        },
+    )
+    updated = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "target_type": "object",
+            "target_id": "SUMO_SUIT",
+            "stat_modifier_charisma": 1,
+            "stat_modifier_dexterity": -2,
+        },
+    )
+
+    # Assert
+    assert created.status_code == 200, created.text
+    assert created.json()["entity"]["stat_modifier_armor_class"] == 3
+    assert updated.status_code == 200, updated.text
+    async with TestSessionLocal() as session:
+        item = (
+            (
+                await session.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.template_id == adv_id,
+                        WorldEntity.session_id.is_(None),
+                        WorldEntity.id == "SUMO_SUIT",
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert item.stat_modifier_armor_class == 3
+        assert item.stat_modifier_dexterity == -2
+        assert item.stat_modifier_charisma == 1

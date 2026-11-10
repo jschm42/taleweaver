@@ -8,6 +8,17 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+# Attribute and armor class bonuses of a WEAPON / WEARABLE item, applied while it is equipped.
+ITEM_STAT_MODIFIERS = (
+    "stat_modifier_strength",
+    "stat_modifier_dexterity",
+    "stat_modifier_intelligence",
+    "stat_modifier_wisdom",
+    "stat_modifier_charisma",
+    "stat_modifier_armor_class",
+)
+
+
 class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist", "exit"]
     target_id: str
@@ -56,6 +67,11 @@ class EntityUpdateRequest(BaseModel):
     on_failure_script: Optional[str] = None
     effects: Optional[dict[str, Any]] = None
     stat_modifier_strength: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
+    stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
+    stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
     current_scene_id: Optional[str] = None
     strength: Optional[int] = None
     intelligence: Optional[int] = None
@@ -179,6 +195,11 @@ class EntityCreateRequest(BaseModel):
     result_item_ids: Optional[list[str]] = None
     kept_ingredients: Optional[list[str]] = None
     stat_modifier_strength: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
+    stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
+    stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
     inventory: Optional[list] = None
     min_items: Optional[int] = None
     max_items: Optional[int] = None

@@ -17,7 +17,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     ref_id,
     validated_scene_ref,
 )
-from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.api.routes.adventures.editing.schemas import ITEM_STAT_MODIFIERS, EntityUpdateRequest
 from backend.engine.rules.crafting_recipes import is_recipe, recipe_results
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity
@@ -144,7 +144,7 @@ def _update_metadata(
 
 
 def _update_columns(item: WorldEntity, payload: EntityUpdateRequest) -> None:
-    copy_given(item, payload, ("is_portable", "stat_modifier_strength"))
+    copy_given(item, payload, ("is_portable", *ITEM_STAT_MODIFIERS))
     for field in ("wearable_slots", "combination_ingredients"):
         if given(payload, field):
             setattr(item, field, getattr(payload, field))
