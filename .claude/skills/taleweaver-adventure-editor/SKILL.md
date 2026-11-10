@@ -93,6 +93,11 @@ fields are rejected (no silent typos).
   container `on_unlock_success_*`, `on_items_added_script/_text`, `inventory` (container contents),
   switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it; npc too),
   `current_scene_id`, ...
+  Weapons: `damage_dice`, `weapon_category` (`MELEE`/`RANGED`/`MAGIC`), `weapon_hit_stat`,
+  `weapon_cost_type`/`weapon_cost_value`, `weapon_effects`. Equipment bonuses while worn or held:
+  `stat_modifier_strength`, `_dexterity`, `_intelligence`, `_wisdom`, `_charisma`,
+  `_armor_class` (also accepted by `create_entity`), plus `wearable_slots` (`Head`, `Chest`,
+  `Arms`, `Legs`, `Hands`, `Feet`, `Ring_1`, `Ring_2`, `Neck`, `MainHand`, `OffHand`).
 - **npc**: `goal`, `character`, `inventory`, `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.

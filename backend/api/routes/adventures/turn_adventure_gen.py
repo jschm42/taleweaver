@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.adventure_ending import save_ending_card
+from backend.api.routes.adventures.combat.loot import drop_combat_state
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
     FINAL_REPORT_COMPLETED_FALLBACK,
@@ -595,6 +596,8 @@ class TurnAdventureGenManager:
         ending = await save_ending_card(self.manager)
 
         self.manager._set_terminal_epilogue_sent(self.manager.state.session.status, sent=True)
+        # The story is over: a fight that ended it (defeat) has nothing left to resolve.
+        drop_combat_state(self.manager.state)
         await self.manager.db.commit()
 
         return {

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.engine.combat.special_attacks import format_effects
+from backend.engine.combat.weapons import DEFAULT_CATEGORY, WEAPON_CATEGORIES
 
 
 def apply_strength_bonus(roll: dict[str, Any], strength_mod: int) -> dict[str, Any]:
@@ -49,7 +50,9 @@ def attack_event_data(
     target_ac: int,
     weapon_name: str,
     damage_applied: int,
+    category: str = DEFAULT_CATEGORY,
 ) -> dict[str, Any]:
+    """Animation payload of a weapon attack; ``category`` picks its animation and sounds."""
     effects = []
     if roll.get("is_hit"):
         effects.append(
@@ -65,6 +68,7 @@ def attack_event_data(
         "actor": actor.get("id"),
         "target": target.get("id"),
         "label": weapon_name,
+        "category": category if category in WEAPON_CATEGORIES else DEFAULT_CATEGORY,
         "d20": roll.get("hit_roll"),
         "modifier": roll.get("hit_modifier"),
         "total": roll.get("hit_total"),

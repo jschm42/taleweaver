@@ -186,7 +186,9 @@ class CombatEnemyMixin:
             damage = hp_before - self.avatar.hp
             on_hit = self._apply_enemy_on_hit(combat, enemy, weapon)
         self._sync_combat_player_snapshot(combat)
-        data = attack_event_data(enemy, player, roll, player_ac, weapon["name"], damage)
+        data = attack_event_data(
+            enemy, player, roll, player_ac, weapon["name"], damage, weapon["category"]
+        )
         data["effects"].extend(on_hit)
         return attack_log_text(enemy["name"], roll, player_ac) + on_hit_suffix(on_hit), data
 

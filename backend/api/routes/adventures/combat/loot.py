@@ -9,6 +9,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,19 @@ LOOT_HELP = (
 )
 # Loot commands that end the loot phase (and trigger the aftermath narration).
 LOOT_FINISH_ACTIONS = ("done", "take_all")
+
+
+def drop_combat_state(state: SessionState) -> bool:
+    """Removes the fight from the session state. Returns True when there was one."""
+    states = dict(state.entity_states or {})
+    # `combat_json` is a runtime mirror set by the turn manager, not a column.
+    had_combat = getattr(state, "combat_json", None) is not None or "__combat__" in states
+    state.combat_json = None
+    if "__combat__" in states:
+        states.pop("__combat__")
+        state.entity_states = states
+        flag_modified(state, "entity_states")
+    return had_combat
 
 
 def _find_loot_index(loot_items: list[dict[str, Any]], ref: str) -> int:
@@ -154,11 +168,7 @@ class CombatLootMixin:
         return f"{dropped.get('name', 'Item')} dropped to the current scene."
 
     async def _clear_combat_state(self) -> None:
-        self.state.combat_json = None
-        self.state.entity_states = {
-            k: v for k, v in (self.state.entity_states or {}).items() if k != "__combat__"
-        }
-        flag_modified(self.state, "entity_states")
+        drop_combat_state(self.state)
         last_msg = await self._load_last_assistant_message()
         await self._generate_prompt_suggestions(last_msg)
         await self.db.commit()

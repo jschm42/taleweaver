@@ -144,7 +144,9 @@ class CombatPlayerMixin:
             if any(e["entity"] == PLAYER_ID for e in on_hit):
                 self._apply_player_view(combat, player)
             self._persist_enemy_resources(target)
-        data = attack_event_data(player, target, roll, target_ac, weapon["name"], damage)
+        data = attack_event_data(
+            player, target, roll, target_ac, weapon["name"], damage, weapon["category"]
+        )
         data["effects"].extend(on_hit)
         text = attack_log_text(self.avatar.name, roll, target_ac) + on_hit_suffix(on_hit)
         return action_result(text, "player_action", data)

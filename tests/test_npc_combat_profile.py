@@ -5,6 +5,7 @@ import io
 import pytest
 from sqlalchemy import select
 
+from backend.api.routes.adventures.combat.attacks import attack_event_data
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.engine.blueprint import analyze_blueprint
 from backend.engine.blueprint.converters import main_attack
@@ -319,3 +320,20 @@ def test_world_builder_prompt_explains_combat_profile_and_talents():
     assert "NPC COMBAT PROFILE" in combat and "main_attack" in combat
     assert "deprecated" in combat
     assert talents.startswith("\n\nPROTAGONIST TALENTS")
+
+
+def test_attack_event_carries_the_weapon_category_for_the_arena():
+    # Arrange
+    roll = {"hit_roll": 14, "hit_modifier": 2, "hit_total": 16, "is_hit": True, "is_crit": False}
+    actor = {"id": "ORC", "name": "Orc"}
+    target = {"id": "PLAYER", "name": "Hero"}
+
+    # Act
+    ranged = attack_event_data(actor, target, roll, 12, "Shortbow", 5, "RANGED")
+    default = attack_event_data(actor, target, roll, 12, "Club", 5)
+    junk = attack_event_data(actor, target, roll, 12, "Club", 5, "LASER")
+
+    # Assert
+    assert ranged["category"] == "RANGED"
+    assert default["category"] == "MELEE"
+    assert junk["category"] == "MELEE"

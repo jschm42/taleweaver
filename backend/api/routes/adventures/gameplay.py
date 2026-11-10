@@ -189,7 +189,9 @@ async def get_chat_history(
         sequence_titles=await visited_sequence_titles(db, state.session_id, adventure),
         sequence_details=await visited_sequence_details(db, state.session_id, adventure),
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
-        combat=AdventureLogic.get_combat_snapshot(state),
+        # A locked (finished) story shows no fight, also for sessions saved before the
+        # terminal epilogue cleared it.
+        combat=None if input_locked else AdventureLogic.get_combat_snapshot(state),
         map_data=map_dict,
         nodes=await AdventureLogic.get_all_scene_metadata(
             db, state.template_id, session_id=state.session_id

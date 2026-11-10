@@ -10,6 +10,8 @@ type UseGameProgressStateOptions = {
   gameSettings: Ref<GameSettings>
   createTerminalEpilogue: () => Promise<void>
   refreshUser: () => Promise<any>
+  /** While true the ending waits, e.g. until the combat dialog showed the lost fight. */
+  holdEnding?: Ref<boolean>
 }
 
 export function useGameProgressState(options: UseGameProgressStateOptions) {
@@ -21,6 +23,7 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     pendingTerminalEpilogue,
     createTerminalEpilogue,
     refreshUser,
+    holdEnding,
   } = options
 
   const trackedQuestId = ref<string | null>(null)
@@ -114,7 +117,7 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
   const isCreatingEpilogue = ref(false)
 
   async function finishAdventure(): Promise<void> {
-    if (!pendingTerminalEpilogue.value || isCreatingEpilogue.value) return
+    if (!pendingTerminalEpilogue.value || isCreatingEpilogue.value || holdEnding?.value) return
     if (status.value !== 'game_over' && !isCompleted.value) return
     if (status.value === 'connecting' || status.value === 'loading') return
     isCreatingEpilogue.value = true
@@ -126,7 +129,7 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     }
   }
 
-  watch([pendingTerminalEpilogue, status, isCompleted], () => {
+  watch([pendingTerminalEpilogue, status, isCompleted, () => !!holdEnding?.value], () => {
     void finishAdventure()
   }, { immediate: true })
 

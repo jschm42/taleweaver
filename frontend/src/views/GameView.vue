@@ -346,6 +346,8 @@ const confirmRestoreCheckpoint = async () => {
   }
 }
 
+// Set from showCombatDialog further down: a lost fight is shown before the ending is written.
+const combatDialogOpen = ref(false)
 const {
   trackedQuestId,
   clockTick,
@@ -360,6 +362,7 @@ const {
   gameSettings,
   createTerminalEpilogue,
   refreshUser,
+  holdEnding: combatDialogOpen,
 })
 
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
@@ -1539,6 +1542,7 @@ const combatActionInFlight = ref(false)
 const isClosingCombat = ref(false)
 const showLootPopup = ref(false)
 const lootPopupShownForCombat = ref(false)
+watch(showCombatDialog, (open) => { combatDialogOpen.value = open }, { immediate: true })
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
   const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
@@ -1856,6 +1860,20 @@ const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
     },
     action,
   )
+}
+
+/**
+ * The protagonist fell: the adventure is over. Closing the dialog releases the ending (epilogue
+ * and ending card in the story feed); the server clears the fight when it writes the ending.
+ * A debug "Lose fight" does not end the adventure, so that fight is closed the normal way.
+ */
+const handleCombatDefeatDismissed = async () => {
+  if (status.value !== 'game_over') {
+    await handleLootDone('done')
+    return
+  }
+  showLootPopup.value = false
+  isClosingCombat.value = true
 }
 
 const closeLootPopup = () => {
@@ -2222,6 +2240,7 @@ usePlayAgentAutoLoop()
       @loot-leave="handleLootLeave"
       @loot-done="handleLootDone('done')"
       @loot-take-all="handleLootDone('take_all')"
+      @defeat-dismissed="handleCombatDefeatDismissed"
       @debug-win="handleCombatDebugWin"
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
