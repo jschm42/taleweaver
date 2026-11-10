@@ -4,6 +4,7 @@ import { FastForward, Maximize2, Minimize2 } from 'lucide-vue-next'
 import type { CharacterSheet, CombatEnemyState, CombatState, InventoryItem } from '@/types'
 import { getImageUrl, getItemIcon, getTypeColor, hasRenderableImagePath } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
+import { audioDuck } from '@/store/audioPreferences'
 import CombatAbilityHand from './combat/CombatAbilityHand.vue'
 import CombatBystanders from './combat/CombatBystanders.vue'
 import CombatItemTray from './combat/CombatItemTray.vue'
@@ -13,6 +14,11 @@ import InitiativeTrack from './combat/InitiativeTrack.vue'
 // PixiJS is only downloaded once a fight actually opens.
 const CombatArena = defineAsyncComponent(() => import('./combat/CombatArena.vue'))
 const FAST_STORAGE_KEY = 'taleweaver.combat.fast'
+/** Background audio plays at this share of its volume while the fight's sound effects run. */
+const COMBAT_AUDIO_DUCK = 0.55
+/** At or below this share of max HP the stage warns with a pulsing red vignette. */
+const LOW_HEALTH_RATIO = 0.25
+const OUTCOME_TITLES = { victory: 'Victory', defeat: 'Defeat', escaped: 'Escaped' } as const
 
 const props = defineProps<{
   open: boolean
@@ -80,8 +86,9 @@ function leaveBrowserFullscreen(): void {
 }
 
 watch(isRendered, (rendered) => {
+  audioDuck.value = rendered ? COMBAT_AUDIO_DUCK : 1
   if (!rendered) leaveBrowserFullscreen()
-})
+}, { immediate: true })
 
 function readFastPreference(): boolean {
   try {
@@ -149,9 +156,28 @@ const turnLabel = computed(() => {
   return isPlayerTurn.value ? 'your move' : 'enemy'
 })
 
+/** The result is announced on the stage once the last animation has played. */
+const outcomeShown = computed(() => isFinished.value && !arenaPlaying.value)
+const outcomeKind = computed<keyof typeof OUTCOME_TITLES>(() => {
+  const outcome = props.combat?.outcome
+  return outcome === 'defeat' || outcome === 'escaped' ? outcome : 'victory'
+})
+
 function asInt(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
+
+const lowHealth = ref(false)
+
+function refreshLowHealth(): void {
+  // The server state is ahead of the arena; wait until the hit has been shown.
+  if (arenaPlaying.value) return
+  const hp = asInt(props.combat?.player?.hp)
+  const maxHp = asInt(props.combat?.player?.max_hp)
+  lowHealth.value = !!props.combat?.active && hp > 0 && maxHp > 0 && hp / maxHp <= LOW_HEALTH_RATIO
+}
+
+watch(() => [arenaPlaying.value, props.combat?.player?.hp, props.combat?.active], refreshLowHealth, { immediate: true })
 
 function tooltipFor(entityId: string): Record<string, unknown> | null {
   const c = props.combat
@@ -217,6 +243,7 @@ onBeforeUnmount(() => {
   motionQuery?.removeEventListener('change', onMotionChange)
   document.removeEventListener('fullscreenchange', onFullscreenChange)
   leaveBrowserFullscreen()
+  audioDuck.value = 1
 })
 </script>
 
@@ -269,15 +296,20 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="relative flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[1fr_340px] gap-3 p-2 sm:p-4">
-          <div class="tw-combat-stage relative min-h-[420px] overflow-hidden flex flex-col">
+          <div
+            class="tw-combat-stage relative min-h-[420px] overflow-hidden flex flex-col"
+            :class="{ [`is-${outcomeKind}`]: outcomeShown, 'is-low-health': lowHealth }"
+          >
             <!-- The current scene sets the stage behind the cards. -->
             <div
               v-if="sceneBackground"
-              class="absolute inset-0 bg-cover bg-center scale-105 blur-[2px] opacity-60"
+              class="tw-combat-backdrop absolute inset-0 bg-cover bg-center scale-105 blur-[2px] opacity-60"
               :style="{ backgroundImage: sceneBackground }"
               aria-hidden="true"
             ></div>
             <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-black/70" aria-hidden="true"></div>
+            <!-- Mood of the stage: danger at low health, gold on victory, blood on defeat. -->
+            <div class="tw-combat-vignette absolute inset-0 pointer-events-none" aria-hidden="true"></div>
 
             <!-- Acting order of this round; clicking an enemy portrait picks it as target. -->
             <div class="relative shrink-0 flex justify-center px-3 pt-3">
@@ -303,6 +335,29 @@ onBeforeUnmount(() => {
               <p v-if="combat.active && fighterCount > 1" class="absolute bottom-1 inset-x-0 text-center text-[11px] opacity-70 pointer-events-none">
                 Click a card in the enemy stack or a portrait in the initiative order to choose your target.
               </p>
+
+              <!-- Floats over the stage so it never moves the panels below. -->
+              <Transition name="fight-status">
+                <div v-if="evaluating" class="absolute bottom-7 inset-x-0 z-10 flex justify-center pointer-events-none" role="status">
+                  <span class="tw-combat-pill tw-combat-eyebrow animate-pulse">
+                    <i class="ra ra-hourglass animate-spin"></i> The Game Master is resolving the turn...
+                  </span>
+                </div>
+              </Transition>
+
+              <Transition name="tw-combat-outcome">
+                <div v-if="outcomeShown" class="tw-combat-outcome" :class="`is-${outcomeKind}`" role="status">
+                  <div class="tw-combat-outcome-title">{{ OUTCOME_TITLES[outcomeKind] }}</div>
+                  <p class="tw-combat-outcome-note">{{ combat.status_note || 'The fight is over.' }}</p>
+                  <p v-if="isLootPhase" class="tw-combat-eyebrow">Claim your spoils to continue</p>
+                  <button
+                    v-else
+                    class="tw-dialog-button !px-8 !py-2"
+                    :disabled="evaluating"
+                    @click="emit('lootDone')"
+                  >Continue</button>
+                </div>
+              </Transition>
             </div>
 
             <!-- Abilities are dealt like a hand of cards below the combatants. -->
@@ -366,28 +421,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <footer class="tw-combat-footer relative shrink-0 border-t p-3 sm:px-4 space-y-3">
+        <footer v-if="!isFinished || isDebug" class="tw-combat-footer relative shrink-0 border-t p-3 sm:px-4 space-y-3">
           <div v-if="isDebug" class="flex items-center gap-2 pb-2 border-b border-rose-500/20">
             <span class="text-[10px] font-black text-rose-400 uppercase tracking-widest mr-1">Debug</span>
             <button class="px-3 py-1 rounded bg-rose-900/40 border border-rose-500/30 text-rose-200 text-xs font-bold hover:bg-rose-800/60" @click="emit('debugWin')">Win fight</button>
             <button class="px-3 py-1 rounded bg-slate-800 border border-slate-600 text-slate-300 text-xs font-bold hover:bg-slate-700" @click="emit('debugLoose')">Lose fight</button>
           </div>
 
-          <div v-if="isFinished && !isLootPhase" class="tw-combat-panel flex flex-wrap items-center justify-between gap-3 p-3">
-            <span
-              class="tw-combat-pill !text-sm"
-              :class="combat.outcome === 'defeat' ? 'tw-combat-pill--enemy' : 'tw-combat-pill--player'"
-            >{{ combat.outcome === 'defeat' ? 'Defeat' : combat.outcome === 'escaped' ? 'Escaped' : 'Victory' }}</span>
-            <span class="text-sm opacity-75 italic flex-1 min-w-[200px]">{{ combat.status_note || 'The fight is over.' }}</span>
-            <button
-              class="tw-dialog-button !px-6"
-              :disabled="evaluating || arenaPlaying"
-              @click="emit('lootDone')"
-            >Continue</button>
-          </div>
-
           <CombatItemTray
-            v-else-if="!isFinished"
+            v-if="!isFinished"
             :combat="combat"
             :player-sheet="playerSheet"
             :consumables="consumables"
@@ -398,10 +440,6 @@ onBeforeUnmount(() => {
             @hover="(entity, event) => emit('entityHover', entity, event)"
             @leave="emit('entityLeave')"
           />
-
-          <div v-if="evaluating" class="tw-combat-eyebrow animate-pulse text-center flex items-center justify-center gap-1.5">
-            <i class="ra ra-hourglass animate-spin"></i> The Game Master is resolving the turn...
-          </div>
         </footer>
       </div>
     </Transition>
@@ -409,13 +447,38 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.fight-fade-enter-active,
+/* The battle screen closes in on the stage when a fight opens. */
+.fight-fade-enter-active {
+  transition: opacity 0.35s ease;
+}
+
 .fight-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
+}
+
+.fight-fade-enter-active .tw-combat-stage {
+  transition: transform 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .fight-fade-enter-from,
-.fight-fade-leave-to {
+.fight-fade-leave-to,
+.fight-status-enter-from,
+.fight-status-leave-to {
   opacity: 0;
+}
+
+.fight-status-enter-active,
+.fight-status-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fight-fade-enter-from .tw-combat-stage {
+  transform: scale(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fight-fade-enter-active .tw-combat-stage {
+    transition: none;
+  }
 }
 </style>

@@ -45,6 +45,10 @@ export class CombatantCard extends Container {
   cardHeight: number
   selected = false
   active = false
+  /** HP the pale "damage taken" segment still shows; it drains after the red bar dropped. */
+  ghostHp = 0
+  /** True once the card has shattered: it stays invisible until the renderer removes it. */
+  gone = false
   /** Layout target, used by the renderer when animating the stack. */
   home = { x: 0, y: 0, rotation: 0, scale: 1, alpha: 1 }
 
@@ -111,6 +115,7 @@ export class CombatantCard extends Container {
       this.displayed.hp = data.hp
       this.displayed.mana = data.mana
       this.displayed.stamina = data.stamina
+      this.ghostHp = data.hp
     }
     if (data.imageUrl !== this.portraitUrl) {
       this.portraitUrl = data.imageUrl
@@ -127,6 +132,13 @@ export class CombatantCard extends Container {
 
   setDisplayed(stat: ResourceStat, value: number): void {
     this.displayed[stat] = value
+    // Healing moves the ghost along; damage leaves it behind until `setGhostHp` drains it.
+    if (stat === 'hp') this.ghostHp = Math.max(this.ghostHp, value)
+    this.drawBars()
+  }
+
+  setGhostHp(value: number): void {
+    this.ghostHp = Math.max(value, this.displayed.hp)
     this.drawBars()
   }
 
@@ -266,7 +278,7 @@ export class CombatantCard extends Container {
     const barW = w - 20
     const d = this.data
     this.bars.clear()
-    this.drawBar(10, top, barW, 8 * fontScale, this.displayed.hp, d.maxHp, COLORS.hp)
+    this.drawBar(10, top, barW, 8 * fontScale, this.displayed.hp, d.maxHp, COLORS.hp, this.ghostHp)
     let y = top + 12 * fontScale
     if (d.maxStamina > 0) {
       this.drawBar(10, y, barW, 4 * fontScale, this.displayed.stamina, d.maxStamina, COLORS.stamina)
@@ -278,9 +290,13 @@ export class CombatantCard extends Container {
     this.hpText.text = `HP ${Math.max(0, Math.round(this.displayed.hp))} / ${d.maxHp}`
   }
 
-  private drawBar(x: number, y: number, w: number, h: number, value: number, max: number, color: number): void {
-    const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0
+  private drawBar(x: number, y: number, w: number, h: number, value: number, max: number, color: number, ghost = 0): void {
+    const ratio = (v: number): number => (max > 0 ? Math.max(0, Math.min(1, v / max)) : 0)
+    const pct = ratio(value)
     this.bars.roundRect(x, y, w, h, h / 2).fill({ color: COLORS.panelLight })
+    if (ratio(ghost) > pct) {
+      this.bars.roundRect(x, y, Math.max(h, w * ratio(ghost)), h, h / 2).fill({ color: COLORS.goldSoft, alpha: 0.85 })
+    }
     if (pct > 0) {
       this.bars.roundRect(x, y, Math.max(h, w * pct), h, h / 2).fill({ color })
     }

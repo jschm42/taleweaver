@@ -226,6 +226,7 @@ export interface CombatEventData {
   entity?: string
   label?: string
   action_name?: string
+  /** Special attacks: their category. Weapon attacks: MELEE, RANGED or MAGIC (animation and sounds). */
   category?: SpecialCategory
   stat?: string
   rolled?: boolean

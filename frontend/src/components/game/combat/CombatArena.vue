@@ -6,6 +6,7 @@ import { ArenaRenderer, type ArenaView } from './arena/ArenaRenderer'
 import type { CardData, ResourceStat } from './arena/CombatantCard'
 import { ArenaEventPlayer } from './arena/eventPlayer'
 import { applySkinColors } from './arena/palette'
+import { CombatSounds } from './combatSounds'
 
 const PLAYER_ID = 'PLAYER'
 const EVENT_TIMEOUT_MS = 9000
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 const host = ref<HTMLElement | null>(null)
 const failed = ref(false)
 const bubble = ref<{ name: string; line: string; x: number; y: number; flip: boolean } | null>(null)
+const sounds = new CombatSounds()
 let arena: ArenaRenderer | null = null
 let player: ArenaEventPlayer | null = null
 let ready = false
@@ -168,6 +170,24 @@ async function speak(entityId: string, line: string): Promise<void> {
 function applySpeed(): void {
   if (!arena?.tween) return
   arena.tween.speed = props.reducedMotion ? 6 : props.fast ? 3 : 1
+  arena.calm = !!props.reducedMotion
+}
+
+/** Deals the cards in when a running fight opens; actions stay locked until it has played. */
+async function playIntro(): Promise<void> {
+  if (!arena || !props.combat.active || props.reducedMotion || document.hidden) return
+  playing = true
+  emit('playing', true)
+  sounds.play('fight_start')
+  try {
+    await withTimeout(arena.playIntro())
+  } catch (err) {
+    console.warn('Combat intro failed', err)
+  }
+  playing = false
+  emit('playing', false)
+  // Events that arrived during the intro were queued; play them now.
+  if (queue.length > 0) void drainQueue()
 }
 
 async function withTimeout(task: Promise<void>): Promise<void> {
@@ -237,6 +257,7 @@ watch(
 watch(() => [props.fast, props.reducedMotion], applySpeed)
 
 onMounted(async () => {
+  sounds.preload()
   if (host.value) applySkinColors(host.value)
   arena = new ArenaRenderer()
   arena.onSelect = (id) => emit('selectTarget', id)
@@ -249,17 +270,19 @@ onMounted(async () => {
     onLogChange()
     return
   }
-  player = new ArenaEventPlayer(arena, speak)
+  player = new ArenaEventPlayer(arena, speak, sounds)
   ready = true
   applySpeed()
   seenCount = props.combat.log?.length ?? 0
   arena.sync(buildView([]), true)
   emit('revealed', seenCount)
+  await playIntro()
 })
 
 onBeforeUnmount(() => {
   queue.length = 0
   player = null
+  sounds.dispose()
   arena?.destroy()
   arena = null
 })

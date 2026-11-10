@@ -11,7 +11,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { AudioSnapshot } from '@/types'
-import { audioMuted, audioVolume, setAudioVolume } from '@/store/audioPreferences'
+import { audioDuck, audioMuted, audioVolume, setAudioVolume } from '@/store/audioPreferences'
 import { audioService } from '@/services/audioService'
 
 const FADE_STEP_MS = 50
@@ -100,9 +100,10 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   const isGenerating = computed(() => audio.value?.now?.status === 'pending')
   const lastError = computed(() => audio.value?.now?.error || '')
 
-  // Player volume x script volume (tw.audio.set_volume) x this playback (tw.audio.play(volume=...)).
+  // Player volume x script volume (tw.audio.set_volume) x this playback (tw.audio.play(volume=...))
+  // x ducking (combat dialog open).
   const targetVolume = (): number =>
-    muted.value ? 0 : playerVolume.value * (audio.value?.volume ?? 1) * (audio.value?.now?.volume ?? 1)
+    muted.value ? 0 : playerVolume.value * (audio.value?.volume ?? 1) * (audio.value?.now?.volume ?? 1) * audioDuck.value
 
   function removeUnlock(): void {
     UNLOCK_EVENTS.forEach((evt) => window.removeEventListener(evt, retryPlayback))
@@ -247,6 +248,10 @@ export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControl
   watch(muted, applyMuted)
   watch(playerVolume, () => {
     if (current && !muted.value && !current.timer) current.audio.volume = targetVolume()
+  })
+  // The combat dialog lowers the track under its sound effects and restores it afterwards.
+  watch(audioDuck, () => {
+    if (current && !muted.value) fade(current, targetVolume(), 0.6)
   })
 
   // tw.audio.stop_speech(): the first snapshot only sets the baseline, so reloading the page
