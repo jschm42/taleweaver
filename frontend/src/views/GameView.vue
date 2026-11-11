@@ -15,7 +15,6 @@ import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
 import ImmersiveGameView from '@/components/game/ImmersiveGameView.vue'
 import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
-import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerPanel from '@/components/game/prompts/ContainerPanel.vue'
 import GivePanel from '@/components/game/prompts/GivePanel.vue'
 import { useGivePanel } from '@/composables/useGivePanel'
@@ -1532,7 +1531,6 @@ watch(sceneExits, (exits) => {
     void refreshSession()
   }
 })
-const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => {
   if (isClosingCombat.value) return false
@@ -1540,8 +1538,6 @@ const showCombatDialog = computed(() => {
 })
 const combatActionInFlight = ref(false)
 const isClosingCombat = ref(false)
-const showLootPopup = ref(false)
-const lootPopupShownForCombat = ref(false)
 watch(showCombatDialog, (open) => { combatDialogOpen.value = open }, { immediate: true })
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
@@ -1549,25 +1545,9 @@ const showsMechanics = computed(() => {
   return mode === 'rpg' || mode === 'story' || mode === 'strict'
 })
 
-watch(combat, (newCombat, oldCombat) => {
+watch(combat, (newCombat) => {
   if (!newCombat) {
     isClosingCombat.value = false
-    showLootPopup.value = false
-    lootPopupShownForCombat.value = false
-    return
-  }
-
-  const hadLootPhase = !!oldCombat?.loot_pending
-  const enteredLootPhase = !!newCombat.loot_pending && !hadLootPhase
-  const hasLootItems = (newCombat.loot_items || []).length > 0
-  if (enteredLootPhase && hasLootItems && !lootPopupShownForCombat.value) {
-    showLootPopup.value = true
-    lootPopupShownForCombat.value = true
-  }
-
-  if (!newCombat.loot_pending) {
-    showLootPopup.value = false
-    lootPopupShownForCombat.value = false
   }
 })
 
@@ -1759,9 +1739,10 @@ const {
 
 
 
-const handleEquipFromSheet = async (name: string) => {
+const handleEquipFromSheet = async (name: string, slot?: string) => {
   sheetDirty.value = true
-  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/equip ${name}`)
+  const cmd = slot ? `/equip ${name} | ${slot}` : `/equip ${name}`
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, cmd)
 }
 
 const handleUnequipFromSheet = async (slot: string) => {
@@ -1849,7 +1830,6 @@ const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
     combatActionInFlight,
     sendMessage,
     () => {
-      showLootPopup.value = false
       isClosingCombat.value = true
     },
     () => {
@@ -1872,12 +1852,7 @@ const handleCombatDefeatDismissed = async () => {
     await handleLootDone('done')
     return
   }
-  showLootPopup.value = false
   isClosingCombat.value = true
-}
-
-const closeLootPopup = () => {
-  showLootPopup.value = false
 }
 
 watch(showCombatDialog, (visible) => {
@@ -2245,19 +2220,6 @@ usePlayAgentAutoLoop()
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
       @entity-leave="hoveredEntity = null"
-    />
-
-    <CombatLootPopup
-      :open="showLootPopup && !!combat?.loot_pending"
-      :items="lootPopupItems"
-      :busy="combatActionInFlight"
-      @close="closeLootPopup"
-      @confirm="handleLootDone('done')"
-      @take-all="handleLootDone('take_all')"
-      @take="handleLootTake"
-      @drop="handleLootLeave"
-      @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
-      @item-leave="hoveredEntity = null"
     />
 
     <AdventureGeneratorModal

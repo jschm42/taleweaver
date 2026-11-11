@@ -1,3 +1,5 @@
+from typing import Any
+
 from backend.models.avatar import Avatar
 
 # Canonical stat names for display
@@ -118,22 +120,67 @@ _OFFHAND_KEYWORDS = ("shield", "buckler", "torch")
 
 
 def _find_inventory_index(avatar: Avatar, item_name: str) -> int:
+    target = item_name.strip().lower()
     for idx, item in enumerate(avatar.inventory):
-        if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
+        if not isinstance(item, dict):
+            continue
+        if item.get("name", "").lower() == target:
+            return idx
+        if str(item.get("id", "")).lower() == target:
             return idx
     return -1
 
 
-def _resolve_equip_slot(item: dict) -> str | None:
-    """Determines the target slot for an item, guessing for weapons and generic hand items."""
+def _is_compatible_with_preferred_slot(item: dict, pref: str) -> bool:
+    norm_pref = _SLOT_ALIASES.get(pref, pref)
+    wearable = item.get("wearable_slots")
+    if isinstance(wearable, list):
+        norm_wearables = {_SLOT_ALIASES.get(s, s).lower() for s in wearable}
+        if norm_pref.lower() in norm_wearables:
+            return True
+    elif (
+        isinstance(wearable, str)
+        and norm_pref.lower() == _SLOT_ALIASES.get(wearable, wearable).lower()
+    ):
+        return True
+
+    item_slot = item.get("slot")
+    if item_slot and _SLOT_ALIASES.get(item_slot, item_slot).lower() == norm_pref.lower():
+        return True
+    if item.get("item_type") == "WEAPON" and norm_pref in ("MainHand", "OffHand"):
+        return True
+    return norm_pref in _DEFAULT_SLOTS
+
+
+def _resolve_wearable_slot(wearable: Any, avatar: Avatar | None) -> str | None:
+    if isinstance(wearable, str) and wearable:
+        return _SLOT_ALIASES.get(wearable, wearable)
+    if not (isinstance(wearable, list) and wearable):
+        return None
+    equipment = getattr(avatar, "equipment", None) or {}
+    for candidate in wearable:
+        cand_norm = _SLOT_ALIASES.get(candidate, candidate)
+        if equipment.get(cand_norm) is None:
+            return cand_norm
+    return _SLOT_ALIASES.get(wearable[0], wearable[0])
+
+
+def _resolve_equip_slot(
+    item: dict, preferred_slot: str | None = None, avatar: Avatar | None = None
+) -> str | None:
+    """Determines the target slot for an item, taking preferred_slot or wearable_slots into account."""
     from backend.engine.rules.item_logic import get_item_slot
 
-    slot = item.get("slot", "Hands")  # Fallback to hands if missing
-    slot = _SLOT_ALIASES.get(slot, slot)
-    if not slot or slot == "None":
-        slot = item.get("slot")
-    if slot and slot != "Hands":
-        return slot
+    if preferred_slot and _is_compatible_with_preferred_slot(item, preferred_slot):
+        return _SLOT_ALIASES.get(preferred_slot, preferred_slot)
+
+    wearable_res = _resolve_wearable_slot(item.get("wearable_slots"), avatar)
+    if wearable_res:
+        return wearable_res
+
+    slot = item.get("slot")
+    if slot and slot != "None":
+        return _SLOT_ALIASES.get(slot, slot)
 
     item_type = item.get("item_type")
     name = item.get("name", "").lower()
@@ -141,7 +188,6 @@ def _resolve_equip_slot(item: dict) -> str | None:
         return "MainHand"
     if item_type == "TOOL" and any(kw in name for kw in _OFFHAND_KEYWORDS):
         return "OffHand"
-    # Last resort: try guessing
     return get_item_slot(item.get("name", ""), item.get("item_type", "PICKABLE"))
 
 
@@ -264,14 +310,18 @@ class CommandParser:
     @staticmethod
     def _handle_equip(avatar: Avatar, item_name: str) -> str:
         if not item_name:
-            return "Usage: /equip <item name>"
+            return "Usage: /equip <item name> [| <slot>]"
+
+        preferred_slot: str | None = None
+        if " | " in item_name:
+            item_name, preferred_slot = [p.strip() for p in item_name.split(" | ", 1)]
 
         item_idx = _find_inventory_index(avatar, item_name)
         if item_idx == -1:
             return f"You don't have '{item_name}' in your inventory."
 
         item_to_equip = avatar.inventory[item_idx]
-        slot = _resolve_equip_slot(item_to_equip)
+        slot = _resolve_equip_slot(item_to_equip, preferred_slot=preferred_slot, avatar=avatar)
         if not slot:
             return f"'{item_to_equip.get('name')}' cannot be equipped."
         if not _ensure_equipment_slot(avatar, slot):
@@ -312,9 +362,18 @@ class CommandParser:
         if not slot_name:
             return "Usage: /unequip <slot name>"
 
-        # Normalize slot name
+        # Normalize slot name or find slot by equipped item name / ID
         slots = list(avatar.equipment.keys())
-        match = next((s for s in slots if s.lower() == slot_name.lower()), None)
+        target = slot_name.strip().lower()
+        match = next((s for s in slots if s.lower() == target), None)
+        if not match:
+            for s, eq_item in avatar.equipment.items():
+                if isinstance(eq_item, dict) and (
+                    eq_item.get("name", "").lower() == target
+                    or str(eq_item.get("id", "")).lower() == target
+                ):
+                    match = s
+                    break
         if not match:
             return f"Invalid slot: {slot_name}. Available: {', '.join(slots)}"
 

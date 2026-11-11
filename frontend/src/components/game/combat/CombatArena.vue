@@ -261,7 +261,13 @@ onMounted(async () => {
   if (host.value) applySkinColors(host.value)
   arena = new ArenaRenderer()
   arena.onSelect = (id) => emit('selectTarget', id)
-  arena.onHover = (id, event) => emit('hover', id, event)
+  arena.onHover = (id, event) => {
+    if (!props.combat?.active) {
+      emit('hover', null, null)
+      return
+    }
+    emit('hover', id, event)
+  }
   try {
     if (!host.value || !(await arena.init(host.value))) return
   } catch (err) {
