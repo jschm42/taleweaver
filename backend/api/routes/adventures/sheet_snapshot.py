@@ -70,6 +70,9 @@ def entity_to_item_dict(entity: WorldEntity) -> dict:
     """Minimal item dict from a WorldEntity for character sheet display."""
     metadata = entity.metadata_json or {}
     effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+    wearables = entity.wearable_slots or []
+    if isinstance(wearables, str):
+        wearables = [wearables]
     return {
         "id": entity.id,
         "name": entity.name,
@@ -77,6 +80,7 @@ def entity_to_item_dict(entity: WorldEntity) -> dict:
         "image_url": entity.image_url,
         "item_type": entity.item_type or "PICKABLE",
         "slot": _entity_slot(entity),
+        "wearable_slots": list(wearables),
         "metadata_json": dict(metadata),
         **{field: _as_int(getattr(entity, field)) for field in _STAT_MODIFIERS},
         "hp_change": _as_int(metadata.get("hp_change"), effects.get("hp")),
@@ -159,9 +163,17 @@ async def _item_entities(db: AsyncSession, avatar: Avatar, session_id: str) -> d
 def _sheet_item(item: dict, image_map: dict[str, str]) -> dict:
     item_copy = dict(item)
     if not item_copy.get("slot"):
-        item_copy["slot"] = get_item_slot(
-            item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE")
-        )
+        wearables = item_copy.get("wearable_slots")
+        if isinstance(wearables, list) and wearables:
+            item_copy["slot"] = wearables[0]
+        elif isinstance(wearables, str) and wearables:
+            item_copy["slot"] = wearables
+        else:
+            item_copy["slot"] = get_item_slot(
+                item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE")
+            )
+    if "wearable_slots" not in item_copy and item_copy.get("slot"):
+        item_copy["wearable_slots"] = [item_copy["slot"]]
     item_id = item_copy.get("id")
     if item_id in image_map and not item_copy.get("image_url"):
         item_copy["image_url"] = image_map[item_id]

@@ -88,3 +88,59 @@ def test_greet_command_returns_trigger_and_is_listed_in_help() -> None:
     help_text = CommandParser.parse_command(_avatar(), "/help")
     assert response == "[TRIGGER_GREET] Bram"
     assert "/greet" in help_text
+
+
+def test_equip_wearable_slots_resolves_correctly() -> None:
+    avatar = Avatar(
+        name="Tester",
+        inventory=[
+            {
+                "id": "ARMORY_COLANDER_HELM",
+                "name": "Colander of Clear Thought",
+                "item_type": "WEARABLE",
+                "wearable_slots": ["Head"],
+            }
+        ],
+        equipment={"Head": None, "Hands": None},
+    )
+    res = CommandParser.parse_command(avatar, "/equip Colander of Clear Thought")
+    assert "[TRIGGER_EQUIP] ARMORY_COLANDER_HELM" in res
+    assert avatar.equipment["Head"]["name"] == "Colander of Clear Thought"
+    assert len(avatar.inventory) == 0
+
+
+def test_equip_by_item_id_and_preferred_slot() -> None:
+    avatar = Avatar(
+        name="Tester",
+        inventory=[
+            {
+                "id": "RUBY_RING",
+                "name": "Ruby Ring",
+                "item_type": "WEARABLE",
+                "wearable_slots": ["Ring_1", "Ring_2"],
+            }
+        ],
+        equipment={"Ring_1": None, "Ring_2": None},
+    )
+    res = CommandParser.parse_command(avatar, "/equip RUBY_RING | Ring_2")
+    assert "[TRIGGER_EQUIP] RUBY_RING" in res
+    assert avatar.equipment["Ring_2"]["name"] == "Ruby Ring"
+    assert avatar.equipment["Ring_1"] is None
+
+
+def test_unequip_by_item_name() -> None:
+    avatar = Avatar(
+        name="Tester",
+        inventory=[],
+        equipment={
+            "Head": {
+                "id": "HELM_01",
+                "name": "Steel Helmet",
+            }
+        },
+    )
+    res = CommandParser.parse_command(avatar, "/unequip Steel Helmet")
+    assert "[TRIGGER_UNEQUIP] HELM_01" in res
+    assert avatar.equipment["Head"] is None
+    assert len(avatar.inventory) == 1
+    assert avatar.inventory[0]["name"] == "Steel Helmet"

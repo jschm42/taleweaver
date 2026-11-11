@@ -10,6 +10,7 @@ export interface CombatWeapon extends WeaponProfile {
   id: string | null
   slot: string | null
   name: string
+  imageUrl?: string | null
   dice: string
   costType: 'mana' | 'stamina'
   cost: number
@@ -25,6 +26,7 @@ function toWeapon(slot: string | null, item: InventoryItem | null): CombatWeapon
     id: item?.id ?? null,
     slot,
     name: item?.name || 'Bare Fists',
+    imageUrl: item?.image_url ?? null,
     dice: String(meta.damage_dice || item?.damage_dice || '1d8'),
     costType: meta.weapon_cost_type === 'mana' ? 'mana' : 'stamina',
     cost: num(meta.weapon_cost_value, 20),

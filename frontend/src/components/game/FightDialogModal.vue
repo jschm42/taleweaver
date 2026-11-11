@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { FastForward, Maximize2, Minimize2 } from 'lucide-vue-next'
+import { FastForward, Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-vue-next'
 import type { CharacterSheet, CombatEnemyState, CombatState, InventoryItem } from '@/types'
 import { getImageUrl, getItemIcon, getTypeColor, hasRenderableImagePath } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
-import { audioDuck } from '@/store/audioPreferences'
+import { audioDuck, audioMuted } from '@/store/audioPreferences'
+import { audioService } from '@/services/audioService'
 import CombatAbilityHand from './combat/CombatAbilityHand.vue'
 import CombatBystanders from './combat/CombatBystanders.vue'
 import CombatItemTray from './combat/CombatItemTray.vue'
 import CombatLogPanel from './combat/CombatLogPanel.vue'
+import CombatLootDialog from './combat/CombatLootDialog.vue'
 import InitiativeTrack from './combat/InitiativeTrack.vue'
 
 // PixiJS is only downloaded once a fight actually opens.
@@ -89,7 +91,11 @@ function leaveBrowserFullscreen(): void {
 
 watch(isRendered, (rendered) => {
   audioDuck.value = rendered ? COMBAT_AUDIO_DUCK : 1
-  if (!rendered) leaveBrowserFullscreen()
+  if (rendered) {
+    audioService.unlock()
+  } else {
+    leaveBrowserFullscreen()
+  }
 }, { immediate: true })
 
 function readFastPreference(): boolean {
@@ -109,6 +115,13 @@ function toggleFast(): void {
   }
 }
 
+function toggleAudioMute(): void {
+  audioMuted.value = !audioMuted.value
+  if (!audioMuted.value) {
+    audioService.unlock()
+  }
+}
+
 const enemies = computed<CombatEnemyState[]>(() => {
   const c = props.combat
   if (!c) return []
@@ -125,6 +138,10 @@ const bystanders = computed(() => enemies.value.filter((e) => !e.engaged && isAl
 const fighterCount = computed(() => enemies.value.length - bystanders.value.length)
 
 function onBystanderHover(id: string, event: MouseEvent): void {
+  if (isLootPhase.value || isFinished.value) {
+    emit('entityLeave')
+    return
+  }
   const entity = tooltipFor(id)
   if (entity) emit('entityHover', entity, event)
 }
@@ -231,6 +248,10 @@ function tooltipFor(entityId: string): Record<string, unknown> | null {
 }
 
 function onArenaHover(entityId: string | null, event: MouseEvent | null): void {
+  if (isLootPhase.value || isFinished.value) {
+    emit('entityLeave')
+    return
+  }
   const entity = entityId ? tooltipFor(entityId) : null
   if (entity && event) {
     emit('entityHover', entity, event)
@@ -269,6 +290,7 @@ onBeforeUnmount(() => {
         role="dialog"
         aria-modal="true"
         aria-label="Combat"
+        @pointerdown.passive="audioService.unlock()"
       >
         <header class="tw-combat-header relative shrink-0 px-4 sm:px-6 py-3 border-b flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 class="tw-combat-title text-sm sm:text-base font-black flex items-center gap-2">
@@ -283,6 +305,17 @@ onBeforeUnmount(() => {
             :class="isPlayerTurn && !arenaPlaying ? 'tw-combat-pill--player' : 'tw-combat-pill--enemy'"
           >{{ turnLabel }}</span>
           <div class="flex-1"></div>
+          <button
+            type="button"
+            class="tw-dialog-icon-button tw-combat-toggle w-7 h-7"
+            :title="audioMuted ? 'Unmute combat sound effects' : 'Mute combat sound effects'"
+            :aria-label="audioMuted ? 'Unmute sound effects' : 'Mute sound effects'"
+            :aria-pressed="!audioMuted"
+            @click="toggleAudioMute"
+          >
+            <VolumeX v-if="audioMuted" class="w-3.5 h-3.5 text-rose-400" />
+            <Volume2 v-else class="w-3.5 h-3.5 text-emerald-400" />
+          </button>
           <button
             type="button"
             class="tw-dialog-icon-button tw-combat-toggle gap-1.5 px-2.5 py-1 text-xs font-bold"
@@ -396,39 +429,6 @@ onBeforeUnmount(() => {
               @leave="emit('entityLeave')"
             />
             <CombatLogPanel class="flex-1" :entries="visibleLogs" :total="logs.length" />
-
-            <section v-if="isLootPhase && !arenaPlaying" class="tw-combat-panel shrink-0 p-3">
-              <div class="tw-combat-eyebrow mb-2">Spoils of Battle</div>
-              <div v-if="lootItems.length === 0" class="text-sm opacity-70">Nothing worth taking.</div>
-              <div v-else class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                <div v-for="item in lootItems" :key="item.id || item.name" class="tw-combat-loot-row">
-                  <span class="flex items-center gap-2 min-w-0">
-                    <i :class="['ra text-sm', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
-                    <span class="text-sm truncate">{{ item.name }}</span>
-                  </span>
-                  <span class="flex gap-1 shrink-0">
-                    <button class="tw-dialog-button !px-2 !py-0.5" :disabled="evaluating" @click="emit('lootTake', item)">Take</button>
-                    <button class="tw-dialog-button tw-dialog-button--ghost !px-2 !py-0.5" :disabled="evaluating" @click="emit('lootLeave', item)">Leave</button>
-                  </span>
-                </div>
-              </div>
-              <div class="mt-2.5 flex gap-2">
-                <button
-                  v-if="lootItems.length"
-                  class="tw-dialog-button flex-1"
-                  :disabled="evaluating"
-                  title="Put all remaining loot into your inventory and end the fight"
-                  @click="emit('lootTakeAll')"
-                >Take All &amp; Finish</button>
-                <button
-                  class="tw-dialog-button flex-1"
-                  :class="{ 'tw-dialog-button--ghost': lootItems.length }"
-                  :disabled="evaluating"
-                  :title="lootItems.length ? 'Leave the remaining loot lying in the scene' : 'End the fight'"
-                  @click="emit('lootDone')"
-                >{{ lootItems.length ? 'Drop Rest &amp; Finish' : 'Finish &amp; Continue' }}</button>
-              </div>
-            </section>
           </div>
         </div>
 
@@ -452,6 +452,19 @@ onBeforeUnmount(() => {
             @leave="emit('entityLeave')"
           />
         </footer>
+
+        <!-- Centered Victory Loot Dialog Overlay -->
+        <CombatLootDialog
+          :open="isLootPhase && !arenaPlaying"
+          :items="lootItems"
+          :evaluating="evaluating"
+          @take="(item) => emit('lootTake', item)"
+          @leave="(item) => emit('lootLeave', item)"
+          @take-all="emit('lootTakeAll')"
+          @done="emit('lootDone')"
+          @entity-hover="(item, event) => emit('entityHover', item, event)"
+          @entity-leave="emit('entityLeave')"
+        />
       </div>
     </Transition>
   </Teleport>

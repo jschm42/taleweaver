@@ -169,9 +169,21 @@ export class CombatantCard extends Container {
     return this.flash
   }
 
+  override destroy(options?: boolean | { children?: boolean; texture?: boolean; textureSource?: boolean; context?: boolean }): void {
+    this.destroyed = true
+    this.filters = []
+    if (this.portrait) {
+      this.portrait.mask = null
+      this.portrait.destroy({ texture: false })
+      this.portrait = null
+    }
+    super.destroy(options)
+  }
+
   private async loadPortrait(url: string | null): Promise<void> {
     if (this.portrait) {
-      this.portrait.destroy()
+      this.portrait.mask = null
+      this.portrait.destroy({ texture: false })
       this.portrait = null
     }
     if (!url) {

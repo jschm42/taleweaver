@@ -123,20 +123,20 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
         <div
           v-else
           class="w-full max-w-full bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in"
-          :class="isNpc ? 'min-h-[22rem]' : 'min-h-[17rem]'"
+          :class="isNpc ? 'min-h-[22rem]' : 'min-h-0'"
         >
 
-          <!-- Image (NPC only) -->
-          <div v-if="hasHeroImage" class="h-72 w-full relative shrink-0">
+          <!-- Image -->
+          <div v-if="hasHeroImage" :class="['w-full relative shrink-0 overflow-hidden', isNpc ? 'h-72' : 'h-36 border-b border-slate-800/80 bg-slate-950']">
             <div
               v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' && (props.hoveredEntity.is_defeated || props.hoveredEntity.hp === 0)"
               class="absolute -right-8 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.12em] py-1 w-28 text-center rotate-45 shadow-lg z-20"
             >
               Defeated
             </div>
-            <img :src="getImageUrl(props.hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" @error="handleImageError" />
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
-             <div class="tooltip-image-fray absolute left-0 right-0 bottom-0 h-12"></div>
+            <img :src="getImageUrl(props.hoveredEntity.image_url)" :class="['absolute inset-0 w-full h-full object-cover', isNpc ? 'object-top' : 'object-center']" @error="handleImageError" />
+            <div v-if="isNpc" class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
+            <div v-if="isNpc" class="tooltip-image-fray absolute left-0 right-0 bottom-0 h-12"></div>
           </div>
           <div v-else :class="['w-full relative bg-slate-950 flex items-center justify-center shrink-0', isExit ? 'h-28' : 'h-20']">
             <div
@@ -166,8 +166,8 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
             <i
               v-else
               :class="[
-                isNpc ? 'ra text-4xl ra-player text-cyan-400/80' :
-                'ra text-4xl ra-vest text-amber-400/80'
+                'ra text-4xl',
+                props.hoveredEntity.icon || (isNpc ? 'ra-player text-cyan-400/80' : getItemIcon(props.hoveredEntity.item_type || 'PICKABLE') + ' text-amber-400/80')
               ]"
             ></i>
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]"></div>
@@ -211,8 +211,8 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
 
           <!-- Non-NPC: original single-column layout -->
           <template v-else>
-          <div :class="['min-h-0 overflow-y-auto', hasHeroImage ? 'tooltip-content-overlap' : '']">
-            <div :class="['flex items-center justify-between mb-1', headerPaddingClass]">
+          <div :class="['min-h-0 overflow-y-auto', (hasHeroImage && isNpc) ? 'tooltip-content-overlap' : '']">
+            <div :class="['flex items-center justify-between mb-1', headerPaddingClass, hasHeroImage && !isNpc ? 'pt-3' : '']">
               <span :class="['font-bold text-white uppercase tracking-wider', headerLabelClass]">{{ entityName }}</span>
               <span
                 class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
@@ -222,7 +222,7 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
               </span>
             </div>
 
-            <div :class="bodyPaddingClass">
+            <div v-if="entityDescription" :class="bodyPaddingClass">
               <p :class="['text-slate-300 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text', bodyTextClass]"
                  v-html="formatEntityRefs(entityDescription)"></p>
 
@@ -236,10 +236,11 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
               </div>
             </div>
 
-            <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && props.ruleMode !== 'chat' && hasObjectDetails" :class="detailsPaddingClass">
+            <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && hasObjectDetails" :class="detailsPaddingClass">
               <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
-                <div v-if="props.hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
-                  {{ props.hoveredEntity.slot.replace('_', ' ') }}
+                <div v-if="props.hoveredEntity.slot" class="col-span-2 text-slate-400 text-xxs font-bold uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800/60 mb-0.5">
+                  <i class="ra ra-vest text-amber-400/80"></i>
+                  Equipped: <span class="text-amber-200">{{ props.hoveredEntity.slot.replace('_', ' ') }}</span>
                 </div>
 
                 <template v-if="hasWeaponDetails">

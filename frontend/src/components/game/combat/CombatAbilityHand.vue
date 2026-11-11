@@ -93,10 +93,14 @@ function weaponTooltip(w: CombatWeapon): Record<string, unknown> {
     entity_type: 'ITEM',
     item_type: 'WEAPON',
     name: w.name,
+    image_url: w.imageUrl || null,
+    icon: WEAPON_CATEGORY_META[w.category].icon,
+    slot: w.slot,
+    damage_dice: w.dice,
+    weapon_cost_value: w.cost,
+    weapon_cost_type: w.costType,
     description: [
-      w.slot ? `Equipped: ${w.slot}` : 'No weapon equipped.',
-      `Cost: ${weaponCostLabel(w)} · Check: ${weaponCheckLabel(w.hitStat)}`,
-      `Damage: ${w.dice}`,
+      `Check: ${weaponCheckLabel(w.hitStat)}`,
       onHit ? `On hit: ${onHit}` : '',
     ].filter(Boolean).join('\n'),
   }
@@ -109,9 +113,13 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
     entity_type: 'ITEM',
     item_type: 'SPECIAL',
     name: `${action.name}${lockNote}`,
+    image_url: (action as any).image_url || null,
+    icon: CATEGORY_META[action.category].icon,
+    weapon_cost_value: action.cost,
+    weapon_cost_type: action.cost_type,
     description: [
       action.description,
-      `Cost: ${costLabel(action)} · Check: ${checkLabel(action)}`,
+      `Check: ${checkLabel(action)}`,
       isAreaAttack(action) ? `Area: ${areaLabel(action, props.targetName)}` : '',
       `Effects: ${describeEffects(action.effects) || 'narrative only'}`,
     ].filter(Boolean).join('\n'),
@@ -126,6 +134,7 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
       v-for="w in weapons"
       :key="w.id || 'bare-fists'"
       :icon="WEAPON_CATEGORY_META[w.category].icon"
+      :image-url="w.imageUrl"
       :type-line="weaponTypeLine(w)"
       :title="w.name"
       :cost="weaponCostLabel(w)"
@@ -143,6 +152,7 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
       v-for="action in specials"
       :key="action.id"
       :icon="CATEGORY_META[action.category].icon"
+      :image-url="(action as any).image_url"
       :type-line="`${CATEGORY_META[action.category].label} — ${actionKind(action)}`"
       :title="action.name"
       :cost="costLabel(action)"

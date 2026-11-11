@@ -28,7 +28,7 @@ const emit = defineEmits<{
   close: []
   itemHover: [item: any, event: MouseEvent]
   itemLeave: []
-  equip: [name: string]
+  equip: [name: string, slot?: string]
   unequip: [slot: string]
   consume: [name: string]
   openContainer: [item: any]
@@ -90,6 +90,70 @@ const tabs = computed<TabDefinition[]>(() => [
   { id: 'specials', icon: 'ra-crystal-wand', label: 'Specials', shortLabel: 'Skills', count: String(unlockedSpecialCount.value) },
 ])
 
+const resolveItemSlot = (item: any): string => {
+  const wearables = Array.isArray(item.wearable_slots)
+    ? item.wearable_slots
+    : typeof item.wearable_slots === 'string'
+      ? [item.wearable_slots]
+      : []
+  if (wearables.length > 0) {
+    const eq = props.sheet?.equipment || {}
+    for (const s of wearables) {
+      if (!eq[s]) return s
+    }
+    return wearables[0]
+  }
+  if (item.slot) return item.slot
+  const itemType = String(item.item_type || item.metadata_json?.item_type || '').toUpperCase()
+  if (itemType === 'WEAPON') return 'MainHand'
+  return 'Hands'
+}
+
+const optimisticEquip = (name: string, slot?: string) => {
+  if (!props.sheet) return
+  const inv = props.sheet.inventory || []
+  const idx = inv.findIndex(
+    (i: any) =>
+      i &&
+      (String(i.name || '').toLowerCase() === name.toLowerCase() ||
+        String(i.id || '').toLowerCase() === name.toLowerCase()),
+  )
+  if (idx === -1) return
+  const item = inv[idx]
+  const targetSlot = slot || resolveItemSlot(item)
+  if (!props.sheet.equipment) props.sheet.equipment = {}
+  const oldEquipped = props.sheet.equipment[targetSlot]
+  inv.splice(idx, 1)
+  if (oldEquipped) {
+    inv.push(oldEquipped)
+  }
+  props.sheet.equipment[targetSlot] = item
+}
+
+const optimisticUnequip = (slot: string) => {
+  if (!props.sheet || !props.sheet.equipment) return
+  let targetSlot = slot
+  if (!props.sheet.equipment[targetSlot]) {
+    const found = Object.keys(props.sheet.equipment).find(
+      (s) =>
+        props.sheet?.equipment?.[s]?.name?.toLowerCase() === slot.toLowerCase() ||
+        props.sheet?.equipment?.[s]?.id?.toLowerCase() === slot.toLowerCase(),
+    )
+    if (found) targetSlot = found
+  }
+  const item = props.sheet.equipment[targetSlot]
+  if (!item) return
+  props.sheet.equipment[targetSlot] = null
+  if (!props.sheet.inventory) props.sheet.inventory = []
+  props.sheet.inventory.push(item)
+}
+
+const handleEquip = (name: string, slot?: string) => {
+  optimisticEquip(name, slot)
+  stateChanged.value = true
+  emit('equip', name, slot)
+}
+
 const handleInventoryClick = (item: any) => {
   if (isReadableItem(item)) {
     emit('readItem', item)
@@ -111,8 +175,10 @@ const handleInventoryClick = (item: any) => {
     return
   }
   if (isEquippable(item)) {
+    const targetSlot = resolveItemSlot(item)
+    optimisticEquip(item.name, targetSlot)
     stateChanged.value = true
-    emit('equip', item.name)
+    emit('equip', item.name, targetSlot)
     return
   }
   // Everything else is looked at, which also fires the item's on_interact triggers.
@@ -120,6 +186,7 @@ const handleInventoryClick = (item: any) => {
 }
 
 const handleUnequip = (slot: string) => {
+  optimisticUnequip(slot)
   stateChanged.value = true
   emit('unequip', slot)
 }
@@ -249,6 +316,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <SheetEquipmentPanel
               v-else-if="activeTab === 'equipment'"
               :sheet="sheet"
+              @equip="handleEquip"
               @unequip="handleUnequip"
               @item-hover="(item, event) => emit('itemHover', item, event)"
               @item-leave="emit('itemLeave')"

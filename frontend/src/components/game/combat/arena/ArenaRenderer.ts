@@ -189,6 +189,13 @@ export class ArenaRenderer {
     if (!this.ready) return
     this.ready = false
     this.tween.destroy()
+    try {
+      this.app.ticker?.stop()
+      this.app.renderer?.render({ container: new Container() })
+      this.app.renderer?.reset?.()
+    } catch {
+      // Ignore if renderer already down
+    }
     this.app.destroy(true, { children: true })
     this.cards.clear()
   }
@@ -200,8 +207,14 @@ export class ArenaRenderer {
     card.on('pointertap', () => {
       if (card.data.side === 'enemy' && !card.data.out) this.onSelect?.(card.entityId)
     })
-    card.on('pointerover', (e: FederatedPointerEvent) => this.onHover?.(card.entityId, e.nativeEvent as MouseEvent))
-    card.on('pointermove', (e: FederatedPointerEvent) => this.onHover?.(card.entityId, e.nativeEvent as MouseEvent))
+    card.on('pointerover', (e: FederatedPointerEvent) => {
+      if (card.data.out) return
+      this.onHover?.(card.entityId, e.nativeEvent as MouseEvent)
+    })
+    card.on('pointermove', (e: FederatedPointerEvent) => {
+      if (card.data.out) return
+      this.onHover?.(card.entityId, e.nativeEvent as MouseEvent)
+    })
     card.on('pointerout', () => this.onHover?.(null, null))
     this.cardLayer.addChild(card)
     return card
