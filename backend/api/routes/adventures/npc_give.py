@@ -28,8 +28,6 @@ from backend.models.world_entity import WorldEntity
 
 GIVE_USAGE = "Usage: /give_items <npc> | <item>[, <item> ...]"
 _GIVE_PREFIX = re.compile(r"^\s*(?:i\s+)?give\s+", re.I)
-_TO_DELIMITER = re.compile(r"\s+to\s+", re.I)
-_AND_SEPARATOR = re.compile(r"\s+and\s+", re.I)
 _ARTICLE = re.compile(r"^(?:the|a|an|my|some)\s+", re.I)
 
 
@@ -49,20 +47,31 @@ def _item_label(entry: Any) -> str:
     return str(entry.get("name") or ref_id(entry)) if isinstance(entry, dict) else str(entry)
 
 
+def _split_on_word(words: list[str], word: str) -> list[str]:
+    """Splits at every inner ``word`` (case-insensitive); no regex, so no ReDoS on long input."""
+    groups: list[list[str]] = [[]]
+    last = len(words) - 1
+    for position, current in enumerate(words):
+        if 0 < position < last and current.lower() == word:
+            groups.append([])
+            continue
+        groups[-1].append(current)
+    return [" ".join(group) for group in groups]
+
+
 def _parse_give_parts(user_msg: str) -> tuple[str, list[str]] | None:
     clean_msg = (user_msg or "").strip().rstrip(" .!")
     prefix_match = _GIVE_PREFIX.match(clean_msg)
     if not prefix_match:
         return None
 
-    rest = clean_msg[prefix_match.end() :].strip()
-    parts = _TO_DELIMITER.split(rest)
+    parts = _split_on_word(clean_msg[prefix_match.end() :].split(), "to")
     if len(parts) < 2:
         return None
 
     npc_hint = _strip_article(parts[-1].strip())
     items_part = " to ".join(parts[:-1]).strip()
-    items_commas = _AND_SEPARATOR.sub(",", items_part)
+    items_commas = ",".join(_split_on_word(items_part.split(), "and"))
     refs = [_strip_article(ref) for ref in items_commas.split(",") if _strip_article(ref)]
     if not npc_hint or not refs:
         return None

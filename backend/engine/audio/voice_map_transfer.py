@@ -20,6 +20,7 @@ from backend.engine.audio.voice_provider_map import (
     GOOGLE_PROVIDER,
     VoiceMapError,
     clean_provider_voice,
+    provider_voice_problem,
 )
 
 JSON_FORMAT_ID: Final = "taleweaver-voice-map"
@@ -115,10 +116,12 @@ def _apply_cells(target: dict[str, Any], imported: Mapping[str, Any], errors: li
     for column, provider in PROVIDER_COLUMNS.items():
         if column not in imported:
             continue
-        try:
-            target[provider] = clean_provider_voice(provider, imported.get(column))
-        except VoiceMapError as exc:
-            errors.append(f"{target['name']}: {exc}")
+        # Validate without exceptions so no exception text reaches the API response.
+        problem = provider_voice_problem(provider, imported.get(column))
+        if problem:
+            errors.append(f"{target['name']}: {problem}")
+            continue
+        target[provider] = clean_provider_voice(provider, imported.get(column))
 
 
 def merge_import(

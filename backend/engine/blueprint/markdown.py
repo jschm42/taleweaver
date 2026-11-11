@@ -5,13 +5,15 @@ from __future__ import annotations
 import re
 import textwrap
 
-_MD_HEADING_RE = re.compile(r"^(\s*)(#{1,6})\s+(.*)$")
+# Patterns end in an unanchored ``(.*)`` (no ``$``) so a failing tail cannot trigger
+# polynomial backtracking (ReDoS); callers strip the captured text.
+_MD_HEADING_RE = re.compile(r"^(\s*)(#{1,6})\s+(.*)")
 _SINGLE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_]+$")
 _HR_RE = re.compile(r"^(?:---+|\*\*\*+)$")
 _FENCE_OPEN_RE = re.compile(r"^\s*```[A-Za-z0-9_\-]*\s*$")
 _FENCE_CLOSE_RE = re.compile(r"^\s*```\s*$")
-_EXIT_ROUTE_RE = re.compile(r"^([^<>\r\n]+?(?:<->|->)\s*[A-Za-z0-9_]+)(.*)$")
-_SEP_START_RE = re.compile(r"^(?:—|–|-|:)\s*(.*)$")
+_EXIT_ROUTE_RE = re.compile(r"^([^<>\r\n]+?(?:<->|->)\s*[A-Za-z0-9_]+)(.*)")
+_SEP_START_RE = re.compile(r"^(?:—|–|-|:)(.*)")
 
 
 def normalize_md_word(raw: str) -> str:

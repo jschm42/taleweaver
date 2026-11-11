@@ -38,27 +38,29 @@ class VoiceMapError(ValueError):
     """A provider voice id that cannot be stored (message is safe to show)."""
 
 
-def _clean_compatible_voice(value: str) -> str:
-    if len(value) > MAX_VOICE_ID_CHARS:
-        raise VoiceMapError(
-            f"Voice id '{value[:40]}…' is longer than {MAX_VOICE_ID_CHARS} characters."
-        )
-    if any(ord(char) < 32 for char in value):
-        raise VoiceMapError("Voice ids must not contain control characters.")
-    return value
+def provider_voice_problem(provider: str, value: object) -> str | None:
+    """Why ``value`` cannot be stored for ``provider`` (safe to show), or None when it is valid."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if provider == GOOGLE_PROVIDER:
+        return None if text.lower() in _GOOGLE_BY_LOWER else f"'{text}' is not a Google TTS voice."
+    if len(text) > MAX_VOICE_ID_CHARS:
+        return f"Voice id '{text[:40]}…' is longer than {MAX_VOICE_ID_CHARS} characters."
+    if any(ord(char) < 32 for char in text):
+        return "Voice ids must not contain control characters."
+    return None
 
 
 def clean_provider_voice(provider: str, value: object) -> str:
     """The voice id as stored ("" = narrator voice); raises ``VoiceMapError`` when invalid."""
+    problem = provider_voice_problem(provider, value)
+    if problem:
+        raise VoiceMapError(problem)
     text = str(value or "").strip()
-    if not text:
-        return ""
-    if provider == GOOGLE_PROVIDER:
-        name = _GOOGLE_BY_LOWER.get(text.lower())
-        if not name:
-            raise VoiceMapError(f"'{text}' is not a Google TTS voice.")
-        return name
-    return _clean_compatible_voice(text)
+    if provider == GOOGLE_PROVIDER and text:
+        return _GOOGLE_BY_LOWER[text.lower()]
+    return text
 
 
 def _clean_entry(raw: object) -> dict[str, str]:

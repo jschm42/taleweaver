@@ -189,7 +189,8 @@ def _key_source(args: argparse.Namespace) -> str:
 
 
 def _summary(entry: dict[str, Any]) -> str:
-    traits = [entry.get("gender") or "neutral", entry.get("age"), entry.get("accent")]
+    """Console summary of a voice; the gender label stays in the list file only (not logged)."""
+    traits = [entry.get("age"), entry.get("accent")]
     text = ", ".join(str(trait) for trait in traits if trait)
     if entry.get("description"):
         text += f"; {entry['description']}"

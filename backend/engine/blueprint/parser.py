@@ -31,9 +31,11 @@ from backend.engine.blueprint.models import Blueprint, BlueprintBlock, Blueprint
 
 MAX_SEQUENCES = 15
 
-_TAG_RE = re.compile(r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[([^:\]]+)(?::([^\]]*))?\]\s*(.*)$")
+# Tag and key patterns end in an unanchored ``(.*)`` (no ``$``) so a failing tail cannot
+# trigger polynomial backtracking (ReDoS); the captured value is stripped by the caller.
+_TAG_RE = re.compile(r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[([^:\]]+)(?::([^\]]*))?\](.*)")
 _KEY_RE = re.compile(
-    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_\-]{0,40}(?:\s+[A-Za-z0-9_\-]+)*?)(?:\*\*|__|`)?\s*:\s*(?:\*\*|__)?\s*(.*)$"
+    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_\-]{0,40}(?:\s+[A-Za-z0-9_\-]+)*?)(?:\*\*|__|`)?\s*:(.*)"
 )
 _TRAILING_ID_RE = re.compile(r"^(.*?)\s*\(([A-Za-z][A-Za-z0-9_]*)\)\s*$")
 _EXIT_REF_RE = re.compile(r"^\s*([^<>\-]+?)\s*(<->|->)\s*([^<>\-]+?)\s*$")
@@ -179,6 +181,14 @@ def _consume_premise_line(state: _ParseState, line: str) -> None:
     state.premise.append(line)
 
 
+def _strip_value_markup(raw: str) -> str:
+    """Value after ``key:`` without a leading ``**`` / ``__`` (the bold key's closing marker)."""
+    value = raw.strip()
+    if value.startswith(("**", "__")):
+        value = value[2:].strip()
+    return value
+
+
 def _try_consume_key(
     state: _ParseState, target: BlueprintBlock, lines: list[str], index: int
 ) -> int | None:
@@ -188,7 +198,7 @@ def _try_consume_key(
     if not key_match or spec is None:
         return None
     raw_key = key_match.group(2)
-    raw_value = strip_inline_code(key_match.group(3).strip())
+    raw_value = strip_inline_code(_strip_value_markup(key_match.group(3)))
     next_has_fence = index + 1 < len(lines) and is_fence_open(lines[index + 1])
     if raw_value in ("|", "") and next_has_fence:
         block_text, next_index = read_fenced_block(lines, index + 2)
