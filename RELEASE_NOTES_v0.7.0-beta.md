@@ -1,6 +1,6 @@
 # TaleWeaver v0.7.0-beta: The Adventure Library, UI Themes & Tactical Combat Release
 
-We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major milestone expands TaleWeaver into a connected, highly customizable adventure platform with an in-game adventure catalog browser, 12 immersive UI skins, turn-based tactical combat, multi-provider voice mapping, and dynamic in-game media synthesis.
+We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major milestone expands TaleWeaver into a connected, highly customizable adventure platform with an in-game adventure catalog browser, 12 immersive UI skins, turn-based tactical combat, multi-provider voice mapping, extensive Python scripting engine enhancements, and two flagship showcase adventures: the engine-spanning **Test-Lab** and the 90s LucasArts-style comedy adventure **Suburban Sabotage**.
 
 ---
 
@@ -11,7 +11,7 @@ We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major
 Finding and playing adventures in TaleWeaver no longer requires manually managing `.adz` files:
 
 * **Direct Catalog Browser (`/library`)**: Browse community and official adventures served straight from [`jschm42/taleweaver-adventures`](https://github.com/jschm42/taleweaver-adventures).
-* **One-Click Download & Verification**: View adventure covers, teasers, creator attributions, and sizes. Download, verify, and register adventures in your local library with a single click.
+* **One-Click Download & Verification**: View adventure covers, teasers, creator attributions, and file sizes. Download, verify, and register adventures in your local library with a single click.
 * **Smart Update Tracking**: Installed adventures automatically display an **Update** badge when a newer version is available (either upstream or as a local file), matching adventures by their stable origin UUID while preserving all existing player sessions and saves.
 * **Format Migration**: Automatically upgrades legacy manifest packs on import.
 
@@ -51,21 +51,36 @@ A story's atmosphere extends to the user interface itself. TaleWeaver now featur
 
 ### ⚔️ 4. Turn-Based Tactical Combat Arena & Audio Effects
 
-* **Tactical Combat Modal (`FightModal.vue` / `CombatArena.vue`)**: Full interactive arena for turn-based encounters featuring round counters, initiative queues, and dynamic health bars.
+* **Tactical Combat Modal (`FightModal.vue` / `CombatArena.vue`)**: Full interactive arena for turn-based encounters featuring round counters, initiative queues, attack animations, and dynamic health bars.
 * **Area-of-Effect & Tactical Abilities**: Support for AoE spells, status modifiers, and custom attack mechanics (`specs/combat-aoe-abilities.md`).
 * **Combat Sound Effects Engine**: Dedicated combat SFX library providing visceral audio feedback for weapon hits, critical strikes, spell casts, parries, and victories.
 * **Post-Battle Loot & Spoils**: Structured post-combat loot modals allowing players to collect equipment, quest items, and currency.
 
 ---
 
-### ⚡ 5. Scripting Engine & Creative Media Extensions
+### ⚡ 5. Extensive Scripting Engine Enhancements
 
-Adventures can now generate dynamic audio and visual assets during live gameplay:
+Adventures now enjoy a dramatically expanded, deterministic Python scripting runtime with deep system hooks:
 
-* **In-Game Image Generation (`tw.image.generate`)**: Scripts can dynamically trigger on-the-fly image synthesis using fast or high-quality diffusion models, seamlessly displaying illustrated scenes and discoveries directly in the story feed.
-* **Dynamic Audio Synthesis (`tw.audio.generate`)**: Procedurally compose music tracks and ambient audio on the fly using Google Lyria or ComfyUI workflows, cross-faded between scenes.
-* **Item Manager Ergonomics**: High-level scripting aliases for moving items seamlessly: `tw.items.to_container()`, `to_player()`, and `to_scene()`.
-* **Hardened Sandbox & Context**: Extended AST interpreter limits, instruction budgeting, memory safeguards, and complete test suites.
+* **Choice Dialogs & Branching Dialogue Trees (`tw.dialog` & `tw.dialog.tree`)**:
+  * Present interactive modal choice dialogs (`tw.dialog.show()`) with customizable options, danger prompts, and callback handlers.
+  * Author multi-branch NPC dialogue trees with condition-gated conversation branches, player question menus, and reactive story outcomes.
+* **Time Engine & Clock-Driven Events (`tw.time`)**:
+  * Full programmatic control over the in-game clock, custom minutes-per-tick scaling, and GM-time toggling.
+  * Schedule real-time deadline triggers with `on_time_reached` (e.g. 30m, 1h, 1h45m, 2h) to drive tense countdowns and world state shifts.
+* **Dynamic Media Synthesis (`tw.image` & `tw.audio`)**:
+  * **In-Game Image Generation (`tw.image.generate`)**: Trigger on-the-fly image synthesis using fast or high-quality diffusion models, seamlessly rendering illustrated discoveries directly in the story feed.
+  * **Dynamic Audio Synthesis (`tw.audio.generate`)**: Procedurally compose music tracks and ambient audio on the fly using Google Lyria or ComfyUI workflows, cross-faded between scenes.
+* **Advanced Item & Container Mechanics**:
+  * Ergonomic item relocation aliases: `tw.items.to_container(item_id, container_id)`, `to_player(item_id)`, and `to_scene(item_id, scene_id)`.
+  * Support for hidden item dispensers, container insertion hooks (`on_items_added`), and multi-item crafting recipes.
+* **Multi-State Switches & Mechanisms (`tw.switches`)**:
+  * State-machine switches with configurable initial states, transition tables, and reactive trigger handlers.
+* **Script-Level LLM Queries (`tw.llm` & `tw.json`)**:
+  * Ask the LLM structured questions from within deterministic scripts to evaluate complex player prose or parse custom intents into structured JSON data.
+* **Global Init Scripts & Scene Helpers**:
+  * Define global reusable helper functions in `init_script` and scene-scoped functions in `helpers_script` accessible by all triggers.
+  * Dynamic win and lose guard expressions (`completed_guard_expression`, `gameover_guard_expression`) evaluating custom persistent session variables (`tw.vars`).
 
 ---
 
@@ -86,6 +101,32 @@ Adventures can now generate dynamic audio and visual assets during live gameplay
 
 ---
 
+### 🎮 8. Showcase Adventures: Test-Lab & Suburban Sabotage
+
+This release comes with two showcase adventure packs demonstrating the full power of TaleWeaver's new engine:
+
+#### 🧪 Test-Lab
+A dedicated interactive testing facility and benchmark arena built to exercise every subsystem of TaleWeaver in a single world:
+* **11 Dedicated Subsystem Chambers**:
+  * **`ART_LAB`**: Tests on-the-fly in-game image generation and narrative feed rendering.
+  * **`COMBAT_LAB`**: Tests turn-based tactical combat, initiative rolls, status effects, and damage tracking.
+  * **`GUILD_VAULT`**: Tests locked containers, passcodes, key-item unlocks, and loot distribution.
+  * **`LOCKED_ROOM`**: Tests door locks, bidirectional exit rules, and softlock prevention.
+  * **`RIDDLE_LAB`**: Tests modal choice dialogs, player prompts, and riddle evaluation.
+  * **`SOCIAL_HALL`**: Tests living NPCs, multi-branch dialogue trees, mood shifts, and vocal-tag audio.
+  * **`SWITCH_LAB`**: Tests multi-state switch mechanisms, lever sequences, and state persistence.
+  * **`TELEPORT_LAB`**: Tests dynamic room redirection and scene transit overlays.
+  * **`TIME_MACHINE_LAB`**: Tests in-game clock mechanics, relative time ticks, and time-triggered events.
+  * **`WORKSHOP`**: Tests constructable multi-ingredient crafting recipes.
+
+#### 🏠 Suburban Sabotage
+A full-length comedy adventure inspired by classic 90s LucasArts games (Monkey Island, Day of the Tentacle):
+* **The Story**: It is 15:30 on a chaotic Saturday afternoon at the Miller household. At 18:00 sharp (2 real in-game hours), Dad's wealthy, tyrannical mother Grandma Evelyn arrives for dinner inspection. If the house is not spotless and the casserole is not baking in Grandma's sacred heirloom Ming porcelain dish, she will evict the Millers and ship Grandpa Joe off to a cheap nursing home!
+* **The Mission**: Ten-year-old Jack must lure Mom out of her locked office, recover Dad's golden wrench from a piranha tank, distract freeloading neighbor Kevin with Dad's "Sports Magazines", glue the shattered Ming dish back together, bake the casserole, and uncover the hilarious truth behind Grandpa Joe's sabotage to turn the tables on Grandma with her own prenup morality clause!
+* **Showcase Mechanics**: Demonstrates clock-driven deadline events (`on_time_reached`), choice dialogs, crafting recipes, dynamic NPC room-patrols, and multi-variable win/lose guards.
+
+---
+
 ## 📦 What's Changed / Commit Summary
 
 * **Frontend**:
@@ -98,7 +139,7 @@ Adventures can now generate dynamic audio and visual assets during live gameplay
   * Implemented Adventure Library catalog index fetching, caching, and download verification.
   * Implemented multi-provider TTS voice mapping (`voice_provider_map` schema & migration).
   * Implemented tactical combat engine, special attacks, and post-battle loot distribution.
-  * Implemented `tw.image.generate` and `tw.audio.generate` media synthesis in the scripting engine.
+  * Implemented extensive scripting engine extensions: `tw.dialog`, `tw.dialog.tree`, `tw.time`, `tw.llm`, `tw.json`, `tw.image`, and `tw.audio`.
   * Added item manager placement aliases (`to_container`, `to_player`, `to_scene`).
   * Implemented upstream adventure UUID resolution and stable storage identifiers.
   * Modernized dependency management with Poetry and added pre-commit linting hooks.

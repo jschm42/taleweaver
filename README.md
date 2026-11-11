@@ -142,8 +142,9 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 * **Atmospheric UI Themes & Dialog Skins**: 12 distinct game UI themes (Classic, Chronicle, Noir, Terminal, Grimoire, Eldritch, Toon, Ancient, Starship, Pixel, Thriller, Sitcom) customizing speech bubble styles, typography, tab treatments, dice designs, scene tinting, and animated NPC entrances. Includes live editor preview, author accent color selection, auto-mood matching, and player settings override with WCAG contrast verification.
 * **Multi-Provider TTS Voice Mapping & ElevenLabs Integration**: Native ElevenLabs support with an expressive voice catalog for characters and narrators. Flexible `voice_provider_map` allowing creators and admins to mix and match TTS providers across characters, narrators, and tones.
 * **Turn-Based Tactical Combat Arena & SFX**: Dedicated combat modal arena (`FightModal.vue`, `CombatArena.vue`) featuring initiative order, combat turn progression, Area-of-Effect (AoE) abilities, visceral audio sound effect feedback, and post-battle loot distribution.
-* **Scripting Engine Media Extensions**: Dynamic in-game image synthesis (`tw.image.generate`) with simple and HQ models directly embedded into the chat feed, procedural audio generation (`tw.audio.generate`) via Google Lyria or ComfyUI, and high-level item management aliases (`tw.items.to_container`, `to_player`, `to_scene`).
+* **Extensive Python Scripting Extensions**: Greatly expanded `tw.*` API runtime including modal choice dialogs (`tw.dialog`), multi-branch dialogue trees (`tw.dialog.tree`), in-game clock control and deadline events (`tw.time`, `on_time_reached`), script-level LLM semantic queries (`tw.llm`, `tw.json`), dynamic media synthesis (`tw.image.generate`, `tw.audio.generate`), and ergonomic container item management (`tw.items.to_container`, `to_player`, `to_scene`).
 * **Adventure Format Specification & Entity Bundles (`.adv` / `.adz` v1.3.1)**: Formal specification ([Adventure Format Specification](docs/specs/adventure_format.md)), shared feature namespaces, modular entity bundles (`.twe`), and stable upstream Adventure UUIDs.
+* **Showcase Adventures**: Ships with the engine-testing sandbox **Test-Lab** (exercising image generation, combat, switches, choice dialogs, and crafting across 11 chambers) and **Suburban Sabotage**, a full-length 90s LucasArts-style comedy adventure featuring clock-driven deadline puzzles and dynamic family antics.
 * **Docker & Production Infrastructure**: Containerized deployment script (`scripts/docker_setup.sh`), production Nginx reverse proxy config, real-time backend health monitoring (`/api/health`), and migration to Poetry for dependency management.
 
 #### Previous Highlights
@@ -440,8 +441,9 @@ Inspect the internal engine workflows through Mermaid diagrams in the repository
 - **Atmospheric UI Themes**: 12 custom dialog skins (Classic, Chronicle, Noir, Terminal, Grimoire, Eldritch, Toon, Ancient, Starship, Pixel, Thriller, Sitcom) with WCAG-tested typography, bubble styles, and live editor preview.
 - **Multi-Provider Voice Mapping**: ElevenLabs TTS integration and flexible voice provider mapping across characters and narrators.
 - **Tactical Combat Arena**: Turn-based fight modal with round progression, attack animations, combat sound effects, and post-battle loot distribution.
-- **Scripting Engine Media Synthesis**: Dynamic in-game image and audio generation directly in chat and scenes (`tw.image.generate`, `tw.audio.generate`).
+- **Extensive Scripting Engine**: Rich `tw.*` API additions including choice dialogs (`tw.dialog`), dialogue trees (`tw.dialog.tree`), time triggers (`tw.time`, `on_time_reached`), script-level LLM queries (`tw.llm`), and dynamic media generation (`tw.image`, `tw.audio`).
 - **Adventure Format v1.3.1**: Format specification, modular entity bundles (`.twe`), and stable upstream adventure identifiers.
+- **Showcase Adventures**: Benchmarking sandbox **Test-Lab** and full-length 90s comedy adventure **Suburban Sabotage**.
 
 </details>
 
