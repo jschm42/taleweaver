@@ -1,6 +1,6 @@
 # TaleWeaver v0.7.0-beta: The Adventure Library, UI Themes & Tactical Combat Release
 
-We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major milestone expands TaleWeaver into a connected, highly customizable adventure platform with an in-game adventure catalog browser, 12 immersive UI skins, turn-based tactical combat, multi-provider voice mapping, local ComfyUI image and audio generation, custom OpenAI-compatible endpoint support, extensive Python scripting engine enhancements, and two flagship showcase adventures: the engine-spanning **Test-Lab** and the 90s LucasArts-style comedy adventure **Suburban Sabotage**.
+We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major milestone expands TaleWeaver into a connected, highly customizable adventure platform with an in-game adventure catalog browser, 12 immersive UI skins, turn-based tactical combat, multi-provider voice mapping, local ComfyUI image and audio generation, custom OpenAI-compatible endpoint support, extensive Python scripting engine enhancements, the revolutionary **World-Builder Blueprint** system, and two flagship showcase adventures: the engine-spanning **Test-Lab** and the 90s LucasArts-style comedy adventure **Suburban Sabotage**.
 
 ---
 
@@ -117,7 +117,25 @@ Adventures now enjoy a dramatically expanded, deterministic Python scripting run
 
 ---
 
-### 🗺️ 8. Adventure Format Specification & Entity Bundles (`.adv` / `.adz` v1.3.1)
+### 📐 8. Structured World-Builder Blueprints & Hybrid Generation
+
+Creators no longer have to choose between pure manual editing and unpredictable AI generation. The new **World-Builder Blueprint** system allows you to author structured, verifiable specifications directly within the **Story Idea & Context** field or upload them as `.md` files via **Load .md**:
+
+* **Declarative Tagged Specification**:
+  * Pin down anything from chapter progression to single lock combinations, NPC stats, crafting recipes, and Python event scripts using clean YAML tags or standard Markdown headings (`[World]`, `[Sequence]`, `[Scene]`, `[NPC]`, `[Item]`, `[Container]`, `[Switch]`, `[Audio]`, `[Quest]`, `[Award]`).
+  * Everything you declare is strictly respected; anything you leave out is creatively synthesized by the AI.
+* **3-Stage Generation & Enforcement Pipeline**:
+  1. **Pre-flight Validation**: Parses and statically audits your blueprint before spending any LLM tokens. Validates Python syntax, guard expressions, entity ID collisions, and reference integrity with exact line-number error reporting.
+  2. **Guided LLM Synthesis**: Injects the structured blueprint into the LLM prompt with strict JSON schema constraints to invent the narrative world around your design.
+  3. **Deterministic Enforcement**: Post-generation enforcement writes every fixed blueprint value (scripts, soft rules, container locks, exits, and abilities) back over the LLM output, guaranteeing zero dropped or hallucinated mechanics.
+* **Adherence Modes**:
+  * **Strict Adherence**: Forces the AI to strictly preserve chapter order and add only the minimum needed to connect your designed puzzle chain.
+  * **Creative Expansion**: Uses your blueprint as an architectural backbone while inviting the AI to weave in atmospheric side content, additional characters, and subplots.
+* Read the comprehensive [World-Builder Blueprint Manual](docs/world-builder-blueprint-manual.md) and [Blueprint Syntax Reference](docs/world-builder-syntax.md).
+
+---
+
+### 🗺️ 9. Adventure Format Specification & Entity Bundles (`.adv` / `.adz` v1.3.1)
 
 * **Formal Format Specification**: Complete documentation of `.adv` manifests and `.adz` archive bundles in [`docs/specs/adventure_format.md`](docs/specs/adventure_format.md).
 * **Schema Extensions**: Support for shared feature namespaces, switch mechanics, and schema versioning.
@@ -126,7 +144,7 @@ Adventures now enjoy a dramatically expanded, deterministic Python scripting run
 
 ---
 
-### 🛠️ 9. Architecture, Security & Production Deployment
+### 🛠️ 10. Architecture, Security & Production Deployment
 
 * **Docker & Reverse Proxy**: Turnkey Docker deployment script (`scripts/docker_setup.sh`) and production Nginx reverse proxy configuration.
 * **Backend Health & Connectivity Monitoring**: `GET /api/health` probes with a non-intrusive frontend connectivity banner that alerts users during disconnections and automatically resumes state upon reconnection.
@@ -134,7 +152,7 @@ Adventures now enjoy a dramatically expanded, deterministic Python scripting run
 
 ---
 
-### 🎮 10. Showcase Adventures: Test-Lab & Suburban Sabotage
+### 🎮 11. Showcase Adventures: Test-Lab & Suburban Sabotage
 
 This release comes with two showcase adventure packs demonstrating the full power of TaleWeaver's new engine:
 
@@ -168,10 +186,12 @@ A full-length comedy adventure inspired by classic 90s LucasArts games (Monkey I
   * Added `CombatArena` and `FightModal` components with turn progression, combat sound effects, and loot rewards.
   * Added ComfyUI settings, checkpoint selectors, and workflow choice controls in visual and audio settings.
   * Added Custom OpenAI-compatible endpoint cards and model discovery across LLM and TTS configuration.
+  * Added World-Builder blueprint pre-flight error banner, Markdown import (**Load .md**), and adherence mode controls.
   * Added ElevenLabs voice selector, narrator voice pickers, and multi-provider voice mapping interfaces.
   * Added frontend connectivity monitoring banner and health check composables.
 * **Backend**:
   * Implemented Adventure Library catalog index fetching, caching, and download verification.
+  * Implemented World-Builder Blueprint parsing engine, pre-flight validator, and post-generation enforcement pipeline (`backend/engine/blueprint/`).
   * Implemented ComfyUI image provider with SD 1.5/SDXL workflows and checkpoint discovery.
   * Implemented ComfyUI text-to-audio workflow execution engine and audio file ingestion.
   * Implemented custom OpenAI-compatible Chat Completions client and endpoint routing.
