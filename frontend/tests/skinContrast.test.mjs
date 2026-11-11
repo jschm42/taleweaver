@@ -61,9 +61,13 @@ const SURFACE_OF = {
   '--tw-speaker-target-bg': '--tw-bubble-bg',
 }
 
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function tokensOf(selector) {
   const tokens = {}
-  const escaped = selector.replace(/[.[\]']/g, '\\$&')
+  const escaped = escapeRegex(selector)
   const blocks = css.matchAll(new RegExp(`(?<=^|[};])\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))
   for (const [, body] of blocks) {
     for (const [, name, value] of body.matchAll(/(--tw-[a-z-]+)\s*:\s*([^;]+);/g)) {
