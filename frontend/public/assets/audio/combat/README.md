@@ -1,8 +1,6 @@
 # Combat sound effects
 
-The combat dialog plays these files. **Every file in this folder is a silent placeholder**
-(0.15 s of silence). To add a real sound, replace the placeholder with your recording and keep
-the file name. No code change is needed; reload the page.
+The combat dialog plays these files. Standard recordings are bundled with the repository (generated via Stable Audio Open and normalized with FFmpeg). To replace a sound, place your own recording with the same file name here. No code change is needed; reload the page.
 
 ## Rules for the files
 
