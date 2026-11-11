@@ -3,7 +3,7 @@
 [data-skin='chronicle'] {
   --tw-accent: #8a2b1a;
   --tw-accent-soft: #e0b25c;
-  --tw-player: #3f5f2a;
+  --tw-player: #35542a;
   --tw-target: #1f4e79;
 
   --tw-font-body: 'Newsreader', Georgia, serif;
@@ -14,20 +14,31 @@
   --tw-narration-ink: #2b1d0e;
   --tw-narration-border: 0 solid transparent;
   --tw-narration-radius: 3px;
-  --tw-narration-shadow: inset 0 0 70px rgba(120, 72, 24, 0.45), 0 18px 50px rgba(0, 0, 0, 0.6);
+  --tw-narration-shadow: inset 0 0 60px rgba(120, 72, 24, 0.3), 0 18px 50px rgba(0, 0, 0, 0.6);
   --tw-font-dropcap: 'IM Fell English SC', Georgia, serif;
   --tw-dropcap-size: 3.6em;
   --tw-dropcap-ink: var(--tw-accent);
   --tw-dropcap-shadow: none;
-  --tw-narration-tag-ink: #f6e1c8;
+  --tw-label-bg: transparent;
+  --tw-label-ink: var(--tw-accent);
+  --tw-narration-tag-ink: #f8e8d2;
+  --tw-narration-tag-bg: #9c2f22;
+  --tw-voice-tag-ink: #f8e8d2;
+  --tw-voice-tag-bg: #9c2f22;
+  --tw-speaker-ink: #f6ead0;
+  --tw-speaker-bg: var(--tw-accent);
+  --tw-speaker-player-ink: #f6ead0;
+  --tw-speaker-player-bg: var(--tw-player);
+  --tw-speaker-target-ink: #f6ead0;
+  --tw-speaker-target-bg: var(--tw-target);
 
-  --tw-bubble-bg: #d9c49a;
-  --tw-bubble-tail-fill: #d9c49a;
+  --tw-bubble-bg: #e0cda4;
+  --tw-bubble-tail-fill: #e0cda4;
   --tw-bubble-ink: #2b1d0e;
   --tw-bubble-color: var(--tw-accent);
   --tw-bubble-border-width: 0;
   --tw-bubble-radius: 3px;
-  --tw-bubble-shadow: inset 0 0 50px rgba(110, 64, 20, 0.45), 0 14px 40px rgba(0, 0, 0, 0.55);
+  --tw-bubble-shadow: inset 0 0 44px rgba(110, 64, 20, 0.3), 0 14px 40px rgba(0, 0, 0, 0.55);
 
   --tw-strong-ink: #6b2015;
 
@@ -40,7 +51,7 @@
   --tw-card-border: rgba(120, 72, 24, 0.35);
   --tw-card-radius: 3px;
   --tw-card-ink: #2b1d0e;
-  --tw-card-muted: #6b5233;
+  --tw-card-muted: #5e4627;
 
   --tw-tab-bg: #3d2a1a;
   --tw-tab-ink: #eadcbc;
@@ -61,7 +72,6 @@
   margin: 0 0 0.5rem;
   padding: 0;
   background: none;
-  color: var(--tw-accent);
   font-size: 0.875rem;
   font-weight: 400;
   text-transform: none;
@@ -93,7 +103,7 @@
   border: 0;
   border-radius: 0;
   background: var(--tw-speaker-color);
-  color: #f3e6c8;
+  color: var(--tw-speaker-ink);
   font-family: 'IM Fell English SC', Georgia, serif;
   font-weight: 400;
   text-transform: none;
@@ -115,8 +125,8 @@
 [data-skin='chronicle'] .comic-voice-tag {
   border: 0;
   border-radius: 999px;
-  background: radial-gradient(circle at 35% 30%, #b23a2a, #6e1610 75%);
-  color: #f6e1c8;
+  background: radial-gradient(circle at 35% 30%, var(--tw-voice-tag-bg), #6e1610 75%);
+  color: var(--tw-voice-tag-ink);
   font-family: 'IM Fell English SC', Georgia, serif;
   font-weight: 400;
   text-transform: lowercase;

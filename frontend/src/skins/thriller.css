@@ -1,0 +1,225 @@
+/* Thriller — cold steel, surveillance readouts and a warning red for suspense, espionage and heists. */
+
+[data-skin='thriller'] {
+  --tw-accent: #ff5a3c;
+  --tw-accent-soft: #ff8a70;
+  --tw-player: #5eead4;
+  --tw-target: #facc15;
+
+  --tw-font-body: 'Newsreader', Georgia, serif;
+  --tw-font-dialogue: 'Newsreader', Georgia, serif;
+  --tw-font-label: 'Share Tech Mono', ui-monospace, monospace;
+
+  --tw-narration-bg: linear-gradient(180deg, rgba(18, 23, 31, 0.97) 0%, rgba(10, 13, 18, 0.97) 100%);
+  --tw-narration-ink: #e9edf2;
+  --tw-narration-border: 1px solid rgba(148, 163, 184, 0.28);
+  --tw-narration-radius: 2px;
+  --tw-narration-shadow: 0 18px 44px rgba(0, 0, 0, 0.7);
+  --tw-label-bg: transparent;
+  --tw-label-ink: var(--tw-accent-soft);
+  --tw-font-dropcap: 'Newsreader', Georgia, serif;
+  --tw-dropcap-size: 3.5em;
+  --tw-dropcap-ink: var(--tw-accent);
+  --tw-dropcap-shadow: none;
+  --tw-narration-tag-ink: #a9b8cb;
+  --tw-voice-tag-ink: #a9b8cb;
+
+  --tw-bubble-bg: rgba(23, 29, 39, 0.97);
+  --tw-bubble-tail-fill: #171d27;
+  --tw-bubble-ink: #f1f4f8;
+  --tw-bubble-color: #8492a6;
+  --tw-bubble-border-width: 1px;
+  --tw-bubble-radius: 2px;
+  --tw-bubble-shadow: 0 14px 36px rgba(0, 0, 0, 0.65);
+
+  --tw-strong-ink: #ffd166;
+
+  --tw-speaker-ink: var(--tw-accent-soft);
+  --tw-speaker-player-ink: var(--tw-player);
+  --tw-speaker-target-ink: var(--tw-target);
+
+  --tw-panel-bg: rgba(9, 12, 16, 0.96);
+  --tw-panel-border: rgba(148, 163, 184, 0.24);
+  --tw-panel-ink: #e2e7ee;
+  --tw-panel-muted: #9aa8ba;
+  --tw-panel-radius: 2px;
+  --tw-card-bg: #151b24;
+  --tw-card-border: rgba(148, 163, 184, 0.26);
+  --tw-card-radius: 2px;
+
+  --tw-tab-bg: rgba(13, 17, 23, 0.92);
+  --tw-tab-ink: #bcc8d8;
+  --tw-tab-border: rgba(148, 163, 184, 0.26);
+  --tw-tab-active-bg: #3a1710;
+  --tw-tab-active-ink: #ffe1d9;
+  --tw-tab-active-border: var(--tw-accent);
+  --tw-tab-radius: 0;
+  --tw-tab-font: 'Share Tech Mono', ui-monospace, monospace;
+
+  /* Drained and cold, with a hard vignette. */
+  --tw-scene-tint:
+    linear-gradient(180deg, rgba(20, 40, 60, 0.22), rgba(4, 8, 14, 0.4)),
+    radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.65) 100%);
+  --tw-scene-filter: saturate(0.55) contrast(1.15) brightness(0.8);
+
+  /* Overlays */
+  --tw-overlay-bg: #05070a;
+  --tw-overlay-ink: #f1f4f8;
+  --tw-overlay-muted: #9aa8ba;
+  --tw-overlay-accent: var(--tw-accent);
+  --tw-overlay-highlight: #ff8a70;
+  --tw-font-overlay-title: 'Newsreader', Georgia, serif;
+  --tw-font-overlay-eyebrow: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-overlay-title-transform: uppercase;
+  --tw-overlay-wash: radial-gradient(ellipse at 50% 110%, rgba(255, 90, 60, 0.4), transparent 60%);
+  --tw-overlay-texture: repeating-linear-gradient(0deg, rgba(148, 163, 184, 0.05) 0 1px, transparent 1px 5px);
+  --tw-overlay-image-filter: saturate(0.4) contrast(1.2) brightness(0.55);
+
+  /* System notes and dice */
+  --tw-sysnote-bg: rgba(13, 17, 23, 0.94);
+  --tw-sysnote-ink: #d8e0ea;
+  --tw-sysnote-border: 1px solid rgba(148, 163, 184, 0.3);
+  --tw-sysnote-radius: 2px;
+  --tw-sysnote-icon: var(--tw-accent);
+  --tw-sysnote-font: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-sysnote-tracking: 0.02em;
+  --tw-sysnote-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+  --tw-die-face: #1b2330;
+  --tw-die-edge: #9aa8ba;
+  --tw-die-ink: #f1f4f8;
+  --tw-die-shine: rgba(255, 255, 255, 0.08);
+  --tw-die-crit: #facc15;
+  --tw-die-fumble: #ff5a3c;
+  --tw-die-number-font: 'Share Tech Mono', ui-monospace, monospace;
+
+  /* NPC entrances */
+  --tw-arrival-sweep: rgba(255, 255, 255, 0.5);
+  --tw-arrival-glow: rgba(255, 90, 60, 0.75);
+  --tw-arrival-tag-bg: #ff5a3c;
+  --tw-arrival-tag-ink: #1a0703;
+  --tw-arrival-tag-font: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-arrival-animation: tw-npc-arrive-surveil;
+  --tw-arrival-duration: 1s;
+}
+
+/* Narration: a briefing sheet with a red rule along the top. */
+[data-skin='thriller'] .tw-narration {
+  border-top: 2px solid var(--tw-accent);
+}
+
+[data-skin='thriller'] .tw-narration-label {
+  padding: 0;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.24em;
+}
+
+[data-skin='thriller'] .tw-narration-label::before {
+  content: '//';
+  margin-right: 0.5rem;
+  opacity: 0.6;
+}
+
+[data-skin='thriller'] .tw-narration-text {
+  font-size: 1.06em;
+  letter-spacing: 0;
+}
+
+/* Dialogue: a transcript line, marked by the speaker's color on the left. */
+[data-skin='thriller'] .tw-bubble {
+  border-color: rgba(148, 163, 184, 0.26);
+  border-left: 3px solid var(--tw-bubble-color);
+  box-shadow: var(--tw-bubble-shadow);
+}
+
+[data-skin='thriller'] .tw-bubble-tail {
+  display: none;
+}
+
+[data-skin='thriller'] .tw-bubble-text {
+  font-size: 1.06em;
+  letter-spacing: 0;
+}
+
+[data-skin='thriller'] .tw-speaker {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tw-speaker-ink);
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+
+[data-skin='thriller'] .tw-speaker:hover {
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-skin='thriller'] .tw-speaker--player {
+  color: var(--tw-speaker-player-ink);
+}
+
+[data-skin='thriller'] .tw-speaker--target {
+  color: var(--tw-speaker-target-ink);
+}
+
+[data-skin='thriller'] .comic-voice-tag {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--tw-voice-tag-ink);
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+[data-skin='thriller'] .comic-voice-tag::before {
+  content: '[';
+}
+
+[data-skin='thriller'] .comic-voice-tag::after {
+  content: ']';
+}
+
+[data-skin='thriller'] .tw-tab {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+
+[data-skin='thriller'] .tw-tab--active {
+  box-shadow: inset 0 -2px 0 var(--tw-accent);
+}
+
+[data-skin='thriller'] .tw-panel-title,
+[data-skin='thriller'] .tw-pager {
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+}
+
+[data-skin='thriller'] .tw-overlay-title {
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+[data-skin='thriller'] .tw-npc-arrival-tag {
+  border-radius: 0;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+/* NPC entrance: caught on a security camera, then the picture locks */
+@keyframes tw-npc-arrive-surveil {
+  0% { opacity: 0; filter: grayscale(1) contrast(2) brightness(1.8); transform: translateX(-6px) skewX(-3deg); }
+  15% { opacity: 1; transform: translateX(5px) skewX(2deg); }
+  30% { opacity: 0.5; transform: translateX(-3px); }
+  45% { opacity: 1; filter: grayscale(1) contrast(1.5) brightness(1.2); transform: none; }
+  100% { opacity: 1; filter: none; transform: none; }
+}

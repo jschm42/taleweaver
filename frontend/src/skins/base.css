@@ -40,6 +40,8 @@
   --tw-bubble-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
 
   --tw-strong-ink: #fde68a;
+  /* Emphasis inside dialogue bubbles (differs when narration and bubbles use opposite papers). */
+  --tw-bubble-strong-ink: var(--tw-strong-ink);
 
   --tw-panel-bg: rgba(2, 6, 23, 0.9);
   --tw-panel-border: rgba(51, 65, 85, 0.8);
@@ -311,9 +313,12 @@
   border: 1px solid color-mix(in srgb, var(--tw-target) 30%, transparent);
 }
 
-.tw-skin .tw-narration strong,
-.tw-skin .tw-bubble strong {
+.tw-skin .tw-narration strong {
   color: var(--tw-strong-ink);
+}
+
+.tw-skin .tw-bubble strong {
+  color: var(--tw-bubble-strong-ink);
 }
 
 /* ---------- Tabs ---------- */

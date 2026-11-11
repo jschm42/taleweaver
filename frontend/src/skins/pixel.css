@@ -1,0 +1,259 @@
+/* Pixel Quest — 16-bit message windows for classic RPG and retro adventures. */
+
+[data-skin='pixel'] {
+  --tw-accent: #ffd23f;
+  --tw-accent-soft: #ffe27a;
+  --tw-player: #7cf29c;
+  --tw-target: #ff9ebb;
+
+  /* The pixel font is for labels only: body text stays in a clean monospace. */
+  --tw-font-body: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-font-dialogue: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-font-label: 'Press Start 2P', ui-monospace, monospace;
+
+  --tw-narration-bg: linear-gradient(180deg, #24339c 0%, #121a66 100%);
+  --tw-narration-ink: #ffffff;
+  --tw-narration-border: 3px solid #f4f4f8;
+  --tw-narration-radius: 6px;
+  --tw-narration-shadow: 0 0 0 3px #0a0d2e, 7px 7px 0 rgba(0, 0, 0, 0.55);
+  --tw-label-bg: transparent;
+  --tw-label-ink: var(--tw-accent);
+  --tw-font-dropcap: 'Press Start 2P', ui-monospace, monospace;
+  --tw-dropcap-size: 2.3em;
+  --tw-dropcap-ink: var(--tw-accent);
+  --tw-dropcap-shadow: 3px 3px 0 #0a0d2e;
+  --tw-narration-tag-ink: #ffe27a;
+  --tw-voice-tag-ink: #ffe27a;
+
+  --tw-bubble-bg: #0e1238;
+  --tw-bubble-tail-fill: #0e1238;
+  --tw-bubble-ink: #ffffff;
+  --tw-bubble-color: #f4f4f8;
+  --tw-bubble-border-width: 3px;
+  --tw-bubble-radius: 6px;
+  --tw-bubble-shadow: 0 0 0 3px #0a0d2e, 6px 6px 0 rgba(0, 0, 0, 0.55);
+
+  --tw-strong-ink: #ffd23f;
+
+  --tw-speaker-ink: #1a1200;
+  --tw-speaker-bg: var(--tw-accent);
+  --tw-speaker-player-ink: #05230f;
+  --tw-speaker-player-bg: var(--tw-player);
+  --tw-speaker-target-ink: #3a0518;
+  --tw-speaker-target-bg: var(--tw-target);
+
+  --tw-panel-bg: rgba(12, 16, 64, 0.97);
+  --tw-panel-border: #f4f4f8;
+  --tw-panel-ink: #f4f6ff;
+  --tw-panel-muted: #b4bcf0;
+  --tw-panel-radius: 6px;
+  --tw-card-bg: #1a2478;
+  --tw-card-border: #6c7ae0;
+  --tw-card-radius: 4px;
+
+  --tw-tab-bg: #0e1238;
+  --tw-tab-ink: #e4e8ff;
+  --tw-tab-border: #f4f4f8;
+  --tw-tab-active-bg: #ffd23f;
+  --tw-tab-active-ink: #1a1200;
+  --tw-tab-active-border: #f4f4f8;
+  --tw-tab-radius: 4px;
+  --tw-tab-font: 'Press Start 2P', ui-monospace, monospace;
+
+  /* A faint pixel grid over the scene. */
+  --tw-scene-tint:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 4px);
+  --tw-scene-filter: saturate(1.25) contrast(1.06) brightness(0.9);
+
+  /* Overlays */
+  --tw-overlay-bg: #070a2a;
+  --tw-overlay-ink: #ffffff;
+  --tw-overlay-muted: #b4bcf0;
+  --tw-overlay-accent: var(--tw-accent);
+  --tw-overlay-highlight: #ffd23f;
+  --tw-font-overlay-title: 'Press Start 2P', ui-monospace, monospace;
+  --tw-font-overlay-eyebrow: 'Press Start 2P', ui-monospace, monospace;
+  --tw-overlay-title-transform: uppercase;
+  --tw-overlay-wash: linear-gradient(180deg, rgba(36, 51, 156, 0.6), transparent 70%);
+  --tw-overlay-texture:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 6px);
+  --tw-overlay-image-filter: saturate(1.3) brightness(0.55);
+
+  /* System notes and dice */
+  --tw-sysnote-bg: #0e1238;
+  --tw-sysnote-ink: #ffffff;
+  --tw-sysnote-border: 2px solid #f4f4f8;
+  --tw-sysnote-radius: 4px;
+  --tw-sysnote-icon: var(--tw-accent);
+  --tw-sysnote-font: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-sysnote-tracking: 0.02em;
+  --tw-sysnote-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
+  --tw-die-face: #f4f4f8;
+  --tw-die-edge: #0a0d2e;
+  --tw-die-ink: #1b2a8a;
+  --tw-die-shine: rgba(255, 255, 255, 0.4);
+  --tw-die-crit: #ffd23f;
+  --tw-die-fumble: #ff5d5d;
+  --tw-die-number-font: 'Share Tech Mono', ui-monospace, monospace;
+
+  /* NPC entrances */
+  --tw-arrival-sweep: rgba(255, 255, 255, 0.55);
+  --tw-arrival-glow: rgba(255, 210, 63, 0.8);
+  --tw-arrival-tag-bg: #ffd23f;
+  --tw-arrival-tag-ink: #1a1200;
+  --tw-arrival-tag-font: 'Share Tech Mono', ui-monospace, monospace;
+  --tw-arrival-animation: tw-npc-arrive-blink;
+  --tw-arrival-duration: 0.9s;
+}
+
+[data-skin='pixel'] .tw-narration,
+[data-skin='pixel'] .tw-bubble,
+[data-skin='pixel'] .tw-tab,
+[data-skin='pixel'] .tw-panel,
+[data-skin='pixel'] .tw-sysnote {
+  backdrop-filter: none;
+}
+
+/* Hard-edged windows: the speaking glow becomes a gold frame. */
+[data-skin='pixel'] .tw-narration.is-speaking,
+[data-skin='pixel'] .tw-bubble.is-speaking {
+  box-shadow: 0 0 0 3px var(--tw-accent), 7px 7px 0 rgba(0, 0, 0, 0.55);
+  transform: none;
+}
+
+[data-skin='pixel'] .tw-bubble {
+  box-shadow: var(--tw-bubble-shadow);
+}
+
+[data-skin='pixel'] .tw-narration-label {
+  padding: 0;
+  font-size: 0.56rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+}
+
+[data-skin='pixel'] .tw-narration-text,
+[data-skin='pixel'] .tw-bubble-text {
+  font-size: 1.06em;
+  letter-spacing: 0.01em;
+}
+
+[data-skin='pixel'] .tw-bubble-tail polygon {
+  stroke-width: 3;
+  stroke-linejoin: miter;
+}
+
+[data-skin='pixel'] .tw-speaker {
+  border: 0;
+  border-radius: 2px;
+  background: var(--tw-speaker-bg);
+  color: var(--tw-speaker-ink);
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-size: 0.52rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1.8;
+  box-shadow: 2px 2px 0 #0a0d2e;
+}
+
+[data-skin='pixel'] .tw-speaker--player {
+  background: var(--tw-speaker-player-bg);
+  color: var(--tw-speaker-player-ink);
+}
+
+[data-skin='pixel'] .tw-speaker--target {
+  background: var(--tw-speaker-target-bg);
+  color: var(--tw-speaker-target-ink);
+}
+
+[data-skin='pixel'] .tw-speaker:hover {
+  filter: brightness(1.12);
+}
+
+[data-skin='pixel'] .comic-voice-tag {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--tw-voice-tag-ink);
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+[data-skin='pixel'] .comic-voice-tag::before {
+  content: '*';
+}
+
+[data-skin='pixel'] .comic-voice-tag::after {
+  content: '*';
+}
+
+[data-skin='pixel'] .tw-tab {
+  border-width: 2px;
+  font-size: 0.52rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
+}
+
+[data-skin='pixel'] .tw-tab-count {
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+[data-skin='pixel'] .tw-panel {
+  border-width: 3px;
+}
+
+[data-skin='pixel'] .tw-card {
+  border-width: 2px;
+}
+
+[data-skin='pixel'] .tw-panel-title,
+[data-skin='pixel'] .tw-pager {
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-size: 0.56rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1.8;
+}
+
+/* The pixel font is about 1.6x wider than the other title faces. */
+[data-skin='pixel'] .tw-overlay-title {
+  font-size: clamp(0.95rem, 2.6vw, 1.75rem);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-shadow: 4px 4px 0 #0a0d2e;
+}
+
+[data-skin='pixel'] .tw-overlay-eyebrow {
+  font-size: 0.55rem;
+  line-height: 1.8;
+}
+
+[data-skin='pixel'] .tw-npc-arrival-tag {
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+[data-skin='pixel'] .tw-scroll-latest {
+  border-radius: 4px;
+  border-width: 2px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
+  backdrop-filter: none;
+}
+
+/* NPC entrance: the sprite blinks in, frame by frame */
+@keyframes tw-npc-arrive-blink {
+  0%, 20%, 40% { opacity: 0; }
+  10%, 30% { opacity: 0.6; filter: brightness(2.5) saturate(0); }
+  50% { opacity: 1; filter: brightness(1.8); transform: translateY(-4px); }
+  70% { transform: translateY(0); }
+  100% { opacity: 1; filter: none; transform: none; }
+}

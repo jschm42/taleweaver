@@ -12,8 +12,8 @@
 
   --tw-narration-bg:
     repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.05) 0 1px, transparent 1px 3px),
-    rgba(4, 19, 26, 0.86);
-  --tw-narration-ink: #c7f9ff;
+    rgba(4, 19, 26, 0.92);
+  --tw-narration-ink: #d6fbff;
   --tw-narration-border: 1px solid color-mix(in srgb, var(--tw-accent) 50%, transparent);
   --tw-narration-radius: 4px;
   --tw-narration-shadow:
@@ -28,7 +28,7 @@
 
   --tw-bubble-bg:
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px),
-    rgba(4, 19, 26, 0.86);
+    rgba(4, 19, 26, 0.92);
   --tw-bubble-tail-fill: #04131a;
   --tw-bubble-ink: #e6fbff;
   --tw-bubble-color: var(--tw-accent);
@@ -41,7 +41,7 @@
   --tw-panel-bg: rgba(3, 14, 20, 0.92);
   --tw-panel-border: color-mix(in srgb, var(--tw-accent) 35%, transparent);
   --tw-panel-ink: #c7f9ff;
-  --tw-panel-muted: #6fb7c4;
+  --tw-panel-muted: #7fc4d1;
   --tw-panel-radius: 4px;
   --tw-card-bg: rgba(4, 25, 34, 0.9);
   --tw-card-border: color-mix(in srgb, var(--tw-accent) 30%, transparent);
@@ -59,7 +59,7 @@
   --tw-scene-tint:
     repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.035) 0 1px, transparent 1px 4px),
     linear-gradient(180deg, rgba(8, 47, 73, 0.25), rgba(2, 6, 23, 0.45));
-  --tw-scene-filter: brightness(0.75) saturate(1.2) contrast(1.1);
+  --tw-scene-filter: brightness(0.78) saturate(1.2) contrast(1.1);
 }
 
 [data-skin='terminal'] .tw-narration-label {
@@ -71,8 +71,9 @@
 
 [data-skin='terminal'] .tw-narration-text,
 [data-skin='terminal'] .tw-bubble-text {
+  font-size: 1.04em;
   letter-spacing: 0.01em;
-  text-shadow: 0 0 6px color-mix(in srgb, var(--tw-accent) 35%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--tw-accent) 20%, transparent);
 }
 
 [data-skin='terminal'] .tw-speaker {

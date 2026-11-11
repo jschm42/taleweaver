@@ -11,7 +11,20 @@ import re
 from typing import Any, Optional
 
 UI_SKINS = frozenset(
-    {"classic", "chronicle", "noir", "terminal", "grimoire", "eldritch", "toon", "ancient"}
+    {
+        "classic",
+        "chronicle",
+        "noir",
+        "terminal",
+        "grimoire",
+        "eldritch",
+        "toon",
+        "ancient",
+        "starship",
+        "pixel",
+        "thriller",
+        "sitcom",
+    }
 )
 # Player choice that defers to the adventure's skin; stored as NULL on the session.
 UI_SKIN_AUTO = "auto"

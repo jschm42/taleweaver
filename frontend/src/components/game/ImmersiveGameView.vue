@@ -598,8 +598,8 @@ defineExpose({
   }
 }
 
-/* Touch devices cannot hover: keep the buttons visible. */
-@media (hover: none) {
+/* Mobile viewports and touch devices keep the compact action button row permanently visible. */
+@media (max-width: 767px), (hover: none) {
   .tw-action-reveal {
     grid-template-rows: 1fr;
     opacity: 1;
@@ -607,6 +607,10 @@ defineExpose({
 
   .tw-action-reveal > * {
     overflow: visible;
+  }
+
+  .tw-action-reveal:hover:not(.is-pinned) :deep(.dock-item) {
+    animation: none;
   }
 }
 </style>

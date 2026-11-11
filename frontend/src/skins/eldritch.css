@@ -22,6 +22,12 @@
   --tw-dropcap-ink: var(--tw-accent-soft);
   --tw-dropcap-shadow: 0 0 14px rgba(163, 230, 53, 0.65);
   --tw-narration-tag-ink: #bef264;
+  --tw-voice-tag-ink: #bef264;
+  --tw-label-bg: transparent;
+  --tw-label-ink: var(--tw-accent-soft);
+  --tw-speaker-ink: var(--tw-accent-soft);
+  --tw-speaker-player-ink: var(--tw-player);
+  --tw-speaker-target-ink: var(--tw-target);
 
   --tw-bubble-bg: #0c140d;
   --tw-bubble-tail-fill: #0c140d;
@@ -36,7 +42,7 @@
   --tw-panel-bg: rgba(6, 12, 7, 0.94);
   --tw-panel-border: color-mix(in srgb, var(--tw-accent) 35%, transparent);
   --tw-panel-ink: #d6e5cf;
-  --tw-panel-muted: #8ea886;
+  --tw-panel-muted: #9ab592;
   --tw-panel-radius: 4px;
   --tw-card-bg: #0c140d;
   --tw-card-border: rgba(101, 163, 13, 0.3);
@@ -54,7 +60,7 @@
   --tw-scene-tint:
     radial-gradient(ellipse at 50% 110%, rgba(77, 124, 15, 0.38), transparent 60%),
     radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.78) 100%);
-  --tw-scene-filter: sepia(0.35) hue-rotate(45deg) saturate(0.6) brightness(0.6) contrast(1.1);
+  --tw-scene-filter: sepia(0.35) hue-rotate(45deg) saturate(0.6) brightness(0.68) contrast(1.1);
 
   /* Overlays (scene transition, chapter intro) */
   --tw-overlay-bg: #040805;
@@ -102,7 +108,6 @@
   margin: 0 0 0.6rem;
   padding: 0;
   background: none;
-  color: var(--tw-accent-soft);
   font-size: 1rem;
   font-weight: 400;
   letter-spacing: 0.14em;
@@ -128,24 +133,26 @@
   border-bottom: 1px dashed currentColor;
   border-radius: 0;
   background: transparent;
-  color: var(--tw-accent-soft);
+  color: var(--tw-speaker-ink);
   font-family: 'Creepster', serif;
+  font-size: 0.9rem;
   font-weight: 400;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
 }
 
 [data-skin='eldritch'] .tw-speaker--player {
-  color: var(--tw-player);
+  color: var(--tw-speaker-player-ink);
 }
 
 [data-skin='eldritch'] .tw-speaker--target {
-  color: var(--tw-target);
+  color: var(--tw-speaker-target-ink);
 }
 
 [data-skin='eldritch'] .comic-voice-tag {
   border: 0;
   background: none;
-  color: #bef264;
+  color: var(--tw-voice-tag-ink);
+  font-size: 0.8rem;
   font-family: 'IM Fell English', Georgia, serif;
   font-style: italic;
   font-weight: 400;
@@ -157,7 +164,7 @@
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: none;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
 }
 
 [data-skin='eldritch'] .tw-panel-title,

@@ -1,42 +1,61 @@
 /* Playing-card dock cards of ImmersiveActionBar.vue (scoped there via <style scoped src>). */
 
-/* ── Card ──────────────────────────────────────────────────────────────── */
+/* ── Slot & Card ───────────────────────────────────────────────────────── */
 .dock-item {
+  --slot-scale: calc(1 + (var(--s, 1) - 1) * 0.46);
+  --drop: calc(var(--dock-base) * var(--arc, 0));
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-end;
+  width: calc(var(--dock-base) * var(--slot-scale));
+  height: calc(var(--dock-base) * 1.5);
+  flex-shrink: 0;
+  z-index: 1;
+  transition: width 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dock-item.is-neighbor {
+  z-index: 5;
+}
+
+.dock-item.is-selected {
+  z-index: 10;
 }
 
 .dock-card {
   --card-w: calc(var(--dock-base) * var(--s, 1));
-  --card-radius: calc(var(--card-w) * 0.11);
-  --card-frame: color-mix(in srgb, var(--tint) 45%, #b08d4a);
+  --card-radius: calc(var(--card-w) * 0.12);
+  --card-frame: color-mix(in srgb, var(--tint) 48%, #c69f53);
+  --shift-x: calc(var(--dock-base) * var(--push, 0) * 0.12);
   position: relative;
   display: block;
   width: var(--card-w);
   height: calc(var(--card-w) * 1.5);
+  flex-shrink: 0;
   padding: 0;
   border-radius: var(--card-radius);
   border: 1.5px solid var(--card-frame);
-  background: #0b0b10;
-  color: color-mix(in srgb, var(--tint) 72%, var(--tw-card-ink, #e2e8f0));
+  background: #090a0f;
+  color: color-mix(in srgb, var(--tint) 75%, var(--tw-card-ink, #e2e8f0));
   box-shadow:
-    0 10px 20px -10px rgba(0, 0, 0, 0.85),
-    0 2px 4px rgba(0, 0, 0, 0.5);
+    0 12px 24px -10px rgba(0, 0, 0, 0.9),
+    0 3px 6px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
   cursor: pointer;
-  /* Fanned hand: tilted away from the middle, lower towards the edges. */
-  transform: translateY(var(--drop, 0)) rotate(var(--rot, 0deg));
-  transform-origin: 50% 120%;
+  /* Fanned hand: tilted away from the center, curved along the arc, parted when a neighbour is selected. */
+  transform: translate3d(var(--shift-x), var(--drop, 0px), 0) rotate(var(--rot, 0deg));
+  transform-origin: 50% 115%;
   transition:
-    width 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.24s cubic-bezier(0.34, 1.52, 0.64, 1),
     border-color 0.2s ease,
     box-shadow 0.25s ease;
 }
 
-/* Card face: artwork clipped to the card, inner gilded frame and a dark foot. */
+/* ── Card Face & Gilded Filigree Frame ─────────────────────────────────── */
 .dock-face {
   position: absolute;
   inset: 0;
@@ -44,23 +63,41 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: calc(var(--card-radius) - 1px);
+  border-radius: calc(var(--card-radius) - 1.5px);
   background:
-    radial-gradient(120% 90% at 30% 15%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 65%),
-    var(--tw-card-bg, rgba(15, 23, 42, 0.95));
+    radial-gradient(120% 90% at 30% 15%, color-mix(in srgb, var(--tint) 30%, transparent), transparent 65%),
+    var(--tw-card-bg, rgba(15, 23, 42, 0.96));
 }
 
+/* Inner foil bevel and sweeping specular sheen. */
 .dock-face::after {
   content: '';
   position: absolute;
-  inset: 2px;
-  border-radius: calc(var(--card-radius) - 2px);
-  border: 1px solid color-mix(in srgb, var(--card-frame) 55%, transparent);
+  inset: calc(var(--card-w) * 0.045);
+  border-radius: calc(var(--card-radius) * 0.72);
+  border: 1px solid color-mix(in srgb, var(--card-frame) 62%, rgba(255, 255, 255, 0.15));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
   background:
-    linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.16) 50%, transparent 65%) 200% 0 / 250% 100% no-repeat,
-    linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.55));
+    linear-gradient(
+      115deg,
+      transparent 32%,
+      rgba(255, 255, 255, 0.24) 48%,
+      color-mix(in srgb, var(--tint) 28%, rgba(255, 255, 255, 0.18)) 52%,
+      transparent 68%
+    )
+    210% 0 / 260% 100% no-repeat;
   pointer-events: none;
-  transition: background-position 0.6s ease;
+  transition: background-position 0.65s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease;
+}
+
+/* Subtle top highlight and bottom depth vignette. */
+.dock-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(100% 70% at 50% 0%, rgba(255, 255, 255, 0.1), transparent 55%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.06) 0%, transparent 50%, rgba(4, 6, 14, 0.55) 100%);
+  pointer-events: none;
 }
 
 .dock-art {
@@ -68,8 +105,8 @@
   height: 100%;
   object-fit: cover;
   user-select: none;
-  transition: transform 0.4s ease, filter 0.25s ease;
-  filter: saturate(0.9) brightness(0.92);
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), filter 0.25s ease;
+  filter: saturate(0.94) brightness(0.93) contrast(1.03);
 }
 
 /* Character portraits keep the face in view. */
@@ -77,108 +114,221 @@
   object-position: top;
 }
 
+/* ── Selected Card (Hero Magnification & Lift) ─────────────────────────── */
+/* Under pointer, keyboard focus, or active popup: the card grows through --s, straightens,
+   and rises prominently out of the hand with a luminous gilded aura. */
+.dock-card.is-selected,
 .dock-card:hover,
-.dock-card:focus-visible {
-  transform: translateY(-9px) rotate(0deg);
-  border-color: color-mix(in srgb, var(--tw-accent, #f59e0b) 70%, var(--card-frame));
+.dock-card:focus-visible,
+.dock-card--ideas.is-active {
+  transform: translate3d(0, calc(var(--dock-base) * -0.26), 0) rotate(0deg);
+  border-color: color-mix(in srgb, var(--tint) 55%, #fde68a);
   box-shadow:
-    0 16px 30px -12px color-mix(in srgb, var(--tint) 70%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 35%, transparent);
+    0 calc(var(--card-w) * 0.28) calc(var(--card-w) * 0.52) calc(var(--card-w) * -0.16) rgba(0, 0, 0, 0.95),
+    0 calc(var(--card-w) * 0.14) calc(var(--card-w) * 0.42) calc(var(--card-w) * -0.12)
+      color-mix(in srgb, var(--tint) 85%, transparent),
+    0 0 calc(var(--card-w) * 0.32) calc(var(--card-w) * -0.06) color-mix(in srgb, var(--tint) 65%, transparent),
+    0 0 0 1.5px color-mix(in srgb, var(--tw-accent, #f59e0b) 65%, rgba(255, 255, 255, 0.35));
   outline: none;
-  z-index: 2;
 }
 
+/* Touch fallback when a card is tapped/focused without pointer magnification. */
+.dock-card:focus-visible:not(.is-selected):not(:hover) {
+  transform: translate3d(0, calc(var(--dock-base) * -0.24), 0) rotate(0deg) scale(1.45);
+}
+
+.dock-card.is-selected .dock-art,
 .dock-card:hover .dock-art,
-.dock-card:focus-visible .dock-art {
-  transform: scale(1.06);
-  filter: saturate(1.05) brightness(1.05);
+.dock-card:focus-visible .dock-art,
+.dock-card--ideas.is-active .dock-art {
+  transform: scale(1.08);
+  filter: saturate(1.14) brightness(1.1) contrast(1.05);
 }
 
-.dock-card:hover .dock-face::after {
-  background-position: -60% 0, 0 0;
+.dock-card.is-selected .dock-face::after,
+.dock-card:hover .dock-face::after,
+.dock-card:focus-visible .dock-face::after {
+  background-position: -55% 0;
+  border-color: color-mix(in srgb, var(--tint) 75%, #fef08a);
 }
 
 .dock-card:active {
-  transform: translateY(-4px) rotate(0deg) scale(0.95);
+  transform: translate3d(0, calc(var(--dock-base) * -0.12), 0) rotate(0deg) scale(0.95);
 }
 
-.dock-card--ideas.is-active {
-  transform: translateY(-9px) rotate(0deg);
-  border-color: var(--tw-accent, #f59e0b);
-  box-shadow:
-    0 0 22px -4px color-mix(in srgb, var(--tw-accent, #f59e0b) 70%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--tw-accent, #f59e0b) 35%, transparent);
+/* Unselected cards step back softly while one card is inspected. */
+.dock-shelf.has-selection .dock-card:not(.is-selected, :hover, :focus-visible, .is-active, .is-glowing) .dock-art {
+  filter: saturate(0.72) brightness(0.68);
 }
 
-/* Cards without artwork (Debug) show their icon large. */
+/* Pool of coloured light on the shelf tray beneath the selected card. */
+.dock-item::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--dock-base) * -0.1);
+  width: calc(var(--dock-base) * var(--s, 1) * 1.25);
+  height: calc(var(--dock-base) * 0.34);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tint) 82%, transparent), transparent);
+  opacity: 0;
+  transform: translateX(-50%) scaleX(0.5);
+  transition: opacity 0.2s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+
+.dock-item.is-selected::before,
+.dock-item:hover::before,
+.dock-item:focus-within::before {
+  opacity: 0.92;
+  transform: translateX(-50%) scaleX(1);
+}
+
+/* Cards without artwork (Debug) show their icon large; mobile shows icons on all buttons. */
 .dock-icon {
   width: 52%;
   height: 52%;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
 }
 
+.dock-icon--mobile {
+  display: none;
+}
+
+/* ── Mobile View: Compact Permanently Visible Button Row ───────────────── */
+@media (max-width: 767px) {
+  .dock-item {
+    width: var(--dock-base);
+    height: var(--dock-base);
+  }
+
+  .dock-item::before,
+  .dock-label,
+  .dock-art {
+    display: none;
+  }
+
+  .dock-icon--mobile {
+    display: block;
+  }
+
+  .dock-card {
+    --card-w: var(--dock-base);
+    --card-radius: 0.6rem;
+    width: var(--dock-base);
+    height: var(--dock-base);
+    transform: none;
+    box-shadow:
+      0 4px 10px -4px rgba(0, 0, 0, 0.8),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  .dock-card.is-selected,
+  .dock-card:hover,
+  .dock-card:focus-visible,
+  .dock-card--ideas.is-active {
+    transform: translateY(-2px);
+  }
+
+  .dock-card:active {
+    transform: scale(0.93);
+  }
+
+  .dock-dot {
+    bottom: -4px;
+  }
+}
+
+/* ── Count Badge ───────────────────────────────────────────────────────── */
 .dock-badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  --badge: clamp(15px, calc(var(--card-w) * 0.28), 26px);
+  top: calc(var(--badge) * -0.28);
+  right: calc(var(--badge) * -0.28);
+  z-index: 3;
+  min-width: var(--badge);
+  height: var(--badge);
+  padding: 0 calc(var(--badge) * 0.26);
   border-radius: 9999px;
-  font: 800 10px/18px var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
+  font: 800 calc(var(--badge) * 0.58) / var(--badge) var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
   text-align: center;
-  color: #0b1120;
-  background: color-mix(in srgb, var(--tint) 85%, #ffffff);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: #090d16;
+  background: linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--tint) 88%, #fef3c7));
+  box-shadow:
+    0 0 0 1.5px #090a0f,
+    0 3px 8px rgba(0, 0, 0, 0.65),
+    0 0 10px -2px color-mix(in srgb, var(--tint) 70%, transparent);
 }
 
-/* Label bubble above the hovered card. */
+/* ── Ornate Floating Label Banner above the Selected Card ──────────────── */
 .dock-label {
   position: absolute;
-  bottom: calc(var(--dock-base) * 1.5 * var(--s, 1) + 18px);
+  bottom: calc(var(--dock-base) * var(--s, 1) * 1.5 + var(--dock-base) * 0.42);
   left: 50%;
-  padding: 3px 9px;
-  border-radius: 8px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: clamp(2px, 0.35dvh, 4px) clamp(8px, 1vw, 12px);
+  border-radius: 9999px;
   white-space: nowrap;
   pointer-events: none;
-  font: 700 10px/1.4 var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
-  letter-spacing: 0.12em;
+  font: 800 clamp(9px, calc(var(--dock-base) * 0.19), 11px) / 1.35 var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--tw-panel-ink, #e2e8f0);
-  background: var(--tw-panel-bg, #0f172a);
-  border: 1px solid var(--tw-panel-border, rgba(51, 65, 85, 0.9));
-  box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.7);
+  color: color-mix(in srgb, var(--tint) 35%, #f8fafc);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tw-panel-bg, #0f172a) 95%, #1e293b),
+    color-mix(in srgb, var(--tw-panel-bg, #0f172a) 98%, #020617)
+  );
+  border: 1px solid color-mix(in srgb, var(--tint) 60%, #b08d4a);
+  box-shadow:
+    0 10px 22px -6px rgba(0, 0, 0, 0.85),
+    0 0 14px -3px color-mix(in srgb, var(--tint) 55%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   opacity: 0;
-  transform: translate(-50%, 6px) scale(0.9);
+  transform: translate(-50%, 6px) scale(0.88);
   transition:
-    opacity 0.15s ease,
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-    bottom 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity 0.16s ease,
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    bottom 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.dock-label-gem {
+  width: 4px;
+  height: 4px;
+  background: color-mix(in srgb, var(--tint) 85%, #fef08a);
+  transform: rotate(45deg);
+  box-shadow: 0 0 4px var(--tint);
+}
+
+.dock-item.is-selected .dock-label,
 .dock-item:hover .dock-label,
 .dock-item:focus-within .dock-label {
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
 }
 
-/* "Running app" dot: the tracked quest. */
+/* ── Tracked Quest Indicator Dot ───────────────────────────────────────── */
 .dock-dot {
   position: absolute;
-  bottom: -6px;
-  width: 4px;
-  height: 4px;
+  bottom: calc(var(--dock-base) * -0.11);
+  width: clamp(4px, calc(var(--dock-base) * 0.09), 5px);
+  height: clamp(4px, calc(var(--dock-base) * 0.09), 5px);
   border-radius: 9999px;
   background: var(--tint);
-  box-shadow: 0 0 6px var(--tint);
+  box-shadow: 0 0 8px var(--tint), 0 0 3px #ffffff;
 }
 
-/* Last, so it wins over the card transitions above and the animations in the component. */
+/* ── Reduced Motion ────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
+  .dock-item,
   .dock-card,
   .dock-label,
   .dock-art,
-  .dock-face::after {
+  .dock-face::after,
+  .dock-item::before {
     transition: none;
   }
   .dock-card.is-glowing,

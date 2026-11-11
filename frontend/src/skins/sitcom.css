@@ -1,0 +1,250 @@
+/* Sitcom — warm studio light, soft rounded cards and sticky notes for sitcoms, rom-coms and cozy stories. */
+
+[data-skin='sitcom'] {
+  --tw-accent: #d9482f;
+  --tw-accent-soft: #c8402f;
+  --tw-player: #c8402f;
+  --tw-target: #7d3f8e;
+
+  --tw-font-body: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --tw-font-dialogue: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --tw-font-label: 'Acme', ui-sans-serif, sans-serif;
+
+  --tw-narration-bg: #fff7ec;
+  --tw-narration-ink: #33261f;
+  --tw-narration-border: 0 solid transparent;
+  --tw-narration-radius: 20px;
+  --tw-narration-shadow: 0 0 0 3px #f6c98b, 0 14px 30px rgba(60, 20, 10, 0.35);
+  --tw-label-bg: #c8402f;
+  --tw-label-ink: #ffffff;
+  --tw-font-dropcap: 'Acme', ui-sans-serif, sans-serif;
+  --tw-dropcap-size: 3.3em;
+  --tw-dropcap-ink: #c8402f;
+  --tw-dropcap-shadow: 2px 2px 0 #f6c98b;
+  --tw-narration-tag-ink: #7d3f8e;
+  --tw-voice-tag-ink: #7d3f8e;
+
+  --tw-bubble-bg: #ffffff;
+  --tw-bubble-tail-fill: #ffffff;
+  --tw-bubble-ink: #2b211c;
+  --tw-bubble-color: #14746f;
+  --tw-bubble-border-width: 2px;
+  --tw-bubble-radius: 20px;
+  --tw-bubble-shadow: 0 5px 0 rgba(20, 116, 111, 0.28), 0 14px 26px rgba(40, 20, 10, 0.3);
+
+  --tw-strong-ink: #b3371f;
+
+  --tw-speaker-ink: #ffffff;
+  --tw-speaker-bg: #14746f;
+  --tw-speaker-player-ink: #ffffff;
+  --tw-speaker-player-bg: var(--tw-player);
+  --tw-speaker-target-ink: #ffffff;
+  --tw-speaker-target-bg: var(--tw-target);
+
+  --tw-panel-bg: #fff3e2;
+  --tw-panel-border: #f1c992;
+  --tw-panel-ink: #33261f;
+  --tw-panel-muted: #6b5546;
+  --tw-panel-radius: 20px;
+  --tw-card-bg: #ffffff;
+  --tw-card-border: #f3d5ac;
+  --tw-card-radius: 14px;
+
+  --tw-tab-bg: #ffe3b8;
+  --tw-tab-ink: #4a2f1b;
+  --tw-tab-border: transparent;
+  --tw-tab-active-bg: #14746f;
+  --tw-tab-active-ink: #ffffff;
+  --tw-tab-active-border: transparent;
+  --tw-tab-radius: 999px;
+  --tw-tab-font: 'Acme', ui-sans-serif, sans-serif;
+
+  /* Bright three-camera studio lighting. */
+  --tw-scene-tint: linear-gradient(180deg, rgba(255, 214, 150, 0.12), rgba(232, 93, 74, 0.08));
+  --tw-scene-filter: saturate(1.15) brightness(1.02) contrast(1.02);
+
+  /* Overlays: a title card with polka dots */
+  --tw-overlay-bg: #0f4f4b;
+  --tw-overlay-ink: #fff7ec;
+  --tw-overlay-muted: #d6ebe6;
+  --tw-overlay-accent: #ffd166;
+  --tw-overlay-highlight: #ffd166;
+  --tw-font-overlay-title: 'Acme', ui-sans-serif, sans-serif;
+  --tw-font-overlay-eyebrow: 'Acme', ui-sans-serif, sans-serif;
+  --tw-overlay-title-transform: none;
+  --tw-overlay-wash:
+    radial-gradient(ellipse at 20% 15%, rgba(255, 209, 102, 0.5), transparent 55%),
+    radial-gradient(ellipse at 85% 85%, rgba(232, 93, 74, 0.45), transparent 55%);
+  --tw-overlay-texture: radial-gradient(rgba(255, 255, 255, 0.1) 5px, transparent 6px) 0 0 / 44px 44px;
+  --tw-overlay-image-filter: saturate(1.2) brightness(0.65);
+
+  /* System notes (sticky notes) and dice */
+  --tw-sysnote-bg: #fff3c4;
+  --tw-sysnote-ink: #4a3410;
+  --tw-sysnote-border: 0 solid transparent;
+  --tw-sysnote-radius: 6px;
+  --tw-sysnote-icon: #c8402f;
+  --tw-sysnote-font: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --tw-sysnote-tracking: 0;
+  --tw-sysnote-shadow: 0 3px 0 rgba(90, 60, 10, 0.2), 0 8px 16px rgba(40, 20, 10, 0.25);
+  --tw-sysnote-rotate: -0.5deg;
+  --tw-die-face: #ffffff;
+  --tw-die-edge: #d9482f;
+  --tw-die-ink: #33261f;
+  --tw-die-shine: rgba(255, 255, 255, 0.6);
+  --tw-die-crit: #f2b134;
+  --tw-die-fumble: #b3371f;
+  --tw-die-number-font: 'Acme', ui-sans-serif, sans-serif;
+
+  /* NPC entrances */
+  --tw-arrival-sweep: rgba(255, 236, 190, 0.6);
+  --tw-arrival-glow: rgba(242, 177, 52, 0.8);
+  --tw-arrival-tag-bg: #c8402f;
+  --tw-arrival-tag-ink: #ffffff;
+  --tw-arrival-tag-font: 'Acme', ui-sans-serif, sans-serif;
+  --tw-arrival-animation: tw-npc-arrive-entrance;
+  --tw-arrival-duration: 0.9s;
+
+  --tw-dialog-shadow: 0 0 0 3px #f6c98b, 0 24px 60px rgba(40, 20, 10, 0.55);
+  --tw-dialog-silhouette-filter: none;
+  --tw-dialog-silhouette-opacity: 0.25;
+}
+
+[data-skin='sitcom'] .tw-narration,
+[data-skin='sitcom'] .tw-bubble,
+[data-skin='sitcom'] .tw-panel {
+  backdrop-filter: none;
+}
+
+[data-skin='sitcom'] .tw-narration-label {
+  padding: 0.15rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+[data-skin='sitcom'] .tw-narration-text,
+[data-skin='sitcom'] .tw-bubble-text {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+[data-skin='sitcom'] .tw-bubble {
+  box-shadow: var(--tw-bubble-shadow);
+}
+
+[data-skin='sitcom'] .tw-bubble--player {
+  --tw-bubble-shadow: 0 5px 0 rgba(200, 64, 47, 0.28), 0 14px 26px rgba(40, 20, 10, 0.3);
+}
+
+/* A soft colored ring instead of a glow on the light cards. */
+[data-skin='sitcom'] .tw-narration.is-speaking {
+  box-shadow: 0 0 0 4px #f2b134, 0 14px 30px rgba(60, 20, 10, 0.35);
+}
+
+[data-skin='sitcom'] .tw-bubble.is-speaking {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tw-bubble-color) 35%, transparent), var(--tw-bubble-shadow);
+}
+
+[data-skin='sitcom'] .tw-speaker {
+  border: 0;
+  border-radius: 999px;
+  background: var(--tw-speaker-bg);
+  color: var(--tw-speaker-ink);
+  font-family: 'Acme', ui-sans-serif, sans-serif;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+
+[data-skin='sitcom'] .tw-speaker--player {
+  background: var(--tw-speaker-player-bg);
+  color: var(--tw-speaker-player-ink);
+}
+
+[data-skin='sitcom'] .tw-speaker--target {
+  background: var(--tw-speaker-target-bg);
+  color: var(--tw-speaker-target-ink);
+}
+
+[data-skin='sitcom'] .tw-speaker:hover {
+  filter: brightness(1.1);
+}
+
+/* Stage directions in the script supervisor's handwriting. */
+[data-skin='sitcom'] .comic-voice-tag {
+  padding: 0 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--tw-voice-tag-ink);
+  font-family: 'Caveat', cursive;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0;
+}
+
+[data-skin='sitcom'] .comic-object-tag {
+  background: #e3f4f1;
+  border-color: #9ad0c9;
+  color: #0f5f5a;
+}
+
+[data-skin='sitcom'] .tw-tab {
+  padding-inline: 1rem;
+  font-size: 0.9rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  box-shadow: 0 3px 0 rgba(120, 70, 20, 0.25);
+  backdrop-filter: none;
+}
+
+[data-skin='sitcom'] .tw-tab-dot {
+  background: #d9482f;
+  box-shadow: 0 0 0 2px #fff7ec;
+}
+
+[data-skin='sitcom'] .tw-card {
+  box-shadow: 0 3px 0 rgba(120, 70, 20, 0.14);
+}
+
+[data-skin='sitcom'] .tw-panel {
+  border-width: 2px;
+}
+
+[data-skin='sitcom'] .tw-panel-title,
+[data-skin='sitcom'] .tw-pager {
+  font-family: 'Acme', ui-sans-serif, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+
+[data-skin='sitcom'] .tw-overlay-title {
+  font-weight: 400;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+[data-skin='sitcom'] .tw-npc-arrival-tag {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+[data-skin='sitcom'] .tw-scroll-latest {
+  box-shadow: 0 4px 0 rgba(120, 70, 20, 0.3);
+  backdrop-filter: none;
+}
+
+/* NPC entrance: walks on from the wings with a little hop, to applause */
+@keyframes tw-npc-arrive-entrance {
+  0% { opacity: 0; transform: translateX(60%) rotate(4deg); }
+  55% { opacity: 1; transform: translateX(-3%) translateY(-5%) rotate(-2deg); }
+  78% { transform: translateX(1%) translateY(0) rotate(1deg); }
+  100% { opacity: 1; transform: none; }
+}

@@ -1,5 +1,5 @@
-/* Self-hosted skin fonts (CSP: font-src 'self'). Acme, Newsreader, Cinzel, Orbitron and
-   Caveat are already loaded globally. */
+/* Self-hosted skin fonts (CSP: font-src 'self'). Acme, Newsreader, Cinzel, Orbitron, Caveat and
+   Press Start 2P are already loaded globally. */
 @import '@fontsource/im-fell-english/latin-400.css';
 @import '@fontsource/im-fell-english/latin-400-italic.css';
 @import '@fontsource/im-fell-english-sc/latin-400.css';
@@ -30,3 +30,7 @@
 @import './eldritch.css';
 @import './toon.css';
 @import './ancient.css';
+@import './starship.css';
+@import './pixel.css';
+@import './thriller.css';
+@import './sitcom.css';

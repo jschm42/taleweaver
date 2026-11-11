@@ -4,7 +4,7 @@
   --tw-accent: #f97316;
   --tw-accent-soft: #fb923c;
   --tw-player: #22c55e;
-  --tw-target: #8b5cf6;
+  --tw-target: #a78bfa;
 
   --tw-font-body: 'Comic Neue', 'Comic Sans MS', sans-serif;
   --tw-font-dialogue: 'Comic Neue', 'Comic Sans MS', sans-serif;
@@ -15,13 +15,22 @@
   --tw-narration-border: 3px solid #111111;
   --tw-narration-radius: 18px;
   --tw-narration-shadow: 6px 6px 0 #111111;
-  --tw-label-bg: #ef4444;
+  --tw-label-bg: #dc2626;
   --tw-label-ink: #ffffff;
   --tw-font-dropcap: 'Bangers', 'Impact', sans-serif;
   --tw-dropcap-size: 3.5em;
-  --tw-dropcap-ink: #3b82f6;
+  --tw-dropcap-ink: #2563eb;
   --tw-dropcap-shadow: 3px 3px 0 #111111;
   --tw-narration-tag-ink: #111111;
+  --tw-narration-tag-bg: #fde047;
+  --tw-voice-tag-ink: #111111;
+  --tw-voice-tag-bg: #fde047;
+  --tw-speaker-ink: #111111;
+  --tw-speaker-bg: #fb923c;
+  --tw-speaker-player-ink: #111111;
+  --tw-speaker-player-bg: #4ade80;
+  --tw-speaker-target-ink: #111111;
+  --tw-speaker-target-bg: var(--tw-target);
 
   --tw-bubble-bg: #ffffff;
   --tw-bubble-tail-fill: #ffffff;
@@ -31,7 +40,7 @@
   --tw-bubble-radius: 22px;
   --tw-bubble-shadow: 5px 5px 0 #111111;
 
-  --tw-strong-ink: #dc2626;
+  --tw-strong-ink: #b91c1c;
 
   --tw-panel-bg: #fef3c7;
   --tw-panel-border: #111111;
@@ -45,7 +54,7 @@
   --tw-tab-bg: #fde047;
   --tw-tab-ink: #111111;
   --tw-tab-border: #111111;
-  --tw-tab-active-bg: #3b82f6;
+  --tw-tab-active-bg: #2563eb;
   --tw-tab-active-ink: #ffffff;
   --tw-tab-active-border: #111111;
   --tw-tab-radius: 10px;
@@ -91,7 +100,7 @@
   /* NPC entrances */
   --tw-arrival-sweep: rgba(253, 224, 71, 0.6);
   --tw-arrival-glow: rgba(249, 115, 22, 0.8);
-  --tw-arrival-tag-bg: #ef4444;
+  --tw-arrival-tag-bg: #dc2626;
   --tw-arrival-tag-ink: #ffffff;
   --tw-arrival-tag-font: 'Bangers', 'Impact', sans-serif;
   --tw-arrival-animation: tw-npc-arrive-boing;
@@ -129,25 +138,24 @@
 
 /* Speaker tags are colored stickers; set each variant explicitly (bubbles are outlined in black). */
 [data-skin='toon'] .tw-speaker {
-  --tw-speaker-color: #f97316;
+  --tw-speaker-color: var(--tw-speaker-bg);
   border: 2px solid #111111;
   border-radius: 6px;
   background: var(--tw-speaker-color);
-  color: #ffffff;
+  color: var(--tw-speaker-ink);
   font-family: 'Bangers', 'Impact', sans-serif;
   font-weight: 400;
   letter-spacing: 0.08em;
-  text-shadow: 1px 1px 0 #111111;
   transform: rotate(-2deg);
   box-shadow: 2px 2px 0 #111111;
 }
 
 [data-skin='toon'] .tw-speaker--player {
-  --tw-speaker-color: var(--tw-player);
+  --tw-speaker-color: var(--tw-speaker-player-bg);
 }
 
 [data-skin='toon'] .tw-speaker--target {
-  --tw-speaker-color: var(--tw-target);
+  --tw-speaker-color: var(--tw-speaker-target-bg);
 }
 
 [data-skin='toon'] .tw-speaker:hover {
@@ -158,8 +166,8 @@
 [data-skin='toon'] .comic-voice-tag {
   border: 2px solid #111111;
   border-radius: 6px;
-  background: #fde047;
-  color: #111111;
+  background: var(--tw-voice-tag-bg);
+  color: var(--tw-voice-tag-ink);
   font-family: 'Bangers', 'Impact', sans-serif;
   font-weight: 400;
   letter-spacing: 0.06em;
