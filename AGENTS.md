@@ -80,6 +80,7 @@ Each skill is a folder with a `SKILL.md` entry file. Read it before doing the ta
 * [taleweaver-adventure-editor](.claude/skills/taleweaver-adventure-editor/SKILL.md) — Modify an existing adventure in the DB (scenes, exits, entities, scripts, init script) via JSON change sets and `python scripts/edit_adventure.py` (dry run by default).
 * [taleweaver-telemetry](.claude/skills/taleweaver-telemetry/SKILL.md) — LLM telemetry, latency percentiles (p50/p90/p95), and token analysis.
 * [taleweaver-commit-message](.claude/skills/taleweaver-commit-message/SKILL.md) — Write a Conventional Commits message (project scopes, why + behavior, migration and breaking-change notes) for the current changes, or split mixed changes into several commits.
+* [second-brain](.claude/skills/second-brain/SKILL.md) — Access and manage notes, concepts, and project documentation in the Obsidian Second-Brain vault on Google Drive.
 
 ---
 

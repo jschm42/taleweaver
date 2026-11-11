@@ -250,34 +250,43 @@ Custom sandboxed event scripts reacting to game hooks and global initialization 
 
 ### 2.10 Extensions (`extensions`)
 
-An optional top-level object where forks and external tools store their own data without
-changing the core format. TaleWeaver never interprets it. It keeps the block on import,
-keeps it while the adventure is edited, and writes it back on export, so data from other
-forks is not lost.
+An optional top-level object where forks, feature runtimes, and external tools store their
+own data without changing the core format. TaleWeaver never interprets it. It keeps the
+block on import, keeps it while the adventure is edited, and writes it back on export, so
+data from other forks and shared runtimes is not lost.
 
 ```json
 "extensions": {
+  "agent_runtime": {
+    "schema_version": 1,
+    "archetype": "reactive_npc",
+    "memory_depth": 5
+  },
+  "comfyui-scenes": {
+    "schema_version": 1,
+    "checkpoint": "illustrious-xl"
+  },
   "my_fork": {
     "presentation": "visual_novel",
     "portraits": { "NPC_GUARD": "assets/guard_vn.png" }
-  },
-  "comfyui-scenes": { "checkpoint": "illustrious-xl" }
+  }
 }
 ```
 
 | Rule | Detail |
 | :--- | :--- |
-| Namespaces | Each key is a namespace you own: your fork or tool name. It must be lower case, 1-64 characters, and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Do not write into another fork's namespace. |
+| Namespaces | Each key is a lower-case namespace identifying a specific fork, tool, or shared feature runtime (e.g. `agent_runtime`, `visual_novel`, `my_fork`). It must be 1-64 characters and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Shared feature namespaces should be chosen neutrally so multiple implementations can adopt the same schema. |
 | Values | Each namespace value must be a JSON object. Inside it, any JSON is allowed. |
+| Schema Versioning | It is recommended that extension objects declare an explicit `schema_version` (e.g. `"schema_version": 1`) so consuming runtimes can detect schema evolutions reliably. |
 | Limits | At most 32 namespaces and 256 KB (UTF-8 JSON) in total. |
 | Invalid entries | Namespaces with an invalid key, a non-object value, or past the limits are dropped on import and export. The rest of the manifest is not affected. |
 | Assets | Asset paths inside `extensions` are passed through as plain strings. They are not packed into or extracted from `.adz` bundles. |
 | Export | The key is omitted when there are no valid namespaces. |
 
-Implementations that do not recognize the block ignore it. Put fork-specific data here
-rather than adding new top-level keys: unknown top-level keys are ignored on import but are
-not written back on export. For per-entity data, NPCs and objects also accept a free-form
-`metadata_json` object that survives import and export.
+Implementations that do not recognize an extension namespace ignore it. Put fork- or
+feature-specific data here rather than adding new top-level keys: unknown top-level keys
+are ignored on import but are not written back on export. For per-entity data, NPCs and
+objects also accept a free-form `metadata_json` object that survives import and export.
 
 ---
 
