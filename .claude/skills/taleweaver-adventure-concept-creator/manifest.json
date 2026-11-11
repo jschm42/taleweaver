@@ -6,8 +6,8 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "f7f26cb43524869f7cc7de096963273d176faddf211221901b60415a156d539c",
-      "size": 33961
+      "sha256": "52d1c2fb1a42f01199bd59f4f255c71964a09ef111ca8df9b7430ded0dc91adf",
+      "size": 34062
     },
     {
       "path": "docs/scripting-enginge.md",
@@ -26,13 +26,13 @@
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",
-      "sha256": "bff23cb1754b62e360e473d52078216ddd2de54f79340eb5699f281e9fc1e4e9",
-      "size": 22545
+      "sha256": "8412860d85a67e1d5b9546e777a5d48a98d103aeb02d91a713fa0c121d216184",
+      "size": 22627
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "c7ccaf84bab1e84ecc2a9351f1f5305308445136a314b2aef6021f87ee9c26c8",
-      "size": 23710
+      "sha256": "4e692bd219575d884a5ac1106b436f07aa84770e4c0b31b7e8861abc03e10a46",
+      "size": 23991
     },
     {
       "path": "package.json",

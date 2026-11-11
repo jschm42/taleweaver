@@ -520,10 +520,19 @@ class SequenceSchema(WorldBaseSchema):
     order: int = Field(..., description="The sequence order (1, 2, 3...)")
     title: str = Field(..., description="Title of the section")
     description: Optional[str] = Field(
-        default="", description="Narrative description for the AI Gamemaster"
+        default="",
+        description=(
+            "Atmospheric lore and narrative premise for this chapter, displayed to the player in the chapter banner. "
+            "It must ONLY describe the narrative situation, atmosphere, or premise. "
+            "It must NEVER reveal spoilers, puzzle solutions, walkthrough steps, codes, or secrets."
+        ),
     )
     walkthrough: Optional[str] = Field(
-        default="", description="The dedicated walkthrough/solution for this sequence"
+        default="",
+        description=(
+            "The dedicated step-by-step walkthrough and puzzle solutions for this sequence. "
+            "All puzzle answers, secret codes, item combinations, and action steps belong strictly here."
+        ),
     )
     end_condition: Optional[str] = Field(
         default="", description="Condition that must be met to proceed to the next sequence"

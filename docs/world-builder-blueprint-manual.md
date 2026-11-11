@@ -534,6 +534,6 @@ When you click **Generate**:
 - **Start small.** Write the chapter outline first and generate. Then fix only the parts that came out wrong.
 - **Give explicit IDs** to everything that is referenced. `[NPC: TOBIN] Tobin` is safer than `[NPC: 1] Tobin`.
 - **One fact per readable.** Put clues in different scenes, so the player has to combine them.
-- **Write the solution into the chapter text.** It becomes the Game Master's walkthrough and keeps hints consistent.
+- **Write the solution into `walkthrough:`.** It becomes the Game Master's walkthrough and keeps hints consistent. Keep sequence descriptions focused on atmosphere and lore without spoiling puzzles.
 - **Let the AI write the atmosphere.** Your free text should say *what matters*; the AI is good at *how it looks*.
 - **Use the adventure-concept-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-concept-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.

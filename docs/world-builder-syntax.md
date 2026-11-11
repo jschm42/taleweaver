@@ -133,8 +133,8 @@ A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game and 
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
-The free text becomes the chapter's description and walkthrough.
+`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+The free text becomes the chapter's description or walkthrough. When `walkthrough:` is provided, free text is treated as the lore description. Keep `description` spoiler-free.
 
 **Sequence progression** is set with `progression:` in `[World]`:
 - `linear` (default): completing a sequence starts the next one by number.

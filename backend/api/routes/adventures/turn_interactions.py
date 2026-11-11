@@ -841,7 +841,6 @@ class TurnInteractionsManager:
                     key = str(effect.get("key") or "").strip()
                     if key:
                         self._set_switch_story_flag(key)
-                        messages.append(f"Story flag set: {key}.")
                 elif effect_type == "unlock_exit":
                     target_id = str(effect.get("target_id") or "").strip()
                     if not target_id:

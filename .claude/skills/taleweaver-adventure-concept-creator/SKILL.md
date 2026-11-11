@@ -168,7 +168,7 @@ Put a line in the premise like **"Design rule: no counting puzzles, no plain-tex
 Every puzzle needs:
 - a **fair clue trail**: at least 2 hints, at least one of them a `[Readable]` or NPC line;
 - a **deterministic check**: a lock code, key item, switch state, guard, dialog answer, or rule with a guard;
-- **its solution written in the chapter's free text**, so it ends up in the walkthrough.
+- **its solution written in the chapter's `walkthrough:` key**, so it ends up in the walkthrough. Keep the chapter's `description:` strictly atmospheric lore without revealing the solution.
 
 No puzzle may be solvable only by guessing, and none may block the main path without a way back (retry, alternative clue, NPC hint after failure).
 

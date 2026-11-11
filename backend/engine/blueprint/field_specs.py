@@ -289,11 +289,14 @@ _GOAL_KEYS: dict[str, FieldSpec] = {
 
 SEQUENCE_KEYS: dict[str, FieldSpec] = {
     **_GOAL_KEYS,
+    "description": FieldSpec("description"),
     "end": FieldSpec("end_condition"),
     "walkthrough": FieldSpec("walkthrough"),
     # Entering this scene starts the sequence (mainly for dynamic progression).
     "activation": _ref("activation_scene_id"),
 }
+for _alias in ("lore", "intro", "chapter_description"):
+    SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]
 for _alias in ("activation_scene", "activation_scene_id", "start_in"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["activation"]
 # Legacy line prefixes understood by the original sequence parser.
