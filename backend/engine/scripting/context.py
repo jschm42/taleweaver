@@ -1637,8 +1637,13 @@ class SequencesProxy:
 class DiceProxy:
     """Safe proxy for dice rolls."""
 
-    def roll(self, dice_str: str) -> int:
-        match = re.match(r"^(\d+)?d(\d+)(?:([+-])(\d+))?$", dice_str.strip().lower())
+    def roll(self, dice_spec: Any = 20) -> int:
+        if isinstance(dice_spec, int):
+            return random.randint(1, max(1, dice_spec))
+        target_str = str(dice_spec or "20").strip().lower()
+        if target_str.isdigit():
+            return random.randint(1, max(1, int(target_str)))
+        match = re.match(r"^(\d+)?d(\d+)(?:([+-])(\d+))?$", target_str)
         if not match:
             return random.randint(1, 20)
         num = int(match.group(1) or 1)
@@ -1652,8 +1657,29 @@ class DiceProxy:
             total -= mod
         return total
 
+    def d4(self) -> int:
+        return random.randint(1, 4)
+
+    def d6(self) -> int:
+        return random.randint(1, 6)
+
+    def d8(self) -> int:
+        return random.randint(1, 8)
+
+    def d10(self) -> int:
+        return random.randint(1, 10)
+
+    def d12(self) -> int:
+        return random.randint(1, 12)
+
     def d20(self) -> int:
         return random.randint(1, 20)
+
+    def d100(self) -> int:
+        return random.randint(1, 100)
+
+    def random(self) -> float:
+        return random.random()
 
 
 class GameContext:
