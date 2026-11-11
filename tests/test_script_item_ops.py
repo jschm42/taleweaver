@@ -311,3 +311,17 @@ async def test_put_items_into_locked_container_is_refused():
         # Assert
         assert events == [("system", "Altar is locked.")]
         assert [i.get("id") for i in manager.avatar.inventory] == ["SWORD"]
+
+
+def test_item_manager_transfer_aliases():
+    """Verify to_container, to_player, and to_scene aliases work on tw.items / tw.objects."""
+    context = _context()
+
+    assert context.items.to_container("SWORD", "CHEST") is True
+    assert context.objects.contents("CHEST")[1].id == "SWORD"
+
+    assert context.items.to_player("GEM") is True
+    assert context.player.has_item("GEM") is True
+
+    assert context.items.to_scene("POTION", "START") is True
+    assert context.objects.get("POTION").current_scene_id == "START"
