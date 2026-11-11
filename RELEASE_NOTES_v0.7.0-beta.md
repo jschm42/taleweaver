@@ -1,6 +1,6 @@
 # TaleWeaver v0.7.0-beta: The Adventure Library, UI Themes & Tactical Combat Release
 
-We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major milestone expands TaleWeaver into a connected, highly customizable adventure platform with an in-game adventure catalog browser, 12 immersive UI skins, turn-based tactical combat, multi-provider voice mapping, extensive Python scripting engine enhancements, and two flagship showcase adventures: the engine-spanning **Test-Lab** and the 90s LucasArts-style comedy adventure **Suburban Sabotage**.
+We are excited to announce the release of **TaleWeaver v0.7.0-beta**! This major milestone expands TaleWeaver into a connected, highly customizable adventure platform with an in-game adventure catalog browser, 12 immersive UI skins, turn-based tactical combat, multi-provider voice mapping, local ComfyUI image and audio generation, custom OpenAI-compatible endpoint support, extensive Python scripting engine enhancements, and two flagship showcase adventures: the engine-spanning **Test-Lab** and the 90s LucasArts-style comedy adventure **Suburban Sabotage**.
 
 ---
 
@@ -58,7 +58,40 @@ A story's atmosphere extends to the user interface itself. TaleWeaver now featur
 
 ---
 
-### ⚡ 5. Extensive Scripting Engine Enhancements
+### 🎨 5. Local AI Media Generation with ComfyUI (Audio & Images)
+
+TaleWeaver now connects directly to local **ComfyUI** instances for offline, zero-cloud generation of both visual art and procedural music:
+
+* **ComfyUI Image Generation**:
+  * Run local diffusion models completely offline via ComfyUI's HTTP API.
+  * Independent configuration for **Standard (Simple)** and **High-Fidelity (Advanced)** profiles on the same server.
+  * Native workflows for **SD 1.5** (512px) and **SDXL** (1024px) checkpoints.
+  * Live checkpoint discovery from ComfyUI's `models/checkpoints` folder via `/object_info/CheckpointLoaderSimple`.
+  * Full control over diffusion parameters: custom steps, CFG scale, samplers (`euler`, `dpmpp_2m`, etc.), and schedulers (`karras`, `normal`).
+* **ComfyUI Procedural Audio Generation**:
+  * Generate custom background music and ambient soundtracks without cloud API fees using ComfyUI text-to-audio workflows (e.g. *ACE-Step 1.5: Text to Music*).
+  * Upload custom API-exported workflow JSONs in **Admin → Audio** with dynamic template placeholders (`{{prompt}}`, `{{negative_prompt}}`, `{{seed}}`, `{{duration}}`).
+  * Automatic capture of generated audio outputs (MP3, WAV, FLAC, OGG, Opus) with seamless in-game scene cross-fading.
+  * Procedurally controllable during gameplay via `tw.audio.generate(prompt, name=...)`.
+
+---
+
+### 🧠 6. Custom OpenAI-Compatible LLM Endpoints
+
+Complete freedom to bring any OpenAI-compatible API or self-hosted LLM inference backend into TaleWeaver:
+
+* **Universal Compatibility**: Connect hosted gateways (**OpenRouter**, **Groq**, **Together**, **DeepInfra**) or self-hosted local engines (**vLLM**, **Ollama**, **llama.cpp**, **LM Studio**, **TGI**) implementing the OpenAI `/v1/chat/completions` API.
+* **Granular Pipeline Assignment**: Configure custom OpenAI-compatible endpoints independently for each game role:
+  * **Pass 1 (Mechanics)**: Ultra-fast local models for dice rolls, inventory rules, and state validations.
+  * **Pass 2 (Narration)**: High-parameter literary models for vivid descriptive prose.
+  * **World-Builder Generator**: Flagship models for deep, consistent JSON world generation.
+  * **Autonomous Play Agent** & **History Compression**.
+* **Model Discovery & Authentication**: Automatically query installed models via `/v1/models` or enter custom model IDs manually. Supports encrypted vault keys with automatic fallback to OpenRouter keys when pointing to `openrouter.ai`.
+* **Complementary OpenAI-Compatible TTS**: Full support for self-hosted OpenAI-compatible speech servers (e.g. Kokoro-82M via Kokoro-FastAPI) alongside cloud TTS providers.
+
+---
+
+### ⚡ 7. Extensive Scripting Engine Enhancements
 
 Adventures now enjoy a dramatically expanded, deterministic Python scripting runtime with deep system hooks:
 
@@ -84,7 +117,7 @@ Adventures now enjoy a dramatically expanded, deterministic Python scripting run
 
 ---
 
-### 🗺️ 6. Adventure Format Specification & Entity Bundles (`.adv` / `.adz` v1.3.1)
+### 🗺️ 8. Adventure Format Specification & Entity Bundles (`.adv` / `.adz` v1.3.1)
 
 * **Formal Format Specification**: Complete documentation of `.adv` manifests and `.adz` archive bundles in [`docs/specs/adventure_format.md`](docs/specs/adventure_format.md).
 * **Schema Extensions**: Support for shared feature namespaces, switch mechanics, and schema versioning.
@@ -93,7 +126,7 @@ Adventures now enjoy a dramatically expanded, deterministic Python scripting run
 
 ---
 
-### 🛠️ 7. Architecture, Security & Production Deployment
+### 🛠️ 9. Architecture, Security & Production Deployment
 
 * **Docker & Reverse Proxy**: Turnkey Docker deployment script (`scripts/docker_setup.sh`) and production Nginx reverse proxy configuration.
 * **Backend Health & Connectivity Monitoring**: `GET /api/health` probes with a non-intrusive frontend connectivity banner that alerts users during disconnections and automatically resumes state upon reconnection.
@@ -101,7 +134,7 @@ Adventures now enjoy a dramatically expanded, deterministic Python scripting run
 
 ---
 
-### 🎮 8. Showcase Adventures: Test-Lab & Suburban Sabotage
+### 🎮 10. Showcase Adventures: Test-Lab & Suburban Sabotage
 
 This release comes with two showcase adventure packs demonstrating the full power of TaleWeaver's new engine:
 
@@ -133,10 +166,15 @@ A full-length comedy adventure inspired by classic 90s LucasArts games (Monkey I
   * Added in-game Adventure Library catalog browser and download manager (`LibraryView`, catalog integration).
   * Added 12 customizable UI skins with WCAG contrast verification and editor previews.
   * Added `CombatArena` and `FightModal` components with turn progression, combat sound effects, and loot rewards.
+  * Added ComfyUI settings, checkpoint selectors, and workflow choice controls in visual and audio settings.
+  * Added Custom OpenAI-compatible endpoint cards and model discovery across LLM and TTS configuration.
   * Added ElevenLabs voice selector, narrator voice pickers, and multi-provider voice mapping interfaces.
   * Added frontend connectivity monitoring banner and health check composables.
 * **Backend**:
   * Implemented Adventure Library catalog index fetching, caching, and download verification.
+  * Implemented ComfyUI image provider with SD 1.5/SDXL workflows and checkpoint discovery.
+  * Implemented ComfyUI text-to-audio workflow execution engine and audio file ingestion.
+  * Implemented custom OpenAI-compatible Chat Completions client and endpoint routing.
   * Implemented multi-provider TTS voice mapping (`voice_provider_map` schema & migration).
   * Implemented tactical combat engine, special attacks, and post-battle loot distribution.
   * Implemented extensive scripting engine extensions: `tw.dialog`, `tw.dialog.tree`, `tw.time`, `tw.llm`, `tw.json`, `tw.image`, and `tw.audio`.
