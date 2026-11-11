@@ -137,15 +137,17 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 
 ### Recent Feature Highlights
 
-#### 🌟 What's New in v0.6.0-beta
-* **Immersive In-Game & Comic Turn Engine**: Fully reimagined interactive gameplay UI. The narrative feed is rendered as comic-style panels with speaker portraits, custom speech bubbles, and action cues (`ImmersiveStoryFeed`, `useComicTurns`). Scenes now feature interactive point-and-click hotspots (`ImmersiveSceneHotspots`) for room exits and item inspections, a dedicated NPC character stage (`ImmersiveCharacterStage`), voice-tag speech synchronization, and a modernized HUD with an in-game clock widget.
-* **Sandboxed Python Scripting Engine**: Secure, deterministic event logic running in an isolated AST interpreter sandbox (`backend/engine/scripting`). Creators and AI world generators can craft rich lifecycle event triggers (`on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`) affecting scenes, inventory, NPC state, stats, custom persistent variables, and victory/defeat rules. Includes an in-editor scripting workbench (`ScriptsTab.vue`) with linting, priority queues, and test execution.
-* **Dynamic World Generation & Script Synthesis**: TaleWeaver's world generator can now synthesize complete deterministic Python event scripts tailored to the generated adventure's lore, plot, and puzzle constraints.
-* **Enhanced World-Editor & AI Validation**: Full-featured in-browser authoring environment with dedicated tabs for Scenes, Directed Graph Map Routing, Inhabitants, Items, Switches, Containers, and Event Scripts. Includes a dual-tier validation suite (`ValidationTab.vue`) combining structural graph auditing (connectivity, broken links, missing ingredients) with semantic LLM story validation.
-* **One-Click AI Fix Proposals**: Automated AI diagnostic assistant (`AIFixSuggestionsModal.vue`) that analyzes world errors and applies one-click structural repairs to scenes, exits, and entities.
-* **Session Runtime Architecture & Asset Isolation**: Independent session state lifecycle with isolated asset folders, runtime entity snapshots, milestone-driven auto-checkpoints, and timeline rewind capabilities.
+#### 🌟 What's New in v0.7.0-beta
+* **In-Game Adventure Library (`/library`)**: Direct catalog browser connected to [`jschm42/taleweaver-adventures`](https://github.com/jschm42/taleweaver-adventures). One-click download and automated verification of community adventures, plus automatic **Update** badges for installed adventures when newer upstream versions are detected without losing player session progress.
+* **Atmospheric UI Themes & Dialog Skins**: 12 distinct game UI themes (Classic, Chronicle, Noir, Terminal, Grimoire, Eldritch, Toon, Ancient, Starship, Pixel, Thriller, Sitcom) customizing speech bubble styles, typography, tab treatments, dice designs, scene tinting, and animated NPC entrances. Includes live editor preview, author accent color selection, auto-mood matching, and player settings override with WCAG contrast verification.
+* **Multi-Provider TTS Voice Mapping & ElevenLabs Integration**: Native ElevenLabs support with an expressive voice catalog for characters and narrators. Flexible `voice_provider_map` allowing creators and admins to mix and match TTS providers across characters, narrators, and tones.
+* **Turn-Based Tactical Combat Arena & SFX**: Dedicated combat modal arena (`FightModal.vue`, `CombatArena.vue`) featuring initiative order, combat turn progression, Area-of-Effect (AoE) abilities, visceral audio sound effect feedback, and post-battle loot distribution.
+* **Scripting Engine Media Extensions**: Dynamic in-game image synthesis (`tw.image.generate`) with simple and HQ models directly embedded into the chat feed, procedural audio generation (`tw.audio.generate`) via Google Lyria or ComfyUI, and high-level item management aliases (`tw.items.to_container`, `to_player`, `to_scene`).
+* **Adventure Format Specification & Entity Bundles (`.adv` / `.adz` v1.3.1)**: Formal specification ([Adventure Format Specification](docs/specs/adventure_format.md)), shared feature namespaces, modular entity bundles (`.twe`), and stable upstream Adventure UUIDs.
+* **Docker & Production Infrastructure**: Containerized deployment script (`scripts/docker_setup.sh`), production Nginx reverse proxy config, real-time backend health monitoring (`/api/health`), and migration to Poetry for dependency management.
 
 #### Previous Highlights
+* **Immersive In-Game & Comic Turn Engine (v0.6.0-beta)**: Reimagined interactive gameplay UI with comic-style turn panels, speech bubbles, interactive scene hotspots, dynamic character stage, in-game clock widget, and sandboxed Python scripting engine.
 * **Whisper Speech-to-Text & Push-to-Talk** (`1f14273`, `6c3f1c2`, `52e7312`): OpenAI Whisper integration featuring background model preloading, hands-free recording overlays, automatic transcription submission, and a Shift/hotkey (B/T) shortcut to speak in-character (`/say `) to NPCs.
 * **Interactive World Map with Pathfinding** (`3e66a99`): Fully interactive world map visualization with pathfinding, panning, and zooming capabilities for navigating adventure scenes.
 * **Fully Functional Adventure Editor** (`ec53b2e`, `50e1657`): The Adventure Editor is now fully functional to edit, refine, and build adventure templates. Includes full CRUD management for scenes, exits, quests, NPCs, items, containers, and switch outcomes directly from the UI, with visual asset configuration and bidirectional route mapping.
@@ -432,7 +434,19 @@ Inspect the internal engine workflows through Mermaid diagrams in the repository
 </details>
 
 <details>
-<summary><b>🌟 What's New in v0.6.0-beta</b></summary>
+<summary><b>🌟 What's New in v0.7.0-beta</b></summary>
+
+- **In-Game Adventure Library**: Direct catalog browser for one-click downloading and updating of adventures from the official community repository.
+- **Atmospheric UI Themes**: 12 custom dialog skins (Classic, Chronicle, Noir, Terminal, Grimoire, Eldritch, Toon, Ancient, Starship, Pixel, Thriller, Sitcom) with WCAG-tested typography, bubble styles, and live editor preview.
+- **Multi-Provider Voice Mapping**: ElevenLabs TTS integration and flexible voice provider mapping across characters and narrators.
+- **Tactical Combat Arena**: Turn-based fight modal with round progression, attack animations, combat sound effects, and post-battle loot distribution.
+- **Scripting Engine Media Synthesis**: Dynamic in-game image and audio generation directly in chat and scenes (`tw.image.generate`, `tw.audio.generate`).
+- **Adventure Format v1.3.1**: Format specification, modular entity bundles (`.twe`), and stable upstream adventure identifiers.
+
+</details>
+
+<details>
+<summary>What's New in v0.6.0-beta</summary>
 
 - **Comic Turn Presentation**: Reimagined UI featuring speaker avatars, expressive comic speech bubbles, and character stage rendering.
 - **Sandboxed Python Scripting**: Deterministic event hooks and world script generation directly integrated into the editor and gameplay loop.

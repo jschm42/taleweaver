@@ -482,10 +482,10 @@ Manages world objects and inventory items. Every world item is held by exactly *
 
 **Moving items**
 - `tw.objects.move_item(item_id: str, target: str) -> bool`: Moves an item to `"player"`, an NPC ID, a container ID, `"current"`/`"here"` (the protagonist's scene) or a scene ID.
-- `tw.objects.add_to_player(item_id: str) -> bool`: Same as `tw.player.take_item(item_id)`.
+- `tw.objects.add_to_player(item_id: str) -> bool` (alias `to_player`): Same as `tw.player.take_item(item_id)`.
 - `tw.objects.remove_from_player(item_id: str) -> bool`: Same as `tw.player.remove_item(item_id)`; `False` if the protagonist does not carry it.
-- `tw.objects.add_to_scene(item_id: str, scene_id: str = None) -> bool`: Moves an item into a scene (default: the protagonist's scene).
-- `tw.objects.put_in_container(item_id: str, container_id: str) -> bool`: Moves an item into a container. Only containers that stand in a scene accept items (not one the protagonist carries), and a container never goes into itself.
+- `tw.objects.add_to_scene(item_id: str, scene_id: str = None) -> bool` (alias `to_scene`): Moves an item into a scene (default: the protagonist's scene).
+- `tw.objects.put_in_container(item_id: str, container_id: str) -> bool` (alias `to_container`): Moves an item into a container. Only containers that stand in a scene accept items (not one the protagonist carries), and a container never goes into itself.
 - `tw.objects.take_from_container(container_id: str, item_id: str, to: str = "player") -> bool`: Moves an item out of a container; `False` if the container does not hold it. `to` accepts the same targets as `move_item`.
 - `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")` and `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Older shortcuts, kept for existing adventures.
 
