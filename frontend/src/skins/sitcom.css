@@ -241,6 +241,26 @@
   backdrop-filter: none;
 }
 
+/* Floating card dock label in the sitcom theme: rich dark espresso with warm cream text and gold frame */
+[data-skin='sitcom'] .dock-label {
+  background: linear-gradient(180deg, #2e1d15, #1c100b);
+  color: #fff7ec;
+  border: 1.5px solid color-mix(in srgb, var(--tint, #d9482f) 45%, #f6c98b);
+  box-shadow:
+    0 10px 24px -6px rgba(0, 0, 0, 0.9),
+    0 0 14px -2px rgba(246, 201, 139, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  font-family: 'Acme', ui-sans-serif, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+[data-skin='sitcom'] .dock-label-gem {
+  background: color-mix(in srgb, var(--tint, #d9482f) 35%, #ffd166);
+  box-shadow: 0 0 4px #ffd166;
+}
+
 /* NPC entrance: walks on from the wings with a little hop, to applause */
 @keyframes tw-npc-arrive-entrance {
   0% { opacity: 0; transform: translateX(60%) rotate(4deg); }

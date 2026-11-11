@@ -276,13 +276,16 @@
   font: 800 clamp(9px, calc(var(--dock-base) * 0.19), 11px) / 1.35 var(--tw-font-label, ui-sans-serif, system-ui, sans-serif);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--tint) 35%, #f8fafc);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--tw-panel-bg, #0f172a) 95%, #1e293b),
-    color-mix(in srgb, var(--tw-panel-bg, #0f172a) 98%, #020617)
+  color: var(--tw-dock-label-ink, color-mix(in srgb, var(--tint) 35%, #f8fafc));
+  background: var(
+    --tw-dock-label-bg,
+    linear-gradient(
+      180deg,
+      rgba(15, 23, 42, 0.96),
+      rgba(2, 6, 23, 0.98)
+    )
   );
-  border: 1px solid color-mix(in srgb, var(--tint) 60%, #b08d4a);
+  border: 1px solid var(--tw-dock-label-border, color-mix(in srgb, var(--tint) 60%, #b08d4a));
   box-shadow:
     0 10px 22px -6px rgba(0, 0, 0, 0.85),
     0 0 14px -3px color-mix(in srgb, var(--tint) 55%, transparent),

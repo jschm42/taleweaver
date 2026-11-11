@@ -255,3 +255,14 @@
   box-shadow: 3px 3px 0 #111111;
   backdrop-filter: none;
 }
+
+[data-skin='toon'] .dock-label {
+  background: #111111;
+  color: #fef3c7;
+  border: 2px solid #fde047;
+  box-shadow: 3px 3px 0 #111111;
+}
+
+[data-skin='toon'] .dock-label-gem {
+  background: #fde047;
+}
