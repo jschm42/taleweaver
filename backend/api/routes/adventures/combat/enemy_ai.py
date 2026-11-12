@@ -162,6 +162,10 @@ class CombatEnemyMixin:
         rest = self._enemy_pay_weapon_cost(enemy, weapon)
         if rest:
             return rest
+        # The companion draws some of the attacks (more with DEFENSIVE tactics).
+        member = self._enemy_target_member(combat)
+        if member:
+            return self._enemy_attacks_member(enemy, member, weapon, combat)
 
         player = self._player_view(combat)
         if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):

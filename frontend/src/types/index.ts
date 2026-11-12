@@ -319,6 +319,12 @@ export interface CombatPlayerState extends CombatantState {
   special_actions?: NormalizedSpecialAttack[]
 }
 
+/** A companion on the protagonist's side; `downed` at 0 HP until the fight ends. */
+export interface CombatPartyMember extends CombatEnemyState {
+  downed?: boolean
+  tactics?: string
+}
+
 export interface CombatState {
   active: boolean
   round: number
@@ -328,6 +334,8 @@ export interface CombatState {
   /** Current target (kept for single-enemy consumers). */
   enemy: CombatEnemyState
   enemies?: CombatEnemyState[]
+  /** The protagonist's companion fighting on their side (backend: combat/party.py). */
+  party?: CombatPartyMember[]
   target_id?: string | null
   initiative?: InitiativeEntry[]
   turn_index?: number

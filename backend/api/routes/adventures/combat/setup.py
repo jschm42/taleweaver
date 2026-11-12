@@ -33,9 +33,11 @@ class CombatSetupMixin:
         return list(ent_res.scalars().all())
 
     def _is_eligible_npc(self, npc: WorldEntity) -> bool:
+        """Fight targets and enemies: never the protagonist's companions."""
         return not (
             self._entity_override(npc.id, "is_defeated")
             or self._entity_override(npc.id, "is_hidden")
+            or npc.id in self._party_ids()
         )
 
     async def _find_fight_target(self, target_hint: str) -> WorldEntity | None:
@@ -129,6 +131,7 @@ class CombatSetupMixin:
             "log": [],
         }
         self._sync_combat_player_snapshot(combat)
+        await self._build_party(combat)
         self._rally_allies(combat, enemies[0])
         self._roll_round_initiative(combat)
         first = combat["initiative"][0]
@@ -145,6 +148,9 @@ class CombatSetupMixin:
     ) -> AsyncGenerator[str, None]:
         reason = self._combat_blocked_reason(initiated_by_enemy)
         target_hint = user_msg.split(" ", 1)[1].strip() if " " in user_msg else ""
+        companion = await self._companion_named(target_hint)
+        if not reason and companion and not initiated_by_enemy:
+            reason = f"{companion.name} is your companion and fights at your side."
         target = None if reason else await self._find_fight_target(target_hint)
         if not reason and not target:
             reason = "No enemy is available in this scene."

@@ -75,8 +75,13 @@ export class ArenaEventPlayer {
     if (handler && data) await handler(data)
   }
 
+  /** The protagonist and the companion fight on the player side. */
+  private onPlayerSide(actorId: string | null | undefined): boolean {
+    return actorId === PLAYER_ID || this.arena.card(actorId)?.data.side === 'player'
+  }
+
   private sideColor(actorId: string | null | undefined): number {
-    return actorId === PLAYER_ID ? COLORS.player : COLORS.enemy
+    return this.onPlayerSide(actorId) ? COLORS.player : COLORS.enemy
   }
 
   private async announce(text: string, color: number, sound: CombatSoundId, hold: number, size: number): Promise<void> {
@@ -89,7 +94,7 @@ export class ArenaEventPlayer {
    * wind up first and linger afterwards, which gives the player time to read the result.
    */
   private async inFront(d: CombatEventData, reach: number, action: () => Promise<void>): Promise<void> {
-    const isEnemy = d.actor !== PLAYER_ID
+    const isEnemy = !this.onPlayerSide(d.actor)
     await this.arena.moves.advance(d.actor, d.target, reach)
     try {
       if (isEnemy) await this.arena.moves.windUp(d.actor, d.target)

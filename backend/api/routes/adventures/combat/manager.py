@@ -19,6 +19,7 @@ from backend.api.routes.adventures.combat.context import (
 from backend.api.routes.adventures.combat.enemy_ai import CombatEnemyMixin
 from backend.api.routes.adventures.combat.loot import LOOT_FINISH_ACTIONS, CombatLootMixin
 from backend.api.routes.adventures.combat.narration import CombatNarrationMixin
+from backend.api.routes.adventures.combat.party import CombatPartyMixin
 from backend.api.routes.adventures.combat.player_actions import (
     INVALID_ACTION_MSG,
     CombatPlayerMixin,
@@ -53,6 +54,7 @@ class TurnCombatManager(
     CombatBanterMixin,
     CombatCombatantMixin,
     CombatAlliesMixin,
+    CombatPartyMixin,
     CombatConsumableMixin,
     CombatLootMixin,
     CombatNarrationMixin,
@@ -115,6 +117,7 @@ class TurnCombatManager(
         combat["active"] = False
         combat["outcome"] = "escaped"
         combat["status_note"] = f"{self.avatar.name} escapes from combat."
+        self._recover_party(combat)
         self._set_combat_state(combat)
         yield system_event(combat["status_note"])
         async for chunk in self._emit_combat_aftermath_narration(combat):

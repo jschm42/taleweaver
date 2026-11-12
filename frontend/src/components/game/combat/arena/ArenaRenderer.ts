@@ -9,6 +9,8 @@ import { easeOutBack, Tweener } from './tween'
 
 export interface ArenaView {
   player: CardData
+  /** Companions: smaller cards behind the protagonist's card. */
+  allies: CardData[]
   enemies: CardData[]
   selectedId: string | null
   activeId: string | null
@@ -21,6 +23,9 @@ const STACK_ROTATION = 0.07
 const STACK_SCALE_STEP = 0.07
 const EDGE_MARGIN = 12
 const INTRO_STAGGER_MS = 90
+/** Companion cards stand behind and beside the protagonist, a little smaller. */
+const ALLY_SCALE = 0.72
+const ALLY_OFFSET_X = 0.62
 
 /** Owns the Pixi application and lays out the protagonist card and the enemy card stack. */
 export class ArenaRenderer {
@@ -117,7 +122,7 @@ export class ArenaRenderer {
   sync(view: ArenaView, snapDisplayed: boolean): void {
     this.view = view
     if (!this.ready) return
-    const all = [view.player, ...view.enemies]
+    const all = [view.player, ...view.allies, ...view.enemies]
     const ids = new Set(all.map((d) => d.id))
     for (const [id, card] of this.cards) {
       if (!ids.has(id)) {
@@ -166,7 +171,7 @@ export class ArenaRenderer {
   /** Fight opening: the cards are dealt in from both sides, then the banner drops. */
   async playIntro(): Promise<void> {
     if (!this.ready || !this.view) return
-    const order = [this.view.player, ...this.stackOrder(this.view)]
+    const order = [this.view.player, ...this.view.allies, ...this.stackOrder(this.view)]
     const entrances = order.map((data, index) => this.dealIn(this.cards.get(data.id), index * INTRO_STAGGER_MS))
     await Promise.all(entrances)
     await this.effects.banner(this.center(), 'FIGHT!', COLORS.gold, 420, 60, this.width)
@@ -248,6 +253,14 @@ export class ArenaRenderer {
       playerCard.resize(w, h)
       this.place(playerCard, { x: this.width * PLAYER_X, y: this.height * 0.5, rotation: -0.03, scale: 1, alpha: 1 }, 50, animate)
     }
+    this.view.allies.forEach((data, k) => {
+      const card = this.cards.get(data.id)
+      if (!card) return
+      card.resize(w, h)
+      const x = Math.max(w * ALLY_SCALE * 0.5 + EDGE_MARGIN, this.width * PLAYER_X - w * ALLY_OFFSET_X * (k + 1))
+      const home = { x, y: this.height * 0.5 + h * 0.12, rotation: -0.08, scale: ALLY_SCALE, alpha: data.out ? 0.55 : 1 }
+      this.place(card, home, 40 - k, animate)
+    })
 
     const order = this.stackOrder(this.view)
     const stackX = this.width * STACK_X
