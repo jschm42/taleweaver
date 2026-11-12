@@ -120,6 +120,7 @@ const modalSequence = ref<any>({
   required_scene_id: '',
   required_defeated_npc_id: '',
   activation_scene_id: '',
+  companions_allowed: true,
   guard_expression: '',
   exp_reward: 50,
   on_start_sequence_script: '',
@@ -154,6 +155,7 @@ function openAddModal() {
     required_scene_id: '',
     required_defeated_npc_id: '',
     activation_scene_id: '',
+    companions_allowed: true,
     guard_expression: '',
     exp_reward: 50,
     on_start_sequence_script: '',
@@ -181,6 +183,7 @@ function openEditModal(seq: any) {
     required_scene_id: seq.required_scene_id || '',
     required_defeated_npc_id: seq.required_defeated_npc_id || '',
     activation_scene_id: seq.activation_scene_id || '',
+    companions_allowed: seq.companions_allowed !== false,
     guard_expression: seq.guard_expression || seq.completion_guard_expression || '',
     exp_reward: seq.exp_reward ?? 50,
     on_start_sequence_script: seq.on_start_sequence_script || '',
@@ -652,6 +655,15 @@ function confirmDelete() {
                 </option>
               </select>
             </div>
+
+            <!-- Solo chapter: the companion does not follow -->
+            <label class="flex items-start gap-2 p-4 rounded-2xl bg-black/40 border border-white/5 text-xs text-slate-300 cursor-pointer">
+              <input v-model="modalSequence.companions_allowed" type="checkbox" class="mt-0.5 accent-amber-500" />
+              <span>
+                Companions follow the protagonist in this chapter
+                <span class="block text-[11px] text-slate-500">Turn off for a solo chapter: the companion stays behind when the protagonist changes scenes.</span>
+              </span>
+            </label>
 
             <!-- Hard Rules: Deterministic Triggers -->
             <div class="space-y-3.5 p-4 rounded-2xl bg-black/40 border border-white/5">

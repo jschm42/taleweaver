@@ -378,7 +378,13 @@ def _build_special_attack_requirement(
         "18 = plate) plus a `main_attack` {name, category MELEE|RANGED|MAGIC, damage_dice, hit_stat}, "
         "e.g. {name: 'Longsword', category: 'MELEE', damage_dice: '1d8', hit_stat: 'strength'}. "
         "Do not give NPCs weapon or armor items for this; `equipped_weapon_id`/`equipped_armor_id` "
-        "are deprecated."
+        "are deprecated.\n"
+        "COMPANIONS: only if the story idea has a sidekick or travel companion, give that NPC a "
+        "`companion` block {recruitable, starts_in_party, tactics BALANCED|OFFENSIVE|DEFENSIVE|"
+        "SUPPORT, banter NORMAL|QUIET|CHATTY, downed_recovery}. `starts_in_party: true` (at most "
+        "one NPC) lets it travel with the protagonist from the start. The companion follows the "
+        "protagonist through exits; set `companions_allowed: false` on an exit or a sequence for "
+        "solo sections. All other NPCs get `companion: null`."
     )
 
 

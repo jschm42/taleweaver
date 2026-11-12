@@ -15,6 +15,7 @@ from backend.engine.world.combat_profile_schemas import (
     SpecialEffectSchema,
     TalentSchema,
 )
+from backend.engine.world.companion_schema import CompanionSchema
 from backend.engine.world.schema_base import WorldBaseSchema
 from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
     SwitchEffectSchema,
@@ -118,6 +119,13 @@ class WorldExitSchema(WorldBaseSchema):
             "True when the player already knows where this exit leads before using it "
             "(a signposted door, a gate with a view into the courtyard): the target scene's "
             "name and image are shown from the start. Usually False."
+        ),
+    )
+    companions_allowed: bool = Field(
+        True,
+        description=(
+            "False for a solo passage (a narrow vent, a guarded door only the protagonist may pass): "
+            "the protagonist's companion stays behind. Usually True."
         ),
     )
     lock_description: Optional[str] = Field(
@@ -423,6 +431,13 @@ class WorldNPCSchema(WorldBaseSchema):
             "pulls the others in the same scene into the fight. Use null for none."
         ),
     )
+    companion: Optional[CompanionSchema] = Field(
+        None,
+        description=(
+            "Only for an NPC who can travel with the protagonist as a companion (sidekick). "
+            "Use null for every other NPC."
+        ),
+    )
     assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
         None,
         description=(
@@ -585,6 +600,13 @@ class SequenceSchema(WorldBaseSchema):
             "(NAME = literal) for this chapter's logic and dialog handlers. Loaded on every "
             "script run like init_script, whichever chapter is active. Any other statement "
             "never runs. Use empty string for none."
+        ),
+    )
+    companions_allowed: bool = Field(
+        default=True,
+        description=(
+            "False for a solo chapter: the protagonist's companion does not follow into new "
+            "scenes while this sequence is active."
         ),
     )
     soft_rules: list[SoftRuleSchema] = Field(

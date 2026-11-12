@@ -11,6 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.engine.debug_commands.context import DebugContext
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.script_item_apply import sync_exit_rows
+from backend.engine.party.follow import bring_companion_along
 from backend.engine.scripting.context import ScriptChangeset
 from backend.models.world_entity import WorldExit, WorldScene
 
@@ -128,6 +129,8 @@ async def goto(ctx: DebugContext) -> str:
     if str(ctx.state.current_scene_id or "").lower() == scene.id.lower():
         return f"DEBUG: You are already in '{scene.label or scene.id}'."
 
+    left_scene_id = ctx.state.current_scene_id
     ctx.state.current_scene_id = scene.id
+    await bring_companion_along(ctx.db, ctx.state, left_scene_id)
     await _record_visit(ctx, scene)
     return f"{DEBUG_GOTO_MARKER} {scene.id}"

@@ -51,7 +51,7 @@ Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: I
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
-`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
+`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `companions` (no = solo passage, the companion stays behind; `solo: yes` is the same), `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak door`), or leave it out and the AI writes one. The exit tile shows the label on both sides of a two-way exit, with `→ Target scene` below it only once the player has visited that scene; unexplored targets are not named on the tile. With `revealed: yes` the target counts as known from the start: the tile shows its image and `→ Target scene`, and the map shows the scene, before the player has been there (a signposted door, a gate with a view). Only locked exits carry a badge on the tile. Hovering a tile opens a popup with the label, the target's image and where the exit leads, once that is known.
@@ -59,7 +59,7 @@ Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak 
 Write the label as the passage itself, not as the way: `an old rusty gate`, `a narrow spiral staircase`, not `Way to the Combat Lab` or `Back to the hall`. A two-way exit shows the same label in both scenes, and the game already adds the target. The World-Builder AI follows the same rule for the labels it writes.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 **Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
 
@@ -131,9 +131,24 @@ A **CONTAINER_SWITCH** (`[ContainerSwitch: ID] Name` or `type: CONTAINER_SWITCH`
 
 A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game and therefore gets no image. It needs at least 2 `combine` ingredients and at least 1 `results` item. Results are regular items of any type; they are hidden automatically and revealed when the recipe is crafted. All ingredients are consumed except those listed in `keep`. The `craft_guard` and the `on_craft` / `on_craft_fail` hooks belong to the recipe.
 
+**Companions.** A companion (sidekick) travels with the protagonist. Any companion key (`companion`, `in_party`, `tactics`, `banter`, `downed_recovery`) makes the NPC a companion; `in_party: yes` puts it into the party when the game starts, next to the protagonist in the first scene. One companion is active at a time; with several `in_party` NPCs the first one travels along and the others wait in their scenes. The active companion follows the protagonist into every new scene, unless the exit (`companions: no` / `solo: yes`) or the active sequence (`companions: no`) is a solo section; then it waits where it is and follows again once the protagonist is back. `tactics`, `banter` and `downed_recovery` are stored for the companion's combat and narration behaviour.
+
+```text
+[NPC: LARA] Lara
+in: GATE
+companion: yes
+in_party: yes
+tactics: support
+
+[Exit: GATE -> VENT] a narrow air vent
+solo: yes
+```
+
+In the World-Editor, the companion settings are in the **Combat** tab of the NPC dialog, the solo switch is *Companions may follow* in the exit dialog and in the sequence dialog.
+
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
 The free text becomes the chapter's description or walkthrough. When `walkthrough:` is provided, free text is treated as the lore description. Keep `description` spoiler-free.
 
 **Sequence progression** is set with `progression:` in `[World]`:

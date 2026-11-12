@@ -328,6 +328,7 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             exit_type=e.exit_type,
             is_locked=e.is_locked,
             is_revealed=bool(e.is_revealed),
+            companions_allowed=e.companions_allowed is not False,
             lock_description=e.lock_description,
             code_to_unlock=e.code_to_unlock,
             item_to_unlock=e.item_to_unlock,

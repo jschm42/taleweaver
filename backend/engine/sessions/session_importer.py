@@ -118,6 +118,7 @@ def _add_world_scenes_and_exits(
             exit_type=ex.get("exit_type", "one_way"),
             is_locked=ex.get("is_locked", False),
             is_revealed=bool(ex.get("is_revealed", False)),
+            companions_allowed=ex.get("companions_allowed") is not False,
             lock_description=ex.get("lock_description"),
             code_to_unlock=ex.get("code_to_unlock"),
             item_to_unlock=ex.get("item_to_unlock"),

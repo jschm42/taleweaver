@@ -169,6 +169,7 @@ def serialize_exit(world_exit: Any) -> dict[str, Any]:
         "is_bidirectional": str(world_exit.exit_type or "").strip().lower() == "bidirectional",
         "is_locked": world_exit.is_locked,
         "is_revealed": bool(world_exit.is_revealed),
+        "companions_allowed": world_exit.companions_allowed is not False,
         "lock_description": world_exit.lock_description,
         "code_to_unlock": world_exit.code_to_unlock,
         "item_to_unlock": world_exit.item_to_unlock,

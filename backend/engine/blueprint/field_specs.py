@@ -142,6 +142,9 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "guard": _expr("unlock_expression"),
     "bidirectional": FieldSpec("is_bidirectional", boolean),
     "one_way": FieldSpec("is_bidirectional", one_way),
+    # Solo passage: the protagonist's companion stays behind.
+    "companions": FieldSpec("companions_allowed", boolean),
+    "solo": FieldSpec("companions_allowed", one_way),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")
@@ -189,6 +192,14 @@ NPC_KEYS: dict[str, FieldSpec] = {
         ),
     ),
     "special_chance": FieldSpec("special_chance", integer),
+    # Companion (sidekick): any of these keys makes the NPC a companion.
+    "companion": FieldSpec("companion.recruitable", boolean),
+    "in_party": FieldSpec("companion.starts_in_party", boolean),
+    "tactics": FieldSpec(
+        "companion.tactics", choice("BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT")
+    ),
+    "banter": FieldSpec("companion.banter", choice("NORMAL", "QUIET", "CHATTY")),
+    "downed_recovery": FieldSpec("companion.downed_recovery"),
 }
 for _alias, _stat in STAT_ALIASES.items():
     NPC_KEYS[_alias] = FieldSpec(_stat, integer)
@@ -294,6 +305,9 @@ SEQUENCE_KEYS: dict[str, FieldSpec] = {
     "walkthrough": FieldSpec("walkthrough"),
     # Entering this scene starts the sequence (mainly for dynamic progression).
     "activation": _ref("activation_scene_id"),
+    # Solo chapter: the companion does not follow into new scenes.
+    "companions": FieldSpec("companions_allowed", boolean),
+    "solo": FieldSpec("companions_allowed", one_way),
 }
 for _alias in ("lore", "intro", "chapter_description"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]

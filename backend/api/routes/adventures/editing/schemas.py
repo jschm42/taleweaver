@@ -41,6 +41,8 @@ class EntityUpdateRequest(BaseModel):
     locked: Optional[bool] = None
     # Exits: the target scene is known from the start.
     revealed: Optional[bool] = None
+    # Exits: False makes it a solo passage (the companion stays behind).
+    companions_allowed: Optional[bool] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
@@ -167,6 +169,8 @@ class ExitCreateRequest(BaseModel):
     is_locked: bool = False
     # The target scene is known from the start (shown on the exit tile and map).
     is_revealed: bool = False
+    # False: a solo passage, the companion stays behind.
+    companions_allowed: bool = True
     lock_description: Optional[str] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None

@@ -16,6 +16,7 @@ from backend.engine.interaction.script_item_apply import (
     sync_exit_rows,
 )
 from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.party.follow import bring_companion_along
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -205,7 +206,12 @@ class TriggerService:
                     messages.append(sys_msg)
 
             await insert_cloned_entities(db, state, context.changeset)
+            left_scene_id = state.current_scene_id
             cls._persist_entity_states(state, context.changeset)
+            if context.changeset.teleport_scene_id:
+                for msg in await bring_companion_along(db, state, left_scene_id):
+                    db.add(ChatMessage(session_id=state.session_id, role="system", content=msg))
+                    messages.append(msg)
             cls._persist_exit_states(state, context.changeset)
             apply_player_inventory(await cls._load_avatar(db, state), context.changeset)
             await cls._sync_npc_personas(db, state, context.changeset)

@@ -139,6 +139,7 @@ Connections and passageways between scenes.
 | `is_bidirectional` | `boolean` | Whether the passage can be traversed in both directions (convenience boolean, matches `exit_type == "bidirectional"`). |
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
 | `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
+| `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
@@ -164,6 +165,11 @@ Non-Player Characters inhabiting the world.
 | `inventory` | `array` | Items currently held or dropped by the NPC. |
 | `is_hidden` | `boolean` | If true, NPC is not immediately visible without inspecting/searching. |
 | `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden NPC. Empty: revealed when the protagonist searches the scene or the NPC starts speaking. The reserved value `script` means only scripts reveal it. |
+| `companion` | `object \| null` | Optional (top level or inside `metadata_json`). Makes the NPC a companion (sidekick) who can travel with the protagonist: `{recruitable, starts_in_party, tactics, banter, downed_recovery}`. `tactics`: `BALANCED` (default), `OFFENSIVE`, `DEFENSIVE`, `SUPPORT`; `banter`: `NORMAL` (default), `QUIET`, `CHATTY`; `downed_recovery`: share of max HP (0.01-1, default `0.25`) after being downed. `starts_in_party: true` puts the NPC into the party when a session starts; with several such NPCs the first one is the active companion. `null` (default): an ordinary NPC. See [Companions](#companions). |
+
+#### Companions
+
+One companion can be active at a time. While it follows, the engine moves it into every scene the protagonist enters (exit, Game Master transition or script teleport), before `on_enter_scene` runs. It stays behind when it is not in the scene the protagonist left, when it is defeated, or when the exit or the active sequence has `companions_allowed: false`; once the protagonist returns, it follows again from there. The Game Master cannot move the active companion to another scene. The session party lives in `entity_states["__party__"]` (`active_id`, `recruited`, `following`, `tactics`) and is part of every checkpoint.
 
 ---
 

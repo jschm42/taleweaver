@@ -73,6 +73,7 @@ from backend.core.llm_request_tuning import bind_llm_session
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.interaction.command_parser import CommandParser
 from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.party.follow import bring_companion_along
 from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.interaction.llm_intents import (
@@ -3092,7 +3093,12 @@ class GameTurnManager:
                     self._in_protagonist_status_trigger = False
 
         if changeset.teleport_scene_id:
+            left_scene_id = self.state.current_scene_id
             self.state.current_scene_id = changeset.teleport_scene_id
+            for msg in await bring_companion_along(
+                self.db, self.state, left_scene_id, adventure=self.adventure
+            ):
+                system_messages.append(await self._save_script_notice(msg))
 
         await insert_cloned_entities(self.db, self.state, changeset)
         entity_states = dict(self.state.entity_states or {})

@@ -68,10 +68,11 @@ fields are rejected (no silent typos).
 | op | Purpose | Key fields |
 |---|---|---|
 | `create_scene` | New scene | `scene_id`, `label`, `description`, `decorative_objects` |
-| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `ref` |
+| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `companions_allowed` (default `true`; `false` = solo passage, the companion stays behind), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `ref` |
 | `create_entity` | New NPC or object | `entity_id`, `entity_type` (`NPC`/`OBJECT`), `scene_id`, `name`, `description`, `item_type`, `is_portable`, `is_hidden`, `inventory`, `metadata_json`, ... |
 | `update` | Change any editor field (incl. all trigger scripts) | `target_type` (`scene`/`exit`/`npc`/`object`/`protagonist`/`cover`), `target_id`, fields |
 | `set_npc_combat` | NPC combat behaviour (the Aggression section in the NPC dialog's Combat tab) | `npc_id`, `attack_mode` (`PASSIVE`/`ATTACK_ON_SIGHT`), `attack_trigger`, `special_chance`, `combat_group`, `assist_mode` (`GROUP`/`ANYONE`/`NEVER`); omitted fields keep their current value |
+| `set_npc_companion` | Make an NPC a companion (sidekick) who travels with the protagonist (Companion section in the NPC dialog's Combat tab) | `npc_id`, `companion` (`{recruitable, starts_in_party, tactics: BALANCED/OFFENSIVE/DEFENSIVE/SUPPORT, banter: NORMAL/QUIET/CHATTY, downed_recovery: 0.01-1}`; `null` = ordinary NPC again) |
 | `set_script` | Add/replace a global script | `id`, `name`, `trigger`, `target`, `code`, `priority`, `is_active` |
 | `set_init_script` / `append_init_script` | Replace / extend the global init script (helpers, dialog handlers, dialogue trees) | `code` |
 | `create_quest` / `create_award` | Quest / award | see `ops` |
@@ -85,7 +86,7 @@ fields are rejected (no silent typos).
   the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
-  `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
+  `companions_allowed` (`false` = solo passage), `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
   `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`.
   A code/item/rule lock needs a lock description (set `description` in the same or an earlier update,
   or `lock_description` on `create_exit`).
@@ -101,6 +102,7 @@ fields are rejected (no silent typos).
 - **npc**: `goal`, `character`, `inventory`, `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.
+  The companion block is not an `update` field either: use `set_npc_companion`.
   `strength`…`charisma` and `armor_class` in `update` apply to the protagonist only and are ignored
   for NPCs; NPC attributes and the main attack live in the editor's combat profile (a `main_attack`
   can also be passed in `metadata_json` on `create_entity`).

@@ -68,6 +68,8 @@ class WorldExit(Base, TimestampMixin):
     # The target scene is known from the start (name and image on the exit tile and map),
     # without the player having visited it.
     is_revealed = Column(Boolean, default=False, nullable=False, server_default="0")
+    # False: a solo passage; the active companion stays behind when the player uses it.
+    companions_allowed = Column(Boolean, default=True, nullable=False, server_default="1")
     lock_description = Column(
         String(255), nullable=True
     )  # e.g. "The door is bolted from the other side."

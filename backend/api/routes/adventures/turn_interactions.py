@@ -42,6 +42,7 @@ from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
+from backend.engine.party.follow import bring_companion_along
 from backend.engine.interaction.switch_states import state_label
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -362,6 +363,15 @@ class TurnInteractionsManager:
             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         self.state.current_scene_id = scene.id
+        for msg in await bring_companion_along(
+            self.db,
+            self.state,
+            current_scene_id,
+            world_exit=world_exit,
+            adventure=self.manager.adventure,
+        ):
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
         await self._record_map_traversal(current_scene_id, scene, world_exit)
         await self.db.commit()
 

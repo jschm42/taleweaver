@@ -23,6 +23,8 @@ export interface EntityEditData {
   locked?: boolean
   /** Exits: the target scene is known from the start. */
   revealed?: boolean
+  /** Exits: false makes a solo passage (the companion stays behind). */
+  companions_allowed?: boolean
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
@@ -98,6 +100,7 @@ export interface ExitCreateData {
   exit_type?: 'one_way' | 'bidirectional'
   is_locked?: boolean
   is_revealed?: boolean
+  companions_allowed?: boolean
   lock_description?: string
   code_to_unlock?: string
   item_to_unlock?: string

@@ -22,6 +22,7 @@ from backend.api.routes.adventures.quest_completion import (
 )
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
+from backend.engine.party.follow import bring_companion_along
 from backend.engine.rules.game_clock import apply_gm_time_request
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
 from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
@@ -509,6 +510,15 @@ class TurnStateApplier:
 
                 self.state.current_scene_id = event.new_scene_id
                 state_dirty = True
+                for msg in await bring_companion_along(
+                    self.db,
+                    self.state,
+                    old_scene_id,
+                    world_exit=valid_exit,
+                    adventure=self.adventure,
+                ):
+                    await self._save_chat_message("system", msg)
+                    system_messages.append(msg)
 
                 # Map Update
                 try:
