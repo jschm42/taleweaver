@@ -272,7 +272,7 @@ const feedItems = computed<FeedItem[]>(() => {
   <div class="story-feed flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
     <div
       ref="storyContainerRef"
-      class="comic-story-container tw-feed flex-1 overflow-y-auto tw-scroll p-2 sm:p-4 flex flex-col min-h-0 relative"
+      class="comic-story-container tw-feed flex-1 overflow-y-auto tw-scroll p-2 sm:p-4 sm:pl-3.5 flex flex-col min-h-0 relative"
       :class="{ 'pb-12 sm:pb-12': hasPager }"
     >
       <!-- Empty State -->

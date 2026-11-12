@@ -10,9 +10,13 @@
  *   - mini    (smaller):               short strip, small name, defeated shown as an icon
  * Cards never shrink below MIN_RATIO x width; past that point the column scrolls as before.
  *
- * The stage reserves its scrollbar gutter (`scrollbar-gutter: stable`), so a scrollbar appearing
- * does not change the measured width. Without that, the width change re-sized the cards, the
- * scrollbar vanished again and the cards jittered in a resize loop.
+ * Companion side column: the active companion stands in a narrower column right of the
+ * protagonist (`sideRatio` x the main column width, one-column stage only). Sizes are then
+ * computed for the main column, and the companion does not count as an extra row.
+ *
+ * The stage hides its scrollbar (`scrollbar-width: none`), so scrolling never changes the measured
+ * width and the column takes no extra room next to the story. A visible scrollbar used to change
+ * the width, re-size the cards, vanish again and make the cards jitter in a resize loop.
  */
 import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 
@@ -53,14 +57,22 @@ export function columnWidth(width: number, columns: number): number {
   return Math.max(0, (width - STAGE_CARD_GAP_PX * (columns - 1)) / columns)
 }
 
+/** Width of the main card column in px; a companion side column takes `sideRatio` of it. */
+export function mainColumnWidth(width: number, columns: number, sideRatio = 0): number {
+  if (columns !== 1 || sideRatio <= 0) {
+    return columnWidth(width, columns)
+  }
+  return Math.max(0, (width - STAGE_CARD_GAP_PX) / (1 + sideRatio))
+}
+
 /** Card height in px for `count` cards in a box; 0 when the box has not been measured yet. */
-export function fitCardHeight(box: StageBox, count: number): number {
+export function fitCardHeight(box: StageBox, count: number, sideRatio = 0): number {
   if (!box.width || !box.height || count <= 0) {
     return 0
   }
   const columns = stageColumns(count)
   const rows = Math.ceil(count / columns)
-  const cardWidth = columnWidth(box.width, columns)
+  const cardWidth = mainColumnWidth(box.width, columns, sideRatio)
   const fullHeight = cardWidth * FULL_RATIO
   const minHeight = Math.max(MIN_CARD_PX, cardWidth * MIN_RATIO)
   const perCard = (box.height - STAGE_CARD_GAP_PX * (rows - 1)) / rows
@@ -74,7 +86,11 @@ export function densityFor(cardHeight: number, width: number): StageDensity {
   return cardHeight >= width * COMPACT_RATIO ? 'compact' : 'mini'
 }
 
-export function useStageDensity(container: Ref<HTMLElement | null>, count: () => number) {
+export function useStageDensity(
+  container: Ref<HTMLElement | null>,
+  count: () => number,
+  sideRatio: () => number = () => 0
+) {
   const box = ref<StageBox>({ width: 0, height: 0 })
   let observer: ResizeObserver | null = null
 
@@ -105,8 +121,10 @@ export function useStageDensity(container: Ref<HTMLElement | null>, count: () =>
   })
 
   const columns = computed(() => stageColumns(count()))
-  const cardHeight = computed(() => fitCardHeight(box.value, count()))
-  const density = computed(() => densityFor(cardHeight.value, columnWidth(box.value.width, columns.value)))
+  const cardHeight = computed(() => fitCardHeight(box.value, count(), sideRatio()))
+  const density = computed(() =>
+    densityFor(cardHeight.value, mainColumnWidth(box.value.width, columns.value, sideRatio()))
+  )
   /** Inline style for each card: an explicit height once shrunk, the 2:3 aspect otherwise. */
   const cardStyle = computed(() => {
     if (density.value === 'full') {
@@ -115,5 +133,5 @@ export function useStageDensity(container: Ref<HTMLElement | null>, count: () =>
     return { height: `${cardHeight.value}px` }
   })
 
-  return { columns, density, cardStyle }
+  return { columns, density, cardHeight, cardStyle }
 }

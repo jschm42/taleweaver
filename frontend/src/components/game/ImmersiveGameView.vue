@@ -347,7 +347,8 @@ defineExpose({
     </HoverRevealHeader>
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->
-    <div class="relative z-10 flex-grow min-h-0 flex flex-row gap-2 sm:gap-3 lg:gap-4 p-2 sm:p-3 lg:p-4 xl:p-6 overflow-hidden">
+    <!-- No row gap: the stage's scrollbar gutter and the feed's left padding already separate it from the story; the right panels keep their own margin. -->
+    <div class="relative z-10 flex-grow min-h-0 flex flex-row p-2 sm:p-3 lg:p-4 xl:p-6 overflow-hidden">
       <!-- 3A. LEFT / CHARACTER STAGE -->
       <ImmersiveCharacterStage
         :npcs="npcs"
@@ -436,6 +437,7 @@ defineExpose({
       <!-- 3C. RIGHT / SCENE SIDEBAR (wide screens) -->
       <SceneSidebar
         v-if="sidebarDocked"
+        class="ml-2 sm:ml-3 lg:ml-4"
         :scene-exits="sceneExits"
         :items="sceneItems"
         :scene-switches="props.sceneSwitches || []"
@@ -454,7 +456,7 @@ defineExpose({
       />
 
       <!-- 3D. RIGHT / PLAY-AGENT CONTROL PANEL -->
-      <PlayAgentPanel v-if="props.sheet?.agent_active" />
+      <PlayAgentPanel v-if="props.sheet?.agent_active" class="ml-2 sm:ml-3 lg:ml-4" />
     </div>
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->

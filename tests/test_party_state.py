@@ -7,6 +7,7 @@ from backend.engine.manifest_apply.npcs import npc_metadata
 from backend.engine.party.companion_config import companion_config, normalize_companion
 from backend.engine.party.party_start import seed_starting_party
 from backend.engine.party.party_state import PARTY_KEY, read_party, store_party
+from backend.engine.party.party_view import mark_active_companion
 
 
 def _npc(npc_id: str, companion=None, entity_type: str = "NPC") -> SimpleNamespace:
@@ -172,3 +173,19 @@ def test_blueprint_keys_map_to_companion_fields():
     assert npc["companion.banter"] == "QUIET"
     assert blocks["exit"].fields["companions_allowed"].value is False
     assert blocks["sequence"].fields["companions_allowed"].value is False
+
+
+def test_mark_active_companion_flags_only_the_active_member():
+    # Arrange
+    states = {PARTY_KEY: {"active_id": "BATLIN", "recruited": ["BATLIN", "LARA"]}}
+    entities = [{"id": "BATLIN"}, {"id": "LARA"}, {"id": "GUARD"}]
+
+    # Act
+    mark_active_companion(entities, states)
+    mark_active_companion(no_party := [{"id": "BATLIN"}], {})
+
+    # Assert
+    assert entities[0]["is_companion"] is True
+    assert "is_companion" not in entities[1]
+    assert "is_companion" not in entities[2]
+    assert "is_companion" not in no_party[0]
