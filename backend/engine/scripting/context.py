@@ -30,6 +30,7 @@ from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NP
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
 from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
+from backend.engine.scripting.party_proxy import PartyProxy
 from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
@@ -133,6 +134,8 @@ class ScriptChangeset:
     skip_narration: bool = False
     # Ordered tw.audio operations, replayed by audio_state.apply_audio_ops.
     audio_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.party operations, replayed by party_ops.apply_party_ops.
+    party_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -189,6 +192,7 @@ class ScriptChangeset:
             or self.cloned_entities
             or self.clock_ops
             or self.audio_ops
+            or self.party_ops
             or self.skip_narration
         )
 
@@ -1707,6 +1711,7 @@ class GameContext:
         sequence_progression_mode: str = "linear",
         audio: Optional[dict[str, Any]] = None,
         audio_library: Optional[list[dict[str, Any]]] = None,
+        party: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1777,6 +1782,8 @@ class GameContext:
         self.audio = AudioProxy(self.changeset, audio, self, library=audio_library)
         # Former name, kept so scripts written before the rename keep working.
         self.music = self.audio
+        # tw.party: the session party (entity_states["__party__"]), else empty.
+        self.party = PartyProxy(self.changeset, party, npc_entities, self.npcs, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)

@@ -22,8 +22,8 @@ from backend.models.user import User
 
 
 def test_adventure_format_current_version():
-    """Adventure format current version must be 1.3.1 (CONSTRUCTABLE recipes)."""
-    assert CURRENT_VERSION == "1.3.1"
+    """Adventure format current version must be 1.4.0 (companions)."""
+    assert CURRENT_VERSION == "1.4.0"
 
 
 def test_is_version_newer_logic():
@@ -98,7 +98,7 @@ def test_legacy_format_detection():
 
 def test_is_newer_than_engine():
     """Only manifests above CURRENT_VERSION count as "built for a newer engine"."""
-    assert is_newer_than_engine("1.4.0") is True
+    assert is_newer_than_engine("1.5.0") is True
     assert is_newer_than_engine("2.0") is True
     assert is_newer_than_engine(CURRENT_VERSION) is False
     assert is_newer_than_engine("1.3") is False
@@ -112,13 +112,13 @@ def test_engine_outdated_flag_keeps_adventure_playable():
     future_tpl = AdventureTemplate(
         id="future-1",
         title="Future Quest",
-        version="1.4.0",
-        original_manifest={"version": "1.4.0", "sequences": [{"id": "seq1", "name": "Act 1"}]},
+        version="1.5.0",
+        original_manifest={"version": "1.5.0", "sequences": [{"id": "seq1", "name": "Act 1"}]},
         sequences=[{"id": "seq1", "name": "Act 1"}],
     )
     status = check_template_update(future_tpl, [])
     assert status["engine_outdated"] is True
-    assert status["format_version"] == "1.4.0"
+    assert status["format_version"] == "1.5.0"
     assert status["is_legacy_format"] is False
     assert status["can_start"] is True
 
@@ -126,16 +126,17 @@ def test_engine_outdated_flag_keeps_adventure_playable():
         id="current-1",
         title="Current Quest",
         version="1.0.0",
-        original_manifest={"version": CURRENT_VERSION, "sequences": [{"id": "seq1", "name": "Act 1"}]},
+        original_manifest={
+            "version": CURRENT_VERSION,
+            "sequences": [{"id": "seq1", "name": "Act 1"}],
+        },
         sequences=[{"id": "seq1", "name": "Act 1"}],
     )
     assert check_template_update(current_tpl, [])["engine_outdated"] is False
 
 
 @pytest.mark.asyncio
-async def test_future_format_template_can_still_start(
-    auth_client: AsyncClient, db_session
-):
+async def test_future_format_template_can_still_start(auth_client: AsyncClient, db_session):
     """GET /api/adventures/templates flags the template, but starting it still works."""
     user_res = await db_session.execute(select(User).where(User.username == "test_user"))
     user = user_res.scalars().first()
@@ -147,7 +148,7 @@ async def test_future_format_template_can_still_start(
         is_ready=True,
         owner_id=user.id if user else None,
         original_manifest={
-            "version": "1.4.0",
+            "version": "1.5.0",
             "sequences": [{"id": "seq1", "name": "Act 1"}],
         },
         sequences=[{"id": "seq1", "name": "Act 1"}],
@@ -159,7 +160,7 @@ async def test_future_format_template_can_still_start(
     assert resp.status_code == 200
     found = next(item for item in resp.json() if item["template_id"] == tpl.id)
     assert found["engine_outdated"] is True
-    assert found["format_version"] == "1.4.0"
+    assert found["format_version"] == "1.5.0"
     assert found["can_start"] is True
     assert found["is_legacy_format"] is False
 

@@ -74,6 +74,8 @@ from backend.core.llm_router import GameMasterLLM
 from backend.engine.interaction.command_parser import CommandParser
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.party.follow import bring_companion_along
+from backend.engine.party.party_ops import apply_session_party_ops
+from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.interaction.llm_intents import (
@@ -2922,6 +2924,7 @@ class GameTurnManager:
             clock=clock_view(self.state, self.adventure),
             audio=read_audio_state(self.state.entity_states),
             audio_library=getattr(self.adventure, "audio_tracks", None),
+            party=session_overrides.get(PARTY_KEY),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3092,6 +3095,8 @@ class GameTurnManager:
                 finally:
                     self._in_protagonist_status_trigger = False
 
+        # Party changes first, so a companion recruited by this script follows its teleport.
+        apply_session_party_ops(self.state, changeset.party_ops)
         if changeset.teleport_scene_id:
             left_scene_id = self.state.current_scene_id
             self.state.current_scene_id = changeset.teleport_scene_id

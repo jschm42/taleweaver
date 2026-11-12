@@ -382,7 +382,9 @@ def _build_special_attack_requirement(
         "COMPANIONS: only if the story idea has a sidekick or travel companion, give that NPC a "
         "`companion` block {recruitable, starts_in_party, tactics BALANCED|OFFENSIVE|DEFENSIVE|"
         "SUPPORT, banter NORMAL|QUIET|CHATTY, downed_recovery}. `starts_in_party: true` (at most "
-        "one NPC) lets it travel with the protagonist from the start. The companion follows the "
+        "one NPC) lets it travel with the protagonist from the start; a companion who joins "
+        "later is recruited by a script with tw.party.recruit('<NPC id>'), e.g. in the on_choice "
+        "handler of a dialog. The companion follows the "
         "protagonist through exits; set `companions_allowed: false` on an exit or a sequence for "
         "solo sections. All other NPCs get `companion: null`."
     )

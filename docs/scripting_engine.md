@@ -25,6 +25,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.game](#twgame)
    - [tw.time (In-Game Clock)](#twtime-in-game-clock)
    - [tw.audio (Generated Background Audio)](#twaudio-generated-background-audio)
+   - [tw.party (Companions)](#twparty-companions)
    - [tw.quests](#twquests)
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
@@ -719,6 +720,40 @@ tw.audio.release()
 ```
 
 **Limits and storage**: the admin sets the number of tracks a play session may render (further requests fail and keep the old audio). The audio state (what plays, the named tracks, the volume) is part of every save; restoring a checkpoint restores the audio. The rendered files live in the session folder (`adventures/sessions/<session>/audio/`); a track whose file is missing (e.g. after a session import) is rendered again.
+
+### `tw.party` (Companions)
+The protagonist's companions (sidekicks). An NPC becomes a companion when a script recruits it, or when its `companion` settings say `starts_in_party` (see *Companions* in `docs/specs/adventure_format.md`). One companion is **active** at a time: while it follows, the engine moves it into every scene the protagonist enters, unless it waits, is defeated, is not in the scene the protagonist left, or the exit or active sequence is marked solo (`companions_allowed: false`). NPC arguments accept an ID, an exact name or an NPC proxy (`tw.npcs.get(...)`). Changes are visible to the same script at once and saved with every checkpoint.
+
+**Changing the party**
+- `tw.party.recruit(npc, tactics=None)`: adds the NPC and makes it the active companion that follows. It stays where it is and travels along from the next scene change on, so recruit it in the scene the player is in. `tactics`: `BALANCED`, `OFFENSIVE`, `DEFENSIVE` or `SUPPORT`; default is the NPC's companion setting. Returns `False` for an unknown NPC or unknown tactics (with a script error in the chat), and for an NPC whose companion settings have `recruitable: false`. Any NPC can be recruited; one without companion settings uses the defaults.
+- `tw.party.dismiss(npc=None)`: removes a member (default: the active companion). It stays in its current scene.
+- `tw.party.wait()` / `tw.party.follow()`: the active companion stays behind until `follow()`; after `follow()` it travels along again from the scene it waits in.
+- `tw.party.set_active(npc)`: makes another recruited member the active companion.
+- `tw.party.set_tactics(tactics, npc=None)`: changes a member's combat tactics (default: the active companion).
+
+**Reading**
+- `tw.party.active`: ID of the active companion, else `None`. `tw.party.companion`: the same NPC as a proxy (`tw.party.companion.current_scene_id`, `.hp`, ...), else `None`.
+- `tw.party.members`: IDs of all recruited companions. `tw.party.is_empty`: `True` when nobody is in the party.
+- `tw.party.following`: `False` while the companion waits.
+- `tw.party.is_member(npc)`, `tw.party.is_active(npc)`, `tw.party.tactics_of(npc=None)`.
+
+`tw.party` also works in guard expressions, e.g. an exit `unlock_expression` of `tw.party.is_member("NPC_LARA")`.
+
+```python
+# init_script: Lara joins after the player helped her.
+def on_lara_choice(index):
+    if index == 0:
+        tw.party.recruit("NPC_LARA")
+        tw.story.narrate("Lara shoulders her pack. 'Lead the way.'")
+
+# on_enter_scene of the vault: she keeps watch outside.
+if tw.party.is_active("NPC_LARA"):
+    tw.party.wait()
+    tw.story.narrate("Lara stays at the entrance to keep watch.")
+
+# on_leave_scene of the vault: she comes along again.
+tw.party.follow()
+```
 
 ### `tw.quests`
 Directly manipulates adventure quest entries:

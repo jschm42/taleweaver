@@ -17,6 +17,8 @@ from backend.engine.interaction.script_item_apply import (
 )
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.party.follow import bring_companion_along
+from backend.engine.party.party_ops import apply_party_ops
+from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -102,6 +104,7 @@ class TriggerService:
             clock=clock_view(state),
             audio=read_audio_state(state.entity_states),
             audio_library=getattr(adventure, "audio_tracks", None) if adventure else None,
+            party=session_overrides.get(PARTY_KEY),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -267,6 +270,7 @@ class TriggerService:
             or changeset.after_narration
             or changeset.clock_ops
             or changeset.audio_ops
+            or changeset.party_ops
             or changeset.skip_narration
         ):
             return
@@ -293,6 +297,7 @@ class TriggerService:
         store_gm_directions(cur_states, changeset.gm_directions, changeset.after_narration)
         apply_changeset_clock(state, cur_states, changeset.clock_ops)
         apply_audio_ops(cur_states, changeset.audio_ops)
+        apply_party_ops(cur_states, changeset.party_ops)
         store_skip_narration(cur_states, changeset.skip_narration)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")

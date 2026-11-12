@@ -50,6 +50,19 @@ class PartyState:
         if self.active_id == npc_id:
             self.active_id = None
 
+    def activate(self, npc_id: str) -> bool:
+        """Makes a recruited NPC the active companion; False if it is not in the party."""
+        npc_id = _clean_id(npc_id)
+        if npc_id not in self.recruited:
+            return False
+        self.active_id = npc_id
+        return True
+
+    def set_tactics(self, npc_id: str, tactics: str) -> None:
+        npc_id = _clean_id(npc_id)
+        if npc_id in self.recruited and tactics:
+            self.tactics[npc_id] = tactics
+
     def follower_id(self) -> Optional[str]:
         """The companion that moves along with the protagonist, if any."""
         if not self.following or not self.active_id:

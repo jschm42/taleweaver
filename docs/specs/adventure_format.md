@@ -20,7 +20,7 @@ The manifest represents the complete blueprint of a generated or exported world.
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "adventure": { ... },
   "protagonist": { ... },
   "scenes": [ ... ],
@@ -42,7 +42,8 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.3.1` (current) | Current format. |
+| `1.4.0` (current) | Current format. Adds companions: NPC `companion`, exit and sequence `companions_allowed`. |
+| `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions; such adventures simply have no companions. |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
 | below `1.0` | Rejected on import. |
@@ -139,7 +140,7 @@ Connections and passageways between scenes.
 | `is_bidirectional` | `boolean` | Whether the passage can be traversed in both directions (convenience boolean, matches `exit_type == "bidirectional"`). |
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
 | `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
-| `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. |
+| `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. *(since 1.4.0)* |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
@@ -165,7 +166,7 @@ Non-Player Characters inhabiting the world.
 | `inventory` | `array` | Items currently held or dropped by the NPC. |
 | `is_hidden` | `boolean` | If true, NPC is not immediately visible without inspecting/searching. |
 | `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden NPC. Empty: revealed when the protagonist searches the scene or the NPC starts speaking. The reserved value `script` means only scripts reveal it. |
-| `companion` | `object \| null` | Optional (top level or inside `metadata_json`). Makes the NPC a companion (sidekick) who can travel with the protagonist: `{recruitable, starts_in_party, tactics, banter, downed_recovery}`. `tactics`: `BALANCED` (default), `OFFENSIVE`, `DEFENSIVE`, `SUPPORT`; `banter`: `NORMAL` (default), `QUIET`, `CHATTY`; `downed_recovery`: share of max HP (0.01-1, default `0.25`) after being downed. `starts_in_party: true` puts the NPC into the party when a session starts; with several such NPCs the first one is the active companion. `null` (default): an ordinary NPC. See [Companions](#companions). |
+| `companion` | `object \| null` | Optional (top level or inside `metadata_json`). Makes the NPC a companion (sidekick) who can travel with the protagonist: `{recruitable, starts_in_party, tactics, banter, downed_recovery}`. `tactics`: `BALANCED` (default), `OFFENSIVE`, `DEFENSIVE`, `SUPPORT`; `banter`: `NORMAL` (default), `QUIET`, `CHATTY`; `downed_recovery`: share of max HP (0.01-1, default `0.25`) after being downed. `starts_in_party: true` puts the NPC into the party when a session starts; with several such NPCs the first one is the active companion. `null` (default): an ordinary NPC. See [Companions](#companions). *(since 1.4.0)* |
 
 #### Companions
 
