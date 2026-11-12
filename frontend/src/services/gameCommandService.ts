@@ -186,6 +186,12 @@ export const gameCommandService = {
       if (!isDefeatedNpc) {
         items.push({ label: 'Give', action: `${GIVE_TO_PREFIX}${entity.id || entity.name}` })
       }
+      // The active companion takes orders: stay behind here, or come along again.
+      if (!isDefeatedNpc && entity?.is_companion === true) {
+        items.push(entity.companion_following === false
+          ? { label: 'Follow me', action: '/companion follow' }
+          : { label: 'Stay here', action: '/companion wait' })
+      }
       if (!isDefeatedNpc && canBeAttacked(entity)) {
         items.push({ label: 'Attack', action: `/attack ${entity.name}` })
       }

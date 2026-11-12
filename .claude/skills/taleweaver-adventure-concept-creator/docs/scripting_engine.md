@@ -737,6 +737,8 @@ The protagonist's companions (sidekicks). An NPC becomes a companion when a scri
 - `tw.party.following`: `False` while the companion waits.
 - `tw.party.is_member(npc)`, `tw.party.is_active(npc)`, `tw.party.tactics_of(npc=None)`.
 
+The player gives the same orders without a script: **Stay here** / **Follow me** in the companion's context menu, `/companion wait|follow`, or in their own words ("Lara, wait here"); they switch `tw.party.following` and only reach a companion standing in the player's scene.
+
 `tw.party` also works in guard expressions, e.g. an exit `unlock_expression` of `tw.party.is_member("NPC_LARA")`.
 
 ```python

@@ -21,6 +21,7 @@ from backend.api.routes.adventures.container_put import (
 )
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.companion_command import companion_order_command
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -1330,6 +1331,14 @@ class TurnInteractionsManager:
         if response.startswith("[TRIGGER_GIVE_ITEMS]"):
             give_args = response.replace("[TRIGGER_GIVE_ITEMS]", "").strip()
             outcome = await give_items_to_npc(self.manager, give_args)
+            for role, content in outcome.events:
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
+        if response.startswith("[TRIGGER_COMPANION]"):
+            order_args = response.replace("[TRIGGER_COMPANION]", "").strip()
+            outcome = await companion_order_command(self.manager, order_args)
             for role, content in outcome.events:
                 yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             self.pending_reaction_prompt = outcome.reaction_prompt

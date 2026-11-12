@@ -170,7 +170,7 @@ Non-Player Characters inhabiting the world.
 
 #### Companions
 
-One companion can be active at a time. While it follows, the engine moves it into every scene the protagonist enters (exit, Game Master transition or script teleport), before `on_enter_scene` runs. It stays behind when it is not in the scene the protagonist left, when it is defeated, or when the exit or the active sequence has `companions_allowed: false`; once the protagonist returns, it follows again from there. The Game Master cannot move the active companion to another scene. The session party lives in `entity_states["__party__"]` (`active_id`, `recruited`, `following`, `tactics`) and is part of every checkpoint.
+One companion can be active at a time. While it follows, the engine moves it into every scene the protagonist enters (exit, Game Master transition or script teleport), before `on_enter_scene` runs. It stays behind when it is not in the scene the protagonist left, when it is defeated, or when the exit or the active sequence has `companions_allowed: false`; once the protagonist returns, it follows again from there. The Game Master cannot move the active companion to another scene. The player tells it to stay behind or to come along again (context menu **Stay here** / **Follow me**, `/companion wait|follow`, or in their own words, reported by Pass 1 as `companion_order`); both passes get a COMPANION line in the CURRENT STATE, so the narration knows who travels along and how talkative it is (`banter`). The session party lives in `entity_states["__party__"]` (`active_id`, `recruited`, `following`, `tactics`) and is part of every checkpoint.
 
 ---
 

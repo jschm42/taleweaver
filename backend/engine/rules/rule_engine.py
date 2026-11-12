@@ -246,6 +246,13 @@ class AdventureGeneratorToolIntent(BaseModel):
     deleted_entities: Optional[list[str]] = None
 
     extra_time_minutes: int = 0
+    companion_order: Optional[Literal["wait", "follow"]] = Field(
+        None,
+        description=(
+            "Only when the player tells the COMPANION (see CURRENT STATE) to stay behind here "
+            "('wait') or to come along again ('follow'), in any words or language. Else null."
+        ),
+    )
 
     tool_results: Optional[ToolResults] = None
     narrative_description: str = ""
@@ -330,6 +337,14 @@ class GameEvent(BaseModel):
     triggered_soft_rule_ids: Optional[list[str]] = Field(
         None,
         description="IDs from ACTIVE SOFT RULES whose condition the player's action fulfilled this message.",
+    )
+
+    companion_order: Optional[Literal["wait", "follow"]] = Field(
+        None,
+        description=(
+            "Only when the player tells the COMPANION (see CURRENT STATE) to stay behind here "
+            "('wait') or to come along again ('follow'), in any words or language. Else null."
+        ),
     )
 
     combination_intent: bool = Field(
