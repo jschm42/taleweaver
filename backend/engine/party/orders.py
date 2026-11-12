@@ -41,7 +41,10 @@ def normalize_order(raw: Any) -> Optional[str]:
     return value if value in ORDERS else None
 
 
-def _refusal(entity_states: dict[str, Any], row: WorldEntity, scene_id: str) -> Optional[str]:
+def companion_refusal(
+    entity_states: dict[str, Any], row: WorldEntity, scene_id: str
+) -> Optional[str]:
+    """Why the companion cannot act on an order or a handover right now (None: it can)."""
     if is_out_of_action(entity_states, row):
         return f"{row.name} is in no state to follow orders."
     if companion_scene_id(entity_states, row) != scene_id:
@@ -53,7 +56,7 @@ def apply_order(
     entity_states: dict[str, Any], row: WorldEntity, order: str, scene_id: str
 ) -> OrderResult:
     """Applies an order to the active companion ``row`` in ``entity_states`` (in place)."""
-    refusal = _refusal(entity_states, row, scene_id)
+    refusal = companion_refusal(entity_states, row, scene_id)
     if refusal:
         return OrderResult(False, refusal, row.id, row.name)
     party = read_party(entity_states)

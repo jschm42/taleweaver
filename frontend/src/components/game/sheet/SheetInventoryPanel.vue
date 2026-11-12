@@ -11,6 +11,8 @@ const SLOT_COUNT = 24
 const props = defineProps<{
   items: InventoryItem[]
   isDebug?: boolean
+  /** Footer text instead of the default click hints (e.g. on the companion's page). */
+  hint?: string
 }>()
 
 const emit = defineEmits<{
@@ -82,8 +84,11 @@ const itemAt = (idx: number): any => props.items[idx - 1]
     </div>
 
     <div class="tw-dialog-divider tw-muted mt-4 pt-3 border-t flex items-center justify-between text-xxs flex-wrap gap-2">
-      <span>💡 Click item to equip, consume, open, or read.</span>
-      <span>Right-click or hold for actions.</span>
+      <span v-if="props.hint">💡 {{ props.hint }}</span>
+      <template v-else>
+        <span>💡 Click item to equip, consume, open, or read.</span>
+        <span>Right-click or hold for actions.</span>
+      </template>
     </div>
   </div>
 </template>

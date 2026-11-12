@@ -15,6 +15,29 @@ export interface ChatMessage {
 }
 
 /** Character sheet snapshot pushed by the server after every action. */
+/** The active companion as the hero dialog shows it (backend: companion_sheet.py). */
+export interface CompanionSheet {
+  id: string
+  name: string
+  description?: string | null
+  npc_type?: string | null
+  image_url?: string | null
+  hp?: number | null
+  max_hp?: number | null
+  mana?: number | null
+  max_mana?: number | null
+  stamina?: number | null
+  max_stamina?: number | null
+  stats: Record<string, number | null>
+  inventory: InventoryItem[]
+  /** Stands in the protagonist's scene. */
+  present: boolean
+  following: boolean
+  is_defeated: boolean
+  tactics: string
+  banter: string
+}
+
 export interface CharacterSheet {
   name: string
   adventure_title?: string | null
@@ -43,6 +66,8 @@ export interface CharacterSheet {
   stats: Record<string, number>
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
+  /** The active companion's page of the hero dialog (null without a companion). */
+  companion?: CompanionSheet | null
   status_effects: string[]
   in_game_time: number  // minutes or units elapsed in-game
   start_datetime?: string | null

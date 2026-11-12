@@ -22,6 +22,7 @@ from backend.api.routes.adventures.container_put import (
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
 from backend.api.routes.adventures.companion_command import companion_order_command
+from backend.api.routes.adventures.companion_inventory import GIVE, TAKE, transfer_companion_items
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -52,6 +53,9 @@ if TYPE_CHECKING:
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 
 logger = logging.getLogger(__name__)
+
+# Hero dialog handovers between the protagonist and the companion (companion_inventory.py).
+_COMPANION_TRANSFER_TAGS = {"[TRIGGER_COMPANION_GIVE]": GIVE, "[TRIGGER_COMPANION_TAKE]": TAKE}
 
 
 class TurnInteractionsManager:
@@ -1342,6 +1346,14 @@ class TurnInteractionsManager:
             for role, content in outcome.events:
                 yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
+        for tag, direction in _COMPANION_TRANSFER_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            item_args = response.replace(tag, "").strip()
+            for role, content in await transfer_companion_items(self.manager, direction, item_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             response = ""
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):

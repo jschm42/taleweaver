@@ -3,6 +3,8 @@
  * CharacterSheetModal — The hero dialog: identity, vitals and tabs for the hero profile,
  * inventory, equipment, status effects and special attacks. Styled by the session's
  * dialog skin (it is teleported out of the immersive root, so it carries its own .tw-skin).
+ * With an active companion, a switch in the header shows the companion's page instead:
+ * its profile (SheetCompanionPanel) and the items it carries.
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import StatBar from './StatBar.vue'
@@ -11,6 +13,7 @@ import SheetHeroPanel from './sheet/SheetHeroPanel.vue'
 import SheetInventoryPanel from './sheet/SheetInventoryPanel.vue'
 import SheetEquipmentPanel from './sheet/SheetEquipmentPanel.vue'
 import SheetStatusPanel from './sheet/SheetStatusPanel.vue'
+import SheetCompanionPanel from './sheet/SheetCompanionPanel.vue'
 import { isEquippable, isReadableItem } from './sheet/sheetItems'
 import type { SheetTabId } from './sheet/types'
 import type { CharacterSheet } from '@/types'
@@ -22,6 +25,8 @@ const props = defineProps<{
   isDebug?: boolean
   /** Tab shown when the dialog opens; without it the last viewed tab stays active. */
   initialTab?: SheetTabId | null
+  /** Whose page the dialog opens on; the companion page needs an active companion. */
+  initialSubject?: 'hero' | 'companion' | null
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +42,8 @@ const emit = defineEmits<{
   itemContextmenu: [item: any, event: MouseEvent]
   inspectItem: [item: any]
   flipSwitch: [item: any]
+  /** A game command from the companion page (orders, handovers). */
+  command: [cmd: string]
 }>()
 
 type TabType = SheetTabId
@@ -51,13 +58,31 @@ type TabDefinition = {
 }
 
 const activeTab = ref<TabType>('hero')
+const subject = ref<'hero' | 'companion'>('hero')
+
+const companion = computed(() => props.sheet?.companion ?? null)
+const showCompanion = computed(() => subject.value === 'companion' && !!companion.value)
 
 watch(
   () => props.open,
   (open) => {
-    if (!open || !props.initialTab) return
-    activeTab.value = props.initialTab
+    if (!open) return
+    subject.value = props.initialSubject === 'companion' && companion.value ? 'companion' : 'hero'
+    if (props.initialTab) activeTab.value = props.initialTab
   }
+)
+
+function selectSubject(next: 'hero' | 'companion'): void {
+  subject.value = next
+  // The companion page has no equipment, status or specials tabs.
+  if (next === 'companion' && !['hero', 'inventory'].includes(activeTab.value)) {
+    activeTab.value = 'hero'
+  }
+}
+
+/** The companion's items, marked so their context menu offers to take them back. */
+const companionItems = computed(() =>
+  (companion.value?.inventory ?? []).map((item) => ({ ...item, held_by_companion: true }))
 )
 const stateChanged = ref(false)
 
@@ -75,7 +100,12 @@ const unlockedSpecialCount = computed(() => {
   return (props.sheet?.special_actions ?? []).filter((a) => unlocked.has(a.id)).length
 })
 
-const tabs = computed<TabDefinition[]>(() => [
+const companionTabs = computed<TabDefinition[]>(() => [
+  { id: 'hero', icon: 'ra-double-team', label: 'Companion', shortLabel: 'Profile', count: '' },
+  { id: 'inventory', icon: 'ra-backpack', label: 'Inventory', shortLabel: 'Bag', count: `${companionItems.value.length}/24` },
+])
+
+const heroTabs = computed<TabDefinition[]>(() => [
   { id: 'hero', icon: 'ra-player', label: 'Hero', shortLabel: 'Hero', count: '' },
   { id: 'inventory', icon: 'ra-backpack', label: 'Inventory', shortLabel: 'Bag', count: `${inventoryList.value.length}/24` },
   { id: 'equipment', icon: 'ra-vest', label: 'Equipped', shortLabel: 'Gear', count: `${equippedCount.value}/11` },
@@ -89,6 +119,20 @@ const tabs = computed<TabDefinition[]>(() => [
   },
   { id: 'specials', icon: 'ra-crystal-wand', label: 'Specials', shortLabel: 'Skills', count: String(unlockedSpecialCount.value) },
 ])
+
+const tabs = computed(() => (showCompanion.value ? companionTabs.value : heroTabs.value))
+
+/** Header identity and vitals of the page shown (protagonist or companion). */
+const header = computed(() => {
+  const c = companion.value
+  if (showCompanion.value && c) {
+    return { name: c.name, role: 'Companion', hp: c.hp ?? 0, maxHp: c.max_hp ?? 0, sta: c.stamina, maxSta: c.max_stamina, mp: c.mana, maxMp: c.max_mana }
+  }
+  const s = props.sheet
+  return { name: s?.name || 'Unnamed', role: s?.role || 'Adventurer', hp: s?.hp ?? 0, maxHp: s?.max_hp ?? 0, sta: s?.stamina, maxSta: s?.max_stamina, mp: s?.mana, maxMp: s?.max_mana }
+})
+const showStamina = computed(() => !showCompanion.value || !!header.value.maxSta)
+const showHeaderMana = computed(() => showMana.value && (!showCompanion.value || !!header.value.maxMp))
 
 const resolveItemSlot = (item: any): string => {
   const wearables = Array.isArray(item.wearable_slots)
@@ -238,21 +282,47 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                 <span class="min-w-0 flex flex-col">
                   <span class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <span class="tw-dialog-title text-base sm:text-xl md:text-2xl truncate">
-                      {{ sheet.name || 'Unnamed' }}
+                      {{ header.name }}
                     </span>
-                    <span v-if="sheet.adventure_version" class="tw-dialog-chip">v{{ sheet.adventure_version }}</span>
+                    <span v-if="sheet.adventure_version && !showCompanion" class="tw-dialog-chip">v{{ sheet.adventure_version }}</span>
                   </span>
                   <span class="tw-dialog-eyebrow text-[11px] sm:text-xs mt-0.5 truncate">
-                    {{ sheet.role || 'Adventurer' }}
+                    {{ header.role }}
                   </span>
                 </span>
               </button>
 
+              <!-- Protagonist / companion switch -->
+              <div v-if="companion" class="flex items-center gap-1 shrink-0" role="tablist" aria-label="Party member">
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="!showCompanion"
+                  class="tw-tab !px-2 sm:!px-3"
+                  :class="{ 'tw-tab--active': !showCompanion }"
+                  @click="selectSubject('hero')"
+                >
+                  <i class="ra ra-player text-xs sm:text-sm"></i>
+                  <span class="truncate max-w-[6rem]">{{ sheet.name || 'Hero' }}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="showCompanion"
+                  class="tw-tab !px-2 sm:!px-3"
+                  :class="{ 'tw-tab--active': showCompanion }"
+                  @click="selectSubject('companion')"
+                >
+                  <i class="ra ra-double-team text-xs sm:text-sm"></i>
+                  <span class="truncate max-w-[6rem]">{{ companion.name }}</span>
+                </button>
+              </div>
+
               <div class="flex items-center gap-3 sm:gap-4 shrink-0">
                 <div v-if="showVitals" class="hidden md:block min-w-[240px]">
-                  <StatBar label="HP" :value="sheet.hp" :max="sheet.max_hp" color="crimson" size="xs" />
-                  <StatBar label="STA" :value="sheet.stamina" :max="sheet.max_stamina" color="emerald" size="xs" />
-                  <StatBar v-if="showMana" label="MP" :value="sheet.mana" :max="sheet.max_mana" color="sapphire" size="xs" />
+                  <StatBar label="HP" :value="header.hp" :max="header.maxHp" color="crimson" size="xs" />
+                  <StatBar v-if="showStamina" label="STA" :value="header.sta ?? 0" :max="header.maxSta ?? 0" color="emerald" size="xs" />
+                  <StatBar v-if="showHeaderMana" label="MP" :value="header.mp ?? 0" :max="header.maxMp ?? 0" color="sapphire" size="xs" />
                 </div>
 
                 <button
@@ -271,9 +341,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
             <!-- Mobile Vitals -->
             <div v-if="showVitals" class="tw-dialog-divider md:hidden grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 border-t">
-              <StatBar label="HP" :value="sheet.hp" :max="sheet.max_hp" color="crimson" size="xs" />
-              <StatBar label="STA" :value="sheet.stamina" :max="sheet.max_stamina" color="emerald" size="xs" />
-              <StatBar v-if="showMana" label="MP" :value="sheet.mana" :max="sheet.max_mana" color="sapphire" size="xs" />
+              <StatBar label="HP" :value="header.hp" :max="header.maxHp" color="crimson" size="xs" />
+              <StatBar v-if="showStamina" label="STA" :value="header.sta ?? 0" :max="header.maxSta ?? 0" color="emerald" size="xs" />
+              <StatBar v-if="showHeaderMana" label="MP" :value="header.mp ?? 0" :max="header.maxMp ?? 0" color="sapphire" size="xs" />
             </div>
           </div>
 
@@ -301,7 +371,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
           <!-- TAB CONTENT BODY -->
           <div class="flex-grow overflow-y-auto custom-scrollbar p-3.5 sm:p-6 min-h-0">
-            <SheetHeroPanel v-if="activeTab === 'hero'" :sheet="sheet" />
+            <template v-if="showCompanion && companion">
+              <SheetCompanionPanel
+                v-if="activeTab === 'hero'"
+                :companion="companion"
+                @command="(cmd) => { stateChanged = true; emit('command', cmd) }"
+              />
+              <SheetInventoryPanel
+                v-else
+                :items="companionItems"
+                :is-debug="isDebug"
+                :hint="`Right-click an item to take it from ${companion.name}. To hand something over, right-click it in your own inventory.`"
+                @item-hover="(item, event) => emit('itemHover', item, event)"
+                @item-leave="emit('itemLeave')"
+                @item-contextmenu="(item, event) => emit('itemContextmenu', item, event)"
+              />
+            </template>
+
+            <SheetHeroPanel v-else-if="activeTab === 'hero'" :sheet="sheet" />
 
             <SheetInventoryPanel
               v-else-if="activeTab === 'inventory'"
