@@ -160,7 +160,7 @@ Non-Player Characters inhabiting the world.
 | `description` | `string` | Appearance, demeanor, and dialogue style. |
 | `current_scene_id` | `string` | Initial location scene ID where the NPC is positioned. |
 | `spatial_position` | `string` | Placement in scene (e.g., `"behind the counter"`, `"near the fireplace"`). |
-| `npc_type` | `string` | `"HUMANOID"`, `"ANIMAL"`, `"MONSTER"`, or `"BEING"`. |
+| `npc_type` | `string` | `"HUMANOID"`, `"BEING"`, `"ANIMAL"`, or `"MONSTER"`. `HUMANOID` and `BEING` speak intelligible sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only. |
 | `movement_type` | `string` | `"STATIONARY"` or `"MOVABLE"`. |
 | `voice` | `string \| null` | Google / ElevenLabs TTS voice identifier for dialogue. |
 | `hp` / `mana` / `stamina` | `number` | NPC combat and interaction resources. |

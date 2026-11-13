@@ -24,6 +24,7 @@ from backend.api.routes.adventures.session_items import backfill_avatar_items_fr
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.global_settings import apply_global_settings
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.media.media_engine import MediaEngine
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
@@ -175,6 +176,7 @@ def _entity_extras(entity: WorldEntity, _data: dict[str, Any]) -> dict[str, Any]
     """Group stats for easier frontend access."""
     if entity.entity_type == "NPC":
         return {
+            "npc_type": normalize_npc_type(entity.npc_type),
             "stats": {"hp": entity.hp, "mana": entity.mana, "stamina": entity.stamina},
             **_text_fields(dict(entity.metadata_json or {}), _NPC_METADATA_FIELDS),
         }

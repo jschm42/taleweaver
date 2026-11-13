@@ -29,6 +29,7 @@ const props = defineProps<{
     mana: number
     goal: string
     character: string
+    npc_type?: string
     voice?: string
     appearance: string
     is_killable: boolean
@@ -131,6 +132,7 @@ function hasActiveScripts(t: any): boolean {
 }
 
 const localForm = ref({
+  npc_type: 'HUMANOID',
   is_hidden: false,
   reveal_rule: '',
   moveable: false,
@@ -538,6 +540,7 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = 'simple'
     localForm.value = {
+      npc_type: 'HUMANOID',
       is_hidden: false,
       reveal_rule: '',
       moveable: false,
@@ -737,6 +740,7 @@ function handleSave() {
   emit('save', {
     ...localForm.value,
     entity_id: (localForm.value.entity_id || '').trim().toUpperCase(),
+    npc_type: String(localForm.value.npc_type || 'HUMANOID').trim().toUpperCase(),
     inventory: parsedInventory,
     wearable_slots: parsedWearableSlots,
     switch_states: parsedSwitchStates,
@@ -1069,6 +1073,22 @@ const textLogPreviewClass = computed(() => {
                 </div>
               </div>
               
+              <div v-if="context.type === 'npc'" class="space-y-2">
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">NPC Type & Speech Rule</label>
+                <select
+                  v-model="localForm.npc_type"
+                  class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                >
+                  <option value="HUMANOID" class="bg-slate-900 text-slate-200">Humanoid — Speaks full sentences & eligible for quotes</option>
+                  <option value="BEING" class="bg-slate-900 text-slate-200">Sentient Being — Speaks full sentences & eligible for quotes</option>
+                  <option value="ANIMAL" class="bg-slate-900 text-slate-200">Animal — Non-verbal sounds & gestures only</option>
+                  <option value="MONSTER" class="bg-slate-900 text-slate-200">Monster — Creature sounds & gestures only</option>
+                </select>
+                <p class="text-[11px] text-slate-500 leading-relaxed">
+                  Humanoid and Sentient Being NPCs speak intelligible full sentences in narration and can deliver transition quotes. Animal and Monster NPCs use creature sounds and body language only.
+                </p>
+              </div>
+
               <NpcVoicePicker
                 v-if="context.type === 'npc' || context.type === 'protagonist'"
                 v-model="localForm.voice"

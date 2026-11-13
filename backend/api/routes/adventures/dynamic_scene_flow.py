@@ -187,8 +187,9 @@ async def _maybe_emit_interlude_quote(
         {
             "id": n.id,
             "name": n.name,
+            "npc_type": str(n.npc_type or "HUMANOID").strip().upper(),
             "goal": n.goal or "",
-            "role": n.npc_type or "",
+            "role": str(n.npc_type or "HUMANOID").strip().upper(),
             "character": n.character or "",
             "description": n.description or "",
             "image_url": n.image_url,
@@ -196,7 +197,10 @@ async def _maybe_emit_interlude_quote(
             "is_defeated": bool((state.entity_states or {}).get(n.id, {}).get("is_defeated")),
         }
         for n in npc_rows
+        if str(n.npc_type or "HUMANOID").strip().upper() in {"HUMANOID", "BEING"}
     ]
+    if not candidates:
+        return
     quote_data = await generate_dynamic_interlude_quote(
         adventure_title=adventure.title or "Adventure",
         adventure_setting=adventure.plot or adventure.teaser or "",

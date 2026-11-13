@@ -89,7 +89,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "Every exit object represents ONE defined path. Use `is_bidirectional: true` (the default) for all normal passages (doors, corridors, hallways, staircases) — the engine will automatically create the return path so you do NOT have to list it twice. Set `is_bidirectional: false` ONLY for intentionally one-way transitions such as a collapsing bridge, a drop, or a gate that permanently closes behind the player.\n"
     "EXIT LABELS: An exit's `label` names the physical passage itself, as seen from either side (e.g. 'an old rusty gate', 'a narrow spiral staircase', 'a heavy oak door'). It must NOT name a destination or a direction ('To the Combat Lab', 'Way to the cellar', 'Back to the hall', 'North exit'), because a bidirectional exit shows the same label in both scenes and the game already shows the target scene next to it. Every exit MUST have a label; even a plain opening gets one (e.g. 'a low archway', 'a gap in the hedge').\n"
     "For every locked container, place at least one discoverable hint or puzzle clue in the world that explains how to unlock it (code clue, key location clue, or explicit riddle).\n"
-    "For NPCs, assign an 'npc_type': HUMANOID, ANIMAL, MONSTER, BEING.\n"
+    "For NPCs, assign an 'npc_type': HUMANOID, ANIMAL, MONSTER, BEING (HUMANOID and BEING speak in intelligible sentences; ANIMAL and MONSTER use non-verbal sounds and gestures only).\n"
     "Every NPC MUST also have a 'goal' and a 'character' description (both strings).\n\n"
     "PROTAGONIST:\n"
     "The protagonist must also have a 'goal' (primary motivation, max 200 chars) and 'character' (personality traits, max 200 chars).\n"
@@ -451,6 +451,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "When several NPCs are present, they talk to each other directly as well: they banter, interrupt, contradict or back each other up. "
     "Keep each line short and in the speaker's own voice; prefer several quick exchanges over one long speech. "
     "Never let an NPC decide or speak for the player, and never let NPCs block the player's action or repeat a question the player ignored word for word.\n\n"
+    'NPC SPEECH RULE: Respect each NPC\'s [Type: ...] in PRESENT NPCs. HUMANOID and BEING NPCs speak in plain, intelligible full sentences in the target language (never incomprehensible grunts or syllable-only noises unless their specific Character explicitly states they are mute). ANIMAL and MONSTER NPCs do NOT speak human sentences — portray their reactions only through creature sounds, posture, and non-verbal actions inside narrator prose (never give ANIMAL or MONSTER NPCs spoken Name: "Dialogue" lines unless their Character explicitly says they can talk).\n\n'
     "MANDATORY FORMATTING: Start all character dialogue on its own standalone line. "
     'Use the format: Character Name: "Dialogue" (or Character Name: [tag] "Dialogue" if an emotion tag is used, e.g. Professor Quark: [excited] "Look here!"). '
     'NEVER put emotion tags inside quotation marks (do NOT write Character Name: "[tag] Dialogue" or "[tag]" "Dialogue"). '

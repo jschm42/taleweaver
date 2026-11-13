@@ -14,6 +14,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.engine.audio.elevenlabs_voices import storable_voice_or_none
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.models.world_entity import WorldEntity
 
 _NPC_SCRIPT_FIELDS = (
@@ -63,6 +64,8 @@ async def update_npc(
     db: AsyncSession, template_id: str, npc: WorldEntity, payload: EntityUpdateRequest
 ) -> None:
     copy_given(npc, payload, ("goal", "character", "is_killable"))
+    if given(payload, "npc_type"):
+        npc.npc_type = normalize_npc_type(payload.npc_type)
     if given(payload, "inventory"):
         await _update_inventory(db, template_id, npc, payload)
     _update_movement(npc, payload)

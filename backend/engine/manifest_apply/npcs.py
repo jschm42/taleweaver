@@ -16,6 +16,7 @@ from backend.engine.audio.voice_casting import (
     resolve_voice_setup,
 )
 from backend.engine.combat.npc_attack import npc_stat_columns
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
 from backend.engine.manifest_apply.visuals import (
@@ -191,7 +192,7 @@ def _npc_entity(
         spatial_position=npc.get("spatial_position"),
         image_url=image_url,
         voice=voice,
-        npc_type=npc.get("npc_type"),
+        npc_type=normalize_npc_type(npc.get("npc_type")),
         movement_type="MOVABLE"
         if (npc.get("moveable") is True or declared_movable)
         else "STATIONARY",

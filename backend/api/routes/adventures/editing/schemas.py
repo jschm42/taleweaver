@@ -35,6 +35,7 @@ class EntityUpdateRequest(BaseModel):
     voice: Optional[str] = None
     # Visual keywords for image prompts; maps to ``cover_appearance`` for the cover.
     appearance: Optional[str] = Field(default=None, max_length=100)
+    npc_type: Optional[str] = None
     is_killable: Optional[bool] = None
     item_type: Optional[str] = None
     is_portable: Optional[bool] = None
@@ -187,6 +188,7 @@ class EntityCreateRequest(BaseModel):
     is_portable: Optional[bool] = None
     goal: Optional[str] = None
     character: Optional[str] = None
+    npc_type: Optional[str] = None
     hp: Optional[int] = None
     stamina: Optional[int] = None
     mana: Optional[int] = None

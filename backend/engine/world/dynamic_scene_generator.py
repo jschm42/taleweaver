@@ -22,18 +22,28 @@ logger = logging.getLogger(__name__)
 
 _LOCAL_LLM_PROVIDERS = {"ollama", "lmstudio"}
 _RANDOM_DANGER_CHOICES: tuple[str, ...] = ("peaceful", "low", "medium", "high", "deadly")
+_SPEAKING_NPC_TYPES = {"HUMANOID", "BEING"}
+_NON_SPEAKING_NPC_TYPES = {"ANIMAL", "MONSTER"}
+
+
+def _is_speaking_npc(npc: Any) -> bool:
+    """Return True if an NPC candidate is a speaking type (HUMANOID or BEING)."""
+    if not isinstance(npc, dict) or not npc.get("name"):
+        return False
+    explicit_type = str(npc.get("npc_type") or "").strip().upper()
+    if explicit_type:
+        return explicit_type in _SPEAKING_NPC_TYPES
+    role_type = str(npc.get("role") or "").strip().upper()
+    return role_type not in _NON_SPEAKING_NPC_TYPES
 
 
 def _pick_interlude_npc(candidate_npcs: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
-    """Choose a random living NPC from the adventure to deliver the transition quote."""
-    alive = [
-        npc
-        for npc in candidate_npcs
-        if isinstance(npc, dict) and npc.get("name") and not npc.get("is_defeated")
-    ]
-    pool = alive or [n for n in candidate_npcs if isinstance(n, dict) and n.get("name")]
-    if not pool:
+    """Choose a random living speaking NPC (HUMANOID/BEING) for the transition quote."""
+    speaking = [npc for npc in candidate_npcs if _is_speaking_npc(npc)]
+    if not speaking:
         return None
+    alive = [npc for npc in speaking if not npc.get("is_defeated")]
+    pool = alive or speaking
     return random.choice(pool)
 
 
@@ -105,6 +115,8 @@ async def generate_dynamic_interlude_quote(
     """Generate a short NPC quote with the fast small model while a dynamic scene loads."""
     del db  # reserved for future settings lookups
     chosen_npc = _pick_interlude_npc(candidate_npcs)
+    if chosen_npc is None:
+        return None
     llm_settings = dict(getattr(user, "llm_settings", None) or {})
     resolved = resolve_model_settings(llm_settings)
     provider = str(resolved["small_model_provider"])

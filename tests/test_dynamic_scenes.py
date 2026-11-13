@@ -1228,3 +1228,145 @@ async def test_script_teleport_existing_dynamic_exit_placeholder(db_session, mon
     )
     assert return_exit is not None
     assert return_exit.label == "Return to Town Gate"
+
+
+@pytest.mark.asyncio
+async def test_npc_speech_rule_in_narration_context_and_interlude_quotes(
+    db_session, monkeypatch
+) -> None:
+    """Narration location context injects speech rules by npc_type, and quotes exclude ANIMAL/MONSTER."""
+    from types import SimpleNamespace
+
+    from backend.engine.interaction.location_context import build_location_context
+
+    # Arrange
+    scene = SimpleNamespace(
+        id="COURTYARD",
+        label="Courtyard",
+        description="A misty stone courtyard.",
+        decorative_objects=[],
+    )
+    npcs = [
+        SimpleNamespace(
+            id="GUARD",
+            entity_type="NPC",
+            name="Captain Rowan",
+            npc_type="HUMANOID",
+            character="Gruff but fair",
+            goal="Guard the gate",
+            description="A veteran watchman.",
+            spatial_position="by the archway",
+            appearance=None,
+            inventory=[],
+            hp=100,
+            max_hp=100,
+            mana=None,
+            max_mana=None,
+            stamina=None,
+            max_stamina=None,
+            is_hidden=False,
+            is_defeated=False,
+            notes=None,
+            moveable=False,
+            movement_type="STATIONARY",
+            allowed_scenes=[],
+        ),
+        SimpleNamespace(
+            id="ORACLE",
+            entity_type="NPC",
+            name="Starlight Sprite",
+            npc_type="BEING",
+            character="",
+            goal="Watch the sky",
+            description="A hovering luminous spirit.",
+            spatial_position="above the well",
+            appearance=None,
+            inventory=[],
+            hp=50,
+            max_hp=50,
+            mana=100,
+            max_mana=100,
+            stamina=None,
+            max_stamina=None,
+            is_hidden=False,
+            is_defeated=False,
+            notes=None,
+            moveable=False,
+            movement_type="STATIONARY",
+            allowed_scenes=[],
+        ),
+        SimpleNamespace(
+            id="WOLF",
+            entity_type="NPC",
+            name="Ash Fang",
+            npc_type="ANIMAL",
+            character="Fiercely territorial",
+            goal="Defend the den",
+            description="A scarred gray wolf.",
+            spatial_position="by the pine",
+            appearance=None,
+            inventory=[],
+            hp=60,
+            max_hp=60,
+            mana=None,
+            max_mana=None,
+            stamina=None,
+            max_stamina=None,
+            is_hidden=False,
+            is_defeated=False,
+            notes=None,
+            moveable=False,
+            movement_type="STATIONARY",
+            allowed_scenes=[],
+        ),
+    ]
+
+    # Act: full narration context
+    narration_ctx = build_location_context(scene, npcs, [], detail_level="full")
+
+    # Assert: all NPCs carry [Type: ...] and matching speech rule
+    assert "Captain Rowan (ID: GUARD) [Type: HUMANOID]" in narration_ctx
+    assert "Gruff but fair (Speaks in plain, intelligible full sentences.)" in narration_ctx
+    assert "Starlight Sprite (ID: ORACLE) [Type: BEING]" in narration_ctx
+    assert "Ash Fang (ID: WOLF) [Type: ANIMAL]" in narration_ctx
+    assert (
+        "Non-verbal creature sounds and body language only; does NOT speak sentences."
+        in narration_ctx
+    )
+
+    # Act & Assert: interlude quotes skip ANIMAL/MONSTER and return None if no HUMANOID/BEING exists
+    monkeypatch.setattr(dynamic_scene_generator, "_has_provider_credentials", lambda *_: True)
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"quote_filter_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+    only_monsters = [
+        {"id": "WOLF", "name": "Ash Fang", "npc_type": "ANIMAL", "is_defeated": False},
+        {"id": "GHOUL", "name": "Hollow Stalker", "npc_type": "MONSTER", "is_defeated": False},
+    ]
+    assert (
+        await dynamic_scene_generator.generate_dynamic_interlude_quote(
+            adventure_title="Test",
+            adventure_setting="Wilds",
+            adventure_tone="Tense",
+            origin_scene_name="Courtyard",
+            exit_label="Trail",
+            zone_theme="Deep woods",
+            candidate_npcs=only_monsters,
+            user=user,
+            db=db_session,
+        )
+        is None
+    )
+
+    picked_names: set[str] = set()
+    mixed_pool = only_monsters + [
+        {"id": "GUARD", "name": "Captain Rowan", "npc_type": "HUMANOID", "is_defeated": False},
+        {"id": "ORACLE", "name": "Starlight Sprite", "npc_type": "BEING", "is_defeated": False},
+    ]
+    for _ in range(15):
+        picked = dynamic_scene_generator._pick_interlude_npc(mixed_pool)
+        assert picked is not None
+        picked_names.add(picked["name"])
+    assert picked_names <= {"Captain Rowan", "Starlight Sprite"}
