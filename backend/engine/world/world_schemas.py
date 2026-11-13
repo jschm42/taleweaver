@@ -209,6 +209,10 @@ class SpecialActionSchema(WorldBaseSchema):
     action_type: Literal["ATTACK", "HEAL", "UTILITY"] = Field(
         ..., description="Type of special action"
     )
+    heal_target: Optional[Literal["self", "ally"]] = Field(
+        None,
+        description="HEAL without effects: 'ally' heals the caster's party partner instead of itself.",
+    )
     category: Optional[Literal["MAGIC", "MELEE", "RANGED", "SOCIAL", "OTHER"]] = Field(
         None,
         description="Flavor of the attack: MAGIC spell, MELEE move, RANGED shot, SOCIAL (e.g. insult) or OTHER.",

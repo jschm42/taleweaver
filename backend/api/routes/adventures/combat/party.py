@@ -122,6 +122,11 @@ class CombatPartyMixin:
             combat, f"{row.name} fights at your side!", "turn", {"kind": "engage", "entity": row.id}
         )
 
+    @staticmethod
+    def _standing_member(combat: dict[str, Any]) -> dict[str, Any] | None:
+        """The companion still fighting (not downed), if any."""
+        return next((m for m in party_members(combat) if is_member_standing(m)), None)
+
     def _party_can_act(self, combat: dict[str, Any], actor_id: str | None) -> bool:
         member = find_member(combat, actor_id)
         return bool(member and is_member_standing(member))

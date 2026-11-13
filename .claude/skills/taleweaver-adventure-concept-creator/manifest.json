@@ -21,8 +21,8 @@
     },
     {
       "path": "docs/specs/adventure_format.md",
-      "sha256": "821731a308d8665c9ce2a8ff2cd3fb03bf59208b779d70e3d4afb58989eaa2db",
-      "size": 25233
+      "sha256": "f5fb399f1091042e2aee45b6aec7f9efd6b3383aca6aaf28f16e5fcc17398f1f",
+      "size": 25641
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",
@@ -31,8 +31,8 @@
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "42f089bb85538a9a5b805975969e41afd88537b4e5ad28f427463fdcd2cb37ca",
-      "size": 25554
+      "sha256": "f62c57e845580080bc8941715c57bf6dbfdf1528c6e1fff0dddca0cd635d8d6d",
+      "size": 25738
     },
     {
       "path": "package.json",

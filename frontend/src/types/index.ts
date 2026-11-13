@@ -154,7 +154,8 @@ export interface AreaTargetOutcome {
 
 /** One stat change of a special attack, e.g. `{ target: 'target', stat: 'hp', amount: '-2d6' }`. */
 export interface SpecialEffect {
-  target: 'target' | 'self'
+  /** `ally`: the caster's party partner (companion for the protagonist, and vice versa). */
+  target: 'target' | 'self' | 'ally'
   stat: CombatStat
   amount: string
 }

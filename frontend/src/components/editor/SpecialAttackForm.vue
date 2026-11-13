@@ -161,6 +161,7 @@ function validAmount(amount: string): boolean {
         <select v-model="eff.target" class="bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white">
           <option value="target">Target</option>
           <option value="self">Self</option>
+          <option value="ally" title="The caster's party partner: the companion when the protagonist uses it, the protagonist when a companion uses it">Ally (companion)</option>
         </select>
         <select v-model="eff.stat" class="bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white">
           <option v-for="s in EFFECT_STATS" :key="s" :value="s">{{ STAT_SHORT[s] }}</option>

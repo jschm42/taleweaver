@@ -61,7 +61,10 @@ def normalize_weapon_config(meta: dict[str, Any]) -> dict[str, Any]:
     return {
         "category": category if category in WEAPON_CATEGORIES else DEFAULT_CATEGORY,
         "hit_stat": hit_stat if hit_stat in SUCCESS_STATS else DEFAULT_HIT_STAT,
-        "effects": normalize_effects(meta.get("weapon_effects"))[:MAX_WEAPON_EFFECTS],
+        # Weapons hit the enemy or the wielder; "ally" is for special actions only.
+        "effects": [
+            e for e in normalize_effects(meta.get("weapon_effects")) if e["target"] != "ally"
+        ][:MAX_WEAPON_EFFECTS],
     }
 
 

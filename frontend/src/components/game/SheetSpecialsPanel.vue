@@ -25,7 +25,7 @@ const available = computed(() => specials.value.filter((s) => !s.locked))
 const locked = computed(() => specials.value.filter((s) => s.locked))
 
 function effectLines(special: SpecialView): string[] {
-  return special.effects.map((e) => `${e.amount} ${STAT_SHORT[e.stat]} ${e.target === 'self' ? '(you)' : '(target)'}`)
+  return special.effects.map((e) => `${e.amount} ${STAT_SHORT[e.stat]} ${e.target === 'self' ? '(you)' : e.target === 'ally' ? '(companion)' : '(target)'}`)
 }
 
 function unlockConditions(raw: SpecialAttack): string[] {

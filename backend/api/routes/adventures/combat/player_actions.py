@@ -189,10 +189,15 @@ class CombatPlayerMixin:
 
         caster = self._player_view(combat)
         target_view = dict(target) if target else None
-        result = resolve_special_attack(action, caster, target_view)
+        # "ally" effects reach the companion fighting at the protagonist's side.
+        ally = self._standing_member(combat)
+        ally_view = dict(ally) if ally else None
+        result = resolve_special_attack(action, caster, target_view, ally_view)
         self._apply_player_view(combat, caster)
         if target and target_view:
             self._apply_enemy_view(target, target_view)
+        if ally and ally_view:
+            self._apply_enemy_view(ally, ally_view)
 
         text = describe_special_result(self.avatar.name, target["name"] if target else None, result)
         await self._note_special_outcome(action, result)

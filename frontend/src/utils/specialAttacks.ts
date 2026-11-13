@@ -47,7 +47,11 @@ function legacyEffects(action: SpecialAttack): SpecialEffect[] {
   const raw = String(action.damage_value || '10').replace(/\s/g, '').replace(/^[+-]/, '')
   const value = AMOUNT_PATTERN.test(raw) ? raw : '10'
   if (action.action_type === 'ATTACK') return [{ target: 'target', stat: 'hp', amount: `-${value}` }]
-  if (action.action_type === 'HEAL') return [{ target: 'self', stat: 'hp', amount: `+${value}` }]
+  if (action.action_type === 'HEAL') {
+    // `heal_target: 'ally'` (blueprint `heals: ally`) heals the party partner instead.
+    const target = (action as { heal_target?: string }).heal_target === 'ally' ? 'ally' : 'self'
+    return [{ target, stat: 'hp', amount: `+${value}` }]
+  }
   return []
 }
 
@@ -106,6 +110,6 @@ export function checkLabel(action: NormalizedSpecialAttack): string {
 
 export function describeEffects(effects: SpecialEffect[]): string {
   return effects
-    .map((e) => `${e.amount} ${STAT_SHORT[e.stat]}${e.target === 'self' ? ' (self)' : ''}`)
+    .map((e) => `${e.amount} ${STAT_SHORT[e.stat]}${e.target === 'self' ? ' (self)' : e.target === 'ally' ? ' (ally)' : ''}`)
     .join(' · ')
 }

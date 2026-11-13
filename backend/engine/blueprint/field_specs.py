@@ -387,6 +387,7 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
     ),
     "dc": FieldSpec("difficulty", integer),
     "damage": FieldSpec("*", ability_damage),
+    "heals": FieldSpec("heal_target", choice("self", "ally")),
     "area": FieldSpec("*", ability_area),
     "save": FieldSpec("save_stat", choice(*_ROLL_STATS, aliases=_ROLL_STAT_ALIASES)),
     "spare_passive": FieldSpec("spares_passive", boolean),

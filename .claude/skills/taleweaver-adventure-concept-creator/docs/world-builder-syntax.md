@@ -194,7 +194,7 @@ A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the 
 Award keys of newly generated adventures are stored in upper case (`brass lever` becomes `BRASS_LEVER`). Granting matches keys case-insensitively, so `tw.awards.grant('brass_lever')` still finds `BRASS_LEVER`, and older adventures keep their stored keys.
 
 ### `[Ability: ID] Name` (inside an NPC or the Protagonist)
-`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
+`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `heals` (`self` or `ally`: with `kind: HEAL`, `ally` heals the caster's party partner, i.e. the companion when the protagonist casts it and the protagonist when a companion casts it), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
 
 **Area abilities** (protagonist only; NPC abilities always hit one target): `area: all` hits every
 engaged enemy, `area: splash` (or `splash 2`) hits the target plus 1 (or 2) neighbours in the
