@@ -88,7 +88,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `copyright` | `string` | Optional copyright notice (max 100 chars). |
 | `license` | `string` | Optional license string or identifier (max 100 chars). |
 | `init_script` | `string \| null` | Optional global Python initialization script executed when a new game session starts. Sets up starting variables, narrative messages, and shared helper functions. |
-| `dynamic_generation` | `object \| null` | Optional configuration for Dynamic Scenes: `{"scene_image_mode": "off" \| "inherit" \| "simple" \| "hq", "npc_image_mode": "off" \| "simple" \| "hq", "item_image_mode": "off" \| "simple" \| "hq", "audio_mode": "inherit" \| "empty" \| "generate", "max_npcs": 0..5, "interlude_quote_enabled": boolean}`. Defaults to `simple` scene/NPC/item images, `inherit` audio, `2` max NPCs, and `true` for interlude quotes. *(since 1.4.0)* |
+| `dynamic_generation` | `object \| null` | Optional configuration for Dynamic Scenes: `{"scene_image_mode": "off" \| "inherit" \| "simple" \| "hq", "npc_image_mode": "off" \| "simple" \| "hq", "item_image_mode": "off" \| "simple" \| "hq", "audio_mode": "inherit" \| "empty" \| "generate", "max_npcs": 0..5, "npc_type_caps": {"humanoid": 0..5, "being": 0..5, "animal": 0..5, "monster": 0..5}, "spawn_chances": {"npc": 0..100, "enemy": 0..100, "humanoid": 0..100, "being": 0..100, "animal": 0..100, "monster": 0..100, "item": 0..100, "container": 0..100, "switch": 0..100}, "interlude_quote_enabled": boolean}`. Defaults to `simple` scene/NPC/item images, `inherit` audio, `2` max NPCs, per-type caps `2`, balanced spawn percentages, and `true` for interlude quotes. *(since 1.4.0)* |
 
 ---
 
@@ -145,7 +145,7 @@ Connections and passageways between scenes.
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
 | `lock_description` | `string` | Narrative clue or description when encountering the lock. |
-| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "depth": number, "max_depth": number, "danger_level": "peaceful" \| "low" \| "medium" \| "high" \| "deadly" \| "random", "max_npcs": number \| null, "audio_mode": "inherit" \| "empty" \| "generate" \| null, "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean}`. When set, entering the exit generates a session-scoped scene tree on-the-fly without mutating the base manifest. *(since 1.4.0)* |
+| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "depth": number, "max_depth": number, "danger_level": "peaceful" \| "low" \| "medium" \| "high" \| "deadly" \| "random", "max_npcs": number \| null, "npc_type_caps": object \| null, "spawn_chances": object \| null, "audio_mode": "inherit" \| "empty" \| "generate" \| null, "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean}`. Optional `npc_type_caps` and `spawn_chances` override the adventure-level `dynamic_generation` defaults per exit (`null` inherits). When set, entering the exit generates a session-scoped scene tree on-the-fly without mutating the base manifest. *(since 1.4.0)* |
 
 ---
 

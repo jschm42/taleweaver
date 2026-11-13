@@ -142,6 +142,14 @@ def _build_object_entity(
         metadata["effect_type"] = obj.effect_type
     if obj.effect_value is not None:
         metadata["effect_value"] = obj.effect_value
+    if obj.hp_change:
+        metadata["hp_change"] = int(obj.hp_change)
+    if obj.stamina_change:
+        metadata["stamina_change"] = int(obj.stamina_change)
+    if obj.mana_change:
+        metadata["mana_change"] = int(obj.mana_change)
+    if obj.item_type == "WEAPON" and obj.damage_dice:
+        metadata["damage_dice"] = obj.damage_dice[:20]
 
     return WorldEntity(
         id=entity_id,
@@ -154,8 +162,16 @@ def _build_object_entity(
         current_scene_id=target_id,
         image_url=image_url,
         item_type=obj.item_type,
+        wearable_slots=obj.wearable_slots or None,
+        stat_modifier_strength=obj.stat_modifier_strength or None,
+        stat_modifier_dexterity=obj.stat_modifier_dexterity or None,
+        stat_modifier_intelligence=obj.stat_modifier_intelligence or None,
+        stat_modifier_wisdom=obj.stat_modifier_wisdom or None,
+        stat_modifier_charisma=obj.stat_modifier_charisma or None,
+        stat_modifier_armor_class=obj.stat_modifier_armor_class or None,
         is_portable=bool(
-            obj.is_takeable and obj.item_type in {"STANDARD", "CONSUMABLE", "READABLE"}
+            obj.is_takeable
+            and obj.item_type in {"STANDARD", "CONSUMABLE", "WEARABLE", "WEAPON", "READABLE"}
         ),
         inventory=[],
         metadata_json=metadata,
@@ -379,6 +395,7 @@ async def materialize_dynamic_scene_for_exit(
             game_id=state.session_id,
             language=language or adventure.language or "English",
             max_npcs_default=int(dyn_cfg.get("max_npcs", 2)),
+            generation_config=dyn_cfg,
         )
     )
 

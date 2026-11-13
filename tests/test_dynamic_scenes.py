@@ -69,6 +69,18 @@ def test_normalization_helpers_and_placeholder_id() -> None:
         "item_image_mode": "simple",
         "audio_mode": "generate",
         "max_npcs": 2,
+        "npc_type_caps": {"humanoid": 2, "being": 2, "animal": 2, "monster": 2},
+        "spawn_chances": {
+            "npc": 55,
+            "enemy": 35,
+            "humanoid": 50,
+            "being": 20,
+            "animal": 30,
+            "monster": 25,
+            "item": 75,
+            "container": 30,
+            "switch": 20,
+        },
         "interlude_quote_enabled": True,
     }
     assert placeholder == "DYN_IRON_MINES_D2_1_A1B2"
@@ -438,6 +450,18 @@ def test_blueprint_dynamic_world_and_exit_roundtrip() -> None:
         "item_image_mode": "off",
         "audio_mode": "inherit",
         "max_npcs": 2,
+        "npc_type_caps": {"humanoid": 2, "being": 2, "animal": 2, "monster": 2},
+        "spawn_chances": {
+            "npc": 55,
+            "enemy": 35,
+            "humanoid": 50,
+            "being": 20,
+            "animal": 30,
+            "monster": 25,
+            "item": 75,
+            "container": 30,
+            "switch": 20,
+        },
         "interlude_quote_enabled": True,
     }
     assert len(manifest["exits"]) == 1
@@ -744,7 +768,7 @@ async def test_generate_dynamic_scene_payload_enforces_max_npcs_and_peaceful(
     monkeypatch.setattr(
         dynamic_scene_generator,
         "_roll_scene_plan",
-        lambda zone, cap: {
+        lambda zone, cap, **_: {
             "target_npcs": 1 if cap > 0 else 0,
             "target_objects": 0,
             "allow_container": False,
@@ -939,11 +963,11 @@ async def test_roll_scene_plan_and_object_variety_enforcement(monkeypatch, db_se
     )
     assert zone is not None
 
-    # Deterministic roll: 0 NPCs, 2 objects, no container, no switch
+    # Deterministic roll: 0 NPCs (0.60 >= 0.55), 2 objects (0.60 < 0.75), no container/switch
     monkeypatch.setattr(
         dynamic_scene_generator.random, "randint", lambda a, b: 0 if a == 0 and b == 2 else 2
     )
-    monkeypatch.setattr(dynamic_scene_generator.random, "random", lambda: 0.99)
+    monkeypatch.setattr(dynamic_scene_generator.random, "random", lambda: 0.60)
 
     plan = dynamic_scene_generator._roll_scene_plan(zone, max_npcs=2)
     assert plan["target_npcs"] == 0
@@ -1370,3 +1394,136 @@ async def test_npc_speech_rule_in_narration_context_and_interlude_quotes(
         assert picked is not None
         picked_names.add(picked["name"])
     assert picked_names <= {"Captain Rowan", "Starlight Sprite"}
+
+
+def test_dynamic_spawn_chances_caps_and_item_stats() -> None:
+    """Verify per-type NPC caps, spawn probabilities, and mixed item stat persistence."""
+    from backend.api.routes.adventures.dynamic_scene_flow import _build_object_entity
+    from backend.engine.world.dynamic_scene_generator import (
+        _apply_scene_plan_to_payload,
+        _roll_scene_plan,
+    )
+    from backend.engine.world.dynamic_scene_schemas import (
+        DynamicGeneratedScenePayload,
+        normalize_dynamic_generation,
+        normalize_dynamic_zone,
+        resolve_effective_dynamic_rules,
+    )
+
+    gen_cfg = normalize_dynamic_generation(
+        {
+            "npc_type_caps": {"humanoid": 1, "being": 0, "animal": 2, "monster": 0},
+            "spawn_chances": {"npc": 100, "enemy": 0, "item": 100, "container": 0, "switch": 0},
+        }
+    )
+    zone = normalize_dynamic_zone(
+        {
+            "zone_id": "quiet_chapel",
+            "theme": "Silent stone chapel",
+            "max_npcs": 3,
+            "spawn_chances": {"npc": 0},
+        }
+    )
+    assert zone is not None
+
+    caps, chances = resolve_effective_dynamic_rules(zone, gen_cfg)
+    assert caps == {"humanoid": 1, "being": 0, "animal": 2, "monster": 0}
+    assert chances["npc"] == 0
+    assert chances["enemy"] == 0
+    assert chances["item"] == 100
+
+    silent_plan = _roll_scene_plan(zone, max_npcs=3, generation_config=gen_cfg)
+    assert silent_plan["target_npcs"] == 0
+    assert silent_plan["npc_slots"] == []
+    assert silent_plan["allow_container"] is False
+    assert silent_plan["allow_switch"] is False
+    assert silent_plan["target_objects"] >= 1
+
+    payload = DynamicGeneratedScenePayload.model_validate(
+        {
+            "name": "Chapel Nave",
+            "description": "Dust motes drift in silence.",
+            "npcs": [
+                {
+                    "id": "HERMIT",
+                    "name": "Brother Ivo",
+                    "npc_type": "HUMANOID",
+                    "description": "Quiet caretaker.",
+                    "attitude": "hostile",
+                },
+                {
+                    "id": "GHOST",
+                    "name": "Wisp",
+                    "npc_type": "BEING",
+                    "description": "Should be dropped by cap=0.",
+                },
+            ],
+            "objects": [
+                {
+                    "id": "RING_GRACE",
+                    "name": "Silver Ring",
+                    "item_type": "WEARABLE",
+                    "description": "A tarnished ring.",
+                },
+                {
+                    "id": "TONIC",
+                    "name": "Herbal Tonic",
+                    "item_type": "CONSUMABLE",
+                    "description": "Bitter brew.",
+                },
+                {
+                    "id": "DAGGER",
+                    "name": "Iron Dagger",
+                    "item_type": "WEAPON",
+                    "description": "Simple blade.",
+                },
+                {
+                    "id": "PEBBLE",
+                    "name": "Smooth Pebble",
+                    "item_type": "STANDARD",
+                    "description": "Just a flavor trinket.",
+                },
+            ],
+        }
+    )
+    _apply_scene_plan_to_payload(
+        payload,
+        {
+            "target_npcs": 2,
+            "npc_type_caps": {"humanoid": 1, "being": 0, "animal": 2, "monster": 0},
+            "allow_hostile": False,
+            "target_objects": 4,
+            "allow_container": False,
+            "allow_switch": False,
+        },
+    )
+    assert [n.id for n in payload.npcs] == ["HERMIT"]
+    assert payload.npcs[0].attitude == "neutral"
+    assert payload.npcs[0].combat_role == "none"
+
+    ring, tonic, dagger, pebble = payload.objects
+    assert ring.wearable_slots
+    assert any(
+        getattr(ring, attr) != 0
+        for attr in (
+            "stat_modifier_strength",
+            "stat_modifier_dexterity",
+            "stat_modifier_intelligence",
+            "stat_modifier_wisdom",
+            "stat_modifier_charisma",
+            "stat_modifier_armor_class",
+        )
+    )
+    assert tonic.hp_change > 0
+    assert dagger.damage_dice == "1d6"
+    assert pebble.stat_modifier_strength == 0 and pebble.hp_change == 0
+
+    ring_entity = _build_object_entity(
+        session_id="sess-1", target_id="DYN_QUIET_CHAPEL_D1_1", obj=ring
+    )
+    assert ring_entity.is_portable is True
+    assert ring_entity.wearable_slots == ring.wearable_slots
+    tonic_entity = _build_object_entity(
+        session_id="sess-1", target_id="DYN_QUIET_CHAPEL_D1_1", obj=tonic
+    )
+    assert tonic_entity.metadata_json.get("hp_change") == tonic.hp_change
