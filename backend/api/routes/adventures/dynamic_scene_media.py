@@ -126,11 +126,13 @@ async def generate_dynamic_visuals(
     adventure: AdventureTemplate,
     session_id: str,
     target_id: str,
+    max_npcs: Optional[int] = None,
 ) -> tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]:
     """Generate dynamic scene backdrop, NPC portraits, and item artwork according to config."""
     scene_mode = str(dyn_cfg.get("scene_image_mode") or "simple")
     npc_mode = str(dyn_cfg.get("npc_image_mode") or "simple")
     item_mode = str(dyn_cfg.get("item_image_mode") or "simple")
+    npc_limit = max(0, int(max_npcs if max_npcs is not None else dyn_cfg.get("max_npcs", 2)))
 
     scene_image: Optional[str] = None
     tasks: list[Awaitable[Optional[str]]] = []
@@ -156,7 +158,7 @@ async def generate_dynamic_visuals(
         task_keys.append(("scene", 0))
 
     _append_entity_image_tasks(
-        entities=payload.npcs[:2],
+        entities=payload.npcs[:npc_limit],
         mode=npc_mode,
         kind="npc",
         prefix_base=f"dyn_npc_{target_id.lower()}",
@@ -208,7 +210,12 @@ def configure_scene_audio(
     adventure: AdventureTemplate,
 ) -> Optional[str]:
     """Configure inherited, empty, or generated music for a newly materialized dynamic scene."""
-    mode = str(dyn_cfg.get("audio_mode") or "inherit")
+    zone_audio = str(zone.get("audio_mode") or "").strip().lower()
+    mode = (
+        zone_audio
+        if zone_audio in {"inherit", "empty", "generate"}
+        else str(dyn_cfg.get("audio_mode") or "inherit")
+    )
     if mode == "empty":
         return None
     if mode == "inherit":

@@ -6,6 +6,7 @@ export interface DynamicGenerationConfig {
   npc_image_mode: 'off' | 'simple' | 'hq'
   item_image_mode: 'off' | 'simple' | 'hq'
   audio_mode: 'inherit' | 'empty' | 'generate'
+  max_npcs: number
   interlude_quote_enabled: boolean
 }
 
@@ -14,6 +15,7 @@ const DEFAULT_CONFIG: DynamicGenerationConfig = {
   npc_image_mode: 'simple',
   item_image_mode: 'simple',
   audio_mode: 'inherit',
+  max_npcs: 2,
   interlude_quote_enabled: true,
 }
 
@@ -30,11 +32,18 @@ const config = computed<DynamicGenerationConfig>(() => ({
   npc_image_mode: props.modelValue?.npc_image_mode || DEFAULT_CONFIG.npc_image_mode,
   item_image_mode: props.modelValue?.item_image_mode || DEFAULT_CONFIG.item_image_mode,
   audio_mode: props.modelValue?.audio_mode || DEFAULT_CONFIG.audio_mode,
+  max_npcs: clampMaxNpcs(props.modelValue?.max_npcs ?? DEFAULT_CONFIG.max_npcs),
   interlude_quote_enabled:
     props.modelValue?.interlude_quote_enabled !== undefined
       ? Boolean(props.modelValue.interlude_quote_enabled)
       : DEFAULT_CONFIG.interlude_quote_enabled,
 }))
+
+function clampMaxNpcs(raw: unknown): number {
+  const num = Number(raw)
+  if (!Number.isFinite(num)) return DEFAULT_CONFIG.max_npcs
+  return Math.max(0, Math.min(5, Math.round(num)))
+}
 
 function updateField<K extends keyof DynamicGenerationConfig>(
   key: K,
@@ -110,6 +119,18 @@ function updateField<K extends keyof DynamicGenerationConfig>(
           <option value="empty">Empty (silence)</option>
           <option value="generate">Generate New Music Track</option>
         </select>
+      </label>
+
+      <label class="block space-y-1.5">
+        <span class="text-xs font-bold text-slate-200">Max NPCs per Scene (0–5)</span>
+        <input
+          type="number"
+          min="0"
+          max="5"
+          :value="config.max_npcs"
+          class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
+          @input="updateField('max_npcs', clampMaxNpcs(($event.target as HTMLInputElement).value))"
+        />
       </label>
 
       <div class="md:col-span-2 flex items-start gap-4 p-4 bg-black/30 border border-white/5 rounded-2xl">

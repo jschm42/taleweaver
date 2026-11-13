@@ -502,12 +502,15 @@ dynamic_scene_images: simple
 dynamic_npc_images: simple
 dynamic_item_images: simple
 dynamic_audio: inherit
+dynamic_max_npcs: 2
 dynamic_quotes: yes
 
 [Exit: HALL -> IRON_MINES] Collapsed Mine Shaft
 theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
 max_depth: 3
-danger: medium
+danger: medium        # peaceful | low | medium | high | deadly | random
+max_npcs: 2           # optional per-exit override (0..5)
+audio: generate       # optional per-exit override: inherit | empty | generate
 cul_de_sac: yes
 allowed_entities: hostile_npc, container, consumable, scenery
 ```

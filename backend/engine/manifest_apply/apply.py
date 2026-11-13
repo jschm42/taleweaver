@@ -144,7 +144,15 @@ async def _persist_world(ctx: ApplyContext) -> None:
         placement.avatar, placement.starting = await persist_avatar(ctx, prot)
         await ctx.commit_and_refresh(refresh_user=False)
 
-    scenes = ctx.manifest.get("scenes", [])
+    scenes = [
+        scene
+        for scene in ctx.manifest.get("scenes", [])
+        if not (
+            isinstance(scene, dict)
+            and str(scene.get("id") or "").strip().upper().startswith("DYN_")
+        )
+    ]
+    ctx.manifest["scenes"] = scenes
     await persist_scenes(ctx, scenes)
     persist_exits(ctx.db, ctx.template_id, ctx.manifest.get("exits", []))
     await ctx.commit_and_refresh(refresh_user=False)

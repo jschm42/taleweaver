@@ -68,6 +68,7 @@ def test_normalization_helpers_and_placeholder_id() -> None:
         "npc_image_mode": "simple",
         "item_image_mode": "simple",
         "audio_mode": "generate",
+        "max_npcs": 2,
         "interlude_quote_enabled": True,
     }
     assert placeholder == "DYN_IRON_MINES_D2_1_A1B2"
@@ -436,6 +437,7 @@ def test_blueprint_dynamic_world_and_exit_roundtrip() -> None:
         "npc_image_mode": "hq",
         "item_image_mode": "off",
         "audio_mode": "inherit",
+        "max_npcs": 2,
         "interlude_quote_enabled": True,
     }
     assert len(manifest["exits"]) == 1
@@ -605,3 +607,624 @@ async def test_generate_dynamic_visuals_includes_item_images(monkeypatch) -> Non
         0: "/data/adventures/sessions/s1/dynamic_assets/dyn_obj_dyn_vault_d1_1_0.webp"
     }
     assert calls == [("dyn_obj_dyn_vault_d1_1_0", "hq")]
+
+
+def test_dynamic_zone_new_options_and_id_cap() -> None:
+    """Zone normalization handles peaceful/random danger, max_npcs, audio_mode aliases, and ID length."""
+    # Arrange & Act
+    peaceful_zone = normalize_dynamic_zone(
+        {
+            "zone_id": "quiet_meadow_sanctuary_with_very_long_name",
+            "theme": "Sunlit alpine meadow with wildflowers",
+            "danger_level": "peaceful",
+            "max_npcs": 9,
+            "audio_mode": "off",
+        }
+    )
+    random_zone = normalize_dynamic_zone(
+        {
+            "zone_id": "shifting_labyrinth",
+            "theme": "Ever-changing stone corridors",
+            "danger_level": "random",
+            "max_npcs": 0,
+            "audio_mode": "generate",
+        }
+    )
+    gen_cfg = normalize_dynamic_generation({"max_npcs": 4})
+    long_placeholder = build_dynamic_placeholder_scene_id(
+        "quiet_meadow_sanctuary_with_very_long_name",
+        depth=1,
+        index=1,
+        suffix="abcd",
+    )
+
+    # Assert
+    assert peaceful_zone is not None
+    assert peaceful_zone["danger_level"] == "peaceful"
+    assert peaceful_zone["max_npcs"] == 5
+    assert peaceful_zone["audio_mode"] == "empty"
+    assert random_zone is not None
+    assert random_zone["danger_level"] == "random"
+    assert random_zone["max_npcs"] == 0
+    assert random_zone["audio_mode"] == "generate"
+    assert gen_cfg["max_npcs"] == 4
+    assert len(long_placeholder) <= 30
+    assert long_placeholder.startswith("DYN_")
+
+
+@pytest.mark.asyncio
+async def test_configure_scene_audio_respects_per_exit_override(db_session) -> None:
+    """Per-exit audio_mode overrides the global dynamic_generation.audio_mode setting."""
+    # Arrange
+    from backend.api.routes.adventures import dynamic_scene_media
+
+    del db_session
+    origin = WorldScene(
+        id="ORIGIN_HUB",
+        template_id="adv_audio",
+        session_id=None,
+        label="Origin Hub",
+        description="Warm tavern.",
+        audio_track_id="TRACK_TAVERN",
+    )
+    adv = AdventureTemplate(id="adv_audio", owner_id="u1", title="Audio Test")
+    state = SessionState(
+        session_id="s_audio",
+        template_id="adv_audio",
+        user_id="u1",
+        avatar_id="a1",
+        current_scene_id="ORIGIN_HUB",
+        entity_states={},
+    )
+
+    # Act: global wants "generate", but exit overrides to "empty"
+    empty_track = dynamic_scene_media.configure_scene_audio(
+        state=state,
+        dyn_cfg={"audio_mode": "generate"},
+        origin_scene=origin,
+        target_id="DYN_AUDIO_D1_1",
+        zone={"zone_id": "audio", "theme": "Echoing cave", "audio_mode": "empty"},
+        payload=DynamicGeneratedScenePayload(name="Silent Tunnel", description="Quiet."),
+        adventure=adv,
+    )
+    assert empty_track is None
+    assert (state.entity_states or {}).get("_dynamic_audio_tracks") is None
+
+    # Act: global wants "empty", but exit overrides to "inherit"
+    inherited_track = dynamic_scene_media.configure_scene_audio(
+        state=state,
+        dyn_cfg={"audio_mode": "empty"},
+        origin_scene=origin,
+        target_id="DYN_AUDIO_D1_2",
+        zone={"zone_id": "audio", "theme": "Warm side room", "audio_mode": "inherit"},
+        payload=DynamicGeneratedScenePayload(name="Side Room", description="Cozy."),
+        adventure=adv,
+    )
+
+    # Assert
+    assert inherited_track == "TRACK_TAVERN"
+
+
+@pytest.mark.asyncio
+async def test_generate_dynamic_scene_payload_enforces_max_npcs_and_peaceful(
+    monkeypatch, db_session
+) -> None:
+    """generate_dynamic_scene_payload enforces max_npcs cap and converts peaceful hostile NPCs."""
+
+    # Arrange
+    class _FakePayloadLLM:
+        def __init__(self, *args, **kwargs):
+            del args, kwargs
+
+        async def aexecute_complex_task(self, *args, **kwargs):
+            del args, kwargs
+            return DynamicGeneratedScenePayload(
+                name="Herb Garden",
+                description="Quiet cloister garden.",
+                npcs=[
+                    DynamicGeneratedNpc(
+                        id="MONK_A",
+                        name="Brother Anselm",
+                        description="Tends rosemary beds.",
+                        attitude="hostile",
+                        combat_role="boss",
+                    ),
+                    DynamicGeneratedNpc(
+                        id="MONK_B",
+                        name="Sister Clara",
+                        description="Waters lavender.",
+                        attitude="friendly",
+                        combat_role="none",
+                    ),
+                ],
+            )
+
+    monkeypatch.setattr(dynamic_scene_generator, "GameMasterLLM", _FakePayloadLLM)
+    monkeypatch.setattr(dynamic_scene_generator, "_has_provider_credentials", lambda *_: True)
+    monkeypatch.setattr(
+        dynamic_scene_generator,
+        "_roll_scene_plan",
+        lambda zone, cap: {
+            "target_npcs": 1 if cap > 0 else 0,
+            "target_objects": 0,
+            "allow_container": False,
+            "allow_switch": False,
+            "allowed_item_types": ["STANDARD", "CONSUMABLE", "READABLE"],
+        },
+    )
+
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"peaceful_tester_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+
+    # Act: max_npcs=1 with danger_level='peaceful'
+    payload_one = await dynamic_scene_generator.generate_dynamic_scene_payload(
+        adventure_title="Abbey",
+        adventure_setting="Mountain monastery",
+        adventure_tone="Serene",
+        origin_scene_name="Cloister",
+        origin_scene_description="Quiet stone cloister.",
+        exit_label="Garden Gate",
+        dynamic_zone={
+            "zone_id": "abbey_garden",
+            "theme": "Tranquil herb garden",
+            "max_depth": 2,
+            "danger_level": "peaceful",
+            "max_npcs": 1,
+        },
+        language="English",
+        user=user,
+        db=db_session,
+    )
+    payload_zero = await dynamic_scene_generator.generate_dynamic_scene_payload(
+        adventure_title="Abbey",
+        adventure_setting="Mountain monastery",
+        adventure_tone="Serene",
+        origin_scene_name="Cloister",
+        origin_scene_description="Quiet stone cloister.",
+        exit_label="Garden Gate",
+        dynamic_zone={
+            "zone_id": "abbey_garden",
+            "theme": "Tranquil herb garden",
+            "max_depth": 2,
+            "danger_level": "peaceful",
+            "max_npcs": 0,
+        },
+        language="English",
+        user=user,
+        db=db_session,
+    )
+
+    # Assert
+    assert len(payload_one.npcs) == 1
+    assert payload_one.npcs[0].attitude == "neutral"
+    assert payload_one.npcs[0].combat_role == "none"
+    assert payload_zero.npcs == []
+
+
+@pytest.mark.asyncio
+async def test_blueprint_and_editor_strip_and_block_virtual_dynamic_scenes(db_session) -> None:
+    """Virtual DYN_* placeholder scenes are stripped on manifest apply and rejected in editor CRUD."""
+    # Arrange
+    from fastapi import HTTPException
+
+    from backend.api.routes.adventures.editing.payload import _build_adventure_editor_assets
+    from backend.api.routes.adventures.editing.schemas import (
+        SceneCreateRequest,
+        StartSceneUpdateRequest,
+    )
+    from backend.api.routes.adventures.editing.world_crud import (
+        create_editor_scene,
+        update_editor_start_scene,
+    )
+    from backend.engine.manifest_apply import apply_manifest
+
+    bp_text = """[World]
+title: Test World
+dynamic_max_npcs: 1
+
+[Scene: HUB] Central Square
+
+[Exit: HUB -> MINES] a dark mine shaft
+theme: Flooded iron mines
+danger: random
+max_npcs: 1
+audio: empty
+"""
+    manifest = {
+        "adventure": {"title": "Test World", "start_scene_id": "HUB"},
+        "protagonist": {"name": "Hero"},
+        "scenes": [
+            {"id": "HUB", "label": "Central Square", "description": "Town square."},
+            {"id": "DYN_MINES_D1_1", "label": "", "description": ""},
+        ],
+        "exits": [
+            {
+                "from_scene_id": "HUB",
+                "to_scene_id": "DYN_MINES_D1_1",
+                "label": "a dark mine shaft",
+                "dynamic_zone": {
+                    "enabled": True,
+                    "zone_id": "mines",
+                    "theme": "Flooded iron mines",
+                    "danger_level": "random",
+                    "max_npcs": 1,
+                    "audio_mode": "empty",
+                },
+            }
+        ],
+    }
+
+    # Act: blueprint merge strips fabricated DYN_* scene
+    parsed, _issues = analyze_blueprint(bp_text)
+    apply_blueprint(manifest, parsed)
+    merged_ids = {s["id"] for s in manifest["scenes"]}
+    assert "HUB" in merged_ids
+    assert "DYN_MINES_D1_1" not in merged_ids
+
+    # Re-inject a fabricated DYN_* scene to verify apply_manifest also skips persisting it
+    manifest["scenes"].append({"id": "DYN_MINES_D1_1", "label": "", "description": ""})
+
+    # Act: apply_manifest persists HUB + dynamic exit without creating DYN_MINES_D1_1 WorldScene
+    user = User(id="u_guard", username=f"guard_{uuid.uuid4().hex[:6]}", hashed_password="x")
+    adv = AdventureTemplate(
+        id="adv_dyn_guard",
+        owner_id=user.id,
+        title="Guard Test",
+    )
+    db_session.add_all([user, adv])
+    await db_session.commit()
+
+    await apply_manifest(db_session, adv.id, manifest, user=user)
+    await db_session.commit()
+
+    persisted_scenes = (
+        await db_session.scalars(
+            select(WorldScene).where(
+                WorldScene.template_id == adv.id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+    ).all()
+    assert [s.id for s in persisted_scenes] == ["HUB"]
+
+    # Stray DB DYN_* scene (e.g. legacy adventure) is hidden from editor assets payload
+    db_session.add(
+        WorldScene(
+            id="DYN_LEGACY_D1_1",
+            template_id=adv.id,
+            session_id=None,
+            label="",
+            description="",
+        )
+    )
+    await db_session.commit()
+    payload = await _build_adventure_editor_assets(adv.id, db_session)
+    assert [s["id"] for s in payload.scenes] == ["HUB"]
+
+    # Editor create/start-scene endpoints reject DYN_* IDs
+    with pytest.raises(HTTPException) as create_exc:
+        await create_editor_scene(
+            adv.id,
+            SceneCreateRequest(scene_id="DYN_FAKE", label="Fake", description="Fake scene."),
+            db=db_session,
+            current_user=user,
+        )
+    assert create_exc.value.status_code == 400
+
+    with pytest.raises(HTTPException) as start_exc:
+        await update_editor_start_scene(
+            adv.id,
+            StartSceneUpdateRequest(scene_id="DYN_LEGACY_D1_1"),
+            db=db_session,
+            current_user=user,
+        )
+    assert start_exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_roll_scene_plan_and_object_variety_enforcement(monkeypatch, db_session) -> None:
+    """_roll_scene_plan allows 0 NPCs, limits switches/containers, and _build_* initializes metadata."""
+    # Arrange
+    zone = normalize_dynamic_zone(
+        {
+            "zone_id": "frost_caves",
+            "theme": "Glacial ice caverns",
+            "depth": 1,
+            "max_depth": 3,
+            "max_npcs": 2,
+        }
+    )
+    assert zone is not None
+
+    # Deterministic roll: 0 NPCs, 2 objects, no container, no switch
+    monkeypatch.setattr(
+        dynamic_scene_generator.random, "randint", lambda a, b: 0 if a == 0 and b == 2 else 2
+    )
+    monkeypatch.setattr(dynamic_scene_generator.random, "random", lambda: 0.99)
+
+    plan = dynamic_scene_generator._roll_scene_plan(zone, max_npcs=2)
+    assert plan["target_npcs"] == 0
+    assert plan["allow_container"] is False
+    assert plan["allow_switch"] is False
+
+    class _OverstuffedPayloadLLM:
+        def __init__(self, *args, **kwargs):
+            del args, kwargs
+
+        async def aexecute_complex_task(self, *args, **kwargs):
+            del args, kwargs
+            return DynamicGeneratedScenePayload(
+                name="Glacial Hollow",
+                description="Wind whistles through empty blue ice.",
+                npcs=[
+                    DynamicGeneratedNpc(
+                        id="STRAY",
+                        name="Stray Guide",
+                        npc_type="HUMANOID",
+                        description="Wanders the ridge.",
+                    )
+                ],
+                objects=[
+                    DynamicGeneratedObject(
+                        id="CRATE",
+                        name="Supply Cache",
+                        item_type="CONTAINER",
+                        description="An old cache.",
+                    ),
+                    DynamicGeneratedObject(
+                        id="LEVER",
+                        name="Ice Valve",
+                        item_type="SWITCH",
+                        description="A frozen valve.",
+                    ),
+                ],
+            )
+
+    monkeypatch.setattr(dynamic_scene_generator, "GameMasterLLM", _OverstuffedPayloadLLM)
+    monkeypatch.setattr(dynamic_scene_generator, "_has_provider_credentials", lambda *_: True)
+
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"variety_tester_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+
+    # Act
+    payload = await dynamic_scene_generator.generate_dynamic_scene_payload(
+        adventure_title="Frost",
+        adventure_setting="Frozen North",
+        adventure_tone="Stark",
+        origin_scene_name="Ridge",
+        origin_scene_description="Windy ridge.",
+        exit_label="Crevasse",
+        dynamic_zone=zone,
+        language="English",
+        user=user,
+        db=db_session,
+    )
+
+    # Assert: 0 NPCs enforced and unrolled CONTAINER/SWITCH coerced to STANDARD
+    assert payload.npcs == []
+    assert [obj.item_type for obj in payload.objects] == ["STANDARD", "STANDARD"]
+
+    # Entity builders preserve npc_type, intelligible speech note, and SWITCH defaults
+    state = SessionState(
+        session_id="s_var",
+        template_id="adv_var",
+        user_id=user.id,
+        avatar_id="av_var",
+        current_scene_id="DYN_FROST_D1_1",
+        entity_states={},
+    )
+    npc_ent = dynamic_scene_flow._build_npc_entity(
+        session_id="s_var",
+        target_id="DYN_FROST_D1_1",
+        npc=DynamicGeneratedNpc(
+            id="SCOUT",
+            name="Outsider Scout",
+            npc_type="ANIMAL",
+            description="A white fox.",
+            dialogue_style="Silent watcher",
+        ),
+        image_url=None,
+        state=state,
+    )
+    human_ent = dynamic_scene_flow._build_npc_entity(
+        session_id="s_var",
+        target_id="DYN_FROST_D1_1",
+        npc=DynamicGeneratedNpc(
+            id="TRADER",
+            name="Valley Trader",
+            npc_type="HUMANOID",
+            description="Carries salt and pelts.",
+            dialogue_style="Warm and practical",
+        ),
+        image_url=None,
+        state=state,
+    )
+    switch_ent = dynamic_scene_flow._build_object_entity(
+        session_id="s_var",
+        target_id="DYN_FROST_D1_1",
+        obj=DynamicGeneratedObject(
+            id="SLUICE",
+            name="Frozen Sluice Gate",
+            item_type="SWITCH",
+            description="Controls meltwater flow.",
+            is_takeable=False,
+        ),
+    )
+
+    assert npc_ent.npc_type == "ANIMAL"
+    assert human_ent.npc_type == "HUMANOID"
+    assert "full sentences" in (human_ent.character or "").lower()
+    assert (switch_ent.metadata_json or {}).get("switch_states") == ["OFF", "ON"]
+    assert (switch_ent.metadata_json or {}).get("switch_initial_state") == "OFF"
+
+
+@pytest.mark.asyncio
+async def test_script_teleport_dynamic_inline_materializes_scene(db_session, monkeypatch) -> None:
+    """tw.scene.teleport_dynamic materializes a procedural scene on trigger and honors return_exit/fresh."""
+    from backend.engine.interaction.trigger_service import TriggerService
+
+    # Arrange
+    _, adv, state, _, _ = await _seed_dynamic_session(db_session)
+    calls: list[dict] = []
+
+    async def _fake_payload(**kwargs):
+        calls.append(kwargs["dynamic_zone"])
+        return DynamicGeneratedScenePayload(
+            name="Astral Nexus",
+            description="Floating obelisks drift over a mirror-still void.",
+            visual_description="Floating stone obelisks in violet starlight",
+            npcs=[],
+            objects=[],
+            forward_exits=[],
+        )
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_payload)
+
+    script = (
+        'dest = tw.scene.teleport_dynamic("Shifting astral nexus", '
+        'danger_level="peaceful", max_npcs=0, return_exit=False, label="Astral Pad")\n'
+        'tw.vars.set("last_dest", dest)\n'
+    )
+
+    # Act
+    await TriggerService.execute_trigger(
+        db_session,
+        state,
+        trigger_name="on_interact",
+        target_id="TELEPORTER_PAD",
+        script_code=script,
+        narrative_text="",
+    )
+    await db_session.commit()
+
+    # Assert: materialized inline dynamic scene and omitted return exit
+    first_dest = state.current_scene_id
+    assert first_dest.startswith("DYN_ASTRAL_PAD_D1_1_")
+    assert (state.entity_states or {}).get("__script_vars__", {}).get("last_dest") == first_dest
+    assert calls[0]["danger_level"] == "peaceful"
+    assert calls[0]["max_npcs"] == 0
+
+    scene_row = (
+        (
+            await db_session.execute(
+                select(WorldScene).where(
+                    WorldScene.session_id == state.session_id,
+                    WorldScene.id == first_dest,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert scene_row is not None
+    assert scene_row.label == "Astral Nexus"
+
+    return_exits = (
+        (
+            await db_session.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.from_scene_id == first_dest,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert return_exits == []
+
+    # Act again with fresh=True -> generates a distinct scene ID
+    state.current_scene_id = "TOWN_GATE"
+    fresh_script = (
+        'tw.scene.teleport_dynamic("Shifting astral nexus", '
+        'danger_level="peaceful", max_npcs=0, return_exit=True, label="Astral Pad", fresh=True)'
+    )
+    await TriggerService.execute_trigger(
+        db_session,
+        state,
+        trigger_name="on_interact",
+        target_id="TELEPORTER_PAD",
+        script_code=fresh_script,
+        narrative_text="",
+    )
+    await db_session.commit()
+
+    assert state.current_scene_id != first_dest
+    fresh_return = (
+        (
+            await db_session.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.from_scene_id == state.current_scene_id,
+                    WorldExit.to_scene_id == "TOWN_GATE",
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert fresh_return is not None
+
+
+@pytest.mark.asyncio
+async def test_script_teleport_existing_dynamic_exit_placeholder(db_session, monkeypatch) -> None:
+    """tw.scene.teleport materializes an unmaterialized dynamic exit placeholder and sets return exit."""
+    from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
+    from backend.engine.scripting.context import GameContext
+
+    # Arrange
+    _, adv, state, _, _ = await _seed_dynamic_session(db_session)
+
+    async def _fake_payload(**kwargs):
+        return DynamicGeneratedScenePayload(
+            name="Flooded Lift Shaft",
+            description="Dark water laps against rusted iron rails.",
+            visual_description="Flooded mine shaft",
+            npcs=[],
+            objects=[],
+            forward_exits=[],
+        )
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_payload)
+
+    ctx = GameContext(
+        avatar_data={},
+        current_scene_id="TOWN_GATE",
+        entities={},
+    )
+    ctx.scene.teleport("DYN_IRON_MINES_D1_1")
+
+    # Act
+    new_scene = await apply_script_teleport(
+        db_session,
+        state,
+        ctx.changeset,
+        adventure=adv,
+    )
+    await db_session.commit()
+
+    # Assert
+    assert new_scene is not None
+    assert new_scene.id == "DYN_IRON_MINES_D1_1"
+    assert state.current_scene_id == "DYN_IRON_MINES_D1_1"
+    return_exit = (
+        (
+            await db_session.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.from_scene_id == "DYN_IRON_MINES_D1_1",
+                    WorldExit.to_scene_id == "TOWN_GATE",
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert return_exit is not None
+    assert return_exit.label == "Return to Town Gate"

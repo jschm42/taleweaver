@@ -21,6 +21,7 @@ from backend.engine.world.dynamic_scene_schemas import (
 logger = logging.getLogger(__name__)
 
 _LOCAL_LLM_PROVIDERS = {"ollama", "lmstudio"}
+_RANDOM_DANGER_CHOICES: tuple[str, ...] = ("peaceful", "low", "medium", "high", "deadly")
 
 
 def _pick_interlude_npc(candidate_npcs: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
@@ -161,6 +162,75 @@ async def generate_dynamic_interlude_quote(
         return None
 
 
+def _roll_scene_plan(zone: dict[str, Any], max_npcs: int) -> dict[str, Any]:
+    """Roll per-scene NPC and object composition targets so rooms feel varied."""
+    depth = int(zone.get("depth") or 1)
+    max_depth = int(zone.get("max_depth") or 3)
+    cul_de_sac = bool(zone.get("cul_de_sac_on_max_depth", True))
+    is_climax = depth >= max_depth and cul_de_sac
+
+    allowed_tokens = {
+        str(token or "").strip().upper()
+        for token in (zone.get("allowed_entity_types") or ["NPC", "OBJECT", "CONTAINER", "SWITCH"])
+    }
+    npc_allowed = bool(allowed_tokens & {"NPC", "FRIENDLY_NPC", "HOSTILE_NPC"})
+    target_npcs = random.randint(0, max_npcs) if (npc_allowed and max_npcs > 0) else 0
+
+    allow_container = ("CONTAINER" in allowed_tokens) and (
+        random.random() < (0.60 if is_climax else 0.30)
+    )
+    allow_switch = (
+        ("SWITCH" in allowed_tokens) and (not allow_container) and (random.random() < 0.20)
+    )
+
+    target_objects = random.randint(1, 3) if is_climax else random.randint(0, 3)
+    if (allow_container or allow_switch) and target_objects == 0:
+        target_objects = 1
+
+    allowed_item_types = ["STANDARD", "CONSUMABLE", "READABLE"]
+    if allow_container:
+        allowed_item_types.append("CONTAINER")
+    if allow_switch:
+        allowed_item_types.append("SWITCH")
+
+    return {
+        "target_npcs": target_npcs,
+        "target_objects": target_objects,
+        "allow_container": allow_container,
+        "allow_switch": allow_switch,
+        "allowed_item_types": allowed_item_types,
+    }
+
+
+def _apply_scene_plan_to_payload(
+    payload: DynamicGeneratedScenePayload,
+    scene_plan: dict[str, Any],
+) -> None:
+    """Enforce rolled NPC/object limits and disallow unrolled containers or switches."""
+    payload.npcs = list(payload.npcs or [])[: int(scene_plan["target_npcs"])]
+    target_objects = int(scene_plan["target_objects"])
+    sliced_objects = list(payload.objects or [])[:target_objects]
+
+    allow_switch = bool(scene_plan["allow_switch"])
+    allow_container = bool(scene_plan["allow_container"])
+    seen_switch = False
+    seen_container = False
+
+    for obj in sliced_objects:
+        if obj.item_type == "SWITCH":
+            if not allow_switch or seen_switch:
+                obj.item_type = "STANDARD"
+            else:
+                seen_switch = True
+        elif obj.item_type == "CONTAINER":
+            if not allow_container or seen_container:
+                obj.item_type = "STANDARD"
+            else:
+                seen_container = True
+
+    payload.objects = sliced_objects
+
+
 def _build_scene_prompts(
     *,
     adventure_title: str,
@@ -171,18 +241,52 @@ def _build_scene_prompts(
     exit_label: str,
     zone: dict[str, Any],
     language: str,
+    effective_danger: str,
+    max_npcs: int,
+    scene_plan: dict[str, Any],
 ) -> tuple[str, str]:
     depth = int(zone.get("depth") or 1)
     max_depth = int(zone.get("max_depth") or 3)
     cul_de_sac = bool(zone.get("cul_de_sac_on_max_depth", True))
     is_climax = depth >= max_depth and cul_de_sac
-    allowed = ", ".join(zone.get("allowed_entity_types") or ["NPC", "OBJECT", "CONTAINER"])
+    allowed = ", ".join(
+        zone.get("allowed_entity_types") or ["NPC", "OBJECT", "CONTAINER", "SWITCH"]
+    )
 
     depth_rule = (
         f"CLIMAX DEPTH ({depth}/{max_depth}): This is the end of the zone (cul-de-sac). "
         "Set forward_exits to an empty list []. Provide a memorable climax (reward container, lore discovery, or boss/guardian encounter)."
         if is_climax
         else f"EXPANSION DEPTH ({depth}/{max_depth}): Include 1 concise forward_exits entry leading deeper into the zone."
+    )
+
+    target_npcs = int(scene_plan["target_npcs"])
+    target_objects = int(scene_plan["target_objects"])
+    allowed_item_types = ", ".join(scene_plan["allowed_item_types"])
+
+    npc_rule = (
+        "- Do NOT spawn any NPCs in this scene (set npcs to an empty list [])."
+        if target_npcs <= 0
+        else f"- Spawn EXACTLY {target_npcs} NPC(s) matching the zone theme."
+    )
+    object_rule = (
+        "\n- Do NOT spawn any interactable objects in this scene (set objects to an empty list [])."
+        if target_objects <= 0
+        else (
+            f"\n- Spawn 1 to {target_objects} object(s) using ONLY these item_type values: {allowed_item_types}. "
+            "Do NOT spawn a CONTAINER or SWITCH unless listed there, and at most 1 CONTAINER or SWITCH per scene."
+        )
+    )
+    peaceful_rule = (
+        "\n- PEACEFUL SCENE: Do NOT spawn hostile NPCs. Every NPC must have attitude 'friendly' or 'neutral' and combat_role 'none'."
+        if effective_danger == "peaceful"
+        else ""
+    )
+    speech_rule = (
+        f"\n- NPC SPEECH RULE: Set npc_type to 'HUMANOID', 'BEING', 'ANIMAL', or 'MONSTER'. "
+        f"Every HUMANOID or BEING NPC MUST speak normal, intelligible full sentences in {language} so the player can converse with them freely "
+        f"(even if the main adventure features a mute, gesture-only, or fictional-dialect faction — make dynamic humanoids outsiders, travelers, or speakers who use plain {language}). "
+        "Never give humanoid NPCs a dialogue_style of grunts, single syllables, or non-verbal sounds."
     )
 
     system_prompt = (
@@ -193,7 +297,7 @@ def _build_scene_prompts(
         "- NEVER spawn, duplicate, or kill named core story NPCs.\n"
         "- Keep visual_description and music_prompt in concise English (comma-separated visual/audio descriptors) even when narration text is in another language.\n"
         "- Keep entity IDs short uppercase alphanumeric slugs (e.g. RUSTY_PICKAXE, CAVE_SPIDER).\n"
-        "- Spawn at most 2 NPCs and at most 3 objects matching allowed entity types."
+        f"{npc_rule}{object_rule}{peaceful_rule}{speech_rule}"
     )
     user_prompt = (
         f"Adventure Title: {adventure_title}\n"
@@ -203,7 +307,8 @@ def _build_scene_prompts(
         f"Traversed Passage: {exit_label}\n"
         f"Zone ID: {zone['zone_id']}\n"
         f"Zone Theme: {zone['theme']}\n"
-        f"Danger Level: {zone['danger_level']}\n"
+        f"Danger Level: {effective_danger}\n"
+        f"Max NPCs Cap: {max_npcs} (Rolled target: {target_npcs})\n"
         f"Allowed Entity Types: {allowed}\n"
         f"{depth_rule}"
     )
@@ -260,12 +365,21 @@ async def generate_dynamic_scene_payload(
     adventure_id: Optional[str] = None,
     game_id: Optional[str] = None,
     language: str = "English",
+    max_npcs_default: int = 2,
 ) -> DynamicGeneratedScenePayload:
     """Generate a structured DynamicGeneratedScenePayload via LLM with deterministic fallback."""
     del db
     zone = normalize_dynamic_zone(dynamic_zone)
     if not zone:
         raise ValueError("Cannot generate a dynamic scene without a valid dynamic_zone config.")
+
+    raw_danger = str(zone.get("danger_level") or "medium")
+    effective_danger = (
+        random.choice(_RANDOM_DANGER_CHOICES) if raw_danger == "random" else raw_danger
+    )
+    raw_max_npcs = dynamic_zone.get("max_npcs") if isinstance(dynamic_zone, dict) else None
+    max_npcs = int(zone["max_npcs"] if raw_max_npcs is not None else max_npcs_default)
+    max_npcs = max(0, min(5, max_npcs))
 
     llm_settings = dict(getattr(user, "llm_settings", None) or {})
     resolved = resolve_model_settings(llm_settings)
@@ -276,6 +390,7 @@ async def generate_dynamic_scene_payload(
         logger.info("No LLM credentials for provider %s; using fallback dynamic scene.", provider)
         return _build_fallback_scene_payload(exit_label, zone)
 
+    scene_plan = _roll_scene_plan(zone, max_npcs)
     system_prompt, user_prompt = _build_scene_prompts(
         adventure_title=adventure_title,
         adventure_setting=adventure_setting,
@@ -285,6 +400,9 @@ async def generate_dynamic_scene_payload(
         exit_label=exit_label,
         zone=zone,
         language=language or "English",
+        effective_danger=effective_danger,
+        max_npcs=max_npcs,
+        scene_plan=scene_plan,
     )
 
     try:
@@ -299,6 +417,13 @@ async def generate_dynamic_scene_payload(
             operation="dynamic_scene.generate",
             phase="expansion",
         )
+        _apply_scene_plan_to_payload(payload, scene_plan)
+        payload.npcs = payload.npcs[:max_npcs]
+        if effective_danger == "peaceful":
+            for npc in payload.npcs:
+                npc.combat_role = "none"
+                if npc.attitude == "hostile":
+                    npc.attitude = "neutral"
         if int(zone["depth"]) >= int(zone["max_depth"]) and zone.get("cul_de_sac_on_max_depth"):
             payload.forward_exits = []
         return payload

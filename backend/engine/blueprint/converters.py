@@ -339,6 +339,14 @@ def dynamic_max_depth(raw: str) -> int:
     return val
 
 
+def dynamic_max_npcs(raw: str) -> int:
+    """Parse max_npcs for dynamic scenes (0..5)."""
+    val = integer(raw)
+    if not 0 <= val <= 5:
+        raise ValueError(f"expected max_npcs between 0 and 5, got '{raw.strip()}'")
+    return val
+
+
 def dynamic_entity_types(raw: str) -> list[str]:
     """Parse comma-separated allowed_entity_types for a dynamic zone."""
     items = [

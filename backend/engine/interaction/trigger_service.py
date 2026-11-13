@@ -204,6 +204,12 @@ class TriggerService:
                     )
                     messages.append(sys_msg)
 
+            from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
+            from backend.api.routes.adventures.sequence_progress import apply_sequence_changeset
+            from backend.api.routes.adventures.session_adventure import load_session_adventure
+
+            adventure = await load_session_adventure(db, state)
+            await apply_script_teleport(db, state, context.changeset, adventure=adventure)
             await insert_cloned_entities(db, state, context.changeset)
             cls._persist_entity_states(state, context.changeset)
             cls._persist_exit_states(state, context.changeset)
@@ -212,11 +218,7 @@ class TriggerService:
             await sync_entity_rows(db, state, context.changeset)
             await sync_exit_rows(db, state, context.changeset)
 
-            from backend.api.routes.adventures.sequence_progress import apply_sequence_changeset
-            from backend.api.routes.adventures.session_adventure import load_session_adventure
-
             avatar = await cls._load_avatar(db, state)
-            adventure = await load_session_adventure(db, state)
             seq_msgs = await apply_sequence_changeset(adventure, state, avatar, context.changeset)
             messages.extend(seq_msgs)
             messages.extend(
@@ -248,8 +250,6 @@ class TriggerService:
     @staticmethod
     def _persist_entity_states(state: SessionState, changeset: ScriptChangeset) -> None:
         """Writes variable, movement, entity, flag and dialog updates of a trigger script."""
-        if changeset.teleport_scene_id:
-            state.current_scene_id = changeset.teleport_scene_id
         if not (
             changeset.var_updates
             or changeset.entity_movements

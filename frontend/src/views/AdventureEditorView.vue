@@ -736,6 +736,7 @@ const form = ref({
     npc_image_mode: 'simple',
     item_image_mode: 'simple',
     audio_mode: 'inherit',
+    max_npcs: 2,
     interlude_quote_enabled: true,
   } as DynamicGenerationConfig,
 })
@@ -838,7 +839,10 @@ const editorNpcs = computed<any[]>(() => {
 
 const editorScenes = computed<any[]>(() => {
   const source = Array.isArray(debugData.value?.scenes) ? debugData.value.scenes : []
-  return source.filter((scene: any) => !!scene?.id)
+  return source.filter((scene: any) => {
+    const id = String(scene?.id || '').trim()
+    return !!id && !id.startsWith('DYN_')
+  })
 })
 
 const editorAllItems = computed<any[]>(() => {
@@ -987,6 +991,7 @@ async function fetchAdventure() {
       npc_image_mode: data.dynamic_generation?.npc_image_mode || 'simple',
       item_image_mode: data.dynamic_generation?.item_image_mode || 'simple',
       audio_mode: data.dynamic_generation?.audio_mode || 'inherit',
+      max_npcs: data.dynamic_generation?.max_npcs ?? 2,
       interlude_quote_enabled: data.dynamic_generation?.interlude_quote_enabled ?? true,
     }
   } catch (error: any) {
@@ -2344,7 +2349,7 @@ async function saveCreateScene() {
 
 function openSceneEditorRoute(sceneId: string) {
   const normalized = String(sceneId || '').trim()
-  if (!normalized) return
+  if (!normalized || normalized.startsWith('DYN_')) return
   clearHover()
   activeMenuId.value = null
   sceneEditorReturnTab.value = activeTab.value

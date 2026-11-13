@@ -194,7 +194,7 @@ def _update_exit_dynamic_zone(world_exit: WorldExit, payload: EntityUpdateReques
     normalized_zone = normalize_dynamic_zone(payload.dynamic_zone)
     world_exit.dynamic_zone = normalized_zone
     flag_modified(world_exit, "dynamic_zone")
-    if normalized_zone and not str(world_exit.to_scene_id or "").startswith("DYN_"):
+    if normalized_zone:
         world_exit.to_scene_id = build_dynamic_placeholder_scene_id(
             normalized_zone["zone_id"], normalized_zone.get("depth", 1)
         )

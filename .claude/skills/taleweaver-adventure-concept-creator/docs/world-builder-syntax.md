@@ -40,7 +40,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)), `dynamic_scene_images` (`off`/`inherit`/`simple`/`hq`), `dynamic_npc_images` (`off`/`simple`/`hq`), `dynamic_item_images` (`off`/`simple`/`hq`), `dynamic_audio` (`inherit`/`empty`/`generate`), `dynamic_quotes` (`yes`/`no`).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)), `dynamic_scene_images` (`off`/`inherit`/`simple`/`hq`), `dynamic_npc_images` (`off`/`simple`/`hq`), `dynamic_item_images` (`off`/`simple`/`hq`), `dynamic_audio` (`inherit`/`empty`/`generate`), `dynamic_max_npcs` (`0`–`5`, default `2`), `dynamic_quotes` (`yes`/`no`).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
@@ -56,7 +56,7 @@ Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 **Dynamic exits (procedural exploration zones):**
 Use `[Exit: FROM -> ZONE_ID] label` or `[Exit: FROM -> ?] label` with `theme:` to create an uncharted procedural zone that expands on entry without failing missing-scene validation:
-`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`low`/`medium`/`high`, default `medium`), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`.
+`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`, default `medium`), `max_npcs` (`0`–`5`, optional per-exit override), `audio`/`audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`, optional per-exit music override), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`.
 
 ```text
 [Exit: TOWN_GATE -> ?] a collapsed iron mine shaft

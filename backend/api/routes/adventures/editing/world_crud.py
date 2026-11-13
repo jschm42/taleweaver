@@ -47,6 +47,11 @@ async def create_editor_scene(
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
     scene_id = _sanitize_object_id(payload.scene_id, "scene_id")
+    if scene_id.upper().startswith("DYN_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Scene IDs starting with 'DYN_' are reserved for dynamic scene placeholders.",
+        )
     label = str(payload.label or "").strip()
     description = str(payload.description or "").strip()
     if not label:
@@ -173,12 +178,8 @@ async def create_editor_exit(
     dynamic_zone = normalize_dynamic_zone(payload.dynamic_zone)
     raw_to = str(payload.to_scene_id or "").strip()
     if dynamic_zone:
-        to_scene_id = (
-            _sanitize_object_id(raw_to, "to_scene_id")
-            if raw_to and raw_to.upper().startswith("DYN_")
-            else build_dynamic_placeholder_scene_id(
-                dynamic_zone["zone_id"], dynamic_zone.get("depth", 1)
-            )
+        to_scene_id = build_dynamic_placeholder_scene_id(
+            dynamic_zone["zone_id"], dynamic_zone.get("depth", 1)
         )
     else:
         to_scene_id = _sanitize_object_id(raw_to, "to_scene_id")
@@ -442,6 +443,11 @@ async def update_editor_start_scene(
     scene_id = str(payload.scene_id or "").strip()
     if not scene_id:
         raise HTTPException(status_code=400, detail="scene_id is required")
+    if scene_id.upper().startswith("DYN_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Dynamic scene placeholders cannot be set as the start scene.",
+        )
 
     sc_res = await db.execute(
         select(WorldScene).where(

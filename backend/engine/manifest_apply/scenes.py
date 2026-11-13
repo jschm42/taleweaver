@@ -91,8 +91,13 @@ async def _scene_image(
 
 
 async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> None:
-    total = len(scenes)
-    for idx, scene in enumerate(scenes, start=1):
+    filtered_scenes = [
+        scene
+        for scene in scenes
+        if not str(scene.get("id") or "").strip().upper().startswith("DYN_")
+    ]
+    total = len(filtered_scenes)
+    for idx, scene in enumerate(filtered_scenes, start=1):
         if scene["id"] in ctx.seen_scene_ids:
             continue
         ctx.seen_scene_ids.add(scene["id"])

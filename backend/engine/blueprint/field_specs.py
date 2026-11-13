@@ -23,6 +23,7 @@ from backend.engine.blueprint.converters import (
     choice,
     dynamic_entity_types,
     dynamic_max_depth,
+    dynamic_max_npcs,
     dynamic_zone_id,
     ident,
     ident_list,
@@ -123,14 +124,33 @@ WORLD_KEYS: dict[str, FieldSpec] = {
         "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
     ),
     "dynamic_audio": FieldSpec(
-        "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
+        "dynamic_generation.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
     ),
     "dynamic_audio_mode": FieldSpec(
-        "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
+        "dynamic_generation.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
     ),
     "dynamic_music": FieldSpec(
-        "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
+        "dynamic_generation.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
     ),
+    "dynamic_max_npcs": FieldSpec("dynamic_generation.max_npcs", dynamic_max_npcs),
     "dynamic_quotes": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
     "dynamic_interlude": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
 }
@@ -184,8 +204,69 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "zone_theme": FieldSpec("dynamic_zone.theme"),
     "max_depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
     "depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
-    "danger": FieldSpec("dynamic_zone.danger_level", choice("low", "medium", "high")),
-    "danger_level": FieldSpec("dynamic_zone.danger_level", choice("low", "medium", "high")),
+    "danger": FieldSpec(
+        "dynamic_zone.danger_level",
+        choice("peaceful", "low", "medium", "high", "deadly", "random"),
+    ),
+    "danger_level": FieldSpec(
+        "dynamic_zone.danger_level",
+        choice("peaceful", "low", "medium", "high", "deadly", "random"),
+    ),
+    "max_npcs": FieldSpec("dynamic_zone.max_npcs", dynamic_max_npcs),
+    "audio": FieldSpec(
+        "dynamic_zone.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "music": FieldSpec(
+        "dynamic_zone.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "audio_mode": FieldSpec(
+        "dynamic_zone.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "music_mode": FieldSpec(
+        "dynamic_zone.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "dynamic_audio": FieldSpec(
+        "dynamic_zone.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "dynamic_music": FieldSpec(
+        "dynamic_zone.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
     "cul_de_sac": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
     "cul_de_sac_on_max_depth": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
     "allowed_entities": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),

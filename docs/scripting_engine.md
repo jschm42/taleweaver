@@ -402,7 +402,22 @@ Inspects the current scene:
 - `tw.scene.id` *(str)*: ID of the current scene (the target scene once the script called `tw.scene.teleport`).
 - `tw.scene.npcs` *(list[NPCProxy])*: All NPCs in the current scene, as the same proxies `tw.npcs.get()` returns. Includes NPCs that are hidden (`.is_hidden`) or defeated (`.is_defeated`) and NPCs moved here earlier in the same script; filter them yourself if needed.
 - `tw.scene.items` *(list[ObjectProxy])*: All objects and items lying in the current scene.
-- `tw.scene.teleport(target_scene_id: str)`: Moves the protagonist directly into another scene, whether or not an exit connects the two. Works in every script, including scene and exit triggers (`on_enter_scene`, `on_leave_scene`, exit scripts). After the call, `tw.scene.id`, `tw.scene.npcs`, `tw.scene.items` and `"current"` targets (e.g. `tw.npcs.move_to_player`) refer to the target scene. A teleport does **not** fire the target scene's `on_enter_scene` or the old scene's `on_leave_scene` script, and no "You have entered" message is shown, so describe the jump yourself (e.g. with `tw.story.direct`). The player sees the travel overlay with the target scene, just like after walking through an exit, whether the teleport happens during a turn or in a script fired by a pickup, a dialog choice or an unlock.
+- `tw.scene.teleport(target_scene_id: str)`: Moves the protagonist directly into another scene, whether or not an exit connects the two. If `target_scene_id` matches an unmaterialized dynamic exit placeholder (`to_scene_id`), exit ID, or dynamic `zone_id`, that dynamic scene is generated and materialized automatically before moving the protagonist there. Works in every script, including scene and exit triggers (`on_enter_scene`, `on_leave_scene`, exit scripts). After the call, `tw.scene.id`, `tw.scene.npcs`, `tw.scene.items` and `"current"` targets (e.g. `tw.npcs.move_to_player`) refer to the target scene. A teleport does **not** fire the target scene's `on_enter_scene` or the old scene's `on_leave_scene` script, and no "You have entered" message is shown, so describe the jump yourself (e.g. with `tw.story.direct`). The player sees the travel overlay with the target scene, just like after walking through an exit, whether the teleport happens during a turn or in a script fired by a pickup, a dialog choice or an unlock.
+- `tw.scene.teleport_dynamic(theme_or_zone_id: str = "", theme: str | None = None, *, zone_id: str | None = None, max_depth: int | None = None, danger_level: str | None = None, max_npcs: int | None = None, audio_mode: str | None = None, cul_de_sac: bool | None = None, return_exit: bool = True, label: str = "Teleporter", fresh: bool = False) -> str`: Materializes a procedural dynamic scene on the fly and teleports the protagonist into it, returning the target scene ID (`str`) and updating `tw.scene.id` immediately. Can be called either with a freeform `theme` description (e.g. `tw.scene.teleport_dynamic("Shifting astral nexus of floating obelisks", danger_level="random", fresh=True)`) or by referencing an existing dynamic exit's `zone_id`, `id`, or `to_scene_id` with optional overrides.
+  - `max_depth` (`1..6`, default `3`), `danger_level` (`"peaceful"`, `"low"`, `"medium"`, `"high"`, `"deadly"`, `"random"`), `max_npcs` (`0..5`), `audio_mode` (`"inherit"`, `"empty"`, `"generate"`), `cul_de_sac` (whether reaching `max_depth` terminates in a cul-de-sac), `return_exit` (default `True`; adds an unlocked return exit back to the origin scene), `label` (display name for the virtual passage / return context), and `fresh` (default `False`; `True` generates a brand-new dynamic scene instance on every activation instead of reusing the previously materialized scene).
+  - Ideal for interactive teleporters, portals, or switches:
+    ```python
+    # On a teleporter pad's on_interact script:
+    dest_id = tw.scene.teleport_dynamic(
+        "Ancient clockwork vault pulsing with golden gears",
+        zone_id="clockwork_vault",
+        danger_level="random",
+        max_depth=2,
+        return_exit=True,
+        label="Brass Teleporter",
+    )
+    tw.story.narrate("Arcane runes flare beneath your boots, folding space around you.")
+    ```
 - `tw.scene.get_attribute(name, default=None)` / `tw.scene.set_attribute(name, value)`: A script-defined value stored per scene.
 
 ```python

@@ -124,7 +124,38 @@ def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]
             entry = _find_or_insert(entries, block, violations)
             if entry is not None:
                 _apply_children(entry, block, violations)
+    _strip_virtual_dynamic_scenes(manifest, blueprint)
     return violations
+
+
+def _strip_virtual_dynamic_scenes(manifest: dict[str, Any], blueprint: Blueprint) -> None:
+    """Remove LLM-fabricated DYN_* or dynamic-target scenes unless explicitly declared as [Scene]."""
+    scenes = manifest.get("scenes")
+    if not isinstance(scenes, list):
+        return
+    declared_scenes = {b.ref.upper() for b in blueprint.of_kind("scene") if b.ref}
+    dynamic_targets: set[str] = set()
+    for ex in manifest.get("exits") or []:
+        if not isinstance(ex, dict) or not isinstance(ex.get("dynamic_zone"), dict):
+            continue
+        to_id = str(ex.get("to_scene_id") or "").strip().upper()
+        zone_id = str(ex["dynamic_zone"].get("zone_id") or "").strip().upper()
+        if to_id:
+            dynamic_targets.add(to_id)
+        if zone_id:
+            dynamic_targets.add(zone_id)
+
+    manifest["scenes"] = [
+        s
+        for s in scenes
+        if not (
+            isinstance(s, dict)
+            and (
+                (sid := str(s.get("id") or "").strip().upper()).startswith("DYN_")
+                or (sid in dynamic_targets and sid not in declared_scenes)
+            )
+        )
+    ]
 
 
 def _is_dynamic_exit_block(block: BlueprintBlock) -> bool:

@@ -3091,8 +3091,16 @@ class GameTurnManager:
                 finally:
                     self._in_protagonist_status_trigger = False
 
-        if changeset.teleport_scene_id:
-            self.state.current_scene_id = changeset.teleport_scene_id
+        if changeset.teleport_scene_id or getattr(changeset, "teleport_dynamic_request", None):
+            from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
+
+            await apply_script_teleport(
+                self.db,
+                self.state,
+                changeset,
+                adventure=self.adventure,
+                user=getattr(self, "user", None),
+            )
 
         await insert_cloned_entities(self.db, self.state, changeset)
         entity_states = dict(self.state.entity_states or {})

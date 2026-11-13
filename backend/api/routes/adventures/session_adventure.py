@@ -109,7 +109,11 @@ def _backfill(state: SessionState, snapshot: dict[str, Any], template: Adventure
 
 def _state_fallbacks(state: SessionState) -> dict[str, Any]:
     """Session values for keys an old snapshot of a deleted template does not have."""
-    session = getattr(state, "session", None)
+    session = (
+        state.__dict__.get("session")
+        if isinstance(state, SessionState)
+        else getattr(state, "session", None)
+    )
     return {
         "id": state.template_id or "deleted-template",
         "title": getattr(session, "adventure_title", None) or "Deleted Adventure",

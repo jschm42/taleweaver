@@ -7,9 +7,11 @@ within a declarative ScriptChangeset.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -92,6 +94,7 @@ class ScriptChangeset:
     player_status_effects_remove: list[str] = field(default_factory=list)
 
     teleport_scene_id: Optional[str] = None
+    teleport_dynamic_request: Optional[dict[str, Any]] = None
     entity_movements: list[dict[str, Any]] = field(default_factory=list)
     entity_updates: list[dict[str, Any]] = field(default_factory=list)
     exit_updates: list[dict[str, Any]] = field(default_factory=list)
@@ -159,6 +162,7 @@ class ScriptChangeset:
             or self.player_status_effects_add
             or self.player_status_effects_remove
             or self.teleport_scene_id
+            or self.teleport_dynamic_request
             or self.entity_movements
             or self.entity_updates
             or self.exit_updates
@@ -329,7 +333,66 @@ class SceneProxy:
         return [obj for obj in self._objects_mgr.all() if obj.current_scene_id == self.id]
 
     def teleport(self, target_scene_id: str) -> None:
+        self._changeset.teleport_dynamic_request = None
         self._changeset.teleport_scene_id = target_scene_id
+
+    def teleport_dynamic(
+        self,
+        theme_or_zone_id: str = "",
+        theme: Optional[str] = None,
+        *,
+        zone_id: Optional[str] = None,
+        max_depth: Optional[int] = None,
+        danger_level: Optional[str] = None,
+        max_npcs: Optional[int] = None,
+        audio_mode: Optional[str] = None,
+        cul_de_sac: Optional[bool] = None,
+        return_exit: bool = True,
+        label: str = "Teleporter",
+        fresh: bool = False,
+    ) -> str:
+        """Schedule a runtime transition into a generated dynamic scene and return its scene ID."""
+        from backend.engine.world.dynamic_scene_schemas import build_dynamic_placeholder_scene_id
+
+        origin_scene_id = self._current_scene_id
+        if theme is not None:
+            resolved_zone_id = str(zone_id or theme_or_zone_id or label or "teleporter").strip()
+            resolved_theme = str(theme).strip()
+            reference_key = str(zone_id or theme_or_zone_id or "").strip()
+        elif zone_id is not None:
+            resolved_zone_id = str(zone_id).strip() or "teleporter"
+            resolved_theme = str(theme_or_zone_id or "").strip()
+            reference_key = resolved_zone_id
+        else:
+            raw_arg = str(theme_or_zone_id or "").strip()
+            resolved_zone_id = str(label or raw_arg or "teleporter").strip()
+            resolved_theme = raw_arg
+            reference_key = raw_arg
+
+        if fresh:
+            suffix = uuid.uuid4().hex[:4]
+        else:
+            digest_src = f"{origin_scene_id}:{resolved_zone_id}:{resolved_theme}".encode()
+            suffix = hashlib.sha256(digest_src).hexdigest()[:4]
+
+        target_scene_id = build_dynamic_placeholder_scene_id(resolved_zone_id, 1, 1, suffix=suffix)
+        self._changeset.teleport_scene_id = target_scene_id
+        self._changeset.teleport_dynamic_request = {
+            "origin_scene_id": origin_scene_id,
+            "target_scene_id": target_scene_id,
+            "reference_key": reference_key,
+            "zone_id": str(zone_id).strip() if zone_id is not None else "",
+            "theme": resolved_theme,
+            "max_depth": max_depth,
+            "danger_level": danger_level,
+            "max_npcs": max_npcs,
+            "audio_mode": audio_mode,
+            "cul_de_sac": cul_de_sac,
+            "return_exit": bool(return_exit),
+            "label": str(label or "Teleporter").strip()[:100] or "Teleporter",
+            "fresh": bool(fresh),
+        }
+        return target_scene_id
 
     def get_attribute(self, attr_name: str, default: Any = None) -> Any:
         k = f"__scene_attr_{self.id}_{attr_name}"

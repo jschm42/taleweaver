@@ -383,12 +383,14 @@ function handleExitMouseMove(event: MouseEvent) {
 }
 
 function handleNodeClick(node: { rawId: string; isDynamic?: boolean; exitId?: string }) {
-  if (node.isDynamic && node.exitId) {
-    emit('open-exit', node.exitId)
+  if (node.isDynamic) {
+    if (node.exitId) {
+      emit('open-exit', node.exitId)
+    }
     return
   }
   const sceneId = String(node.rawId || '').trim()
-  if (!sceneId) return
+  if (!sceneId || sceneId.startsWith('DYN_')) return
   emit('open-scene', sceneId)
 }
 

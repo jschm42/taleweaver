@@ -326,7 +326,11 @@ async def _build_adventure_editor_assets(
 
     protagonist_payload = _serialize_protagonist_with_items(avatar, entities)
 
-    db_scenes = [_serialize_model(s) for s in scenes]
+    db_scenes = [
+        _serialize_model(s)
+        for s in scenes
+        if not str(getattr(s, "id", "") or "").strip().upper().startswith("DYN_")
+    ]
     db_npcs = [_serialize_model(ent) for ent in entities if _is_npc_entity(ent)]
     db_objects = [_serialize_model(ent) for ent in entities if _is_object_entity(ent)]
     db_exits = [_serialize_model(ex) for ex in exits]

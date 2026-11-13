@@ -38,6 +38,8 @@ _RULES = (
     "descriptions, walkthroughs and puzzles.\n"
     "- Fixed scripts and guard expressions are deterministic engine code. Do not rewrite them; "
     "build the world so they work (create every ID, variable and flag they use).\n"
+    "- Exits with `dynamic_zone` expand procedurally at runtime; their `to_scene_id` (`DYN_*`) "
+    "is a virtual placeholder. NEVER create an entry in `scenes` for a `DYN_*` target.\n"
 )
 _STRICT_TEXT = (
     "- STRICT ADHERENCE: keep the blueprint's structure. Only add scenes, NPCs or items that are "

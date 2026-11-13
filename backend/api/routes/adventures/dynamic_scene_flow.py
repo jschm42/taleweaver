@@ -19,6 +19,7 @@ from backend.api.routes.adventures.dynamic_scene_media import (
     generate_dynamic_visuals,
     sync_dynamic_scene_audio,
 )
+from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
 from backend.engine.world.dynamic_scene_generator import (
     generate_dynamic_interlude_quote,
     generate_dynamic_scene_payload,
@@ -73,6 +74,13 @@ def _build_npc_entity(
     state: SessionState,
 ) -> WorldEntity:
     entity_id = f"{target_id}_{_safe_slug(npc.id, 16)}"[:50]
+    npc_type = str(getattr(npc, "npc_type", "HUMANOID") or "HUMANOID").upper()
+    dialogue_style = str(npc.dialogue_style or "").strip()
+    if npc_type in {"HUMANOID", "BEING"}:
+        speech_note = "Speaks in plain, intelligible full sentences."
+        if "full sentences" not in dialogue_style.lower():
+            dialogue_style = f"{dialogue_style} ({speech_note})" if dialogue_style else speech_note
+
     is_hostile = npc.attitude == "hostile"
     stats = _COMBAT_ROLE_DEFAULTS.get(npc.combat_role, {"hp": 80, "ac": 12}) if is_hostile else None
     hp_val = stats["hp"] if stats else 100
@@ -86,11 +94,11 @@ def _build_npc_entity(
         appearance=npc.visual_description[:100] if npc.visual_description else None,
         current_scene_id=target_id,
         image_url=image_url,
-        npc_type="HUMANOID",
+        npc_type=npc_type,
         movement_type="STATIONARY",
         moveable=False,
         goal=npc.role[:1000] if npc.role else None,
-        character=npc.dialogue_style[:1000] if npc.dialogue_style else None,
+        character=dialogue_style[:1000] if dialogue_style else None,
         hp=hp_val,
         max_hp=hp_val,
         mana=100,
@@ -123,6 +131,10 @@ def _build_object_entity(
 ) -> WorldEntity:
     entity_id = f"{target_id}_{_safe_slug(obj.id, 16)}"[:50]
     metadata: dict[str, Any] = {"dynamic_generated": True}
+    if obj.item_type == "SWITCH":
+        metadata["switch_states"] = ["OFF", "ON"]
+        metadata["switch_initial_state"] = "OFF"
+        metadata["switch"] = {"states": ["OFF", "ON"], "initial_state": "OFF"}
     if obj.item_type == "READABLE" and obj.text_log_content:
         metadata["text_log_content"] = obj.text_log_content[:1000]
         metadata["text_log_format"] = "DOCUMENT"
@@ -231,7 +243,10 @@ def _persist_generated_scene_entities(
     )
     db.add(new_scene)
 
-    if str(world_exit.exit_type or "").lower() != "bidirectional" and origin_scene:
+    if (
+        str(world_exit.exit_type or "").lower() not in {"bidirectional", "one_way_no_return"}
+        and origin_scene
+    ):
         db.add(
             WorldExit(
                 template_id=None,
@@ -272,7 +287,8 @@ def _persist_generated_scene_entities(
                 )
             )
 
-    for idx, npc in enumerate(payload.npcs[:2]):
+    max_npcs = max(0, int(zone.get("max_npcs", 2)))
+    for idx, npc in enumerate(payload.npcs[:max_npcs]):
         db.add(
             _build_npc_entity(
                 session_id=state.session_id,
@@ -329,6 +345,14 @@ async def materialize_dynamic_scene_for_exit(
         raise ValueError(f"Exit '{world_exit.id}' is not a valid dynamic exit.")
 
     dyn_cfg = normalize_dynamic_generation(getattr(adventure, "dynamic_generation", None))
+    raw_zone = world_exit.dynamic_zone if isinstance(world_exit.dynamic_zone, dict) else {}
+    max_npcs = max(
+        0,
+        int(
+            zone["max_npcs"] if raw_zone.get("max_npcs") is not None else dyn_cfg.get("max_npcs", 2)
+        ),
+    )
+    zone["max_npcs"] = max_npcs
     if emit_sse:
         await emit_sse("status", {"content": "Exploring uncharted territory..."})
 
@@ -350,6 +374,7 @@ async def materialize_dynamic_scene_for_exit(
             adventure_id=adventure.id,
             game_id=state.session_id,
             language=language or adventure.language or "English",
+            max_npcs_default=int(dyn_cfg.get("max_npcs", 2)),
         )
     )
 
@@ -376,6 +401,7 @@ async def materialize_dynamic_scene_for_exit(
         adventure=adventure,
         session_id=state.session_id,
         target_id=target_id,
+        max_npcs=max_npcs,
     )
     scene_audio_track_id = configure_scene_audio(
         state=state,
@@ -460,3 +486,11 @@ async def prepare_dynamic_traversal_sse(
             break
         yield chunk
     await task
+
+
+__all__ = [
+    "apply_script_teleport",
+    "materialize_dynamic_scene_for_exit",
+    "prepare_dynamic_traversal_sse",
+    "sync_dynamic_scene_audio",
+]
