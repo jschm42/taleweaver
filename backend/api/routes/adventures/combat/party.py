@@ -160,7 +160,7 @@ class CombatPartyMixin:
         data = attack_event_data(
             enemy, member, roll, member_ac, weapon["name"], damage, weapon["category"]
         )
-        text = attack_log_text(enemy["name"], roll, member_ac) + f" (on {member['name']})"
+        text = attack_log_text(enemy["name"], roll, member_ac, weapon["name"], member["name"])
         if member.get("downed"):
             text += f" {member['name']} is downed!"
         return text, data
@@ -204,7 +204,8 @@ class CombatPartyMixin:
         data = attack_event_data(
             member, target, roll, target_ac, weapon["name"], damage, weapon["category"]
         )
-        return attack_log_text(member["name"], roll, target_ac), data
+        text = attack_log_text(member["name"], roll, target_ac, weapon["name"], target["name"])
+        return text, data
 
     async def _healing_item(self, member: dict[str, Any]) -> dict[str, Any] | None:
         """A consumable the companion carries that restores HP."""

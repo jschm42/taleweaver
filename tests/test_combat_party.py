@@ -148,3 +148,18 @@ async def test_enemies_mostly_attack_the_protagonist(setup_test_db, monkeypatch)
         # Assert
         assert target is None
         assert drawn["id"] == "BATLIN"
+
+
+async def test_attack_log_names_the_weapon_and_the_target():
+    # Arrange
+    from backend.api.routes.adventures.combat.attacks import attack_log_text
+
+    roll = {**LETHAL, "hit_modifier": 2, "damage_dice_str": "1d8"}
+
+    # Act
+    text = attack_log_text("Batlin", roll, 12, "Practice Sword", "Goblin")
+    plain = attack_log_text("Batlin", roll, 12)
+
+    # Assert
+    assert text.startswith("Batlin attacks Goblin with Practice Sword: ATTACK ROLL: 19 + 2")
+    assert plain.startswith("Batlin ATTACK ROLL:")

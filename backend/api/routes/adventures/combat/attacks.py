@@ -18,9 +18,22 @@ def apply_strength_bonus(roll: dict[str, Any], strength_mod: int) -> dict[str, A
     return adjusted
 
 
-def attack_log_text(attacker_name: str, roll: dict[str, Any], target_ac: int) -> str:
+def attack_log_text(
+    attacker_name: str,
+    roll: dict[str, Any],
+    target_ac: int,
+    weapon_name: str | None = None,
+    target_name: str | None = None,
+) -> str:
+    """Chronicle line of a weapon attack, e.g. 'Batlin attacks Goblin with Practice Sword: ...'."""
+    who = attacker_name
+    if target_name or weapon_name:
+        who = f"{attacker_name} attacks"
+        who += f" {target_name}" if target_name else ""
+        who += f" with {weapon_name}" if weapon_name else ""
+        who += ":"
     head = (
-        f"{attacker_name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = "
+        f"{who} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = "
         f"{roll['hit_total']} vs AC {target_ac}"
     )
     if not roll.get("is_hit"):

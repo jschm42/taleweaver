@@ -194,7 +194,8 @@ class CombatEnemyMixin:
             enemy, player, roll, player_ac, weapon["name"], damage, weapon["category"]
         )
         data["effects"].extend(on_hit)
-        return attack_log_text(enemy["name"], roll, player_ac) + on_hit_suffix(on_hit), data
+        text = attack_log_text(enemy["name"], roll, player_ac, weapon["name"], self.avatar.name)
+        return text + on_hit_suffix(on_hit), data
 
     def _apply_enemy_on_hit(
         self, combat: dict[str, Any], enemy: dict[str, Any], weapon: dict[str, Any]
