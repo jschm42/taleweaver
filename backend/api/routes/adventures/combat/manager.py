@@ -141,6 +141,12 @@ class TurnCombatManager(
         self._sync_combat_player_snapshot(combat)
         self._append_combat_log(combat, result["text"], result["type"], result.get("data"))
         yield system_event(result["text"])
+        if result.get("free"):
+            # Free actions (Mark) keep the protagonist's turn.
+            self._set_combat_state(combat)
+            async for chunk in self._emit_combat_final(None):
+                yield chunk
+            return
         if (result.get("data") or {}).get("kind") == "special":
             async for chunk in self._special_script_events(combat, result["data"]):
                 yield chunk

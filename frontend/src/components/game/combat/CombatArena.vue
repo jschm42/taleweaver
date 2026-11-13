@@ -105,6 +105,7 @@ function enemyCard(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>
     engaged: !!enemy.engaged && !info.engageIds.has(enemy.id),
     out: isOut ? (enemy.fled ? 'fled' : 'defeated') : null,
     initiative: initiativeOf(enemy.id),
+    marked: (props.combat.party ?? []).some((m) => m.mark_id === enemy.id),
   }
 }
 

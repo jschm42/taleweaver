@@ -23,6 +23,8 @@ export interface CardData {
   initiative: number | null
   /** The protagonist's companion (player side, tagged ALLY instead of YOU). */
   ally?: boolean
+  /** Enemy marked for the companion (Mark order). */
+  marked?: boolean
 }
 
 const PORTRAIT_RATIO = 0.64
@@ -336,6 +338,7 @@ export class CombatantCard extends Container {
     if (this.data.out) return ''
     if (this.data.side === 'player') return this.data.ally ? 'ALLY' : 'YOU'
     if (!this.data.engaged) return 'PASSIVE'
+    if (this.data.marked) return 'MARKED'
     return this.selected ? 'TARGET' : ''
   }
 

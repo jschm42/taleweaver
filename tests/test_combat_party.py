@@ -163,3 +163,42 @@ async def test_attack_log_names_the_weapon_and_the_target():
     # Assert
     assert text.startswith("Batlin attacks Goblin with Practice Sword: ATTACK ROLL: 19 + 2")
     assert plain.startswith("Batlin ATTACK ROLL:")
+
+
+async def test_mark_focuses_the_companion_and_keeps_the_players_turn(setup_test_db, monkeypatch):
+    async with TestSessionLocal() as db:
+        # Arrange: an OFFENSIVE companion would go for the weaker Orc
+        user, _avatar, _state = await _seed_with_companion(db, tactics="OFFENSIVE")
+        _patch_dice(monkeypatch)
+        manager = GameTurnManager(db, SESSION_ID, user)
+        await _play(manager, "/fight GOBLIN")
+        await _play(manager, "/attack ORC")
+        combat = manager._read_combat_state()
+        next(e for e in combat["enemies"] if e["id"] == "ORC")["hp"] = 5
+        manager.combat._set_combat_state(combat)
+        round_before = combat["round"]
+
+        # Act
+        await _play(manager, "mark GOBLIN")
+        combat = manager._read_combat_state()
+        target = manager.combat._member_target(combat, combat["party"][0])
+
+        # Assert: marked, still the player's turn, and the companion goes for the Goblin
+        assert combat["party"][0]["mark_id"] == "GOBLIN"
+        assert combat["turn"] == "player" and combat["round"] == round_before
+        assert target["id"] == "GOBLIN"
+
+
+async def test_mark_needs_a_companion(setup_test_db, monkeypatch):
+    async with TestSessionLocal() as db:
+        # Arrange: no companion in this fight
+        user, _avatar, _state = await _seed(db)
+        _patch_dice(monkeypatch)
+        manager = GameTurnManager(db, SESSION_ID, user)
+        await _play(manager, "/fight GOBLIN")
+
+        # Act
+        chunks = await _play(manager, "mark GOBLIN")
+
+        # Assert
+        assert any("needs a companion" in chunk for chunk in chunks)

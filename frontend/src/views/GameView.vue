@@ -1824,6 +1824,12 @@ const handleCombatSpecial = async (actionId: string, targetId: string | null = n
   }
 }
 
+/** Mark: the companion attacks only this target (free action); null lifts the mark. */
+const handleCombatMark = async (targetId: string | null) => {
+  const command = targetId ? `mark ${targetId}` : 'mark'
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, command)
+}
+
 const handleCombatDebugWin = async () => {
   await sendMessage('/debug win_fight')
 }
@@ -2227,6 +2233,7 @@ usePlayAgentAutoLoop()
       @run="handleCombatRun"
       @rest="handleCombatRest"
       @special="handleCombatSpecial"
+      @mark="handleCombatMark"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"

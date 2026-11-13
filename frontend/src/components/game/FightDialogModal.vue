@@ -38,6 +38,8 @@ const emit = defineEmits<{
   run: []
   rest: []
   special: [id: string, targetId: string | null]
+  /** Companion focus: the target to mark, or null to lift the mark. */
+  mark: [targetId: string | null]
   consume: [name: string]
   lootTake: [item: InventoryItem]
   lootLeave: [item: InventoryItem]
@@ -414,6 +416,7 @@ onBeforeUnmount(() => {
               :target-name="selectedTarget?.name ?? null"
               @attack="(weaponId) => emit('attack', selectedTargetId, weaponId)"
               @special="(id) => emit('special', id, selectedTargetId)"
+              @mark="(lift) => emit('mark', lift ? null : selectedTargetId)"
               @hover="(entity, event) => emit('entityHover', entity, event)"
               @leave="emit('entityLeave')"
             />

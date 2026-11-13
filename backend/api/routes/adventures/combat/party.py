@@ -126,6 +126,27 @@ class CombatPartyMixin:
         member = find_member(combat, actor_id)
         return bool(member and is_member_standing(member))
 
+    async def _player_mark(self, combat: dict[str, Any], arg: str) -> dict[str, Any]:
+        """Free action: the companion attacks only the marked enemy; ``mark`` alone lifts it."""
+        member = next((m for m in party_members(combat) if is_member_standing(m)), None)
+        if member is None:
+            return {"error": "Mark needs a companion fighting at your side."}
+        if not arg.strip():
+            member["mark_id"] = None
+            text = (
+                f"{self.avatar.name} lifts the mark. {member['name']} fights by its tactics again."
+            )
+            return {"text": text, "type": "player_action", "data": None, "free": True}
+        target = find_enemy(combat, arg.strip())
+        if target is None or target not in engaged_enemies(combat):
+            return {"error": "Mark an enemy that is in the fight."}
+        member["mark_id"] = target["id"]
+        text = (
+            f"{self.avatar.name} marks {target['name']}: {member['name']} attacks only that target."
+        )
+        data = {"kind": "mark", "actor": "PLAYER", "target": target["id"]}
+        return {"text": text, "type": "player_action", "data": data, "free": True}
+
     # --- enemy targeting -----------------------------------------------------------
 
     def _enemy_target_member(self, combat: dict[str, Any]) -> dict[str, Any] | None:
@@ -177,6 +198,10 @@ class CombatPartyMixin:
 
     def _member_target(self, combat: dict[str, Any], member: dict[str, Any]) -> dict[str, Any]:
         engaged = engaged_enemies(combat)
+        marked = find_enemy(combat, member.get("mark_id"))
+        if marked in engaged:
+            return marked
+        member["mark_id"] = None  # the marked enemy is down or gone: back to the tactics
         if member.get("tactics") == "OFFENSIVE":
             return min(engaged, key=lambda e: int(e.get("hp") or 0))
         target = find_enemy(combat, combat.get("target_id"))

@@ -339,6 +339,8 @@ export interface CombatPlayerState extends CombatantState {
 export interface CombatPartyMember extends CombatEnemyState {
   downed?: boolean
   tactics?: string
+  /** Enemy the protagonist marked: the companion attacks only this one. */
+  mark_id?: string | null
 }
 
 export interface CombatState {

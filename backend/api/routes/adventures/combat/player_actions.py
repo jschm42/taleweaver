@@ -34,7 +34,7 @@ REST_STAMINA = 40
 NO_DAMAGE_MSG = "The protagonist cannot damage NPCs in this adventure. Use Run, Rest, or /consume."
 INVALID_ACTION_MSG = (
     "Combat active. Valid actions: Attack [target] [--with <weapon>], Run, Rest, /consume <item>, "
-    "or /special <action_id> [target]."
+    "/special <action_id> [target], or Mark <target> (with a companion)."
 )
 _VERBS = {
     "attack": "attack",
@@ -48,6 +48,7 @@ _VERBS = {
     "run": "run",
     "r": "run",
     "consume": "consume",
+    "mark": "mark",
 }
 
 
@@ -288,5 +289,6 @@ class CombatPlayerMixin:
             "rest": self._player_rest,
             "run": self._player_run,
             "consume": self._player_consume,
+            "mark": self._player_mark,
         }
         return handlers.get(verb or "")
