@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * InhabitantsTab — the adventure's NPCs, one section per scene (in the editor's scene
+ * order); NPCs without a known scene come last. Companions (NPCs with a `companion`
+ * block) get a sky-blue ring and a COMPANION / IN PARTY badge.
+ */
+import { computed } from 'vue'
 import { Brain } from 'lucide-vue-next'
 import { getItemIcon } from '@/utils/game_icons'
 import { hasAnyScript } from '@/utils/editor_utils'
@@ -43,6 +49,36 @@ function buildVisualImageUrl(imagePath?: string | null) {
   return `${imagePath}?v=${props.visualsCacheVersion}`
 }
 
+type InhabitantSection = { key: string; label: string; sceneId: string | null; npcs: any[] }
+
+const sceneKey = (sceneId?: string | null): string => String(sceneId || '').trim().toUpperCase()
+
+/** One section per scene that has inhabitants, then everyone without a known scene. */
+const sections = computed<InhabitantSection[]>(() => {
+  const byScene = new Map<string, any[]>()
+  for (const npc of props.editorNpcs) {
+    const key = sceneKey(npc.current_scene_id)
+    byScene.set(key, [...(byScene.get(key) ?? []), npc])
+  }
+  const result: InhabitantSection[] = []
+  for (const scene of props.editorScenes ?? []) {
+    const key = sceneKey(scene.id)
+    const npcs = byScene.get(key)
+    if (!npcs?.length) continue
+    result.push({ key, label: scene.name || scene.label || scene.id, sceneId: scene.id, npcs })
+    byScene.delete(key)
+  }
+  const rest = [...byScene.values()].flat()
+  if (rest.length) result.push({ key: '__UNASSIGNED__', label: 'Unassigned / elsewhere', sceneId: null, npcs: rest })
+  return result
+})
+
+const companionOf = (npc: any): any => npc?.metadata_json?.companion || null
+
+function companionBadge(npc: any): string {
+  return companionOf(npc)?.starts_in_party ? 'IN PARTY' : 'COMPANION'
+}
+
 function getSceneLabel(sceneId?: string | null): string {
   if (!sceneId) return 'Unassigned'
   const match = props.editorScenes?.find((s: any) => String(s.id).toUpperCase() === String(sceneId).toUpperCase())
@@ -71,14 +107,22 @@ function getSceneLabel(sceneId?: string | null): string {
           </button>
         </div>
       </div>
+      <div v-for="section in sections" :key="section.key" class="space-y-3">
+        <h4 class="flex items-center gap-2 text-[11px] font-black text-sky-300/90 uppercase tracking-[0.2em] border-b border-white/5 pb-1.5">
+          <i class="ra ra-compass"></i>
+          <span>{{ section.label }}</span>
+          <span v-if="section.sceneId" class="text-slate-600 font-mono normal-case tracking-normal">{{ section.sceneId }}</span>
+          <span class="text-slate-500">({{ section.npcs.length }})</span>
+        </h4>
       <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
         <div
-          v-for="npc in editorNpcs"
+          v-for="npc in section.npcs"
           :key="'npc_' + npc.id"
           @mouseenter="emit('handle-hover', { id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats, inventory: npc.inventory }, $event)"
           @mouseleave="emit('clear-hover')"
           :class="[
-            'relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible',
+            'relative group aspect-[3/4] bg-slate-900 border rounded-2xl shadow-lg transition-all overflow-visible',
+            companionOf(npc) ? 'border-sky-400/70 ring-2 ring-sky-400/60 ring-offset-2 ring-offset-slate-950' : 'border-white/5',
             activeMenuId === npc.id ? 'z-[180]' : 'z-0',
           ]"
         >
@@ -88,6 +132,11 @@ function getSceneLabel(sceneId?: string | null): string {
               <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
             </div>
             <div class="absolute top-2 left-2 right-11 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+              <div
+                v-if="companionOf(npc)"
+                class="px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-sky-400/60 bg-sky-500/30 text-sky-100 pointer-events-auto"
+                :title="companionOf(npc)?.starts_in_party ? 'Companion, in the party from the start' : 'Companion: can join the protagonist\'s party'"
+              >{{ companionBadge(npc) }}</div>
               <div v-if="npc.is_hidden" class="px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200 pointer-events-auto">HIDDEN</div>
               <div
                 v-if="hasScript(npc)"
@@ -153,6 +202,7 @@ function getSceneLabel(sceneId?: string | null): string {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </section>
 
