@@ -21,6 +21,10 @@ from backend.api.routes.adventures.container_put import (
 )
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.dynamic_scene_flow import (
+    prepare_dynamic_traversal_sse,
+    sync_dynamic_scene_audio,
+)
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -334,6 +338,12 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
+        if getattr(world_exit, "dynamic_zone", None):
+            async for chunk in prepare_dynamic_traversal_sse(
+                interactions=self, exit_ref=exit_ref, language=language
+            ):
+                yield chunk
+
         scene_res = await self.db.execute(
             select(WorldScene)
             .where(
@@ -362,6 +372,7 @@ class TurnInteractionsManager:
             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         self.state.current_scene_id = scene.id
+        sync_dynamic_scene_audio(self.state, scene.id)
         await self._record_map_traversal(current_scene_id, scene, world_exit)
         await self.db.commit()
 

@@ -504,6 +504,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     can_start: bool = True
     rule_enforcement_mode: Optional[str] = "rpg"
     sequence_progression_mode: Optional[str] = "linear"
+    dynamic_generation: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
 
     @field_validator("selected_tone", mode="before")
@@ -676,6 +677,7 @@ class AdventureTemplateUpdate(BaseModel):
     original_prompt: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
     sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = None
+    dynamic_generation: Optional[dict[str, Any]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None

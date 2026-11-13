@@ -40,7 +40,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)), `dynamic_scene_images` (`off`/`inherit`/`simple`/`hq`), `dynamic_npc_images` (`off`/`simple`/`hq`), `dynamic_audio` (`inherit`/`empty`/`generate`), `dynamic_quotes` (`yes`/`no`).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
@@ -53,6 +53,19 @@ Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: I
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
 `via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
+
+**Dynamic exits (procedural exploration zones):**
+Use `[Exit: FROM -> ZONE_ID] label` or `[Exit: FROM -> ?] label` with `theme:` to create an uncharted procedural zone that expands on entry without failing missing-scene validation:
+`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`low`/`medium`/`high`, default `medium`), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`.
+
+```text
+[Exit: TOWN_GATE -> ?] a collapsed iron mine shaft
+zone: iron_mines
+theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
+max_depth: 3
+danger: medium
+cul_de_sac: yes
+```
 
 Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak door`), or leave it out and the AI writes one. The exit tile shows the label on both sides of a two-way exit, with `→ Target scene` below it only once the player has visited that scene; unexplored targets are not named on the tile. With `revealed: yes` the target counts as known from the start: the tile shows its image and `→ Target scene`, and the map shows the scene, before the player has been there (a signposted door, a gate with a view). Only locked exits carry a badge on the tile. Hovering a tile opens a popup with the label, the target's image and where the exit leads, once that is known.
 

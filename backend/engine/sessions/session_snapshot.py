@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldEntity, WorldExit
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 AVATAR_FIELDS = (
     "hp",
@@ -99,6 +99,7 @@ def dump_session(game_session: GameSession, state: SessionState, avatar: Avatar)
 
 async def dump_world(db: AsyncSession, session_id: str) -> dict[str, Any]:
     return {
+        "scenes": [_dump_row(r) for r in await _session_rows(db, WorldScene, session_id)],
         "entities": [_dump_row(r) for r in await _session_rows(db, WorldEntity, session_id)],
         "exits": [_dump_row(r) for r in await _session_rows(db, WorldExit, session_id)],
     }
@@ -137,6 +138,8 @@ async def restore_world(db: AsyncSession, state: SessionState, world: dict[str, 
     """Restores the session's world rows; snapshots without a world dump leave them as they are."""
     if not isinstance(world, dict):
         return
+    if "scenes" in world:
+        await _restore_rows(db, WorldScene, state, list(world.get("scenes") or []))
     await _restore_rows(db, WorldEntity, state, list(world.get("entities") or []))
     await _restore_rows(db, WorldExit, state, list(world.get("exits") or []))
 

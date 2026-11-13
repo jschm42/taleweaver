@@ -144,6 +144,7 @@ class EntityUpdateRequest(BaseModel):
     moveable: Optional[bool] = None
     allowed_scenes: Optional[list[str]] = None
     notes: Optional[str] = None
+    dynamic_zone: Optional[dict[str, Any]] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -160,7 +161,7 @@ class SceneCreateRequest(BaseModel):
 
 class ExitCreateRequest(BaseModel):
     from_scene_id: str
-    to_scene_id: str
+    to_scene_id: str = ""
     # Required: names the passage itself ("an old rusty gate"), the same from both sides.
     label: str
     exit_type: Literal["one_way", "bidirectional"] = "one_way"
@@ -171,6 +172,7 @@ class ExitCreateRequest(BaseModel):
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
+    dynamic_zone: Optional[dict[str, Any]] = None
 
 
 class EntityCreateRequest(BaseModel):

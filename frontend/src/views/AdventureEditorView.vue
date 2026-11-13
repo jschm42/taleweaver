@@ -33,6 +33,7 @@ import ScriptsTab from '@/components/editor/ScriptsTab.vue'
 import TriggerTreeTab from '@/components/editor/TriggerTreeTab.vue'
 import type { TriggerTreeNode } from '@/services/triggerTree'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
+import type { DynamicGenerationConfig } from '@/components/editor/DynamicGenerationSection.vue'
 import ValidationTab from '@/components/editor/ValidationTab.vue'
 import WorldBuilderPrompt from '@/components/editor/WorldBuilderPrompt.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
@@ -116,6 +117,7 @@ const exitModalForm = ref({
   on_unlock_success_text: '',
   on_unlock_failure_script: '',
   on_unlock_failure_text: '',
+  dynamic_zone: null as any,
 })
 
 const editForm = ref({
@@ -425,6 +427,19 @@ function closeExitEditModal() {
     exit_type: 'one_way',
     is_revealed: false,
     lock_description: '',
+    code_to_unlock: '',
+    item_to_unlock: '',
+    rule_to_unlock: '',
+    on_open_exit_script: '',
+    on_open_exit_text: '',
+    on_exit_used_script: '',
+    on_exit_used_text: '',
+    unlock_expression: '',
+    on_unlock_success_script: '',
+    on_unlock_success_text: '',
+    on_unlock_failure_script: '',
+    on_unlock_failure_text: '',
+    dynamic_zone: null,
   }
 }
 
@@ -714,7 +729,13 @@ const form = ref({
   selected_style_id: '',
   selected_tone_id: '',
   narrator_voice: null as NarratorVoice | null,
-  is_adventure_generator: false
+  is_adventure_generator: false,
+  dynamic_generation: {
+    scene_image_mode: 'simple',
+    npc_image_mode: 'simple',
+    audio_mode: 'inherit',
+    interlude_quote_enabled: true,
+  } as DynamicGenerationConfig,
 })
 
 const editingField = ref<string | null>(null)
@@ -959,6 +980,12 @@ async function fetchAdventure() {
     }
     form.value.narrator_voice = data.narrator_voice || null
     form.value.is_adventure_generator = !!data.is_adventure_generator
+    form.value.dynamic_generation = {
+      scene_image_mode: data.dynamic_generation?.scene_image_mode || 'simple',
+      npc_image_mode: data.dynamic_generation?.npc_image_mode || 'simple',
+      audio_mode: data.dynamic_generation?.audio_mode || 'inherit',
+      interlude_quote_enabled: data.dynamic_generation?.interlude_quote_enabled ?? true,
+    }
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -2392,6 +2419,7 @@ function openCreateExitModal() {
     on_unlock_success_text: '',
     on_unlock_failure_script: '',
     on_unlock_failure_text: '',
+    dynamic_zone: null,
   }
   showExitModal.value = true
 
@@ -2590,6 +2618,7 @@ function openEditExitModal(exitId: string) {
     on_unlock_success_text: String(exit.on_unlock_success_text || ''),
     on_unlock_failure_script: String(exit.on_unlock_failure_script || ''),
     on_unlock_failure_text: String(exit.on_unlock_failure_text || ''),
+    dynamic_zone: exit.dynamic_zone ? { ...exit.dynamic_zone } : null,
   }
   showExitModal.value = true
 
@@ -2597,7 +2626,15 @@ function openEditExitModal(exitId: string) {
 
 async function saveExitModal(formData: any) {
   const fromSceneId = String(formData.from_scene_id || activeMapSceneId.value || '').trim()
-  const toSceneId = String(formData.to_scene_id || '').trim()
+  const isDynamic = Boolean(formData.dynamic_zone)
+  let toSceneId = String(formData.to_scene_id || '').trim()
+  if (isDynamic && (!toSceneId || !toSceneId.startsWith('DYN_'))) {
+    const cleanZone = String(formData.dynamic_zone?.zone_id || 'zone')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'ZONE'
+    toSceneId = `DYN_${cleanZone}_D${Number(formData.dynamic_zone?.depth || 1)}_1`
+  }
   const label = String(formData.label || '').trim()
   const lockDescription = String(formData.lock_description || '').trim()
 
@@ -2606,12 +2643,12 @@ async function saveExitModal(formData: any) {
     return
   }
 
-  if (isCreateExitMode.value && !toSceneId) {
+  if (isCreateExitMode.value && !isDynamic && !toSceneId) {
     addNotification('Exit requires a destination scene.', 'error')
     return
   }
 
-  if (isCreateExitMode.value && toSceneId === fromSceneId) {
+  if (isCreateExitMode.value && !isDynamic && toSceneId === fromSceneId) {
     addNotification('Exit destination must be a different scene.', 'error')
     return
   }
@@ -2627,6 +2664,7 @@ async function saveExitModal(formData: any) {
         label,
         exit_type: formData.exit_type,
         is_revealed: Boolean(formData.is_revealed),
+        dynamic_zone: formData.dynamic_zone ?? null,
         lock_description: lockDescription || undefined,
         code_to_unlock: formData.code_to_unlock || undefined,
         item_to_unlock: formData.item_to_unlock || undefined,
@@ -2655,6 +2693,7 @@ async function saveExitModal(formData: any) {
         description: lockDescription,
         exit_type: formData.exit_type,
         revealed: Boolean(formData.is_revealed),
+        dynamic_zone: formData.dynamic_zone ?? null,
         code_to_unlock: formData.code_to_unlock,
         item_to_unlock: formData.item_to_unlock,
         rule_to_unlock: formData.rule_to_unlock,
@@ -3197,6 +3236,7 @@ watch(
               @update:generator="form.is_adventure_generator = $event; saveChanges()"
               @update:can-damage-npcs="form.can_damage_npcs = $event; saveChanges()"
               @update:npcs-can-damage-protagonist="form.npcs_can_damage_protagonist = $event; saveChanges()"
+              @update:dynamic-generation="form.dynamic_generation = $event; saveChanges()"
               @show-debug="showDebug = true"
               @save-changes="saveChanges"
             />

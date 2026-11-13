@@ -1,6 +1,7 @@
 import { API_BASE, authHeaders } from '@/services/http'
 import { isNpcEntity, isObjectEntity, mergeUniqueById } from '@/utils/editor_utils'
 import type { NarratorVoice } from '@/services/narratorVoiceService'
+import type { DynamicGenerationConfig } from '@/components/editor/DynamicGenerationSection.vue'
 
 export interface Adventure {
   id: string
@@ -61,6 +62,7 @@ export interface Adventure {
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
   start_scene_id?: string
+  dynamic_generation?: DynamicGenerationConfig | null
 }
 
 export interface AdventureFormData {
@@ -114,6 +116,7 @@ export interface AdventureFormData {
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
   ui_theme?: { skin?: string | null; accent?: string | null } | null
+  dynamic_generation?: DynamicGenerationConfig | null
 }
 
 export interface CatalogData {

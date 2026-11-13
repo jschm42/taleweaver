@@ -116,7 +116,10 @@ def _scene_extras(scene: WorldScene, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _exit_extras(world_exit: WorldExit, _data: dict[str, Any]) -> dict[str, Any]:
-    return _text_fields(world_exit, _EXIT_SCRIPT_FIELDS)
+    return {
+        **_text_fields(world_exit, _EXIT_SCRIPT_FIELDS),
+        "dynamic_zone": getattr(world_exit, "dynamic_zone", None),
+    }
 
 
 def _avatar_extras(avatar: Avatar, _data: dict[str, Any]) -> dict[str, Any]:
@@ -127,6 +130,7 @@ def _adventure_extras(adventure: AdventureTemplate, _data: dict[str, Any]) -> di
     return {
         "scripts": list(getattr(adventure, "scripts", []) or []),
         "init_script": getattr(adventure, "init_script", None),
+        "dynamic_generation": getattr(adventure, "dynamic_generation", None),
     }
 
 

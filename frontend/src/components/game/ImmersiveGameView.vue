@@ -84,6 +84,12 @@ const props = defineProps<{
   isCheckpointSaving?: boolean
   exitTraversalBusy?: string
   isSceneTransitioning?: boolean
+  dynamicInterlude?: {
+    quote: string
+    speaker_name: string
+    speaker_role?: string
+    image_url?: string | null
+  } | null
   sceneTransitionTarget?: {
     label: string
     targetSceneName: string
@@ -525,6 +531,7 @@ defineExpose({
       :exit-label="props.sceneTransitionTarget?.label"
       :status-text="props.statusText"
       :background-image-url="transitionSceneImageUrl"
+      :interlude="props.dynamicInterlude"
     />
 
     <SceneImageViewer

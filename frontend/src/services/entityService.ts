@@ -27,6 +27,7 @@ export interface EntityEditData {
   item_to_unlock?: string
   rule_to_unlock?: string
   exit_type?: 'one_way' | 'bidirectional'
+  dynamic_zone?: Record<string, any> | null
   inventory?: any[]
   text_log_content?: string
   text_log_format?: string
@@ -102,6 +103,7 @@ export interface ExitCreateData {
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
+  dynamic_zone?: Record<string, any> | null
 }
 
 export interface EntityCreateData {

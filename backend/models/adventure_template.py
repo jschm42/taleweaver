@@ -208,23 +208,28 @@ class AdventureTemplate(Base, TimestampMixin):
         flag_modified(self, "original_manifest")
 
     @property
-    def sequence_progression_mode(self) -> str:
-        """Returns sequence progression mode: 'linear' or 'dynamic'."""
-        if not self.original_manifest or not isinstance(self.original_manifest, dict):
-            return "linear"
-        mode = self.original_manifest.get(
-            "sequence_progression_mode"
-        ) or self.original_manifest.get("sequence_progression")
-        cleaned = str(mode or "linear").strip().lower()
-        return cleaned if cleaned in {"linear", "dynamic"} else "linear"
+    def dynamic_generation(self) -> dict[str, Any]:
+        """Returns dynamic scene generation settings from original_manifest."""
+        from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_generation
 
-    @sequence_progression_mode.setter
-    def sequence_progression_mode(self, value: Optional[str]) -> None:
-        """Sets sequence_progression_mode inside original_manifest and marks original_manifest modified."""
+        manifest = self.original_manifest if isinstance(self.original_manifest, dict) else {}
+        adv_block = manifest.get("adventure") if isinstance(manifest.get("adventure"), dict) else {}
+        raw = manifest.get("dynamic_generation") or adv_block.get("dynamic_generation")
+        return normalize_dynamic_generation(raw)
+
+    @dynamic_generation.setter
+    def dynamic_generation(self, value: Optional[dict[str, Any]]) -> None:
+        """Stores dynamic_generation in original_manifest and mirrors into adventure block."""
+        from copy import deepcopy
+
         from sqlalchemy.orm.attributes import flag_modified
 
-        manifest = dict(self.original_manifest or {})
-        mode = str(value or "linear").strip().lower()
-        manifest["sequence_progression_mode"] = mode if mode in {"dynamic", "linear"} else "linear"
+        from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_generation
+
+        manifest = deepcopy(self.original_manifest or {})
+        normalized = normalize_dynamic_generation(value)
+        manifest["dynamic_generation"] = normalized
+        if isinstance(manifest.get("adventure"), dict):
+            manifest["adventure"]["dynamic_generation"] = dict(normalized)
         self.original_manifest = manifest
         flag_modified(self, "original_manifest")

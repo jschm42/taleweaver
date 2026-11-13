@@ -13,6 +13,10 @@ from backend.api.routes.adventures.container_detach import (
     detach_from_containers,
     load_session_containers,
 )
+from backend.api.routes.adventures.dynamic_scene_flow import (
+    materialize_dynamic_scene_for_exit,
+    sync_dynamic_scene_audio,
+)
 from backend.api.routes.adventures.entity_state_merge import merge_entity_states
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.quest_completion import (
@@ -489,6 +493,7 @@ class TurnStateApplier:
                 event.exit_label = None
             else:
                 old_scene_id = self.state.current_scene_id
+                old_sc_db = None
                 if old_scene_id:
                     old_sc_res = await self.db.execute(
                         select(WorldScene).where(
@@ -507,7 +512,19 @@ class TurnStateApplier:
                             await self._save_chat_message("system", old_sc_db.on_leave_scene_text)
                             system_messages.append(old_sc_db.on_leave_scene_text)
 
+                if valid_exit and getattr(valid_exit, "dynamic_zone", None):
+                    await materialize_dynamic_scene_for_exit(
+                        db=self.db,
+                        state=self.state,
+                        adventure=self.manager.adventure,
+                        user=self.manager.user,
+                        world_exit=valid_exit,
+                        origin_scene=old_sc_db,
+                        language=self.manager.adventure.language or "English",
+                    )
+
                 self.state.current_scene_id = event.new_scene_id
+                sync_dynamic_scene_audio(self.state, event.new_scene_id)
                 state_dirty = True
 
                 # Map Update

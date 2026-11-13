@@ -56,6 +56,10 @@ class MapEngine:
         ).upper()
 
     @staticmethod
+    def _is_dynamic_scene_id(scene_id: str) -> bool:
+        return str(scene_id or "").strip().upper().startswith("DYN_")
+
+    @staticmethod
     def register_visit(
         world_map,
         scene_id: str,
@@ -79,6 +83,7 @@ class MapEngine:
 
         # Use safe ID for keys to ensure consistency
         sid = MapEngine._safe_id(scene_id)
+        is_dynamic = MapEngine._is_dynamic_scene_id(scene_id)
 
         if sid not in nodes:
             nodes[sid] = {
@@ -87,7 +92,11 @@ class MapEngine:
                 "description": description or "",
                 "image_url": image_url,
             }
+            if is_dynamic:
+                nodes[sid]["is_dynamic"] = True
         else:
+            if is_dynamic:
+                nodes[sid]["is_dynamic"] = True
             # Update data if missing or if the new data is more detailed.
             if label and (not nodes[sid].get("label") or len(label) > len(nodes[sid]["label"])):
                 nodes[sid]["label"] = label
@@ -236,6 +245,7 @@ class MapEngine:
                         "code_to_unlock": getattr(ex, "code_to_unlock", "") or "",
                         "item_to_unlock": getattr(ex, "item_to_unlock", "") or "",
                         "rule_to_unlock": getattr(ex, "rule_to_unlock", "") or "",
+                        "dynamic_zone": getattr(ex, "dynamic_zone", None),
                     }
                 )
             else:
@@ -252,6 +262,7 @@ class MapEngine:
                 matched_edge["code_to_unlock"] = ex.code_to_unlock or ""
                 matched_edge["item_to_unlock"] = ex.item_to_unlock or ""
                 matched_edge["rule_to_unlock"] = ex.rule_to_unlock or ""
+                matched_edge["dynamic_zone"] = getattr(ex, "dynamic_zone", None)
 
         MapEngine._add_revealed_exits(nodes, edges, exits)
         MapEngine._add_exits_between_visited(nodes, edges, exits)
@@ -262,13 +273,24 @@ class MapEngine:
     @staticmethod
     def _ensure_target_node(nodes: dict, safe_id: str, raw_id: str, ex) -> None:
         """Adds an unvisited target as an unknown placeholder; a revealed exit makes it known."""
+        dyn_zone = getattr(ex, "dynamic_zone", None)
+        is_dyn = bool(dyn_zone) or MapEngine._is_dynamic_scene_id(raw_id)
         if safe_id not in nodes:
-            nodes[safe_id] = {
+            node_data: dict[str, Any] = {
                 "id": raw_id,
                 "label": "?",
                 "description": "An unexplored area...",
                 "is_unknown": True,
             }
+            if is_dyn:
+                node_data["is_dynamic"] = True
+                if isinstance(dyn_zone, dict):
+                    node_data["dynamic_zone"] = dyn_zone
+            nodes[safe_id] = node_data
+        elif is_dyn:
+            nodes[safe_id]["is_dynamic"] = True
+            if isinstance(dyn_zone, dict) and not nodes[safe_id].get("dynamic_zone"):
+                nodes[safe_id]["dynamic_zone"] = dyn_zone
         if getattr(ex, "is_revealed", False):
             MapEngine._reveal_node(nodes[safe_id])
 
@@ -352,6 +374,7 @@ class MapEngine:
                     "is_locked": getattr(ex, "is_locked", False),
                     "is_revealed": True,
                     "exit_type": exit_type,
+                    "dynamic_zone": getattr(ex, "dynamic_zone", None),
                 }
             )
 
@@ -381,6 +404,7 @@ class MapEngine:
                     "label": getattr(ex, "label", "") or "",
                     "is_locked": getattr(ex, "is_locked", False),
                     "exit_type": exit_type,
+                    "dynamic_zone": getattr(ex, "dynamic_zone", None),
                 }
             )
 

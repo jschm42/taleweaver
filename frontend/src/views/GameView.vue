@@ -249,6 +249,7 @@ const {
   questGlow,
   isCheckpointSaving,
   isSceneTransitioning: socketIsSceneTransitioning,
+  dynamicInterlude,
   sceneArrival,
   generatorProposal,
   showGeneratorModal,
@@ -1647,6 +1648,28 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
 })
 
+watch(
+  dynamicInterlude,
+  (interlude) => {
+    if (!interlude?.quote) return
+    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
+    if (!autoSpeakSettings.value.npcs || gameAudio.speechHeld.value) return
+    const rawTone = sheet.value?.adventure_tone
+    const toneText = typeof rawTone === 'string' ? rawTone : rawTone?.id || rawTone?.name || undefined
+    void audioService.enqueueSpeak(interlude.quote, {
+      adventureId: sheet.value?.adventure_id || undefined,
+      sessionId: props.id,
+      title: sheet.value?.adventure_title || undefined,
+      sceneName: sheet.value?.current_scene || undefined,
+      tone: toneText,
+      npcMetadata: npcMetadata.value,
+      voiceOverride: interlude.voice || interlude.speaker_name || undefined,
+      speaker: interlude.speaker_name || undefined,
+    })
+  },
+  { flush: 'post' },
+)
+
 const handleTrackQuest = (questId: string | null) => {
   setTrackedQuest(questId)
   showQuests.value = false
@@ -1935,6 +1958,7 @@ usePlayAgentAutoLoop()
       :is-checkpoint-saving="isCheckpointSaving"
       :exit-traversal-busy="exitTraversalBusy"
       :is-scene-transitioning="isSceneTransitioning"
+      :dynamic-interlude="dynamicInterlude"
       :scene-transition-target="sceneTransitionTarget || arrivalTarget"
       :exit-unlock-busy="exitUnlockBusy"
       :turn-error="turnError"

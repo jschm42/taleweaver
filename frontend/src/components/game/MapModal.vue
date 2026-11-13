@@ -39,6 +39,8 @@ const hoveredExit = ref<{
   from: string
   to: string
   isLocked: boolean
+  isDynamic?: boolean
+  dynamicZone?: Record<string, any> | null
 } | null>(null)
 const hoveredExitPos = ref({ x: 0, y: 0 })
 
@@ -137,6 +139,8 @@ const layoutData = ref<{
     isCurrent: boolean
     isVisited: boolean
     isUnknown: boolean
+    isDynamic: boolean
+    dynamicZone: Record<string, any> | null
     imageUrl: string | null
     description: string
   }>
@@ -148,6 +152,8 @@ const layoutData = ref<{
     isLocked: boolean
     exitType: string
     isBidirectional: boolean
+    isDynamic: boolean
+    dynamicZone: Record<string, any> | null
   }>
   width: number
   height: number
@@ -200,6 +206,10 @@ function updateLayout() {
     const isRevealed = !!sessionNode?.is_revealed
     const isVisited = !!sessionNode && !isUnknown && !isRevealed
     const dbNode = props.nodes[id] || {}
+    const isDynamic = !!sessionNode?.is_dynamic || id.startsWith('DYN_')
+    const dynamicZone = (sessionNode?.dynamic_zone && typeof sessionNode.dynamic_zone === 'object')
+      ? sessionNode.dynamic_zone
+      : null
 
     return {
       id,
@@ -211,6 +221,8 @@ function updateLayout() {
       isCurrent,
       isVisited,
       isUnknown,
+      isDynamic,
+      dynamicZone,
       imageUrl: isUnknown ? null : (sessionNode?.image_url || dbNode.image_url || null),
       description: isUnknown ? '' : (sessionNode?.description || dbNode.description || '')
     }
@@ -221,16 +233,21 @@ function updateLayout() {
     const rawEdge = props.mapData!.edges.find(re => 
       (safeId(re.from) === e.v && safeId(re.to) === e.w) ||
       (safeId(re.from) === e.w && safeId(re.to) === e.v)
-    ) || {}
-    const exitType = edge.exitType || rawEdge.exit_type || 'one_way'
+    )
+    const exitType = String(edge.exitType || rawEdge?.exit_type || 'one_way')
+    const dynamicZone = (rawEdge?.dynamic_zone && typeof rawEdge.dynamic_zone === 'object')
+      ? (rawEdge.dynamic_zone as Record<string, any>)
+      : null
     return {
       from: e.v,
       to: e.w,
       points: edge.points || [],
-      label: edge.label || rawEdge.label || '',
-      isLocked: edge.isLocked || rawEdge.is_locked || false,
+      label: edge.label || rawEdge?.label || '',
+      isLocked: edge.isLocked || rawEdge?.is_locked || false,
       exitType,
-      isBidirectional: exitType === 'bidirectional'
+      isBidirectional: exitType === 'bidirectional',
+      isDynamic: !!dynamicZone,
+      dynamicZone,
     }
   })
 
@@ -262,6 +279,8 @@ const exitCircles = computed(() => {
     label: string
     isLocked: boolean
     exitType: string
+    isDynamic: boolean
+    dynamicZone: Record<string, any> | null
   }> = []
 
   layoutData.value.edges.forEach((edge, edgeIdx) => {
@@ -282,7 +301,9 @@ const exitCircles = computed(() => {
       to: toNode?.label || edge.to,
       label: edge.label || `Exit to ${toNode?.label || edge.to}`,
       isLocked: edge.isLocked,
-      exitType: edge.exitType
+      exitType: edge.exitType,
+      isDynamic: edge.isDynamic,
+      dynamicZone: edge.dynamicZone,
     })
 
     // If bidirectional, also add a circle at the start of the edge (pointing back to 'from' scene)
@@ -298,7 +319,9 @@ const exitCircles = computed(() => {
         to: fromNode?.label || edge.from,
         label: edge.label || `Exit to ${fromNode?.label || edge.from}`,
         isLocked: edge.isLocked,
-        exitType: edge.exitType
+        exitType: edge.exitType,
+        isDynamic: edge.isDynamic,
+        dynamicZone: edge.dynamicZone,
       })
     }
   })
@@ -459,7 +482,9 @@ function handleExitMouseEnter(exit: any, event: MouseEvent) {
     label: exit.label,
     from: exit.from,
     to: exit.to,
-    isLocked: exit.isLocked
+    isLocked: exit.isLocked,
+    isDynamic: !!exit.isDynamic,
+    dynamicZone: exit.dynamicZone || null,
   }
   hoveredExitPos.value = { x: event.clientX, y: event.clientY }
 }
@@ -559,6 +584,9 @@ onMounted(() => {
                     <circle cx="20" cy="5" r="2.5" fill="#ffd97d"/>
                   </svg>
                   Two-way
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="inline-block w-3 h-3 rounded-md bg-violet-950/80 border border-dashed border-violet-400"></span> Dynamic Zone
                 </span>
               </div>
 
@@ -673,6 +701,31 @@ onMounted(() => {
                     >
                       <circle cx="5" cy="5" r="3.5" fill="#ffd97d" />
                     </marker>
+
+                    <!-- Dynamic zone arrowhead and dot -->
+                    <marker
+                      id="arrow-dynamic"
+                      viewBox="0 0 12 12"
+                      refX="10"
+                      refY="6"
+                      markerWidth="7"
+                      markerHeight="7"
+                      orient="auto-start-reverse"
+                    >
+                      <path d="M 0 1 L 11 6 L 0 11 Z" fill="#c084fc" />
+                    </marker>
+
+                    <marker
+                      id="dot-dynamic"
+                      viewBox="0 0 10 10"
+                      refX="5"
+                      refY="5"
+                      markerWidth="5"
+                      markerHeight="5"
+                      orient="auto"
+                    >
+                      <circle cx="5" cy="5" r="3.5" fill="#c084fc" />
+                    </marker>
                   </defs>
 
                   <!-- Draw SVG edge paths -->
@@ -681,14 +734,14 @@ onMounted(() => {
                       v-for="(edge, idx) in layoutData.edges"
                       :key="idx"
                       :d="getEdgePath(edge.points)"
-                      :stroke="edge.isBidirectional ? '#ffd97d' : '#f97316'"
+                      :stroke="edge.isDynamic ? '#c084fc' : (edge.isBidirectional ? '#ffd97d' : '#f97316')"
                       :stroke-width="edge.isLocked ? 2 : 2.5"
-                      :stroke-dasharray="edge.isLocked ? '6,5' : 'none'"
+                      :stroke-dasharray="edge.isLocked ? '6,5' : (edge.isDynamic ? '4,3' : 'none')"
                       fill="none"
                       class="transition-opacity duration-300"
                       :class="{ 'opacity-50': edge.isLocked }"
-                      :marker-end="edge.isBidirectional ? 'url(#dot-bidir)' : 'url(#arrow-oneway)'"
-                      :marker-start="edge.isBidirectional ? 'url(#dot-bidir)' : 'none'"
+                      :marker-end="edge.isDynamic ? (edge.isBidirectional ? 'url(#dot-dynamic)' : 'url(#arrow-dynamic)') : (edge.isBidirectional ? 'url(#dot-bidir)' : 'url(#arrow-oneway)')"
+                      :marker-start="edge.isBidirectional ? (edge.isDynamic ? 'url(#dot-dynamic)' : 'url(#dot-bidir)') : 'none'"
                     />
                   </g>
                 </svg>
@@ -715,15 +768,26 @@ onMounted(() => {
                       :class="[
                         node.isCurrent 
                           ? 'border-emerald-500 shadow-emerald-950/50 shadow-md ring-2 ring-emerald-500/30' 
-                          : node.isUnknown 
-                            ? 'border-slate-800 bg-slate-950/80 border-dashed' 
-                            : 'border-slate-700 hover:border-amber-500/50'
+                          : node.isUnknown && node.isDynamic
+                            ? 'border-violet-500/60 bg-violet-950/30 border-dashed'
+                            : node.isUnknown 
+                              ? 'border-slate-800 bg-slate-950/80 border-dashed' 
+                              : node.isDynamic
+                                ? 'border-violet-500/40 hover:border-violet-400'
+                                : 'border-slate-700 hover:border-amber-500/50'
                       ]"
                     >
                       <!-- Thumbnail area -->
                       <div class="flex-grow relative bg-slate-950 overflow-hidden">
-                        <div v-if="node.isUnknown" class="w-full h-full flex items-center justify-center bg-black/60">
-                          <span class="text-4xl font-extrabold text-slate-750 group-hover:scale-110 group-hover:text-slate-650 transition-all duration-300">?</span>
+                        <div v-if="node.isUnknown" class="w-full h-full flex flex-col items-center justify-center" :class="node.isDynamic ? 'bg-violet-950/40' : 'bg-black/60'">
+                          <span
+                            class="text-4xl font-extrabold group-hover:scale-110 transition-all duration-300"
+                            :class="node.isDynamic ? 'text-violet-300' : 'text-slate-750 group-hover:text-slate-650'"
+                          >{{ node.isDynamic ? '✦ ?' : '?' }}</span>
+                          <span
+                            v-if="node.isDynamic"
+                            class="mt-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-violet-500/20 text-violet-300 border border-violet-500/40"
+                          >Dynamic</span>
                         </div>
                         <template v-else>
                           <img 
@@ -746,6 +810,10 @@ onMounted(() => {
                           >
                             <span class="w-1.5 h-1.5 rounded-full bg-black animate-ping"></span> Here
                           </span>
+                          <span
+                            v-if="node.isDynamic"
+                            class="absolute top-2 left-2 bg-violet-500/25 text-violet-200 border border-violet-400/40 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full backdrop-blur-sm z-20"
+                          >Dynamic</span>
                         </template>
                       </div>
 
@@ -759,14 +827,17 @@ onMounted(() => {
                           :class="[
                             node.isCurrent 
                               ? 'text-emerald-400' 
-                              : node.isUnknown 
-                                ? 'text-slate-500 italic' 
-                                : 'text-slate-200'
+                              : node.isUnknown && node.isDynamic
+                                ? 'text-violet-300 italic'
+                                : node.isUnknown 
+                                  ? 'text-slate-500 italic' 
+                                  : 'text-slate-200'
                           ]"
                         >
-                          {{ node.label }}
+                          {{ node.isUnknown && node.isDynamic ? (node.dynamicZone?.zone_id || 'Dynamic Zone') : node.label }}
                         </span>
-                        <span v-if="node.isVisited && !node.isCurrent" class="text-[9px] text-slate-500 uppercase font-bold">Visited</span>
+                        <span v-if="node.isUnknown && node.isDynamic" class="text-[8px] text-violet-300 uppercase font-bold">Dynamic</span>
+                        <span v-else-if="node.isVisited && !node.isCurrent" class="text-[9px] text-slate-500 uppercase font-bold">Visited</span>
                       </div>
                     </div>
                   </div>
@@ -793,12 +864,15 @@ onMounted(() => {
                       :class="[
                         exit.isLocked
                           ? 'bg-amber-950 border-amber-500 text-amber-400 hover:bg-amber-900'
-                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-emerald-500 hover:text-emerald-400'
+                          : exit.isDynamic
+                            ? 'bg-violet-950 border-violet-400 text-violet-300 hover:bg-violet-900'
+                            : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-emerald-500 hover:text-emerald-400'
                       ]"
                     >
                       <svg v-if="exit.isLocked" xmlns="http://www.w3.org/2050/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
+                      <span v-else-if="exit.isDynamic" class="text-[7px] font-black uppercase font-mono">dyn</span>
                       <span v-else class="text-[7px] font-black uppercase font-mono">exit</span>
                     </button>
                   </div>
@@ -827,8 +901,27 @@ onMounted(() => {
                   :style="{ left: (tooltipPos.x + 20) + 'px', top: (tooltipPos.y - 40) + 'px' }"
                 >
                   <div class="w-72 bg-slate-900/95 border border-slate-700 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
+                    <!-- Unknown Dynamic Zone Node Content -->
+                    <div v-if="(hoveredNode.isUnknown || hoveredNode.label === '?') && hoveredNode.isDynamic" class="p-6 bg-slate-950 flex flex-col items-center text-center">
+                      <div class="w-14 h-14 rounded-full border-2 border-violet-500/60 bg-violet-950/40 flex items-center justify-center mb-3 animate-pulse">
+                        <span class="text-2xl font-black text-violet-300">✦ ?</span>
+                      </div>
+                      <h3 class="text-base font-bold text-violet-200 mb-1 uppercase tracking-widest">Uncharted Dynamic Zone</h3>
+                      <div v-if="hoveredNode.dynamicZone" class="flex flex-wrap items-center justify-center gap-1.5 mb-2">
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 font-bold uppercase">
+                          {{ hoveredNode.dynamicZone.danger_level || 'medium' }} danger
+                        </span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                          Max Depth {{ hoveredNode.dynamicZone.max_depth || 3 }}
+                        </span>
+                      </div>
+                      <p class="text-xs text-slate-300 italic leading-relaxed">
+                        "{{ hoveredNode.dynamicZone?.theme || mysteriousSaying }}"
+                      </p>
+                    </div>
+
                     <!-- Unknown Node Content -->
-                    <div v-if="hoveredNode.isUnknown || hoveredNode.label === '?'" class="p-8 bg-black flex flex-col items-center text-center">
+                    <div v-else-if="hoveredNode.isUnknown || hoveredNode.label === '?'" class="p-8 bg-black flex flex-col items-center text-center">
                       <div class="w-16 h-16 rounded-full border-2 border-slate-800 flex items-center justify-center mb-4 animate-pulse">
                         <span class="text-4xl font-black text-slate-600">?</span>
                       </div>
@@ -851,6 +944,9 @@ onMounted(() => {
                         <div class="flex items-center justify-between mb-2">
                           <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label || hoveredNode.id }}</span>
                           <div class="flex gap-1.5">
+                            <span v-if="hoveredNode.isDynamic" class="text-xxs px-1.5 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-violet-300 font-mono uppercase">
+                              Dynamic
+                            </span>
                             <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
                               Room
                             </span>
@@ -877,14 +973,25 @@ onMounted(() => {
                   <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col p-4 animate-tooltip-in">
                     <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
                       <span class="text-xs font-black uppercase text-slate-400 tracking-wider">Exit Connection</span>
-                      <span 
-                        class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight"
-                        :class="hoveredExit.isLocked ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
-                      >
-                        {{ hoveredExit.isLocked ? 'Locked' : 'Unlocked' }}
-                      </span>
+                      <div class="flex items-center gap-1">
+                        <span
+                          v-if="hoveredExit.isDynamic"
+                          class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                        >
+                          Dynamic Zone
+                        </span>
+                        <span 
+                          class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight"
+                          :class="hoveredExit.isLocked ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
+                        >
+                          {{ hoveredExit.isLocked ? 'Locked' : 'Unlocked' }}
+                        </span>
+                      </div>
                     </div>
                     <p class="text-xs font-bold text-white mb-1 uppercase tracking-tight">{{ hoveredExit.label }}</p>
+                    <p v-if="hoveredExit.isDynamic && hoveredExit.dynamicZone" class="text-[10px] text-violet-300 mb-1">
+                      Danger: {{ hoveredExit.dynamicZone.danger_level || 'medium' }} • Max Depth: {{ hoveredExit.dynamicZone.max_depth || 3 }}
+                    </p>
                     <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
                       <span>{{ hoveredExit.from }}</span>
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">

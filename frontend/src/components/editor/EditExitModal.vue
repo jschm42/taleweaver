@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
 import { Lock, Sparkles, ChevronDown, ChevronRight } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -29,6 +30,7 @@ const props = defineProps<{
     on_open_exit_text?: string
     on_exit_used_script?: string
     on_exit_used_text?: string
+    dynamic_zone?: DynamicZoneForm | null
   }
   sceneReferenceOptions: any[]
   referenceOptions: any[]
@@ -56,6 +58,7 @@ const emit = defineEmits<{
     on_open_exit_text?: string
     on_exit_used_script?: string
     on_exit_used_text?: string
+    dynamic_zone?: DynamicZoneForm | null
   }): void
 }>()
 
@@ -78,6 +81,7 @@ const EMPTY_FORM = {
   on_open_exit_text: '',
   on_exit_used_script: '',
   on_exit_used_text: '',
+  dynamic_zone: null as DynamicZoneForm | null,
 }
 
 const showExitGuard = ref(false)
@@ -125,6 +129,15 @@ const hasGate = computed(() => {
   )
 })
 
+const dynamicPlaceholderId = computed(() => {
+  if (!form.value.dynamic_zone) return ''
+  const clean = String(form.value.dynamic_zone.zone_id || 'zone')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'ZONE'
+  return `DYN_${clean}_D${form.value.dynamic_zone.depth || 1}_1`
+})
+
 const isFormInvalid = computed(() => {
   // Required: the label names the passage itself ("an old rusty gate").
   const labelText = (form.value.label || '').trim()
@@ -133,6 +146,7 @@ const isFormInvalid = computed(() => {
   if ((form.value.code_to_unlock || '').length > 32) return true
   if ((form.value.rule_to_unlock || '').length > 500) return true
   if (hasGate.value && !(form.value.lock_description || '').trim()) return true
+  if (form.value.dynamic_zone && !(form.value.dynamic_zone.theme || '').trim()) return true
   return false
 })
 
@@ -171,8 +185,14 @@ function submit() {
               </label>
               <label class="text-xs text-slate-300 space-y-1">
                 <span>To Scene</span>
+                <input
+                  v-if="form.dynamic_zone"
+                  :value="dynamicPlaceholderId"
+                  class="w-full bg-black/40 border border-emerald-500/20 rounded-2xl px-4 py-3 text-sm text-emerald-300 font-mono"
+                  disabled
+                />
                 <EntityReferenceCombobox
-                  v-if="isCreateMode"
+                  v-else-if="isCreateMode"
                   v-model="form.to_scene_id"
                   :options="sceneReferenceOptions.filter((scene) => scene.id !== (form.from_scene_id || fromSceneId))"
                   placeholder="Select destination scene"
@@ -216,6 +236,8 @@ function submit() {
               <input v-model="form.is_revealed" type="checkbox" class="accent-emerald-500" />
               <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
             </label>
+
+            <DynamicZoneFields v-model="form.dynamic_zone" />
 
             <label class="text-xs text-slate-300 space-y-1 block">
               <div class="flex justify-between items-center">

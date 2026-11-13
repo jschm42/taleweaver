@@ -87,6 +87,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `copyright` | `string` | Optional copyright notice (max 100 chars). |
 | `license` | `string` | Optional license string or identifier (max 100 chars). |
 | `init_script` | `string \| null` | Optional global Python initialization script executed when a new game session starts. Sets up starting variables, narrative messages, and shared helper functions. |
+| `dynamic_generation` | `object \| null` | Optional configuration for Dynamic Scenes: `{"scene_image_mode": "off" \| "inherit" \| "simple" \| "hq", "npc_image_mode": "off" \| "simple" \| "hq", "audio_mode": "inherit" \| "empty" \| "generate", "interlude_quote_enabled": boolean}`. Defaults to `simple` scene/NPC images, `inherit` audio, and `true` for interlude quotes. |
 
 ---
 
@@ -143,6 +144,7 @@ Connections and passageways between scenes.
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
 | `lock_description` | `string` | Narrative clue or description when encountering the lock. |
+| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "depth": number, "max_depth": number, "danger_level": "low" \| "medium" \| "high", "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean}`. When set, entering the exit generates a session-scoped scene tree on-the-fly without mutating the base manifest. |
 
 ---
 

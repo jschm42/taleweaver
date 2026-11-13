@@ -172,6 +172,10 @@ class WorldExitSchema(WorldBaseSchema):
         default="",
         description="Optional text output when unlocking this exit fails. Use empty string for none.",
     )
+    dynamic_zone: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional procedural expansion profile for dynamic exits generated on first traversal.",
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -831,6 +835,10 @@ class WorldManifesto(WorldBaseSchema):
     sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = Field(
         default="linear",
         description="Sequence progression mode: 'linear' (default, advances in sequence order and completes adventure after last sequence) or 'dynamic' (sequences are activated/managed via scripts or scene entries, without auto-completion after last sequence).",
+    )
+    dynamic_generation: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional configuration for procedural dynamic scene image tiers, music mode, and NPC interlude quotes.",
     )
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]

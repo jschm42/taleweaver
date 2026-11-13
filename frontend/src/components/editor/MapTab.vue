@@ -34,6 +34,8 @@ const hoveredExit = ref<{
   from: string
   to: string
   isLocked: boolean
+  isDynamic?: boolean
+  dynamicZone?: Record<string, any> | null
 } | null>(null)
 const hoveredExitPos = ref({ x: 0, y: 0 })
 
@@ -80,6 +82,9 @@ const layoutData = ref<{
     width: number
     height: number
     isStart: boolean
+    isDynamic: boolean
+    dynamicZone: Record<string, any> | null
+    exitId?: string
     imageUrl: string | null
     description: string
   }>
@@ -92,6 +97,8 @@ const layoutData = ref<{
     isLocked: boolean
     exitType: string
     isBidirectional: boolean
+    isDynamic: boolean
+    dynamicZone: Record<string, any> | null
   }>
   width: number
   height: number
@@ -113,11 +120,29 @@ function updateLayout() {
     g.setNode(id, { width: 160, height: 120 })
   })
 
-  // 2. Add edges (exits)
+  // 2. Add edges (exits) and virtual dynamic zone target nodes
+  const virtualDynamicNodes = new Map<string, {
+    rawId: string
+    label: string
+    description: string
+    dynamicZone: Record<string, any>
+    exitId: string
+  }>()
   const exits = props.debugData?.exits || []
   exits.forEach((edge: any) => {
     const fromId = safeId(edge.from_scene_id)
     const toId = safeId(edge.to_scene_id)
+    const dynZone = (edge.dynamic_zone && typeof edge.dynamic_zone === 'object') ? edge.dynamic_zone : null
+    if (dynZone && toId && !g.hasNode(toId)) {
+      g.setNode(toId, { width: 160, height: 120 })
+      virtualDynamicNodes.set(toId, {
+        rawId: String(edge.to_scene_id || toId),
+        label: dynZone.zone_id ? `Zone: ${dynZone.zone_id}` : (edge.label || 'Dynamic Zone'),
+        description: dynZone.theme || 'Procedural dynamic zone',
+        dynamicZone: dynZone,
+        exitId: String(edge.id || ''),
+      })
+    }
     if (!g.hasNode(fromId) || !g.hasNode(toId)) return
     
     g.setEdge(fromId, toId, {
@@ -133,6 +158,24 @@ function updateLayout() {
 
   const nodes = g.nodes().map(id => {
     const node = g.node(id)
+    const virtualDyn = virtualDynamicNodes.get(id)
+    if (virtualDyn) {
+      return {
+        id,
+        rawId: virtualDyn.rawId,
+        label: virtualDyn.label,
+        x: node.x,
+        y: node.y,
+        width: node.width,
+        height: node.height,
+        isStart: false,
+        isDynamic: true,
+        dynamicZone: virtualDyn.dynamicZone,
+        exitId: virtualDyn.exitId,
+        imageUrl: null,
+        description: virtualDyn.description,
+      }
+    }
     const originalScene = props.editorScenes.find(s => safeId(s.id) === id) || {}
     const isStart = startSceneId.value === id
 
@@ -145,6 +188,8 @@ function updateLayout() {
       width: node.width,
       height: node.height,
       isStart,
+      isDynamic: false,
+      dynamicZone: null,
       imageUrl: originalScene.image_url || null,
       description: originalScene.description || ''
     }
@@ -157,6 +202,9 @@ function updateLayout() {
       (safeId(re.from_scene_id) === e.w && safeId(re.to_scene_id) === e.v)
     ) || {}
     const exitType = edge.exitType || rawExit.exit_type || 'one_way'
+    const dynamicZone = (rawExit.dynamic_zone && typeof rawExit.dynamic_zone === 'object')
+      ? rawExit.dynamic_zone
+      : null
     return {
       id: String(rawExit.id || `${e.v}-${e.w}`),
       from: e.v,
@@ -165,7 +213,9 @@ function updateLayout() {
       label: edge.label || rawExit.label || '',
       isLocked: edge.isLocked || !!rawExit.is_locked,
       exitType,
-      isBidirectional: exitType === 'bidirectional'
+      isBidirectional: exitType === 'bidirectional',
+      isDynamic: !!dynamicZone,
+      dynamicZone,
     }
   })
 
@@ -190,6 +240,8 @@ const exitCircles = computed(() => {
     label: string
     isLocked: boolean
     exitType: string
+    isDynamic: boolean
+    dynamicZone: Record<string, any> | null
   }> = []
 
   layoutData.value.edges.forEach((edge, edgeIdx) => {
@@ -211,7 +263,9 @@ const exitCircles = computed(() => {
       to: toNode?.label || edge.to,
       label: edge.label || `Exit to ${toNode?.label || edge.to}`,
       isLocked: edge.isLocked,
-      exitType: edge.exitType
+      exitType: edge.exitType,
+      isDynamic: edge.isDynamic,
+      dynamicZone: edge.dynamicZone,
     })
 
     // If bidirectional, also add a circle at the start of the edge (pointing back to 'from' scene)
@@ -228,7 +282,9 @@ const exitCircles = computed(() => {
         to: fromNode?.label || edge.from,
         label: edge.label || `Exit to ${fromNode?.label || edge.from}`,
         isLocked: edge.isLocked,
-        exitType: edge.exitType
+        exitType: edge.exitType,
+        isDynamic: edge.isDynamic,
+        dynamicZone: edge.dynamicZone,
       })
     }
   })
@@ -311,7 +367,9 @@ function handleExitMouseEnter(exit: any, event: MouseEvent) {
     label: exit.label,
     from: exit.from,
     to: exit.to,
-    isLocked: exit.isLocked
+    isLocked: exit.isLocked,
+    isDynamic: !!exit.isDynamic,
+    dynamicZone: exit.dynamicZone || null,
   }
   hoveredExitPos.value = { x: event.clientX, y: event.clientY }
 }
@@ -324,7 +382,11 @@ function handleExitMouseMove(event: MouseEvent) {
   hoveredExitPos.value = { x: event.clientX, y: event.clientY }
 }
 
-function handleNodeClick(node: { rawId: string }) {
+function handleNodeClick(node: { rawId: string; isDynamic?: boolean; exitId?: string }) {
+  if (node.isDynamic && node.exitId) {
+    emit('open-exit', node.exitId)
+    return
+  }
   const sceneId = String(node.rawId || '').trim()
   if (!sceneId) return
   emit('open-scene', sceneId)
@@ -465,6 +527,28 @@ onMounted(() => {
               >
                 <path d="M 10 1 L 0 5 L 10 9 z" fill="#ffd97d" />
               </marker>
+              <marker 
+                id="arrow-dynamic-end" 
+                viewBox="0 0 10 10" 
+                refX="8" 
+                refY="5" 
+                markerWidth="6" 
+                markerHeight="6" 
+                orient="auto"
+              >
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc" />
+              </marker>
+              <marker 
+                id="arrow-dynamic-start" 
+                viewBox="0 0 10 10" 
+                refX="2" 
+                refY="5" 
+                markerWidth="6" 
+                markerHeight="6" 
+                orient="auto"
+              >
+                <path d="M 10 1 L 0 5 L 10 9 z" fill="#c084fc" />
+              </marker>
             </defs>
 
             <!-- Draw SVG edge paths -->
@@ -473,14 +557,14 @@ onMounted(() => {
                 v-for="(edge, idx) in layoutData.edges"
                 :key="idx"
                 :d="getEdgePath(edge.points)"
-                stroke="#ffd97d"
+                :stroke="edge.isDynamic ? '#c084fc' : '#ffd97d'"
                 :stroke-width="isActiveExit(edge.id) ? 4 : (edge.isLocked ? 2 : 2.5)"
-                :stroke-dasharray="edge.isLocked ? '6,6' : 'none'"
+                :stroke-dasharray="edge.isLocked ? '6,6' : (edge.isDynamic ? '4,3' : 'none')"
                 fill="none"
                 class="transition-opacity duration-300 cursor-pointer"
                 :class="{ 'opacity-60': edge.isLocked, 'opacity-100': isActiveExit(edge.id), 'opacity-80': !isActiveExit(edge.id) }"
-                marker-end="url(#arrow-end)"
-                :marker-start="edge.isBidirectional ? 'url(#arrow-start)' : 'none'"
+                :marker-end="edge.isDynamic ? 'url(#arrow-dynamic-end)' : 'url(#arrow-end)'"
+                :marker-start="edge.isBidirectional ? (edge.isDynamic ? 'url(#arrow-dynamic-start)' : 'url(#arrow-start)') : 'none'"
                 style="pointer-events: stroke;"
                 @click.stop="handleExitClick(edge.id)"
               />
@@ -510,22 +594,35 @@ onMounted(() => {
                 :class="[
                   node.isStart || isActiveSceneNode(node.id)
                     ? 'border-emerald-500 shadow-emerald-950/50 shadow-md ring-2 ring-emerald-500/30' 
-                    : 'border-slate-700 hover:border-amber-500/50'
+                    : node.isDynamic
+                      ? 'border-violet-500/60 border-dashed bg-slate-900/90 hover:border-violet-400'
+                      : 'border-slate-700 hover:border-amber-500/50'
                 ]"
               >
                 <!-- Thumbnail area -->
                 <div class="flex-grow relative bg-slate-950 overflow-hidden">
-                  <img 
-                    v-if="node.imageUrl" 
-                    :src="buildImageUrl(node.imageUrl)" 
-                    class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                  />
-                  <div 
-                    v-else 
-                    class="w-full h-full flex items-center justify-center bg-slate-850 text-slate-650"
+                  <div
+                    v-if="node.isDynamic"
+                    class="w-full h-full flex flex-col items-center justify-center bg-violet-950/35 px-2 text-center"
                   >
-                    <i class="ra ra-compass text-3xl opacity-40"></i>
+                    <span class="text-xl font-black text-violet-300">✦</span>
+                    <span class="text-[9px] text-violet-200/80 font-mono mt-0.5">
+                      Depth 1–{{ node.dynamicZone?.max_depth || 3 }} • {{ node.dynamicZone?.danger_level || 'medium' }}
+                    </span>
                   </div>
+                  <template v-else>
+                    <img 
+                      v-if="node.imageUrl" 
+                      :src="buildImageUrl(node.imageUrl)" 
+                      class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                    />
+                    <div 
+                      v-else 
+                      class="w-full h-full flex items-center justify-center bg-slate-850 text-slate-650"
+                    >
+                      <i class="ra ra-compass text-3xl opacity-40"></i>
+                    </div>
+                  </template>
                   <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/20 to-transparent"></div>
                   
                   <!-- Start scene indicator badge -->
@@ -535,19 +632,27 @@ onMounted(() => {
                   >
                     <span class="w-1.5 h-1.5 rounded-full bg-black"></span> Start
                   </span>
+                  <span
+                    v-else-if="node.isDynamic"
+                    class="absolute top-2 right-2 bg-violet-500/20 text-violet-300 border border-violet-500/40 text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-20"
+                  >
+                    Dynamic
+                  </span>
                 </div>
 
                 <!-- Text label bar -->
                 <div 
                   class="h-10 px-3 flex items-center justify-between shrink-0 bg-slate-900/95 border-t border-slate-800"
-                  :class="{ 'bg-emerald-950/30 border-emerald-900/40': node.isStart }"
+                  :class="{ 'bg-emerald-950/30 border-emerald-900/40': node.isStart, 'bg-violet-950/20 border-violet-900/40': node.isDynamic }"
                 >
                   <span 
                     class="text-[11px] font-bold truncate tracking-wide"
                     :class="[
                       node.isStart 
                         ? 'text-emerald-400' 
-                        : 'text-slate-200'
+                        : node.isDynamic
+                          ? 'text-violet-300'
+                          : 'text-slate-200'
                     ]"
                   >
                     {{ node.label }}
@@ -580,6 +685,8 @@ onMounted(() => {
                     ? 'bg-emerald-700 border-emerald-400 text-white'
                     : exit.isLocked
                     ? 'bg-amber-950 border-amber-500 text-amber-400 hover:bg-amber-900'
+                    : exit.isDynamic
+                    ? 'bg-violet-950 border-violet-400 text-violet-300 hover:bg-violet-900'
                     : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-emerald-500 hover:text-emerald-400'
                 ]"
                 @click.stop="handleExitClick(exit.exitId)"
@@ -587,6 +694,7 @@ onMounted(() => {
                 <svg v-if="exit.isLocked" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
+                <span v-else-if="exit.isDynamic" class="text-[7px] font-black uppercase font-mono">dyn</span>
                 <span v-else class="text-[7px] font-black uppercase font-mono">exit</span>
               </button>
             </div>
@@ -618,6 +726,9 @@ onMounted(() => {
             <span class="inline-block w-2.5 h-2.5 rounded bg-slate-900 border border-slate-700"></span> Regular Scene
           </span>
           <span class="flex items-center gap-1.5">
+            <span class="inline-block w-2.5 h-2.5 rounded bg-violet-950/80 border border-dashed border-violet-400"></span> Dynamic Zone
+          </span>
+          <span class="flex items-center gap-1.5">
             <span class="inline-block w-2.5 h-1 border-t-2 border-dashed border-[#ffd97d]/50"></span> Locked Exit
           </span>
         </div>
@@ -646,8 +757,11 @@ onMounted(() => {
               <div class="p-5 bg-slate-900">
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label || hoveredNode.name || hoveredNode.id }}</span>
-                  <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
-                    Scene
+                  <span
+                    class="text-xxs px-1.5 py-0.5 rounded font-mono uppercase border"
+                    :class="hoveredNode.isDynamic ? 'border-violet-500/40 bg-violet-500/15 text-violet-300' : 'border-emerald-500/30 text-emerald-400'"
+                  >
+                    {{ hoveredNode.isDynamic ? 'Dynamic Zone' : 'Scene' }}
                   </span>
                 </div>
                 <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-4">
@@ -670,14 +784,25 @@ onMounted(() => {
             <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col p-4 animate-tooltip-in">
               <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
                 <span class="text-xs font-black uppercase text-slate-400 tracking-wider">Exit Connection</span>
-                <span 
-                  class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight"
-                  :class="hoveredExit.isLocked ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
-                >
-                  {{ hoveredExit.isLocked ? 'Locked' : 'Unlocked' }}
-                </span>
+                <div class="flex items-center gap-1">
+                  <span
+                    v-if="hoveredExit.isDynamic"
+                    class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                  >
+                    Dynamic Zone
+                  </span>
+                  <span 
+                    class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight"
+                    :class="hoveredExit.isLocked ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
+                  >
+                    {{ hoveredExit.isLocked ? 'Locked' : 'Unlocked' }}
+                  </span>
+                </div>
               </div>
               <p class="text-xs font-bold text-white mb-1 uppercase tracking-tight">{{ hoveredExit.label }}</p>
+              <p v-if="hoveredExit.isDynamic && hoveredExit.dynamicZone" class="text-[10px] text-violet-300 mb-1">
+                Danger: {{ hoveredExit.dynamicZone.danger_level || 'medium' }} • Max Depth: {{ hoveredExit.dynamicZone.max_depth || 3 }}
+              </p>
               <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
                 <span>{{ hoveredExit.from }}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">

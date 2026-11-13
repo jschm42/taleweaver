@@ -16,6 +16,12 @@ const props = defineProps<{
   exitLabel?: string | null
   statusText?: string | null
   backgroundImageUrl?: string | null
+  interlude?: {
+    quote: string
+    speaker_name: string
+    speaker_role?: string
+    image_url?: string | null
+  } | null
 }>()
 
 const imageLoaded = ref(false)
@@ -106,6 +112,20 @@ function formatSceneTitle(name?: string | null): string {
             <span>The path unfolds into the unknown...</span>
           </template>
         </p>
+
+        <!-- Atmospheric NPC Interlude Quote (Dynamic Scenes) -->
+        <blockquote
+          v-if="props.interlude?.quote"
+          class="mt-5 px-5 py-4 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md text-left shadow-xl max-w-md w-full"
+        >
+          <p class="tw-overlay-highlight text-sm sm:text-base italic leading-relaxed">
+            “{{ props.interlude.quote }}”
+          </p>
+          <footer class="mt-2 flex items-center gap-2 text-xs tw-overlay-muted">
+            <span class="font-bold not-italic tw-overlay-title">— {{ props.interlude.speaker_name }}</span>
+            <span v-if="props.interlude.speaker_role" class="opacity-80">({{ props.interlude.speaker_role }})</span>
+          </footer>
+        </blockquote>
 
         <!-- Shimmering Progress Bar -->
         <div class="tw-overlay-progress w-44 sm:w-60 h-1 rounded-full overflow-hidden mt-6 relative">

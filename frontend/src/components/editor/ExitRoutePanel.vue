@@ -7,6 +7,7 @@ import {
 import { notificationService } from '@/services/notificationService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
 import { ArrowLeft } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -40,6 +41,7 @@ const exitEditForm = ref({
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
+  dynamic_zone: null as DynamicZoneForm | null,
 })
 
 watch(
@@ -54,6 +56,7 @@ watch(
         code_to_unlock: '',
         item_to_unlock: '',
         rule_to_unlock: '',
+        dynamic_zone: null,
       }
       return
     }
@@ -65,6 +68,7 @@ watch(
       code_to_unlock: String(exitData.code_to_unlock || ''),
       item_to_unlock: String(exitData.item_to_unlock || ''),
       rule_to_unlock: String(exitData.rule_to_unlock || ''),
+      dynamic_zone: exitData.dynamic_zone ? { ...exitData.dynamic_zone } : null,
     }
   },
   { immediate: true }
@@ -96,6 +100,7 @@ const isFormInvalid = computed(() => {
   if ((exitEditForm.value.code_to_unlock || '').length > 32) return true
   if ((exitEditForm.value.rule_to_unlock || '').length > 500) return true
   if (hasGate.value && !(exitEditForm.value.lock_description || '').trim()) return true
+  if (exitEditForm.value.dynamic_zone && !(exitEditForm.value.dynamic_zone.theme || '').trim()) return true
   return false
 })
 
@@ -119,6 +124,7 @@ async function saveRouteExit() {
     description: trimmedLockDesc,
     exit_type: exitEditForm.value.exit_type,
     revealed: exitEditForm.value.is_revealed,
+    dynamic_zone: exitEditForm.value.dynamic_zone ?? null,
     code_to_unlock: rawCode,
     item_to_unlock: rawItem,
     rule_to_unlock: rawRule,
@@ -194,6 +200,8 @@ async function saveRouteExit() {
       <input v-model="exitEditForm.is_revealed" type="checkbox" class="accent-emerald-500" />
       <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
     </label>
+
+    <DynamicZoneFields v-model="exitEditForm.dynamic_zone" />
 
     <label class="text-xs text-slate-300 space-y-1 block">
       <div class="flex justify-between items-center">

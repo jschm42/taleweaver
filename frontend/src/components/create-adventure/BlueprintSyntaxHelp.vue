@@ -3,7 +3,7 @@ const tags = [
   '## World  style: / tone: / win: / init_script:',
   '## Protagonist: Name  hp: / inventory:',
   '## Scene: CELL — Name  decor: / on_enter:',
-  '## Exit: CELL -> HALL — label  code: / key_item:',
+  '## Exit: CELL -> HALL — label  code: / key_item: / theme: / max_depth:',
   '## NPC: WARDEN — Name  in: / hp: / attack:',
   '## Item: KEY — Name  in: / type: / hidden:',
   '## Switch: LEVER — Name  states: / transition: / on_success:',

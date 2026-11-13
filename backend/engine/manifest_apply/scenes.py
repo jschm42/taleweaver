@@ -16,6 +16,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
 )
 from backend.engine.media.image_prompt_context import build_scene_image_prompt
+from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.world_entity import WorldExit, WorldScene
 
@@ -150,6 +151,7 @@ def persist_exits(db: AsyncSession, template_id: str, exits: list[dict[str, Any]
                 code_to_unlock=code_to_unlock,
                 item_to_unlock=item_to_unlock,
                 rule_to_unlock=rule_to_unlock,
+                dynamic_zone=normalize_dynamic_zone(exit_def.get("dynamic_zone")),
                 **{field: exit_def.get(field) or None for field in _EXIT_SCRIPT_FIELDS},
             )
         )

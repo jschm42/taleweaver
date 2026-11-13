@@ -33,6 +33,16 @@ export interface AgentLogEntry {
   action: string
 }
 
+export interface DynamicInterlude {
+  quote: string
+  speaker_name: string
+  speaker_role?: string
+  npc_id?: string | null
+  voice?: string | null
+  image_url?: string | null
+  target_scene_name?: string | null
+}
+
 const AGENT_LOG_LIMIT = 50
 const AGENT_IDLE_TIMEOUT_MS = 180_000
 
@@ -88,6 +98,7 @@ export interface UseGameSocket {
   agentLog: Ref<AgentLogEntry[]>
   isCheckpointSaving: Ref<boolean>
   isSceneTransitioning: Ref<boolean>
+  dynamicInterlude: Ref<DynamicInterlude | null>
   /** Set when a turn ended in another scene without a travel event (script teleport, GM move). */
   sceneArrival: Ref<{ sceneId: string; at: number } | null>
   generatorProposal: Ref<any | null>
@@ -169,6 +180,7 @@ export function useGameSocket(): UseGameSocket {
   const agentLog = ref<AgentLogEntry[]>([])
   const isCheckpointSaving = ref(false)
   const isSceneTransitioning = ref(false)
+  const dynamicInterlude = ref<DynamicInterlude | null>(null)
   const sceneArrival = ref<{ sceneId: string; at: number } | null>(null)
   let checkpointPulseTimer: number | null = null
   const generatorProposal = ref<any | null>(null)
@@ -469,6 +481,7 @@ export function useGameSocket(): UseGameSocket {
       checkpointPulseTimer = null
     }
     isCheckpointSaving.value = false
+    dynamicInterlude.value = null
 
     // Clear all session-specific states
     messages.value = []
@@ -748,6 +761,9 @@ export function useGameSocket(): UseGameSocket {
               status.value = 'connected'
               statusText.value = ''
             }
+          } else if (event === 'dynamic_interlude') {
+            isSceneTransitioning.value = true
+            dynamicInterlude.value = data
           } else if (event === 'scene_transition') {
             // The story feed marks the new scene with a divider; earlier scenes stay above it.
             isSceneTransitioning.value = true
@@ -821,6 +837,7 @@ export function useGameSocket(): UseGameSocket {
     } finally {
       clearTimeout(timeoutId)
       isSceneTransitioning.value = false
+      dynamicInterlude.value = null
       if (activeChatController === controller) {
         activeChatController = null
       }
@@ -1159,6 +1176,7 @@ export function useGameSocket(): UseGameSocket {
     agentLog,
     isCheckpointSaving,
     isSceneTransitioning,
+    dynamicInterlude,
     sceneArrival,
     generatorProposal,
     showGeneratorModal,

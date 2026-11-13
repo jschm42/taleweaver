@@ -25,6 +25,10 @@ from backend.api.routes.adventures.editing.schemas import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.world.dynamic_scene_schemas import (
+    build_dynamic_placeholder_scene_id,
+    normalize_dynamic_zone,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -164,12 +168,23 @@ async def create_editor_exit(
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
     from_scene_id = _sanitize_object_id(payload.from_scene_id, "from_scene_id")
-    to_scene_id = _sanitize_object_id(payload.to_scene_id, "to_scene_id")
-    if from_scene_id == to_scene_id:
-        raise HTTPException(status_code=400, detail="from_scene_id and to_scene_id must differ")
-
     await _ensure_template_scene_exists(db, template_id, from_scene_id)
-    await _ensure_template_scene_exists(db, template_id, to_scene_id)
+
+    dynamic_zone = normalize_dynamic_zone(payload.dynamic_zone)
+    raw_to = str(payload.to_scene_id or "").strip()
+    if dynamic_zone:
+        to_scene_id = (
+            _sanitize_object_id(raw_to, "to_scene_id")
+            if raw_to and raw_to.upper().startswith("DYN_")
+            else build_dynamic_placeholder_scene_id(
+                dynamic_zone["zone_id"], dynamic_zone.get("depth", 1)
+            )
+        )
+    else:
+        to_scene_id = _sanitize_object_id(raw_to, "to_scene_id")
+        if from_scene_id == to_scene_id:
+            raise HTTPException(status_code=400, detail="from_scene_id and to_scene_id must differ")
+        await _ensure_template_scene_exists(db, template_id, to_scene_id)
 
     # The label names the passage itself ("an old rusty gate"), the same from both sides.
     label = str(payload.label or "").strip()
@@ -204,6 +219,7 @@ async def create_editor_exit(
         code_to_unlock=code or None,
         item_to_unlock=item or None,
         rule_to_unlock=rule or None,
+        dynamic_zone=dynamic_zone,
     )
     db.add(world_exit)
     await db.flush()  # assigns the generated id before it is mirrored into the manifest
@@ -225,6 +241,7 @@ async def create_editor_exit(
                 "code_to_unlock": world_exit.code_to_unlock,
                 "item_to_unlock": world_exit.item_to_unlock,
                 "rule_to_unlock": world_exit.rule_to_unlock,
+                "dynamic_zone": world_exit.dynamic_zone,
             }
         )
         adv.original_manifest = manifest

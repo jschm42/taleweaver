@@ -480,6 +480,8 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "original_prompt": adv.original_prompt,
         "image_url": adv.image_url,
         "rule_enforcement_mode": adv.rule_enforcement_mode,
+        "sequence_progression_mode": adv.sequence_progression_mode,
+        "dynamic_generation": adv.dynamic_generation,
         "time_per_turn": adv.time_per_turn,
         "pacing_minutes": adv.pacing_minutes,
         "max_time_per_turn": adv.max_time_per_turn,
@@ -678,6 +680,7 @@ class AdventureExporter:
             "sequences": adv.sequences or [],
             "scripts": (adv.original_manifest or {}).get("scripts", []),
             "init_script": adv.init_script or "",
+            "dynamic_generation": adv.dynamic_generation,
         }
         # Fork-specific data is passed through untouched (docs/specs/adventure_format.md 2.10).
         extensions = manifest_extensions(adv.original_manifest)

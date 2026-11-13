@@ -83,6 +83,7 @@ class WorldExit(Base, TimestampMixin):
     on_unlock_success_text = Column(String(5000), nullable=True)
     on_unlock_failure_script = Column(String(5000), nullable=True)
     on_unlock_failure_text = Column(String(5000), nullable=True)
+    dynamic_zone = Column(JSON, nullable=True)
     adventure_id = synonym("template_id")
 
 

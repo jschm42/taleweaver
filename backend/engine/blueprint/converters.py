@@ -318,3 +318,40 @@ def switch_outcome(raw: str) -> dict[str, Any]:
         slot = "key" if effect_type == "story_flag" else "target_id"
         effects.append({"type": effect_type, "target_id": "", "key": "", slot: value.strip()})
     return {"on_state": state.strip().upper(), "effects": effects}
+
+
+_DYNAMIC_ENTITY_TYPES = ("hostile_npc", "friendly_npc", "scenery", "container", "consumable")
+
+
+def dynamic_zone_id(raw: str) -> str:
+    """Normalize a dynamic zone ID to lower_snake_case."""
+    cleaned = normalize_id(raw).lower()
+    if not cleaned:
+        raise ValueError(f"expected a zone ID, got '{raw.strip()}'")
+    return cleaned
+
+
+def dynamic_max_depth(raw: str) -> int:
+    """Parse max_depth for a dynamic zone (1..6)."""
+    val = integer(raw)
+    if not 1 <= val <= 6:
+        raise ValueError(f"expected a max_depth between 1 and 6, got '{raw.strip()}'")
+    return val
+
+
+def dynamic_entity_types(raw: str) -> list[str]:
+    """Parse comma-separated allowed_entity_types for a dynamic zone."""
+    items = [
+        re.sub(r"[\s\-]+", "_", part.strip().lower()) for part in raw.split(",") if part.strip()
+    ]
+    if not items:
+        raise ValueError(
+            f"expected one or more of {', '.join(_DYNAMIC_ENTITY_TYPES)}, got '{raw.strip()}'"
+        )
+    allowed = set(_DYNAMIC_ENTITY_TYPES)
+    for item in items:
+        if item not in allowed:
+            raise ValueError(
+                f"unknown allowed entity type '{item}' (expected {', '.join(_DYNAMIC_ENTITY_TYPES)})"
+            )
+    return list(dict.fromkeys(items))

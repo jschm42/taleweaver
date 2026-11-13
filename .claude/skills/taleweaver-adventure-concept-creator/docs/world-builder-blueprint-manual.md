@@ -492,6 +492,27 @@ audio: CRYPT_DRONE
 
 The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
+### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`)
+
+Add optional procedural side-zones (catacombs, wilderness trails, back alleys) that generate scenes on entry instead of ahead of time:
+
+```text
+[World]
+dynamic_scene_images: simple
+dynamic_npc_images: simple
+dynamic_audio: inherit
+dynamic_quotes: yes
+
+[Exit: HALL -> IRON_MINES] Collapsed Mine Shaft
+theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
+max_depth: 3
+danger: medium
+cul_de_sac: yes
+allowed_entities: hostile_npc, container, consumable, scenery
+```
+
+You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets.
+
 ## 7. Strict Adherence or Creative Expansion
 
 Choose the builder mode below the Story Idea field:

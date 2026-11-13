@@ -28,6 +28,7 @@ from backend.engine.blueprint.markdown import (
     strip_inline_code,
 )
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock, BlueprintValue
+from backend.engine.world.dynamic_scene_schemas import build_dynamic_placeholder_scene_id
 
 MAX_SEQUENCES = 15
 
@@ -410,7 +411,9 @@ def _apply_exit_ref(blueprint: Blueprint, block: BlueprintBlock, raw_ref: str) -
     if not match:
         blueprint.add_issue(block.line, f"[Exit: {raw_ref}] must look like [Exit: FROM -> TO].")
         return
-    from_id, to_id = normalize_id(match.group(1)), normalize_id(match.group(3))
+    from_id = normalize_id(match.group(1))
+    raw_to = match.group(3).strip()
+    to_id = "?" if raw_to in {"?", "*"} else normalize_id(raw_to)
     block.ref = f"{from_id}->{to_id}"
     block.fields["from_scene_id"] = BlueprintValue(from_id, "fixed", block.line)
     block.fields["to_scene_id"] = BlueprintValue(to_id, "fixed", block.line)
@@ -435,8 +438,27 @@ _IMPLIED_ITEM_TYPES = (
 )
 
 
+def _derive_dynamic_exit_fields(block: BlueprintBlock) -> None:
+    from_id = str(block.fields.get("from_scene_id", BlueprintValue("")).value or "")
+    raw_to = str(block.fields.get("to_scene_id", BlueprintValue("")).value or "")
+    if "dynamic_zone.zone_id" not in block.fields:
+        fallback_name = normalize_id(block.name or "zone").lower() or "zone"
+        zone_id = raw_to.lower() if (raw_to and raw_to != "?") else fallback_name
+        block.fields["dynamic_zone.zone_id"] = BlueprintValue(zone_id, "fixed", block.line)
+    else:
+        zone_id = str(block.fields["dynamic_zone.zone_id"].value)
+    if "dynamic_zone.theme" not in block.fields and block.description:
+        block.fields["dynamic_zone.theme"] = BlueprintValue(block.description, "fixed", block.line)
+    placeholder_id = build_dynamic_placeholder_scene_id(
+        zone_id, 1, 1, f"{from_id}{block.name or ''}"
+    )
+    block.fields["to_scene_id"] = BlueprintValue(placeholder_id, "fixed", block.line)
+
+
 def _derive_implied_fields(block: BlueprintBlock) -> None:
     if block.kind == "exit":
+        if any(k.startswith("dynamic_zone.") for k in block.fields):
+            _derive_dynamic_exit_fields(block)
         lock_fields = ("code_to_unlock", "item_to_unlock", "rule_to_unlock", "unlock_expression")
         if "is_locked" not in block.fields and any(f in block.fields for f in lock_fields):
             block.fields["is_locked"] = BlueprintValue(True, "fixed", block.line)

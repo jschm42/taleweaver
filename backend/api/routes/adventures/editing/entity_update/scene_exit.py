@@ -17,6 +17,10 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.engine.audio.audio_library import track_id_or_none
+from backend.engine.world.dynamic_scene_schemas import (
+    build_dynamic_placeholder_scene_id,
+    normalize_dynamic_zone,
+)
 from backend.engine.world.scene_fields import SCENE_AUDIO_FIELDS, SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -34,6 +38,7 @@ _EXIT_SCRIPT_FIELDS = (
 )
 # Exit columns mirrored into the manifest's exit entries.
 _EXIT_MANIFEST_FIELDS = (
+    "to_scene_id",
     "label",
     "exit_type",
     "is_locked",
@@ -42,6 +47,7 @@ _EXIT_MANIFEST_FIELDS = (
     "code_to_unlock",
     "item_to_unlock",
     "rule_to_unlock",
+    "dynamic_zone",
     *_EXIT_SCRIPT_FIELDS,
 )
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
@@ -182,6 +188,18 @@ def _sync_exit_manifest(adv: AdventureTemplate, world_exit: WorldExit) -> None:
     flag_modified(adv, "original_manifest")
 
 
+def _update_exit_dynamic_zone(world_exit: WorldExit, payload: EntityUpdateRequest) -> None:
+    if not given(payload, "dynamic_zone"):
+        return
+    normalized_zone = normalize_dynamic_zone(payload.dynamic_zone)
+    world_exit.dynamic_zone = normalized_zone
+    flag_modified(world_exit, "dynamic_zone")
+    if normalized_zone and not str(world_exit.to_scene_id or "").startswith("DYN_"):
+        world_exit.to_scene_id = build_dynamic_placeholder_scene_id(
+            normalized_zone["zone_id"], normalized_zone.get("depth", 1)
+        )
+
+
 async def update_exit(
     db: AsyncSession, template_id: str, adv: AdventureTemplate, payload: EntityUpdateRequest
 ) -> None:
@@ -206,6 +224,7 @@ async def update_exit(
         world_exit.lock_description = payload.description
     if given(payload, "exit_type"):
         world_exit.exit_type = payload.exit_type
+    _update_exit_dynamic_zone(world_exit, payload)
     copy_scripts(world_exit, payload, _EXIT_SCRIPT_FIELDS)
     if any(given(payload, f) for f in _LOCK_FIELDS):
         _update_exit_lock(world_exit, payload)

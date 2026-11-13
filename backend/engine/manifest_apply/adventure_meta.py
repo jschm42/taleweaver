@@ -296,3 +296,6 @@ def apply_final_adventure_fields(ctx: ApplyContext) -> None:
     )
     adventure.is_ready = False  # type: ignore[assignment]
     adventure.original_manifest = ctx.manifest  # type: ignore[assignment]
+    dyn_gen = adventure_field(ctx.manifest, "dynamic_generation")
+    if isinstance(dyn_gen, dict):
+        adventure.dynamic_generation = dyn_gen  # type: ignore[assignment]

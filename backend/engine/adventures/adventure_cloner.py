@@ -341,6 +341,7 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_unlock_success_text=e.on_unlock_success_text,
             on_unlock_failure_script=e.on_unlock_failure_script,
             on_unlock_failure_text=e.on_unlock_failure_text,
+            dynamic_zone=deepcopy(e.dynamic_zone) if e.dynamic_zone else None,
         )
         db.add(cloned)
 

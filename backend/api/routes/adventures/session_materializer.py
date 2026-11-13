@@ -62,6 +62,7 @@ _EXIT_COPY_FIELDS = (
     "code_to_unlock",
     "item_to_unlock",
     "rule_to_unlock",
+    "dynamic_zone",
 )
 
 

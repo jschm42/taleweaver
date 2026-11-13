@@ -21,6 +21,9 @@ from backend.engine.blueprint.converters import (
     ability_damage,
     boolean,
     choice,
+    dynamic_entity_types,
+    dynamic_max_depth,
+    dynamic_zone_id,
     ident,
     ident_list,
     integer,
@@ -98,6 +101,29 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "init_script": _script("init_script"),
     "progression": FieldSpec("sequence_progression_mode", choice("linear", "dynamic")),
     "sequence_progression": FieldSpec("sequence_progression_mode", choice("linear", "dynamic")),
+    "dynamic_scene_images": FieldSpec(
+        "dynamic_generation.scene_image_mode", choice("off", "inherit", "simple", "hq")
+    ),
+    "dynamic_scene_image_mode": FieldSpec(
+        "dynamic_generation.scene_image_mode", choice("off", "inherit", "simple", "hq")
+    ),
+    "dynamic_npc_images": FieldSpec(
+        "dynamic_generation.npc_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_npc_image_mode": FieldSpec(
+        "dynamic_generation.npc_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_audio": FieldSpec(
+        "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
+    ),
+    "dynamic_audio_mode": FieldSpec(
+        "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
+    ),
+    "dynamic_music": FieldSpec(
+        "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
+    ),
+    "dynamic_quotes": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
+    "dynamic_interlude": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
 }
 
 PROTAGONIST_KEYS: dict[str, FieldSpec] = {
@@ -142,6 +168,21 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "guard": _expr("unlock_expression"),
     "bidirectional": FieldSpec("is_bidirectional", boolean),
     "one_way": FieldSpec("is_bidirectional", one_way),
+    "dynamic_zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "zone_id": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "theme": FieldSpec("dynamic_zone.theme"),
+    "zone_theme": FieldSpec("dynamic_zone.theme"),
+    "max_depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
+    "depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
+    "danger": FieldSpec("dynamic_zone.danger_level", choice("low", "medium", "high")),
+    "danger_level": FieldSpec("dynamic_zone.danger_level", choice("low", "medium", "high")),
+    "cul_de_sac": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
+    "cul_de_sac_on_max_depth": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
+    "allowed_entities": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "allowed_entity_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "return_direction": FieldSpec("dynamic_zone.return_exit_direction"),
+    "return_exit_direction": FieldSpec("dynamic_zone.return_exit_direction"),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")
