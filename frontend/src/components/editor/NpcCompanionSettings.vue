@@ -81,6 +81,7 @@ async function save(): Promise<void> {
         <p class="text-[11px] text-slate-400">
           The NPC can join the protagonist's party and follows them through exits.
           Exits and chapters marked as solo leave the companion behind.
+          In combat it uses its special actions from "Combat Profile &amp; Specials"; players can switch them off and equip it in the hero dialog.
         </p>
       </div>
       <button

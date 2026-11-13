@@ -26,6 +26,8 @@ class PartyState:
     recruited: list[str] = field(default_factory=list)
     following: bool = True
     tactics: dict[str, str] = field(default_factory=dict)
+    # Abilities (special action IDs) the player switched off per companion (hero dialog).
+    disabled_abilities: dict[str, list[str]] = field(default_factory=dict)
 
     def is_member(self, npc_id: str) -> bool:
         return _clean_id(npc_id) in self.recruited
@@ -47,6 +49,7 @@ class PartyState:
         npc_id = _clean_id(npc_id)
         self.recruited = [m for m in self.recruited if m != npc_id]
         self.tactics.pop(npc_id, None)
+        self.disabled_abilities.pop(npc_id, None)
         if self.active_id == npc_id:
             self.active_id = None
 
@@ -63,6 +66,21 @@ class PartyState:
         if npc_id in self.recruited and tactics:
             self.tactics[npc_id] = tactics
 
+    def set_ability(self, npc_id: str, ability_id: str, enabled: bool) -> None:
+        npc_id, ability_id = _clean_id(npc_id), _clean_id(ability_id)
+        if npc_id not in self.recruited or not ability_id:
+            return
+        off = [a for a in self.disabled_abilities.get(npc_id, []) if a != ability_id]
+        if not enabled:
+            off.append(ability_id)
+        if off:
+            self.disabled_abilities[npc_id] = off
+        else:
+            self.disabled_abilities.pop(npc_id, None)
+
+    def ability_enabled(self, npc_id: str, ability_id: str) -> bool:
+        return _clean_id(ability_id) not in self.disabled_abilities.get(_clean_id(npc_id), [])
+
     def follower_id(self) -> Optional[str]:
         """The companion that moves along with the protagonist, if any."""
         if not self.following or not self.active_id:
@@ -75,6 +93,7 @@ class PartyState:
             "recruited": list(self.recruited),
             "following": self.following,
             "tactics": dict(self.tactics),
+            "disabled_abilities": {k: list(v) for k, v in self.disabled_abilities.items()},
         }
 
 
@@ -88,11 +107,18 @@ def read_party(entity_states: Any) -> PartyState:
     if active_id and active_id not in recruited:
         recruited.append(active_id)
     tactics = raw.get("tactics") if isinstance(raw.get("tactics"), dict) else {}
+    disabled = raw.get("disabled_abilities")
+    disabled = disabled if isinstance(disabled, dict) else {}
     return PartyState(
         active_id=active_id,
         recruited=list(dict.fromkeys(recruited)),
         following=bool(raw.get("following", True)),
         tactics={_clean_id(k): str(v) for k, v in tactics.items() if _clean_id(k)},
+        disabled_abilities={
+            _clean_id(k): [_clean_id(a) for a in v if _clean_id(a)]
+            for k, v in disabled.items()
+            if _clean_id(k) and isinstance(v, list)
+        },
     )
 
 

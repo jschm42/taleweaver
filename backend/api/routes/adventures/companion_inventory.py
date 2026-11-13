@@ -30,7 +30,7 @@ USAGE = {
 Events = list[tuple[str, str]]
 
 
-async def _reachable_companion(manager: Any) -> tuple[WorldEntity | None, str | None]:
+async def reachable_companion(manager: Any) -> tuple[WorldEntity | None, str | None]:
     """(companion row, None) or (None, why the handover is not possible)."""
     party = read_party(manager.state.entity_states)
     row = None
@@ -75,7 +75,7 @@ async def transfer_companion_items(manager: Any, direction: str, args: str) -> E
     refs = split_item_refs(args or "")
     if not refs:
         return [("system", USAGE[direction])]
-    row, refusal = await _reachable_companion(manager)
+    row, refusal = await reachable_companion(manager)
     if row is None:
         return [("system", refusal or "You have no companion.")]
     context = await manager._build_script_context()

@@ -15,6 +15,17 @@ export interface ChatMessage {
 }
 
 /** Character sheet snapshot pushed by the server after every action. */
+/** One of the companion's abilities; `enabled: false` means it is not used in combat. */
+export interface CompanionAbility {
+  id: string
+  name: string
+  description?: string
+  category: string
+  cost_type: string
+  cost: number
+  enabled: boolean
+}
+
 /** The active companion as the hero dialog shows it (backend: companion_sheet.py). */
 export interface CompanionSheet {
   id: string
@@ -29,7 +40,12 @@ export interface CompanionSheet {
   stamina?: number | null
   max_stamina?: number | null
   stats: Record<string, number | null>
+  /** Carried items that are not equipped. */
   inventory: InventoryItem[]
+  /** Slot -> equipped item (the protagonist's slots). */
+  equipment: Record<string, InventoryItem | null>
+  /** Special actions from the editor with the player's on/off switch. */
+  abilities: CompanionAbility[]
   /** Stands in the protagonist's scene. */
   present: boolean
   following: boolean

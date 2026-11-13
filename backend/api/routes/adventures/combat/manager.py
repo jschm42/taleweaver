@@ -20,6 +20,7 @@ from backend.api.routes.adventures.combat.enemy_ai import CombatEnemyMixin
 from backend.api.routes.adventures.combat.loot import LOOT_FINISH_ACTIONS, CombatLootMixin
 from backend.api.routes.adventures.combat.narration import CombatNarrationMixin
 from backend.api.routes.adventures.combat.party import CombatPartyMixin
+from backend.api.routes.adventures.combat.party_loadout import CombatPartyLoadoutMixin
 from backend.api.routes.adventures.combat.player_actions import (
     INVALID_ACTION_MSG,
     CombatPlayerMixin,
@@ -55,6 +56,7 @@ class TurnCombatManager(
     CombatCombatantMixin,
     CombatAlliesMixin,
     CombatPartyMixin,
+    CombatPartyLoadoutMixin,
     CombatConsumableMixin,
     CombatLootMixin,
     CombatNarrationMixin,

@@ -4,12 +4,13 @@
  * with an interactive equipment slot picker modal for equipping and unequipping.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import type { CharacterSheet, InventoryItem } from '@/types'
+import type { InventoryItem } from '@/types'
+import type { EquipmentSheet } from './types'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { useBrokenImages } from './sheetItems'
 
 const props = defineProps<{
-  sheet: CharacterSheet
+  sheet: EquipmentSheet
 }>()
 
 const emit = defineEmits<{

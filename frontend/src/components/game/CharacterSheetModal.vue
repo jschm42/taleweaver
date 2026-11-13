@@ -14,6 +14,8 @@ import SheetInventoryPanel from './sheet/SheetInventoryPanel.vue'
 import SheetEquipmentPanel from './sheet/SheetEquipmentPanel.vue'
 import SheetStatusPanel from './sheet/SheetStatusPanel.vue'
 import SheetCompanionPanel from './sheet/SheetCompanionPanel.vue'
+import SheetCompanionAbilities from './sheet/SheetCompanionAbilities.vue'
+import type { EquipmentSheet } from './sheet/types'
 import { isEquippable, isReadableItem } from './sheet/sheetItems'
 import type { SheetTabId } from './sheet/types'
 import type { CharacterSheet } from '@/types'
@@ -74,8 +76,8 @@ watch(
 
 function selectSubject(next: 'hero' | 'companion'): void {
   subject.value = next
-  // The companion page has no equipment, status or specials tabs.
-  if (next === 'companion' && !['hero', 'inventory'].includes(activeTab.value)) {
+  // The companion page has no status tab.
+  if (next === 'companion' && activeTab.value === 'ailments') {
     activeTab.value = 'hero'
   }
 }
@@ -103,7 +105,36 @@ const unlockedSpecialCount = computed(() => {
 const companionTabs = computed<TabDefinition[]>(() => [
   { id: 'hero', icon: 'ra-double-team', label: 'Companion', shortLabel: 'Profile', count: '' },
   { id: 'inventory', icon: 'ra-backpack', label: 'Inventory', shortLabel: 'Bag', count: `${companionItems.value.length}/24` },
+  { id: 'equipment', icon: 'ra-vest', label: 'Equipped', shortLabel: 'Gear', count: `${companionEquippedCount.value}/11` },
+  { id: 'specials', icon: 'ra-crystal-wand', label: 'Abilities', shortLabel: 'Skills', count: String(companion.value?.abilities?.length ?? 0) },
 ])
+
+const companionEquippedCount = computed(() =>
+  Object.values(companion.value?.equipment ?? {}).filter((item) => !!item).length
+)
+
+/** The equipment panel's view of the companion: its gear, carried items and attributes. */
+const companionEquipmentSheet = computed<EquipmentSheet | null>(() => {
+  const c = companion.value
+  if (!c) return null
+  const stat = (key: string): number => Number(c.stats?.[key] ?? 0)
+  return {
+    equipment: c.equipment ?? {},
+    inventory: c.inventory ?? [],
+    strength: stat('strength'),
+    dexterity: stat('dexterity'),
+    intelligence: stat('intelligence'),
+    wisdom: stat('wisdom'),
+    charisma: stat('charisma'),
+    armor_class: stat('armor_class'),
+    rule_enforcement_mode: props.sheet?.rule_enforcement_mode,
+  }
+})
+
+function companionCommand(cmd: string): void {
+  stateChanged.value = true
+  emit('command', cmd)
+}
 
 const heroTabs = computed<TabDefinition[]>(() => [
   { id: 'hero', icon: 'ra-player', label: 'Hero', shortLabel: 'Hero', count: '' },
@@ -376,6 +407,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                 v-if="activeTab === 'hero'"
                 :companion="companion"
                 @command="(cmd) => { stateChanged = true; emit('command', cmd) }"
+              />
+              <SheetEquipmentPanel
+                v-else-if="activeTab === 'equipment' && companionEquipmentSheet"
+                :sheet="companionEquipmentSheet"
+                @equip="(name, slot) => companionCommand(slot ? `/companion_equip ${name} | ${slot}` : `/companion_equip ${name}`)"
+                @unequip="(slot) => companionCommand(`/companion_unequip ${slot}`)"
+                @item-hover="(item, event) => emit('itemHover', item, event)"
+                @item-leave="emit('itemLeave')"
+              />
+              <SheetCompanionAbilities
+                v-else-if="activeTab === 'specials'"
+                :abilities="companion.abilities ?? []"
+                :companion-name="companion.name"
+                @command="companionCommand"
               />
               <SheetInventoryPanel
                 v-else

@@ -116,6 +116,7 @@ class CombatPartyMixin:
             downed_recovery=config.downed_recovery if config else DEFAULT_DOWNED_RECOVERY,
             inventory=[],
         )
+        await self._apply_member_loadout(entry, row, party)
         combat[PARTY_KEY] = [entry]
         self._append_combat_log(
             combat, f"{row.name} fights at your side!", "turn", {"kind": "engage", "entity": row.id}
@@ -184,7 +185,7 @@ class CombatPartyMixin:
     async def _member_attack(
         self, combat: dict[str, Any], member: dict[str, Any], row: WorldEntity
     ) -> tuple[str, dict[str, Any]]:
-        weapon = await self._enemy_weapon_profile(row)
+        weapon = await self._member_weapon(member, row)
         rest = self._enemy_pay_weapon_cost(member, weapon)
         if rest:
             return rest
@@ -267,13 +268,18 @@ class CombatPartyMixin:
         if row is None:
             member["downed"] = True
             return
-        action = await self._member_heal(combat, member) or await self._member_attack(
-            combat, member, row
+        action = (
+            await self._member_heal(combat, member)
+            or self._member_special(combat, member)
+            or await self._member_attack(combat, member, row)
         )
         text, data = action
         self._append_combat_log(combat, text, "party_action", data)
         yield system_event(text)
-        if data.get("kind") != "attack":
+        if data.get("kind") == "special":
+            async for chunk in self._special_script_events(combat, data):
+                yield chunk
+        if data.get("kind") not in ("attack", "special") or not data.get("target"):
             return
         async for chunk in self._resolve_casualties(combat, data.get("target")):
             yield chunk
