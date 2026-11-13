@@ -108,6 +108,7 @@ class DynamicZoneConfig(BaseModel):
         default_factory=lambda: list(DEFAULT_ALLOWED_ENTITY_TYPES)
     )
     cul_de_sac_on_max_depth: bool = True
+    on_after_generated_script: Optional[str] = Field(default=None, max_length=8000)
 
 
 class DynamicGenerationConfig(BaseModel):
@@ -302,6 +303,8 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
 
     caps_override = _normalize_npc_type_caps(raw.get("npc_type_caps"), partial=True)
     chances_override = _normalize_spawn_chances(raw.get("spawn_chances"), partial=True)
+    raw_after_script = raw.get("on_after_generated_script")
+    after_script = str(raw_after_script).strip() if raw_after_script is not None else ""
 
     return DynamicZoneConfig(
         enabled=True,
@@ -322,6 +325,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
         audio_mode=zone_audio_mode,
         allowed_entity_types=allowed_types,
         cul_de_sac_on_max_depth=bool(cul_de_sac),
+        on_after_generated_script=after_script[:8000] if after_script else None,
     ).model_dump()
 
 

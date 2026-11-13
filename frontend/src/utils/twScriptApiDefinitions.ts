@@ -406,6 +406,7 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'log', kind: 'namespace', doc: 'Server console logging.' },
   { name: 'console', kind: 'namespace', doc: 'Alias for tw.log.' },
   { name: 'turn', kind: 'namespace', doc: 'Current turn details (player_message, language).' },
+  { name: 'generated_scene', kind: 'property', signature: 'dict | None', snippet: 'generated_scene', doc: 'Available in dynamic zone on_after_generated_script: dict with id, name, description, depth, max_depth, danger_level, npcs, objects, forward_exits.' },
   { name: 'player_message', kind: 'property', signature: 'str', snippet: 'player_message', doc: 'Shortcut for tw.turn.player_message.' },
   // Direct shortcuts
   { name: 'narrate', kind: 'method', signature: '(message: str)', snippet: 'narrate("${1:message}")', doc: 'Shortcut for tw.story.narrate(). Emits GM narration.' },

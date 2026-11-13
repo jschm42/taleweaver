@@ -132,6 +132,7 @@ class TriggerService:
         script_code: Optional[str] = None,
         narrative_text: Optional[str] = None,
         llm_asker: Optional[LlmAsker] = None,
+        extra_scope: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """
         Executes a transition trigger (script + narrative text).
@@ -165,8 +166,12 @@ class TriggerService:
         code = str(script_code or "").strip()
         if code:
             context = await cls.build_context(db, state, llm_asker)
+            if extra_scope and "generated_scene" in extra_scope:
+                context.generated_scene = extra_scope["generated_scene"]
             runner = await cls._session_runner(db, state)
-            scope = {"tw": context, "game": context}
+            scope: dict[str, Any] = {"tw": context, "game": context}
+            if extra_scope:
+                scope.update(extra_scope)
             runner.execute_code(code, scope, script_id=f"trigger_{trigger_name}_{target_id}")
 
             if getattr(context.changeset, "ordered_messages", None):

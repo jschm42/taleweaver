@@ -1527,3 +1527,155 @@ def test_dynamic_spawn_chances_caps_and_item_stats() -> None:
         session_id="sess-1", target_id="DYN_QUIET_CHAPEL_D1_1", obj=tonic
     )
     assert tonic_entity.metadata_json.get("hp_change") == tonic.hp_change
+
+
+@pytest.mark.asyncio
+async def test_after_generated_script_inspects_and_populates_scene(monkeypatch, db_session) -> None:
+    """on_after_generated_script receives generated_scene data and can add items/NPCs."""
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"after_gen_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+    adv_id = str(uuid.uuid4())
+    adv = AdventureTemplate(
+        id=adv_id,
+        title="Trigger Ruin",
+        owner_id=user.id,
+        language="English",
+        dynamic_generation={
+            "scene_image_mode": "off",
+            "npc_image_mode": "off",
+            "item_image_mode": "off",
+        },
+    )
+    session_id = str(uuid.uuid4())
+    avatar_id = str(uuid.uuid4())
+    avatar = Avatar(id=avatar_id, user_id=user.id, template_id=adv_id, name="Tester")
+    gs = GameSession(id=session_id, template_id=adv_id, user_id=user.id, avatar_id=avatar_id)
+    state = SessionState(
+        session_id=session_id,
+        template_id=adv_id,
+        user_id=user.id,
+        avatar_id=avatar_id,
+        current_scene_id="START",
+        entity_states={},
+    )
+    origin_scene = WorldScene(
+        id="START",
+        session_id=session_id,
+        label="Ruins Gate",
+        description="A stone archway.",
+    )
+    # Template entities in another scene to clone into the newly generated scene
+    bonus_item = WorldEntity(
+        id="RELIC_KEY",
+        session_id=session_id,
+        entity_type="OBJECT",
+        name="Relic Key",
+        description="An ornate bronze key.",
+        current_scene_id="VAULT_TEMPLATE",
+        item_type="STANDARD",
+        is_portable=True,
+        inventory=[],
+        metadata_json={},
+    )
+    bonus_npc = WorldEntity(
+        id="SCOUT_ALLY",
+        session_id=session_id,
+        entity_type="NPC",
+        name="Scout Lyra",
+        description="A friendly scout.",
+        current_scene_id="VAULT_TEMPLATE",
+        npc_type="HUMANOID",
+        inventory=[],
+        metadata_json={},
+    )
+    after_script = (
+        'tw.vars.set("seen_name", generated_scene["name"])\n'
+        'tw.vars.set("seen_npc_count", len(tw.generated_scene["npcs"]))\n'
+        'if generated_scene["depth"] == 1:\n'
+        '    tw.items.clone("RELIC_KEY", scene_id=generated_scene["id"])\n'
+        '    tw.npcs.clone("SCOUT_ALLY", scene_id=generated_scene["id"])\n'
+    )
+    dyn_exit = WorldExit(
+        session_id=session_id,
+        from_scene_id="START",
+        to_scene_id="DYN_CRYPT_D1_1",
+        label="Descend into Crypt",
+        exit_type="bidirectional",
+        dynamic_zone={
+            "enabled": True,
+            "zone_id": "crypt",
+            "theme": "Ancient flooded crypt",
+            "depth": 1,
+            "max_depth": 2,
+            "danger_level": "low",
+            "max_npcs": 1,
+            "on_after_generated_script": after_script,
+        },
+    )
+    db_session.add_all(
+        [user, adv, gs, avatar, state, origin_scene, bonus_item, bonus_npc, dyn_exit]
+    )
+    await db_session.flush()
+
+    async def _fake_generate_payload(**kwargs):
+        del kwargs
+        return DynamicGeneratedScenePayload(
+            name="Flooded Vestibule",
+            description="Cold water laps against mossy pillars.",
+            npcs=[
+                DynamicGeneratedNpc(
+                    id="SHADE",
+                    name="Crypt Shade",
+                    npc_type="BEING",
+                    description="Drifts silently.",
+                )
+            ],
+            objects=[
+                DynamicGeneratedObject(
+                    id="LANTERN",
+                    name="Brass Lantern",
+                    item_type="STANDARD",
+                    description="Still warm.",
+                )
+            ],
+            forward_exits=[
+                DynamicGeneratedChildExit(label="Deeper Stair", theme_hint="Sunken hall")
+            ],
+        )
+
+    monkeypatch.setattr(
+        dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_generate_payload
+    )
+
+    new_scene = await dynamic_scene_flow.materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+        language="English",
+    )
+
+    assert new_scene.id == "DYN_CRYPT_D1_1"
+    script_vars = (state.entity_states or {}).get("__script_vars__", {})
+    assert script_vars["seen_name"] == "Flooded Vestibule"
+    assert script_vars["seen_npc_count"] == 1
+
+    spawned_rows = (
+        (
+            await db_session.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == session_id,
+                    WorldEntity.current_scene_id == "DYN_CRYPT_D1_1",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    spawned_names = {row.name for row in spawned_rows}
+    assert {"Crypt Shade", "Brass Lantern", "Relic Key", "Scout Lyra"} <= spawned_names

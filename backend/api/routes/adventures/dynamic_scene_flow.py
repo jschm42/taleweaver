@@ -251,7 +251,7 @@ def _persist_generated_scene_entities(
     npc_images: dict[int, Optional[str]],
     object_images: Optional[dict[int, Optional[str]]] = None,
     scene_audio_track_id: Optional[str],
-) -> WorldScene:
+) -> tuple[WorldScene, dict[str, Any]]:
     new_scene = WorldScene(
         id=target_id,
         template_id=None,
@@ -280,6 +280,7 @@ def _persist_generated_scene_entities(
             )
         )
 
+    spawned_forward_exits: list[dict[str, str]] = []
     if int(zone["depth"]) < int(zone["max_depth"]):
         for idx, child_exit in enumerate(payload.forward_exits[:2], start=1):
             child_target = build_dynamic_placeholder_scene_id(
@@ -306,27 +307,58 @@ def _persist_generated_scene_entities(
                     dynamic_zone=child_zone,
                 )
             )
+            spawned_forward_exits.append(
+                {
+                    "to_scene_id": child_target,
+                    "label": child_exit.label[:100],
+                    "theme_hint": child_exit.theme_hint,
+                }
+            )
 
+    spawned_npcs: list[dict[str, Any]] = []
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
     for idx, npc in enumerate(payload.npcs[:max_npcs]):
-        db.add(
-            _build_npc_entity(
-                session_id=state.session_id,
-                target_id=target_id,
-                npc=npc,
-                image_url=npc_images.get(idx),
-                state=state,
-            )
+        npc_entity = _build_npc_entity(
+            session_id=state.session_id,
+            target_id=target_id,
+            npc=npc,
+            image_url=npc_images.get(idx),
+            state=state,
+        )
+        db.add(npc_entity)
+        spawned_npcs.append(
+            {
+                "id": npc_entity.id,
+                "name": npc_entity.name,
+                "npc_type": npc_entity.npc_type,
+                "role": npc.role,
+                "attitude": npc.attitude,
+                "combat_role": npc.combat_role,
+                "description": npc_entity.description,
+            }
         )
 
+    spawned_objects: list[dict[str, Any]] = []
     for idx, obj in enumerate(payload.objects[:3]):
-        db.add(
-            _build_object_entity(
-                session_id=state.session_id,
-                target_id=target_id,
-                obj=obj,
-                image_url=(object_images or {}).get(idx),
-            )
+        obj_entity = _build_object_entity(
+            session_id=state.session_id,
+            target_id=target_id,
+            obj=obj,
+            image_url=(object_images or {}).get(idx),
+        )
+        db.add(obj_entity)
+        spawned_objects.append(
+            {
+                "id": obj_entity.id,
+                "name": obj_entity.name,
+                "item_type": obj_entity.item_type,
+                "is_takeable": obj_entity.is_portable,
+                "description": obj_entity.description,
+                "hp_change": obj.hp_change,
+                "stamina_change": obj.stamina_change,
+                "mana_change": obj.mana_change,
+                "damage_dice": obj.damage_dice,
+            }
         )
 
     entity_states = dict(state.entity_states or {})
@@ -335,7 +367,24 @@ def _persist_generated_scene_entities(
     entity_states[_DYNAMIC_ZONE_META_KEY] = dyn_meta
     state.entity_states = entity_states
     flag_modified(state, "entity_states")
-    return new_scene
+
+    generated_scene_data = {
+        "id": target_id,
+        "origin_scene_id": origin_scene.id if origin_scene else world_exit.from_scene_id,
+        "zone_id": zone["zone_id"],
+        "theme": zone["theme"],
+        "depth": int(zone.get("depth") or 1),
+        "max_depth": int(zone.get("max_depth") or 3),
+        "danger_level": str(zone.get("danger_level") or "medium"),
+        "name": new_scene.label,
+        "description": new_scene.description,
+        "visual_description": payload.visual_description,
+        "music_prompt": payload.music_prompt,
+        "npcs": spawned_npcs,
+        "objects": spawned_objects,
+        "forward_exits": spawned_forward_exits,
+    }
+    return new_scene, generated_scene_data
 
 
 async def materialize_dynamic_scene_for_exit(
@@ -433,7 +482,7 @@ async def materialize_dynamic_scene_for_exit(
         payload=payload,
         adventure=adventure,
     )
-    new_scene = _persist_generated_scene_entities(
+    new_scene, generated_scene_data = _persist_generated_scene_entities(
         db=db,
         state=state,
         world_exit=world_exit,
@@ -447,6 +496,21 @@ async def materialize_dynamic_scene_for_exit(
         scene_audio_track_id=scene_audio_track_id,
     )
     await db.flush()
+
+    after_script = str(zone.get("on_after_generated_script") or "").strip()
+    if after_script:
+        from backend.engine.interaction.trigger_service import TriggerService
+
+        await TriggerService.execute_trigger(
+            db,
+            state,
+            "after_generated",
+            target_id,
+            script_code=after_script,
+            extra_scope={"generated_scene": generated_scene_data},
+        )
+        await db.flush()
+
     return new_scene
 
 

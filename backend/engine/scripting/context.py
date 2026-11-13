@@ -1780,6 +1780,7 @@ class GameContext:
         self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)
         self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
+        self.generated_scene: Optional[dict[str, Any]] = None
         self.exits = ExitProxy(exit_states or {}, self.changeset)
         self.vars = VarsProxy(raw_vars, self.changeset, story_flags=story_flags)
         self.flags = StoryFlagsProxy(story_flags or {}, self.changeset)

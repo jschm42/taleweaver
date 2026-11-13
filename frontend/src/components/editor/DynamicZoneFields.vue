@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 
 export interface DynamicZoneNpcCapsOverride {
   humanoid?: number | null
@@ -31,6 +32,7 @@ export interface DynamicZoneForm {
   spawn_chances?: DynamicZoneSpawnChancesOverride | null
   audio_mode?: 'inherit' | 'empty' | 'generate' | null
   cul_de_sac_on_max_depth: boolean
+  on_after_generated_script?: string | null
 }
 
 const NPC_CAP_FIELDS: Array<{ key: keyof DynamicZoneNpcCapsOverride; label: string }> = [
@@ -65,7 +67,7 @@ const emit = defineEmits<{
 }>()
 
 const enabled = computed(() => Boolean(props.modelValue))
-const activeDynamicTab = ref<'setup' | 'spawns'>('setup')
+const activeDynamicTab = ref<'setup' | 'spawns' | 'after_generated'>('setup')
 
 const zone = computed<DynamicZoneForm>(() => ({
   zone_id: props.modelValue?.zone_id || 'wild_zone',
@@ -81,6 +83,7 @@ const zone = computed<DynamicZoneForm>(() => ({
     props.modelValue?.cul_de_sac_on_max_depth !== undefined
       ? Boolean(props.modelValue.cul_de_sac_on_max_depth)
       : true,
+  on_after_generated_script: props.modelValue?.on_after_generated_script ?? '',
 }))
 
 const hasAnyOverride = computed(() => {
@@ -255,6 +258,19 @@ function clearOverrides() {
           <span>Spawn Caps &amp; Chances</span>
           <span v-if="hasAnyOverride" class="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         </button>
+        <button
+          type="button"
+          :class="[
+            'px-3 py-1.5 text-[11px] font-bold rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5',
+            activeDynamicTab === 'after_generated'
+              ? 'border-emerald-400 text-white bg-black/30'
+              : 'border-transparent text-slate-400 hover:text-slate-200',
+          ]"
+          @click="activeDynamicTab = 'after_generated'"
+        >
+          <span>After Generated</span>
+          <span v-if="(zone.on_after_generated_script || '').trim()" class="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+        </button>
       </div>
 
       <template v-if="activeDynamicTab === 'setup'">
@@ -348,7 +364,7 @@ function clearOverrides() {
         </label>
       </template>
 
-      <div v-else class="space-y-4">
+      <div v-else-if="activeDynamicTab === 'spawns'" class="space-y-4">
         <div class="space-y-2">
           <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Max NPCs per Type (blank = Use Global)
@@ -413,6 +429,26 @@ function clearOverrides() {
               />
             </div>
           </div>
+        </div>
+      </div>
+
+      <div v-else class="space-y-3">
+        <ScriptEditor
+          :model-value="zone.on_after_generated_script || ''"
+          label="On After Generated Script"
+          help-text="Executed right after a dynamic scene is generated and persisted. Read `generated_scene` (or `tw.generated_scene`) and clone/move items or NPCs into `generated_scene['id']`."
+          context="after_generated"
+          min-height="120px"
+          @update:model-value="updateField('on_after_generated_script', $event || null)"
+        />
+        <div class="bg-black/30 border border-white/5 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
+          <p class="font-bold text-slate-300">Available in <code>generated_scene</code> (and <code>tw.generated_scene</code>):</p>
+          <p class="font-mono text-[10px] text-emerald-300/90">
+            id, origin_scene_id, zone_id, theme, depth, max_depth, danger_level, name, description, npcs, objects, forward_exits
+          </p>
+          <p class="font-mono text-[10px] text-slate-300">
+            Example: <code>if generated_scene["depth"] == generated_scene["max_depth"]: tw.items.clone("RELIC_KEY", scene_id=generated_scene["id"])</code>
+          </p>
         </div>
       </div>
     </div>

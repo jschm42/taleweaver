@@ -418,6 +418,7 @@ Inspects the current scene:
     )
     tw.story.narrate("Arcane runes flare beneath your boots, folding space around you.")
     ```
+- **Dynamic Zone `on_after_generated_script` & `generated_scene`** *(also `tw.generated_scene`)*: Optional trigger script on a dynamic exit's `dynamic_zone` configuration, executed immediately after the procedural scene, its NPCs, objects, and forward exits are persisted. Both top-level `generated_scene` and `tw.generated_scene` provide a read-only dictionary with `id`, `origin_scene_id`, `zone_id`, `theme`, `depth`, `max_depth`, `danger_level`, `name`, `description`, `visual_description`, `music_prompt`, `npcs`, `objects`, and `forward_exits`, allowing scripts to inspect the generated scene and add items or NPCs (e.g., `tw.items.clone("RELIC_KEY", scene_id=generated_scene["id"])` or `tw.npcs.clone("GUARD", scene_id=generated_scene["id"])`).
 - `tw.scene.get_attribute(name, default=None)` / `tw.scene.set_attribute(name, value)`: A script-defined value stored per scene.
 
 ```python
