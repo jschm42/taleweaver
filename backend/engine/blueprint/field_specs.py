@@ -113,6 +113,15 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "dynamic_npc_image_mode": FieldSpec(
         "dynamic_generation.npc_image_mode", choice("off", "simple", "hq")
     ),
+    "dynamic_item_images": FieldSpec(
+        "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_item_image_mode": FieldSpec(
+        "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_object_images": FieldSpec(
+        "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
+    ),
     "dynamic_audio": FieldSpec(
         "dynamic_generation.audio_mode", choice("inherit", "empty", "generate")
     ),

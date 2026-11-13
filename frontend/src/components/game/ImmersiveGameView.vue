@@ -86,8 +86,9 @@ const props = defineProps<{
   isSceneTransitioning?: boolean
   dynamicInterlude?: {
     quote: string
-    speaker_name: string
+    speaker_name?: string
     speaker_role?: string
+    speaker?: string
     image_url?: string | null
   } | null
   sceneTransitionTarget?: {

@@ -19,6 +19,7 @@ from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.image_prompt_context import (
     build_npc_image_prompt,
+    build_object_image_prompt,
     build_scene_image_prompt,
 )
 from backend.engine.media.media_engine import MediaEngine
@@ -82,6 +83,40 @@ async def _generate_tier_image(
         return None
 
 
+def _append_entity_image_tasks(
+    *,
+    entities: list[Any],
+    mode: str,
+    kind: str,
+    prefix_base: str,
+    prompt_builder: Any,
+    user: Any,
+    adventure: AdventureTemplate,
+    session_id: str,
+    tasks: list[Awaitable[Optional[str]]],
+    task_keys: list[tuple[str, int]],
+) -> None:
+    if mode not in {"simple", "hq"}:
+        return
+    for idx, entity in enumerate(entities):
+        prompt = prompt_builder(
+            entity.name,
+            entity.description,
+            appearance=entity.visual_description,
+        )
+        tasks.append(
+            _generate_tier_image(
+                prompt=prompt,
+                tier=mode,
+                user=user,
+                adventure=adventure,
+                session_id=session_id,
+                prefix=f"{prefix_base}_{idx}",
+            )
+        )
+        task_keys.append((kind, idx))
+
+
 async def generate_dynamic_visuals(
     *,
     payload: DynamicGeneratedScenePayload,
@@ -91,10 +126,11 @@ async def generate_dynamic_visuals(
     adventure: AdventureTemplate,
     session_id: str,
     target_id: str,
-) -> tuple[Optional[str], dict[int, Optional[str]]]:
-    """Generate dynamic scene backdrop and NPC portraits according to adventure config."""
+) -> tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]:
+    """Generate dynamic scene backdrop, NPC portraits, and item artwork according to config."""
     scene_mode = str(dyn_cfg.get("scene_image_mode") or "simple")
     npc_mode = str(dyn_cfg.get("npc_image_mode") or "simple")
+    item_mode = str(dyn_cfg.get("item_image_mode") or "simple")
 
     scene_image: Optional[str] = None
     tasks: list[Awaitable[Optional[str]]] = []
@@ -119,37 +155,46 @@ async def generate_dynamic_visuals(
         )
         task_keys.append(("scene", 0))
 
-    if npc_mode in {"simple", "hq"}:
-        for idx, npc in enumerate(payload.npcs[:2]):
-            npc_prompt = build_npc_image_prompt(
-                npc.name,
-                npc.description,
-                appearance=npc.visual_description,
-            )
-            tasks.append(
-                _generate_tier_image(
-                    prompt=npc_prompt,
-                    tier=npc_mode,
-                    user=user,
-                    adventure=adventure,
-                    session_id=session_id,
-                    prefix=f"dyn_npc_{target_id.lower()}_{idx}",
-                )
-            )
-            task_keys.append(("npc", idx))
+    _append_entity_image_tasks(
+        entities=payload.npcs[:2],
+        mode=npc_mode,
+        kind="npc",
+        prefix_base=f"dyn_npc_{target_id.lower()}",
+        prompt_builder=build_npc_image_prompt,
+        user=user,
+        adventure=adventure,
+        session_id=session_id,
+        tasks=tasks,
+        task_keys=task_keys,
+    )
+    _append_entity_image_tasks(
+        entities=payload.objects[:3],
+        mode=item_mode,
+        kind="obj",
+        prefix_base=f"dyn_obj_{target_id.lower()}",
+        prompt_builder=build_object_image_prompt,
+        user=user,
+        adventure=adventure,
+        session_id=session_id,
+        tasks=tasks,
+        task_keys=task_keys,
+    )
 
     npc_images: dict[int, Optional[str]] = {}
+    object_images: dict[int, Optional[str]] = {}
     if not tasks:
-        return scene_image, npc_images
+        return scene_image, npc_images, object_images
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for (kind, idx), result in zip(task_keys, results, strict=False):
         url = result if isinstance(result, str) and result else None
         if kind == "scene":
             scene_image = url
-        else:
+        elif kind == "npc":
             npc_images[idx] = url
-    return scene_image, npc_images
+        else:
+            object_images[idx] = url
+    return scene_image, npc_images, object_images
 
 
 def configure_scene_audio(

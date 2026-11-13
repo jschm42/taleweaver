@@ -35,8 +35,10 @@ export interface AgentLogEntry {
 
 export interface DynamicInterlude {
   quote: string
-  speaker_name: string
+  speaker_name?: string
   speaker_role?: string
+  speaker?: string
+  role?: string
   npc_id?: string | null
   voice?: string | null
   image_url?: string | null

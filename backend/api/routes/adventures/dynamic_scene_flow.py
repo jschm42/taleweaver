@@ -119,6 +119,7 @@ def _build_object_entity(
     session_id: str,
     target_id: str,
     obj: DynamicGeneratedObject,
+    image_url: Optional[str] = None,
 ) -> WorldEntity:
     entity_id = f"{target_id}_{_safe_slug(obj.id, 16)}"[:50]
     metadata: dict[str, Any] = {"dynamic_generated": True}
@@ -139,6 +140,7 @@ def _build_object_entity(
         description=obj.description[:1000],
         appearance=obj.visual_description[:100] if obj.visual_description else None,
         current_scene_id=target_id,
+        image_url=image_url,
         item_type=obj.item_type,
         is_portable=bool(
             obj.is_takeable and obj.item_type in {"STANDARD", "CONSUMABLE", "READABLE"}
@@ -173,10 +175,12 @@ async def _maybe_emit_interlude_quote(
         {
             "id": n.id,
             "name": n.name,
-            "role": n.goal or n.npc_type or "",
+            "goal": n.goal or "",
+            "role": n.npc_type or "",
             "character": n.character or "",
             "description": n.description or "",
             "image_url": n.image_url,
+            "voice": n.voice,
             "is_defeated": bool((state.entity_states or {}).get(n.id, {}).get("is_defeated")),
         }
         for n in npc_rows
@@ -213,6 +217,7 @@ def _persist_generated_scene_entities(
     payload: DynamicGeneratedScenePayload,
     scene_image: Optional[str],
     npc_images: dict[int, Optional[str]],
+    object_images: Optional[dict[int, Optional[str]]] = None,
     scene_audio_track_id: Optional[str],
 ) -> WorldScene:
     new_scene = WorldScene(
@@ -278,8 +283,15 @@ def _persist_generated_scene_entities(
             )
         )
 
-    for obj in payload.objects[:3]:
-        db.add(_build_object_entity(session_id=state.session_id, target_id=target_id, obj=obj))
+    for idx, obj in enumerate(payload.objects[:3]):
+        db.add(
+            _build_object_entity(
+                session_id=state.session_id,
+                target_id=target_id,
+                obj=obj,
+                image_url=(object_images or {}).get(idx),
+            )
+        )
 
     entity_states = dict(state.entity_states or {})
     dyn_meta = dict(entity_states.get(_DYNAMIC_ZONE_META_KEY) or {})
@@ -356,7 +368,7 @@ async def materialize_dynamic_scene_for_exit(
         )
 
     payload = await scene_task
-    scene_image, npc_images = await generate_dynamic_visuals(
+    scene_image, npc_images, object_images = await generate_dynamic_visuals(
         payload=payload,
         dyn_cfg=dyn_cfg,
         origin_scene=origin_scene,
@@ -384,6 +396,7 @@ async def materialize_dynamic_scene_for_exit(
         payload=payload,
         scene_image=scene_image,
         npc_images=npc_images,
+        object_images=object_images,
         scene_audio_track_id=scene_audio_track_id,
     )
     await db.flush()

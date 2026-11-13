@@ -1656,6 +1656,7 @@ watch(
     if (!autoSpeakSettings.value.npcs || gameAudio.speechHeld.value) return
     const rawTone = sheet.value?.adventure_tone
     const toneText = typeof rawTone === 'string' ? rawTone : rawTone?.id || rawTone?.name || undefined
+    const speakerName = interlude.speaker_name || interlude.speaker || undefined
     void audioService.enqueueSpeak(interlude.quote, {
       adventureId: sheet.value?.adventure_id || undefined,
       sessionId: props.id,
@@ -1663,8 +1664,8 @@ watch(
       sceneName: sheet.value?.current_scene || undefined,
       tone: toneText,
       npcMetadata: npcMetadata.value,
-      voiceOverride: interlude.voice || interlude.speaker_name || undefined,
-      speaker: interlude.speaker_name || undefined,
+      voiceOverride: interlude.voice || speakerName,
+      speaker: speakerName,
     })
   },
   { flush: 'post' },

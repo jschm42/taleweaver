@@ -7,7 +7,7 @@
  * and layered gradient vignettes. Colors and fonts follow the active dialog skin
  * (--tw-overlay-* tokens, see src/skins/overlays.css).
  */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import handPointingRightUrl from '@/assets/svg/hand-pointing-right.svg'
 
 const props = defineProps<{
@@ -18,14 +18,19 @@ const props = defineProps<{
   backgroundImageUrl?: string | null
   interlude?: {
     quote: string
-    speaker_name: string
+    speaker_name?: string
     speaker_role?: string
+    speaker?: string
     image_url?: string | null
   } | null
 }>()
 
 const imageLoaded = ref(false)
 const imageFailed = ref(false)
+
+const interludeSpeaker = computed((): string => {
+  return (props.interlude?.speaker_name || props.interlude?.speaker || '').trim()
+})
 
 watch(
   () => props.backgroundImageUrl,
@@ -121,9 +126,10 @@ function formatSceneTitle(name?: string | null): string {
           <p class="tw-overlay-highlight text-sm sm:text-base italic leading-relaxed">
             “{{ props.interlude.quote }}”
           </p>
-          <footer class="mt-2 flex items-center gap-2 text-xs tw-overlay-muted">
-            <span class="font-bold not-italic tw-overlay-title">— {{ props.interlude.speaker_name }}</span>
-            <span v-if="props.interlude.speaker_role" class="opacity-80">({{ props.interlude.speaker_role }})</span>
+          <footer v-if="interludeSpeaker" class="mt-2.5 flex items-baseline justify-end text-right">
+            <cite class="interlude-signature not-italic tw-overlay-ink text-xl sm:text-2xl leading-none">
+              — {{ interludeSpeaker }}
+            </cite>
           </footer>
         </blockquote>
 
@@ -223,5 +229,14 @@ function formatSceneTitle(name?: string | null): string {
   .light-sweep {
     animation: none;
   }
+}
+
+.interlude-signature {
+  font-family: 'Caveat', 'Segoe Script', 'Brush Script MT', cursive;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  display: inline-block;
+  transform: rotate(-1.5deg);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
 }
 </style>

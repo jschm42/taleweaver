@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import DynamicGenerationSection from '@/components/editor/DynamicGenerationSection.vue'
-
 defineProps<{
   form: any
 }>()
@@ -10,7 +8,6 @@ const emit = defineEmits<{
   (e: 'update:generator', val: boolean): void
   (e: 'update:can-damage-npcs', val: boolean): void
   (e: 'update:npcs-can-damage-protagonist', val: boolean): void
-  (e: 'update:dynamic-generation', val: any): void
   (e: 'show-debug'): void
 }>()
 </script>
@@ -41,14 +38,8 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <!-- Dynamic Generation -->
-      <DynamicGenerationSection
-        :model-value="form.dynamic_generation"
-        @update:model-value="emit('update:dynamic-generation', $event)"
-      />
-
       <!-- Data Debug -->
-      <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6 md:col-span-2">
+      <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
         <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
           <i class="ra ra-crystal-ball text-cyan-500"></i> Adventure Data Debug
         </h4>

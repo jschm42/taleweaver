@@ -19,11 +19,13 @@ from backend.engine.audio.audio_state import read_audio_state
 from backend.engine.blueprint import analyze_blueprint, apply_blueprint
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.sessions.session_snapshot import dump_world, restore_world
+from backend.engine.world import dynamic_scene_generator
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedChildExit,
     DynamicGeneratedNpc,
     DynamicGeneratedObject,
     DynamicGeneratedScenePayload,
+    DynamicInterludeQuotePayload,
     build_dynamic_placeholder_scene_id,
     normalize_dynamic_generation,
     normalize_dynamic_zone,
@@ -64,6 +66,7 @@ def test_normalization_helpers_and_placeholder_id() -> None:
     assert gen_cfg == {
         "scene_image_mode": "hq",
         "npc_image_mode": "simple",
+        "item_image_mode": "simple",
         "audio_mode": "generate",
         "interlude_quote_enabled": True,
     }
@@ -403,6 +406,7 @@ def test_blueprint_dynamic_world_and_exit_roundtrip() -> None:
     [World]
     dynamic_scene_images: simple
     dynamic_npc_images: hq
+    dynamic_item_images: off
     dynamic_audio: inherit
     dynamic_quotes: yes
 
@@ -430,6 +434,7 @@ def test_blueprint_dynamic_world_and_exit_roundtrip() -> None:
     assert manifest["dynamic_generation"] == {
         "scene_image_mode": "simple",
         "npc_image_mode": "hq",
+        "item_image_mode": "off",
         "audio_mode": "inherit",
         "interlude_quote_enabled": True,
     }
@@ -480,3 +485,123 @@ def test_map_engine_marks_dynamic_target_nodes_and_edges() -> None:
     assert target_node["dynamic_zone"]["zone_id"] == "iron_mines"
     assert len(augmented["edges"]) == 1
     assert augmented["edges"][0]["dynamic_zone"]["zone_id"] == "iron_mines"
+
+
+@pytest.mark.asyncio
+async def test_generate_dynamic_interlude_quote_returns_frontend_fields(
+    db_session, monkeypatch
+) -> None:
+    """Interlude generator emits speaker_name, speaker_role, npc_id, voice, image_url, and quote."""
+
+    # Arrange
+    class _FakeLLM:
+        def __init__(self, user, provider=None, model_category=None):
+            del user, provider, model_category
+
+        async def aexecute_complex_task(self, *args, **kwargs):
+            del args, kwargs
+            return DynamicInterludeQuotePayload(
+                speaker="Ignored Fallback",
+                role="Scout",
+                quote='"Keep your blade dry in the dark."',
+            )
+
+    monkeypatch.setattr(dynamic_scene_generator, "GameMasterLLM", _FakeLLM)
+    monkeypatch.setattr(dynamic_scene_generator, "_has_provider_credentials", lambda *_: True)
+
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"quote_tester_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+
+    # Act
+    result = await dynamic_scene_generator.generate_dynamic_interlude_quote(
+        adventure_title="Dwarven Frontier",
+        adventure_setting="Beneath the iron peaks",
+        adventure_tone="Grim",
+        origin_scene_name="Town Gate",
+        exit_label="Mine Shaft",
+        zone_theme="Flooded mine",
+        candidate_npcs=[
+            {
+                "id": "NPC_MINER",
+                "name": "Old Borin",
+                "role": "Prospector",
+                "character": "Cautious",
+                "description": "Grizzled miner",
+                "image_url": "/images/borin.png",
+                "voice": "en-US-Standard-B",
+                "is_defeated": False,
+            }
+        ],
+        user=user,
+        db=db_session,
+        language="English",
+    )
+
+    # Assert
+    assert result is not None
+    assert result["quote"] == "Keep your blade dry in the dark."
+    assert result["speaker_name"] == "Old Borin"
+    assert result["speaker_role"] == "Prospector"
+    assert result["npc_id"] == "NPC_MINER"
+    assert result["voice"] == "en-US-Standard-B"
+    assert result["image_url"] == "/images/borin.png"
+    assert result["speaker"] == "Old Borin"
+    assert result["role"] == "Prospector"
+    assert result["avatar_url"] == "/images/borin.png"
+
+
+@pytest.mark.asyncio
+async def test_generate_dynamic_visuals_includes_item_images(monkeypatch) -> None:
+    """generate_dynamic_visuals generates item artwork when item_image_mode is simple or hq."""
+    # Arrange
+    from backend.api.routes.adventures import dynamic_scene_media
+
+    calls: list[tuple[str, str]] = []
+
+    async def _fake_generate_tier_image(**kwargs):
+        calls.append((kwargs["prefix"], kwargs["tier"]))
+        return f"/data/adventures/sessions/s1/dynamic_assets/{kwargs['prefix']}.webp"
+
+    monkeypatch.setattr(dynamic_scene_media, "_generate_tier_image", _fake_generate_tier_image)
+
+    payload = DynamicGeneratedScenePayload(
+        name="Forgotten Vault",
+        description="A dusty subterranean chamber.",
+        npcs=[
+            DynamicGeneratedNpc(
+                id="WARDEN",
+                name="Clockwork Warden",
+                description="Brass sentinel.",
+            )
+        ],
+        objects=[
+            DynamicGeneratedObject(
+                id="LANTERN",
+                name="Brass Lantern",
+                description="Burns with a pale blue flame.",
+                visual_description="ornate brass lantern, blue flame",
+            )
+        ],
+    )
+
+    # Act
+    scene_img, npc_imgs, obj_imgs = await dynamic_scene_media.generate_dynamic_visuals(
+        payload=payload,
+        dyn_cfg={"scene_image_mode": "off", "npc_image_mode": "off", "item_image_mode": "hq"},
+        origin_scene=None,
+        user=object(),
+        adventure=AdventureTemplate(id="adv1", owner_id="u1", title="Vault"),
+        session_id="s1",
+        target_id="DYN_VAULT_D1_1",
+    )
+
+    # Assert
+    assert scene_img is None
+    assert npc_imgs == {}
+    assert obj_imgs == {
+        0: "/data/adventures/sessions/s1/dynamic_assets/dyn_obj_dyn_vault_d1_1_0.webp"
+    }
+    assert calls == [("dyn_obj_dyn_vault_d1_1_0", "hq")]

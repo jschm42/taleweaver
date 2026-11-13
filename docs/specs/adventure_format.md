@@ -20,7 +20,7 @@ The manifest represents the complete blueprint of a generated or exported world.
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "adventure": { ... },
   "protagonist": { ... },
   "scenes": [ ... ],
@@ -42,7 +42,8 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.3.1` (current) | Current format. |
+| `1.4.0` (current) | Current format. |
+| `1.3.1` up to below `1.4.0` | Supported and fully playable (predates optional `dynamic_generation` / `dynamic_zone` fields). |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
 | below `1.0` | Rejected on import. |
@@ -87,7 +88,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `copyright` | `string` | Optional copyright notice (max 100 chars). |
 | `license` | `string` | Optional license string or identifier (max 100 chars). |
 | `init_script` | `string \| null` | Optional global Python initialization script executed when a new game session starts. Sets up starting variables, narrative messages, and shared helper functions. |
-| `dynamic_generation` | `object \| null` | Optional configuration for Dynamic Scenes: `{"scene_image_mode": "off" \| "inherit" \| "simple" \| "hq", "npc_image_mode": "off" \| "simple" \| "hq", "audio_mode": "inherit" \| "empty" \| "generate", "interlude_quote_enabled": boolean}`. Defaults to `simple` scene/NPC images, `inherit` audio, and `true` for interlude quotes. |
+| `dynamic_generation` | `object \| null` | Optional configuration for Dynamic Scenes: `{"scene_image_mode": "off" \| "inherit" \| "simple" \| "hq", "npc_image_mode": "off" \| "simple" \| "hq", "item_image_mode": "off" \| "simple" \| "hq", "audio_mode": "inherit" \| "empty" \| "generate", "interlude_quote_enabled": boolean}`. Defaults to `simple` scene/NPC/item images, `inherit` audio, and `true` for interlude quotes. *(since 1.4.0)* |
 
 ---
 
@@ -144,7 +145,7 @@ Connections and passageways between scenes.
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
 | `lock_description` | `string` | Narrative clue or description when encountering the lock. |
-| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "depth": number, "max_depth": number, "danger_level": "low" \| "medium" \| "high", "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean}`. When set, entering the exit generates a session-scoped scene tree on-the-fly without mutating the base manifest. |
+| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "depth": number, "max_depth": number, "danger_level": "low" \| "medium" \| "high", "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean}`. When set, entering the exit generates a session-scoped scene tree on-the-fly without mutating the base manifest. *(since 1.4.0)* |
 
 ---
 

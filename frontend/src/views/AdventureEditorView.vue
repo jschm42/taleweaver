@@ -33,7 +33,7 @@ import ScriptsTab from '@/components/editor/ScriptsTab.vue'
 import TriggerTreeTab from '@/components/editor/TriggerTreeTab.vue'
 import type { TriggerTreeNode } from '@/services/triggerTree'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
-import type { DynamicGenerationConfig } from '@/components/editor/DynamicGenerationSection.vue'
+import DynamicGenerationSection, { type DynamicGenerationConfig } from '@/components/editor/DynamicGenerationSection.vue'
 import ValidationTab from '@/components/editor/ValidationTab.vue'
 import WorldBuilderPrompt from '@/components/editor/WorldBuilderPrompt.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
@@ -450,7 +450,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -553,6 +553,7 @@ const editorTabs = [
   { key: 'visuals', label: 'Visual Style' },
   { key: 'tone', label: 'Tone' },
   { key: 'audio', label: 'Audio' },
+  { key: 'dynamic', label: 'Dynamic Generator' },
   { key: 'advanced', label: 'Advanced' },
   { key: 'validation', label: 'Validation' },
 ] as const
@@ -733,6 +734,7 @@ const form = ref({
   dynamic_generation: {
     scene_image_mode: 'simple',
     npc_image_mode: 'simple',
+    item_image_mode: 'simple',
     audio_mode: 'inherit',
     interlude_quote_enabled: true,
   } as DynamicGenerationConfig,
@@ -983,6 +985,7 @@ async function fetchAdventure() {
     form.value.dynamic_generation = {
       scene_image_mode: data.dynamic_generation?.scene_image_mode || 'simple',
       npc_image_mode: data.dynamic_generation?.npc_image_mode || 'simple',
+      item_image_mode: data.dynamic_generation?.item_image_mode || 'simple',
       audio_mode: data.dynamic_generation?.audio_mode || 'inherit',
       interlude_quote_enabled: data.dynamic_generation?.interlude_quote_enabled ?? true,
     }
@@ -3230,13 +3233,18 @@ watch(
               @refresh-world="fetchDebugInfo"
             />
 
+            <DynamicGenerationSection
+              v-if="activeTab === 'dynamic'"
+              :model-value="form.dynamic_generation"
+              @update:model-value="form.dynamic_generation = $event; saveChanges()"
+            />
+
             <AdvancedTab 
               v-if="activeTab === 'advanced'"
               :form="form"
               @update:generator="form.is_adventure_generator = $event; saveChanges()"
               @update:can-damage-npcs="form.can_damage_npcs = $event; saveChanges()"
               @update:npcs-can-damage-protagonist="form.npcs_can_damage_protagonist = $event; saveChanges()"
-              @update:dynamic-generation="form.dynamic_generation = $event; saveChanges()"
               @show-debug="showDebug = true"
               @save-changes="saveChanges"
             />

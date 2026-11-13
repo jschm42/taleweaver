@@ -144,11 +144,17 @@ async def generate_dynamic_interlude_quote(
             if chosen_npc
             else str(payload.role or "")
         )
+        image_url = chosen_npc.get("image_url") if chosen_npc else None
         return {
             "quote": quote_text,
+            "speaker_name": speaker,
+            "speaker_role": role,
+            "npc_id": chosen_npc.get("id") if chosen_npc else None,
+            "voice": chosen_npc.get("voice") if chosen_npc else None,
+            "image_url": image_url,
             "speaker": speaker,
             "role": role,
-            "avatar_url": chosen_npc.get("image_url") if chosen_npc else None,
+            "avatar_url": image_url,
         }
     except Exception as exc:
         logger.debug("Dynamic interlude quote skipped due to error: %s", exc)

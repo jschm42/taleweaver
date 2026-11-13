@@ -35,6 +35,7 @@ class DynamicGenerationConfig(BaseModel):
 
     scene_image_mode: SceneImageMode = "simple"
     npc_image_mode: NpcImageMode = "simple"
+    item_image_mode: NpcImageMode = "simple"
     audio_mode: AudioMode = "inherit"
     interlude_quote_enabled: bool = True
 
@@ -158,6 +159,10 @@ def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
     if npc_mode not in {"off", "simple", "hq"}:
         npc_mode = "simple"
 
+    item_mode = str(data.get("item_image_mode") or "simple").strip().lower()
+    if item_mode not in {"off", "simple", "hq"}:
+        item_mode = "simple"
+
     audio_mode = str(data.get("audio_mode") or "inherit").strip().lower()
     if audio_mode not in {"inherit", "empty", "generate"}:
         audio_mode = "inherit"
@@ -169,6 +174,7 @@ def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
     return DynamicGenerationConfig(
         scene_image_mode=scene_mode,  # type: ignore[arg-type]
         npc_image_mode=npc_mode,  # type: ignore[arg-type]
+        item_image_mode=item_mode,  # type: ignore[arg-type]
         audio_mode=audio_mode,  # type: ignore[arg-type]
         interlude_quote_enabled=bool(interlude),
     ).model_dump()

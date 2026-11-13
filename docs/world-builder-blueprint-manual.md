@@ -500,6 +500,7 @@ Add optional procedural side-zones (catacombs, wilderness trails, back alleys) t
 [World]
 dynamic_scene_images: simple
 dynamic_npc_images: simple
+dynamic_item_images: simple
 dynamic_audio: inherit
 dynamic_quotes: yes
 
