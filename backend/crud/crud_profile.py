@@ -51,6 +51,8 @@ async def build_user_profile_data(db: AsyncSession, user: User) -> dict[str, Any
     return {
         "id": user.id,
         "username": user.username,
+        "email": user.email,
+        "is_active": user.is_active,
         "role": user.role,
         "profile_image_url": normalize_public_data_url(user.profile_image_url),
         "bio": user.bio,

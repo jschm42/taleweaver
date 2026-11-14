@@ -17,7 +17,14 @@ class User(Base, TimestampMixin):
         String(36), primary_key=True, default=lambda: str(uuid6.uuid7())
     )
     username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    email: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Self-registered accounts start inactive and cannot log in until an admin activates them.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     role: Mapped[str] = mapped_column(
         String(20), nullable=False, default="user"
     )  # "admin" or "user"

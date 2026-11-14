@@ -173,6 +173,10 @@ const handleRemoveUser = async (user: any) => {
   await userService.deleteUser(user.id, user.username)
 }
 
+const handleActivateUser = async (user: any) => {
+  await userService.activateUser(user)
+}
+
 // ============ CATALOG MANAGEMENT HANDLERS ============
 
 const openCatalogModal = (type: 'styles' | 'tones', item?: CatalogTile, index?: number) => {
@@ -522,6 +526,7 @@ const navCategories: NavCategory[] = [
           @add-user="openUserModal()"
           @edit-user="openUserModal"
           @remove-user="handleRemoveUser"
+          @activate-user="handleActivateUser"
         />
 
       </div>

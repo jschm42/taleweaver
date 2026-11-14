@@ -6,6 +6,7 @@ import { api } from '@/composables/useApi'
  * - Fetching user list
  * - Creating new users
  * - Updating existing users
+ * - Approving pending accounts
  * - Deleting users
  *
  * All user operations are persisted to the backend. The service maintains
@@ -76,6 +77,27 @@ class UserService {
     } catch (err: any) {
       console.error('[UserService] Failed to update user:', err)
       this.statusMessage.value = { type: 'error', text: 'Failed to update user: ' + err.message }
+    } finally {
+      this.isSubmitting.value = false
+    }
+  }
+
+  /**
+   * Approve a pending (self-registered) account so the user can log in.
+   */
+  async activateUser(user: any) {
+    if (this.isSubmitting.value) return
+
+    this.isSubmitting.value = true
+    this.statusMessage.value = null
+
+    try {
+      await api.activateUser(user.id)
+      this.statusMessage.value = { type: 'success', text: `Account for "${user.username}" approved.` }
+      await this.fetchUsers()
+    } catch (err: any) {
+      console.error('[UserService] Failed to activate user:', err)
+      this.statusMessage.value = { type: 'error', text: 'Failed to activate user: ' + err.message }
     } finally {
       this.isSubmitting.value = false
     }
