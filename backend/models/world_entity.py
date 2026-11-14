@@ -37,6 +37,7 @@ class WorldScene(Base, TimestampMixin):
     on_leave_scene_text = Column(String(5000), nullable=True)
     # Helper functions/constants (like init_script) available to every script run.
     helpers_script = Column(Text, nullable=True)
+    dynamic_zone = Column(JSON, nullable=True)
     adventure_id = synonym("template_id")
 
 

@@ -37,6 +37,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Editor"])
 
 
+def _clean_decorative_objects(decorative_objects: list[str] | None) -> list[str]:
+    """Validate, trim, and cap decorative objects to at most 7 items."""
+    if not decorative_objects:
+        return []
+    cleaned: list[str] = []
+    for item in decorative_objects:
+        text = item.strip()
+        if not text:
+            continue
+        if len(text) > 100:
+            raise HTTPException(
+                status_code=400, detail="Each decorative object must be at most 100 characters."
+            )
+        cleaned.append(text)
+    return cleaned[:7]
+
+
 @router.post("/{template_id}/editor/scene")
 async def create_editor_scene(
     template_id: str,
@@ -52,25 +69,21 @@ async def create_editor_scene(
             status_code=400,
             detail="Scene IDs starting with 'DYN_' are reserved for dynamic scene placeholders.",
         )
+    norm_zone = (
+        normalize_dynamic_zone(payload.dynamic_zone)
+        if isinstance(payload.dynamic_zone, dict)
+        else None
+    )
     label = str(payload.label or "").strip()
-    description = str(payload.description or "").strip()
+    description = str(payload.description or "").strip() or (
+        norm_zone["theme"] if norm_zone else ""
+    )
     if not label:
         raise HTTPException(status_code=400, detail="label is required")
     if not description:
         raise HTTPException(status_code=400, detail="description is required")
 
-    clean_decor: list[str] = []
-    if payload.decorative_objects:
-        for d in payload.decorative_objects:
-            s = d.strip()
-            if not s:
-                continue
-            if len(s) > 100:
-                raise HTTPException(
-                    status_code=400, detail="Each decorative object must be at most 100 characters."
-                )
-            clean_decor.append(s)
-        clean_decor = clean_decor[:7]
+    clean_decor = _clean_decorative_objects(payload.decorative_objects)
 
     existing_scene = await db.execute(
         select(WorldScene).where(
@@ -100,6 +113,7 @@ async def create_editor_scene(
         description=description,
         image_url=str(payload.image_url or "").strip() or None,
         decorative_objects=clean_decor or None,
+        dynamic_zone=norm_zone,
     )
     db.add(scene)
     await db.commit()

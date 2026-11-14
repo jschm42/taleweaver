@@ -31,6 +31,7 @@ export interface DynamicZoneForm {
   zone_id: string
   theme: string
   instructions?: string | null
+  instructions_scope?: 'once' | 'first_scene' | 'max_depth' | 'all_scenes' | null
   cluster_consistency?: boolean
   depth: number
   max_depth: number
@@ -66,21 +67,29 @@ const SPAWN_CHANCE_FIELDS: Array<{
   { key: 'switch', label: 'Switches', defaultVal: 20 },
 ]
 
-const props = defineProps<{
-  modelValue: DynamicZoneForm | null | undefined
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: DynamicZoneForm | null | undefined
+    mode?: 'exit' | 'scene'
+  }>(),
+  {
+    mode: 'exit',
+  },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: DynamicZoneForm | null): void
 }>()
 
 const enabled = computed(() => Boolean(props.modelValue))
+const isSceneMode = computed(() => props.mode === 'scene')
 const activeDynamicTab = ref<'setup' | 'spawns' | 'after_generated'>('setup')
 
 const zone = computed<DynamicZoneForm>(() => ({
   zone_id: props.modelValue?.zone_id || 'ZONE_WILD',
   theme: props.modelValue?.theme || '',
   instructions: props.modelValue?.instructions ?? '',
+  instructions_scope: props.modelValue?.instructions_scope ?? 'once',
   cluster_consistency:
     props.modelValue?.cluster_consistency !== undefined
       ? Boolean(props.modelValue.cluster_consistency)
@@ -124,6 +133,7 @@ function toggleEnabled() {
       zone_id: 'ZONE_WILD',
       theme: '',
       instructions: '',
+      instructions_scope: 'once',
       cluster_consistency: true,
       depth: 1,
       max_depth: 3,
@@ -199,10 +209,18 @@ function clearOverrides() {
     <div class="flex items-center justify-between gap-3">
       <div class="space-y-0.5">
         <p class="text-xs font-black uppercase tracking-wider text-emerald-400">
-          Dynamic Zone Exit (Procedural Scene Generation)
+          {{
+            isSceneMode
+              ? 'Dynamic Scene (Generate on First Entry)'
+              : 'Dynamic Zone Exit (Procedural Scene Generation)'
+          }}
         </p>
         <p class="text-[11px] text-slate-400">
-          Generate a persistent session scene on-the-fly when a player enters this passage.
+          {{
+            isSceneMode
+              ? 'Preserve authored exits and static entities, generating scene details, visuals, and random encounters on first player entry.'
+              : 'Generate a persistent session scene on-the-fly when a player enters this passage.'
+          }}
         </p>
       </div>
       <button
@@ -225,8 +243,11 @@ function clearOverrides() {
 
     <div v-if="enabled" class="space-y-3 pt-2 border-t border-white/10">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="text-[11px] text-emerald-300/80 font-mono">
+        <div v-if="!isSceneMode" class="text-[11px] text-emerald-300/80 font-mono">
           Target placeholder: {{ placeholderTargetId }}
+        </div>
+        <div v-else class="text-[11px] text-emerald-300/80">
+          Share a Zone ID across multiple Dynamic Scenes or Exits to share cluster consistency.
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
@@ -289,7 +310,7 @@ function clearOverrides() {
       </div>
 
       <template v-if="activeDynamicTab === 'setup'">
-        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div :class="isSceneMode ? 'grid md:grid-cols-3 gap-3' : 'grid md:grid-cols-2 lg:grid-cols-4 gap-3'">
           <div class="text-xs text-slate-300 space-y-1">
             <span class="block">Zone ID</span>
             <EditorIdInput
@@ -303,7 +324,7 @@ function clearOverrides() {
             />
           </div>
 
-          <label class="text-xs text-slate-300 space-y-1">
+          <label v-if="!isSceneMode" class="text-xs text-slate-300 space-y-1">
             <span>Max Depth (1–6)</span>
             <input
               type="number"
@@ -370,7 +391,7 @@ function clearOverrides() {
           />
         </label>
 
-        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+        <label v-if="!isSceneMode" class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
           <input
             type="checkbox"
             :checked="zone.cul_de_sac_on_max_depth"
@@ -395,13 +416,26 @@ function clearOverrides() {
           </span>
         </label>
 
-        <div class="space-y-1.5">
+        <div class="space-y-2">
           <div class="flex items-center justify-between gap-2">
             <label class="text-xs font-medium text-slate-300">
               Generation Instructions (Loose Prompt or Blueprint)
             </label>
             <span class="text-[10px] font-mono text-slate-500">Optional</span>
           </div>
+          <label v-if="!isSceneMode" class="text-xs text-slate-300 space-y-1 block">
+            <span>Instructions Scope</span>
+            <select
+              :value="zone.instructions_scope || 'once'"
+              class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+              @change="updateField('instructions_scope', ($event.target as HTMLSelectElement).value as DynamicZoneForm['instructions_scope'])"
+            >
+              <option value="once">Once per cluster (avoid repeating unique items/NPCs — default)</option>
+              <option value="first_scene">First scene only (depth 1)</option>
+              <option value="max_depth">Climax scene only (max depth)</option>
+              <option value="all_scenes">All scenes in cluster</option>
+            </select>
+          </label>
           <textarea
             :value="zone.instructions || ''"
             rows="4"
@@ -410,7 +444,7 @@ function clearOverrides() {
             @input="updateField('instructions', ($event.target as HTMLTextAreaElement).value)"
           />
           <p class="text-[11px] text-slate-400">
-            Accepts freeform instructions or World-Builder Blueprint blocks ([Scene:], [NPC:], [Container:], [Weapon:], [Item:], ...).
+            Accepts freeform instructions or World-Builder Blueprint blocks ([Scene:], [NPC:], [Container:], [Weapon:], [Item:], ...). In Blueprint blocks, optional <code>depth: 1</code> or <code>depth: max</code> targets specific depths, and spawned entities are automatically deduplicated across the cluster.
           </p>
         </div>
       </template>

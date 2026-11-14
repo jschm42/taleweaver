@@ -1103,6 +1103,9 @@ const isDynamicSceneId = (sceneId?: string | null): boolean => {
   const raw = String(sceneId || '').trim()
   if (!raw) return false
   if (/^DYN_/i.test(raw)) return true
+  const safe = raw.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+  const metaNode = nodes.value?.[safe] || nodes.value?.[raw.toUpperCase()] || nodes.value?.[raw]
+  if (metaNode?.is_dynamic) return true
   return Boolean(findMapNode(raw)?.is_dynamic)
 }
 

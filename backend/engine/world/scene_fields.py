@@ -21,6 +21,7 @@ SCENE_CONTENT_FIELDS = (
     "label",
     "description",
     "decorative_objects",
+    "dynamic_zone",
     *SCENE_SCRIPT_FIELDS,
     *SCENE_AUDIO_FIELDS,
 )

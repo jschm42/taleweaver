@@ -569,3 +569,75 @@ def test_container_switch_and_take_locked_items_parse_correctly():
         "key": "",
     }
     assert soda.fixed()["locked"] is True
+
+
+def test_dynamic_scene_tag_and_exit_instructions_scope():
+    # Arrange
+    text = (
+        "[Scene: HALL] Great Hall\n"
+        "A lantern-lit stone hall.\n"
+        "\n"
+        "[DynamicScene: SCENE_STABLE] Old Stable\n"
+        "zone: haunted_farm\n"
+        "theme: Creaking timber barn smelling of damp hay\n"
+        "danger: low\n"
+        "max_npcs: 1\n"
+        "cluster_consistency: yes\n"
+        "instructions: Generate a rusted lantern on the workbench.\n"
+        "instructions_scope: all_scenes\n"
+        "on_after_generated: |\n"
+        "  tw.vars.set('stable_ready', True)\n"
+        "\n"
+        "[Scene: SCENE_LOFT] Dusty Hayloft\n"
+        "dynamic: yes\n"
+        "theme: Shadows among the high rafters\n"
+        "\n"
+        "[Exit: HALL <-> SCENE_STABLE] a creaking barn door\n"
+        "[Exit: SCENE_STABLE <-> SCENE_LOFT] a splintered ladder\n"
+        "\n"
+        "[Exit: SCENE_STABLE -> ?] a sunken cellar hatch\n"
+        "zone: bone_cellar\n"
+        "theme: Damp brick vaults\n"
+        "max_depth: 3\n"
+        "scope: climax\n"
+    )
+
+    # Act
+    blueprint, missing = analyze_blueprint(text)
+    manifest: dict = {"scenes": [], "exits": [], "npcs": [], "objects": []}
+    for b in blueprint.of_kind("scene"):
+        manifest["scenes"].append(
+            {"id": b.ref, "name": b.name, "label": b.name, "description": b.description}
+        )
+    for b in blueprint.of_kind("exit"):
+        manifest["exits"].append(
+            {
+                "from_scene_id": b.fixed().get("from_scene_id", ""),
+                "to_scene_id": b.fixed().get("to_scene_id", ""),
+                "label": b.fixed().get("label", b.name),
+            }
+        )
+    violations = apply_blueprint(manifest, blueprint)
+
+    # Assert
+    assert blueprint.errors == []
+    assert missing == []
+    assert violations == []
+    stable = next(s for s in manifest["scenes"] if s["id"] == "SCENE_STABLE")
+    loft = next(s for s in manifest["scenes"] if s["id"] == "SCENE_LOFT")
+    cellar_exit = next(
+        e
+        for e in manifest["exits"]
+        if e["from_scene_id"] == "SCENE_STABLE" and e["to_scene_id"].startswith("DYN_")
+    )
+    assert stable["dynamic_zone"]["zone_id"] == "haunted_farm"
+    assert stable["dynamic_zone"]["danger_level"] == "low"
+    assert stable["dynamic_zone"]["max_npcs"] == 1
+    assert stable["dynamic_zone"]["instructions_scope"] == "all_scenes"
+    assert (
+        "tw.vars.set('stable_ready', True)" in stable["dynamic_zone"]["on_after_generated_script"]
+    )
+    assert stable["description"] == "Creaking timber barn smelling of damp hay"
+    assert loft["dynamic_zone"]["zone_id"] == "scene_loft"
+    assert loft["dynamic_zone"]["theme"] == "Shadows among the high rafters"
+    assert cellar_exit["dynamic_zone"]["instructions_scope"] == "max_depth"

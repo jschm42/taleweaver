@@ -86,6 +86,10 @@ class WorldSceneSchema(WorldBaseSchema):
             "is. Any other statement never runs. Use empty string for none."
         ),
     )
+    dynamic_zone: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional procedural generation profile for dynamic scenes materialized on first entry.",
+    )
 
     model_config = {"extra": "forbid"}
 

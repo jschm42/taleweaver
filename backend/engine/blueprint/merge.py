@@ -271,6 +271,22 @@ def _apply_dynamic_exit_fixed(entry: dict[str, Any], block: BlueprintBlock) -> N
     )
 
 
+def _apply_dynamic_scene_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
+    raw_zone = dict(entry["dynamic_zone"])
+    if raw_zone.get("enabled") is False:
+        entry["dynamic_zone"] = None
+        return
+    raw_zone.setdefault("zone_id", str(entry.get("id") or "zone").lower())
+    raw_zone.setdefault(
+        "theme",
+        block.description or entry.get("description") or entry.get("name") or "Uncharted area",
+    )
+    zone = normalize_dynamic_zone(raw_zone)
+    entry["dynamic_zone"] = zone
+    if zone and not str(entry.get("description") or "").strip():
+        entry["description"] = zone["theme"]
+
+
 def _apply_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
     for path, value in block.fixed().items():
         _set_path(entry, path, value)
@@ -278,6 +294,8 @@ def _apply_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
         entry["completion_guard_expression"] = block.fixed()["guard_expression"]
     if block.kind == "exit" and isinstance(entry.get("dynamic_zone"), dict):
         _apply_dynamic_exit_fixed(entry, block)
+    if block.kind == "scene" and isinstance(entry.get("dynamic_zone"), dict):
+        _apply_dynamic_scene_fixed(entry, block)
     if block.kind == "world" and isinstance(entry.get("dynamic_generation"), dict):
         entry["dynamic_generation"] = normalize_dynamic_generation(entry["dynamic_generation"])
 

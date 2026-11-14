@@ -21,6 +21,7 @@ import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
 import SceneAudioSelect from '@/components/editor/SceneAudioSelect.vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -422,6 +423,56 @@ async function saveSceneDesc(newDesc: any) {
   }
 }
 
+const sceneDynamicDraft = ref<DynamicZoneForm | null>(null)
+const isSceneDynamicDirty = ref(false)
+
+watch(
+  () => routeSceneDetails.value,
+  (scene) => {
+    sceneDynamicDraft.value = scene?.dynamic_zone
+      ? JSON.parse(JSON.stringify(scene.dynamic_zone))
+      : null
+    isSceneDynamicDirty.value = false
+  },
+  { immediate: true },
+)
+
+function onSceneDynamicDraftChange(val: DynamicZoneForm | null) {
+  sceneDynamicDraft.value = val
+  isSceneDynamicDirty.value = true
+}
+
+const isSceneDynamicInvalid = computed(() =>
+  Boolean(sceneDynamicDraft.value && !String(sceneDynamicDraft.value.theme || '').trim()),
+)
+
+async function saveSceneDynamicZone() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  if (isSceneDynamicInvalid.value) {
+    notificationService.add('Zone Theme is required when Dynamic Scene is enabled.', 'error')
+    return
+  }
+  localIsSavingText.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: String(scene.id),
+      dynamic_zone: sceneDynamicDraft.value,
+    })
+    isSceneDynamicDirty.value = false
+    emit('refresh')
+    notificationService.add(
+      sceneDynamicDraft.value ? 'Dynamic scene settings saved.' : 'Dynamic scene disabled.',
+      'success',
+    )
+  } catch (error: any) {
+    notificationService.add(error?.message || 'Failed to save dynamic scene settings.', 'error')
+  } finally {
+    localIsSavingText.value = false
+  }
+}
+
 async function handleGenerateSceneDesc() {
   const sceneName = routeSceneDetails.value?.label || routeSceneDetails.value?.name
   if (!props.adventureId || !sceneName) return
@@ -591,6 +642,12 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 {{ routeSceneDetails?.id || sceneId }}
               </button>
               <h4 class="text-xs font-black text-slate-400 uppercase tracking-[0.25em]">Scene Editor</h4>
+              <span
+                v-if="routeSceneDetails?.dynamic_zone?.theme"
+                class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0"
+              >
+                Dynamic Scene
+              </span>
             </template>
           </div>
         </div>
@@ -755,6 +812,31 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           @refresh="emit('refresh')"
           @open-library="emit('open-audio-library')"
         />
+
+        <!-- Pre-mapped Dynamic Scene Profile -->
+        <div v-if="routeSceneDetails" class="space-y-2.5">
+          <DynamicZoneFields
+            :model-value="sceneDynamicDraft"
+            mode="scene"
+            @update:model-value="onSceneDynamicDraftChange"
+          />
+          <div v-if="isSceneDynamicDirty" class="flex items-center justify-between gap-3">
+            <span v-if="isSceneDynamicInvalid" class="text-[11px] font-semibold text-amber-400">
+              Zone Theme is required before saving.
+            </span>
+            <span v-else class="text-[11px] text-slate-400">
+              Unsaved Dynamic Scene changes.
+            </span>
+            <button
+              type="button"
+              :disabled="localIsSavingText || isSavingText || isSceneDynamicInvalid"
+              class="px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 transition-colors cursor-pointer"
+              @click="saveSceneDynamicZone"
+            >
+              Save Dynamic Scene
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

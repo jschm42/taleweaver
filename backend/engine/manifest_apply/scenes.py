@@ -45,9 +45,11 @@ def clean_decorative_objects(decorative: Any) -> list[str]:
 
 
 def _scene_prompt(scene: dict[str, Any]) -> str:
+    zone = scene.get("dynamic_zone") if isinstance(scene.get("dynamic_zone"), dict) else {}
+    desc = str(scene.get("description") or zone.get("theme") or "")
     return build_scene_image_prompt(
         scene["name"],
-        scene["description"],
+        desc,
         decorative_objects=clean_decorative_objects(scene.get("decorative_objects")),
     )
 
@@ -102,15 +104,19 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
             continue
         ctx.seen_scene_ids.add(scene["id"])
         image_url = await _scene_image(ctx, scene, (idx, total))
+        raw_zone = scene.get("dynamic_zone")
+        norm_zone = normalize_dynamic_zone(raw_zone) if isinstance(raw_zone, dict) else None
+        description = str(scene.get("description") or (norm_zone or {}).get("theme") or "")
         ctx.db.add(
             WorldScene(
                 id=scene["id"],
                 template_id=ctx.template_id,
                 label=scene.get("name") or scene.get("label") or "Unknown Scene",
-                description=scene.get("description") or "",
+                description=description,
                 image_url=image_url,
                 decorative_objects=clean_decorative_objects(scene.get("decorative_objects"))
                 or None,
+                dynamic_zone=norm_zone,
                 **{key: scene.get(key) or None for key in SCENE_SCRIPT_FIELDS},
                 audio_track_id=track_id_or_none(
                     scene.get("audio_track_id") or scene.get("music_track_id")

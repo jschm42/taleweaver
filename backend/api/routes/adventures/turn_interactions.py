@@ -338,11 +338,10 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
-        if getattr(world_exit, "dynamic_zone", None):
-            async for chunk in prepare_dynamic_traversal_sse(
-                interactions=self, exit_ref=exit_ref, language=language
-            ):
-                yield chunk
+        async for chunk in prepare_dynamic_traversal_sse(
+            interactions=self, exit_ref=exit_ref, language=language
+        ):
+            yield chunk
 
         scene_res = await self.db.execute(
             select(WorldScene)

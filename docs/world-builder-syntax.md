@@ -49,6 +49,17 @@ Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: I
 ### `[Scene: ID] Name`
 `decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
 
+**Dynamic scenes (`[DynamicScene: ID] Name` or `[Scene: ID]` with `dynamic: yes`):**
+Creates a pre-mapped scene node whose authored exits and pre-placed static NPCs/objects stay intact, while its narrative description, ambience, visuals/audio, and procedural encounters are generated on first player entry. Supports `dynamic` (`yes`/`no`), `zone`/`dynamic_zone`/`zone_id` (slug, optional; defaults from scene ID), `theme`/`zone_theme` (atmospheric prompt; also fallback `description`), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`), `max_npcs` (`0`–`5`), `audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`), `allowed_entities`, `instructions`/`prompt`/`zone_instructions` (optional freeform prompt or Blueprint blocks), `instructions_scope`/`scope` (`once`/`first_scene`/`max_depth`/`all_scenes`), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`), and `on_after_generated`/`on_after_generated_script`. Multiple `[DynamicScene]` nodes and dynamic `[Exit]` passages sharing a `zone_id` share cluster consistency. Unvisited pre-mapped Dynamic Scenes keep their details hidden in the player's travel overlay until entered.
+
+```text
+[DynamicScene: FOREST_CLEARING] Mossy Clearing
+theme: Mist-shrouded ancient oak glade with rune-carved standing stones
+danger: medium
+zone: whisper_woods
+cluster_consistency: yes
+```
+
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
 `via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
@@ -56,7 +67,7 @@ Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 **Dynamic exits (procedural exploration zones):**
 Use `[Exit: FROM -> ZONE_ID] label` or `[Exit: FROM -> ?] label` with `theme:` to create an uncharted procedural zone that expands on entry without failing missing-scene validation:
-`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`, default `medium`), `max_npcs` (`0`–`5`, optional per-exit override), `audio`/`audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`, optional per-exit music override), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`, `instructions`/`zone_instructions` (optional freeform generation prompt or fenced Blueprint blocks defining containers, weapons, NPCs, etc. for the cluster), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`; passes the global adventure theme, root dynamic exit theme, and already-generated cluster scenes/NPCs/items to keep the cluster coherent — set `no` to reduce token usage). Target scene IDs for dynamic exits use deterministic `DYN_*` pseudo-names and remain hidden in the player's travel overlay until visited.
+`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`, default `medium`), `max_npcs` (`0`–`5`, optional per-exit override), `audio`/`audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`, optional per-exit music override), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`, `instructions`/`prompt`/`zone_instructions` (optional freeform generation prompt or fenced Blueprint blocks defining containers, weapons, NPCs, etc. for the cluster), `instructions_scope`/`scope` (`once` default — apply once per cluster so unique loot/NPCs are not duplicated in every depth; `first_scene` — depth 1 only; `max_depth` — climax depth only; `all_scenes` — apply at every depth), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`; passes the global adventure theme, root dynamic exit theme, and already-generated cluster scenes/NPCs/items to keep the cluster coherent — set `no` to reduce token usage), `on_after_generated` (script hook). Target scene IDs for dynamic exits use deterministic `DYN_*` pseudo-names and remain hidden in the player's travel overlay until visited.
 
 ```text
 [Exit: TOWN_GATE -> ?] a collapsed iron mine shaft

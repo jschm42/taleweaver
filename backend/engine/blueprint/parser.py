@@ -47,6 +47,8 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "protagonist": ("protagonist", ""),
     "player": ("protagonist", ""),
     "scene": ("scene", ""),
+    "dynamic_scene": ("scene", "DYNAMIC"),
+    "dynamicscene": ("scene", "DYNAMIC"),
     "location": ("scene", ""),
     "exit": ("exit", ""),
     "path": ("exit", ""),
@@ -334,7 +336,9 @@ def _open_block(
             state.current = BlueprintBlock(kind="ignored", ref="", name=rest, line=line_no)
             return
     block = _new_block(blueprint, line_no, kind, raw_ref, rest, state.sequence_count)
-    if preset_type:
+    if preset_type == "DYNAMIC" and kind == "scene":
+        block.fields["dynamic_zone.enabled"] = BlueprintValue(True, "fixed", line_no)
+    elif preset_type:
         block.fields["item_type"] = BlueprintValue(preset_type, "fixed", line_no)
     _note_introduction(state, block)
     blueprint.blocks.append(block)
@@ -455,7 +459,23 @@ def _derive_dynamic_exit_fields(block: BlueprintBlock) -> None:
     block.fields["to_scene_id"] = BlueprintValue(placeholder_id, "fixed", block.line)
 
 
+def _derive_dynamic_scene_fields(block: BlueprintBlock) -> None:
+    enabled_field = block.fields.get("dynamic_zone.enabled")
+    if enabled_field and enabled_field.value is False:
+        return
+    if "dynamic_zone.zone_id" not in block.fields:
+        fallback_zone = normalize_id(block.ref or block.name or "zone").lower() or "zone"
+        block.fields["dynamic_zone.zone_id"] = BlueprintValue(fallback_zone, "fixed", block.line)
+    if "dynamic_zone.theme" not in block.fields:
+        theme = block.description or block.name or "Uncharted area"
+        block.fields["dynamic_zone.theme"] = BlueprintValue(theme, "fixed", block.line)
+
+
 def _derive_implied_fields(block: BlueprintBlock) -> None:
+    if block.kind == "scene":
+        if any(k.startswith("dynamic_zone.") for k in block.fields):
+            _derive_dynamic_scene_fields(block)
+        return
     if block.kind == "exit":
         if any(k.startswith("dynamic_zone.") for k in block.fields):
             _derive_dynamic_exit_fields(block)

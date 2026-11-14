@@ -68,6 +68,16 @@ def script_violations(target_type: str, field_updates: dict[str, Any]) -> list[s
     """Readable syntax problems of every script / guard value in ``field_updates``."""
     violations: list[str] = []
     for field, value in field_updates.items():
+        if str(field) == "dynamic_zone" and isinstance(value, dict):
+            dyn_errors = _syntax_errors(
+                "on_after_generated_script", value.get("on_after_generated_script")
+            )
+            if dyn_errors:
+                violations.append(
+                    f"{target_type}.dynamic_zone.on_after_generated_script "
+                    f"has invalid syntax ({dyn_errors[0]})"
+                )
+            continue
         errors = _syntax_errors(str(field), value)
         if errors:
             violations.append(f"{target_type}.{field} has invalid syntax ({errors[0]})")

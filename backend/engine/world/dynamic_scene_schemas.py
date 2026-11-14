@@ -26,13 +26,16 @@ __all__ = [
     "DynamicSpawnChances",
     "DynamicSpawnChancesOverride",
     "DynamicZoneConfig",
+    "InstructionScope",
     "NpcImageMode",
     "SceneImageMode",
     "build_dynamic_placeholder_scene_id",
     "generate_deterministic_pseudoname",
     "is_dynamic_exit_dict",
+    "is_dynamic_scene_dict",
     "normalize_dynamic_generation",
     "normalize_dynamic_zone",
+    "normalize_instructions_scope",
     "resolve_effective_dynamic_rules",
 ]
 
@@ -40,6 +43,29 @@ SceneImageMode = Literal["off", "inherit", "simple", "hq"]
 NpcImageMode = Literal["off", "simple", "hq"]
 AudioMode = Literal["inherit", "empty", "generate"]
 DangerLevel = Literal["peaceful", "low", "medium", "high", "deadly", "random"]
+InstructionScope = Literal["once", "first_scene", "max_depth", "all_scenes"]
+
+_INSTRUCTION_SCOPE_ALIASES: dict[str, InstructionScope] = {
+    "once": "once",
+    "once_in_cluster": "once",
+    "first_scene": "first_scene",
+    "first": "first_scene",
+    "entry": "first_scene",
+    "max_depth": "max_depth",
+    "final_depth": "max_depth",
+    "final": "max_depth",
+    "boss": "max_depth",
+    "all_scenes": "all_scenes",
+    "all": "all_scenes",
+    "cluster": "all_scenes",
+}
+
+
+def normalize_instructions_scope(raw: Any) -> InstructionScope:
+    """Normalize dynamic instruction scope aliases to a canonical value (default 'once')."""
+    key = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower()).strip("_")
+    return _INSTRUCTION_SCOPE_ALIASES.get(key, "once")
+
 
 DEFAULT_ALLOWED_ENTITY_TYPES: tuple[str, ...] = ("NPC", "OBJECT", "CONTAINER", "SWITCH")
 NPC_TYPE_CAP_KEYS: tuple[str, ...] = ("humanoid", "being", "animal", "monster")
@@ -138,6 +164,7 @@ class DynamicZoneConfig(BaseModel):
     )
     cul_de_sac_on_max_depth: bool = True
     instructions: Optional[str] = Field(default=None, max_length=8000)
+    instructions_scope: InstructionScope = "once"
     cluster_consistency: bool = True
     root_theme: Optional[str] = Field(default=None, max_length=1000)
     on_after_generated_script: Optional[str] = Field(default=None, max_length=8000)
@@ -146,6 +173,7 @@ class DynamicZoneConfig(BaseModel):
     def normalize_dynamic_fields(self) -> DynamicZoneConfig:
         raw_inst = str(self.instructions).strip() if self.instructions is not None else ""
         self.instructions = raw_inst[:8000] if raw_inst else None
+        self.instructions_scope = normalize_instructions_scope(self.instructions_scope)
         self.cluster_consistency = bool(self.cluster_consistency)
         raw_root = str(self.root_theme).strip() if self.root_theme is not None else ""
         self.root_theme = raw_root[:1000] if raw_root else self.theme
@@ -360,6 +388,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
     chances_override = _normalize_spawn_chances(raw.get("spawn_chances"), partial=True)
     raw_instructions = raw.get("instructions")
     instructions = str(raw_instructions).strip()[:8000] if raw_instructions is not None else ""
+    instructions_scope = normalize_instructions_scope(raw.get("instructions_scope"))
     cluster_consistency = raw.get("cluster_consistency")
     if cluster_consistency is None:
         cluster_consistency = True
@@ -368,7 +397,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
     raw_after_script = raw.get("on_after_generated_script")
     after_script = str(raw_after_script).strip() if raw_after_script is not None else ""
 
-    return DynamicZoneConfig(
+    dumped = DynamicZoneConfig(
         enabled=True,
         zone_id=zone_id,
         theme=theme[:1000],
@@ -388,10 +417,16 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
         allowed_entity_types=allowed_types,
         cul_de_sac_on_max_depth=bool(cul_de_sac),
         instructions=instructions or None,
+        instructions_scope=instructions_scope,
         cluster_consistency=bool(cluster_consistency),
         root_theme=root_theme,
         on_after_generated_script=after_script[:8000] if after_script else None,
     ).model_dump()
+    if raw.get("materialized"):
+        dumped["materialized"] = True
+    if raw.get("instructions_consumed"):
+        dumped["instructions_consumed"] = True
+    return dumped
 
 
 def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
@@ -440,3 +475,10 @@ def is_dynamic_exit_dict(ex: Any) -> bool:
     if not isinstance(ex, dict):
         return False
     return normalize_dynamic_zone(ex.get("dynamic_zone")) is not None
+
+
+def is_dynamic_scene_dict(scene: Any) -> bool:
+    """Return True if a scene dictionary defines an enabled dynamic scene profile."""
+    if not isinstance(scene, dict):
+        return False
+    return normalize_dynamic_zone(scene.get("dynamic_zone")) is not None

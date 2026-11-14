@@ -307,6 +307,7 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_leave_scene_text=s.on_leave_scene_text,
             helpers_script=s.helpers_script,
             audio_track_id=s.audio_track_id,
+            dynamic_zone=deepcopy(s.dynamic_zone) if s.dynamic_zone else None,
         )
         db.add(cloned)
 

@@ -176,6 +176,16 @@ def _check_scenes(scenes: list[dict[str, Any]]) -> list[ValidationFinding]:
                     extra_context={"scene_id": sid},
                 )
             )
+        dyn_zone = scene.get("dynamic_zone")
+        if isinstance(dyn_zone, dict) and dyn_zone.get("on_after_generated_script"):
+            findings.extend(
+                _validate_script_code(
+                    dyn_zone.get("on_after_generated_script"),
+                    "dynamic_zone.on_after_generated_script",
+                    location=loc,
+                    extra_context={"scene_id": sid},
+                )
+            )
     return findings
 
 

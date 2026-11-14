@@ -14,7 +14,10 @@ from backend.api.routes.adventures.container_detach import (
     load_session_containers,
 )
 from backend.api.routes.adventures.dynamic_scene_flow import (
+    _find_session_scene,
+    is_unmaterialized_dynamic_scene,
     materialize_dynamic_scene_for_exit,
+    materialize_existing_dynamic_scene,
     sync_dynamic_scene_audio,
 )
 from backend.api.routes.adventures.entity_state_merge import merge_entity_states
@@ -512,7 +515,13 @@ class TurnStateApplier:
                             await self._save_chat_message("system", old_sc_db.on_leave_scene_text)
                             system_messages.append(old_sc_db.on_leave_scene_text)
 
-                if valid_exit and getattr(valid_exit, "dynamic_zone", None):
+                target_sc_db = await _find_session_scene(
+                    self.db, self.state.session_id, event.new_scene_id
+                )
+                if valid_exit and (
+                    getattr(valid_exit, "dynamic_zone", None)
+                    or is_unmaterialized_dynamic_scene(self.state, target_sc_db)
+                ):
                     await materialize_dynamic_scene_for_exit(
                         db=self.db,
                         state=self.state,
@@ -520,6 +529,19 @@ class TurnStateApplier:
                         user=self.manager.user,
                         world_exit=valid_exit,
                         origin_scene=old_sc_db,
+                        language=self.manager.adventure.language or "English",
+                    )
+                elif target_sc_db and is_unmaterialized_dynamic_scene(self.state, target_sc_db):
+                    await materialize_existing_dynamic_scene(
+                        db=self.db,
+                        state=self.state,
+                        adventure=self.manager.adventure,
+                        user=self.manager.user,
+                        target_scene=target_sc_db,
+                        origin_scene=old_sc_db,
+                        exit_label=getattr(valid_exit, "label", None)
+                        or event.exit_label
+                        or "Passage",
                         language=self.manager.adventure.language or "English",
                     )
 

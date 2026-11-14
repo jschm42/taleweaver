@@ -2079,3 +2079,343 @@ def test_cluster_consistency_prompt_formatting_respects_toggle() -> None:
     text_off = build_cluster_consistency_prompt_section(zone_off, cluster)
     assert "Collapsed Ore Bay" not in text_off
     assert "Old Borin" not in text_off
+
+
+@pytest.mark.asyncio
+async def test_instructions_scope_controls_cluster_expansion(db_session, monkeypatch) -> None:
+    """Freeform instructions honor scope ('once', 'first_scene', 'max_depth', 'all_scenes')."""
+    from backend.engine.world.dynamic_instructions_helper import resolve_active_instructions
+
+    # Arrange: verify scope filtering rules at depth 1 and depth 2
+    base_zone = {
+        "zone_id": "ruins",
+        "theme": "Crumbling stone vaults",
+        "instructions": "Generate a loot chest with a 1d+2 sword.",
+        "depth": 1,
+        "max_depth": 2,
+    }
+    once_d1, _ = resolve_active_instructions({**base_zone, "instructions_scope": "once"}, [])
+    once_d2, _ = resolve_active_instructions(
+        {**base_zone, "instructions_scope": "once", "depth": 2}, [{"scene_id": "D1"}]
+    )
+    max_d1, _ = resolve_active_instructions({**base_zone, "instructions_scope": "max_depth"}, [])
+    max_d2, _ = resolve_active_instructions(
+        {**base_zone, "instructions_scope": "max_depth", "depth": 2}, [{"scene_id": "D1"}]
+    )
+    all_d2, _ = resolve_active_instructions(
+        {**base_zone, "instructions_scope": "all_scenes", "depth": 2}, [{"scene_id": "D1"}]
+    )
+
+    assert "loot chest" in once_d1.lower()
+    assert once_d2 == ""
+    assert max_d1 == ""
+    assert "loot chest" in max_d2.lower()
+    assert "loot chest" in all_d2.lower()
+
+    # Act: materialize depth 1 of a 'once' dynamic exit and verify child exit marks instructions_consumed
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(db_session)
+    dyn_exit.dynamic_zone = {
+        **dyn_exit.dynamic_zone,
+        "instructions": "Generate a loot chest with a bronze key.",
+        "instructions_scope": "once",
+    }
+    await db_session.commit()
+
+    async def _fake_interlude(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        return DynamicGeneratedScenePayload(
+            name="Outer Gallery",
+            description="Dusty arched chamber.",
+            forward_exits=[
+                DynamicGeneratedChildExit(label="Deeper Vault", theme_hint="Inner chamber")
+            ],
+        )
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_interlude_quote", _fake_interlude)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    scene_d1 = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+    )
+    child_exit = (
+        (
+            await db_session.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.from_scene_id == scene_d1.id,
+                    WorldExit.to_scene_id != origin_scene.id,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+    # Assert
+    assert child_exit is not None
+    assert child_exit.dynamic_zone["instructions_consumed"] is True
+
+
+def test_blueprint_instructions_deduplicate_across_cluster_and_honor_depth() -> None:
+    """Blueprint instruction blocks skip already-spawned entities and filter by block depth."""
+    from backend.engine.world.dynamic_instructions_helper import (
+        apply_instructions_backfill,
+        resolve_active_instructions,
+    )
+
+    # Arrange
+    bp_instructions = (
+        "[Container: IRON_CHEST] Loot Chest\n"
+        "A bolted iron chest.\n\n"
+        "[Weapon: IRON_SWORD] Iron Sword\n"
+        "location: IRON_CHEST\n"
+        "damage_dice: 1d+2\n\n"
+        "[NPC: BOSS_TROLL] Cave Troll\n"
+        "depth: max\n"
+        "attack: on_sight\n"
+    )
+    zone_d1 = normalize_dynamic_zone(
+        {
+            "zone_id": "iron_mines",
+            "theme": "Flooded mine",
+            "instructions": bp_instructions,
+            "instructions_scope": "once",
+            "depth": 1,
+            "max_depth": 2,
+        }
+    )
+
+    # Act 1: Depth 1 gets chest + sword, skips BOSS_TROLL (depth: max)
+    _, bp_d1 = resolve_active_instructions(zone_d1, [])
+    payload_d1 = DynamicGeneratedScenePayload(name="Stables", description="Damp stables.")
+    apply_instructions_backfill(payload_d1, zone_d1, {"has_instructions": True}, [])
+
+    assert bp_d1 is not None
+    assert [b.ref for b in bp_d1.of_kind("item")] == ["IRON_CHEST", "IRON_SWORD"]
+    assert bp_d1.of_kind("npc") == []
+    assert [o.id for o in payload_d1.objects] == ["IRON_CHEST", "IRON_SWORD"]
+    assert payload_d1.npcs == []
+
+    # Act 2: Depth 2 (max) with IRON_CHEST & IRON_SWORD already in cluster skips duplicates and spawns BOSS_TROLL
+    cluster_ctx = [
+        {
+            "scene_id": "DYN_MINES_1",
+            "name": "Stables",
+            "depth": 1,
+            "npcs": [],
+            "objects": [
+                {"id": "DYN_MINES_1_IRON_CHEST", "name": "Loot Chest", "item_type": "CONTAINER"},
+                {"id": "DYN_MINES_1_IRON_SWORD", "name": "Iron Sword", "item_type": "WEAPON"},
+            ],
+        }
+    ]
+    zone_d2 = {**zone_d1, "depth": 2}
+    _, bp_d2 = resolve_active_instructions(zone_d2, cluster_ctx)
+    payload_d2 = DynamicGeneratedScenePayload(name="Deep Lair", description="Cavern core.")
+    apply_instructions_backfill(payload_d2, zone_d2, {"has_instructions": True}, cluster_ctx)
+
+    # Assert
+    assert bp_d2 is not None
+    assert bp_d2.of_kind("item") == []
+    assert [b.ref for b in bp_d2.of_kind("npc")] == ["BOSS_TROLL"]
+    assert payload_d2.objects == []
+    assert [n.id for n in payload_d2.npcs] == ["BOSS_TROLL"]
+
+
+@pytest.mark.asyncio
+async def test_premapped_dynamic_scene_materializes_preserving_exits_and_entities(
+    db_session, monkeypatch
+) -> None:
+    """Pre-mapped WorldScene.dynamic_zone materializes on entry while keeping exits & static entities."""
+    from backend.api.routes.adventures.logic import AdventureLogic
+
+    # Arrange
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(db_session)
+    stable_scene = WorldScene(
+        id="PRE_STABLE",
+        template_id=adv.id,
+        session_id=state.session_id,
+        label="Old Stable",
+        description="Authored note: stone stable behind the inn.",
+        dynamic_zone=normalize_dynamic_zone(
+            {
+                "zone_id": "haunted_farm",
+                "theme": "Cobwebbed stone stable smelling of lantern oil and ash",
+                "danger_level": "medium",
+                "cluster_consistency": True,
+                "on_after_generated_script": "tw.vars.set('premapped_done', generated_scene['id'])",
+            }
+        ),
+    )
+    barn_scene = WorldScene(
+        id="PRE_BARN",
+        template_id=adv.id,
+        session_id=state.session_id,
+        label="Collapsed Barn",
+        description="Timberloft overlooking the yard.",
+        dynamic_zone=normalize_dynamic_zone(
+            {
+                "zone_id": "haunted_farm",
+                "theme": "Sagging timber barn overlooking a fogbound courtyard",
+                "danger_level": "low",
+                "cluster_consistency": True,
+            }
+        ),
+    )
+    entry_exit = WorldExit(
+        id="EXIT_TO_PRE_STABLE",
+        session_id=state.session_id,
+        from_scene_id=origin_scene.id,
+        to_scene_id="PRE_STABLE",
+        label="a crooked stable door",
+        exit_type="bidirectional",
+    )
+    authored_link = WorldExit(
+        id="EXIT_STABLE_TO_BARN",
+        session_id=state.session_id,
+        from_scene_id="PRE_STABLE",
+        to_scene_id="PRE_BARN",
+        label="a mud-splashed paddock gate",
+        exit_type="bidirectional",
+    )
+    static_marker = WorldEntity(
+        id="STATIC_PLAQUE",
+        session_id=state.session_id,
+        entity_type="OBJECT",
+        item_type="READABLE",
+        name="Brass Stable Plaque",
+        description="Reads: Est. 1842.",
+        current_scene_id="PRE_STABLE",
+        is_portable=False,
+    )
+    db_session.add_all([stable_scene, barn_scene, entry_exit, authored_link, static_marker])
+    await db_session.commit()
+
+    # Metadata marks both unmaterialized Dynamic Scenes as dynamic + unknown before entry
+    meta_before = await AdventureLogic.get_all_scene_metadata(
+        db_session, adv.id, session_id=state.session_id
+    )
+    assert meta_before["PRE_STABLE"]["is_dynamic"] is True
+    assert meta_before["PRE_STABLE"]["is_unknown"] is True
+    assert meta_before["PRE_BARN"]["is_dynamic"] is True
+    assert meta_before["PRE_BARN"]["is_unknown"] is True
+
+    captured_calls: list[dict] = []
+
+    async def _fake_interlude(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        captured_calls.append(
+            {
+                "cluster_context": kwargs.get("cluster_context"),
+                "existing_scene_hint": kwargs.get("existing_scene_hint"),
+            }
+        )
+        scene_id = (kwargs.get("existing_scene_hint") or {}).get("id")
+        return DynamicGeneratedScenePayload(
+            name=f"Generated {scene_id}",
+            description=f"Materialized description for {scene_id}.",
+            npcs=[
+                DynamicGeneratedNpc(
+                    id="STABLE_HAND",
+                    name="Pale Groom" if scene_id == "PRE_STABLE" else "Barn Owl Keeper",
+                    role="Caretaker",
+                    description="Watches the rafters.",
+                )
+            ],
+            objects=[
+                DynamicGeneratedObject(
+                    id="OIL_LAMP",
+                    name="Sooty Lantern",
+                    item_type="STANDARD",
+                    description="Warm glass lantern.",
+                )
+            ],
+            forward_exits=[DynamicGeneratedChildExit(label="Ignored Exit", theme_hint="Ignored")],
+        )
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_interlude_quote", _fake_interlude)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    # Act 1: Enter PRE_STABLE via authored non-dynamic exit -> materializes in-place
+    mat_stable = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=entry_exit,
+        origin_scene=origin_scene,
+    )
+    await db_session.commit()
+
+    # Assert 1: Existing exits & static item preserved, description & generated entities saved, script fired
+    assert mat_stable.id == "PRE_STABLE"
+    assert mat_stable.label == "Old Stable"
+    assert mat_stable.description == "Materialized description for PRE_STABLE."
+    assert mat_stable.dynamic_zone["materialized"] is True
+    assert captured_calls[0]["existing_scene_hint"]["id"] == "PRE_STABLE"
+    assert any("PRE_BARN" in ex for ex in captured_calls[0]["existing_scene_hint"]["exits"])
+    script_vars = (state.entity_states or {}).get("__script_vars__", {})
+    assert script_vars.get("premapped_done") == "PRE_STABLE"
+
+    stable_exits = (
+        (
+            await db_session.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.from_scene_id == "PRE_STABLE",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [e.to_scene_id for e in stable_exits] == ["PRE_BARN"]
+
+    stable_entities = (
+        (
+            await db_session.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == state.session_id,
+                    WorldEntity.current_scene_id == "PRE_STABLE",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    stable_ids = {ent.id for ent in stable_entities}
+    assert "STATIC_PLAQUE" in stable_ids
+    assert "PRE_STABLE_STABLE_HAND" in stable_ids
+    assert "PRE_STABLE_OIL_LAMP" in stable_ids
+
+    meta_mid = await AdventureLogic.get_all_scene_metadata(
+        db_session, adv.id, session_id=state.session_id
+    )
+    assert "is_unknown" not in meta_mid["PRE_STABLE"]
+    assert meta_mid["PRE_BARN"]["is_unknown"] is True
+
+    # Act 2: Enter PRE_BARN (same zone_id) -> sees PRE_STABLE in cluster_context
+    mat_barn = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=authored_link,
+        origin_scene=mat_stable,
+    )
+    await db_session.commit()
+
+    assert mat_barn.id == "PRE_BARN"
+    assert mat_barn.dynamic_zone["materialized"] is True
+    barn_cluster = captured_calls[1]["cluster_context"]
+    assert isinstance(barn_cluster, list)
+    assert any(c["scene_id"] == "PRE_STABLE" for c in barn_cluster)

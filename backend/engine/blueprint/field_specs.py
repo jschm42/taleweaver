@@ -22,6 +22,7 @@ from backend.engine.blueprint.converters import (
     boolean,
     choice,
     dynamic_entity_types,
+    dynamic_instructions_scope,
     dynamic_max_depth,
     dynamic_max_npcs,
     dynamic_zone_id,
@@ -173,6 +174,41 @@ for _alias, _stat in STAT_ALIASES.items():
 _hook(PROTAGONIST_KEYS, "on_hp_change", "on_hp_change")
 _hook(PROTAGONIST_KEYS, "on_status_change", "on_status_change")
 
+_DYNAMIC_DANGER_CONVERT = choice("peaceful", "low", "medium", "high", "deadly", "random")
+_DYNAMIC_AUDIO_CONVERT = choice(
+    "inherit",
+    "empty",
+    "generate",
+    aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+)
+_DYNAMIC_COMMON_KEYS: dict[str, FieldSpec] = {
+    "dynamic_zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "zone_id": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "theme": FieldSpec("dynamic_zone.theme"),
+    "zone_theme": FieldSpec("dynamic_zone.theme"),
+    "danger": FieldSpec("dynamic_zone.danger_level", _DYNAMIC_DANGER_CONVERT),
+    "danger_level": FieldSpec("dynamic_zone.danger_level", _DYNAMIC_DANGER_CONVERT),
+    "max_npcs": FieldSpec("dynamic_zone.max_npcs", dynamic_max_npcs),
+    "audio_mode": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "music_mode": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "dynamic_audio": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "dynamic_music": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "allowed_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "allowed_entities": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "allowed_entity_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "instructions": FieldSpec("dynamic_zone.instructions"),
+    "prompt": FieldSpec("dynamic_zone.instructions"),
+    "zone_instructions": FieldSpec("dynamic_zone.instructions"),
+    "instructions_scope": FieldSpec("dynamic_zone.instructions_scope", dynamic_instructions_scope),
+    "scope": FieldSpec("dynamic_zone.instructions_scope", dynamic_instructions_scope),
+    "cluster_consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "consistent_cluster": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "on_after_generated": _script("dynamic_zone.on_after_generated_script"),
+    "on_after_generated_script": _script("dynamic_zone.on_after_generated_script"),
+}
+
 SCENE_KEYS: dict[str, FieldSpec] = {
     "decor": FieldSpec("decorative_objects", text_list),
     # Track of the audio library ([Audio: ID]) that plays in this scene.
@@ -180,6 +216,8 @@ SCENE_KEYS: dict[str, FieldSpec] = {
     "music": _ref("audio_track_id"),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
+    "dynamic": FieldSpec("dynamic_zone.enabled", boolean),
+    **_DYNAMIC_COMMON_KEYS,
 }
 _hook(SCENE_KEYS, "on_enter", "on_enter_scene")
 _hook(SCENE_KEYS, "on_leave", "on_leave_scene")
@@ -197,86 +235,15 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "guard": _expr("unlock_expression"),
     "bidirectional": FieldSpec("is_bidirectional", boolean),
     "one_way": FieldSpec("is_bidirectional", one_way),
-    "dynamic_zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
-    "zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
-    "zone_id": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
-    "theme": FieldSpec("dynamic_zone.theme"),
-    "zone_theme": FieldSpec("dynamic_zone.theme"),
+    **_DYNAMIC_COMMON_KEYS,
     "max_depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
     "depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
-    "danger": FieldSpec(
-        "dynamic_zone.danger_level",
-        choice("peaceful", "low", "medium", "high", "deadly", "random"),
-    ),
-    "danger_level": FieldSpec(
-        "dynamic_zone.danger_level",
-        choice("peaceful", "low", "medium", "high", "deadly", "random"),
-    ),
-    "max_npcs": FieldSpec("dynamic_zone.max_npcs", dynamic_max_npcs),
-    "audio": FieldSpec(
-        "dynamic_zone.audio_mode",
-        choice(
-            "inherit",
-            "empty",
-            "generate",
-            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
-        ),
-    ),
-    "music": FieldSpec(
-        "dynamic_zone.audio_mode",
-        choice(
-            "inherit",
-            "empty",
-            "generate",
-            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
-        ),
-    ),
-    "audio_mode": FieldSpec(
-        "dynamic_zone.audio_mode",
-        choice(
-            "inherit",
-            "empty",
-            "generate",
-            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
-        ),
-    ),
-    "music_mode": FieldSpec(
-        "dynamic_zone.audio_mode",
-        choice(
-            "inherit",
-            "empty",
-            "generate",
-            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
-        ),
-    ),
-    "dynamic_audio": FieldSpec(
-        "dynamic_zone.audio_mode",
-        choice(
-            "inherit",
-            "empty",
-            "generate",
-            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
-        ),
-    ),
-    "dynamic_music": FieldSpec(
-        "dynamic_zone.audio_mode",
-        choice(
-            "inherit",
-            "empty",
-            "generate",
-            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
-        ),
-    ),
+    "audio": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "music": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
     "cul_de_sac": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
     "cul_de_sac_on_max_depth": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
-    "allowed_entities": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
-    "allowed_entity_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
     "return_direction": FieldSpec("dynamic_zone.return_exit_direction"),
     "return_exit_direction": FieldSpec("dynamic_zone.return_exit_direction"),
-    "instructions": FieldSpec("dynamic_zone.instructions"),
-    "zone_instructions": FieldSpec("dynamic_zone.instructions"),
-    "cluster_consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
-    "consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")

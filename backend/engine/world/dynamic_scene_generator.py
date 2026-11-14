@@ -16,9 +16,15 @@ from backend.engine.world.dynamic_instructions_helper import (
     adjust_plan_for_instructions,
     apply_instructions_backfill,
     build_cluster_consistency_prompt_section,
+    build_existing_scene_context_prompt_section,
     build_instructions_prompt_section,
     ensure_object_item_stats,
     select_planned_objects,
+)
+from backend.engine.world.dynamic_interlude_quote import (
+    _build_interlude_prompts,
+    _pick_interlude_npc,
+    _strip_outer_quotes,
 )
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedScenePayload,
@@ -31,72 +37,6 @@ logger = logging.getLogger(__name__)
 
 _LOCAL_LLM_PROVIDERS = {"ollama", "lmstudio"}
 _RANDOM_DANGER_CHOICES: tuple[str, ...] = ("peaceful", "low", "medium", "high", "deadly")
-_SPEAKING_NPC_TYPES = {"HUMANOID", "BEING"}
-_NON_SPEAKING_NPC_TYPES = {"ANIMAL", "MONSTER"}
-
-
-def _is_speaking_npc(npc: Any) -> bool:
-    """Return True if an NPC candidate is a speaking type (HUMANOID or BEING)."""
-    if not isinstance(npc, dict) or not npc.get("name"):
-        return False
-    explicit_type = str(npc.get("npc_type") or "").strip().upper()
-    if explicit_type:
-        return explicit_type in _SPEAKING_NPC_TYPES
-    role_type = str(npc.get("role") or "").strip().upper()
-    return role_type not in _NON_SPEAKING_NPC_TYPES
-
-
-def _pick_interlude_npc(candidate_npcs: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
-    """Choose a random living speaking NPC (HUMANOID/BEING) for the transition quote."""
-    speaking = [npc for npc in candidate_npcs if _is_speaking_npc(npc)]
-    if not speaking:
-        return None
-    alive = [npc for npc in speaking if not npc.get("is_defeated")]
-    pool = alive or speaking
-    return random.choice(pool)
-
-
-def _strip_outer_quotes(text: str) -> str:
-    cleaned = str(text or "").strip()
-    if len(cleaned) >= 2 and cleaned[0] in {'"', "'", "“", "„"} and cleaned[-1] in {'"', "'", "”"}:
-        return cleaned[1:-1].strip()
-    return cleaned
-
-
-def _build_interlude_prompts(
-    *,
-    adventure_title: str,
-    adventure_setting: str,
-    adventure_tone: str,
-    origin_scene_name: str,
-    exit_label: str,
-    zone_theme: str,
-    chosen_npc: Optional[dict[str, Any]],
-    language: str,
-) -> tuple[str, str]:
-    npc_hint = (
-        f"Speak in the voice of existing NPC '{chosen_npc['name']}' "
-        f"(Character/Role: {chosen_npc.get('character') or chosen_npc.get('goal') or 'Companion'}; "
-        f"Bio: {str(chosen_npc.get('description') or '')[:160]})."
-        if chosen_npc
-        else "Invent a brief, evocative speaker fitting the adventure tone (e.g. a seasoned scout, old chronicler, or whispered memory)."
-    )
-    system_prompt = (
-        "You write ultra-short atmospheric transition quotes for an interactive RPG.\n"
-        f"Return strict JSON matching the schema. Write ALL quote text strictly in {language}.\n"
-        "The quote must be 1 to 2 short sentences (under 200 characters), evocative, and fit the tone."
-    )
-    user_prompt = (
-        f"Adventure: {adventure_title}\n"
-        f"Tone: {adventure_tone or 'Atmospheric Adventure'}\n"
-        f"Setting excerpt: {adventure_setting[:300]}\n"
-        f"Origin scene: {origin_scene_name}\n"
-        f"Passage taken: {exit_label}\n"
-        f"Destination zone theme: {zone_theme}\n"
-        f"Speaker directive: {npc_hint}\n"
-        "Respond with JSON fields: speaker, role, quote."
-    )
-    return system_prompt, user_prompt
 
 
 def _has_provider_credentials(user: Any, provider: str) -> bool:
@@ -228,6 +168,7 @@ def _roll_scene_plan(
     max_npcs: int,
     effective_danger: str = "medium",
     generation_config: Optional[dict[str, Any]] = None,
+    cluster_context: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Roll per-scene NPC and object composition targets from caps and spawn chances."""
     depth = int(zone.get("depth") or 1)
@@ -290,9 +231,10 @@ def _roll_scene_plan(
             "allow_items": allow_items,
             "allowed_item_types": allowed_item_types,
             "is_climax": is_climax,
-            "has_instructions": bool(str(zone.get("instructions") or "").strip()),
+            "has_instructions": False,
         },
         zone,
+        cluster_context,
     )
 
 
@@ -368,6 +310,7 @@ def _build_scene_prompts(
     max_npcs: int,
     scene_plan: dict[str, Any],
     cluster_context: Optional[list[dict[str, Any]]] = None,
+    existing_scene_hint: Optional[dict[str, Any]] = None,
 ) -> tuple[str, str]:
     depth = int(zone.get("depth") or 1)
     max_depth = int(zone.get("max_depth") or 3)
@@ -377,12 +320,15 @@ def _build_scene_prompts(
         zone.get("allowed_entity_types") or ["NPC", "OBJECT", "CONTAINER", "SWITCH"]
     )
 
-    depth_rule = (
-        f"CLIMAX DEPTH ({depth}/{max_depth}): This is the end of the zone (cul-de-sac). "
-        "Set forward_exits to an empty list []. Provide a memorable climax (reward container, lore discovery, or boss/guardian encounter)."
-        if is_climax
-        else f"EXPANSION DEPTH ({depth}/{max_depth}): Include 1 concise forward_exits entry leading deeper into the zone."
-    )
+    if existing_scene_hint:
+        depth_rule = "PRE-MAPPED DYNAMIC SCENE: Set forward_exits to [] (map exits are already defined by the author)."
+    elif is_climax:
+        depth_rule = (
+            f"CLIMAX DEPTH ({depth}/{max_depth}): This is the end of the zone (cul-de-sac). "
+            "Set forward_exits to an empty list []. Provide a memorable climax (reward container, lore discovery, or boss/guardian encounter)."
+        )
+    else:
+        depth_rule = f"EXPANSION DEPTH ({depth}/{max_depth}): Include 1 concise forward_exits entry leading deeper into the zone."
 
     target_npcs = int(scene_plan["target_npcs"])
     npc_slots = list(scene_plan.get("npc_slots") or [])
@@ -437,7 +383,10 @@ def _build_scene_prompts(
     )
     cluster_section = build_cluster_consistency_prompt_section(zone, cluster_context)
     instructions_section = build_instructions_prompt_section(zone, cluster_context)
-    extra_sections = "\n\n".join(part for part in (cluster_section, instructions_section) if part)
+    scene_hint_section = build_existing_scene_context_prompt_section(existing_scene_hint)
+    extra_sections = "\n\n".join(
+        part for part in (cluster_section, scene_hint_section, instructions_section) if part
+    )
     user_prompt = (
         f"Adventure Title: {adventure_title}\n"
         f"Adventure Tone: {adventure_tone or 'Atmospheric'}\n"
@@ -491,6 +440,32 @@ def _build_fallback_scene_payload(
     )
 
 
+def _finalize_fallback_scene(
+    exit_label: str,
+    zone: dict[str, Any],
+    existing_scene_hint: Optional[dict[str, Any]],
+    cluster_context: Optional[list[dict[str, Any]]] = None,
+    *,
+    backfill: bool = False,
+) -> DynamicGeneratedScenePayload:
+    """Build fallback payload, clearing exits on pre-mapped scenes and optionally backfilling."""
+    fallback = _build_fallback_scene_payload(exit_label, zone)
+    if existing_scene_hint:
+        fallback.forward_exits = []
+        fallback.name = str(existing_scene_hint.get("label") or fallback.name)[:100]
+    if backfill:
+        apply_instructions_backfill(fallback, zone, {}, cluster_context)
+    return fallback
+
+
+def _apply_peaceful_filter(npcs: list[Any]) -> None:
+    """Ensure no hostile combat roles or attitudes appear in peaceful zones."""
+    for npc in npcs:
+        npc.combat_role = "none"
+        if npc.attitude == "hostile":
+            npc.attitude = "neutral"
+
+
 async def generate_dynamic_scene_payload(
     *,
     adventure_title: str,
@@ -508,6 +483,7 @@ async def generate_dynamic_scene_payload(
     max_npcs_default: int = 2,
     generation_config: Optional[dict[str, Any]] = None,
     cluster_context: Optional[list[dict[str, Any]]] = None,
+    existing_scene_hint: Optional[dict[str, Any]] = None,
 ) -> DynamicGeneratedScenePayload:
     """Generate a structured DynamicGeneratedScenePayload via LLM with deterministic fallback."""
     del db
@@ -530,15 +506,16 @@ async def generate_dynamic_scene_payload(
 
     if not _has_provider_credentials(user, provider):
         logger.info("No LLM credentials for provider %s; using fallback dynamic scene.", provider)
-        fallback = _build_fallback_scene_payload(exit_label, zone)
-        apply_instructions_backfill(fallback, zone, {}, cluster_context)
-        return fallback
+        return _finalize_fallback_scene(
+            exit_label, zone, existing_scene_hint, cluster_context, backfill=True
+        )
 
     scene_plan = _roll_scene_plan(
         zone,
         max_npcs,
         effective_danger=effective_danger,
         generation_config=generation_config,
+        cluster_context=cluster_context,
     )
     system_prompt, user_prompt = _build_scene_prompts(
         adventure_title=adventure_title,
@@ -553,6 +530,7 @@ async def generate_dynamic_scene_payload(
         max_npcs=max_npcs,
         scene_plan=scene_plan,
         cluster_context=cluster_context,
+        existing_scene_hint=existing_scene_hint,
     )
 
     try:
@@ -570,13 +548,13 @@ async def generate_dynamic_scene_payload(
         _apply_scene_plan_to_payload(payload, scene_plan, zone, cluster_context)
         payload.npcs = payload.npcs[:max_npcs]
         if effective_danger == "peaceful":
-            for npc in payload.npcs:
-                npc.combat_role = "none"
-                if npc.attitude == "hostile":
-                    npc.attitude = "neutral"
-        if int(zone["depth"]) >= int(zone["max_depth"]) and zone.get("cul_de_sac_on_max_depth"):
+            _apply_peaceful_filter(payload.npcs)
+        is_cul_de_sac = int(zone["depth"]) >= int(zone["max_depth"]) and zone.get(
+            "cul_de_sac_on_max_depth"
+        )
+        if existing_scene_hint or is_cul_de_sac:
             payload.forward_exits = []
         return payload
     except Exception as exc:
         logger.warning("Dynamic scene generation failed (%s); using fallback scene.", exc)
-        return _build_fallback_scene_payload(exit_label, zone)
+        return _finalize_fallback_scene(exit_label, zone, existing_scene_hint)

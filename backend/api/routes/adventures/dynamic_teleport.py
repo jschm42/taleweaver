@@ -140,6 +140,11 @@ def _merge_dynamic_teleport_zone(
             if req.get("instructions") is not None
             else base_zone.get("instructions")
         ),
+        "instructions_scope": (
+            req["instructions_scope"]
+            if req.get("instructions_scope") is not None
+            else base_zone.get("instructions_scope")
+        ),
         "cluster_consistency": (
             req["cluster_consistency"]
             if req.get("cluster_consistency") is not None
@@ -188,6 +193,40 @@ async def _move_into_scene(
     return scene
 
 
+async def _maybe_materialize_existing_scene(
+    *,
+    db: AsyncSession,
+    state: SessionState,
+    scene: WorldScene,
+    origin_scene_id: str,
+    exit_label: str,
+    adventure: Any,
+    user: Any,
+) -> WorldScene:
+    """Materialize a pre-mapped Dynamic Scene on script teleport if not yet generated."""
+    from backend.api.routes.adventures.dynamic_scene_flow import (
+        is_unmaterialized_dynamic_scene,
+        materialize_existing_dynamic_scene,
+    )
+
+    if not is_unmaterialized_dynamic_scene(state, scene):
+        return scene
+    origin_scene = await _find_session_scene(db, state.session_id, origin_scene_id)
+    return (
+        await materialize_existing_dynamic_scene(
+            db=db,
+            state=state,
+            adventure=adventure,
+            user=user,
+            target_scene=scene,
+            origin_scene=origin_scene,
+            exit_label=exit_label,
+            language=getattr(adventure, "language", None) or "English",
+        )
+        or scene
+    )
+
+
 async def _enter_existing_exit_target(
     *,
     db: AsyncSession,
@@ -204,6 +243,15 @@ async def _enter_existing_exit_target(
 
     existing = await _find_session_scene(db, state.session_id, matched_exit.to_scene_id)
     if existing:
+        existing = await _maybe_materialize_existing_scene(
+            db=db,
+            state=state,
+            scene=existing,
+            origin_scene_id=origin_scene_id,
+            exit_label=exit_label or matched_exit.label or "Passage",
+            adventure=adventure,
+            user=user,
+        )
         return await _move_into_scene(
             db=db,
             state=state,
@@ -260,6 +308,7 @@ async def _apply_dynamic_teleport_request(
             "audio_mode",
             "cul_de_sac",
             "instructions",
+            "instructions_scope",
             "cluster_consistency",
         )
     )
@@ -280,6 +329,15 @@ async def _apply_dynamic_teleport_request(
     target_id = str(req.get("target_scene_id") or "").strip()
     existing = None if fresh else await _find_session_scene(db, state.session_id, target_id)
     if existing:
+        existing = await _maybe_materialize_existing_scene(
+            db=db,
+            state=state,
+            scene=existing,
+            origin_scene_id=origin_scene_id,
+            exit_label=str(req.get("label") or "Teleporter"),
+            adventure=adventure,
+            user=user,
+        )
         return await _move_into_scene(
             db=db,
             state=state,
@@ -354,6 +412,15 @@ async def apply_script_teleport(
 
     existing_scene = await _find_session_scene(db, state.session_id, target_id)
     if existing_scene:
+        existing_scene = await _maybe_materialize_existing_scene(
+            db=db,
+            state=state,
+            scene=existing_scene,
+            origin_scene_id=origin_scene_id,
+            exit_label="Teleporter",
+            adventure=resolved_adv,
+            user=user,
+        )
         return await _move_into_scene(
             db=db,
             state=state,

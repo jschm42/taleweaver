@@ -1032,13 +1032,19 @@ async function setStartScene(sceneId: string) {
   }
 }
 
-async function handleCreateScene(data: { sceneId: string; name: string; description: string }) {
+async function handleCreateScene(data: {
+  sceneId: string
+  name: string
+  description: string
+  dynamicZone?: Record<string, any> | null
+}) {
   isSavingText.value = true
   try {
     await entityService.createScene(props.adventureId, {
       scene_id: data.sceneId,
       label: data.name,
       description: data.description,
+      dynamic_zone: data.dynamicZone ?? null,
     })
     await fetchDebugInfo()
     addNotification(`Scene "${data.name}" created.`, 'success')

@@ -5,11 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any, Optional
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -18,6 +16,16 @@ from backend.api.routes.adventures.dynamic_cluster_context import (
     link_generated_container_inventories,
     normalize_match_token,
 )
+from backend.api.routes.adventures.dynamic_scene_materialize import (
+    _DYNAMIC_ZONE_META_KEY,
+    _build_npc_entity,
+    _build_object_entity,
+    _find_session_scene,
+    _maybe_emit_interlude_quote,
+    _safe_slug,
+    is_unmaterialized_dynamic_scene,
+    materialize_existing_dynamic_scene,
+)
 from backend.api.routes.adventures.dynamic_scene_media import (
     configure_scene_audio,
     extract_tone_text,
@@ -25,222 +33,23 @@ from backend.api.routes.adventures.dynamic_scene_media import (
     sync_dynamic_scene_audio,
 )
 from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
+from backend.engine.blueprint.parser import has_blueprint_tags
 from backend.engine.world.dynamic_scene_generator import (
     generate_dynamic_interlude_quote,
     generate_dynamic_scene_payload,
 )
 from backend.engine.world.dynamic_scene_schemas import (
-    DynamicGeneratedNpc,
-    DynamicGeneratedObject,
     DynamicGeneratedScenePayload,
     build_dynamic_placeholder_scene_id,
     normalize_dynamic_generation,
     normalize_dynamic_zone,
+    normalize_instructions_scope,
 )
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
-
-_DYNAMIC_ZONE_META_KEY = "__dynamic_zones__"
-
-_COMBAT_ROLE_DEFAULTS: dict[str, dict[str, int]] = {
-    "minion": {"hp": 45, "ac": 11},
-    "standard": {"hp": 85, "ac": 13},
-    "elite": {"hp": 140, "ac": 15},
-    "boss": {"hp": 220, "ac": 16},
-}
-
-
-def _safe_slug(raw: str, max_len: int = 24) -> str:
-    cleaned = re.sub(r"[^A-Z0-9]+", "_", str(raw or "").upper()).strip("_")
-    return (cleaned or "ITEM")[:max_len]
-
-
-async def _find_session_scene(
-    db: AsyncSession, session_id: str, scene_id: str
-) -> Optional[WorldScene]:
-    res = await db.execute(
-        select(WorldScene).where(
-            WorldScene.session_id == session_id,
-            func.lower(WorldScene.id) == str(scene_id).lower(),
-        )
-    )
-    return res.scalars().first()
-
-
-def _build_npc_entity(
-    *,
-    session_id: str,
-    target_id: str,
-    npc: DynamicGeneratedNpc,
-    image_url: Optional[str],
-    state: SessionState,
-) -> WorldEntity:
-    entity_id = f"{target_id}_{_safe_slug(npc.id, 16)}"[:50]
-    npc_type = str(getattr(npc, "npc_type", "HUMANOID") or "HUMANOID").upper()
-    dialogue_style = str(npc.dialogue_style or "").strip()
-    if npc_type in {"HUMANOID", "BEING"}:
-        speech_note = "Speaks in plain, intelligible full sentences."
-        if "full sentences" not in dialogue_style.lower():
-            dialogue_style = f"{dialogue_style} ({speech_note})" if dialogue_style else speech_note
-
-    is_hostile = npc.attitude == "hostile"
-    stats = _COMBAT_ROLE_DEFAULTS.get(npc.combat_role, {"hp": 80, "ac": 12}) if is_hostile else None
-    hp_val = stats["hp"] if stats else 100
-    entity = WorldEntity(
-        id=entity_id,
-        template_id=None,
-        session_id=session_id,
-        entity_type="NPC",
-        name=npc.name[:100],
-        description=npc.description[:1000],
-        appearance=npc.visual_description[:100] if npc.visual_description else None,
-        current_scene_id=target_id,
-        image_url=image_url,
-        npc_type=npc_type,
-        movement_type="STATIONARY",
-        moveable=False,
-        goal=npc.role[:1000] if npc.role else None,
-        character=dialogue_style[:1000] if dialogue_style else None,
-        hp=hp_val,
-        max_hp=hp_val,
-        mana=100,
-        max_mana=100,
-        stamina=100,
-        max_stamina=100,
-        is_attackable=is_hostile,
-        is_killable=is_hostile,
-        inventory=[],
-        metadata_json={
-            "dynamic_generated": True,
-            "attitude": npc.attitude,
-            "combat_role": npc.combat_role,
-        },
-    )
-    if is_hostile:
-        states = dict(state.entity_states or {})
-        states[entity_id] = {"hp": hp_val, "max_hp": hp_val, "attitude": "hostile"}
-        state.entity_states = states
-        flag_modified(state, "entity_states")
-    return entity
-
-
-def _build_object_entity(
-    *,
-    session_id: str,
-    target_id: str,
-    obj: DynamicGeneratedObject,
-    image_url: Optional[str] = None,
-) -> WorldEntity:
-    entity_id = f"{target_id}_{_safe_slug(obj.id, 16)}"[:50]
-    metadata: dict[str, Any] = {"dynamic_generated": True}
-    if obj.item_type == "SWITCH":
-        metadata["switch_states"] = ["OFF", "ON"]
-        metadata["switch_initial_state"] = "OFF"
-        metadata["switch"] = {"states": ["OFF", "ON"], "initial_state": "OFF"}
-    if obj.item_type == "READABLE" and obj.text_log_content:
-        metadata["text_log_content"] = obj.text_log_content[:1000]
-        metadata["text_log_format"] = "DOCUMENT"
-    if obj.effect_type:
-        metadata["effect_type"] = obj.effect_type
-    if obj.effect_value is not None:
-        metadata["effect_value"] = obj.effect_value
-    if obj.hp_change:
-        metadata["hp_change"] = int(obj.hp_change)
-    if obj.stamina_change:
-        metadata["stamina_change"] = int(obj.stamina_change)
-    if obj.mana_change:
-        metadata["mana_change"] = int(obj.mana_change)
-    if obj.item_type == "WEAPON" and obj.damage_dice:
-        metadata["damage_dice"] = obj.damage_dice[:20]
-
-    return WorldEntity(
-        id=entity_id,
-        template_id=None,
-        session_id=session_id,
-        entity_type="OBJECT",
-        name=obj.name[:100],
-        description=obj.description[:1000],
-        appearance=obj.visual_description[:100] if obj.visual_description else None,
-        current_scene_id=target_id,
-        image_url=image_url,
-        item_type=obj.item_type,
-        wearable_slots=obj.wearable_slots or None,
-        stat_modifier_strength=obj.stat_modifier_strength or None,
-        stat_modifier_dexterity=obj.stat_modifier_dexterity or None,
-        stat_modifier_intelligence=obj.stat_modifier_intelligence or None,
-        stat_modifier_wisdom=obj.stat_modifier_wisdom or None,
-        stat_modifier_charisma=obj.stat_modifier_charisma or None,
-        stat_modifier_armor_class=obj.stat_modifier_armor_class or None,
-        is_portable=bool(
-            obj.is_takeable
-            and obj.item_type in {"STANDARD", "CONSUMABLE", "WEARABLE", "WEAPON", "READABLE"}
-        ),
-        inventory=[],
-        metadata_json=metadata,
-    )
-
-
-async def _maybe_emit_interlude_quote(
-    *,
-    db: AsyncSession,
-    state: SessionState,
-    adventure: AdventureTemplate,
-    user: Any,
-    world_exit: WorldExit,
-    origin_name: str,
-    tone_text: str,
-    zone: dict[str, Any],
-    language: str,
-    emit_sse: Callable[[str, dict[str, Any]], Awaitable[None]],
-) -> None:
-    npc_rows = (
-        await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.session_id == state.session_id,
-                WorldEntity.entity_type == "NPC",
-            )
-        )
-    ).scalars()
-    candidates = [
-        {
-            "id": n.id,
-            "name": n.name,
-            "npc_type": str(n.npc_type or "HUMANOID").strip().upper(),
-            "goal": n.goal or "",
-            "role": str(n.npc_type or "HUMANOID").strip().upper(),
-            "character": n.character or "",
-            "description": n.description or "",
-            "image_url": n.image_url,
-            "voice": n.voice,
-            "is_defeated": bool((state.entity_states or {}).get(n.id, {}).get("is_defeated")),
-        }
-        for n in npc_rows
-        if str(n.npc_type or "HUMANOID").strip().upper() in {"HUMANOID", "BEING"}
-    ]
-    if not candidates:
-        return
-    quote_data = await generate_dynamic_interlude_quote(
-        adventure_title=adventure.title or "Adventure",
-        adventure_setting=adventure.plot or adventure.teaser or "",
-        adventure_tone=tone_text,
-        origin_scene_name=origin_name,
-        exit_label=world_exit.label or "Passage",
-        zone_theme=zone["theme"],
-        candidate_npcs=candidates,
-        user=user,
-        db=db,
-        adventure_id=adventure.id,
-        game_id=state.session_id,
-        language=language or adventure.language or "English",
-    )
-    if quote_data:
-        await emit_sse(
-            "dynamic_interlude",
-            {**quote_data, "target_scene_name": world_exit.label or "Uncharted Area"},
-        )
 
 
 def _persist_generated_scene_entities(
@@ -294,11 +103,17 @@ def _persist_generated_scene_entities(
                 idx,
                 suffix=target_id[-4:],
             )
+            child_scope = normalize_instructions_scope(zone.get("instructions_scope"))
+            child_consumed = bool(zone.get("instructions_consumed")) or (
+                child_scope in {"once", "first_scene"}
+                and not has_blueprint_tags(str(zone.get("instructions") or ""))
+            )
             child_zone = {
                 **zone,
                 "depth": int(zone["depth"]) + 1,
                 "root_theme": zone.get("root_theme") or zone["theme"],
                 "theme": child_exit.theme_hint or zone["theme"],
+                "instructions_consumed": child_consumed,
             }
             db.add(
                 WorldExit(
@@ -417,6 +232,23 @@ async def materialize_dynamic_scene_for_exit(
     )
     existing = await _find_session_scene(db, state.session_id, target_id)
     if existing:
+        if is_unmaterialized_dynamic_scene(state, existing):
+            return (
+                await materialize_existing_dynamic_scene(
+                    db=db,
+                    state=state,
+                    adventure=adventure,
+                    user=user,
+                    target_scene=existing,
+                    origin_scene=origin_scene,
+                    exit_label=world_exit.label or "Passage",
+                    language=language,
+                    emit_sse=emit_sse,
+                    payload_fn=generate_dynamic_scene_payload,
+                    interlude_fn=generate_dynamic_interlude_quote,
+                )
+                or existing
+            )
         sync_dynamic_scene_audio(state, existing.id)
         return existing
 
@@ -477,6 +309,7 @@ async def materialize_dynamic_scene_for_exit(
             zone=zone,
             language=language or adventure.language or "English",
             emit_sse=emit_sse,
+            interlude_fn=generate_dynamic_interlude_quote,
         )
 
     payload = await scene_task
@@ -537,11 +370,11 @@ async def prepare_dynamic_traversal_sse(
     exit_ref: str,
     language: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream interlude quote and materialize a dynamic exit target before traversal."""
+    """Stream interlude quote and materialize a dynamic exit or scene before traversal."""
     state: SessionState = interactions.state
     db: AsyncSession = interactions.db
     world_exit = await interactions._resolve_traversal_exit(exit_ref)
-    if not world_exit or world_exit.is_locked or not world_exit.dynamic_zone:
+    if not world_exit or world_exit.is_locked:
         return
 
     current_scene_id = str(state.current_scene_id or "").strip()
@@ -555,7 +388,12 @@ async def prepare_dynamic_traversal_sse(
     else:
         return
 
-    if await _find_session_scene(db, state.session_id, target_id):
+    target_scene = await _find_session_scene(db, state.session_id, target_id)
+    target_is_unmaterialized = is_unmaterialized_dynamic_scene(state, target_scene)
+    if not world_exit.dynamic_zone and not target_is_unmaterialized:
+        return
+
+    if target_scene and not target_is_unmaterialized:
         sync_dynamic_scene_audio(state, target_id)
         return
 
@@ -591,8 +429,14 @@ async def prepare_dynamic_traversal_sse(
 
 
 __all__ = [
+    "_build_npc_entity",
+    "_build_object_entity",
+    "_find_session_scene",
+    "_safe_slug",
     "apply_script_teleport",
+    "is_unmaterialized_dynamic_scene",
     "materialize_dynamic_scene_for_exit",
+    "materialize_existing_dynamic_scene",
     "prepare_dynamic_traversal_sse",
     "sync_dynamic_scene_audio",
 ]

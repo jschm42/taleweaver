@@ -155,9 +155,10 @@ class StartSceneUpdateRequest(BaseModel):
 class SceneCreateRequest(BaseModel):
     scene_id: str
     label: str
-    description: str
+    description: str = ""
     image_url: Optional[str] = None
     decorative_objects: Optional[list[str]] = None
+    dynamic_zone: Optional[dict[str, Any]] = None
 
 
 class ExitCreateRequest(BaseModel):

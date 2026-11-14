@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
 import EditorIdInput from '@/components/editor/EditorIdInput.vue'
 import {
   EDITOR_ID_PREFIXES,
@@ -14,12 +15,21 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'create', payload: { sceneId: string; name: string; description: string }): void
+  (
+    e: 'create',
+    payload: {
+      sceneId: string
+      name: string
+      description: string
+      dynamicZone?: DynamicZoneForm | null
+    },
+  ): void
 }>()
 
 const sceneId = ref('')
 const name = ref('')
 const description = ref('')
+const dynamicZone = ref<DynamicZoneForm | null>(null)
 const formError = ref('')
 const sceneNameInputRef = ref<HTMLInputElement | null>(null)
 
@@ -52,7 +62,8 @@ function cancel() {
 function submit() {
   const sId = sceneId.value.trim()
   const sName = name.value.trim()
-  const sDesc = description.value.trim()
+  let sDesc = description.value.trim()
+  const dynTheme = dynamicZone.value?.theme?.trim() || ''
 
   if (!sId) {
     formError.value = 'Scene ID is required.'
@@ -71,6 +82,13 @@ function submit() {
     formError.value = 'Scene name must be 100 characters or less.'
     return
   }
+  if (dynamicZone.value && !dynTheme) {
+    formError.value = 'Zone Theme is required when Dynamic Scene is enabled.'
+    return
+  }
+  if (!sDesc && dynamicZone.value) {
+    sDesc = dynTheme
+  }
   if (!sDesc) {
     formError.value = 'Scene description is required.'
     return
@@ -81,7 +99,12 @@ function submit() {
   }
 
   formError.value = ''
-  emit('create', { sceneId: sId, name: sName, description: sDesc })
+  emit('create', {
+    sceneId: sId,
+    name: sName,
+    description: sDesc,
+    dynamicZone: dynamicZone.value,
+  })
 }
 </script>
 
@@ -134,11 +157,15 @@ function submit() {
         />
       </div>
 
-      <!-- Scene Description (Pflichtfeld) -->
+      <!-- Scene Description -->
       <div>
         <div class="flex justify-between items-center mb-1.5">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
-            Description <span class="text-red-400">*</span>
+            Description
+            <span v-if="!dynamicZone" class="text-red-400">*</span>
+            <span v-else class="ml-1 text-[10px] font-normal normal-case tracking-normal text-slate-400">
+              (optional — defaults to Zone Theme)
+            </span>
           </label>
           <span :class="['text-[10px] font-bold tracking-widest', (description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
             {{ (description || '').length }} / 1000
@@ -148,10 +175,13 @@ function submit() {
           v-model="description"
           rows="4"
           maxlength="1000"
-          placeholder="A brief description of this scene..."
+          :placeholder="dynamicZone ? 'Optional author notes for generation (defaults to Zone Theme)...' : 'A brief description of this scene...'"
           class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
         ></textarea>
       </div>
+
+      <!-- Optional Dynamic Scene Configuration -->
+      <DynamicZoneFields v-model="dynamicZone" mode="scene" />
 
       <!-- Error -->
       <p v-if="formError" class="text-xs font-bold text-red-400">{{ formError }}</p>

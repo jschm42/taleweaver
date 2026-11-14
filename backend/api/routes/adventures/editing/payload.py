@@ -112,6 +112,7 @@ def _scene_extras(scene: WorldScene, data: dict[str, Any]) -> dict[str, Any]:
     decor = decor if isinstance(decor, list) else []
     return {
         "decorative_objects": [str(d) for d in decor if isinstance(d, (str, int, float))],
+        "dynamic_zone": getattr(scene, "dynamic_zone", None),
         **_text_fields(scene, SCENE_SCRIPT_FIELDS),
     }
 

@@ -67,8 +67,8 @@ fields are rejected (no silent typos).
 
 | op | Purpose | Key fields |
 |---|---|---|
-| `create_scene` | New scene | `scene_id`, `label`, `description`, `decorative_objects` |
-| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `dynamic_zone` (`zone_id`, `theme`, `instructions`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`), `ref` |
+| `create_scene` | New scene | `scene_id`, `label`, `description` (optional if `dynamic_zone` provides `theme`), `decorative_objects`, `dynamic_zone` (optional pre-mapped Dynamic Scene profile) |
+| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `dynamic_zone` (`zone_id`, `theme`, `instructions`, `instructions_scope`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`), `ref` |
 | `create_entity` | New NPC or object | `entity_id`, `entity_type` (`NPC`/`OBJECT`), `scene_id`, `name`, `description`, `item_type`, `is_portable`, `is_hidden`, `inventory`, `metadata_json`, ... |
 | `update` | Change any editor field (incl. all trigger scripts) | `target_type` (`scene`/`exit`/`npc`/`object`/`protagonist`/`cover`), `target_id`, fields |
 | `set_npc_combat` | NPC combat behaviour (the Aggression section in the NPC dialog's Combat tab) | `npc_id`, `attack_mode` (`PASSIVE`/`ATTACK_ON_SIGHT`), `attack_trigger`, `special_chance`, `combat_group`, `assist_mode` (`GROUP`/`ANYONE`/`NEVER`); omitted fields keep their current value |
@@ -82,11 +82,12 @@ fields are rejected (no silent typos).
 ### Field mapping of `update` (editor naming)
 
 - **scene**: `name` sets the label; `description`, `decorative_objects`, `audio_track_id` (a track id of
-  the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab), `on_enter_scene_script/_text`,
+  the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab),
+  `dynamic_zone` (turn into a pre-mapped Dynamic Scene or clear with `null`), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
   `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
-  `dynamic_zone` (`zone_id`, `theme`, `instructions`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`, `allowed_entity_types`, `return_exit_direction`),
+  `dynamic_zone` (`zone_id`, `theme`, `instructions`, `instructions_scope`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`, `allowed_entity_types`, `return_exit_direction`, `on_after_generated_script`),
   `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`.
   A code/item/rule lock needs a lock description (set `description` in the same or an earlier update,
   or `lock_description` on `create_exit`).

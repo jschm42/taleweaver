@@ -90,6 +90,7 @@ export interface SceneCreateData {
   description: string
   image_url?: string
   decorative_objects?: string[]
+  dynamic_zone?: Record<string, any> | null
 }
 
 export interface ExitCreateData {

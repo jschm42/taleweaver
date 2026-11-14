@@ -122,9 +122,21 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
         entry = {"id": scene.id, "name": scene.label, "description": scene.description}
         scenes.append(entry)
     entry.update({f: getattr(scene, f) for f in (*SCENE_SCRIPT_FIELDS, *SCENE_AUDIO_FIELDS)})
+    entry["dynamic_zone"] = scene.dynamic_zone
     manifest["scenes"] = scenes
     adv.original_manifest = manifest
     flag_modified(adv, "original_manifest")
+
+
+def _update_scene_dynamic_zone(scene: WorldScene, payload: EntityUpdateRequest) -> None:
+    if not given(payload, "dynamic_zone"):
+        return
+    scene.dynamic_zone = (
+        normalize_dynamic_zone(payload.dynamic_zone)
+        if isinstance(payload.dynamic_zone, dict)
+        else None
+    )
+    flag_modified(scene, "dynamic_zone")
 
 
 async def update_scene(
@@ -145,6 +157,7 @@ async def update_scene(
         flag_modified(scene, "decorative_objects")
     if given(payload, "audio_track_id"):
         scene.audio_track_id = track_id_or_none(payload.audio_track_id)
+    _update_scene_dynamic_zone(scene, payload)
     copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
     _sync_scene_manifest(adv, scene)
 

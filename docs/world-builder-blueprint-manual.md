@@ -492,9 +492,12 @@ audio: CRYPT_DRONE
 
 The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
-### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`)
+### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`) & Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]`)
 
-Add optional procedural side-zones (catacombs, wilderness trails, back alleys) that generate scenes on entry instead of ahead of time:
+Combine author-designed map topology with on-demand AI generation in two complementary ways:
+
+1. **Dynamic Exits (`[Exit: FROM -> ZONE]`)**: generate an uncharted multi-scene tree (`max_depth` 1–6) on first traversal.
+2. **Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]` or `[Scene: ID]` with `dynamic: yes`)**: you define the exact map connections (`Scene A <-> Dynamic Scene B <-> Dynamic Scene C`), locks, keys, and any pre-placed static NPCs or items. On first player entry, the scene is materialized in-place while preserving all authored exits and static entities. A pre-mapped Dynamic Scene can even have a dynamic exit attached to branch into an open procedural cluster afterward.
 
 ```text
 [World]
@@ -505,7 +508,15 @@ dynamic_audio: inherit
 dynamic_max_npcs: 2
 dynamic_quotes: yes
 
-[Exit: HALL -> IRON_MINES] Collapsed Mine Shaft
+[DynamicScene: FOREST_FORK] Whispering Trailhead
+zone: whisper_woods
+theme: Ancient pine clearing choked with ferns and mossy milestones
+danger: low
+cluster_consistency: yes
+
+[Exit: HALL <-> FOREST_FORK] an overgrown stone stile
+
+[Exit: FOREST_FORK -> IRON_MINES] Collapsed Mine Shaft
 theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
 max_depth: 3
 danger: medium        # peaceful | low | medium | high | deadly | random
@@ -513,12 +524,13 @@ max_npcs: 2           # optional per-exit override (0..5)
 audio: generate       # optional per-exit override: inherit | empty | generate
 cul_de_sac: yes
 cluster_consistency: yes # optional: keep scenes/NPCs/items consistent across the cluster (default yes)
+instructions_scope: once # once (default) | first_scene | max_depth | all_scenes
 instructions: |         # optional: freeform prompt or Blueprint blocks inside a fenced block
   Generate a loot chest in the first alcove holding an iron sword (1d+2 damage).
 allowed_entities: hostile_npc, container, consumable, scenery
 ```
 
-You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster.
+You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster. With `instructions_scope: once` (the default), freeform instructions run only on the first generated scene in a cluster and Blueprint blocks automatically skip entities that were already spawned (with optional per-block `depth: 1` or `depth: max` inside Blueprint instructions).
 
 ## 7. Strict Adherence or Creative Expansion
 

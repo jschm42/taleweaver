@@ -347,6 +347,32 @@ def dynamic_max_npcs(raw: str) -> int:
     return val
 
 
+_INSTRUCTION_SCOPE_ALIASES: dict[str, str] = {
+    "once": "once",
+    "first": "first_scene",
+    "first_scene": "first_scene",
+    "root": "first_scene",
+    "max_depth": "max_depth",
+    "climax": "max_depth",
+    "final": "max_depth",
+    "end": "max_depth",
+    "all": "all_scenes",
+    "all_scenes": "all_scenes",
+    "every_scene": "all_scenes",
+}
+
+
+def dynamic_instructions_scope(raw: str) -> str:
+    """Normalize dynamic instructions scope (once, first_scene, max_depth, all_scenes)."""
+    cleaned = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower())
+    resolved = _INSTRUCTION_SCOPE_ALIASES.get(cleaned)
+    if resolved is None:
+        raise ValueError(
+            f"expected once, first_scene, max_depth, or all_scenes, got '{str(raw or '').strip()}'"
+        )
+    return resolved
+
+
 def dynamic_entity_types(raw: str) -> list[str]:
     """Parse comma-separated allowed_entity_types for a dynamic zone."""
     items = [

@@ -40,6 +40,9 @@ _RULES = (
     "build the world so they work (create every ID, variable and flag they use).\n"
     "- Exits with `dynamic_zone` expand procedurally at runtime; their `to_scene_id` (`DYN_*`) "
     "is a virtual placeholder. NEVER create an entry in `scenes` for a `DYN_*` target.\n"
+    "- Pre-mapped scenes with `dynamic_zone` ARE real entries in `scenes` whose exits and fixed "
+    "entities already exist on the map, while narrative description and dynamic encounters are "
+    "generated on first player entry; keep their `dynamic_zone` verbatim.\n"
 )
 _STRICT_TEXT = (
     "- STRICT ADHERENCE: keep the blueprint's structure. Only add scenes, NPCs or items that are "

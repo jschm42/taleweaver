@@ -7,12 +7,14 @@ import random
 import re
 from typing import Any, Optional
 
+from backend.engine.blueprint.models import Blueprint
 from backend.engine.blueprint.parser import has_blueprint_tags, parse_blueprint
 from backend.engine.blueprint.prompt import blueprint_payload
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedNpc,
     DynamicGeneratedObject,
     DynamicGeneratedScenePayload,
+    normalize_instructions_scope,
 )
 
 _WEARABLE_SLOT_FALLBACKS: tuple[str, ...] = ("Head", "Neck", "Chest", "Hands", "Ring", "Feet")
@@ -112,27 +114,120 @@ def _collect_cluster_entity_keys(
     return scene_keys, entity_keys
 
 
-def adjust_plan_for_instructions(plan: dict[str, Any], zone: dict[str, Any]) -> dict[str, Any]:
-    """Ensure rolled scene plan does not strip containers, weapons, or NPCs required by instructions."""
-    instructions = str(zone.get("instructions") or "").strip()
-    if not instructions:
-        return plan
+def _block_target_depth(block: Any, max_depth: int) -> Optional[int]:
+    prose_kv = _extract_prose_kv(getattr(block, "prose", []) or [])
+    values = {**block.hints(), **block.fixed()}
+    raw_depth = prose_kv.get("depth") or values.get("depth")
+    if raw_depth is None:
+        return None
+    token = str(raw_depth).strip().lower()
+    if token in {"max", "final", "max_depth", "end", "climax"}:
+        return max_depth
+    if token.isdigit():
+        val = int(token)
+        return val if 1 <= val <= 6 else None
+    return None
 
+
+def _filter_blueprint_for_scene(
+    bp: Blueprint,
+    *,
+    depth: int,
+    max_depth: int,
+    scope: str,
+    cluster_context: Optional[list[dict[str, Any]]],
+) -> Optional[Blueprint]:
+    scene_keys, entity_keys = _collect_cluster_entity_keys(cluster_context)
+    kept_blocks: list[Any] = []
+    for block in bp.blocks:
+        target_depth = _block_target_depth(block, max_depth)
+        if target_depth is not None and target_depth != depth:
+            continue
+        if block.kind in {"item", "npc"}:
+            id_key = _norm_key(block.ref)[:24]
+            name_key = _norm_key(block.name)
+            if (id_key and id_key in entity_keys) or (name_key and name_key in entity_keys):
+                continue
+        if block.kind == "item":
+            values = {**block.hints(), **block.fixed()}
+            prose_kv = _extract_prose_kv(getattr(block, "prose", []) or [])
+            loc = _norm_key(
+                prose_kv.get("location")
+                or prose_kv.get("container")
+                or values.get("start_scene_id")
+            )
+            if loc and loc in scene_keys:
+                continue
+        kept_blocks.append(block)
+
+    premise = str(bp.premise or "").strip()
+    if scope == "once" and (depth > 1 or bool(cluster_context)):
+        premise = ""
+    if not kept_blocks and not premise:
+        return None
+    return Blueprint(title=bp.title, premise=premise, blocks=kept_blocks)
+
+
+def resolve_active_instructions(
+    zone: dict[str, Any],
+    cluster_context: Optional[list[dict[str, Any]]] = None,
+) -> tuple[str, Optional[Blueprint]]:
+    """Resolve active instructions for the current depth/cluster state."""
+    instructions = str(zone.get("instructions") or "").strip()
+    scope = normalize_instructions_scope(zone.get("instructions_scope"))
+    depth = int(zone.get("depth") or 1)
+    max_depth = int(zone.get("max_depth") or 3)
+
+    depth_blocked = (scope == "first_scene" and depth > 1) or (
+        scope == "max_depth" and depth < max_depth
+    )
+    if not instructions or zone.get("instructions_consumed") or depth_blocked:
+        return "", None
+
+    if has_blueprint_tags(instructions):
+        filtered = _filter_blueprint_for_scene(
+            parse_blueprint(instructions),
+            depth=depth,
+            max_depth=max_depth,
+            scope=scope,
+            cluster_context=cluster_context,
+        )
+        return (instructions, filtered) if filtered is not None else ("", None)
+
+    if scope == "once" and (depth > 1 or bool(cluster_context)):
+        return "", None
+    return instructions, None
+
+
+def adjust_plan_for_instructions(
+    plan: dict[str, Any],
+    zone: dict[str, Any],
+    cluster_context: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    """Ensure rolled scene plan does not strip containers, weapons, or NPCs required by active instructions."""
     updated = dict(plan)
+    active_text, active_bp = resolve_active_instructions(zone, cluster_context)
+    if not active_text and active_bp is None:
+        updated["has_instructions"] = False
+        return updated
+
+    updated["has_instructions"] = True
     updated["allow_items"] = True
     updated["allow_container"] = True
     updated["allow_switch"] = True
     updated["allowed_item_types"] = list(_ALL_DYNAMIC_ITEM_TYPES)
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
 
-    if has_blueprint_tags(instructions):
-        bp = parse_blueprint(instructions)
-        item_blocks = bp.of_kind("item")
-        npc_blocks = bp.of_kind("npc")
-        updated["target_objects"] = max(
-            int(updated.get("target_objects") or 0),
-            min(5, max(2, len(item_blocks))),
-        )
+    if active_bp is not None:
+        item_blocks = active_bp.of_kind("item")
+        npc_blocks = active_bp.of_kind("npc")
+        if item_blocks:
+            updated["target_objects"] = max(
+                int(updated.get("target_objects") or 0),
+                min(5, max(2, len(item_blocks))),
+            )
+        elif active_bp.premise:
+            updated["target_objects"] = max(int(updated.get("target_objects") or 0), 2)
         if npc_blocks and max_npcs > 0:
             updated["target_npcs"] = max(
                 int(updated.get("target_npcs") or 0),
@@ -141,7 +236,7 @@ def adjust_plan_for_instructions(plan: dict[str, Any], zone: dict[str, Any]) -> 
         return updated
 
     updated["target_objects"] = max(int(updated.get("target_objects") or 0), 3)
-    lowered = instructions.lower()
+    lowered = active_text.lower()
     npc_cues = ("npc", "guard", "merchant", "keeper", "smith", "bandit", "enemy", "wolf")
     if max_npcs > 0 and any(cue in lowered for cue in npc_cues):
         updated["target_npcs"] = max(1, int(updated.get("target_npcs") or 0))
@@ -205,9 +300,9 @@ def build_instructions_prompt_section(
     zone: dict[str, Any],
     cluster_context: Optional[list[dict[str, Any]]] = None,
 ) -> str:
-    """Format author generation instructions (loose prompt or Blueprint) for the scene generator."""
-    instructions = str(zone.get("instructions") or "").strip()
-    if not instructions:
+    """Format active author generation instructions (loose prompt or Blueprint) for this scene."""
+    active_text, active_bp = resolve_active_instructions(zone, cluster_context)
+    if not active_text and active_bp is None:
         return ""
 
     consistency_on = bool(zone.get("cluster_consistency", True))
@@ -222,26 +317,73 @@ def build_instructions_prompt_section(
             + ", ".join(combined)
         )
 
-    if has_blueprint_tags(instructions):
-        bp = parse_blueprint(instructions)
-        bp_json = json.dumps(blueprint_payload(bp), indent=1)
+    if active_bp is not None:
+        bp_json = json.dumps(blueprint_payload(active_bp), indent=1)
+        premise_block = f"\nPremise: {active_bp.premise}" if active_bp.premise else ""
         return (
-            "\nDYNAMIC EXIT BLUEPRINT INSTRUCTIONS (HIGH PRIORITY):\n"
+            "\nDYNAMIC SCENE BLUEPRINT INSTRUCTIONS (HIGH PRIORITY):\n"
             "Honor the structured blueprint below when fitting this location and its contents. "
             "If an item belongs inside a CONTAINER, emit both the CONTAINER object and the contained item(s) "
-            "in `objects`, and put each contained item's `id` inside the container's `inventory` list.\n"
-            f"{already_note}\n"
+            "in `objects`, and put each contained item's `id` inside the container's `inventory` list."
+            f"{premise_block}{already_note}\n"
             f"Blueprint:\n{bp_json}"
         ).strip()
 
     return (
-        "\nDYNAMIC EXIT GENERATION INSTRUCTIONS (HIGH PRIORITY):\n"
-        f"{instructions}\n"
+        "\nDYNAMIC SCENE GENERATION INSTRUCTIONS (HIGH PRIORITY):\n"
+        f"{active_text}\n"
         "CONTAINER & LOOT RULE: Whenever instructions place item(s) inside a container (such as a chest, crate, or sack), "
         "create the CONTAINER in `objects` AND each contained item in `objects`, and list the contained item `id`(s) "
         "inside the container's `inventory` array. Preserve exact requested weapon damage dice such as '1d+2'."
         f"{already_note}"
     ).strip()
+
+
+def build_existing_scene_context_prompt_section(
+    scene_hint: Optional[dict[str, Any]] = None,
+) -> str:
+    """Format pre-mapped Dynamic Scene author constraints (label, exits, static entities)."""
+    if not isinstance(scene_hint, dict) or not scene_hint:
+        return ""
+    lines = ["PRE-MAPPED DYNAMIC SCENE CONSTRAINTS (AUTHORED MAP NODE):"]
+    if scene_hint.get("label"):
+        lines.append(f"- Scene Label: {scene_hint['label']}")
+    if scene_hint.get("premise"):
+        lines.append(f"- Author Scene Premise: {str(scene_hint['premise'])[:600]}")
+
+    exits = scene_hint.get("exits") or []
+    if exits:
+        exit_bits = [
+            f"'{ex.get('label')}' -> {ex.get('to_scene_id')}"
+            + (" [locked]" if ex.get("is_locked") else "")
+            for ex in exits[:8]
+        ]
+        lines.append(
+            "- Fixed Map Exits Leaving This Scene (set `forward_exits` to [] and describe these real passages naturally): "
+            + "; ".join(exit_bits)
+        )
+    else:
+        lines.append(
+            "- Fixed Map Node (cul-de-sac or pre-mapped node): set `forward_exits` to an empty list []."
+        )
+
+    static_npcs = scene_hint.get("existing_npcs") or []
+    if static_npcs:
+        npc_bits = [f"{n.get('id')} ({n.get('name')})" for n in static_npcs[:6]]
+        lines.append(
+            f"- Pre-placed Static NPCs ALREADY in this scene (do NOT regenerate or rename them, reference naturally): {', '.join(npc_bits)}"
+        )
+
+    static_objs = scene_hint.get("existing_objects") or []
+    if static_objs:
+        obj_bits = [
+            f"{o.get('id')} ({o.get('name')}, {o.get('item_type', 'STANDARD')})"
+            for o in static_objs[:8]
+        ]
+        lines.append(
+            f"- Pre-placed Static Objects ALREADY in this scene (do NOT regenerate or rename them, reference naturally): {', '.join(obj_bits)}"
+        )
+    return "\n".join(lines)
 
 
 def _bp_item_to_dynamic_object(block: Any) -> tuple[DynamicGeneratedObject, str]:
@@ -390,19 +532,18 @@ def apply_instructions_backfill(
     scene_plan: dict[str, Any],
     cluster_context: Optional[list[dict[str, Any]]] = None,
 ) -> None:
-    """Deterministically enforce blueprint items/NPCs and resolve container inventory links."""
+    """Deterministically enforce active blueprint items/NPCs and resolve container inventory links."""
     del scene_plan
-    instructions = str(zone.get("instructions") or "").strip()
+    _active_text, active_bp = resolve_active_instructions(zone, cluster_context)
     consistency_on = bool(zone.get("cluster_consistency", True))
     scene_keys, entity_keys = (
         _collect_cluster_entity_keys(cluster_context) if consistency_on else (set(), set())
     )
 
-    if instructions and has_blueprint_tags(instructions):
-        bp = parse_blueprint(instructions)
-        _merge_blueprint_objects(payload, bp.of_kind("item"), entity_keys, scene_keys)
+    if active_bp is not None:
+        _merge_blueprint_objects(payload, active_bp.of_kind("item"), entity_keys, scene_keys)
         max_npcs = max(0, int(zone.get("max_npcs", 2)))
-        _merge_blueprint_npcs(payload, bp.of_kind("npc"), entity_keys, max_npcs)
+        _merge_blueprint_npcs(payload, active_bp.of_kind("npc"), entity_keys, max_npcs)
 
     _resolve_container_inventory_links(payload.objects)
 
