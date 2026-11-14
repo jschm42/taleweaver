@@ -15,6 +15,45 @@ export interface ChatMessage {
 }
 
 /** Character sheet snapshot pushed by the server after every action. */
+/** One of the companion's abilities; `enabled: false` means it is not used in combat. */
+export interface CompanionAbility {
+  id: string
+  name: string
+  description?: string
+  category: string
+  cost_type: string
+  cost: number
+  enabled: boolean
+}
+
+/** The active companion as the hero dialog shows it (backend: companion_sheet.py). */
+export interface CompanionSheet {
+  id: string
+  name: string
+  description?: string | null
+  npc_type?: string | null
+  image_url?: string | null
+  hp?: number | null
+  max_hp?: number | null
+  mana?: number | null
+  max_mana?: number | null
+  stamina?: number | null
+  max_stamina?: number | null
+  stats: Record<string, number | null>
+  /** Carried items that are not equipped. */
+  inventory: InventoryItem[]
+  /** Slot -> equipped item (the protagonist's slots). */
+  equipment: Record<string, InventoryItem | null>
+  /** Special actions from the editor with the player's on/off switch. */
+  abilities: CompanionAbility[]
+  /** Stands in the protagonist's scene. */
+  present: boolean
+  following: boolean
+  is_defeated: boolean
+  tactics: string
+  banter: string
+}
+
 export interface CharacterSheet {
   name: string
   adventure_title?: string | null
@@ -43,6 +82,8 @@ export interface CharacterSheet {
   stats: Record<string, number>
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
+  /** The active companion's page of the hero dialog (null without a companion). */
+  companion?: CompanionSheet | null
   status_effects: string[]
   in_game_time: number  // minutes or units elapsed in-game
   start_datetime?: string | null
@@ -113,7 +154,8 @@ export interface AreaTargetOutcome {
 
 /** One stat change of a special attack, e.g. `{ target: 'target', stat: 'hp', amount: '-2d6' }`. */
 export interface SpecialEffect {
-  target: 'target' | 'self'
+  /** `ally`: the caster's party partner (companion for the protagonist, and vice versa). */
+  target: 'target' | 'self' | 'ally'
   stat: CombatStat
   amount: string
 }
@@ -294,6 +336,14 @@ export interface CombatPlayerState extends CombatantState {
   special_actions?: NormalizedSpecialAttack[]
 }
 
+/** A companion on the protagonist's side; `downed` at 0 HP until the fight ends. */
+export interface CombatPartyMember extends CombatEnemyState {
+  downed?: boolean
+  tactics?: string
+  /** Enemy the protagonist marked: the companion attacks only this one. */
+  mark_id?: string | null
+}
+
 export interface CombatState {
   active: boolean
   round: number
@@ -303,6 +353,8 @@ export interface CombatState {
   /** Current target (kept for single-enemy consumers). */
   enemy: CombatEnemyState
   enemies?: CombatEnemyState[]
+  /** The protagonist's companion fighting on their side (backend: combat/party.py). */
+  party?: CombatPartyMember[]
   target_id?: string | null
   initiative?: InitiativeEntry[]
   turn_index?: number

@@ -158,6 +158,7 @@ def persist_exits(db: AsyncSession, template_id: str, exits: list[dict[str, Any]
                 exit_type="bidirectional" if bidirectional else "one_way",
                 is_locked=bool(exit_def.get("is_locked", False)),
                 is_revealed=bool(exit_def.get("is_revealed", False)),
+                companions_allowed=exit_def.get("companions_allowed") is not False,
                 lock_description=exit_def.get("lock_description"),
                 code_to_unlock=code_to_unlock,
                 item_to_unlock=item_to_unlock,

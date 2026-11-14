@@ -32,6 +32,7 @@ from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NP
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
 from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
+from backend.engine.scripting.party_proxy import PartyProxy
 from backend.engine.scripting.player_inventory import PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
@@ -136,6 +137,8 @@ class ScriptChangeset:
     skip_narration: bool = False
     # Ordered tw.audio operations, replayed by audio_state.apply_audio_ops.
     audio_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.party operations, replayed by party_ops.apply_party_ops.
+    party_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -193,6 +196,7 @@ class ScriptChangeset:
             or self.cloned_entities
             or self.clock_ops
             or self.audio_ops
+            or self.party_ops
             or self.skip_narration
         )
 
@@ -1706,8 +1710,13 @@ class SequencesProxy:
 class DiceProxy:
     """Safe proxy for dice rolls."""
 
-    def roll(self, dice_str: str) -> int:
-        match = re.match(r"^(\d+)?d(\d+)(?:([+-])(\d+))?$", dice_str.strip().lower())
+    def roll(self, dice_spec: Any = 20) -> int:
+        if isinstance(dice_spec, int):
+            return random.randint(1, max(1, dice_spec))
+        target_str = str(dice_spec or "20").strip().lower()
+        if target_str.isdigit():
+            return random.randint(1, max(1, int(target_str)))
+        match = re.match(r"^(\d+)?d(\d+)(?:([+-])(\d+))?$", target_str)
         if not match:
             return random.randint(1, 20)
         num = int(match.group(1) or 1)
@@ -1721,8 +1730,29 @@ class DiceProxy:
             total -= mod
         return total
 
+    def d4(self) -> int:
+        return random.randint(1, 4)
+
+    def d6(self) -> int:
+        return random.randint(1, 6)
+
+    def d8(self) -> int:
+        return random.randint(1, 8)
+
+    def d10(self) -> int:
+        return random.randint(1, 10)
+
+    def d12(self) -> int:
+        return random.randint(1, 12)
+
     def d20(self) -> int:
         return random.randint(1, 20)
+
+    def d100(self) -> int:
+        return random.randint(1, 100)
+
+    def random(self) -> float:
+        return random.random()
 
 
 class GameContext:
@@ -1750,6 +1780,7 @@ class GameContext:
         sequence_progression_mode: str = "linear",
         audio: Optional[dict[str, Any]] = None,
         audio_library: Optional[list[dict[str, Any]]] = None,
+        party: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1821,6 +1852,8 @@ class GameContext:
         self.audio = AudioProxy(self.changeset, audio, self, library=audio_library)
         # Former name, kept so scripts written before the rename keep working.
         self.music = self.audio
+        # tw.party: the session party (entity_states["__party__"]), else empty.
+        self.party = PartyProxy(self.changeset, party, npc_entities, self.npcs, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)

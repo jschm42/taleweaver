@@ -62,7 +62,7 @@ cluster_consistency: yes
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
-`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
+`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `companions` (no = solo passage, the companion stays behind; `solo: yes` is the same), `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 **Dynamic exits (procedural exploration zones):**
@@ -84,7 +84,7 @@ Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak 
 Write the label as the passage itself, not as the way: `an old rusty gate`, `a narrow spiral staircase`, not `Way to the Combat Lab` or `Back to the hall`. A two-way exit shows the same label in both scenes, and the game already adds the target. The World-Builder AI follows the same rule for the labels it writes.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 **Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
 
@@ -156,10 +156,25 @@ A **CONTAINER_SWITCH** (`[ContainerSwitch: ID] Name` or `type: CONTAINER_SWITCH`
 
 A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game and therefore gets no image. It needs at least 2 `combine` ingredients and at least 1 `results` item. Results are regular items of any type; they are hidden automatically and revealed when the recipe is crafted. All ingredients are consumed except those listed in `keep`. The `craft_guard` and the `on_craft` / `on_craft_fail` hooks belong to the recipe.
 
+**Companions.** A companion (sidekick) travels with the protagonist. Any companion key (`companion`, `in_party`, `tactics`, `banter`, `downed_recovery`) makes the NPC a companion; `in_party: yes` puts it into the party when the game starts, next to the protagonist in the first scene. One companion is active at a time; with several `in_party` NPCs the first one travels along and the others wait in their scenes. The active companion follows the protagonist into every new scene, unless the exit (`companions: no` / `solo: yes`) or the active sequence (`companions: no`) is a solo section; then it waits where it is and follows again once the protagonist is back. `tactics`, `banter` and `downed_recovery` are stored for the companion's combat and narration behaviour.
+
+```text
+[NPC: LARA] Lara
+in: GATE
+companion: yes
+in_party: yes
+tactics: support
+
+[Exit: GATE -> VENT] a narrow air vent
+solo: yes
+```
+
+In the World-Editor, the companion settings are in the **Combat** tab of the NPC dialog, the solo switch is *Companions may follow* in the exit dialog and in the sequence dialog.
+
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
-The free text becomes the chapter's description and walkthrough.
+`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+The free text becomes the chapter's description or walkthrough. When `walkthrough:` is provided, free text is treated as the lore description. Keep `description` spoiler-free.
 
 **Sequence progression** is set with `progression:` in `[World]`:
 - `linear` (default): completing a sequence starts the next one by number.
@@ -204,7 +219,7 @@ A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the 
 Award keys of newly generated adventures are stored in upper case (`brass lever` becomes `BRASS_LEVER`). Granting matches keys case-insensitively, so `tw.awards.grant('brass_lever')` still finds `BRASS_LEVER`, and older adventures keep their stored keys.
 
 ### `[Ability: ID] Name` (inside an NPC or the Protagonist)
-`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
+`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `heals` (`self` or `ally`: with `kind: HEAL`, `ally` heals the caster's party partner, i.e. the companion when the protagonist casts it and the protagonist when a companion casts it), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
 
 **Area abilities** (protagonist only; NPC abilities always hit one target): `area: all` hits every
 engaged enemy, `area: splash` (or `splash 2`) hits the target plus 1 (or 2) neighbours in the

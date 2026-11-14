@@ -22,7 +22,7 @@ from backend.models.user import User
 
 
 def test_adventure_format_current_version():
-    """Adventure format current version must be 1.4.0 (Dynamic Scenes & item visuals)."""
+    """Adventure format current version must be 1.4.0 (Dynamic Scenes, item visuals & companions)."""
     assert CURRENT_VERSION == "1.4.0"
 
 

@@ -15,6 +15,7 @@ from backend.engine.world.combat_profile_schemas import (
     SpecialEffectSchema,
     TalentSchema,
 )
+from backend.engine.world.companion_schema import CompanionSchema
 from backend.engine.world.schema_base import WorldBaseSchema
 from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
     SwitchEffectSchema,
@@ -124,6 +125,13 @@ class WorldExitSchema(WorldBaseSchema):
             "name and image are shown from the start. Usually False."
         ),
     )
+    companions_allowed: bool = Field(
+        True,
+        description=(
+            "False for a solo passage (a narrow vent, a guarded door only the protagonist may pass): "
+            "the protagonist's companion stays behind. Usually True."
+        ),
+    )
     lock_description: Optional[str] = Field(
         default="",
         description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.",
@@ -208,6 +216,10 @@ class SpecialActionSchema(WorldBaseSchema):
     description: str = Field(..., description="Short explanation of the action")
     action_type: Literal["ATTACK", "HEAL", "UTILITY"] = Field(
         ..., description="Type of special action"
+    )
+    heal_target: Optional[Literal["self", "ally"]] = Field(
+        None,
+        description="HEAL without effects: 'ally' heals the caster's party partner instead of itself.",
     )
     category: Optional[Literal["MAGIC", "MELEE", "RANGED", "SOCIAL", "OTHER"]] = Field(
         None,
@@ -431,6 +443,13 @@ class WorldNPCSchema(WorldBaseSchema):
             "pulls the others in the same scene into the fight. Use null for none."
         ),
     )
+    companion: Optional[CompanionSchema] = Field(
+        None,
+        description=(
+            "Only for an NPC who can travel with the protagonist as a companion (sidekick). "
+            "Use null for every other NPC."
+        ),
+    )
     assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
         None,
         description=(
@@ -528,10 +547,19 @@ class SequenceSchema(WorldBaseSchema):
     order: int = Field(..., description="The sequence order (1, 2, 3...)")
     title: str = Field(..., description="Title of the section")
     description: Optional[str] = Field(
-        default="", description="Narrative description for the AI Gamemaster"
+        default="",
+        description=(
+            "Atmospheric lore and narrative premise for this chapter, displayed to the player in the chapter banner. "
+            "It must ONLY describe the narrative situation, atmosphere, or premise. "
+            "It must NEVER reveal spoilers, puzzle solutions, walkthrough steps, codes, or secrets."
+        ),
     )
     walkthrough: Optional[str] = Field(
-        default="", description="The dedicated walkthrough/solution for this sequence"
+        default="",
+        description=(
+            "The dedicated step-by-step walkthrough and puzzle solutions for this sequence. "
+            "All puzzle answers, secret codes, item combinations, and action steps belong strictly here."
+        ),
     )
     end_condition: Optional[str] = Field(
         default="", description="Condition that must be met to proceed to the next sequence"
@@ -584,6 +612,13 @@ class SequenceSchema(WorldBaseSchema):
             "(NAME = literal) for this chapter's logic and dialog handlers. Loaded on every "
             "script run like init_script, whichever chapter is active. Any other statement "
             "never runs. Use empty string for none."
+        ),
+    )
+    companions_allowed: bool = Field(
+        default=True,
+        description=(
+            "False for a solo chapter: the protagonist's companion does not follow into new "
+            "scenes while this sequence is active."
         ),
     )
     soft_rules: list[SoftRuleSchema] = Field(

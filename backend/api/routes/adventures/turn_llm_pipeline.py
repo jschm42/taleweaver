@@ -20,6 +20,7 @@ from backend.api.routes.adventures.turn_context_helpers import (
 )
 from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
+from backend.engine.party.party_prompt import companion_prompt_block
 from backend.engine.rules.crafting_recipes import is_recipe
 from backend.engine.rules.game_clock import gm_time_allowed, read_clock
 from backend.engine.rules.soft_rules import (
@@ -319,6 +320,14 @@ class TurnLlmContextBuilder:
             location_detail_level="full",
             other_npcs=None,
             **state_kwargs,
+        )
+        scene_labels = {str(s.id): str(s.label or s.id) for s in world.all_scenes}
+        companion_args = (state.entity_states or {}, world.all_entities, state.current_scene_id)
+        mechanics_state_block += companion_prompt_block(
+            *companion_args, scene_labels, for_mechanics=True
+        )
+        narration_state_block += companion_prompt_block(
+            *companion_args, scene_labels, for_mechanics=False
         )
         session_memory_block = (
             self.manager._build_gm_notes_prompt_block()

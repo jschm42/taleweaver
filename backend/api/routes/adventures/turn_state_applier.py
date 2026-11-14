@@ -29,6 +29,8 @@ from backend.api.routes.adventures.quest_completion import (
 )
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
+from backend.engine.party.follow import bring_companion_along
+from backend.engine.party.orders import give_companion_order
 from backend.engine.rules.game_clock import apply_gm_time_request
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
 from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
@@ -462,6 +464,14 @@ class TurnStateApplier:
             event.scene_label = None
             event.exit_label = None
 
+        # Before a scene change, so "wait here" in the same message leaves the companion behind.
+        if event.companion_order and not getattr(self.manager, "arrival_narration", False):
+            order = await give_companion_order(self.db, self.state, event.companion_order)
+            logger.info("[Turn %s] Companion order: %s", self.game_id, order.message)
+            if order.applied:
+                await self._save_chat_message("system", order.message)
+                system_messages.append(order.message)
+
         state_dirty = False
         if event.new_scene_id and event.new_scene_id != self.state.current_scene_id:
             # Enforce that the target scene is adjacent (connected by a WorldExit from the current scene)
@@ -548,6 +558,15 @@ class TurnStateApplier:
                 self.state.current_scene_id = event.new_scene_id
                 sync_dynamic_scene_audio(self.state, event.new_scene_id)
                 state_dirty = True
+                for msg in await bring_companion_along(
+                    self.db,
+                    self.state,
+                    old_scene_id,
+                    world_exit=valid_exit,
+                    adventure=self.adventure,
+                ):
+                    await self._save_chat_message("system", msg)
+                    system_messages.append(msg)
 
                 # Map Update
                 try:

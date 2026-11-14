@@ -104,8 +104,12 @@ class TalentSchema(WorldBaseSchema):
 
 
 class SpecialEffectSchema(WorldBaseSchema):
-    target: Literal["target", "self"] = Field(
-        "target", description="'target' affects the attacked combatant, 'self' the caster."
+    target: Literal["target", "self", "ally"] = Field(
+        "target",
+        description=(
+            "'target' affects the attacked combatant, 'self' the caster, 'ally' the caster's "
+            "party partner (the companion for the protagonist, the protagonist for a companion)."
+        ),
     )
     stat: Literal[
         "hp",
@@ -123,3 +127,11 @@ class SpecialEffectSchema(WorldBaseSchema):
     )
 
     model_config = {"extra": "forbid"}
+
+
+class WeaponEffectSchema(SpecialEffectSchema):
+    """Weapon on-hit effects: only the hit enemy or the wielder, never an ally."""
+
+    target: Literal["target", "self"] = Field(
+        "target", description="'target' affects the hit combatant, 'self' the wielder."
+    )

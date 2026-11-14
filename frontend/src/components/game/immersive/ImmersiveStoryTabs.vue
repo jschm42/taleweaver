@@ -49,7 +49,7 @@ const hasSwitches = computed(() => !props.docked && props.sceneSwitches.length >
 <template>
   <div
     v-if="hasSectionTabs || hasSwitches"
-    class="relative z-30 shrink-0 mb-3 flex items-center gap-2 overflow-x-auto overflow-y-visible pt-1 pb-1 no-scrollbar"
+    class="relative z-30 shrink-0 mb-3 flex items-center gap-2 overflow-x-auto overflow-y-visible pt-1 pb-1 pl-2 sm:pl-3.5 no-scrollbar"
   >
     <div v-if="hasSectionTabs" role="tablist" aria-label="Story sections" class="flex items-center gap-2">
       <button

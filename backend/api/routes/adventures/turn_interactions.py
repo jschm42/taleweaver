@@ -21,6 +21,13 @@ from backend.api.routes.adventures.container_put import (
 )
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.companion_command import companion_order_command
+from backend.api.routes.adventures.companion_inventory import GIVE, TAKE, transfer_companion_items
+from backend.api.routes.adventures.companion_loadout import (
+    equip_companion,
+    toggle_companion_ability,
+    unequip_companion,
+)
 from backend.api.routes.adventures.dynamic_scene_flow import (
     prepare_dynamic_traversal_sse,
     sync_dynamic_scene_audio,
@@ -46,6 +53,7 @@ from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
+from backend.engine.party.follow import bring_companion_along
 from backend.engine.interaction.switch_states import state_label
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -54,6 +62,15 @@ if TYPE_CHECKING:
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 
 logger = logging.getLogger(__name__)
+
+# Hero dialog handovers between the protagonist and the companion (companion_inventory.py).
+_COMPANION_TRANSFER_TAGS = {"[TRIGGER_COMPANION_GIVE]": GIVE, "[TRIGGER_COMPANION_TAKE]": TAKE}
+# Hero dialog loadout of the companion: equipment and ability switches (companion_loadout.py).
+_COMPANION_LOADOUT_TAGS = {
+    "[TRIGGER_COMPANION_EQUIP]": equip_companion,
+    "[TRIGGER_COMPANION_UNEQUIP]": unequip_companion,
+    "[TRIGGER_COMPANION_ABILITY]": toggle_companion_ability,
+}
 
 
 class TurnInteractionsManager:
@@ -372,6 +389,15 @@ class TurnInteractionsManager:
 
         self.state.current_scene_id = scene.id
         sync_dynamic_scene_audio(self.state, scene.id)
+        for msg in await bring_companion_along(
+            self.db,
+            self.state,
+            current_scene_id,
+            world_exit=world_exit,
+            adventure=self.manager.adventure,
+        ):
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
         await self._record_map_traversal(current_scene_id, scene, world_exit)
         await self.db.commit()
 
@@ -851,7 +877,6 @@ class TurnInteractionsManager:
                     key = str(effect.get("key") or "").strip()
                     if key:
                         self._set_switch_story_flag(key)
-                        messages.append(f"Story flag set: {key}.")
                 elif effect_type == "unlock_exit":
                     target_id = str(effect.get("target_id") or "").strip()
                     if not target_id:
@@ -1334,6 +1359,30 @@ class TurnInteractionsManager:
             for role, content in outcome.events:
                 yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
+        if response.startswith("[TRIGGER_COMPANION]"):
+            order_args = response.replace("[TRIGGER_COMPANION]", "").strip()
+            outcome = await companion_order_command(self.manager, order_args)
+            for role, content in outcome.events:
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
+        for tag, direction in _COMPANION_TRANSFER_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            item_args = response.replace(tag, "").strip()
+            for role, content in await transfer_companion_items(self.manager, direction, item_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            response = ""
+
+        for tag, loadout_handler in _COMPANION_LOADOUT_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            loadout_args = response.replace(tag, "").strip()
+            for role, content in await loadout_handler(self.manager, loadout_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             response = ""
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):

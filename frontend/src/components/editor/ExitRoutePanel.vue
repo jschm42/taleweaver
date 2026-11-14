@@ -40,6 +40,7 @@ const exitEditForm = ref({
   lock_description: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
   is_revealed: false,
+  companions_allowed: true,
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
@@ -55,6 +56,7 @@ watch(
         lock_description: '',
         exit_type: 'one_way',
         is_revealed: false,
+        companions_allowed: true,
         code_to_unlock: '',
         item_to_unlock: '',
         rule_to_unlock: '',
@@ -67,6 +69,7 @@ watch(
       lock_description: String(exitData.lock_description || ''),
       exit_type: String(exitData.exit_type || 'one_way').toLowerCase() === 'bidirectional' ? 'bidirectional' : 'one_way',
       is_revealed: Boolean(exitData.is_revealed),
+      companions_allowed: exitData.companions_allowed !== false,
       code_to_unlock: String(exitData.code_to_unlock || ''),
       item_to_unlock: String(exitData.item_to_unlock || ''),
       rule_to_unlock: String(exitData.rule_to_unlock || ''),
@@ -127,6 +130,7 @@ async function saveRouteExit() {
     exit_type: exitEditForm.value.exit_type,
     revealed: exitEditForm.value.is_revealed,
     dynamic_zone: exitEditForm.value.dynamic_zone ?? null,
+    companions_allowed: exitEditForm.value.companions_allowed,
     code_to_unlock: rawCode,
     item_to_unlock: rawItem,
     rule_to_unlock: rawRule,
@@ -242,6 +246,11 @@ async function saveRouteExit() {
       <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="The target scene's name and image are shown on the exit tile and the map from the start, before the player has been there (e.g. a signposted door or a gate with a view).">
         <input v-model="exitEditForm.is_revealed" type="checkbox" class="accent-emerald-500" />
         <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
+      </label>
+
+      <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="Turn off for a solo passage (a narrow vent, a door only the protagonist may pass): the companion stays behind when the protagonist uses this exit.">
+        <input v-model="exitEditForm.companions_allowed" type="checkbox" class="accent-emerald-500" />
+        <span>Companions may follow <span class="text-slate-500">(off = solo passage)</span></span>
       </label>
     </template>
 

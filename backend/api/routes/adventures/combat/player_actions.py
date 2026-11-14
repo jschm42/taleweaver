@@ -34,7 +34,7 @@ REST_STAMINA = 40
 NO_DAMAGE_MSG = "The protagonist cannot damage NPCs in this adventure. Use Run, Rest, or /consume."
 INVALID_ACTION_MSG = (
     "Combat active. Valid actions: Attack [target] [--with <weapon>], Run, Rest, /consume <item>, "
-    "or /special <action_id> [target]."
+    "/special <action_id> [target], or Mark <target> (with a companion)."
 )
 _VERBS = {
     "attack": "attack",
@@ -48,6 +48,7 @@ _VERBS = {
     "run": "run",
     "r": "run",
     "consume": "consume",
+    "mark": "mark",
 }
 
 
@@ -148,7 +149,8 @@ class CombatPlayerMixin:
             player, target, roll, target_ac, weapon["name"], damage, weapon["category"]
         )
         data["effects"].extend(on_hit)
-        text = attack_log_text(self.avatar.name, roll, target_ac) + on_hit_suffix(on_hit)
+        text = attack_log_text(self.avatar.name, roll, target_ac, weapon["name"], target["name"])
+        text += on_hit_suffix(on_hit)
         return action_result(text, "player_action", data)
 
     def _find_player_special(self, action_id: str) -> tuple[dict[str, Any] | None, str | None]:
@@ -187,10 +189,15 @@ class CombatPlayerMixin:
 
         caster = self._player_view(combat)
         target_view = dict(target) if target else None
-        result = resolve_special_attack(action, caster, target_view)
+        # "ally" effects reach the companion fighting at the protagonist's side.
+        ally = self._standing_member(combat)
+        ally_view = dict(ally) if ally else None
+        result = resolve_special_attack(action, caster, target_view, ally_view)
         self._apply_player_view(combat, caster)
         if target and target_view:
             self._apply_enemy_view(target, target_view)
+        if ally and ally_view:
+            self._apply_enemy_view(ally, ally_view)
 
         text = describe_special_result(self.avatar.name, target["name"] if target else None, result)
         await self._note_special_outcome(action, result)
@@ -287,5 +294,6 @@ class CombatPlayerMixin:
             "rest": self._player_rest,
             "run": self._player_run,
             "consume": self._player_consume,
+            "mark": self._player_mark,
         }
         return handlers.get(verb or "")

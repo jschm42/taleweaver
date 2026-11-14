@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { CombatEnemyState, CombatLogEntry, CombatStat, CombatState } from '@/types'
+import type { CombatEnemyState, CombatLogEntry, CombatPartyMember, CombatStat, CombatState } from '@/types'
 import { getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import { ArenaRenderer, type ArenaView } from './arena/ArenaRenderer'
 import type { CardData, ResourceStat } from './arena/CombatantCard'
@@ -105,6 +105,27 @@ function enemyCard(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>
     engaged: !!enemy.engaged && !info.engageIds.has(enemy.id),
     out: isOut ? (enemy.fled ? 'fled' : 'defeated') : null,
     initiative: initiativeOf(enemy.id),
+    marked: (props.combat.party ?? []).some((m) => m.mark_id === enemy.id),
+  }
+}
+
+/** The companion's card on the protagonist's side; a downed companion is dimmed. */
+function allyCard(member: CombatPartyMember, info: ReturnType<typeof pendingInfo>): CardData {
+  const values = resourceValues(member.id, member as unknown as Record<string, unknown>, info.deltas)
+  return {
+    id: member.id,
+    name: member.name,
+    imageUrl: imageUrl(member.image_url),
+    side: 'player',
+    ally: true,
+    ...values,
+    maxHp: num(member.max_hp, values.hp),
+    maxMana: num(member.max_mana),
+    maxStamina: num(member.max_stamina),
+    modifiers: rewindModifiers(member.id, member.modifiers, info.deltas),
+    engaged: true,
+    out: member.downed ? 'defeated' : null,
+    initiative: initiativeOf(member.id),
   }
 }
 
@@ -137,6 +158,7 @@ function buildView(pending: CombatLogEntry[]): ArenaView {
       out: null,
       initiative: initiativeOf(PLAYER_ID),
     },
+    allies: (props.combat.party ?? []).map((m) => allyCard(m, info)),
     enemies: enemies.filter((e) => e && isOnStage(e, info)).map((e) => enemyCard(e, info)),
     selectedId: props.selectedTargetId,
     activeId: props.combat.active ? (props.combat.active_actor ?? null) : null,
@@ -249,7 +271,7 @@ function onLogChange(): void {
 
 watch(() => props.combat.log?.length ?? 0, onLogChange)
 watch(
-  () => [props.selectedTargetId, props.combat.active_actor, props.combat.enemies, props.combat.player, props.combat.initiative],
+  () => [props.selectedTargetId, props.combat.active_actor, props.combat.enemies, props.combat.party, props.combat.player, props.combat.initiative],
   () => {
     if (ready) arena?.sync(buildView(queue), !playing)
   },

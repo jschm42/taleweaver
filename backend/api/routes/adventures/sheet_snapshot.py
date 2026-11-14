@@ -336,6 +336,8 @@ async def build_sheet_snapshot(
     session_profile_image: Optional[str],
 ) -> dict:
     """Builds a serialisable character-sheet snapshot."""
+    # companion_sheet imports this module (entity_to_item_dict), so it is imported here.
+    from backend.api.routes.adventures.companion_sheet import build_companion_sheet
     from backend.engine.rules.stat_aggregator import calculate_total_stats
 
     ctx = _SheetContext(
@@ -353,6 +355,8 @@ async def build_sheet_snapshot(
             avatar, entity_lookup, image_map, dict(state.entity_states or {})
         ),
         "equipment": _sync_equipment(avatar, entity_lookup, image_map),
+        # The hero dialog's switch to the active companion (None without one).
+        "companion": await build_companion_sheet(db, state, image_map),
         "in_game_time": state.in_game_time,
         "start_datetime": await _start_datetime(state, ctx),
         "current_scene": current_scene.label if current_scene else state.current_scene_id,

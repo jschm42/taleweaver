@@ -1,10 +1,10 @@
-"""Fork- and tool-specific data in an adventure manifest (top-level ``extensions``).
+"""Fork-, feature-, and tool-specific data in an adventure manifest (top-level ``extensions``).
 
-Forks and external tools may store their own data under a namespace of their choice,
-e.g. ``"extensions": {"my_fork": {"visual_novel": {...}}}``. TaleWeaver never interprets it:
-the block is kept on import, survives editing (it lives in ``original_manifest``) and is
-written back on export. Imports are untrusted, so only well-formed namespaces are kept and
-the block is size-capped.
+Forks, shared feature runtimes, and external tools may store their own data under a
+namespace of their choice, e.g. ``"extensions": {"agent_runtime": {...}, "my_fork": {...}}``.
+TaleWeaver never interprets it: the block is kept on import, survives editing (it lives
+in ``original_manifest``) and is written back on export. Imports are untrusted, so only
+well-formed namespaces are kept and the block is size-capped.
 """
 
 from __future__ import annotations

@@ -8,6 +8,7 @@ import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue'
 import ReceiveItemTriggerFields from '@/components/editor/ReceiveItemTriggerFields.vue'
 import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
+import NpcCompanionSettings from '@/components/editor/NpcCompanionSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
@@ -2338,6 +2339,15 @@ const textLogPreviewClass = computed(() => {
                   @saved="emit('combat-saved')"
                 />
                 <p v-else class="text-[11px] text-slate-400">Save the NPC first to configure attack behaviour, combat group and special attacks.</p>
+              </div>
+
+              <!-- Companion (sidekick) settings -->
+              <div v-if="adventureId && npcData && !isCreateEntityMode" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <NpcCompanionSettings
+                  :adventure-id="adventureId"
+                  :npc="npcData"
+                  @saved="emit('combat-saved')"
+                />
               </div>
             </div> <!-- End combat tab -->
 

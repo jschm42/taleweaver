@@ -22,6 +22,7 @@ from backend.api.routes.adventures.session_start_settings import (
 from backend.api.routes.adventures.sheet_snapshot import build_sheet_snapshot
 from backend.engine.audio.voice_casting import PROTAGONIST_VOICE_KEY, cast_adventure_voices
 from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.party.party_view import mark_active_companion
 from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -381,6 +382,7 @@ class AdventureLogic:
                 ent.get("inventory"), entity_lookup
             )
             entities.append({**ent, "inventory": inventory})
+        mark_active_companion(entities, overrides)
         return entities
 
     @staticmethod

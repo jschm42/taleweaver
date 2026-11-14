@@ -27,6 +27,7 @@ from backend.engine.manifest_apply.visuals import (
     uses_advanced_model,
 )
 from backend.engine.media.image_prompt_context import build_npc_image_prompt, clean_appearance
+from backend.engine.party.companion_config import COMPANION_KEY, normalize_companion
 from backend.models.world_entity import WorldEntity
 
 # NPC settings that may appear at the top level (generated manifests) or inside
@@ -42,6 +43,7 @@ _METADATA_FIELDS = (
     "special_chance",
     "combat_group",
     "assist_mode",
+    "companion",
     "on_defeat_script",
     "on_defeat_text",
     "on_protagonist_enters_scene_script",
@@ -80,6 +82,7 @@ def npc_metadata(npc: dict[str, Any]) -> dict[str, Any]:
         if value in (None, "", []):
             value = _METADATA_DEFAULTS.get(key)
         metadata[key] = value
+    metadata[COMPANION_KEY] = normalize_companion(metadata.get(COMPANION_KEY))
     return metadata
 
 

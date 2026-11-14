@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 from pydantic import Field
 
-from backend.engine.world.combat_profile_schemas import SpecialEffectSchema
+from backend.engine.world.combat_profile_schemas import WeaponEffectSchema
 from backend.engine.world.schema_base import WorldBaseSchema
 from backend.engine.world.switch_schemas import (
     SwitchOutcomeSchema,
@@ -175,7 +175,7 @@ class WorldObjectSchema(WorldBaseSchema):
         None,
         description="Only for WEAPON items: stat added to the d20 attack roll (default dexterity).",
     )
-    weapon_effects: list[SpecialEffectSchema] = Field(
+    weapon_effects: list[WeaponEffectSchema] = Field(
         default=[],
         description=(
             "Only for WEAPON items: up to 4 extra effects applied on a hit, e.g. "

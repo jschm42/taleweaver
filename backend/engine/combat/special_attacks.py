@@ -24,7 +24,9 @@ SUCCESS_STATS = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
 CATEGORIES = ("MAGIC", "MELEE", "RANGED", "SOCIAL", "OTHER")
 COST_TYPES = ("mana", "stamina")
 ACTION_TYPES = ("ATTACK", "HEAL", "UTILITY")
-EFFECT_TARGETS = ("target", "self")
+# "ally": the caster's party partner: the companion for the protagonist, the protagonist for
+# the companion. Without one (or for enemies) the effect does nothing.
+EFFECT_TARGETS = ("target", "self", "ally")
 TARGET_SCOPES = ("SINGLE", "SPLASH", "ALL_ENEMIES")
 MAX_SPLASH_RADIUS = 2
 
@@ -113,7 +115,9 @@ def _legacy_effects(raw: dict[str, Any], action_type: str) -> list[dict[str, str
     if action_type == "ATTACK":
         return [{"target": "target", "stat": "hp", "amount": f"-{value}"}]
     if action_type == "HEAL":
-        return [{"target": "self", "stat": "hp", "amount": f"+{value}"}]
+        # heal_target "ally": heals the party partner instead (blueprint ``heals: ally``).
+        target = "ally" if str(raw.get("heal_target") or "").lower() == "ally" else "self"
+        return [{"target": target, "stat": "hp", "amount": f"+{value}"}]
     return []
 
 
@@ -163,6 +167,14 @@ def normalize_special_action(raw: Any) -> Optional[dict[str, Any]]:
         "unlock_required_defeated_npc_id": raw.get("unlock_required_defeated_npc_id") or None,
         "has_unlock_guard": bool(str(raw.get("unlock_guard_expression") or "").strip()),
     }
+
+
+def heals_ally(attack: dict[str, Any]) -> bool:
+    """True when the action restores HP of the caster's party partner."""
+    return any(
+        e["target"] == "ally" and e["stat"] == "hp" and not str(e["amount"]).startswith("-")
+        for e in attack.get("effects") or []
+    )
 
 
 def normalize_effects(raw_list: Any) -> list[dict[str, str]]:
@@ -239,13 +251,12 @@ def _success_roll(
 
 def _apply_effects(
     attack: dict[str, Any],
-    caster: dict[str, Any],
-    target: Optional[dict[str, Any]],
+    recipients: dict[str, Optional[dict[str, Any]]],
     crit: bool,
 ) -> list[dict[str, Any]]:
     applied: list[dict[str, Any]] = []
     for effect in attack["effects"]:
-        recipient = caster if effect["target"] == "self" else target
+        recipient = recipients.get(effect["target"])
         if recipient is None:
             continue
         value, detail = roll_amount(effect["amount"])
@@ -265,12 +276,19 @@ def _apply_effects(
 
 
 def resolve_special_attack(
-    attack: dict[str, Any], caster: dict[str, Any], target: Optional[dict[str, Any]]
+    attack: dict[str, Any],
+    caster: dict[str, Any],
+    target: Optional[dict[str, Any]],
+    ally: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Pays the cost, rolls for success and applies effects. Mutates the combatant dicts."""
+    """Pays the cost, rolls for success and applies effects. Mutates the combatant dicts.
+
+    ``ally`` receives the effects aimed at ``"ally"`` (the caster's party partner).
+    """
     caster[attack["cost_type"]] = max(0, _as_int(caster.get(attack["cost_type"])) - attack["cost"])
     roll = _success_roll(attack, caster, target)
-    effects = _apply_effects(attack, caster, target, roll["crit"]) if roll["success"] else []
+    recipients = {"self": caster, "target": target, "ally": ally}
+    effects = _apply_effects(attack, recipients, roll["crit"]) if roll["success"] else []
     return {
         **roll,
         "kind": "special",

@@ -17,6 +17,7 @@ const props = defineProps<{
     label: string
     exit_type: 'one_way' | 'bidirectional'
     is_revealed?: boolean
+    companions_allowed?: boolean
     lock_description: string
     code_to_unlock?: string
     item_to_unlock?: string
@@ -45,6 +46,7 @@ const emit = defineEmits<{
     label: string
     exit_type: 'one_way' | 'bidirectional'
     is_revealed?: boolean
+    companions_allowed?: boolean
     lock_description: string
     code_to_unlock?: string
     item_to_unlock?: string
@@ -68,6 +70,7 @@ const EMPTY_FORM = {
   label: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
   is_revealed: false,
+  companions_allowed: true,
   lock_description: '',
   code_to_unlock: '',
   item_to_unlock: '',
@@ -316,6 +319,11 @@ function submit() {
               <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="The target scene's name and image are shown on the exit tile and the map from the start, before the player has been there (e.g. a signposted door or a gate with a view).">
                 <input v-model="form.is_revealed" type="checkbox" class="accent-emerald-500" />
                 <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
+              </label>
+
+              <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="Turn off for a solo passage (a narrow vent, a door only the protagonist may pass): the companion stays behind when the protagonist uses this exit.">
+                <input v-model="form.companions_allowed" type="checkbox" class="accent-emerald-500" />
+                <span>Companions may follow <span class="text-slate-500">(off = solo passage)</span></span>
               </label>
             </template>
 

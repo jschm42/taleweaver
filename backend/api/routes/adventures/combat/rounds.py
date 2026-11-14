@@ -11,6 +11,7 @@ from backend.api.routes.adventures.combat.context import (
     find_enemy,
     system_event,
 )
+from backend.api.routes.adventures.combat.party import is_member_standing, party_members
 from backend.engine.combat.initiative import PLAYER_ID, describe_initiative, roll_initiative
 from backend.models.world_entity import WorldEntity
 
@@ -33,6 +34,10 @@ class CombatRoundMixin:
                 (enemy.get("modifiers") or {}).get("dexterity", 0)
             )
             participants.append({"id": enemy["id"], "name": enemy["name"], "dexterity": dex})
+        for member in party_members(combat):
+            if is_member_standing(member):
+                dex = int(member.get("dexterity_mod") or 0)
+                participants.append({"id": member["id"], "name": member["name"], "dexterity": dex})
         return participants
 
     def _roll_round_initiative(self, combat: dict[str, Any]) -> None:
@@ -84,6 +89,10 @@ class CombatRoundMixin:
             if self._enemy_can_act(combat, actor):
                 self._set_turn_marker(combat)
                 async for chunk in self._resolve_enemy_turn(actor, combat):
+                    yield chunk
+            elif self._party_can_act(combat, actor):
+                self._set_turn_marker(combat)
+                async for chunk in self._resolve_companion_turn(actor, combat):
                     yield chunk
             combat["turn_index"] = int(combat.get("turn_index") or 0) + 1
 
@@ -172,6 +181,7 @@ class CombatRoundMixin:
         combat["active"] = False
         combat["outcome"] = "victory"
         combat["loot_pending"] = True
+        self._recover_party(combat)
         combat["turn"] = "player"
         if len(out) == 1:
             verb = "flees in panic! You won the battle." if out[0].get("fled") else "is defeated."

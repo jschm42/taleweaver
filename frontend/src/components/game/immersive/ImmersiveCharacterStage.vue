@@ -10,13 +10,17 @@
  * Crowded scenes: defeated characters move last (see stageCastOrder.ts) and cards shrink to fit the
  * column height, switching to compact/mini layouts; from eight characters on the stage uses two
  * narrower columns (see useStageDensity.ts).
+ * The active companion (`is_companion`) stands as a smaller card right of the protagonist: a
+ * narrower side column in row 1 that widens the stage instead of shrinking the other cards.
+ * From eight characters on (two columns) it simply takes the cell next to the protagonist.
  */
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, type CSSProperties } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { STAT_POPUP_STAGGER_MS, useStatChangePopups } from './useStatChangePopups'
-import { useStageDensity } from './useStageDensity'
-import { isDefeated, orderStageCast } from './stageCastOrder'
+import { STAGE_TWO_COLUMN_MIN, useStageDensity } from './useStageDensity'
+import { isDefeated, isStageCompanion, orderStageCast } from './stageCastOrder'
+import type { StageDensity } from './useStageDensity'
 
 const props = defineProps<{
   npcs: any[]
@@ -169,37 +173,96 @@ function isNpcVoiced(npc: any): boolean {
 
 // --- Crowded scenes: defeated characters last, cards shrink to fit the column ---
 const orderedNpcs = computed(() => orderStageCast(props.npcs))
-const { columns, density, cardStyle } = useStageDensity(stageContainerRef, () => orderedNpcs.value.length)
+
+// --- Companion: a smaller card in a side column right of the protagonist ---
+/** Width of the companion column relative to the main column. */
+const COMPANION_SIDE_RATIO = 0.5
+const hasPlayerCard = computed(() => orderedNpcs.value.some((npc) => npc?.id === 'PLAYER'))
+const companionCount = computed(() =>
+  hasPlayerCard.value ? orderedNpcs.value.filter((npc) => isStageCompanion(npc)).length : 0
+)
+/** Cards that take a row of their own; the companion shares row 1 with the protagonist. */
+const rowCardCount = computed(() => orderedNpcs.value.length - Math.min(1, companionCount.value))
+const sideRatio = computed(() =>
+  companionCount.value && rowCardCount.value < STAGE_TWO_COLUMN_MIN ? COMPANION_SIDE_RATIO : 0
+)
+const { columns, density, cardHeight, cardStyle } = useStageDensity(
+  stageContainerRef,
+  () => (sideRatio.value ? rowCardCount.value : orderedNpcs.value.length),
+  () => sideRatio.value
+)
+
+function isSideCompanion(npc: any): boolean {
+  return sideRatio.value > 0 && isStageCompanion(npc)
+}
+
+/** The companion card is half as wide, so it uses the mini layout (small name, no role). */
+function cardDensity(npc: any): StageDensity {
+  return isSideCompanion(npc) ? 'mini' : density.value
+}
+
+const gridStyle = computed(() =>
+  sideRatio.value ? { gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${sideRatio.value}fr)` } : {}
+)
+
+function cardStyleFor(npc: any): CSSProperties {
+  if (!sideRatio.value) {
+    return cardStyle.value
+  }
+  if (!isSideCompanion(npc)) {
+    return { ...cardStyle.value, gridColumn: '1' }
+  }
+  const height = density.value === 'full' ? {} : { height: `${Math.round(cardHeight.value * sideRatio.value)}px` }
+  return { aspectRatio: '2 / 3', ...height, gridColumn: '2', gridRow: '1', alignSelf: 'end' }
+}
+
+function cardBorderClass(npc: any): string {
+  if (isNpcVoiced(npc)) {
+    return 'tw-npc-voiced border-transparent'
+  }
+  if (npc.id === 'PLAYER') {
+    return playerCardClass(npc)
+  }
+  return isStageCompanion(npc) ? 'border-sky-500/70 hover:border-sky-300' : 'border-slate-700/70 hover:border-cyan-400/80'
+}
+
+function cardTitle(npc: any): string | undefined {
+  if (npc.id === 'PLAYER') {
+    return playerDangerLevel(npc) ? `Open your hero (HP ${npc.hp}/${npc.max_hp})` : 'Open your hero'
+  }
+  return isStageCompanion(npc) ? `${npc.name} · your companion` : undefined
+}
 </script>
 
 <template>
   <aside
     ref="stageContainerRef"
-    class="tw-stage flex flex-col gap-2 shrink-0 overflow-y-auto tw-scroll pr-1 py-1 max-h-full"
-    :class="columns === 2 ? 'w-[6.5rem] sm:w-[8rem] md:w-[9.5rem] lg:w-[11.5rem]' : 'w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem]'"
+    class="tw-stage flex flex-col gap-2 shrink-0 overflow-y-auto py-1 max-h-full"
+    :class="columns === 2
+      ? 'w-[6.5rem] sm:w-[8rem] md:w-[9.5rem] lg:w-[11.5rem]'
+      : sideRatio
+        ? 'w-[6.5rem] sm:w-[8.9rem] md:w-[11.3rem] lg:w-[13.7rem]'
+        : 'w-16 sm:w-[5.6rem] md:w-[7.2rem] lg:w-[8.8rem]'"
   >
     <TransitionGroup
       :name="stageReady ? 'tw-npc' : 'tw-npc-initial'"
       tag="div"
       class="grid gap-2 w-full content-start"
       :class="columns === 2 ? 'grid-cols-2' : 'grid-cols-1'"
+      :style="gridStyle"
     >
       <div
         v-for="npc in orderedNpcs"
         :key="npc.id"
         :data-npc-id="npc.id"
         class="relative group flex flex-col items-center bg-slate-950 border-2 transition-all duration-300 shrink-0 w-full overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
-        :style="cardStyle"
+        :style="cardStyleFor(npc)"
         :class="[
-          density === 'mini' ? 'rounded-lg' : 'rounded-xl',
+          cardDensity(npc) === 'mini' ? 'rounded-lg' : 'rounded-xl',
           { 'tw-npc-arrived': hasJustArrived(npc), 'tw-npc-hit': hitCards.has(String(npc.id)) },
-          isNpcVoiced(npc)
-            ? 'tw-npc-voiced border-transparent'
-            : npc.id === 'PLAYER'
-              ? playerCardClass(npc)
-              : 'border-slate-700/70 hover:border-cyan-400/80'
+          cardBorderClass(npc)
         ]"
-        :title="npc.id === 'PLAYER' ? (playerDangerLevel(npc) ? `Open your hero (HP ${npc.hp}/${npc.max_hp})` : 'Open your hero') : undefined"
+        :title="cardTitle(npc)"
         @click="emit('npcClick', npc)"
         @mouseenter="emit('npcHover', npc, $event)"
         @mousemove="emit('npcHover', npc, $event)"
@@ -216,7 +279,7 @@ const { columns, density, cardStyle } = useStageDensity(stageContainerRef, () =>
           @error="onImageLoadError($event, npc.image_url)"
         />
         <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
-          <i :class="['ra mb-1', density === 'full' ? 'text-4xl' : 'text-2xl', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
+          <i :class="['ra mb-1', cardDensity(npc) === 'full' ? 'text-4xl' : 'text-2xl', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
         </div>
 
         <!-- Entrance: one-off light sweep and a short "Enters" tag -->
@@ -238,7 +301,7 @@ const { columns, density, cardStyle } = useStageDensity(stageContainerRef, () =>
         <div v-if="isNpcVoiced(npc)" class="tw-npc-voice-ring" aria-hidden="true"></div>
 
         <!-- Defeated: ribbon on larger cards, a small skull badge on mini cards -->
-        <div v-if="isDefeated(npc) && density !== 'mini'" class="absolute -right-6 top-3 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20">
+        <div v-if="isDefeated(npc) && cardDensity(npc) !== 'mini'" class="absolute -right-6 top-3 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20">
           Defeated
         </div>
         <div
@@ -252,15 +315,15 @@ const { columns, density, cardStyle } = useStageDensity(stageContainerRef, () =>
         <!-- Name & Role Overlay with Gradient & Strong Shadow (role only on full cards) -->
         <div
           class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col items-center text-center pointer-events-none z-10"
-          :class="density === 'mini' ? 'pt-3 pb-0.5 px-1' : 'pt-8 pb-2 px-2'"
+          :class="cardDensity(npc) === 'mini' ? 'pt-3 pb-0.5 px-1' : 'pt-8 pb-2 px-2'"
         >
           <h4
             class="font-black text-white group-hover:text-amber-300 transition-colors uppercase drop-shadow-[0_2px_3px_rgba(0,0,0,1)] truncate w-full"
-            :class="density === 'mini' ? 'text-[9px] tracking-wide' : 'text-[11px] sm:text-xs tracking-wider'"
+            :class="cardDensity(npc) === 'mini' ? 'text-[9px] tracking-wide' : 'text-[11px] sm:text-xs tracking-wider'"
           >
             {{ npc.name }}
           </h4>
-          <span v-if="npc.role && density === 'full'" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
+          <span v-if="npc.role && cardDensity(npc) === 'full'" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
             {{ npc.role }}
           </span>
         </div>
@@ -270,9 +333,14 @@ const { columns, density, cardStyle } = useStageDensity(stageContainerRef, () =>
 </template>
 
 <style scoped>
-/* Reserve the scrollbar's space so its appearance never changes the measured width (resize loop). */
+/* The stage scrolls (wheel, touch) without a visible scrollbar: no scrollbar means no space next
+   to the story, and the measured width never changes when the column starts to scroll. */
 .tw-stage {
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+}
+
+.tw-stage::-webkit-scrollbar {
+  display: none;
 }
 
 @property --tw-voice-angle {

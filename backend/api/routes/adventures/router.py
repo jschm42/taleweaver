@@ -13,6 +13,9 @@ from backend.api.routes.adventures.editor_entity_transfer import (
     router as editor_entity_transfer_router,
 )
 from backend.api.routes.adventures.editor_npc_combat import router as editor_npc_combat_router
+from backend.api.routes.adventures.editor_npc_companion import (
+    router as editor_npc_companion_router,
+)
 from backend.api.routes.adventures.editor_npc_profile import router as editor_npc_profile_router
 from backend.api.routes.adventures.editor_special_actions import (
     router as editor_special_actions_router,
@@ -44,6 +47,7 @@ router.include_router(sessions_router)
 router.include_router(editor_router)
 router.include_router(editor_special_actions_router)
 router.include_router(editor_npc_combat_router)
+router.include_router(editor_npc_companion_router)
 router.include_router(editor_npc_profile_router)
 router.include_router(editor_talents_router)
 router.include_router(editor_entity_transfer_router)

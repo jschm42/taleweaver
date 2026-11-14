@@ -110,14 +110,17 @@ def blueprint_sequences(blueprint: Blueprint) -> list[dict[str, Any]]:
     for block in blueprint.of_kind("sequence"):
         order = int(block.ref)
         values = {**block.hints(), **block.fixed()}
-        description = block.description or "Follow the sequence blueprint."
+        explicit_desc = str(values.get("description") or "").strip()
+        explicit_walkthrough = str(values.get("walkthrough") or "").strip()
+        description = explicit_desc or block.description or "Follow the sequence blueprint."
+        walkthrough = explicit_walkthrough or (block.description if not explicit_desc else "")
         sequences.append(
             {
                 "id": f"SEQ_{order}",
                 "order": order,
                 "title": values.get("title") or f"Sequence {order}",
                 "description": description[:500],
-                "walkthrough": values.get("walkthrough") or description,
+                "walkthrough": walkthrough or description,
                 "end_condition": values.get("end_condition") or "Complete the sequence objectives.",
                 "required_item_id": values.get("required_item_id", ""),
                 "required_scene_id": values.get("required_scene_id", ""),

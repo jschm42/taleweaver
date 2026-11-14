@@ -1,3 +1,4 @@
+import type { CompanionSheet } from '@/types'
 export type UiPanelCommand = 'map' | 'sheet' | 'quests'
 
 export type SpecialGameCommand =
@@ -22,6 +23,8 @@ const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
 const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
+/** Context menu action that opens the hero dialog on the companion's page (GameView). */
+export const OPEN_COMPANION_SHEET_PREFIX = '[OPEN_COMPANION_SHEET] '
 /** Context menu action that opens the Give dialog for an NPC (handled in GameView). */
 export const GIVE_TO_PREFIX = '[GIVE_TO] '
 
@@ -181,10 +184,19 @@ export const gameCommandService = {
     } else if (entity?.entity_type === 'NPC') {
       items.push({ label: 'Talk', action: `${PREFILL_SAY_TO_PREFIX}${entity.name || ''}` })
       items.push({ label: 'Greet', action: `/greet ${entity.name}` })
-      items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
+      // The companion's Inspect opens the hero dialog on its page, like the protagonist's.
+      items.push(entity?.is_companion === true
+        ? { label: 'Inspect', action: `${OPEN_COMPANION_SHEET_PREFIX}${entity.id}` }
+        : { label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
       if (!isDefeatedNpc) {
         items.push({ label: 'Give', action: `${GIVE_TO_PREFIX}${entity.id || entity.name}` })
+      }
+      // The active companion takes orders: stay behind here, or come along again.
+      if (!isDefeatedNpc && entity?.is_companion === true) {
+        items.push(entity.companion_following === false
+          ? { label: 'Follow me', action: '/companion follow' }
+          : { label: 'Stay here', action: '/companion wait' })
       }
       if (!isDefeatedNpc && canBeAttacked(entity)) {
         items.push({ label: 'Attack', action: `/attack ${entity.name}` })
@@ -228,9 +240,19 @@ export const gameCommandService = {
     return { title, items }
   },
 
-  buildInventoryContextMenu(item: any, _ruleMode?: string): ContextMenuModel | null {
+  buildInventoryContextMenu(
+    item: any,
+    _ruleMode?: string,
+    companion?: CompanionSheet | null,
+  ): ContextMenuModel | null {
     const items: ContextMenuItem[] = []
     const title = item?.name || 'Item'
+
+    // An item the companion carries (its page of the hero dialog): only take it back.
+    if (item?.held_by_companion === true) {
+      const holder = companion?.name || 'your companion'
+      return { title, items: [{ label: `Take from ${holder}`, action: `/companion_take ${item.id || item.name}` }] }
+    }
 
     const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
     const isEquipped = !!item.equipped_slot
@@ -259,6 +281,9 @@ export const gameCommandService = {
 
     items.push({ label: 'Combine', action: `${COMBINE_WITH_PREFIX}${item.id || item.name}` })
     items.push({ label: 'Drop', action: `/drop ${item.name}` })
+    if (companion?.present && !companion.is_defeated && !isEquipped) {
+      items.push({ label: `Give to ${companion.name}`, action: `/companion_give ${item.id || item.name}` })
+    }
     items.push({ label: 'Inspect', action: `/inspect ${item.name}` })
 
     return items.length > 0 ? { title, items } : null

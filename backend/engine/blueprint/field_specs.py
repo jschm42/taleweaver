@@ -244,6 +244,9 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "cul_de_sac_on_max_depth": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
     "return_direction": FieldSpec("dynamic_zone.return_exit_direction"),
     "return_exit_direction": FieldSpec("dynamic_zone.return_exit_direction"),
+    # Solo passage: the protagonist's companion stays behind.
+    "companions": FieldSpec("companions_allowed", boolean),
+    "solo": FieldSpec("companions_allowed", one_way),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")
@@ -291,6 +294,14 @@ NPC_KEYS: dict[str, FieldSpec] = {
         ),
     ),
     "special_chance": FieldSpec("special_chance", integer),
+    # Companion (sidekick): any of these keys makes the NPC a companion.
+    "companion": FieldSpec("companion.recruitable", boolean),
+    "in_party": FieldSpec("companion.starts_in_party", boolean),
+    "tactics": FieldSpec(
+        "companion.tactics", choice("BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT")
+    ),
+    "banter": FieldSpec("companion.banter", choice("NORMAL", "QUIET", "CHATTY")),
+    "downed_recovery": FieldSpec("companion.downed_recovery"),
 }
 for _alias, _stat in STAT_ALIASES.items():
     NPC_KEYS[_alias] = FieldSpec(_stat, integer)
@@ -391,11 +402,17 @@ _GOAL_KEYS: dict[str, FieldSpec] = {
 
 SEQUENCE_KEYS: dict[str, FieldSpec] = {
     **_GOAL_KEYS,
+    "description": FieldSpec("description"),
     "end": FieldSpec("end_condition"),
     "walkthrough": FieldSpec("walkthrough"),
     # Entering this scene starts the sequence (mainly for dynamic progression).
     "activation": _ref("activation_scene_id"),
+    # Solo chapter: the companion does not follow into new scenes.
+    "companions": FieldSpec("companions_allowed", boolean),
+    "solo": FieldSpec("companions_allowed", one_way),
 }
+for _alias in ("lore", "intro", "chapter_description"):
+    SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]
 for _alias in ("activation_scene", "activation_scene_id", "start_in"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["activation"]
 # Legacy line prefixes understood by the original sequence parser.
@@ -472,6 +489,7 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
     ),
     "dc": FieldSpec("difficulty", integer),
     "damage": FieldSpec("*", ability_damage),
+    "heals": FieldSpec("heal_target", choice("self", "ally")),
     "area": FieldSpec("*", ability_area),
     "save": FieldSpec("save_stat", choice(*_ROLL_STATS, aliases=_ROLL_STAT_ALIASES)),
     "spare_passive": FieldSpec("spares_passive", boolean),

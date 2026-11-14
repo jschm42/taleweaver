@@ -339,6 +339,25 @@ in: ROAD
 
 Varek attacks on sight and Grim joins him, because they share the combat group `BANDITS`. Mira has no group, so she is a bystander: the battle dialog lists her apart from the enemies, and she only fights if the player attacks her. Use `assist: anyone` for an NPC who joins every fight in its scene (a guard dog) and `assist: never` for a group member who stays out until attacked. To make the gang turn on one of its own after a twist, move him out of the group in a script: `tw.npcs.set_combat_group('GRIM', '')`.
 
+### A companion who travels with the hero, and a solo passage
+
+```text
+[NPC: LARA] Lara the Thief
+in: GATE
+character: cynical, observant, quiet on her feet
+companion: yes
+in_party: yes
+tactics: support
+
+[Exit: GATE -> VENT] a narrow air vent
+solo: yes
+
+[Sequence: 3] Alone in the Tower
+companions: no
+```
+
+Lara starts in the party and follows the protagonist into every scene. She waits at the gate when the protagonist crawls through the vent, and she stays behind in every scene the protagonist leaves during chapter 3. Once the protagonist returns to her, she follows again.
+
 ### An NPC whose mood changes with the player's behavior
 
 ```text
@@ -574,6 +593,6 @@ When you click **Generate**:
 - **Start small.** Write the chapter outline first and generate. Then fix only the parts that came out wrong.
 - **Give explicit IDs** to everything that is referenced. `[NPC: TOBIN] Tobin` is safer than `[NPC: 1] Tobin`.
 - **One fact per readable.** Put clues in different scenes, so the player has to combine them.
-- **Write the solution into the chapter text.** It becomes the Game Master's walkthrough and keeps hints consistent.
+- **Write the solution into `walkthrough:`.** It becomes the Game Master's walkthrough and keeps hints consistent. Keep sequence descriptions focused on atmosphere and lore without spoiling puzzles.
 - **Let the AI write the atmosphere.** Your free text should say *what matters*; the AI is good at *how it looks*.
 - **Use the adventure-concept-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-concept-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.

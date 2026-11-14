@@ -31,6 +31,9 @@ from backend.api.routes.adventures.session_items import (
 from backend.core.config import settings
 from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY, resolve_tts_preferences
 from backend.engine.audio.audio_state import apply_audio_ops
+from backend.engine.party.party_ops import apply_party_ops
+from backend.engine.party.party_start import seed_starting_party, sync_starting_party_rows
+from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.scripting.context import GameContext
@@ -248,6 +251,7 @@ def _run_init_scripts(
         in_game_time=0,
         clock=clock_view(SimpleNamespace(in_game_time=0, entity_states={}), adventure),
         audio_library=getattr(adventure, "audio_tracks", None),
+        party=entity_states.get(PARTY_KEY),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
         active_sequence_id=str(first_seq.get("id") or "") if first_seq else None,
@@ -278,6 +282,7 @@ def _run_init_scripts(
     store_pending_dialog(entity_states, changes.pending_dialog)
     store_gm_directions(entity_states, changes.gm_directions, changes.after_narration)
     apply_audio_ops(entity_states, changes.audio_ops)
+    apply_party_ops(entity_states, changes.party_ops)
     store_skip_narration(entity_states, changes.skip_narration)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)
@@ -473,6 +478,7 @@ async def start_session(db: AsyncSession, adventure: AdventureTemplate, user: Us
         },
         template_entities,
     )
+    seed_starting_party(entity_states, template_entities, first_scene_id)
     script_messages = _run_init_scripts(
         adventure, avatar, first_scene_id, template_entities, entity_states
     )
@@ -482,5 +488,6 @@ async def start_session(db: AsyncSession, adventure: AdventureTemplate, user: Us
     await _clone_template_world(
         db, template_id, session_id, avatar, template_entities, entity_images, asset_cache
     )
+    await sync_starting_party_rows(db, session_id, entity_states)
     await db.commit()
     return {"game_id": session_id, "template_id": template_id, "avatar_id": avatar.id}

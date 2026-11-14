@@ -25,6 +25,8 @@ const emit = defineEmits<{
   /** Weapon item id to attack with; null for the default weapon (Bare Fists). */
   attack: [weaponId: string | null]
   special: [id: string]
+  /** Mark the selected target for the companion; `true` lifts the current mark. */
+  mark: [lift: boolean]
   hover: [entity: Record<string, unknown>, event: MouseEvent]
   leave: []
 }>()
@@ -41,6 +43,17 @@ const TONE_HEX: Record<string, string> = {
 }
 
 const { resources, weapons, canAfford } = useCombatLoadout(toRef(props, 'combat'), toRef(props, 'playerSheet'))
+
+/** The companion fighting at the protagonist's side (Mark only exists with one). */
+const companion = computed(() =>
+  (props.combat.party ?? []).find((m) => !m.downed && Number(m.hp ?? 0) > 0) ?? null
+)
+const selectedIsMarked = computed(() => {
+  const markId = companion.value?.mark_id
+  if (!markId || !props.targetName) return false
+  const marked = (props.combat.enemies ?? []).find((e) => e.id === markId)
+  return marked?.name === props.targetName
+})
 
 const specials = computed<NormalizedSpecialAttack[]>(() => {
   const fromCombat = props.combat.player?.special_actions
@@ -147,6 +160,25 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
       @hover="(event) => emit('hover', weaponTooltip(w), event)"
       @leave="emit('leave')"
     />
+    <!-- Order to the companion: attack only the selected target (free action). -->
+    <template v-if="companion">
+      <span class="tw-ability-divider" aria-hidden="true"></span>
+      <AbilityCard
+        icon="ra-targeted"
+        :type-line="'Order — free action'"
+        :title="selectedIsMarked ? 'Lift mark' : 'Mark target'"
+        cost="Free"
+        check="—"
+        :effects="selectedIsMarked
+          ? `${companion.name} fights by its tactics again`
+          : `${companion.name} attacks only this target`"
+        :footer="`→ ${targetName || 'no target'}`"
+        :tone="TONE_HEX.cyan"
+        :disabled="locked || !targetName"
+        @use="emit('mark', selectedIsMarked)"
+        @leave="emit('leave')"
+      />
+    </template>
     <span v-if="specials.length" class="tw-ability-divider" aria-hidden="true"></span>
     <AbilityCard
       v-for="action in specials"

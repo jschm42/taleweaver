@@ -19,6 +19,8 @@ from backend.api.routes.adventures.combat.context import (
 from backend.api.routes.adventures.combat.enemy_ai import CombatEnemyMixin
 from backend.api.routes.adventures.combat.loot import LOOT_FINISH_ACTIONS, CombatLootMixin
 from backend.api.routes.adventures.combat.narration import CombatNarrationMixin
+from backend.api.routes.adventures.combat.party import CombatPartyMixin
+from backend.api.routes.adventures.combat.party_loadout import CombatPartyLoadoutMixin
 from backend.api.routes.adventures.combat.player_actions import (
     INVALID_ACTION_MSG,
     CombatPlayerMixin,
@@ -53,6 +55,8 @@ class TurnCombatManager(
     CombatBanterMixin,
     CombatCombatantMixin,
     CombatAlliesMixin,
+    CombatPartyMixin,
+    CombatPartyLoadoutMixin,
     CombatConsumableMixin,
     CombatLootMixin,
     CombatNarrationMixin,
@@ -115,6 +119,7 @@ class TurnCombatManager(
         combat["active"] = False
         combat["outcome"] = "escaped"
         combat["status_note"] = f"{self.avatar.name} escapes from combat."
+        self._recover_party(combat)
         self._set_combat_state(combat)
         yield system_event(combat["status_note"])
         async for chunk in self._emit_combat_aftermath_narration(combat):
@@ -136,6 +141,12 @@ class TurnCombatManager(
         self._sync_combat_player_snapshot(combat)
         self._append_combat_log(combat, result["text"], result["type"], result.get("data"))
         yield system_event(result["text"])
+        if result.get("free"):
+            # Free actions (Mark) keep the protagonist's turn.
+            self._set_combat_state(combat)
+            async for chunk in self._emit_combat_final(None):
+                yield chunk
+            return
         if (result.get("data") or {}).get("kind") == "special":
             async for chunk in self._special_script_events(combat, result["data"]):
                 yield chunk

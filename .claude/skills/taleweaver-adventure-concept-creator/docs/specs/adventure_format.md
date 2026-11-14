@@ -42,8 +42,8 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.4.0` (current) | Current format. |
-| `1.3.1` up to below `1.4.0` | Supported and fully playable (predates optional `dynamic_generation` / `dynamic_zone` fields). |
+| `1.4.0` (current) | Current format. Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, and companions (NPC `companion`, exit and sequence `companions_allowed`). |
+| `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions (predates optional `dynamic_generation` / `dynamic_zone` fields and companions). |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
 | below `1.0` | Rejected on import. |
@@ -142,6 +142,7 @@ Connections and passageways between scenes.
 | `is_bidirectional` | `boolean` | Whether the passage can be traversed in both directions (convenience boolean, matches `exit_type == "bidirectional"`). |
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
 | `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
+| `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. *(since 1.4.0)* |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
@@ -168,6 +169,11 @@ Non-Player Characters inhabiting the world.
 | `inventory` | `array` | Items currently held or dropped by the NPC. |
 | `is_hidden` | `boolean` | If true, NPC is not immediately visible without inspecting/searching. |
 | `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden NPC. Empty: revealed when the protagonist searches the scene or the NPC starts speaking. The reserved value `script` means only scripts reveal it. |
+| `companion` | `object \| null` | Optional (top level or inside `metadata_json`). Makes the NPC a companion (sidekick) who can travel with the protagonist: `{recruitable, starts_in_party, tactics, banter, downed_recovery}`. `tactics`: `BALANCED` (default), `OFFENSIVE`, `DEFENSIVE`, `SUPPORT`; `banter`: `NORMAL` (default), `QUIET`, `CHATTY`; `downed_recovery`: share of max HP (0.01-1, default `0.25`) after being downed. `starts_in_party: true` puts the NPC into the party when a session starts; with several such NPCs the first one is the active companion. `null` (default): an ordinary NPC. See [Companions](#companions). *(since 1.4.0)* |
+
+#### Companions
+
+One companion can be active at a time. While it follows, the engine moves it into every scene the protagonist enters (exit, Game Master transition or script teleport), before `on_enter_scene` runs. It stays behind when it is not in the scene the protagonist left, when it is defeated, or when the exit or the active sequence has `companions_allowed: false`; once the protagonist returns, it follows again from there. The Game Master cannot move the active companion to another scene. The player tells it to stay behind or to come along again (context menu **Stay here** / **Follow me**, `/companion wait|follow`, or in their own words, reported by Pass 1 as `companion_order`); both passes get a COMPANION line in the CURRENT STATE, so the narration knows who travels along and how talkative it is (`banter`). The hero dialog switches between the protagonist and the companion (its **Inspect** opens the companion's page): there the player sees its vitals, attributes and the items it carries, and hands items over with **Give to <companion>** / **Take from <companion>** (`/companion_give`, `/companion_take`; no Game Master turn, no `on_receive_item` trigger). The companion has the protagonist's equipment slots: on its **Equipped** tab the player equips items it carries (`/companion_equip <item>[ | <slot>]`, `/companion_unequip <slot>`); equipped items stay in its inventory (`entity_states[<npc>]["equipment"]`, slot -> item ID), add their attribute and armor bonuses, and the `MainHand` item is its weapon in combat. Its abilities are the NPC's `special_actions`; on its **Abilities** tab the player switches each one on or off for combat (`/companion_ability <id> on|off`, stored in `__party__.disabled_abilities`). **Combat** (`rpg` mode): a companion standing in the fight scene fights on the protagonist's side (`combat["party"]`, its own initiative turn) and is never an enemy or a fight target. `tactics`: `OFFENSIVE` attacks the weakest enemy, `DEFENSIVE` draws more enemy attacks (60 % instead of 30 %), `SUPPORT` heals a protagonist below half HP with a healing consumable it carries, `BALANCED` attacks the current target. The protagonist can **Mark** an enemy (free action, only with a fighting companion; `mark <enemy>`, `mark` lifts it): the companion then attacks only that enemy until it falls or flees. It uses its active single-target and self abilities on its own (heals the protagonist below half HP with an `ally` ability, itself below 40 % HP, others with the NPC's `special_chance`). Special-action effects take `target: "target" | "self" | "ally"`: `ally` is the caster's party partner (the companion when the protagonist casts, the protagonist when the companion casts; nothing without one). A `HEAL` action without `effects` can use `heal_target: "ally"` (blueprint `heals: ally`). Weapon on-hit effects only take `target` / `self`. At 0 HP it is downed, not killed, and gets `downed_recovery` of its max HP back after the fight; the fight is lost when the protagonist falls. The session party lives in `entity_states["__party__"]` (`active_id`, `recruited`, `following`, `tactics`) and is part of every checkpoint.
 
 ---
 
@@ -254,34 +260,43 @@ Custom sandboxed event scripts reacting to game hooks and global initialization 
 
 ### 2.10 Extensions (`extensions`)
 
-An optional top-level object where forks and external tools store their own data without
-changing the core format. TaleWeaver never interprets it. It keeps the block on import,
-keeps it while the adventure is edited, and writes it back on export, so data from other
-forks is not lost.
+An optional top-level object where forks, feature runtimes, and external tools store their
+own data without changing the core format. TaleWeaver never interprets it. It keeps the
+block on import, keeps it while the adventure is edited, and writes it back on export, so
+data from other forks and shared runtimes is not lost.
 
 ```json
 "extensions": {
+  "agent_runtime": {
+    "schema_version": 1,
+    "archetype": "reactive_npc",
+    "memory_depth": 5
+  },
+  "comfyui-scenes": {
+    "schema_version": 1,
+    "checkpoint": "illustrious-xl"
+  },
   "my_fork": {
     "presentation": "visual_novel",
     "portraits": { "NPC_GUARD": "assets/guard_vn.png" }
-  },
-  "comfyui-scenes": { "checkpoint": "illustrious-xl" }
+  }
 }
 ```
 
 | Rule | Detail |
 | :--- | :--- |
-| Namespaces | Each key is a namespace you own: your fork or tool name. It must be lower case, 1-64 characters, and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Do not write into another fork's namespace. |
+| Namespaces | Each key is a lower-case namespace identifying a specific fork, tool, or shared feature runtime (e.g. `agent_runtime`, `visual_novel`, `my_fork`). It must be 1-64 characters and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Shared feature namespaces should be chosen neutrally so multiple implementations can adopt the same schema. |
 | Values | Each namespace value must be a JSON object. Inside it, any JSON is allowed. |
+| Schema Versioning | It is recommended that extension objects declare an explicit `schema_version` (e.g. `"schema_version": 1`) so consuming runtimes can detect schema evolutions reliably. |
 | Limits | At most 32 namespaces and 256 KB (UTF-8 JSON) in total. |
 | Invalid entries | Namespaces with an invalid key, a non-object value, or past the limits are dropped on import and export. The rest of the manifest is not affected. |
 | Assets | Asset paths inside `extensions` are passed through as plain strings. They are not packed into or extracted from `.adz` bundles. |
 | Export | The key is omitted when there are no valid namespaces. |
 
-Implementations that do not recognize the block ignore it. Put fork-specific data here
-rather than adding new top-level keys: unknown top-level keys are ignored on import but are
-not written back on export. For per-entity data, NPCs and objects also accept a free-form
-`metadata_json` object that survives import and export.
+Implementations that do not recognize an extension namespace ignore it. Put fork- or
+feature-specific data here rather than adding new top-level keys: unknown top-level keys
+are ignored on import but are not written back on export. For per-entity data, NPCs and
+objects also accept a free-form `metadata_json` object that survives import and export.
 
 ---
 

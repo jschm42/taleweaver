@@ -145,6 +145,10 @@ class ItemManagerMixin:
     def add_to_player(self, item_id: str) -> bool:
         return self._require_mover().to_player(item_id) is not None
 
+    def to_player(self, item_id: str) -> bool:
+        """Alias for add_to_player."""
+        return self.add_to_player(item_id)
+
     def remove_from_player(self, item_id: str) -> bool:
         """Takes an item out of the inventory without placing it anywhere."""
         return self._require_mover()._player._take_entry(item_id) is not None
@@ -152,8 +156,16 @@ class ItemManagerMixin:
     def add_to_scene(self, item_id: str, scene_id: Optional[str] = None) -> bool:
         return self._require_mover().to_scene(item_id, scene_id)
 
+    def to_scene(self, item_id: str, scene_id: Optional[str] = None) -> bool:
+        """Alias for add_to_scene."""
+        return self.add_to_scene(item_id, scene_id)
+
     def put_in_container(self, item_id: str, container_id: str) -> bool:
         return self._require_mover().to_container(item_id, container_id)
+
+    def to_container(self, item_id: str, container_id: str) -> bool:
+        """Alias for put_in_container."""
+        return self.put_in_container(item_id, container_id)
 
     def take_from_container(self, container_id: str, item_id: str, to: str = "player") -> bool:
         mover = self._require_mover()

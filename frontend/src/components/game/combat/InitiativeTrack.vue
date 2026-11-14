@@ -21,16 +21,19 @@ function portrait(raw: string | null | undefined): string | null {
 /** Portraits in acting order for the current round; defeated enemies drop out of the order. */
 const slots = computed(() => {
   const enemies = new Map((props.combat.enemies ?? []).map((e) => [e.id, e]))
+  // The companion fights on the protagonist's side: shown in the order, never a target.
+  const allies = new Map((props.combat.party ?? []).map((m) => [m.id, m]))
   const allSlots = (props.combat.initiative ?? []).map((entry, idx) => {
     const enemy = enemies.get(entry.id)
+    const ally = allies.get(entry.id)
     const isPlayer = entry.id === 'PLAYER'
-    const isOut = !!(enemy && (enemy.defeated || enemy.fled))
+    const isOut = !!(enemy && (enemy.defeated || enemy.fled)) || !!ally?.downed
     return {
       ...entry,
       isPlayer,
       isOut,
-      selectable: !isPlayer && !isOut,
-      image: portrait(isPlayer ? props.combat.player?.image_url || props.playerImage : enemy?.image_url),
+      selectable: !isPlayer && !ally && !isOut,
+      image: portrait(isPlayer ? props.combat.player?.image_url || props.playerImage : (enemy ?? ally)?.image_url),
       isActive: props.combat.active && props.combat.active_actor === entry.id,
       isDone: idx < (props.combat.turn_index ?? 0),
       isTarget: entry.id === props.selectedTargetId,

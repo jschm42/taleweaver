@@ -62,7 +62,7 @@ import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
 import { waitForSpeechToFinish } from '@/services/speechWait'
 import { type GameSettings } from '@/services/gameViewService'
-import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
+import { GIVE_TO_PREFIX, OPEN_COMPANION_SHEET_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 import type { SheetTabId } from '@/components/game/sheet/types'
@@ -77,6 +77,8 @@ const route = useRoute()
 const showSheet = ref(false)
 /** Tab the hero dialog opens on (the hero portrait asks for 'hero'); null keeps the last tab. */
 const sheetInitialTab = ref<SheetTabId | null>(null)
+/** Whose page the hero dialog opens on: the protagonist or the active companion. */
+const sheetInitialSubject = ref<'hero' | 'companion'>('hero')
 const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
@@ -1798,6 +1800,13 @@ const {
       return openCombinePanel(action.replace(COMBINE_WITH_PREFIX, '').trim())
     }
 
+    if (action.startsWith(OPEN_COMPANION_SHEET_PREFIX)) {
+      sheetInitialSubject.value = 'companion'
+      sheetInitialTab.value = 'hero'
+      showSheet.value = true
+      return true
+    }
+
     if (action.startsWith(GIVE_TO_PREFIX)) {
       return openGivePanel(action.replace(GIVE_TO_PREFIX, '').trim())
     }
@@ -1832,6 +1841,12 @@ const handleUnequipFromSheet = async (slot: string) => {
 const handleConsumeFromSheet = async (name: string) => {
   sheetDirty.value = true
   await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/consume ${name}`)
+}
+
+/** Orders and handovers from the companion page of the hero dialog. */
+const handleSheetCommand = async (cmd: string) => {
+  sheetDirty.value = true
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, cmd)
 }
 
 const handleSheetChanged = async () => {
@@ -1886,6 +1901,12 @@ const handleCombatSpecial = async (actionId: string, targetId: string | null = n
     addNotification(blockedMsg, 'info')
     emitSystemMessage(blockedMsg)
   }
+}
+
+/** Mark: the companion attacks only this target (free action); null lifts the mark. */
+const handleCombatMark = async (targetId: string | null) => {
+  const command = targetId ? `mark ${targetId}` : 'mark'
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, command)
 }
 
 const handleCombatDebugWin = async () => {
@@ -2175,7 +2196,9 @@ usePlayAgentAutoLoop()
       :sheet="sheet" 
       :is-debug="!!sheet?.debug_mode"
       :initial-tab="sheetInitialTab"
-      @close="() => { showSheet = false; if (sheetDirty) handleSheetChanged(); }"
+      :initial-subject="sheetInitialSubject"
+      @close="() => { showSheet = false; sheetInitialSubject = 'hero'; if (sheetDirty) handleSheetChanged(); }"
+      @command="handleSheetCommand"
       @equip="handleEquipFromSheet"
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"
@@ -2290,6 +2313,7 @@ usePlayAgentAutoLoop()
       @run="handleCombatRun"
       @rest="handleCombatRest"
       @special="handleCombatSpecial"
+      @mark="handleCombatMark"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"

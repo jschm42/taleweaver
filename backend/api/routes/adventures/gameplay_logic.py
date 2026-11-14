@@ -73,6 +73,9 @@ from backend.core.llm_request_tuning import bind_llm_session
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.interaction.command_parser import CommandParser
 from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.party.follow import bring_companion_along
+from backend.engine.party.party_ops import apply_session_party_ops
+from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.interaction.llm_intents import (
@@ -2921,6 +2924,7 @@ class GameTurnManager:
             clock=clock_view(self.state, self.adventure),
             audio=read_audio_state(self.state.entity_states),
             audio_library=getattr(self.adventure, "audio_tracks", None),
+            party=session_overrides.get(PARTY_KEY),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3091,9 +3095,12 @@ class GameTurnManager:
                 finally:
                     self._in_protagonist_status_trigger = False
 
+        # Party changes first, so a companion recruited by this script follows its teleport.
+        apply_session_party_ops(self.state, changeset.party_ops)
         if changeset.teleport_scene_id or getattr(changeset, "teleport_dynamic_request", None):
             from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
 
+            left_scene_id = self.state.current_scene_id
             await apply_script_teleport(
                 self.db,
                 self.state,
@@ -3101,6 +3108,11 @@ class GameTurnManager:
                 adventure=self.adventure,
                 user=getattr(self, "user", None),
             )
+            if self.state.current_scene_id != left_scene_id:
+                for msg in await bring_companion_along(
+                    self.db, self.state, left_scene_id, adventure=self.adventure
+                ):
+                    system_messages.append(await self._save_script_notice(msg))
 
         await insert_cloned_entities(self.db, self.state, changeset)
         entity_states = dict(self.state.entity_states or {})
