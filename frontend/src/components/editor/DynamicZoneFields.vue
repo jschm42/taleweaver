@@ -21,9 +21,17 @@ export interface DynamicZoneSpawnChancesOverride {
   switch?: number | null
 }
 
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  buildDynamicPlaceholderSceneId,
+} from '@/utils/editor_utils'
+
 export interface DynamicZoneForm {
   zone_id: string
   theme: string
+  instructions?: string | null
+  cluster_consistency?: boolean
   depth: number
   max_depth: number
   danger_level: 'peaceful' | 'low' | 'medium' | 'high' | 'deadly' | 'random'
@@ -70,8 +78,13 @@ const enabled = computed(() => Boolean(props.modelValue))
 const activeDynamicTab = ref<'setup' | 'spawns' | 'after_generated'>('setup')
 
 const zone = computed<DynamicZoneForm>(() => ({
-  zone_id: props.modelValue?.zone_id || 'wild_zone',
+  zone_id: props.modelValue?.zone_id || 'ZONE_WILD',
   theme: props.modelValue?.theme || '',
+  instructions: props.modelValue?.instructions ?? '',
+  cluster_consistency:
+    props.modelValue?.cluster_consistency !== undefined
+      ? Boolean(props.modelValue.cluster_consistency)
+      : true,
   depth: props.modelValue?.depth ?? 1,
   max_depth: props.modelValue?.max_depth ?? 3,
   danger_level: props.modelValue?.danger_level || 'medium',
@@ -95,21 +108,23 @@ const hasAnyOverride = computed(() => {
   )
 })
 
-const placeholderTargetId = computed(() => {
-  const clean = String(zone.value.zone_id || 'wild_zone')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'ZONE'
-  return `DYN_${clean}_D${zone.value.depth || 1}_1`
-})
+const placeholderTargetId = computed(() =>
+  buildDynamicPlaceholderSceneId(
+    zone.value.zone_id || 'ZONE_WILD',
+    zone.value.depth || 1,
+    1,
+  ),
+)
 
 function toggleEnabled() {
   if (enabled.value) {
     emit('update:modelValue', null)
   } else {
     emit('update:modelValue', {
-      zone_id: 'wild_zone',
+      zone_id: 'ZONE_WILD',
       theme: '',
+      instructions: '',
+      cluster_consistency: true,
       depth: 1,
       max_depth: 3,
       danger_level: 'medium',
@@ -275,16 +290,18 @@ function clearOverrides() {
 
       <template v-if="activeDynamicTab === 'setup'">
         <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <label class="text-xs text-slate-300 space-y-1">
-            <span>Zone ID</span>
-            <input
-              :value="zone.zone_id"
-              maxlength="40"
-              placeholder="iron_mines"
-              class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
-              @input="updateField('zone_id', ($event.target as HTMLInputElement).value)"
+          <div class="text-xs text-slate-300 space-y-1">
+            <span class="block">Zone ID</span>
+            <EditorIdInput
+              :model-value="zone.zone_id"
+              :prefix="EDITOR_ID_PREFIXES.ZONE"
+              :source-name="zone.theme"
+              :compact="true"
+              placeholder="ZONE_IRON_MINES"
+              aria-label="Dynamic Zone ID"
+              @update:model-value="(val) => updateField('zone_id', val)"
             />
-          </label>
+          </div>
 
           <label class="text-xs text-slate-300 space-y-1">
             <span>Max Depth (1–6)</span>
@@ -362,6 +379,40 @@ function clearOverrides() {
           />
           <span>Cul-de-sac on max depth (stop branching with a climax/dead-end at max depth)</span>
         </label>
+
+        <label class="flex items-start gap-2 text-xs text-slate-300 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            :checked="zone.cluster_consistency !== false"
+            class="mt-0.5 accent-emerald-500"
+            @change="updateField('cluster_consistency', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>
+            <span class="font-medium text-slate-200">Cluster consistency</span>
+            <span class="block text-[11px] text-slate-400">
+              Include global adventure theme, root zone theme, and existing cluster scenes (NPCs &amp; items) in generation prompts (uses more tokens; disable for independent generation).
+            </span>
+          </span>
+        </label>
+
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <label class="text-xs font-medium text-slate-300">
+              Generation Instructions (Loose Prompt or Blueprint)
+            </label>
+            <span class="text-[10px] font-mono text-slate-500">Optional</span>
+          </div>
+          <textarea
+            :value="zone.instructions || ''"
+            rows="4"
+            placeholder="E.g. Generate a loot chest in the stable with a 1d+2 sword&#10;or Blueprint syntax:&#10;[Container: IRON_CHEST] Loot Chest&#10;&#10;[Weapon: IRON_SWORD] Iron Sword&#10;location: IRON_CHEST&#10;damage_dice: 1d+2"
+            class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none resize-y"
+            @input="updateField('instructions', ($event.target as HTMLTextAreaElement).value)"
+          />
+          <p class="text-[11px] text-slate-400">
+            Accepts freeform instructions or World-Builder Blueprint blocks ([Scene:], [NPC:], [Container:], [Weapon:], [Item:], ...).
+          </p>
+        </div>
       </template>
 
       <div v-else-if="activeDynamicTab === 'spawns'" class="space-y-4">

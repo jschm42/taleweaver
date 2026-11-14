@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
-import { Plus, Trash2, ChevronDown, ChevronUp, MessageSquareQuote, AlertCircle } from 'lucide-vue-next'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  sanitizeEditorId,
+} from '@/utils/editor_utils'
+import { Plus, Trash2, ChevronDown, ChevronUp, MessageSquareQuote } from 'lucide-vue-next'
 
 export interface SoftRule {
   id: string
@@ -23,17 +30,6 @@ const emit = defineEmits<{
 const rules = computed<SoftRule[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
 const expandedIndex = ref<number | null>(null)
 
-const duplicateIds = computed(() => {
-  const seen = new Set<string>()
-  const duplicates = new Set<string>()
-  for (const rule of rules.value) {
-    const id = (rule.id || '').trim()
-    if (id && seen.has(id)) duplicates.add(id)
-    seen.add(id)
-  }
-  return duplicates
-})
-
 function updateRule(index: number, patch: Partial<SoftRule>) {
   emit(
     'update:modelValue',
@@ -42,7 +38,7 @@ function updateRule(index: number, patch: Partial<SoftRule>) {
 }
 
 function updateId(index: number, raw: string) {
-  updateRule(index, { id: raw.toUpperCase().replace(/[^A-Z0-9_]/g, '_') })
+  updateRule(index, { id: sanitizeEditorId(raw, MAX_EDITOR_ID_LENGTH) })
 }
 
 function updateMaxTriggers(index: number, raw: string) {
@@ -51,9 +47,12 @@ function updateMaxTriggers(index: number, raw: string) {
 }
 
 function addRule() {
-  const slug = Math.random().toString(36).substring(2, 6).toUpperCase()
   const rule: SoftRule = {
-    id: `SOFT_RULE_${rules.value.length + 1}_${slug}`,
+    id: generateEditorId({
+      prefix: EDITOR_ID_PREFIXES.RULE,
+      takenIds: rules.value.map((r) => String(r.id || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     condition: '',
     script: '',
     text: '',
@@ -123,15 +122,18 @@ function toggle(index: number) {
         <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-3">
           <div class="space-y-1">
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Rule ID</label>
-            <input
-              :value="rule.id"
-              type="text"
-              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500/50 outline-none"
-              @input="updateId(index, ($event.target as HTMLInputElement).value)"
+            <EditorIdInput
+              :model-value="rule.id"
+              :prefix="EDITOR_ID_PREFIXES.RULE"
+              :source-name="rule.condition"
+              :taken-ids="rules.filter((_, i) => i !== index).map((r) => String(r.id || ''))"
+              :max-length="MAX_EDITOR_ID_LENGTH"
+              :compact="true"
+              :required="true"
+              placeholder="RULE_FLIRT_KEY"
+              aria-label="Rule ID"
+              @update:model-value="(val) => updateId(index, val)"
             />
-            <span v-if="duplicateIds.has(rule.id)" class="flex items-center gap-1 text-[10px] text-rose-400">
-              <AlertCircle class="w-3 h-3" /> Duplicate ID: rule IDs must be unique within the sequence.
-            </span>
           </div>
           <div class="space-y-1">
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Max Triggers</label>

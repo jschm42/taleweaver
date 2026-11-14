@@ -135,6 +135,17 @@ def _merge_dynamic_teleport_zone(
             if req.get("cul_de_sac") is not None
             else base_zone.get("cul_de_sac_on_max_depth", True)
         ),
+        "instructions": (
+            req["instructions"]
+            if req.get("instructions") is not None
+            else base_zone.get("instructions")
+        ),
+        "cluster_consistency": (
+            req["cluster_consistency"]
+            if req.get("cluster_consistency") is not None
+            else base_zone.get("cluster_consistency", True)
+        ),
+        "root_theme": base_zone.get("root_theme") or base_zone.get("theme"),
     }
     normalized = normalize_dynamic_zone(raw_zone)
     if normalized:
@@ -242,7 +253,15 @@ async def _apply_dynamic_teleport_request(
     return_exit = bool(req.get("return_exit", True))
     has_overrides = any(
         req.get(k) is not None
-        for k in ("max_depth", "danger_level", "max_npcs", "audio_mode", "cul_de_sac")
+        for k in (
+            "max_depth",
+            "danger_level",
+            "max_npcs",
+            "audio_mode",
+            "cul_de_sac",
+            "instructions",
+            "cluster_consistency",
+        )
     )
 
     if matched_exit and not fresh and not has_overrides:

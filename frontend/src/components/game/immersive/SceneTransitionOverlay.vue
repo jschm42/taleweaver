@@ -43,6 +43,7 @@ watch(
 function formatSceneTitle(name?: string | null): string {
   if (!name) return ''
   const trimmed = String(name).trim()
+  if (!trimmed || /^DYN(?:_|\s|$)/i.test(trimmed)) return ''
   if (trimmed.includes('_') || trimmed.includes('-') || /^[A-Z0-9\s_-]+$/.test(trimmed)) {
     return trimmed
       .replace(/[_-]+/g, ' ')

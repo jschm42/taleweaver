@@ -4,6 +4,8 @@ import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
 import type { SpecialAttack, SpecialEffect } from '@/types'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import HardRuleTriggersEditor, { type HardRule } from '@/components/editor/HardRuleTriggersEditor.vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import { EDITOR_ID_PREFIXES, MAX_EDITOR_ID_LENGTH } from '@/utils/editor_utils'
 import {
   AMOUNT_PATTERN,
   CATEGORY_META,
@@ -19,6 +21,7 @@ export type SpecialAttackDraft = SpecialAttack & { effects: SpecialEffect[]; _ke
 const props = defineProps<{
   isProtagonist: boolean
   referenceOptions?: Array<{ id: string; name?: string; type?: string }>
+  takenIds?: Iterable<string>
 }>()
 
 const draft = defineModel<SpecialAttackDraft>({ required: true })
@@ -62,10 +65,20 @@ function validAmount(amount: string): boolean {
       <span class="text-slate-400 font-bold">Name</span>
       <input v-model="draft.name" :class="inputClass" />
     </label>
-    <label class="space-y-1">
+    <div class="space-y-1">
       <span class="text-slate-400 font-bold">ID</span>
-      <input v-model="draft.id" :class="[inputClass, 'font-mono uppercase']" />
-    </label>
+      <EditorIdInput
+        v-model="draft.id"
+        :prefix="EDITOR_ID_PREFIXES.ATTACK"
+        :source-name="draft.name"
+        :taken-ids="takenIds"
+        :max-length="MAX_EDITOR_ID_LENGTH"
+        :compact="true"
+        :required="true"
+        placeholder="ATK_CLEAVE"
+        aria-label="Special Attack ID"
+      />
+    </div>
     <label class="space-y-1 md:col-span-2">
       <span class="text-slate-400 font-bold">Description</span>
       <input v-model="draft.description" :class="inputClass" />

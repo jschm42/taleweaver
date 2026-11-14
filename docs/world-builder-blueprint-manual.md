@@ -512,10 +512,13 @@ danger: medium        # peaceful | low | medium | high | deadly | random
 max_npcs: 2           # optional per-exit override (0..5)
 audio: generate       # optional per-exit override: inherit | empty | generate
 cul_de_sac: yes
+cluster_consistency: yes # optional: keep scenes/NPCs/items consistent across the cluster (default yes)
+instructions: |         # optional: freeform prompt or Blueprint blocks inside a fenced block
+  Generate a loot chest in the first alcove holding an iron sword (1d+2 damage).
 allowed_entities: hostile_npc, container, consumable, scenery
 ```
 
-You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets.
+You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster.
 
 ## 7. Strict Adherence or Creative Expansion
 

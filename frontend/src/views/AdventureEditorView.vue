@@ -60,8 +60,13 @@ import {
   formatBytes,
   makeSafeFilename,
   getImageExtension,
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
   itemTypePrefix,
   buildPrefixedEditorId,
+  buildDynamicPlaceholderSceneId,
+  generateEditorId,
+  isValidEditorId,
   sanitizeEditorIdToken,
 } from '@/utils/editor_utils'
 
@@ -278,19 +283,11 @@ function openCreateNpc(targetSceneId?: string) {
   isCreateEntityMode.value = true
   editEntityContext.value = { type: 'npc', id: 'NEW_NPC' }
 
-  let candidateId = ''
-  const takenIds = new Set(referenceOptions.value.map((entry) => String(entry.id || '').toUpperCase()))
-  for (let i = 0; i < 20; i++) {
-    const randomSuffix = Math.random().toString(36).slice(2, 8).toUpperCase()
-    const testId = `NPC_${randomSuffix}`
-    if (!takenIds.has(testId)) {
-      candidateId = testId
-      break
-    }
-  }
-  if (!candidateId) {
-    candidateId = `NPC_${Date.now().toString(36).toUpperCase()}`
-  }
+  const takenIds = referenceOptions.value.map((entry) => String(entry.id || '').toUpperCase())
+  const candidateId = generateEditorId({
+    prefix: EDITOR_ID_PREFIXES.NPC,
+    takenIds,
+  })
 
   editForm.value = {
     name: 'New NPC',
@@ -372,8 +369,8 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
   createEntityType.value = 'object'
   editEntityContext.value = { type: 'object', id: `NEW_${String(itemType).toUpperCase()}` }
   const prefix = itemTypePrefix(String(itemType).toUpperCase())
-  const randomSuffix = Math.random().toString(36).slice(2, 8).toUpperCase()
-  const defaultId = `${sanitizeEditorIdToken(prefix)}${randomSuffix}`
+  const takenIds = referenceOptions.value.map((entry) => String(entry.id || '').toUpperCase())
+  const defaultId = generateEditorId({ prefix, takenIds })
 
   editForm.value = {
     name: 'New Item',
@@ -1234,13 +1231,16 @@ async function saveEntityText(data: any) {
       return
     }
 
-    let candidateId = String(data.entity_id || '').trim().toUpperCase()
+    const candidateId = String(data.entity_id || '').trim().toUpperCase()
     if (!candidateId) {
       addNotification('Entity ID is required.', 'error')
       return
     }
-    if (candidateId.length > 30) {
-      addNotification('Entity ID must be 30 characters or less.', 'error')
+    if (!isValidEditorId(candidateId, MAX_EDITOR_ID_LENGTH)) {
+      addNotification(
+        `Entity ID must use uppercase A-Z, 0-9, or _ only (${MAX_EDITOR_ID_LENGTH} chars max).`,
+        'error',
+      )
       return
     }
 
@@ -1459,6 +1459,17 @@ async function saveEntityText(data: any) {
   try {
     const oldId = editEntityContext.value.id
     const newId = data.entity_id ? String(data.entity_id).trim().toUpperCase() : ''
+    if (
+      newId &&
+      newId !== String(oldId || '').trim().toUpperCase() &&
+      !isValidEditorId(newId, MAX_EDITOR_ID_LENGTH)
+    ) {
+      addNotification(
+        `New entity ID must use uppercase A-Z, 0-9, or _ only (${MAX_EDITOR_ID_LENGTH} chars max).`,
+        'error',
+      )
+      return
+    }
 
     await entityService.saveEntityText(props.adventureId, {
       target_type: editEntityContext.value.type,
@@ -2310,6 +2321,10 @@ async function saveCreateScene() {
     createSceneFormError.value = 'Scene ID is required.'
     return
   }
+  if (!isValidEditorId(sceneId, MAX_EDITOR_ID_LENGTH)) {
+    createSceneFormError.value = `Scene ID must use uppercase A-Z, 0-9, or _ only (${MAX_EDITOR_ID_LENGTH} chars max).`
+    return
+  }
   if (!name) {
     createSceneFormError.value = 'Scene name is required.'
     return
@@ -2632,7 +2647,16 @@ function openEditExitModal(exitId: string) {
     on_unlock_success_text: String(exit.on_unlock_success_text || ''),
     on_unlock_failure_script: String(exit.on_unlock_failure_script || ''),
     on_unlock_failure_text: String(exit.on_unlock_failure_text || ''),
-    dynamic_zone: exit.dynamic_zone ? { ...exit.dynamic_zone } : null,
+    dynamic_zone: exit.dynamic_zone
+      ? {
+          ...exit.dynamic_zone,
+          instructions: exit.dynamic_zone.instructions ?? '',
+          cluster_consistency:
+            exit.dynamic_zone.cluster_consistency !== undefined
+              ? Boolean(exit.dynamic_zone.cluster_consistency)
+              : true,
+        }
+      : null,
   }
   showExitModal.value = true
 
@@ -2643,11 +2667,11 @@ async function saveExitModal(formData: any) {
   const isDynamic = Boolean(formData.dynamic_zone)
   let toSceneId = String(formData.to_scene_id || '').trim()
   if (isDynamic && (!toSceneId || !toSceneId.startsWith('DYN_'))) {
-    const cleanZone = String(formData.dynamic_zone?.zone_id || 'zone')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'ZONE'
-    toSceneId = `DYN_${cleanZone}_D${Number(formData.dynamic_zone?.depth || 1)}_1`
+    toSceneId = buildDynamicPlaceholderSceneId(
+      formData.dynamic_zone?.zone_id || 'ZONE_WILD',
+      Number(formData.dynamic_zone?.depth || 1),
+      1,
+    )
   }
   const label = String(formData.label || '').trim()
   const lockDescription = String(formData.lock_description || '').trim()

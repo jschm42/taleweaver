@@ -273,6 +273,10 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "allowed_entity_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
     "return_direction": FieldSpec("dynamic_zone.return_exit_direction"),
     "return_exit_direction": FieldSpec("dynamic_zone.return_exit_direction"),
+    "instructions": FieldSpec("dynamic_zone.instructions"),
+    "zone_instructions": FieldSpec("dynamic_zone.instructions"),
+    "cluster_consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")

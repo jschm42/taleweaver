@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
-import { Plus, Trash2, ChevronDown, ChevronUp, Code2, AlertCircle } from 'lucide-vue-next'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  sanitizeEditorId,
+} from '@/utils/editor_utils'
+import { Plus, Trash2, ChevronDown, ChevronUp, Code2 } from 'lucide-vue-next'
 
 export interface SequenceScript {
   id: string
@@ -47,17 +54,6 @@ const TRIGGERS: { value: string; label: string; target: TargetKind }[] = [
 const scripts = computed<SequenceScript[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
 const expandedIndex = ref<number | null>(null)
 
-const duplicateIds = computed(() => {
-  const seen = new Set<string>()
-  const duplicates = new Set<string>()
-  for (const script of scripts.value) {
-    const id = (script.id || '').trim()
-    if (id && seen.has(id)) duplicates.add(id)
-    seen.add(id)
-  }
-  return duplicates
-})
-
 function targetKind(trigger: string): TargetKind {
   return TRIGGERS.find((t) => t.value === trigger)?.target ?? null
 }
@@ -79,7 +75,7 @@ function updateScript(index: number, patch: Partial<SequenceScript>): void {
 }
 
 function updateId(index: number, raw: string): void {
-  updateScript(index, { id: raw.toUpperCase().replace(/[^A-Z0-9_]/g, '_') })
+  updateScript(index, { id: sanitizeEditorId(raw, MAX_EDITOR_ID_LENGTH) })
 }
 
 function updateTrigger(index: number, trigger: string): void {
@@ -89,9 +85,12 @@ function updateTrigger(index: number, trigger: string): void {
 }
 
 function addScript(): void {
-  const slug = Math.random().toString(36).substring(2, 6).toUpperCase()
   const script: SequenceScript = {
-    id: `SEQ_SCRIPT_${scripts.value.length + 1}_${slug}`,
+    id: generateEditorId({
+      prefix: EDITOR_ID_PREFIXES.SCRIPT,
+      takenIds: scripts.value.map((s) => String(s.id || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     name: '',
     trigger: 'on_interact',
     target_id: '',
@@ -163,15 +162,18 @@ function toggle(index: number): void {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="space-y-1">
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Script ID</label>
-            <input
-              :value="script.id"
-              type="text"
-              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-cyan-500/50 outline-none"
-              @input="updateId(index, ($event.target as HTMLInputElement).value)"
+            <EditorIdInput
+              :model-value="script.id"
+              :prefix="EDITOR_ID_PREFIXES.SCRIPT"
+              :source-name="script.name || ''"
+              :taken-ids="scripts.filter((_, i) => i !== index).map((s) => String(s.id || ''))"
+              :max-length="MAX_EDITOR_ID_LENGTH"
+              :compact="true"
+              :required="true"
+              placeholder="SCR_TAMPER_BOMB"
+              aria-label="Script ID"
+              @update:model-value="(val) => updateId(index, val)"
             />
-            <span v-if="duplicateIds.has(script.id)" class="flex items-center gap-1 text-[10px] text-rose-400">
-              <AlertCircle class="w-3 h-3" /> Duplicate ID: script IDs must be unique within the sequence.
-            </span>
           </div>
           <div class="space-y-1">
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Name (optional)</label>

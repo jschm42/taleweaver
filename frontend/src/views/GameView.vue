@@ -1076,6 +1076,36 @@ const formatSceneIdToTitle = (rawId?: string | null): string => {
   return trimmed
 }
 
+const findMapNode = (sceneId?: string | null): any | null => {
+  if (!sceneId) return null
+  const raw = String(sceneId).trim()
+  if (!raw) return null
+  const upper = raw.toUpperCase()
+  const safe = raw.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+  const rawNodes = mapData.value?.nodes
+  if (!rawNodes) return null
+  if (Array.isArray(rawNodes)) {
+    return (
+      rawNodes.find((n: any) => {
+        const nid = String(n?.id || n?.key || '').trim().toUpperCase()
+        return nid === upper || nid === safe
+      }) || null
+    )
+  }
+  if (typeof rawNodes === 'object') {
+    const dict = rawNodes as Record<string, any>
+    return dict[safe] || dict[upper] || dict[raw] || null
+  }
+  return null
+}
+
+const isDynamicSceneId = (sceneId?: string | null): boolean => {
+  const raw = String(sceneId || '').trim()
+  if (!raw) return false
+  if (/^DYN_/i.test(raw)) return true
+  return Boolean(findMapNode(raw)?.is_dynamic)
+}
+
 const resolveSceneName = (sceneId?: string | null): string => {
   if (!sceneId) return ''
   const raw = String(sceneId).trim()
@@ -1085,20 +1115,18 @@ const resolveSceneName = (sceneId?: string | null): string => {
 
   // 1. Check in nodes dictionary (AdventureLogic.get_all_scene_metadata)
   const node = nodes.value?.[safe] || nodes.value?.[upper] || nodes.value?.[raw]
-  if (node?.label && String(node.label).trim()) return String(node.label).trim()
-  if (node?.name && String(node.name).trim()) return String(node.name).trim()
+  const nodeLabel = String(node?.label || node?.name || '').trim()
+  if (nodeLabel && nodeLabel !== '?' && !node?.is_unknown) return nodeLabel
 
-  // 2. Check in mapData.nodes
-  const mapNodes = Array.isArray(mapData.value?.nodes) ? mapData.value.nodes : []
-  const found = mapNodes.find((n: any) => {
-    const nid = String(n.id || n.key || '').trim().toUpperCase()
-    return nid === upper || nid === safe
-  })
-  if (found?.label && String(found.label).trim() && found.label !== '?') {
-    return String(found.label).trim()
-  }
+  // 2. Check in mapData.nodes (supports both dict and array forms)
+  const found = findMapNode(raw)
+  const foundLabel = found && !found.is_unknown ? String(found.label || '').trim() : ''
+  if (foundLabel && foundLabel !== '?') return foundLabel
 
-  // 3. Fallback: Format the ID to Title Case
+  // Never display raw/generated DYN_* IDs in travel UI before materialization
+  if (isDynamicSceneId(raw)) return ''
+
+  // 3. Fallback: Format static scene ID to Title Case
   return formatSceneIdToTitle(raw)
 }
 
@@ -1112,24 +1140,48 @@ const resolveSceneImage = (sceneId?: string | null): string | null => {
   const node = nodes.value?.[safe] || nodes.value?.[upper] || nodes.value?.[raw]
   if (node?.image_url) return String(node.image_url)
 
-  const mapNodes = Array.isArray(mapData.value?.nodes) ? mapData.value.nodes : []
-  const found = mapNodes.find((n: any) => {
-    const nid = String(n.id || n.key || '').trim().toUpperCase()
-    return nid === upper || nid === safe
-  })
+  const found = findMapNode(raw)
   return found?.image_url ? String(found.image_url) : null
 }
 
 const currentSceneName = computed(() => {
   const curId = sheet.value?.scene_id || sheet.value?.current_scene_id || sheet.value?.current_scene
   if (!curId) return 'Unknown Location'
-  return resolveSceneName(curId)
+  return resolveSceneName(curId) || 'New Location'
 })
+
+watch(
+  nodes,
+  () => {
+    const active = sceneTransitionTarget.value
+    if (!active?.targetSceneId) return
+    const resolvedName = resolveSceneName(active.targetSceneId)
+    const resolvedImage = resolveSceneImage(active.targetSceneId)
+    if (resolvedName && resolvedName !== active.targetSceneName) {
+      sceneTransitionTarget.value = {
+        ...active,
+        targetSceneName: resolvedName,
+        targetSceneImage: resolvedImage ?? active.targetSceneImage,
+      }
+    } else if (resolvedImage && resolvedImage !== active.targetSceneImage) {
+      sceneTransitionTarget.value = {
+        ...active,
+        targetSceneImage: resolvedImage,
+      }
+    }
+  },
+  { deep: true },
+)
 
 const traverseSceneExit = async (exit: any, exitRef: string) => {
   exitTraversalBusy.value = exitRef
   const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim()
-  const targetSceneName = exit?.target_scene_name || resolveSceneName(targetId) || 'New Location'
+  const knownName = resolveSceneName(targetId)
+  const safeTargetName =
+    (exit?.target_known && exit?.target_scene_name && !/^DYN_/i.test(String(exit.target_scene_name).trim())
+      ? exit.target_scene_name
+      : '') || knownName
+  const targetSceneName = safeTargetName || 'New Location'
   sceneTransitionTarget.value = {
     label: exitDisplayName(exit),
     targetSceneName,

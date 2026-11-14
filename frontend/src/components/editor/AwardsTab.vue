@@ -2,7 +2,14 @@
 import { computed, ref } from 'vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
-import { formatObjectIds } from '@/utils/editor_utils'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  formatObjectIds,
+  generateEditorId,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 import { ShieldCheck, Package, MapPin, Swords } from 'lucide-vue-next'
 import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
 import silverTrophy from '@/assets/svg/silver-award-trophy.svg'
@@ -112,7 +119,11 @@ const modalAward = ref<any>({
 function openAddModal() {
   isNewAward.value = true
   modalAward.value = {
-    key: 'AWARD_' + Math.random().toString(36).substring(2, 11).toUpperCase(),
+    key: generateEditorId({
+      prefix: EDITOR_ID_PREFIXES.AWARD,
+      takenIds: awards.value.map((a) => String(a.key || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     title: '',
     description: '',
     tier: 'bronze',
@@ -151,6 +162,18 @@ function saveAward() {
   if (!(modalAward.value.title || '').trim() || !(modalAward.value.description || '').trim()) {
     emit('notify', 'Award title and description are required.', 'error')
     return
+  }
+  const normalizedKey = String(modalAward.value.key || '').trim().toUpperCase()
+  if (isNewAward.value) {
+    if (!isValidEditorId(normalizedKey, MAX_EDITOR_ID_LENGTH)) {
+      emit('notify', `Award key must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`, 'error')
+      return
+    }
+    if (awards.value.some((a) => String(a.key || '').toUpperCase() === normalizedKey)) {
+      emit('notify', `Award key "${normalizedKey}" already exists.`, 'error')
+      return
+    }
+    modalAward.value.key = normalizedKey
   }
   const updated = [...awards.value]
   if (isNewAward.value) {
@@ -253,7 +276,19 @@ function confirmDeleteAward() {
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="space-y-2">
                   <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Key</label>
-                  <input v-model="modalAward.key" :disabled="!isNewAward" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white disabled:opacity-60 outline-none" />
+                  <EditorIdInput
+                    v-model="modalAward.key"
+                    :prefix="EDITOR_ID_PREFIXES.AWARD"
+                    :source-name="modalAward.title"
+                    :taken-ids="awards.map((a) => String(a.key || ''))"
+                    :original-id="isNewAward ? null : modalAward.key"
+                    :disabled="!isNewAward"
+                    :max-length="MAX_EDITOR_ID_LENGTH"
+                    :compact="true"
+                    :required="true"
+                    placeholder="AWD_MASTER_RUINS"
+                    aria-label="Award Key"
+                  />
                 </div>
                 <div class="sm:col-span-2 space-y-2">
                   <div class="flex items-center justify-between">

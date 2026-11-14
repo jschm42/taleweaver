@@ -3,7 +3,11 @@ import { ref, computed } from 'vue'
 import { entityService } from '@/services/entityService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
-import { formatObjectIds } from '@/utils/editor_utils'
+import {
+  MAX_EDITOR_ID_LENGTH,
+  formatObjectIds,
+  generateEditorId,
+} from '@/utils/editor_utils'
 import { ShieldCheck, Package, MapPin, Swords } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -150,7 +154,12 @@ async function autoGenerateNewQuest() {
     )
     isNewQuest.value = true
     modalQuest.value = {
-      id: 'quest_' + Math.random().toString(36).substring(2, 11),
+      id: generateEditorId({
+        prefix: 'QUEST_',
+        sourceName: result.title || '',
+        takenIds: sideQuests.value.map((q: any) => String(q.id || '')),
+        maxLen: MAX_EDITOR_ID_LENGTH,
+      }),
       title: result.title,
       description: result.description,
       goal: '',
@@ -175,7 +184,11 @@ async function autoGenerateNewQuest() {
 function openAddModal() {
   isNewQuest.value = true
   modalQuest.value = {
-    id: 'quest_' + Math.random().toString(36).substring(2, 11),
+    id: generateEditorId({
+      prefix: 'QUEST_',
+      takenIds: sideQuests.value.map((q: any) => String(q.id || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     title: '',
     description: '',
     goal: '',

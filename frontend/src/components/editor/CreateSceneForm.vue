@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 
 const props = defineProps<{
   isSaving: boolean
@@ -17,24 +23,18 @@ const description = ref('')
 const formError = ref('')
 const sceneNameInputRef = ref<HTMLInputElement | null>(null)
 
-watch(sceneId, (newVal) => {
-  sceneId.value = newVal.toUpperCase()
-})
+const existingSceneIds = computed(() =>
+  (props.editorScenes || []).map((scene) => String(scene.id || '').toUpperCase()),
+)
 
 const idError = computed(() => {
   const val = sceneId.value.trim()
   if (!val) return ''
-  
-  const idRegex = /^[A-Z0-9_]+$/
-  if (!idRegex.test(val)) {
-    return 'ID must contain only uppercase letters, digits, and underscores.'
+  if (!isValidEditorId(val, MAX_EDITOR_ID_LENGTH)) {
+    return `ID must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`
   }
 
-  if (val.length > 30) {
-    return 'ID must be 30 characters or less.'
-  }
-
-  const takenIds = new Set((props.editorScenes || []).map((scene) => String(scene.id || '').toUpperCase()))
+  const takenIds = new Set(existingSceneIds.value)
   if (takenIds.has(val.toUpperCase())) {
     return `ID "${val}" already exists in this adventure.`
   }
@@ -95,26 +95,22 @@ function submit() {
     </div>
 
     <div class="space-y-4">
-      <!-- Scene ID (Pflichtfeld) -->
+      <!-- Scene ID (required) -->
       <div>
-        <div class="flex justify-between items-center mb-1.5">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
-            Scene ID <span class="text-red-400">*</span>
-          </label>
-          <span :class="['text-[10px] font-bold tracking-widest', (sceneId || '').length > 30 ? 'text-red-500' : 'text-emerald-500/50']">
-            {{ (sceneId || '').length }} / 30
-          </span>
-        </div>
-        <input
+        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
+          Scene ID <span class="text-red-400">*</span>
+        </label>
+        <EditorIdInput
           v-model="sceneId"
-          type="text"
-          maxlength="30"
-          placeholder="e.g. DARK_FOREST"
-          class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-sm text-white font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-2 transition-all uppercase"
-          :class="idError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/10 focus:ring-emerald-500/50 focus:border-emerald-500'"
+          :prefix="EDITOR_ID_PREFIXES.SCENE"
+          :source-name="name"
+          :taken-ids="existingSceneIds"
+          :max-length="MAX_EDITOR_ID_LENGTH"
+          :required="true"
+          placeholder="SCENE_DARK_FOREST"
+          aria-label="Scene ID"
           @keydown.enter="submit"
         />
-        <p v-if="idError" class="text-xs font-bold text-red-400 mt-1.5">{{ idError }}</p>
       </div>
 
       <!-- Scene Name (Pflichtfeld) -->

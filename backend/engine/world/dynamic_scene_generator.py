@@ -12,8 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.routes.adventures.turn_context_helpers import resolve_model_settings
 from backend.core.api_keys import has_api_key
 from backend.core.llm_router import GameMasterLLM
+from backend.engine.world.dynamic_instructions_helper import (
+    adjust_plan_for_instructions,
+    apply_instructions_backfill,
+    build_cluster_consistency_prompt_section,
+    build_instructions_prompt_section,
+    ensure_object_item_stats,
+    select_planned_objects,
+)
 from backend.engine.world.dynamic_scene_schemas import (
-    DynamicGeneratedObject,
     DynamicGeneratedScenePayload,
     DynamicInterludeQuotePayload,
     normalize_dynamic_zone,
@@ -182,15 +189,6 @@ _NPC_SLOT_TYPES: tuple[tuple[str, str], ...] = (
     ("animal", "ANIMAL"),
     ("monster", "MONSTER"),
 )
-_WEARABLE_SLOT_FALLBACKS: tuple[str, ...] = ("Head", "Neck", "Chest", "Hands", "Ring", "Feet")
-_WEARABLE_STAT_ATTRS: tuple[str, ...] = (
-    "stat_modifier_strength",
-    "stat_modifier_dexterity",
-    "stat_modifier_intelligence",
-    "stat_modifier_wisdom",
-    "stat_modifier_charisma",
-    "stat_modifier_armor_class",
-)
 
 
 def _roll_npc_slots(
@@ -280,34 +278,22 @@ def _roll_scene_plan(
     if allow_switch:
         allowed_item_types.append("SWITCH")
 
-    return {
-        "target_npcs": len(npc_slots),
-        "npc_slots": npc_slots,
-        "npc_type_caps": npc_type_caps,
-        "allow_hostile": effective_danger != "peaceful" and spawn_chances["enemy"] > 0,
-        "target_objects": target_objects,
-        "allow_container": allow_container,
-        "allow_switch": allow_switch,
-        "allow_items": allow_items,
-        "allowed_item_types": allowed_item_types,
-        "is_climax": is_climax,
-    }
-
-
-def _ensure_object_item_stats(obj: DynamicGeneratedObject) -> None:
-    """Guarantee gear/consumable objects carry usable stats while leaving trinkets as flavor."""
-    if obj.item_type == "CONSUMABLE":
-        if obj.hp_change == 0 and obj.stamina_change == 0 and obj.mana_change == 0:
-            obj.hp_change = 15
-        return
-    if obj.item_type == "WEARABLE":
-        if not obj.wearable_slots:
-            obj.wearable_slots = [random.choice(_WEARABLE_SLOT_FALLBACKS)]
-        if not any(getattr(obj, attr, 0) != 0 for attr in _WEARABLE_STAT_ATTRS):
-            setattr(obj, random.choice(_WEARABLE_STAT_ATTRS), 1)
-        return
-    if obj.item_type == "WEAPON" and not str(obj.damage_dice or "").strip():
-        obj.damage_dice = "1d6"
+    return adjust_plan_for_instructions(
+        {
+            "target_npcs": len(npc_slots),
+            "npc_slots": npc_slots,
+            "npc_type_caps": npc_type_caps,
+            "allow_hostile": effective_danger != "peaceful" and spawn_chances["enemy"] > 0,
+            "target_objects": target_objects,
+            "allow_container": allow_container,
+            "allow_switch": allow_switch,
+            "allow_items": allow_items,
+            "allowed_item_types": allowed_item_types,
+            "is_climax": is_climax,
+            "has_instructions": bool(str(zone.get("instructions") or "").strip()),
+        },
+        zone,
+    )
 
 
 def _filter_planned_npcs(
@@ -337,12 +323,20 @@ def _filter_planned_npcs(
 def _apply_scene_plan_to_payload(
     payload: DynamicGeneratedScenePayload,
     scene_plan: dict[str, Any],
+    zone: Optional[dict[str, Any]] = None,
+    cluster_context: Optional[list[dict[str, Any]]] = None,
 ) -> None:
     """Enforce rolled NPC/object limits, per-type caps, hostility, and item stats."""
+    if zone:
+        apply_instructions_backfill(payload, zone, scene_plan, cluster_context)
     payload.npcs = _filter_planned_npcs(list(payload.npcs or []), scene_plan)
 
-    target_objects = int(scene_plan["target_objects"])
-    sliced_objects = list(payload.objects or [])[:target_objects]
+    max_cap = 5
+    sliced_objects = select_planned_objects(
+        list(payload.objects or []),
+        int(scene_plan["target_objects"]),
+        max_cap=max_cap,
+    )
     allow_switch = bool(scene_plan["allow_switch"])
     allow_container = bool(scene_plan["allow_container"])
     seen_switch = False
@@ -355,7 +349,7 @@ def _apply_scene_plan_to_payload(
         elif obj.item_type == "CONTAINER":
             obj.item_type = "STANDARD" if (not allow_container or seen_container) else "CONTAINER"
             seen_container = seen_container or (obj.item_type == "CONTAINER")
-        _ensure_object_item_stats(obj)
+        ensure_object_item_stats(obj)
 
     payload.objects = sliced_objects
 
@@ -373,6 +367,7 @@ def _build_scene_prompts(
     effective_danger: str,
     max_npcs: int,
     scene_plan: dict[str, Any],
+    cluster_context: Optional[list[dict[str, Any]]] = None,
 ) -> tuple[str, str]:
     depth = int(zone.get("depth") or 1)
     max_depth = int(zone.get("max_depth") or 3)
@@ -409,11 +404,13 @@ def _build_scene_prompts(
         if target_objects <= 0
         else (
             f"\n- Spawn 1 to {target_objects} object(s) using ONLY these item_type values: {allowed_item_types}. "
-            "Do NOT spawn a CONTAINER or SWITCH unless listed there, and at most 1 CONTAINER or SWITCH per scene.\n"
+            "Do NOT spawn a CONTAINER or SWITCH unless listed there, and at most 1 CONTAINER or SWITCH per scene. "
+            "If you place item(s) inside a CONTAINER, include both the CONTAINER and each child object in `objects`, "
+            "and list the child object ID(s) in the container's `inventory` field.\n"
             "- MIXED LOOT & ITEM STATS: Mix useful gear/consumables with occasional flavor trinkets (STANDARD/READABLE with 0 stats). "
             "For CONSUMABLE items set hp_change, stamina_change, or mana_change (e.g. 10 to 30). "
             "For WEARABLE items set wearable_slots (e.g. ['Ring'], ['Neck'], ['Head'], ['Chest'], ['Hands'], ['Feet']) and 1-2 light stat modifiers (+1 or +2 on strength/dexterity/intelligence/wisdom/charisma/armor_class). "
-            "For WEAPON items set damage_dice (e.g. '1d6' or '1d8') and optional +1 stat modifier."
+            "For WEAPON items set damage_dice (e.g. '1d6', '1d+2', or '1d8') and optional +1 stat modifier."
         )
     )
     peaceful_rule = (
@@ -438,6 +435,9 @@ def _build_scene_prompts(
         "- Keep entity IDs short uppercase alphanumeric slugs (e.g. RUSTY_PICKAXE, CAVE_SPIDER).\n"
         f"{npc_rule}{object_rule}{peaceful_rule}{speech_rule}"
     )
+    cluster_section = build_cluster_consistency_prompt_section(zone, cluster_context)
+    instructions_section = build_instructions_prompt_section(zone, cluster_context)
+    extra_sections = "\n\n".join(part for part in (cluster_section, instructions_section) if part)
     user_prompt = (
         f"Adventure Title: {adventure_title}\n"
         f"Adventure Tone: {adventure_tone or 'Atmospheric'}\n"
@@ -449,8 +449,9 @@ def _build_scene_prompts(
         f"Danger Level: {effective_danger}\n"
         f"Max NPCs Cap: {max_npcs} (Rolled target: {target_npcs})\n"
         f"Allowed Entity Types: {allowed}\n"
-        f"{depth_rule}"
-    )
+        f"{depth_rule}\n"
+        f"{extra_sections}"
+    ).strip()
     return system_prompt, user_prompt
 
 
@@ -506,6 +507,7 @@ async def generate_dynamic_scene_payload(
     language: str = "English",
     max_npcs_default: int = 2,
     generation_config: Optional[dict[str, Any]] = None,
+    cluster_context: Optional[list[dict[str, Any]]] = None,
 ) -> DynamicGeneratedScenePayload:
     """Generate a structured DynamicGeneratedScenePayload via LLM with deterministic fallback."""
     del db
@@ -528,7 +530,9 @@ async def generate_dynamic_scene_payload(
 
     if not _has_provider_credentials(user, provider):
         logger.info("No LLM credentials for provider %s; using fallback dynamic scene.", provider)
-        return _build_fallback_scene_payload(exit_label, zone)
+        fallback = _build_fallback_scene_payload(exit_label, zone)
+        apply_instructions_backfill(fallback, zone, {}, cluster_context)
+        return fallback
 
     scene_plan = _roll_scene_plan(
         zone,
@@ -548,6 +552,7 @@ async def generate_dynamic_scene_payload(
         effective_danger=effective_danger,
         max_npcs=max_npcs,
         scene_plan=scene_plan,
+        cluster_context=cluster_context,
     )
 
     try:
@@ -562,7 +567,7 @@ async def generate_dynamic_scene_payload(
             operation="dynamic_scene.generate",
             phase="expansion",
         )
-        _apply_scene_plan_to_payload(payload, scene_plan)
+        _apply_scene_plan_to_payload(payload, scene_plan, zone, cluster_context)
         payload.npcs = payload.npcs[:max_npcs]
         if effective_danger == "peaceful":
             for npc in payload.npcs:

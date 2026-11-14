@@ -122,7 +122,7 @@ TW_API_REFERENCE = (
     "inventory (list of item dicts), item_ids, take_item(item_id) (moves an existing item from "
     "wherever it is into the inventory), drop_item(item_id, scene_id=None), "
     "transfer_item(item_id, target_id) (to an NPC or a container in the scene)\n"
-    "- tw.scene: id, npcs, items | teleport(scene_id) | teleport_dynamic(theme_or_zone_id, theme=None, *, zone_id=None, max_depth=3, danger_level='medium', max_npcs=None, audio_mode=None, cul_de_sac=True, return_exit=True, label='Teleporter', fresh=False)\n"
+    "- tw.scene: id, npcs, items | teleport(scene_id) | teleport_dynamic(theme_or_zone_id, theme=None, *, zone_id=None, max_depth=3, danger_level='medium', max_npcs=None, audio_mode=None, cul_de_sac=True, instructions=None, cluster_consistency=None, return_exit=True, label='Teleporter', fresh=False)\n"
     "- tw.exits: is_locked(from_scene_id, to_scene_id), lock(from_scene_id, to_scene_id, reason), "
     "unlock(from_scene_id, to_scene_id)  (ALWAYS pass the two scene IDs of the exit)\n"
     "- tw.npcs / tw.objects (alias tw.items): get(id), exists(id), say(id, text), move(id, scene_id), "

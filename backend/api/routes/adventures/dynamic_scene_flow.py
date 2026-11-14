@@ -13,6 +13,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.dynamic_cluster_context import (
+    collect_cluster_context,
+    link_generated_container_inventories,
+    normalize_match_token,
+)
 from backend.api.routes.adventures.dynamic_scene_media import (
     configure_scene_audio,
     extract_tone_text,
@@ -292,6 +297,7 @@ def _persist_generated_scene_entities(
             child_zone = {
                 **zone,
                 "depth": int(zone["depth"]) + 1,
+                "root_theme": zone.get("root_theme") or zone["theme"],
                 "theme": child_exit.theme_hint or zone["theme"],
             }
             db.add(
@@ -339,7 +345,9 @@ def _persist_generated_scene_entities(
         )
 
     spawned_objects: list[dict[str, Any]] = []
-    for idx, obj in enumerate(payload.objects[:3]):
+    persisted_objects = list(payload.objects[:5])
+    raw_id_to_entity: dict[str, WorldEntity] = {}
+    for idx, obj in enumerate(persisted_objects):
         obj_entity = _build_object_entity(
             session_id=state.session_id,
             target_id=target_id,
@@ -347,6 +355,8 @@ def _persist_generated_scene_entities(
             image_url=(object_images or {}).get(idx),
         )
         db.add(obj_entity)
+        raw_id_to_entity[normalize_match_token(obj.id)] = obj_entity
+        raw_id_to_entity.setdefault(normalize_match_token(obj.name), obj_entity)
         spawned_objects.append(
             {
                 "id": obj_entity.id,
@@ -360,6 +370,7 @@ def _persist_generated_scene_entities(
                 "damage_dice": obj.damage_dice,
             }
         )
+    link_generated_container_inventories(persisted_objects, raw_id_to_entity)
 
     entity_states = dict(state.entity_states or {})
     dyn_meta = dict(entity_states.get(_DYNAMIC_ZONE_META_KEY) or {})
@@ -428,6 +439,11 @@ async def materialize_dynamic_scene_for_exit(
     tone_text = extract_tone_text(adventure)
     origin_name = origin_scene.label if origin_scene else world_exit.from_scene_id
     origin_desc = origin_scene.description if origin_scene else ""
+    cluster_context = (
+        await collect_cluster_context(db, state, zone["zone_id"], exclude_scene_id=target_id)
+        if zone.get("cluster_consistency", True)
+        else None
+    )
 
     scene_task = asyncio.create_task(
         generate_dynamic_scene_payload(
@@ -445,6 +461,7 @@ async def materialize_dynamic_scene_for_exit(
             language=language or adventure.language or "English",
             max_npcs_default=int(dyn_cfg.get("max_npcs", 2)),
             generation_config=dyn_cfg,
+            cluster_context=cluster_context,
         )
     )
 

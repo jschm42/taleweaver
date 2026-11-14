@@ -3,6 +3,13 @@ import { ref, computed } from 'vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import SoftRulesEditor from '@/components/editor/SoftRulesEditor.vue'
 import SequenceScriptsEditor from '@/components/editor/SequenceScriptsEditor.vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 import {
   Plus,
   Trash2,
@@ -142,9 +149,12 @@ function openAddModal() {
   isNewSequence.value = true
   activeModalTab.value = 'general'
   const nextOrder = sequences.value.length + 1
-  const randSlug = Math.random().toString(36).substring(2, 8).toUpperCase()
   modalSequence.value = {
-    id: `SEQ_${nextOrder}_${randSlug}`,
+    id: generateEditorId({
+      prefix: EDITOR_ID_PREFIXES.SEQUENCE,
+      takenIds: sequences.value.map((s) => String(s.id || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     order: nextOrder,
     title: '',
     description: '',
@@ -202,6 +212,18 @@ function saveSequence() {
   if (!modalSequence.value.title.trim()) {
     emit('notify', 'Sequence title is required.', 'error')
     return
+  }
+  if (isNewSequence.value) {
+    const seqId = String(modalSequence.value.id || '').trim().toUpperCase()
+    if (!isValidEditorId(seqId, MAX_EDITOR_ID_LENGTH)) {
+      emit('notify', `Sequence ID must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`, 'error')
+      return
+    }
+    if (sequences.value.some((s) => String(s.id || '').toUpperCase() === seqId)) {
+      emit('notify', `A sequence with ID "${seqId}" already exists.`, 'error')
+      return
+    }
+    modalSequence.value.id = seqId
   }
   const softRules: any[] = modalSequence.value.soft_rules || []
   const softRuleIds = softRules.map((rule) => String(rule.id || '').trim())
@@ -555,6 +577,23 @@ function confirmDelete() {
           <!-- Scrollable Content Body -->
           <div class="flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5 space-y-5">
             <div v-show="activeModalTab === 'general'" class="space-y-5">
+            <div class="space-y-1">
+              <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Sequence ID</label>
+              <EditorIdInput
+                v-model="modalSequence.id"
+                :prefix="EDITOR_ID_PREFIXES.SEQUENCE"
+                :source-name="modalSequence.title"
+                :taken-ids="sequences.map((s) => String(s.id || ''))"
+                :original-id="isNewSequence ? null : modalSequence.id"
+                :disabled="!isNewSequence"
+                :max-length="MAX_EDITOR_ID_LENGTH"
+                :compact="true"
+                :required="true"
+                placeholder="SEQ_CELL_ESCAPE"
+                aria-label="Sequence ID"
+              />
+            </div>
+
             <!-- Title & XP -->
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div class="sm:col-span-3 space-y-1">

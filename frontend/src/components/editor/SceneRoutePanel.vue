@@ -4,13 +4,18 @@ import { entityService } from '@/services/entityService'
 import { visualService } from '@/services/visualService'
 import { notificationService } from '@/services/notificationService'
 import { 
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
   isNpcEntity, 
   isObjectEntity, 
+  isValidEditorId,
   mergeUniqueById, 
   formatObjectIds,
   hasAnyScript,
+  sanitizeEditorId,
 } from '@/utils/editor_utils'
 import { Save, X, Trash2, ArrowLeft, Sparkles, Brain } from 'lucide-vue-next'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
@@ -140,8 +145,9 @@ const isSavingSceneId = ref(false)
 const sceneIdError = computed(() => {
   const val = editingSceneIdValue.value.trim().toUpperCase()
   if (!val) return 'ID is required.'
-  if (!/^[A-Z0-9_]+$/.test(val)) return 'Only uppercase letters, digits and underscores allowed.'
-  if (val.length > 50) return 'Max 50 characters.'
+  if (!isValidEditorId(val, MAX_EDITOR_ID_LENGTH)) {
+    return `Only uppercase A-Z, 0-9, and _ allowed (max ${MAX_EDITOR_ID_LENGTH} chars).`
+  }
   const currentId = String(routeSceneDetails.value?.id || props.sceneId || '').toUpperCase()
   const taken = (props.referenceOptions || [])
     .map((e: any) => String(e.id || '').toUpperCase())
@@ -193,7 +199,10 @@ async function saveSceneId() {
 }
 
 watch(() => editingSceneIdValue.value, (val) => {
-  editingSceneIdValue.value = val.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+  const sanitized = sanitizeEditorId(val, MAX_EDITOR_ID_LENGTH)
+  if (sanitized !== val) {
+    editingSceneIdValue.value = sanitized
+  }
 })
 
 // Filtering
@@ -535,18 +544,24 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           <!-- Inline Scene ID Editor -->
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <template v-if="isEditingSceneId">
-              <div class="flex-1 min-w-0 space-y-1">
-                <div class="flex items-center gap-2">
-                  <input
-                    v-model="editingSceneIdValue"
-                    maxlength="50"
-                    class="flex-1 min-w-0 bg-slate-950/80 border rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-amber-300 focus:outline-none uppercase tracking-wider transition-all"
-                    :class="sceneIdError ? 'border-red-500/70 focus:border-red-500' : 'border-emerald-500/50 focus:border-emerald-400'"
-                    placeholder="SCENE_ID"
-                    @keydown.enter="saveSceneId"
-                    @keydown.esc="cancelEditSceneId"
-                    autofocus
-                  />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start gap-2">
+                  <div class="flex-1 min-w-0">
+                    <EditorIdInput
+                      v-model="editingSceneIdValue"
+                      :prefix="EDITOR_ID_PREFIXES.SCENE"
+                      :source-name="String(routeSceneDetails?.label || routeSceneDetails?.name || '')"
+                      :taken-ids="(referenceOptions || []).map((e: any) => String(e.id || ''))"
+                      :original-id="String(routeSceneDetails?.id || props.sceneId || '')"
+                      :max-length="MAX_EDITOR_ID_LENGTH"
+                      :compact="true"
+                      :required="true"
+                      placeholder="SCENE_VILLAGE"
+                      aria-label="Scene ID"
+                      @keydown.enter="saveSceneId"
+                      @keydown.esc="cancelEditSceneId"
+                    />
+                  </div>
                   <button
                     @click="saveSceneId"
                     :disabled="!!sceneIdError || isSavingSceneId"
@@ -565,7 +580,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                     <X class="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p v-if="sceneIdError" class="text-[10px] text-red-400 font-bold pl-1">{{ sceneIdError }}</p>
               </div>
             </template>
             <template v-else>

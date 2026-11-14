@@ -83,7 +83,16 @@ def test_normalization_helpers_and_placeholder_id() -> None:
         },
         "interlude_quote_enabled": True,
     }
-    assert placeholder == "DYN_IRON_MINES_D2_1_A1B2"
+    expected_placeholder = build_dynamic_placeholder_scene_id(
+        "iron_mines",
+        depth=2,
+        index=1,
+        suffix="A1B2",
+    )
+    assert placeholder == expected_placeholder
+    assert placeholder.startswith("DYN_")
+    assert len(placeholder) <= 20
+    assert all(ch.isupper() or ch.isdigit() or ch == "_" for ch in placeholder)
 
 
 def test_validator_skips_dynamic_exit_targets() -> None:
@@ -467,7 +476,14 @@ def test_blueprint_dynamic_world_and_exit_roundtrip() -> None:
     assert len(manifest["exits"]) == 1
     dyn_exit = manifest["exits"][0]
     assert dyn_exit["from_scene_id"] == "HALL"
-    assert dyn_exit["to_scene_id"].startswith("DYN_IRON_MINES_D1_")
+    assert dyn_exit["to_scene_id"] == build_dynamic_placeholder_scene_id(
+        "iron_mines",
+        depth=1,
+        index=1,
+        suffix="HALLCollapsed Mine Shaft",
+    )
+    assert dyn_exit["to_scene_id"].startswith("DYN_")
+    assert len(dyn_exit["to_scene_id"]) <= 20
     assert dyn_exit["dynamic_zone"]["zone_id"] == "iron_mines"
     assert dyn_exit["dynamic_zone"]["max_depth"] == 3
     assert dyn_exit["dynamic_zone"]["danger_level"] == "high"
@@ -672,7 +688,8 @@ def test_dynamic_zone_new_options_and_id_cap() -> None:
     assert random_zone["max_npcs"] == 0
     assert random_zone["audio_mode"] == "generate"
     assert gen_cfg["max_npcs"] == 4
-    assert len(long_placeholder) <= 30
+    assert len(long_placeholder) <= 20
+    assert long_placeholder.startswith("DYN_")
     assert long_placeholder.startswith("DYN_")
 
 
@@ -1129,7 +1146,9 @@ async def test_script_teleport_dynamic_inline_materializes_scene(db_session, mon
 
     # Assert: materialized inline dynamic scene and omitted return exit
     first_dest = state.current_scene_id
-    assert first_dest.startswith("DYN_ASTRAL_PAD_D1_1_")
+    assert first_dest.startswith("DYN_")
+    assert len(first_dest) <= 20
+    assert all(ch.isupper() or ch.isdigit() or ch == "_" for ch in first_dest)
     assert (state.entity_states or {}).get("__script_vars__", {}).get("last_dest") == first_dest
     assert calls[0]["danger_level"] == "peaceful"
     assert calls[0]["max_npcs"] == 0
@@ -1679,3 +1698,384 @@ async def test_after_generated_script_inspects_and_populates_scene(monkeypatch, 
     )
     spawned_names = {row.name for row in spawned_rows}
     assert {"Crypt Shade", "Brass Lantern", "Relic Key", "Scout Lyra"} <= spawned_names
+
+
+def test_dynamic_placeholder_pseudoname_deterministic_and_bounded() -> None:
+    """Placeholder IDs use deterministic pronounceable pseudo-names capped at 20 chars."""
+    id_a1 = build_dynamic_placeholder_scene_id("IRON_MINES", depth=1, index=1)
+    id_a2 = build_dynamic_placeholder_scene_id("iron_mines", depth=1, index=1)
+    id_b = build_dynamic_placeholder_scene_id("iron_mines", depth=1, index=2)
+    id_c = build_dynamic_placeholder_scene_id(
+        "VERY_LONG_ZONE_IDENTIFIER_THAT_EXCEEDS_LIMIT", depth=3, index=2, suffix="ABCD1234"
+    )
+
+    assert id_a1 == id_a2
+    assert id_a1 != id_b
+    assert id_a1.startswith("DYN_")
+    assert "_D1_1_" not in id_a1
+    for candidate in (id_a1, id_b, id_c):
+        assert 4 <= len(candidate) <= 20
+        assert all(ch.isupper() or ch.isdigit() or ch == "_" for ch in candidate)
+
+
+def test_normalize_dynamic_zone_instructions_and_cluster_consistency() -> None:
+    """Dynamic zone normalization retains instructions, root_theme, and cluster_consistency."""
+    from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
+
+    defaulted = normalize_dynamic_zone(
+        {
+            "zone_id": "old_stable",
+            "theme": "Drafty stable",
+            "instructions": "  Generate a loot chest with a 1d+2 sword  ",
+        }
+    )
+    assert defaulted["instructions"] == "Generate a loot chest with a 1d+2 sword"
+    assert defaulted["cluster_consistency"] is True
+    assert defaulted["root_theme"] == "Drafty stable"
+
+    disabled = normalize_dynamic_zone(
+        {
+            "zone_id": "old_stable",
+            "theme": "Drafty stable",
+            "root_theme": "Country Inn Courtyard",
+            "cluster_consistency": False,
+        }
+    )
+    assert disabled["cluster_consistency"] is False
+    assert disabled["root_theme"] == "Country Inn Courtyard"
+
+
+@pytest.mark.asyncio
+async def test_loose_instructions_container_and_sword_materialization(
+    db_session, monkeypatch
+) -> None:
+    """Loose instructions drive prompt rules, weapon 1d+2 stats, and container inventory links."""
+    from backend.engine.world.dynamic_instructions_helper import (
+        adjust_plan_for_instructions,
+        apply_instructions_backfill,
+        build_instructions_prompt_section,
+    )
+
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(db_session)
+    zone = dict(dyn_exit.dynamic_zone or {})
+    zone["instructions"] = "Generate a loot chest in the stable with a 1d+2 sword"
+    dyn_exit.dynamic_zone = zone
+    await db_session.flush()
+
+    prompt_section = build_instructions_prompt_section(zone)
+    assert "Generate a loot chest in the stable with a 1d+2 sword" in prompt_section
+    assert "CONTAINER" in prompt_section
+    adjusted = adjust_plan_for_instructions(
+        {"allow_container": False, "target_objects": 0, "target_npcs": 0},
+        zone,
+    )
+    assert adjusted["allow_container"] is True
+    assert adjusted["target_objects"] >= 3
+
+    async def _fake_interlude(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        payload = DynamicGeneratedScenePayload(
+            name="Dim Timber Stable",
+            description="Hay-strewn stalls smell of rain and leather.",
+            npcs=[],
+            objects=[
+                DynamicGeneratedObject(
+                    id="STABLE_CHEST",
+                    name="Stable Loot Chest",
+                    item_type="CONTAINER",
+                    description="An iron-strapped chest under the hayloft ladder.",
+                    inventory=["Iron Sword"],
+                ),
+                DynamicGeneratedObject(
+                    id="IRON_SWORD",
+                    name="Iron Sword",
+                    item_type="WEAPON",
+                    description="A keen arming sword wrapped in oiled cloth.",
+                    damage_dice="1d+2",
+                ),
+            ],
+            forward_exits=[],
+        )
+        apply_instructions_backfill(
+            payload,
+            kwargs["dynamic_zone"],
+            {},
+            kwargs.get("cluster_context"),
+        )
+        return payload
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_interlude_quote", _fake_interlude)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    new_scene = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+    )
+    await db_session.commit()
+
+    rows = (
+        (
+            await db_session.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == state.session_id,
+                    WorldEntity.current_scene_id == new_scene.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    containers = [row for row in rows if row.item_type == "CONTAINER"]
+    weapons = [row for row in rows if row.item_type == "WEAPON"]
+    assert len(containers) == 1
+    assert len(weapons) == 1
+    weapon_meta = weapons[0].metadata_json or {}
+    assert weapon_meta.get("damage_dice") == "1d+2"
+    assert weapons[0].id in (containers[0].inventory or [])
+
+
+@pytest.mark.asyncio
+async def test_blueprint_instructions_container_and_weapon_backfill(
+    db_session, monkeypatch
+) -> None:
+    """Blueprint tags inside exit instructions create typed entities and link inventories."""
+    from backend.engine.world.dynamic_instructions_helper import apply_instructions_backfill
+
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(db_session)
+    dyn_exit.dynamic_zone = {
+        **(dyn_exit.dynamic_zone or {}),
+        "instructions": (
+            "[Container: iron_chest] Ironbound Chest\n"
+            "Heavy bolted chest.\n\n"
+            "[Weapon: oak_sword] Rune Sabre\n"
+            "location: iron_chest\n"
+            "damage_dice: 1d+2"
+        ),
+    }
+    await db_session.flush()
+
+    async def _fake_interlude(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        payload = DynamicGeneratedScenePayload(
+            name="Guard Tack Room",
+            description="Saddles and oilskin cloaks hang along rough beams.",
+            npcs=[],
+            objects=[],
+            forward_exits=[],
+        )
+        apply_instructions_backfill(
+            payload,
+            kwargs["dynamic_zone"],
+            {},
+            kwargs.get("cluster_context"),
+        )
+        return payload
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_interlude_quote", _fake_interlude)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    new_scene = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+    )
+    await db_session.commit()
+
+    rows = (
+        (
+            await db_session.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == state.session_id,
+                    WorldEntity.current_scene_id == new_scene.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_name = {row.name: row for row in rows}
+    assert "Ironbound Chest" in by_name
+    assert "Rune Sabre" in by_name
+    chest = by_name["Ironbound Chest"]
+    sabre = by_name["Rune Sabre"]
+    assert chest.item_type == "CONTAINER"
+    assert sabre.item_type == "WEAPON"
+    assert (sabre.metadata_json or {}).get("damage_dice") == "1d+2"
+    assert sabre.id in (chest.inventory or [])
+
+
+@pytest.mark.asyncio
+async def test_cluster_consistency_collects_cluster_context_and_respects_toggle(
+    db_session, monkeypatch
+) -> None:
+    """Cluster consistency loads sibling scenes/NPCs/items and obeys toggle off."""
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(db_session)
+    seen_cluster_contexts: list[object] = []
+
+    async def _fake_interlude(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        seen_cluster_contexts.append(kwargs.get("cluster_context"))
+        depth = kwargs["dynamic_zone"]["depth"]
+        return DynamicGeneratedScenePayload(
+            name=f"Cluster Gallery {depth}",
+            description="Torchlit stone gallery carved beneath the tavern.",
+            npcs=[
+                DynamicGeneratedNpc(
+                    id=f"MINER_D{depth}",
+                    name=f"Miner D{depth}",
+                    role="Prospect",
+                    description="Works the seam.",
+                )
+            ],
+            objects=[
+                DynamicGeneratedObject(
+                    id=f"PICK_D{depth}",
+                    name=f"Steel Pick {depth}",
+                    item_type="STANDARD",
+                    description="Chipped but sturdy.",
+                )
+            ],
+            forward_exits=[
+                DynamicGeneratedChildExit(label="Lower Seam", theme_hint="Deep basalt vault")
+            ]
+            if depth < 2
+            else [],
+        )
+
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_interlude_quote", _fake_interlude)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    # First materialization: cluster is initially empty, creates child exit with root_theme
+    scene_d1 = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+    )
+    await db_session.commit()
+
+    assert seen_cluster_contexts[0] == []
+    child_exit = (
+        (
+            await db_session.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.from_scene_id == scene_d1.id,
+                    WorldExit.to_scene_id != origin_scene.id,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert child_exit is not None
+    assert child_exit.dynamic_zone["root_theme"] == dyn_exit.dynamic_zone["theme"]
+
+    # Second materialization with cluster_consistency=True sees scene_d1, its NPC and item
+    await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=child_exit,
+        origin_scene=scene_d1,
+    )
+    await db_session.commit()
+
+    second_context = seen_cluster_contexts[1]
+    assert isinstance(second_context, list)
+    assert len(second_context) == 1
+    assert second_context[0]["scene_id"] == scene_d1.id
+    assert any(n["name"] == "Miner D1" for n in second_context[0]["npcs"])
+    assert any(o["name"] == "Steel Pick 1" for o in second_context[0]["objects"])
+
+    # With cluster_consistency=False on a new exit, generator receives empty cluster context
+    third_placeholder = build_dynamic_placeholder_scene_id("iron_mines", depth=2, index=2)
+    off_exit = WorldExit(
+        id="EXIT_OFF_TEST",
+        session_id=state.session_id,
+        from_scene_id=scene_d1.id,
+        to_scene_id=third_placeholder,
+        label="Dry Tunnel",
+        exit_type="one_way",
+        is_revealed=True,
+        dynamic_zone={
+            "zone_id": "iron_mines",
+            "theme": "Dry slate crevice",
+            "root_theme": dyn_exit.dynamic_zone["theme"],
+            "depth": 2,
+            "max_depth": 3,
+            "cluster_consistency": False,
+        },
+    )
+    db_session.add(off_exit)
+    await db_session.flush()
+
+    await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=off_exit,
+        origin_scene=scene_d1,
+    )
+    assert seen_cluster_contexts[2] is None
+
+
+def test_cluster_consistency_prompt_formatting_respects_toggle() -> None:
+    """Cluster consistency formats themes/scenes/NPCs/items when enabled and omits when off."""
+    from backend.engine.world.dynamic_instructions_helper import (
+        build_cluster_consistency_prompt_section,
+    )
+
+    zone_on = {
+        "theme": "Flooded Lower Tunnel",
+        "root_theme": "Abandoned Dwarven Iron Mines",
+        "cluster_consistency": True,
+    }
+    cluster = [
+        {
+            "scene_id": "DYN_TEST_ONE",
+            "name": "Collapsed Ore Bay",
+            "depth": 1,
+            "description": "Rusted rails vanish under dark water.",
+            "npcs": [{"name": "Old Borin", "npc_type": "HUMANOID"}],
+            "objects": [
+                {
+                    "name": "Dwarven Pick",
+                    "item_type": "WEAPON",
+                    "damage_dice": "1d+2",
+                    "in_container": "Tool Chest",
+                }
+            ],
+        }
+    ]
+
+    text_on = build_cluster_consistency_prompt_section(zone_on, cluster)
+    assert "Abandoned Dwarven Iron Mines" in text_on
+    assert "Flooded Lower Tunnel" in text_on
+    assert "Collapsed Ore Bay" in text_on
+    assert "Old Borin" in text_on
+    assert "Dwarven Pick" in text_on
+    assert "1d+2" in text_on
+    assert "Tool Chest" in text_on
+
+    zone_off = {**zone_on, "cluster_consistency": False}
+    text_off = build_cluster_consistency_prompt_section(zone_off, cluster)
+    assert "Collapsed Ore Bay" not in text_off
+    assert "Old Borin" not in text_off

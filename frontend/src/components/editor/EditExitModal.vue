@@ -133,13 +133,15 @@ const hasGate = computed(() => {
   )
 })
 
+import { buildDynamicPlaceholderSceneId } from '@/utils/editor_utils'
+
 const dynamicPlaceholderId = computed(() => {
   if (!form.value.dynamic_zone) return ''
-  const clean = String(form.value.dynamic_zone.zone_id || 'zone')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'ZONE'
-  return `DYN_${clean}_D${form.value.dynamic_zone.depth || 1}_1`
+  return buildDynamicPlaceholderSceneId(
+    form.value.dynamic_zone.zone_id || 'ZONE_WILD',
+    form.value.dynamic_zone.depth || 1,
+    1,
+  )
 })
 
 const hasAnyScript = computed(() => {

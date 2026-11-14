@@ -56,7 +56,7 @@ Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
 
 **Dynamic exits (procedural exploration zones):**
 Use `[Exit: FROM -> ZONE_ID] label` or `[Exit: FROM -> ?] label` with `theme:` to create an uncharted procedural zone that expands on entry without failing missing-scene validation:
-`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`, default `medium`), `max_npcs` (`0`–`5`, optional per-exit override), `audio`/`audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`, optional per-exit music override), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`.
+`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–6, default 3), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`, default `medium`), `max_npcs` (`0`–`5`, optional per-exit override), `audio`/`audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`, optional per-exit music override), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`, `instructions`/`zone_instructions` (optional freeform generation prompt or fenced Blueprint blocks defining containers, weapons, NPCs, etc. for the cluster), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`; passes the global adventure theme, root dynamic exit theme, and already-generated cluster scenes/NPCs/items to keep the cluster coherent — set `no` to reduce token usage). Target scene IDs for dynamic exits use deterministic `DYN_*` pseudo-names and remain hidden in the player's travel overlay until visited.
 
 ```text
 [Exit: TOWN_GATE -> ?] a collapsed iron mine shaft
@@ -65,6 +65,7 @@ theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying ti
 max_depth: 3
 danger: medium
 cul_de_sac: yes
+cluster_consistency: yes
 ```
 
 Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak door`), or leave it out and the AI writes one. The exit tile shows the label on both sides of a two-way exit, with `→ Target scene` below it only once the player has visited that scene; unexplored targets are not named on the tile. With `revealed: yes` the target counts as known from the start: the tile shows its image and `→ Target scene`, and the map shows the scene, before the player has been there (a signposted door, a gate with a view). Only locked exits carry a badge on the tile. Hovering a tile opens a popup with the label, the target's image and where the exit leads, once that is known.

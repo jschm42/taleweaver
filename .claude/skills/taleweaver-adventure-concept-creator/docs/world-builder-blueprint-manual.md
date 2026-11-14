@@ -508,14 +508,19 @@ dynamic_quotes: yes
 [Exit: HALL -> IRON_MINES] Collapsed Mine Shaft
 theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
 max_depth: 3
-danger: medium        # peaceful | low | medium | high | deadly | random
-max_npcs: 2           # optional per-exit override (0..5)
-audio: generate       # optional per-exit override: inherit | empty | generate
+danger: medium
+max_npcs: 2
+audio: generate
 cul_de_sac: yes
+cluster_consistency: yes
+instructions: |
+  Generate a loot chest in the first alcove holding an iron sword (1d+2 damage).
 allowed_entities: hostile_npc, container, consumable, scenery
 ```
 
-You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets.
+Optional values: `danger` accepts `peaceful | low | medium | high | deadly | random`; `max_npcs` accepts `0..5`; `audio` accepts `inherit | empty | generate`; `cluster_consistency` keeps scenes, NPCs, and items coherent across the cluster (`yes` by default); `instructions` accepts freeform prompts or Blueprint blocks inside a fenced block (```` ``` ````).
+
+You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster.
 
 ## 7. Strict Adherence or Creative Expansion
 

@@ -12,9 +12,14 @@ import {
   describeEffects,
   normalizeSpecialAttack,
 } from '@/utils/specialAttacks'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 
 const MAX_ATTACKS = 8
-const ID_PATTERN = /^[A-Z0-9_-]{1,128}$/
 // Fields accepted by the backend schema (extra fields are rejected there).
 const SCHEMA_KEYS: Array<keyof SpecialAttack> = [
   'id', 'name', 'description', 'action_type', 'category', 'cost_type', 'cost', 'mana_cost',
@@ -99,24 +104,18 @@ watch(() => `${props.targetId}:${JSON.stringify(props.attacks ?? [])}`, () => {
   expanded.value = null
 }, { immediate: true })
 
-function slugify(name: string): string {
-  return name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'SPECIAL'
-}
-
-function uniqueId(base: string): string {
-  const taken = new Set(drafts.value.map((d) => d.id))
-  let candidate = base
-  for (let n = 2; taken.has(candidate); n += 1) candidate = `${base}_${n}`
-  return candidate
-}
-
 function addAttack(presetName?: string): void {
   if (drafts.value.length >= MAX_ATTACKS) return
   const preset = presetName ? PRESETS[presetName] : null
   const base: SpecialAttack = preset
     ? { ...preset, effects: preset.effects?.map((e) => ({ ...e })), id: '' }
     : { id: '', name: 'New Attack', action_type: 'ATTACK', category: 'MELEE', cost_type: 'stamina', cost: 10, effects: [{ target: 'target', stat: 'hp', amount: '-1d6' }] }
-  base.id = uniqueId(slugify(base.name))
+  base.id = generateEditorId({
+    prefix: EDITOR_ID_PREFIXES.ATTACK,
+    sourceName: base.name,
+    takenIds: drafts.value.map((d) => d.id),
+    maxLen: MAX_EDITOR_ID_LENGTH,
+  })
   drafts.value.push(toDraft(base))
   expanded.value = drafts.value[drafts.value.length - 1]._key
 }
@@ -130,9 +129,11 @@ const problems = computed(() => {
   const ids = new Set<string>()
   for (const d of drafts.value) {
     if (!d.name.trim()) issues.push('Every attack needs a name.')
-    if (!ID_PATTERN.test(d.id)) issues.push(`"${d.name}": ID may only use A-Z, 0-9, _ and -.`)
-    if (ids.has(d.id)) issues.push(`Duplicate ID ${d.id}.`)
-    ids.add(d.id)
+    if (!isValidEditorId(d.id.toUpperCase(), MAX_EDITOR_ID_LENGTH)) {
+      issues.push(`"${d.name}": ID must use A-Z, 0-9, and _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`)
+    }
+    if (ids.has(d.id.toUpperCase())) issues.push(`Duplicate ID ${d.id}.`)
+    ids.add(d.id.toUpperCase())
     if (d.effects.some((e) => !AMOUNT_PATTERN.test(e.amount.replace(/\s/g, '')))) {
       issues.push(`"${d.name}": amounts must look like -2d6, +5 or -3.`)
     }
@@ -230,6 +231,7 @@ function summary(d: SpecialAttackDraft): string {
         v-model="drafts[idx]"
         :is-protagonist="targetType === 'protagonist'"
         :reference-options="referenceOptions"
+        :taken-ids="drafts.filter((o) => o._key !== d._key).map((o) => o.id)"
       />
     </article>
 

@@ -16,6 +16,13 @@ import {
 import { adventureService } from '@/services/adventureService'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InitScriptPanel from '@/components/editor/InitScriptPanel.vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 
 const props = defineProps<{
   adventure: any
@@ -145,7 +152,11 @@ function openAddModal() {
   syntaxValidationResult.value = null
   showApiReference.value = false
   modalScript.value = {
-    id: `script_${Math.random().toString(36).substring(2, 8)}`,
+    id: generateEditorId({
+      prefix: EDITOR_ID_PREFIXES.SCRIPT,
+      takenIds: scripts.value.map((s) => String(s.id || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     name: 'New Event Script',
     trigger: 'on_turn_start',
     target: '',
@@ -178,7 +189,12 @@ function closeModal() {
 }
 
 function duplicateScript(script: any) {
-  const newId = `script_${Math.random().toString(36).substring(2, 8)}`
+  const newId = generateEditorId({
+    prefix: EDITOR_ID_PREFIXES.SCRIPT,
+    sourceName: script.name || script.id || '',
+    takenIds: scripts.value.map((s) => String(s.id || '')),
+    maxLen: MAX_EDITOR_ID_LENGTH,
+  })
   const cloned = {
     ...script,
     id: newId,
@@ -260,20 +276,26 @@ async function checkSyntax() {
 // ---------------------------------------------------------------------------
 
 async function saveScript() {
-  const sId = (modalScript.value.id || '').trim()
+  const rawId = (modalScript.value.id || '').trim()
+  const sId = isNewScript.value ? rawId.toUpperCase() : rawId
   if (!sId) {
     emit('notify', 'Script ID is required.', 'error')
     return
   }
 
   // Validate ID format
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(sId)) {
+  if (isNewScript.value) {
+    if (!isValidEditorId(sId, MAX_EDITOR_ID_LENGTH)) {
+      emit('notify', `Script ID must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`, 'error')
+      return
+    }
+  } else if (!/^[A-Za-z0-9_-]{1,128}$/.test(sId)) {
     emit('notify', 'Script ID must only contain letters, numbers, underscores, and hyphens.', 'error')
     return
   }
 
   // Check duplicate ID if new
-  if (isNewScript.value && scripts.value.some((s) => s.id === sId)) {
+  if (isNewScript.value && scripts.value.some((s) => String(s.id || '').toUpperCase() === sId)) {
     emit('notify', `A script with ID '${sId}' already exists.`, 'error')
     return
   }
@@ -633,12 +655,18 @@ function handleTabKey(e: KeyboardEvent) {
               <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Script ID
               </label>
-              <input
+              <EditorIdInput
                 v-model="modalScript.id"
-                type="text"
+                :prefix="EDITOR_ID_PREFIXES.SCRIPT"
+                :source-name="modalScript.name"
+                :taken-ids="scripts.map((s) => String(s.id || ''))"
+                :original-id="isNewScript ? null : modalScript.id"
                 :disabled="!isNewScript"
-                placeholder="e.g. trap_chest_01"
-                class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500 disabled:opacity-60 transition-colors"
+                :max-length="MAX_EDITOR_ID_LENGTH"
+                :compact="true"
+                :required="true"
+                placeholder="SCR_TRAP_CHEST"
+                aria-label="Script ID"
               />
             </div>
 

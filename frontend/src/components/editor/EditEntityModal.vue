@@ -12,6 +12,13 @@ import AppearanceField from '@/components/editor/AppearanceField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
 import WeaponCombatSettings from '@/components/editor/WeaponCombatSettings.vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  isValidEditorId,
+  itemTypePrefix,
+} from '@/utils/editor_utils'
 import { DICE_PATTERN, readWeaponConfig, type WeaponConfig } from '@/utils/weaponConfig'
 import { AMOUNT_PATTERN } from '@/utils/specialAttacks'
 import type { TtsVoiceList } from '@/types'
@@ -429,26 +436,33 @@ const entityImageUrl = computed(() => {
 
 const currentItemType = computed(() => String(localForm.value.item_type || '').toUpperCase())
 
+const entityIdPrefix = computed(() => {
+  if (props.context?.type === 'scene') return EDITOR_ID_PREFIXES.SCENE
+  if (props.context?.type === 'npc') return EDITOR_ID_PREFIXES.NPC
+  return itemTypePrefix(localForm.value.item_type)
+})
+
+const originalEntityId = computed(() =>
+  String(props.initialForm.entity_id || props.context?.id || '').trim().toUpperCase(),
+)
+
+const takenEntityIds = computed(() =>
+  (props.referenceOptions || [])
+    .map((entry) => String(entry.id || '').toUpperCase())
+    .filter((id) => id !== originalEntityId.value),
+)
+
 const entityIdError = computed(() => {
-  const val = (localForm.value.entity_id || '').trim()
+  const val = (localForm.value.entity_id || '').trim().toUpperCase()
   if (!val) return 'ID is required.'
 
-  const idRegex = /^[A-Z0-9_]+$/
-  if (!idRegex.test(val)) {
-    return 'ID must contain only uppercase letters, digits, and underscores.'
+  const isUnchangedLegacy = !props.isCreateEntityMode && val === originalEntityId.value
+  if (!isUnchangedLegacy && !isValidEditorId(val, MAX_EDITOR_ID_LENGTH)) {
+    return `ID must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`
   }
 
-  // Get original ID (if we are in edit mode, it can remain the same)
-  const originalId = String(props.initialForm.entity_id || props.context?.id || '').trim().toUpperCase()
-
-  // Set of all taken IDs in this adventure, excluding the current one being edited
-  const takenIds = new Set(
-    (props.referenceOptions || [])
-      .map((entry) => String(entry.id || '').toUpperCase())
-      .filter((id) => id !== originalId)
-  )
-
-  if (takenIds.has(val.toUpperCase())) {
+  const takenIds = new Set(takenEntityIds.value)
+  if (takenIds.has(val)) {
     return `ID "${val}" already exists in this adventure.`
   }
   return ''
@@ -464,9 +478,11 @@ const isFormInvalid = computed(() => {
   const teaserInvalid = (localForm.value.teaser || '').length > 300 ||
          (localForm.value.appearance || '').length > 100
   const hasEditableId = props.isCreateEntityMode || (props.context && ['npc', 'object', 'scene'].includes(props.context.type))
-  const maxIdLen = props.context?.type === 'scene' ? 50 : 30
+  const currentIdVal = (localForm.value.entity_id || '').trim().toUpperCase()
+  const isUnchangedLegacy = !props.isCreateEntityMode && currentIdVal === originalEntityId.value
+  const maxIdLen = isUnchangedLegacy ? 50 : MAX_EDITOR_ID_LENGTH
   const idInvalid = hasEditableId
-    ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > maxIdLen || !!entityIdError.value)
+    ? (!currentIdVal || currentIdVal.length > maxIdLen || !!entityIdError.value)
     : false
   // A recipe needs at least two ingredients and one result.
   const ingredientsCount = Array.isArray(localForm.value.combination_ingredients_input)
@@ -952,24 +968,24 @@ const textLogPreviewClass = computed(() => {
           <div class="px-8 py-6 space-y-6 overflow-y-auto flex-1">
             <div v-show="activeTab === 'simple'" class="space-y-6">
               <!-- Editable ID (create mode or scene/npc/object edit mode) -->
-              <div v-if="isCreateEntityMode || ['npc', 'object', 'scene'].includes(context.type)" class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
-                    {{ context.type === 'scene' ? 'Scene ID' : 'Entity ID' }} <span class="text-red-400">*</span>
-                  </label>
-                  <span :class="['text-xs font-bold tracking-widest', (localForm.entity_id || '').length > (context.type === 'scene' ? 50 : 30) || entityIdError ? 'text-red-500' : 'text-emerald-500/50']">
-                    {{ (localForm.entity_id || '').length }} / {{ context.type === 'scene' ? 50 : 30 }}
-                  </span>
-                </div>
-                <input
+              <div v-if="isCreateEntityMode || ['npc', 'object', 'scene'].includes(context.type)" class="space-y-2">
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
+                  {{ context.type === 'scene' ? 'Scene ID' : 'Entity ID' }} <span class="text-red-400">*</span>
+                </label>
+                <EditorIdInput
                   v-model="localForm.entity_id"
-                  :maxlength="context.type === 'scene' ? 50 : 30"
-                  class="w-full bg-black/40 border rounded-2xl px-4 py-3 text-lg font-mono font-bold text-amber-300 focus:border-amber-500 outline-none transition-all shadow-inner uppercase"
-                  :class="entityIdError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/5'"
-                  placeholder="ITEM_001"
+                  :prefix="entityIdPrefix"
+                  :source-name="localForm.name"
+                  :taken-ids="takenEntityIds"
+                  :original-id="isCreateEntityMode ? null : originalEntityId"
+                  :max-length="MAX_EDITOR_ID_LENGTH"
+                  :required="true"
+                  :placeholder="`${entityIdPrefix}001`"
+                  :aria-label="context.type === 'scene' ? 'Scene ID' : 'Entity ID'"
                 />
-                <p v-if="entityIdError" class="text-xs font-bold text-red-400">{{ entityIdError }}</p>
-                <p v-else class="text-[10px] text-slate-500 uppercase tracking-wider">Unique identifier. Only uppercase letters, numbers, and underscores.</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                  Unique identifier. Uppercase A-Z, digits 0-9, and underscores only (max 20 chars).
+                </p>
               </div>
 
               <div class="space-y-3">

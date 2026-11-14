@@ -5,7 +5,36 @@ from __future__ import annotations
 import re
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from backend.engine.world.dynamic_pseudoname import (
+    build_dynamic_placeholder_scene_id,
+    generate_deterministic_pseudoname,
+)
+
+__all__ = [
+    "AudioMode",
+    "DangerLevel",
+    "DynamicGeneratedChildExit",
+    "DynamicGeneratedNpc",
+    "DynamicGeneratedObject",
+    "DynamicGeneratedScenePayload",
+    "DynamicGenerationConfig",
+    "DynamicInterludeQuotePayload",
+    "DynamicNpcTypeCaps",
+    "DynamicNpcTypeCapsOverride",
+    "DynamicSpawnChances",
+    "DynamicSpawnChancesOverride",
+    "DynamicZoneConfig",
+    "NpcImageMode",
+    "SceneImageMode",
+    "build_dynamic_placeholder_scene_id",
+    "generate_deterministic_pseudoname",
+    "is_dynamic_exit_dict",
+    "normalize_dynamic_generation",
+    "normalize_dynamic_zone",
+    "resolve_effective_dynamic_rules",
+]
 
 SceneImageMode = Literal["off", "inherit", "simple", "hq"]
 NpcImageMode = Literal["off", "simple", "hq"]
@@ -108,7 +137,19 @@ class DynamicZoneConfig(BaseModel):
         default_factory=lambda: list(DEFAULT_ALLOWED_ENTITY_TYPES)
     )
     cul_de_sac_on_max_depth: bool = True
+    instructions: Optional[str] = Field(default=None, max_length=8000)
+    cluster_consistency: bool = True
+    root_theme: Optional[str] = Field(default=None, max_length=1000)
     on_after_generated_script: Optional[str] = Field(default=None, max_length=8000)
+
+    @model_validator(mode="after")
+    def normalize_dynamic_fields(self) -> DynamicZoneConfig:
+        raw_inst = str(self.instructions).strip() if self.instructions is not None else ""
+        self.instructions = raw_inst[:8000] if raw_inst else None
+        self.cluster_consistency = bool(self.cluster_consistency)
+        raw_root = str(self.root_theme).strip() if self.root_theme is not None else ""
+        self.root_theme = raw_root[:1000] if raw_root else self.theme
+        return self
 
 
 class DynamicGenerationConfig(BaseModel):
@@ -163,6 +204,20 @@ class DynamicGeneratedObject(BaseModel):
     effect_type: Optional[str] = Field(default=None, max_length=60)
     effect_value: Optional[int] = Field(default=None)
     text_log_content: Optional[str] = Field(default=None, max_length=1000)
+    inventory: list[str] = Field(
+        default_factory=list,
+        description="For CONTAINER objects: IDs of other objects in this scene's objects list that are placed inside this container.",
+    )
+
+    @model_validator(mode="after")
+    def normalize_inventory_ids(self) -> DynamicGeneratedObject:
+        seen: list[str] = []
+        for raw in self.inventory or []:
+            token = re.sub(r"[^A-Z0-9]+", "_", str(raw or "").strip().upper()).strip("_")[:24]
+            if token and token not in seen:
+                seen.append(token)
+        self.inventory = seen
+        return self
 
 
 class DynamicGeneratedChildExit(BaseModel):
@@ -303,6 +358,13 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
 
     caps_override = _normalize_npc_type_caps(raw.get("npc_type_caps"), partial=True)
     chances_override = _normalize_spawn_chances(raw.get("spawn_chances"), partial=True)
+    raw_instructions = raw.get("instructions")
+    instructions = str(raw_instructions).strip()[:8000] if raw_instructions is not None else ""
+    cluster_consistency = raw.get("cluster_consistency")
+    if cluster_consistency is None:
+        cluster_consistency = True
+    raw_root_theme = str(raw.get("root_theme") or "").strip()
+    root_theme = (raw_root_theme or theme)[:1000]
     raw_after_script = raw.get("on_after_generated_script")
     after_script = str(raw_after_script).strip() if raw_after_script is not None else ""
 
@@ -325,6 +387,9 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
         audio_mode=zone_audio_mode,
         allowed_entity_types=allowed_types,
         cul_de_sac_on_max_depth=bool(cul_de_sac),
+        instructions=instructions or None,
+        cluster_consistency=bool(cluster_consistency),
+        root_theme=root_theme,
         on_after_generated_script=after_script[:8000] if after_script else None,
     ).model_dump()
 
@@ -368,20 +433,6 @@ def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
         spawn_chances=DynamicSpawnChances.model_validate(spawn_chances),
         interlude_quote_enabled=bool(interlude),
     ).model_dump()
-
-
-def build_dynamic_placeholder_scene_id(
-    zone_id: str,
-    depth: int = 1,
-    index: int = 1,
-    suffix: str = "",
-) -> str:
-    """Build a deterministic, valid scene ID <= 30 chars for a dynamic exit target."""
-    slug = _slugify_identifier(zone_id, fallback="ZONE", max_len=14).upper()
-    clean_suffix = re.sub(r"[^A-Z0-9]+", "", str(suffix or "").upper())[:6]
-    tail = f"_{clean_suffix}" if clean_suffix else ""
-    candidate = f"DYN_{slug}_D{max(1, int(depth))}_{max(1, int(index))}{tail}"
-    return candidate[:30]
 
 
 def is_dynamic_exit_dict(ex: Any) -> bool:
