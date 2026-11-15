@@ -24,6 +24,9 @@ from backend.api.routes.adventures.editor_talents import router as editor_talent
 from backend.api.routes.adventures.gameplay import router as gameplay_router
 from backend.api.routes.adventures.imports import router as imports_router
 from backend.api.routes.adventures.library import router as library_router
+from backend.api.routes.adventures.session_debug_exports import (
+    router as session_debug_exports_router,
+)
 from backend.api.routes.adventures.sessions import router as sessions_router
 from backend.api.routes.adventures.templates import router as templates_router
 
@@ -61,6 +64,7 @@ router.include_router(templates_router)
 
 # 7. Gameplay (parameterized paths like /{game_id}/chat)
 router.include_router(gameplay_router)
+router.include_router(session_debug_exports_router)
 router.include_router(chat_history_router)
 router.include_router(dice_router)
 router.include_router(dialog_router)

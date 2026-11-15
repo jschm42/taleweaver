@@ -43,6 +43,7 @@ import {
   Swords,
   Layers,
 } from 'lucide-vue-next'
+import DebugDownloadButton from '@/components/game/debug/DebugDownloadButton.vue'
 
 const props = defineProps<{
   open: boolean
@@ -65,6 +66,8 @@ const activeTab = ref<DebugTab>('npcs')
 const sessionDebug = computed(() => props.data?.fullWorld || null)
 const sheet = computed(() => props.data?.sheet || null)
 const currentSceneId = computed(() => sessionDebug.value?.session?.current_scene_id || sheet.value?.scene_id || '')
+/** Session id for the debug downloads (images ZIP, .twe export). */
+const debugGameId = computed(() => String(sessionDebug.value?.session?.id || sheet.value?.session_id || ''))
 
 // --- Quick Command Execution Helper ---
 const commandBusy = ref(false)
@@ -672,6 +675,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               </button>
             </div>
 
+            <!-- All session images (incl. dynamic scenes / spawns) as ZIP -->
+            <DebugDownloadButton
+              v-if="debugGameId"
+              :game-id="debugGameId"
+              label="Images ZIP"
+              class="hidden sm:inline-flex"
+            />
+
             <!-- Close Button -->
             <button
               type="button"
@@ -820,7 +831,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                           {{ npc.is_alive ? 'Alive' : 'Defeated' }}
                         </span>
                       </div>
-                      <div class="text-[10px] text-slate-400 font-mono truncate mt-0.5">ID: {{ npc.id }}</div>
+                      <div class="flex items-center gap-1.5 mt-0.5">
+                        <div class="text-[10px] text-slate-400 font-mono truncate">ID: {{ npc.id }}</div>
+                        <DebugDownloadButton v-if="debugGameId" :game-id="debugGameId" :entity-id="npc.id" compact />
+                      </div>
 
                       <!-- Location & Movement Badges -->
                       <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -1324,7 +1338,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
                       <!-- ID -->
                       <td class="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        <span class="bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">{{ item.id }}</span>
+                        <div class="flex items-center gap-1.5">
+                          <span class="bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">{{ item.id }}</span>
+                          <DebugDownloadButton
+                            v-if="debugGameId && item.id"
+                            :game-id="debugGameId"
+                            :entity-id="item.id"
+                            compact
+                          />
+                        </div>
                       </td>
 
                       <!-- Type -->

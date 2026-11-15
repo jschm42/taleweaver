@@ -81,6 +81,12 @@ The **World Map** tab of the debug inspector (bug icon) shows every scene, unmas
 - **Click the red lock badge** on a locked passage to unlock it (`/debug open_exit`).
 The inspector reloads its data after each action.
 
+### Downloading Images and Entities
+- **Images ZIP** (inspector header) downloads every image of the session in one archive: scenes (template and dynamically generated), NPCs and items (including dynamic spawns) and the protagonist portrait, sorted into `scenes/`, `npcs/`, `items/` and `protagonist/`. Images that are not stored locally (remote URLs, missing files) are listed in `missing.txt`.
+- The **download icon** next to an NPC's or item's ID exports that entity with its current session values and image as a `.twe` bundle, the same format as the editor's *Export (.twe)*, so it can be imported into any adventure (editor: *Import NPC* / *Import Item*).
+
+Both need debug mode and only work for your own session (`GET /adventures/{game_id}/session-debug/images.zip`, `GET /adventures/{game_id}/session-debug/export/{entity_id}`).
+
 ### 5. Checking a Script Value
 To see whether a variable was set and how many HP an NPC has left:
 `user: /script tw.vars.get('alarm')`
