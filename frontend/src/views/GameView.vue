@@ -1933,8 +1933,10 @@ const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
       isClosingCombat.value = true
     },
     () => {
-      // Ensure the guard resets eventually once the combat state is truly gone
-      if (!combat.value) {
+      // Reset the guard once the fight is gone, and also when the loot phase is still open
+      // (the /loot request failed or was cut off): otherwise the dialog stays hidden while the
+      // server keeps rejecting every message with "Loot phase active".
+      if (!combat.value || combat.value.loot_pending || combat.value.active) {
         isClosingCombat.value = false
       }
     },

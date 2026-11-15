@@ -195,6 +195,26 @@ class CombatLootMixin:
         ]
         return "Loot dropped to the scene:\n" + "\n".join(f"- {name}" for name in names)
 
+    async def settle_loot_on_scene_exit(self) -> str | None:
+        """Close a finished fight's open loot phase when the player walks out of its scene.
+
+        Remaining loot is dropped into the fight scene (still the current scene here), so a
+        loot phase can never follow the player and block every later message.
+        """
+        combat = self._read_combat_state()
+        if not combat or combat.get("active"):
+            return None
+        if not (combat.get("loot_pending") or combat.get("outcome")):
+            return None
+        dropped = list(combat.get("loot_items") or [])
+        for item in dropped:
+            await self._spawn_scene_item(item)
+        drop_combat_state(self.state)
+        if not dropped:
+            return None
+        names = [str(item.get("name") or item.get("id") or "Unknown Item") for item in dropped]
+        return "You leave the remaining loot behind: " + ", ".join(names)
+
     async def _loot_take_all(self, combat: dict[str, Any]) -> str:
         """Moves every remaining loot item into the inventory and ends the loot phase."""
         taken = list(combat.get("loot_items") or [])

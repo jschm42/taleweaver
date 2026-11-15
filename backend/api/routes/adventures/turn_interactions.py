@@ -355,6 +355,13 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
+        loot_note = await self.manager.combat.settle_loot_on_scene_exit()
+        if loot_note:
+            self.db.add(
+                ChatMessage(session_id=self.state.session_id, role="system", content=loot_note)
+            )
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': loot_note})}\n\n"
+
         async for chunk in prepare_dynamic_traversal_sse(
             interactions=self, exit_ref=exit_ref, language=language
         ):
