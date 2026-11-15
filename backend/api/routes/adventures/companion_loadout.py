@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.api.routes.adventures.companion_inventory import reachable_companion
 from backend.api.routes.adventures.companion_sheet import held_entries, held_items
 from backend.engine.party.equipment import (
+    can_wear_equipment,
     choose_slot,
     equip_item,
     is_equippable,
@@ -53,13 +54,23 @@ def _match(items: list[dict[str, Any]], wanted: str) -> dict[str, Any] | None:
     )
 
 
+async def _equipping_companion(manager: Any) -> tuple[Any, str]:
+    """(companion row, '') when it can equip something now, else (None, why not)."""
+    row, refusal = await reachable_companion(manager)
+    if row is None:
+        return None, refusal or "You have no companion."
+    if not can_wear_equipment(row.npc_type):
+        return None, f"{row.name} cannot wear equipment; it only carries items."
+    return row, ""
+
+
 async def equip_companion(manager: Any, args: str) -> Events:
     item_ref, _, slot_ref = (args or "").partition("|")
     if not item_ref.strip():
         return [("system", EQUIP_USAGE)]
-    row, refusal = await reachable_companion(manager)
+    row, refusal = await _equipping_companion(manager)
     if row is None:
-        return [("system", refusal or "You have no companion.")]
+        return [("system", refusal)]
     states = dict(manager.state.entity_states or {})
     items = await held_items(manager.db, manager.state.session_id, held_entries(states, row), {})
     item = _match(items, item_ref)

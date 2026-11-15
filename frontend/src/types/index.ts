@@ -42,7 +42,9 @@ export interface CompanionSheet {
   stats: Record<string, number | null>
   /** Carried items that are not equipped. */
   inventory: InventoryItem[]
-  /** Slot -> equipped item (the protagonist's slots). */
+  /** Only HUMANOID and BEING companions have equipment slots; animals and monsters do not. */
+  can_equip?: boolean
+  /** Slot -> equipped item (the protagonist's slots); empty without equipment slots. */
   equipment: Record<string, InventoryItem | null>
   /** Special actions from the editor with the player's on/off switch. */
   abilities: CompanionAbility[]

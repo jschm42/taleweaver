@@ -76,11 +76,22 @@ watch(
 
 function selectSubject(next: 'hero' | 'companion'): void {
   subject.value = next
-  // The companion page has no status tab.
-  if (next === 'companion' && activeTab.value === 'ailments') {
+  // The companion page has no status tab, and animals / monsters have no equipment tab.
+  const missingOnCompanion = activeTab.value === 'ailments'
+    || (activeTab.value === 'equipment' && !companionCanEquip.value)
+  if (next === 'companion' && missingOnCompanion) {
     activeTab.value = 'hero'
   }
 }
+
+/** Only HUMANOID and BEING companions wear gear; the backend sends `can_equip`. */
+const companionCanEquip = computed(() => companion.value?.can_equip !== false)
+// The dialog may already show the companion's Equipped tab when the companion changes.
+watch([showCompanion, companionCanEquip], () => {
+  if (showCompanion.value && !companionCanEquip.value && activeTab.value === 'equipment') {
+    activeTab.value = 'hero'
+  }
+})
 
 /** The companion's items, marked so their context menu offers to take them back. */
 const companionItems = computed(() =>
@@ -105,7 +116,9 @@ const unlockedSpecialCount = computed(() => {
 const companionTabs = computed<TabDefinition[]>(() => [
   { id: 'hero', icon: 'ra-double-team', label: 'Companion', shortLabel: 'Profile', count: '' },
   { id: 'inventory', icon: 'ra-backpack', label: 'Inventory', shortLabel: 'Bag', count: `${companionItems.value.length}/24` },
-  { id: 'equipment', icon: 'ra-vest', label: 'Equipped', shortLabel: 'Gear', count: `${companionEquippedCount.value}/11` },
+  ...(companionCanEquip.value
+    ? [{ id: 'equipment', icon: 'ra-vest', label: 'Equipped', shortLabel: 'Gear', count: `${companionEquippedCount.value}/11` } as TabDefinition]
+    : []),
   { id: 'specials', icon: 'ra-crystal-wand', label: 'Abilities', shortLabel: 'Skills', count: String(companion.value?.abilities?.length ?? 0) },
 ])
 

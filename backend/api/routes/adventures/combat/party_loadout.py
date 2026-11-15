@@ -57,7 +57,7 @@ class CombatPartyLoadoutMixin:
         states = dict(self.state.entity_states or {})
         items = await held_items(self.db, self.game_id, held_entries(states, row), {})
         by_id = {str(item.get("id", "")).upper(): item for item in items}
-        equipped = carried_equipment(states, row.id, set(by_id))
+        equipped = carried_equipment(states, row.id, set(by_id), row.npc_type)
         apply_equipment_bonuses(
             entry, equipment_modifiers([by_id[i.upper()] for i in equipped.values()])
         )

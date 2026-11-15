@@ -4,12 +4,16 @@ Equipped items stay in the companion's carried inventory (``entity_states[<npc>]
 so the scripting ``ItemMover`` still sees exactly one holder per item. The equipment map only
 says which carried item sits in which slot; readers drop slots whose item the companion no longer
 carries (``carried_equipment``). The slots are the protagonist's slots.
+
+Only HUMANOID and BEING companions wear equipment (``can_wear_equipment``); animals and
+monsters fight with their main attack and special actions and just carry items.
 """
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.scripting.item_transfer import ref_id
 
 EQUIPMENT_SLOTS = (
@@ -36,6 +40,13 @@ STAT_MODIFIER_FIELDS = {
 }
 _SLOT_ALIASES = {"hand": "Hands", "ring": "Ring_1", "weapon": "MainHand", "shield": "OffHand"}
 _EQUIPPABLE_TYPES = {"WEAPON", "WEARABLE"}
+# NPC types with hands, heads and the wits to use gear.
+EQUIPMENT_NPC_TYPES = frozenset({"HUMANOID", "BEING"})
+
+
+def can_wear_equipment(npc_type: Any) -> bool:
+    """True for HUMANOID and BEING NPCs; ANIMAL and MONSTER have no equipment slots."""
+    return normalize_npc_type(npc_type) in EQUIPMENT_NPC_TYPES
 
 
 def _entry(entity_states: dict[str, Any], npc_id: str) -> dict[str, Any]:
@@ -52,8 +63,15 @@ def read_equipment(entity_states: Any, npc_id: str) -> dict[str, str]:
     return {slot: str(item) for slot, item in raw.items() if slot in EQUIPMENT_SLOTS and item}
 
 
-def carried_equipment(entity_states: Any, npc_id: str, held_ids: set[str]) -> dict[str, str]:
-    """The equipment map without items the companion no longer carries (given away, moved)."""
+def carried_equipment(
+    entity_states: Any, npc_id: str, held_ids: set[str], npc_type: Any = "HUMANOID"
+) -> dict[str, str]:
+    """The equipment map without items the companion no longer carries (given away, moved).
+
+    Empty for NPC types without equipment slots, so gear stored before stays plain inventory.
+    """
+    if not can_wear_equipment(npc_type):
+        return {}
     return {
         slot: item
         for slot, item in read_equipment(entity_states, npc_id).items()

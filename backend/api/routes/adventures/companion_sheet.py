@@ -19,6 +19,7 @@ from backend.engine.combat.special_attacks import normalize_special_actions
 from backend.engine.party.companion_config import TACTICS, companion_config
 from backend.engine.party.equipment import (
     EQUIPMENT_SLOTS,
+    can_wear_equipment,
     carried_equipment,
     equipment_modifiers,
 )
@@ -110,7 +111,8 @@ async def build_companion_sheet(
     default_tactics = config.tactics if config else TACTICS[0]
     items = await held_items(db, state.session_id, held_entries(states, row), image_map)
     by_id = {str(item.get("id", "")).upper(): item for item in items}
-    equipped = carried_equipment(states, row.id, set(by_id))
+    can_equip = can_wear_equipment(row.npc_type)
+    equipped = carried_equipment(states, row.id, set(by_id), row.npc_type)
     equipped_items = [by_id[item_id.upper()] for item_id in equipped.values()]
     equipped_ids = {item_id.upper() for item_id in equipped.values()}
     return {
@@ -122,10 +124,14 @@ async def build_companion_sheet(
         **_vitals(states, row),
         "stats": _attributes(row, equipment_modifiers(equipped_items)),
         "inventory": [i for i in items if str(i.get("id", "")).upper() not in equipped_ids],
+        # Animals and monsters have no slots: no Equipped tab, everything is inventory.
+        "can_equip": can_equip,
         "equipment": {
             slot: by_id.get(equipped[slot].upper()) if slot in equipped else None
             for slot in EQUIPMENT_SLOTS
-        },
+        }
+        if can_equip
+        else {},
         "abilities": _abilities(row, party),
         "present": companion_scene_id(states, row) == str(state.current_scene_id or ""),
         "following": party.following,

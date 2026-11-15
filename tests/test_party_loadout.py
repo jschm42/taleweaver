@@ -169,3 +169,32 @@ async def test_companion_fights_with_its_equipped_weapon_and_active_abilities(
         assert weapon["name"] == "Sword" and weapon["dice"] == "2d6"
         assert member["stats"]["strength"] == 12
         assert [a["id"] for a in member["special_actions"]] == ["SHRIEK"]
+
+
+async def test_animal_companion_has_no_equipment_slots(setup_test_db):
+    async with TestSessionLocal() as db:
+        # Arrange: Lara is a wolf here and already has an old equipment entry
+        manager = await _seed_turn_manager(db)
+        db.add(_sword(SESSION, "__INVENTORY__"))
+        lara = await _lara(db)
+        lara.npc_type = "ANIMAL"
+        lara.metadata_json = {"special_actions": SPECIALS}
+        manager.avatar.inventory = [{"id": "SWORD", "name": "Sword", "item_type": "WEAPON"}]
+        await db.commit()
+        await transfer_companion_items(manager, GIVE, "sword")
+        states = dict(manager.state.entity_states)
+        equip_item(states, lara.id, "SWORD", "MainHand")
+        manager.state.entity_states = states
+
+        # Act
+        refused = await equip_companion(manager, "Sword")
+        sheet = await build_companion_sheet(db, manager.state, {})
+
+        # Assert
+        assert refused == [("system", "Lara cannot wear equipment; it only carries items.")]
+        assert sheet["can_equip"] is False
+        assert sheet["equipment"] == {}
+        assert [i["id"] for i in sheet["inventory"]] == ["SWORD"]
+        assert sheet["stats"]["strength"] == 10  # no bonus from the stored sword
+        assert carried_equipment(states, lara.id, {"SWORD"}, "ANIMAL") == {}
+        assert [a["id"] for a in sheet["abilities"]] == ["BITE", "SHRIEK"]
