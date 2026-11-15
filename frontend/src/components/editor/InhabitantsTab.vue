@@ -148,12 +148,12 @@ function getSceneLabel(sceneId?: string | null): string {
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="text-xs font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ npc.name }}</div>
-                <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-indigo-400/30 bg-indigo-500/20 text-indigo-200 shrink-0">{{ npc.npc_type || 'HUMANOID' }}</span>
-              </div>
+              <!-- Name gets the full width (up to two lines); the type badge sits below it. -->
+              <div class="text-xs font-black text-white uppercase tracking-wider leading-tight line-clamp-2 break-words drop-shadow-md" :title="npc.name">{{ npc.name }}</div>
+              <span class="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-indigo-400/30 bg-indigo-500/20 text-indigo-200">{{ npc.npc_type || 'HUMANOID' }}</span>
               <div v-if="npc.role" class="text-[9px] text-slate-300 font-bold uppercase tracking-tighter truncate opacity-70">{{ npc.role }}</div>
-              <div v-if="npc.current_scene_id" class="text-[9px] text-sky-400 font-bold uppercase tracking-tighter truncate opacity-90 mt-1 flex items-center gap-1" :title="`Current Scene: ${getSceneLabel(npc.current_scene_id)} (${npc.current_scene_id})`">
+              <!-- The cards are grouped by scene; only the catch-all group still names the NPC's scene. -->
+              <div v-if="!section.sceneId && npc.current_scene_id" class="text-[9px] text-sky-400 font-bold uppercase tracking-tighter truncate opacity-90 mt-1 flex items-center gap-1" :title="`Current Scene: ${npc.current_scene_id}`">
                 <i class="ra ra-compass text-[10px]"></i>
                 <span>{{ getSceneLabel(npc.current_scene_id) }}</span>
               </div>
