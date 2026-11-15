@@ -13,7 +13,7 @@ from backend.engine.rules.rule_engine import RESOURCE_CAP
 from backend.engine.rules.stat_aggregator import calculate_total_stats
 from backend.models.world_entity import WorldEntity
 
-DICE_RX = re.compile(r"^\d+d\d+([+-]\d+)?$")
+DICE_RX = re.compile(r"^\d+d\d*([+-]\d+)?$")
 DEFAULT_WEAPON_COST = 20
 ATTRIBUTE_KEYS = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
 _ITEM_STAT_FIELDS = {

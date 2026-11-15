@@ -301,10 +301,16 @@ onMounted(async () => {
   player = new ArenaEventPlayer(arena, speak, sounds)
   ready = true
   applySpeed()
-  seenCount = props.combat.log?.length ?? 0
-  arena.sync(buildView([]), true)
+  const logs = props.combat.log ?? []
+  seenCount = logs.length
+  if (props.combat.active && (props.combat.round ?? 1) === 1) {
+    const openingBanter = logs.find((e) => e.data?.kind === 'banter')
+    if (openingBanter) queue.push(openingBanter)
+  }
+  arena.sync(buildView(queue), true)
   emit('revealed', seenCount)
   await playIntro()
+  if (queue.length > 0) void drainQueue()
 })
 
 onBeforeUnmount(() => {

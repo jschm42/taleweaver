@@ -141,6 +141,7 @@ class CombatSetupMixin:
             else f"{first['name']} is faster and starts."
         )
         self._append_combat_log(combat, starts, "turn")
+        await self._emit_opening_banter(combat)
         return combat
 
     async def _handle_fight_start(

@@ -12,7 +12,7 @@ from typing import Any
 from backend.engine.combat.special_attacks import effective_ac, stat_modifier
 
 D20_FACES = range(1, 21)
-_AMOUNT_RX = re.compile(r"^([+-])?(?:(\d+)d(\d+)([+-]\d+)?|(\d+))$")
+_AMOUNT_RX = re.compile(r"^([+-])?(?:(\d+)d(\d*)([+-]\d+)?|(\d+))$")
 
 
 def average_amount(expr: Any) -> float:
@@ -24,7 +24,7 @@ def average_amount(expr: Any) -> float:
     if match.group(5) is not None:
         return float(sign * int(match.group(5)))
     count = min(int(match.group(2)), 50)
-    sides = max(1, int(match.group(3)))
+    sides = max(1, int(match.group(3) or 6))
     bonus = int(match.group(4) or 0)
     return float(sign * max(0.0, count * (sides + 1) / 2 + bonus))
 

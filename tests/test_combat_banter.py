@@ -8,6 +8,7 @@ from backend.api.routes.adventures.combat.banter import (
     CombatBanterMixin,
     battle_mood,
     clean_banter_line,
+    highest_initiative_enemy,
 )
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from tests.test_combat_encounters import SESSION_ID, _patch_dice, _play, _seed
@@ -82,13 +83,13 @@ async def test_round_end_adds_llm_banter_for_engaged_enemy(setup_test_db, monkey
         # Assert
         combat = manager._read_combat_state()
         banter = [e for e in combat["log"] if e["type"] == "banter"]
-        assert len(banter) == 1
-        assert banter[0]["data"] == {
+        assert len(banter) == 2
+        assert banter[-1]["data"] == {
             "kind": "banter",
             "actor": "GOBLIN",
             "line": "You fight like a startled chicken.",
         }
-        assert banter[0]["text"] == 'Goblin: "You fight like a startled chicken."'
+        assert banter[-1]["text"] == 'Goblin: "You fight like a startled chicken."'
 
 
 @pytest.mark.asyncio
@@ -112,3 +113,59 @@ async def test_banter_falls_back_to_canned_line_without_llm(setup_test_db, monke
         banter = next(e for e in combat["log"] if e["type"] == "banter")
         all_fallbacks = {line for lines in FALLBACK_LINES.values() for line in lines}
         assert banter["data"]["line"] in all_fallbacks
+
+
+def test_highest_initiative_enemy_ignores_player_allies_and_bystanders():
+    combat = {
+        "enemies": [
+            {"id": "GOBLIN", "name": "Goblin", "engaged": True, "hp": 25},
+            {"id": "ORC", "name": "Orc", "engaged": True, "hp": 40},
+            {"id": "WATCHER", "name": "Watcher", "engaged": False, "hp": 30},
+        ],
+        "initiative": [
+            {"id": "PLAYER", "name": "Hero", "total": 22},
+            {"id": "COMPANION", "name": "Gizmo", "total": 20},
+            {"id": "WATCHER", "name": "Watcher", "total": 19},
+            {"id": "ORC", "name": "Orc", "total": 16},
+            {"id": "GOBLIN", "name": "Goblin", "total": 10},
+        ],
+    }
+
+    speaker = highest_initiative_enemy(combat)
+    assert speaker is not None
+    assert speaker["id"] == "ORC"
+
+
+@pytest.mark.asyncio
+async def test_fight_start_adds_opening_banter_from_highest_initiative_enemy(
+    setup_test_db, monkeypatch
+):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        user, _avatar, _state = await _seed(db)
+        _patch_dice(monkeypatch)
+        seen_moods: list[str] = []
+
+        async def fake_line(_self, _combat, speaker, mood):
+            seen_moods.append(mood)
+            return f"No trespasser survives {speaker['name']}'s watch!"
+
+        monkeypatch.setattr(CombatBanterMixin, "_llm_banter_line", fake_line)
+        manager = GameTurnManager(db, SESSION_ID, user)
+
+        # Act
+        await _play(manager, "/fight GOBLIN")
+
+        # Assert
+        combat = manager._read_combat_state()
+        opening_banter = [e for e in combat["log"] if e["type"] == "banter"]
+        assert seen_moods == ["opening"]
+        assert len(opening_banter) == 1
+        assert opening_banter[0]["data"] == {
+            "kind": "banter",
+            "actor": "GOBLIN",
+            "line": "No trespasser survives Goblin's watch!",
+        }
+        assert opening_banter[0]["text"] == 'Goblin: "No trespasser survives Goblin\'s watch!"'
