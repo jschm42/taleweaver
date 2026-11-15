@@ -76,6 +76,11 @@ export interface EntityEditData {
   on_open_exit_text?: string | null
   on_exit_used_script?: string | null
   on_exit_used_text?: string | null
+  unlock_expression?: string | null
+  on_unlock_success_script?: string | null
+  on_unlock_success_text?: string | null
+  on_unlock_failure_script?: string | null
+  on_unlock_failure_text?: string | null
   on_defeat_script?: string | null
   on_defeat_text?: string | null
   on_protagonist_enters_scene_script?: string | null
@@ -107,6 +112,15 @@ export interface ExitCreateData {
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
+  unlock_expression?: string | null
+  on_open_exit_script?: string | null
+  on_open_exit_text?: string | null
+  on_exit_used_script?: string | null
+  on_exit_used_text?: string | null
+  on_unlock_success_script?: string | null
+  on_unlock_success_text?: string | null
+  on_unlock_failure_script?: string | null
+  on_unlock_failure_text?: string | null
   dynamic_zone?: Record<string, any> | null
 }
 

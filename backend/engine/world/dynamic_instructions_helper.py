@@ -339,6 +339,22 @@ def build_instructions_prompt_section(
     ).strip()
 
 
+def _format_hint_exit(ex: Any) -> str:
+    if isinstance(ex, dict):
+        locked = " [locked]" if ex.get("is_locked") else ""
+        return f"'{ex.get('label')}' -> {ex.get('to_scene_id')}{locked}"
+    return str(ex)
+
+
+def _format_hint_entity(entry: Any, *, include_type: bool = False) -> str:
+    if not isinstance(entry, dict):
+        return str(entry)
+    base = f"{entry.get('id')} ({entry.get('name')}"
+    if include_type:
+        return f"{base}, {entry.get('item_type', 'STANDARD')})"
+    return f"{base})"
+
+
 def build_existing_scene_context_prompt_section(
     scene_hint: Optional[dict[str, Any]] = None,
 ) -> str:
@@ -348,16 +364,13 @@ def build_existing_scene_context_prompt_section(
     lines = ["PRE-MAPPED DYNAMIC SCENE CONSTRAINTS (AUTHORED MAP NODE):"]
     if scene_hint.get("label"):
         lines.append(f"- Scene Label: {scene_hint['label']}")
-    if scene_hint.get("premise"):
-        lines.append(f"- Author Scene Premise: {str(scene_hint['premise'])[:600]}")
+    premise = scene_hint.get("premise") or scene_hint.get("author_notes")
+    if premise:
+        lines.append(f"- Author Scene Premise: {str(premise)[:600]}")
 
     exits = scene_hint.get("exits") or []
     if exits:
-        exit_bits = [
-            f"'{ex.get('label')}' -> {ex.get('to_scene_id')}"
-            + (" [locked]" if ex.get("is_locked") else "")
-            for ex in exits[:8]
-        ]
+        exit_bits = [_format_hint_exit(ex) for ex in exits[:8]]
         lines.append(
             "- Fixed Map Exits Leaving This Scene (set `forward_exits` to [] and describe these real passages naturally): "
             + "; ".join(exit_bits)
@@ -369,19 +382,23 @@ def build_existing_scene_context_prompt_section(
 
     static_npcs = scene_hint.get("existing_npcs") or []
     if static_npcs:
-        npc_bits = [f"{n.get('id')} ({n.get('name')})" for n in static_npcs[:6]]
+        npc_bits = [_format_hint_entity(n) for n in static_npcs[:6]]
         lines.append(
             f"- Pre-placed Static NPCs ALREADY in this scene (do NOT regenerate or rename them, reference naturally): {', '.join(npc_bits)}"
         )
 
     static_objs = scene_hint.get("existing_objects") or []
     if static_objs:
-        obj_bits = [
-            f"{o.get('id')} ({o.get('name')}, {o.get('item_type', 'STANDARD')})"
-            for o in static_objs[:8]
-        ]
+        obj_bits = [_format_hint_entity(o, include_type=True) for o in static_objs[:8]]
         lines.append(
             f"- Pre-placed Static Objects ALREADY in this scene (do NOT regenerate or rename them, reference naturally): {', '.join(obj_bits)}"
+        )
+
+    static_entities = scene_hint.get("entities") or []
+    if static_entities and not (static_npcs or static_objs):
+        ent_bits = [_format_hint_entity(ent) for ent in static_entities[:8]]
+        lines.append(
+            f"- Pre-placed Static Entities ALREADY in this scene (do NOT regenerate or rename them, reference naturally): {', '.join(ent_bits)}"
         )
     return "\n".join(lines)
 
@@ -552,8 +569,9 @@ def select_planned_objects(
     objects: list[DynamicGeneratedObject],
     target_objects: int,
     max_cap: int = 5,
+    carried_ids: Optional[set[str]] = None,
 ) -> list[DynamicGeneratedObject]:
-    """Slice objects up to ``target_objects`` while retaining items placed inside kept containers."""
+    """Slice objects up to ``target_objects`` while retaining container contents, NPC loot, and zone keys."""
     limit = min(max_cap, max(0, int(target_objects)))
     if limit <= 0:
         return []
@@ -565,11 +583,12 @@ def select_planned_objects(
         if obj.item_type == "CONTAINER"
         for child_id in obj.inventory
     }
+    extra_keep = child_ids | set(carried_ids or set())
     for obj in list(objects or [])[limit:]:
         if len(kept) >= max_cap:
             break
         key = _norm_key(obj.id)
-        if key in child_ids and key not in kept_ids:
+        if (key in extra_keep or getattr(obj, "is_zone_key", False)) and key not in kept_ids:
             kept.append(obj)
             kept_ids.add(key)
     return kept

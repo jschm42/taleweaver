@@ -15,6 +15,10 @@ from backend.api.routes.adventures.editing.common import (
     _sanitize_object_id,
 )
 from backend.api.routes.adventures.editing.entity_create import create_template_entity
+from backend.api.routes.adventures.editing.entity_update.fields import (
+    EXIT_SCRIPT_FIELDS,
+    copy_scripts,
+)
 from backend.api.routes.adventures.editing.image_clone import _clone_entity_image
 from backend.api.routes.adventures.editing.payload import _serialize_model
 from backend.api.routes.adventures.editing.schemas import (
@@ -228,7 +232,13 @@ async def create_editor_exit(
         to_scene_id=to_scene_id,
         label=label,
         exit_type=payload.exit_type,
-        is_locked=bool(payload.is_locked or code or item or rule),
+        is_locked=bool(
+            payload.is_locked
+            or code
+            or item
+            or rule
+            or str(payload.unlock_expression or "").strip()
+        ),
         is_revealed=bool(payload.is_revealed),
         companions_allowed=payload.companions_allowed is not False,
         lock_description=lock_description or None,
@@ -237,6 +247,7 @@ async def create_editor_exit(
         rule_to_unlock=rule or None,
         dynamic_zone=dynamic_zone,
     )
+    copy_scripts(world_exit, payload, EXIT_SCRIPT_FIELDS)
     db.add(world_exit)
     await db.flush()  # assigns the generated id before it is mirrored into the manifest
     if isinstance(adv.original_manifest, dict) and isinstance(
@@ -259,6 +270,7 @@ async def create_editor_exit(
                 "item_to_unlock": world_exit.item_to_unlock,
                 "rule_to_unlock": world_exit.rule_to_unlock,
                 "dynamic_zone": world_exit.dynamic_zone,
+                **{f: getattr(world_exit, f) for f in EXIT_SCRIPT_FIELDS},
             }
         )
         adv.original_manifest = manifest

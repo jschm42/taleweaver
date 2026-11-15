@@ -315,6 +315,7 @@ class AdventureTemplateResponse(BaseModel):
 
     rule_enforcement_mode: str
     sequence_progression_mode: str = "linear"
+    dynamic_generation: Optional[dict[str, Any]] = None
     strict_rules: bool = True
     time_per_turn: int
     pacing_minutes: int

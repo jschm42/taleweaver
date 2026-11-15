@@ -178,6 +178,15 @@ class ExitCreateRequest(BaseModel):
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
+    unlock_expression: Optional[str] = None
+    on_open_exit_script: Optional[str] = None
+    on_open_exit_text: Optional[str] = None
+    on_exit_used_script: Optional[str] = None
+    on_exit_used_text: Optional[str] = None
+    on_unlock_success_script: Optional[str] = None
+    on_unlock_success_text: Optional[str] = None
+    on_unlock_failure_script: Optional[str] = None
+    on_unlock_failure_text: Optional[str] = None
     dynamic_zone: Optional[dict[str, Any]] = None
 
 

@@ -11,6 +11,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.dynamic_challenge_helper import (
+    apply_cluster_key_and_climax_progression,
+    apply_dynamic_scripts_and_locks,
+    build_dynamic_npc_clones,
+    compute_party_hp_budget,
+    link_dynamic_npc_inventories,
+    scale_dynamic_object_stats,
+)
 from backend.api.routes.adventures.dynamic_cluster_context import (
     collect_cluster_context,
     link_generated_container_inventories,
@@ -124,6 +132,35 @@ def _build_npc_entity(
     return entity
 
 
+def _apply_item_type_metadata(obj: DynamicGeneratedObject, metadata: dict[str, Any]) -> None:
+    if obj.item_type == "SWITCH":
+        metadata["switch_states"] = ["OFF", "ON"]
+        metadata["switch_initial_state"] = "OFF"
+        metadata["switch"] = {"states": ["OFF", "ON"], "initial_state": "OFF"}
+    elif obj.item_type == "READABLE" and obj.text_log_content:
+        metadata["text_log_content"] = obj.text_log_content[:1000]
+        metadata["text_log_format"] = "DOCUMENT"
+    elif obj.item_type == "WEAPON" and obj.damage_dice:
+        metadata["damage_dice"] = obj.damage_dice[:20]
+
+
+def _build_object_metadata(obj: DynamicGeneratedObject) -> dict[str, Any]:
+    metadata: dict[str, Any] = {"dynamic_generated": True}
+    _apply_item_type_metadata(obj, metadata)
+    for key in ("effect_type", "effect_value"):
+        if (val := getattr(obj, key, None)) is not None:
+            metadata[key] = val
+    for key in ("hp_change", "stamina_change", "mana_change"):
+        if val := getattr(obj, key, None):
+            metadata[key] = int(val)
+    for attr, meta_key in (("is_locked", "locked"), ("is_zone_key", "is_zone_key")):
+        if getattr(obj, attr, False):
+            metadata[meta_key] = True
+    if getattr(obj, "lock_description", None):
+        metadata["lock_description"] = str(obj.lock_description)[:255]
+    return metadata
+
+
 def _build_object_entity(
     *,
     session_id: str,
@@ -133,24 +170,7 @@ def _build_object_entity(
 ) -> WorldEntity:
     """Construct a session WorldEntity for a dynamically generated item, container, or switch."""
     entity_id = f"{target_id}_{_safe_slug(obj.id, 16)}"[:50]
-    metadata: dict[str, Any] = {"dynamic_generated": True}
-    if obj.item_type == "SWITCH":
-        metadata["switch_states"] = ["OFF", "ON"]
-        metadata["switch_initial_state"] = "OFF"
-        metadata["switch"] = {"states": ["OFF", "ON"], "initial_state": "OFF"}
-    if obj.item_type == "READABLE" and obj.text_log_content:
-        metadata["text_log_content"] = obj.text_log_content[:1000]
-        metadata["text_log_format"] = "DOCUMENT"
-    for key in ("effect_type", "effect_value"):
-        val = getattr(obj, key, None)
-        if val is not None:
-            metadata[key] = val
-    for key in ("hp_change", "stamina_change", "mana_change"):
-        val = getattr(obj, key, None)
-        if val:
-            metadata[key] = int(val)
-    if obj.item_type == "WEAPON" and obj.damage_dice:
-        metadata["damage_dice"] = obj.damage_dice[:20]
+    metadata = _build_object_metadata(obj)
 
     return WorldEntity(
         id=entity_id,
@@ -174,6 +194,7 @@ def _build_object_entity(
             obj.is_takeable
             and obj.item_type in {"STANDARD", "CONSUMABLE", "WEARABLE", "WEAPON", "READABLE"}
         ),
+        is_hidden=bool(getattr(obj, "is_hidden", False)),
         inventory=[],
         metadata_json=metadata,
     )
@@ -299,7 +320,7 @@ async def _existing_entity_ids(db: AsyncSession, session_id: str) -> set[str]:
     return set(rows)
 
 
-def _persist_existing_scene_contents(
+async def _persist_existing_scene_contents(
     *,
     db: AsyncSession,
     state: SessionState,
@@ -312,10 +333,16 @@ def _persist_existing_scene_contents(
     npc_images: dict[int, Optional[str]],
     object_images: dict[int, Optional[str]],
     scene_audio_track_id: Optional[str],
+    dyn_cfg: Optional[dict[str, Any]] = None,
+    user: Any = None,
+    adventure: Any = None,
 ) -> tuple[WorldScene, dict[str, Any]]:
     """Populate a pre-mapped Dynamic Scene with generated narrative, media, and entities."""
     target_id = existing_scene.id
-    existing_scene.label = (existing_scene.label or payload.name)[:100]
+    if isinstance(zone.get("cluster_node"), dict):
+        existing_scene.label = (payload.name or existing_scene.label)[:100]
+    else:
+        existing_scene.label = (existing_scene.label or payload.name)[:100]
     existing_scene.description = payload.description
     if scene_image and not existing_scene.image_url:
         existing_scene.image_url = scene_image
@@ -327,35 +354,52 @@ def _persist_existing_scene_contents(
     flag_modified(existing_scene, "dynamic_zone")
 
     spawned_npcs: list[dict[str, Any]] = []
+    npc_entries: list[tuple[DynamicGeneratedNpc, WorldEntity, bool]] = []
+    party_hp = await compute_party_hp_budget(db, state)
+    danger = str(zone.get("danger_level") or "medium")
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
     for idx, npc in enumerate(payload.npcs[:max_npcs]):
-        npc_entity = _build_npc_entity(
+        for npc_entity, is_primary in build_dynamic_npc_clones(
             session_id=state.session_id,
             target_id=target_id,
             npc=npc,
             image_url=npc_images.get(idx),
             state=state,
-        )
-        if npc_entity.id in existing_ids:
-            continue
-        existing_ids.add(npc_entity.id)
-        db.add(npc_entity)
-        spawned_npcs.append(
-            {
-                "id": npc_entity.id,
-                "name": npc_entity.name,
-                "npc_type": npc_entity.npc_type,
-                "role": npc.role,
-                "attitude": npc.attitude,
-                "combat_role": npc.combat_role,
-                "description": npc_entity.description,
-            }
-        )
+            existing_ids=existing_ids,
+            party_hp=party_hp,
+            danger=danger,
+        ):
+            db.add(npc_entity)
+            npc_entries.append((npc, npc_entity, is_primary))
+            spawned_npcs.append(
+                {
+                    "id": npc_entity.id,
+                    "name": npc_entity.name,
+                    "npc_type": npc_entity.npc_type,
+                    "role": npc.role,
+                    "attitude": npc.attitude,
+                    "combat_role": npc.combat_role,
+                    "description": npc_entity.description,
+                }
+            )
 
     spawned_objects: list[dict[str, Any]] = []
     persisted_objects: list[DynamicGeneratedObject] = []
+    object_entities: list[WorldEntity] = []
     raw_id_to_entity: dict[str, WorldEntity] = {}
+    enemy_hps = [int(ent.max_hp or ent.hp or 0) for _, ent, _ in npc_entries if ent.is_attackable]
+    is_climax = int(zone.get("depth") or 1) >= int(zone.get("max_depth") or 3) and bool(
+        zone.get("cul_de_sac_on_max_depth", True)
+    )
     for idx, obj in enumerate(list(payload.objects[:5])):
+        scale_dynamic_object_stats(
+            obj,
+            party_hp=party_hp,
+            enemy_hps=enemy_hps,
+            danger=danger,
+            is_climax=is_climax,
+            instructions=str(zone.get("instructions") or ""),
+        )
         obj_entity = _build_object_entity(
             session_id=state.session_id,
             target_id=target_id,
@@ -367,6 +411,7 @@ def _persist_existing_scene_contents(
         existing_ids.add(obj_entity.id)
         db.add(obj_entity)
         persisted_objects.append(obj)
+        object_entities.append(obj_entity)
         raw_id_to_entity[normalize_match_token(obj.id)] = obj_entity
         raw_id_to_entity.setdefault(normalize_match_token(obj.name), obj_entity)
         spawned_objects.append(
@@ -383,6 +428,19 @@ def _persist_existing_scene_contents(
             }
         )
     link_generated_container_inventories(persisted_objects, raw_id_to_entity)
+    link_dynamic_npc_inventories(npc_entries, raw_id_to_entity)
+    apply_dynamic_scripts_and_locks(persisted_objects, npc_entries, raw_id_to_entity)
+    await apply_cluster_key_and_climax_progression(
+        db=db,
+        state=state,
+        zone=zone,
+        target_id=target_id,
+        npc_entities=[ent for _, ent, _ in npc_entries],
+        object_entities=object_entities,
+        dyn_cfg=dyn_cfg,
+        user=user,
+        adventure=adventure,
+    )
 
     entity_states = dict(state.entity_states or {})
     dyn_meta = dict(entity_states.get(_DYNAMIC_ZONE_META_KEY) or {})
@@ -446,7 +504,7 @@ async def materialize_existing_dynamic_scene(
     if emit_sse:
         await emit_sse("status", {"content": "Exploring uncharted territory..."})
 
-    tone_text = extract_tone_text(adventure)
+    tone_text = extract_tone_text(adventure, user)
     max_npcs = max(0, min(5, int(zone.get("max_npcs", dyn_cfg.get("max_npcs", 2)))))
     origin_name = origin_scene.label if origin_scene else target_scene.label
     origin_desc = origin_scene.description if origin_scene else ""
@@ -515,7 +573,7 @@ async def materialize_existing_dynamic_scene(
         adventure=adventure,
     )
     existing_ids = await _existing_entity_ids(db, state.session_id)
-    updated_scene, generated_scene_data = _persist_existing_scene_contents(
+    updated_scene, generated_scene_data = await _persist_existing_scene_contents(
         db=db,
         state=state,
         existing_scene=target_scene,
@@ -527,6 +585,9 @@ async def materialize_existing_dynamic_scene(
         npc_images=npc_images,
         object_images=object_images,
         scene_audio_track_id=scene_audio_track_id,
+        dyn_cfg=dyn_cfg,
+        user=user,
+        adventure=adventure,
     )
     await db.flush()
 

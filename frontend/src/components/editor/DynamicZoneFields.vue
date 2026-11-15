@@ -40,6 +40,7 @@ export interface DynamicZoneForm {
   npc_type_caps?: DynamicZoneNpcCapsOverride | null
   spawn_chances?: DynamicZoneSpawnChancesOverride | null
   audio_mode?: 'inherit' | 'empty' | 'generate' | null
+  generation_model?: 'mechanics' | 'narration' | 'world_builder' | null
   cul_de_sac_on_max_depth: boolean
   on_after_generated_script?: string | null
 }
@@ -101,6 +102,7 @@ const zone = computed<DynamicZoneForm>(() => ({
   npc_type_caps: props.modelValue?.npc_type_caps ?? null,
   spawn_chances: props.modelValue?.spawn_chances ?? null,
   audio_mode: props.modelValue?.audio_mode ?? null,
+  generation_model: props.modelValue?.generation_model ?? null,
   cul_de_sac_on_max_depth:
     props.modelValue?.cul_de_sac_on_max_depth !== undefined
       ? Boolean(props.modelValue.cul_de_sac_on_max_depth)
@@ -142,6 +144,7 @@ function toggleEnabled() {
       npc_type_caps: null,
       spawn_chances: null,
       audio_mode: null,
+      generation_model: null,
       cul_de_sac_on_max_depth: true,
     })
   }
@@ -365,19 +368,35 @@ function clearOverrides() {
           </label>
         </div>
 
-        <label class="text-xs text-slate-300 space-y-1 block">
-          <span>Music Override</span>
-          <select
-            :value="zone.audio_mode || ''"
-            class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
-            @change="updateField('audio_mode', (($event.target as HTMLSelectElement).value || null) as DynamicZoneForm['audio_mode'])"
-          >
-            <option value="">Use Global Setting</option>
-            <option value="inherit">Inherit from Originating Scene</option>
-            <option value="generate">Generate New Music Track</option>
-            <option value="empty">Off (silence)</option>
-          </select>
-        </label>
+        <div class="grid md:grid-cols-2 gap-3">
+          <label class="text-xs text-slate-300 space-y-1 block">
+            <span>Music Override</span>
+            <select
+              :value="zone.audio_mode || ''"
+              class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+              @change="updateField('audio_mode', (($event.target as HTMLSelectElement).value || null) as DynamicZoneForm['audio_mode'])"
+            >
+              <option value="">Use Global Setting</option>
+              <option value="inherit">Inherit from Originating Scene</option>
+              <option value="generate">Generate New Music Track</option>
+              <option value="empty">Off (silence)</option>
+            </select>
+          </label>
+
+          <label class="text-xs text-slate-300 space-y-1 block">
+            <span>Generation Model Override</span>
+            <select
+              :value="zone.generation_model || ''"
+              class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+              @change="updateField('generation_model', (($event.target as HTMLSelectElement).value || null) as DynamicZoneForm['generation_model'])"
+            >
+              <option value="">Use Global Setting</option>
+              <option value="mechanics">Mechanics Model (Pass 1 — Fast)</option>
+              <option value="narration">Narration Model (Pass 2 — Story &amp; Atmosphere)</option>
+              <option value="world_builder">World Builder Model (Pass 3 — High Context)</option>
+            </select>
+          </label>
+        </div>
 
         <label class="text-xs text-slate-300 space-y-1 block">
           <span>Zone Theme <span class="text-red-400">*</span></span>

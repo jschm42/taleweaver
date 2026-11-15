@@ -689,6 +689,21 @@ async function uploadSelectedVisual(event: Event) {
   }
 }
 
+function normalizeDynamicGenerationForm(
+  raw?: Partial<DynamicGenerationConfig> | null,
+): DynamicGenerationConfig {
+  return {
+    ...(raw || {}),
+    scene_image_mode: raw?.scene_image_mode || 'simple',
+    npc_image_mode: raw?.npc_image_mode || 'simple',
+    item_image_mode: raw?.item_image_mode || 'simple',
+    audio_mode: raw?.audio_mode || 'inherit',
+    generation_model: raw?.generation_model || 'mechanics',
+    max_npcs: raw?.max_npcs ?? 2,
+    interlude_quote_enabled: raw?.interlude_quote_enabled ?? true,
+  } as DynamicGenerationConfig
+}
+
 const form = ref({
   title: '',
   teaser: '',
@@ -738,6 +753,7 @@ const form = ref({
     npc_image_mode: 'simple',
     item_image_mode: 'simple',
     audio_mode: 'inherit',
+    generation_model: 'mechanics',
     max_npcs: 2,
     interlude_quote_enabled: true,
   } as DynamicGenerationConfig,
@@ -988,14 +1004,7 @@ async function fetchAdventure() {
     }
     form.value.narrator_voice = data.narrator_voice || null
     form.value.is_adventure_generator = !!data.is_adventure_generator
-    form.value.dynamic_generation = {
-      scene_image_mode: data.dynamic_generation?.scene_image_mode || 'simple',
-      npc_image_mode: data.dynamic_generation?.npc_image_mode || 'simple',
-      item_image_mode: data.dynamic_generation?.item_image_mode || 'simple',
-      audio_mode: data.dynamic_generation?.audio_mode || 'inherit',
-      max_npcs: data.dynamic_generation?.max_npcs ?? 2,
-      interlude_quote_enabled: data.dynamic_generation?.interlude_quote_enabled ?? true,
-    }
+    form.value.dynamic_generation = normalizeDynamicGenerationForm(data.dynamic_generation)
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -2087,6 +2096,37 @@ async function handleUpdateQuests(newQuests: any[]) {
     addNotification(error instanceof Error ? error.message : 'Failed to update quests', 'error')
   } finally {
     isSaving.value = false
+  }
+}
+
+let dynamicSaveSeq = 0
+
+async function handleUpdateDynamicGeneration(nextConfig?: DynamicGenerationConfig) {
+  const payload = normalizeDynamicGenerationForm(nextConfig ?? form.value.dynamic_generation)
+  form.value.dynamic_generation = payload
+  const seq = ++dynamicSaveSeq
+  isSaving.value = true
+  errorMsg.value = ''
+  try {
+    const updated = await adventureService.updateAdventure(props.adventureId, {
+      dynamic_generation: payload,
+    })
+    if (seq !== dynamicSaveSeq) return
+    if (updated?.dynamic_generation) {
+      form.value.dynamic_generation = normalizeDynamicGenerationForm(updated.dynamic_generation)
+      if (adventure.value) {
+        adventure.value.dynamic_generation = updated.dynamic_generation
+      }
+    }
+    addNotification('Dynamic Generator settings saved.', 'success')
+  } catch (error: any) {
+    if (seq !== dynamicSaveSeq) return
+    errorMsg.value = error?.message || 'Failed to save Dynamic Generator settings.'
+    addNotification(errorMsg.value, 'error')
+  } finally {
+    if (seq === dynamicSaveSeq) {
+      isSaving.value = false
+    }
   }
 }
 
@@ -3283,7 +3323,9 @@ watch(
             <DynamicGenerationSection
               v-if="activeTab === 'dynamic'"
               :model-value="form.dynamic_generation"
-              @update:model-value="form.dynamic_generation = $event; saveChanges()"
+              :is-saving="isSaving"
+              @update:model-value="form.dynamic_generation = $event"
+              @save="handleUpdateDynamicGeneration"
             />
 
             <AdvancedTab 

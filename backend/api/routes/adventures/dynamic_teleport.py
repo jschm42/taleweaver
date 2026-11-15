@@ -130,6 +130,7 @@ def _merge_dynamic_teleport_zone(
         "audio_mode": req["audio_mode"]
         if req.get("audio_mode") is not None
         else base_zone.get("audio_mode"),
+        "generation_model": base_zone.get("generation_model"),
         "cul_de_sac_on_max_depth": (
             req["cul_de_sac"]
             if req.get("cul_de_sac") is not None

@@ -6,8 +6,8 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "c17596de62f1adac4a69b283e046dd00d67e425c771e707381f5fa2aec7365ed",
-      "size": 35937
+      "sha256": "1581d45a3def348c9b53ebc3709917c5a10a3ea781931db56566dd6563f9e5fe",
+      "size": 36120
     },
     {
       "path": "docs/scripting-enginge.md",
@@ -21,8 +21,8 @@
     },
     {
       "path": "docs/specs/adventure_format.md",
-      "sha256": "a1ed20b0db7c37eeeb4be5c345320c491d13f701253baa775efa532860757d3c",
-      "size": 28589
+      "sha256": "1561326c1431b8d03bc4b583dc9e0e52af0172b5ca614288302a4d6b33ddbc90",
+      "size": 28918
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",
@@ -31,8 +31,8 @@
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "501547f387f9fe8cd2f3b268669522c1bade7868d608e93c5582485588eb57fb",
-      "size": 29470
+      "sha256": "1adb3b219c98df3ee5efd39eaffdf6965ec4669ba1412a7d988150f94f623896",
+      "size": 29743
     },
     {
       "path": "package.json",

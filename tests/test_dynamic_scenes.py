@@ -68,6 +68,7 @@ def test_normalization_helpers_and_placeholder_id() -> None:
         "npc_image_mode": "simple",
         "item_image_mode": "simple",
         "audio_mode": "generate",
+        "generation_model": "mechanics",
         "max_npcs": 2,
         "npc_type_caps": {"humanoid": 2, "being": 2, "animal": 2, "monster": 2},
         "spawn_chances": {
@@ -458,6 +459,7 @@ def test_blueprint_dynamic_world_and_exit_roundtrip() -> None:
         "npc_image_mode": "hq",
         "item_image_mode": "off",
         "audio_mode": "inherit",
+        "generation_model": "mechanics",
         "max_npcs": 2,
         "npc_type_caps": {"humanoid": 2, "being": 2, "animal": 2, "monster": 2},
         "spawn_chances": {
@@ -2419,3 +2421,194 @@ async def test_premapped_dynamic_scene_materializes_preserving_exits_and_entitie
     barn_cluster = captured_calls[1]["cluster_context"]
     assert isinstance(barn_cluster, list)
     assert any(c["scene_id"] == "PRE_STABLE" for c in barn_cluster)
+
+
+@pytest.mark.asyncio
+async def test_dynamic_generation_template_response_and_patch_roundtrip(db_session) -> None:
+    """AdventureTemplateResponse and PATCH/GET endpoints preserve custom dynamic_generation settings."""
+    from backend.api.routes.adventures.schemas import (
+        AdventureTemplateResponse,
+        AdventureTemplateUpdate,
+    )
+    from backend.api.routes.adventures.templates import get_adventure, update_adventure
+
+    # Arrange
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"dyn_cfg_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+    adv = AdventureTemplate(
+        id=str(uuid.uuid4()),
+        owner_id=user.id,
+        title="Dynamic Config Test",
+        is_ready=True,
+        original_manifest={
+            "title": "Dynamic Config Test",
+            "adventure": {"title": "Dynamic Config Test"},
+        },
+    )
+    db_session.add_all([user, adv])
+    await db_session.commit()
+
+    custom_cfg = {
+        "scene_image_mode": "hq",
+        "npc_image_mode": "off",
+        "item_image_mode": "hq",
+        "audio_mode": "generate",
+        "generation_model": "world_builder",
+        "max_npcs": 4,
+        "npc_type_caps": {"humanoid": 1, "being": 3, "animal": 0, "monster": 4},
+        "spawn_chances": {
+            "npc": 80,
+            "enemy": 65,
+            "humanoid": 20,
+            "being": 40,
+            "animal": 0,
+            "monster": 90,
+            "item": 50,
+            "container": 10,
+            "switch": 5,
+        },
+        "interlude_quote_enabled": False,
+    }
+
+    # Act
+    patched = await update_adventure(
+        adv.id,
+        AdventureTemplateUpdate(dynamic_generation=custom_cfg),
+        db=db_session,
+        current_user=user,
+    )
+    fetched = await get_adventure(adv.id, db=db_session, current_user=user)
+    validated = AdventureTemplateResponse.model_validate(adv).model_dump()
+
+    # Assert
+    for data in (patched, fetched, validated):
+        assert data["dynamic_generation"] == custom_cfg
+
+
+@pytest.mark.asyncio
+async def test_dynamic_zone_update_enable_disable_and_exit_scripts(db_session) -> None:
+    """Scene/exit dynamic_zone can be saved and cleared cleanly, and create_editor_exit saves scripts."""
+    from backend.api.routes.adventures.editing.entity_update.scene_exit import (
+        _update_exit_dynamic_zone,
+        _update_scene_dynamic_zone,
+        update_exit,
+    )
+    from backend.api.routes.adventures.editing.schemas import (
+        EntityUpdateRequest,
+        ExitCreateRequest,
+    )
+    from backend.api.routes.adventures.editing.world_crud import create_editor_exit
+
+    # Arrange
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"dyn_zone_{uuid.uuid4().hex[:8]}",
+        hashed_password="x",
+    )
+    adv = AdventureTemplate(
+        id=str(uuid.uuid4()),
+        owner_id=user.id,
+        title="Exit Zone Test",
+        is_ready=True,
+        original_manifest={
+            "exits": [
+                {
+                    "from_scene_id": "TOWN_GATE",
+                    "to_scene_id": "STATIC_ROOM",
+                    "label": "Old Gate",
+                    "exit_type": "one_way",
+                }
+            ]
+        },
+    )
+    gate = WorldScene(
+        id="TOWN_GATE",
+        template_id=adv.id,
+        session_id=None,
+        label="Town Gate",
+        description="Stone gate.",
+    )
+    static_room = WorldScene(
+        id="STATIC_ROOM",
+        template_id=adv.id,
+        session_id=None,
+        label="Static Room",
+        description="Static room.",
+    )
+    exit_row = WorldExit(
+        id="EXIT_GATE",
+        template_id=adv.id,
+        session_id=None,
+        from_scene_id="TOWN_GATE",
+        to_scene_id="STATIC_ROOM",
+        label="Old Gate",
+        exit_type="one_way",
+    )
+    db_session.add_all([user, adv, gate, static_room, exit_row])
+    await db_session.commit()
+
+    zone_cfg = {
+        "zone_id": "ZONE_CRYPTS",
+        "theme": "Flooded ancient crypt",
+        "depth": 1,
+        "max_depth": 4,
+        "danger_level": "high",
+    }
+
+    # Act 1: Enable and then explicitly disable dynamic_zone on scene and exit
+    _update_scene_dynamic_zone(
+        static_room,
+        EntityUpdateRequest(target_type="scene", target_id=static_room.id, dynamic_zone=zone_cfg),
+    )
+    assert static_room.dynamic_zone is not None
+    assert static_room.dynamic_zone["zone_id"] == "zone_crypts"
+
+    _update_scene_dynamic_zone(
+        static_room,
+        EntityUpdateRequest(target_type="scene", target_id=static_room.id, dynamic_zone=None),
+    )
+    assert static_room.dynamic_zone is None
+
+    await update_exit(
+        db_session,
+        adv.id,
+        adv,
+        EntityUpdateRequest(target_type="exit", target_id=exit_row.id, dynamic_zone=zone_cfg),
+    )
+    assert exit_row.dynamic_zone is not None
+    assert exit_row.to_scene_id.startswith("DYN_")
+    assert adv.original_manifest["exits"][0]["dynamic_zone"]["zone_id"] == "zone_crypts"
+
+    _update_exit_dynamic_zone(
+        exit_row,
+        EntityUpdateRequest(target_type="exit", target_id=exit_row.id, dynamic_zone=None),
+    )
+    assert exit_row.dynamic_zone is None
+
+    # Act 2: create_editor_exit persists script fields and unlock_expression
+    created = await create_editor_exit(
+        adv.id,
+        ExitCreateRequest(
+            from_scene_id="TOWN_GATE",
+            to_scene_id="STATIC_ROOM",
+            label="Rune Gate",
+            lock_description="Sealed by a glyph.",
+            unlock_expression="tw.vars.get('rune_key') == True",
+            on_exit_used_script="tw.vars['entered_crypt'] = True",
+            on_exit_used_text="The rune flares.",
+            dynamic_zone=zone_cfg,
+        ),
+        db=db_session,
+        current_user=user,
+    )
+
+    # Assert
+    assert created["status"] == "success"
+    assert created["exit"]["is_locked"] is True
+    assert created["exit"]["unlock_expression"] == "tw.vars.get('rune_key') == True"
+    assert created["exit"]["on_exit_used_script"] == "tw.vars['entered_crypt'] = True"
+    assert created["exit"]["on_exit_used_text"] == "The rune flares."
+    assert created["exit"]["dynamic_zone"]["zone_id"] == "zone_crypts"

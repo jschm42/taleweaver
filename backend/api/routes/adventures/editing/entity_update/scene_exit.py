@@ -9,6 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.editing.common import _normalize_lock_fields
 from backend.api.routes.adventures.editing.entity_update.fields import (
+    EXIT_SCRIPT_FIELDS,
     copy_scripts,
     given,
     template_row_exists,
@@ -25,17 +26,6 @@ from backend.engine.world.scene_fields import SCENE_AUDIO_FIELDS, SCENE_SCRIPT_F
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
-_EXIT_SCRIPT_FIELDS = (
-    "unlock_expression",
-    "on_open_exit_script",
-    "on_open_exit_text",
-    "on_exit_used_script",
-    "on_exit_used_text",
-    "on_unlock_success_script",
-    "on_unlock_success_text",
-    "on_unlock_failure_script",
-    "on_unlock_failure_text",
-)
 # Exit columns mirrored into the manifest's exit entries.
 _EXIT_MANIFEST_FIELDS = (
     "to_scene_id",
@@ -49,7 +39,7 @@ _EXIT_MANIFEST_FIELDS = (
     "item_to_unlock",
     "rule_to_unlock",
     "dynamic_zone",
-    *_EXIT_SCRIPT_FIELDS,
+    *EXIT_SCRIPT_FIELDS,
 )
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
 _MAX_SCENE_ID_LENGTH = 50
@@ -130,7 +120,7 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
 
 
 def _update_scene_dynamic_zone(scene: WorldScene, payload: EntityUpdateRequest) -> None:
-    if not given(payload, "dynamic_zone"):
+    if "dynamic_zone" not in payload.model_fields_set:
         return
     scene.dynamic_zone = (
         normalize_dynamic_zone(payload.dynamic_zone)
@@ -178,22 +168,22 @@ def _update_exit_lock(world_exit: WorldExit, payload: EntityUpdateRequest) -> No
     world_exit.rule_to_unlock = rule
 
 
-def _sync_exit_manifest(adv: AdventureTemplate, world_exit: WorldExit) -> None:
+def _sync_exit_manifest(
+    adv: AdventureTemplate, world_exit: WorldExit, previous_to_scene_id: str | None = None
+) -> None:
     manifest = adv.original_manifest
     if not isinstance(manifest, dict) or not isinstance(manifest.get("exits"), list):
         return
     manifest = deepcopy(manifest)
-    route = (world_exit.from_scene_id, world_exit.to_scene_id)
+    routes = {(world_exit.from_scene_id, world_exit.to_scene_id)}
+    if previous_to_scene_id:
+        routes.add((world_exit.from_scene_id, previous_to_scene_id))
     for item in manifest["exits"]:
         if not isinstance(item, dict):
             continue
         if (
             item.get("id") != world_exit.id
-            and (
-                item.get("from_scene_id"),
-                item.get("to_scene_id"),
-            )
-            != route
+            and (item.get("from_scene_id"), item.get("to_scene_id")) not in routes
         ):
             continue
         item.update({f: getattr(world_exit, f) for f in _EXIT_MANIFEST_FIELDS})
@@ -203,9 +193,13 @@ def _sync_exit_manifest(adv: AdventureTemplate, world_exit: WorldExit) -> None:
 
 
 def _update_exit_dynamic_zone(world_exit: WorldExit, payload: EntityUpdateRequest) -> None:
-    if not given(payload, "dynamic_zone"):
+    if "dynamic_zone" not in payload.model_fields_set:
         return
-    normalized_zone = normalize_dynamic_zone(payload.dynamic_zone)
+    normalized_zone = (
+        normalize_dynamic_zone(payload.dynamic_zone)
+        if isinstance(payload.dynamic_zone, dict)
+        else None
+    )
     world_exit.dynamic_zone = normalized_zone
     flag_modified(world_exit, "dynamic_zone")
     if normalized_zone:
@@ -225,6 +219,7 @@ async def update_exit(
     world_exit = res.scalars().first()
     if not world_exit:
         return
+    previous_to_scene_id = world_exit.to_scene_id
     if given(payload, "name"):
         label = str(payload.name or "").strip()
         if not label:
@@ -241,7 +236,7 @@ async def update_exit(
     if given(payload, "exit_type"):
         world_exit.exit_type = payload.exit_type
     _update_exit_dynamic_zone(world_exit, payload)
-    copy_scripts(world_exit, payload, _EXIT_SCRIPT_FIELDS)
+    copy_scripts(world_exit, payload, EXIT_SCRIPT_FIELDS)
     if any(given(payload, f) for f in _LOCK_FIELDS):
         _update_exit_lock(world_exit, payload)
-    _sync_exit_manifest(adv, world_exit)
+    _sync_exit_manifest(adv, world_exit, previous_to_scene_id)

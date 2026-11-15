@@ -15,6 +15,7 @@ from backend.api.routes.adventures.script_image import (
     _style_instruction,
     _tier_options,
 )
+from backend.core.style_catalog import resolve_tone_instruction
 from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.image_prompt_context import (
@@ -34,12 +35,24 @@ logger = logging.getLogger(__name__)
 _DYNAMIC_AUDIO_MAP_KEY = "__dynamic_scene_audio__"
 
 
-def extract_tone_text(adv: AdventureTemplate) -> str:
-    """Return a readable tone string from an adventure's selected_tone."""
+def extract_tone_text(adv: Any, user: Any = None) -> str:
+    """Return a readable tone string (name + instruction) from an adventure's selected_tone and user catalog."""
     tone = getattr(adv, "selected_tone", None)
+    if not tone:
+        return ""
+    user_catalog = list(getattr(user, "tone_catalog", None) or []) if user is not None else []
+    instruction = resolve_tone_instruction(tone, user_catalog).strip()
     if isinstance(tone, dict):
-        return str(tone.get("name") or tone.get("id") or "").strip()
-    return str(tone or "").strip()
+        name = str(tone.get("name") or tone.get("id") or "").strip()
+        desc = str(tone.get("description") or "").strip()
+        detail = instruction or desc
+        if name and detail and detail.lower() != name.lower():
+            return f"{name} — {detail}"
+        return name or detail
+    name = str(tone).strip()
+    if instruction and instruction.lower() != name.lower():
+        return f"{name} — {instruction}"
+    return name
 
 
 async def _generate_tier_image(
@@ -115,6 +128,32 @@ def _append_entity_image_tasks(
             )
         )
         task_keys.append((kind, idx))
+
+
+async def generate_dynamic_object_image(
+    *,
+    name: str,
+    description: str,
+    appearance: str = "",
+    dyn_cfg: Optional[dict[str, Any]],
+    user: Any,
+    adventure: Optional[AdventureTemplate],
+    session_id: str,
+    prefix: str,
+) -> Optional[str]:
+    """Generate a single dynamic item artwork according to dyn_cfg['item_image_mode']."""
+    item_mode = str((dyn_cfg or {}).get("item_image_mode") or "simple")
+    if item_mode not in {"simple", "hq"} or not user or not adventure:
+        return None
+    prompt = build_object_image_prompt(name, description, appearance=appearance)
+    return await _generate_tier_image(
+        prompt=prompt,
+        tier=item_mode,
+        user=user,
+        adventure=adventure,
+        session_id=session_id,
+        prefix=prefix,
+    )
 
 
 async def generate_dynamic_visuals(

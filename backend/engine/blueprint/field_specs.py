@@ -80,6 +80,24 @@ def _hook(table: dict[str, FieldSpec], key: str, target: str) -> None:
     table[f"{key}_text"] = FieldSpec(f"{target}_text")
 
 
+_DYNAMIC_MODEL_CONVERT = choice(
+    "mechanics",
+    "narration",
+    "world_builder",
+    aliases={
+        "small": "mechanics",
+        "pass1": "mechanics",
+        "complex": "narration",
+        "narrative": "narration",
+        "story": "narration",
+        "pass2": "narration",
+        "worldbuilder": "world_builder",
+        "generator": "world_builder",
+        "world": "world_builder",
+        "pass3": "world_builder",
+    },
+)
+
 WORLD_KEYS: dict[str, FieldSpec] = {
     "language": FieldSpec("language"),
     "image_style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
@@ -151,6 +169,10 @@ WORLD_KEYS: dict[str, FieldSpec] = {
             aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
         ),
     ),
+    "dynamic_model": FieldSpec("dynamic_generation.generation_model", _DYNAMIC_MODEL_CONVERT),
+    "dynamic_generation_model": FieldSpec(
+        "dynamic_generation.generation_model", _DYNAMIC_MODEL_CONVERT
+    ),
     "dynamic_max_npcs": FieldSpec("dynamic_generation.max_npcs", dynamic_max_npcs),
     "dynamic_quotes": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
     "dynamic_interlude": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
@@ -194,6 +216,8 @@ _DYNAMIC_COMMON_KEYS: dict[str, FieldSpec] = {
     "music_mode": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
     "dynamic_audio": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
     "dynamic_music": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "generation_model": FieldSpec("dynamic_zone.generation_model", _DYNAMIC_MODEL_CONVERT),
+    "dynamic_model": FieldSpec("dynamic_zone.generation_model", _DYNAMIC_MODEL_CONVERT),
     "allowed_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
     "allowed_entities": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
     "allowed_entity_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),

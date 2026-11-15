@@ -20,11 +20,14 @@ export interface DynamicSpawnChances {
   switch: number
 }
 
+export type DynamicGenerationModel = 'mechanics' | 'narration' | 'world_builder'
+
 export interface DynamicGenerationConfig {
   scene_image_mode: 'off' | 'inherit' | 'simple' | 'hq'
   npc_image_mode: 'off' | 'simple' | 'hq'
   item_image_mode: 'off' | 'simple' | 'hq'
   audio_mode: 'inherit' | 'empty' | 'generate'
+  generation_model: DynamicGenerationModel
   max_npcs: number
   npc_type_caps: DynamicNpcTypeCaps
   spawn_chances: DynamicSpawnChances
@@ -55,6 +58,7 @@ const DEFAULT_CONFIG: DynamicGenerationConfig = {
   npc_image_mode: 'simple',
   item_image_mode: 'simple',
   audio_mode: 'inherit',
+  generation_model: 'mechanics',
   max_npcs: 2,
   npc_type_caps: { ...DEFAULT_NPC_TYPE_CAPS },
   spawn_chances: { ...DEFAULT_SPAWN_CHANCES },
@@ -82,10 +86,12 @@ const SPAWN_CHANCE_FIELDS: Array<{ key: keyof DynamicSpawnChances; label: string
 
 const props = defineProps<{
   modelValue?: Partial<DynamicGenerationConfig> | null
+  isSaving?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: DynamicGenerationConfig): void
+  (e: 'save', value: DynamicGenerationConfig): void
 }>()
 
 function clampInt(raw: unknown, fallback: number, min: number, max: number): number {
@@ -99,6 +105,7 @@ const config = computed<DynamicGenerationConfig>(() => ({
   npc_image_mode: props.modelValue?.npc_image_mode || DEFAULT_CONFIG.npc_image_mode,
   item_image_mode: props.modelValue?.item_image_mode || DEFAULT_CONFIG.item_image_mode,
   audio_mode: props.modelValue?.audio_mode || DEFAULT_CONFIG.audio_mode,
+  generation_model: props.modelValue?.generation_model || DEFAULT_CONFIG.generation_model,
   max_npcs: clampInt(props.modelValue?.max_npcs ?? DEFAULT_CONFIG.max_npcs, DEFAULT_CONFIG.max_npcs, 0, 5),
   npc_type_caps: {
     humanoid: clampInt(props.modelValue?.npc_type_caps?.humanoid, DEFAULT_NPC_TYPE_CAPS.humanoid, 0, 5),
@@ -130,37 +137,61 @@ function clampMaxNpcs(raw: unknown): number {
 function updateField<K extends keyof DynamicGenerationConfig>(
   key: K,
   value: DynamicGenerationConfig[K],
+  shouldSave = false,
 ) {
-  emit('update:modelValue', {
+  const next: DynamicGenerationConfig = {
     ...config.value,
     [key]: value,
-  })
+  }
+  emit('update:modelValue', next)
+  if (shouldSave) {
+    emit('save', next)
+  }
 }
 
-function updateNpcCap(key: keyof DynamicNpcTypeCaps, raw: unknown) {
-  updateField('npc_type_caps', {
-    ...config.value.npc_type_caps,
-    [key]: clampInt(raw, DEFAULT_NPC_TYPE_CAPS[key], 0, 5),
-  })
+function updateNpcCap(key: keyof DynamicNpcTypeCaps, raw: unknown, shouldSave = false) {
+  updateField(
+    'npc_type_caps',
+    {
+      ...config.value.npc_type_caps,
+      [key]: clampInt(raw, DEFAULT_NPC_TYPE_CAPS[key], 0, 5),
+    },
+    shouldSave,
+  )
 }
 
-function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
-  updateField('spawn_chances', {
-    ...config.value.spawn_chances,
-    [key]: clampInt(raw, DEFAULT_SPAWN_CHANCES[key], 0, 100),
-  })
+function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown, shouldSave = false) {
+  updateField(
+    'spawn_chances',
+    {
+      ...config.value.spawn_chances,
+      [key]: clampInt(raw, DEFAULT_SPAWN_CHANCES[key], 0, 100),
+    },
+    shouldSave,
+  )
 }
 </script>
 
 <template>
   <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6 animate-page-in">
-    <div class="space-y-1">
-      <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
-        <i class="ra ra-compass text-emerald-400"></i> Dynamic Generator
-      </h4>
-      <p class="text-xs text-slate-400 leading-relaxed">
-        Configure how on-the-fly procedural scenes, portraits, item artwork, audio, and loading quotes behave when players enter Dynamic Zone Exits.
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
+        <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+          <i class="ra ra-compass text-emerald-400"></i> Dynamic Generator
+        </h4>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Configure how on-the-fly procedural scenes, portraits, item artwork, audio, and loading quotes behave when players enter Dynamic Zone Exits.
+        </p>
+      </div>
+      <button
+        type="button"
+        :disabled="isSaving"
+        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg disabled:opacity-50 shrink-0 cursor-pointer"
+        @click="emit('save', config)"
+      >
+        <i v-if="isSaving" class="ra ra-cycle animate-spin mr-1.5"></i>
+        {{ isSaving ? 'Saving...' : 'Save Settings' }}
+      </button>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -169,7 +200,7 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
         <select
           :value="config.scene_image_mode"
           class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
-          @change="updateField('scene_image_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['scene_image_mode'])"
+          @change="updateField('scene_image_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['scene_image_mode'], true)"
         >
           <option value="simple">Simple Model (fast scene artwork)</option>
           <option value="hq">High Quality Model (detailed scene artwork)</option>
@@ -183,7 +214,7 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
         <select
           :value="config.npc_image_mode"
           class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
-          @change="updateField('npc_image_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['npc_image_mode'])"
+          @change="updateField('npc_image_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['npc_image_mode'], true)"
         >
           <option value="simple">Simple Model (fast NPC portraits)</option>
           <option value="hq">High Quality Model (detailed portraits)</option>
@@ -196,7 +227,7 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
         <select
           :value="config.item_image_mode"
           class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
-          @change="updateField('item_image_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['item_image_mode'])"
+          @change="updateField('item_image_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['item_image_mode'], true)"
         >
           <option value="simple">Simple Model (fast item artwork)</option>
           <option value="hq">High Quality Model (detailed item artwork)</option>
@@ -209,11 +240,24 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
         <select
           :value="config.audio_mode"
           class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
-          @change="updateField('audio_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['audio_mode'])"
+          @change="updateField('audio_mode', ($event.target as HTMLSelectElement).value as DynamicGenerationConfig['audio_mode'], true)"
         >
           <option value="inherit">Inherit from Originating Scene</option>
           <option value="empty">Empty (silence)</option>
           <option value="generate">Generate New Music Track</option>
+        </select>
+      </label>
+
+      <label class="block space-y-1.5">
+        <span class="text-xs font-bold text-slate-200">Default Generation Model</span>
+        <select
+          :value="config.generation_model"
+          class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
+          @change="updateField('generation_model', ($event.target as HTMLSelectElement).value as DynamicGenerationModel, true)"
+        >
+          <option value="mechanics">Mechanics Model (Pass 1 — Fast)</option>
+          <option value="narration">Narration Model (Pass 2 — Story &amp; Atmosphere)</option>
+          <option value="world_builder">World Builder Model (Pass 3 — High Context)</option>
         </select>
       </label>
 
@@ -225,7 +269,8 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
           max="5"
           :value="config.max_npcs"
           class="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all"
-          @input="updateField('max_npcs', clampMaxNpcs(($event.target as HTMLInputElement).value))"
+          @input="updateField('max_npcs', clampMaxNpcs(($event.target as HTMLInputElement).value), false)"
+          @change="updateField('max_npcs', clampMaxNpcs(($event.target as HTMLInputElement).value), true)"
         />
       </label>
 
@@ -251,7 +296,8 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
               max="5"
               :value="config.npc_type_caps[cap.key]"
               class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
-              @input="updateNpcCap(cap.key, ($event.target as HTMLInputElement).value)"
+              @input="updateNpcCap(cap.key, ($event.target as HTMLInputElement).value, false)"
+              @change="updateNpcCap(cap.key, ($event.target as HTMLInputElement).value, true)"
             />
           </label>
         </div>
@@ -284,7 +330,8 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
               max="100"
               :value="config.spawn_chances[field.key]"
               class="w-full accent-emerald-500 cursor-pointer"
-              @input="updateSpawnChance(field.key, ($event.target as HTMLInputElement).value)"
+              @input="updateSpawnChance(field.key, ($event.target as HTMLInputElement).value, false)"
+              @change="updateSpawnChance(field.key, ($event.target as HTMLInputElement).value, true)"
             />
             <p class="text-[10px] text-slate-500">{{ field.hint }}</p>
           </label>
@@ -305,7 +352,7 @@ function updateSpawnChance(key: keyof DynamicSpawnChances, raw: unknown) {
             config.interlude_quote_enabled ? 'bg-emerald-600' : 'bg-slate-800',
           ]"
           :aria-pressed="config.interlude_quote_enabled"
-          @click="updateField('interlude_quote_enabled', !config.interlude_quote_enabled)"
+          @click="updateField('interlude_quote_enabled', !config.interlude_quote_enabled, true)"
         >
           <div
             :class="[

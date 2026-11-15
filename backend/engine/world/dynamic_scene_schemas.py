@@ -20,6 +20,7 @@ __all__ = [
     "DynamicGeneratedObject",
     "DynamicGeneratedScenePayload",
     "DynamicGenerationConfig",
+    "DynamicGenerationModel",
     "DynamicInterludeQuotePayload",
     "DynamicNpcTypeCaps",
     "DynamicNpcTypeCapsOverride",
@@ -35,6 +36,7 @@ __all__ = [
     "is_dynamic_scene_dict",
     "normalize_dynamic_generation",
     "normalize_dynamic_zone",
+    "normalize_generation_model",
     "normalize_instructions_scope",
     "resolve_effective_dynamic_rules",
 ]
@@ -42,8 +44,43 @@ __all__ = [
 SceneImageMode = Literal["off", "inherit", "simple", "hq"]
 NpcImageMode = Literal["off", "simple", "hq"]
 AudioMode = Literal["inherit", "empty", "generate"]
+DynamicGenerationModel = Literal["mechanics", "narration", "world_builder"]
 DangerLevel = Literal["peaceful", "low", "medium", "high", "deadly", "random"]
 InstructionScope = Literal["once", "first_scene", "max_depth", "all_scenes"]
+
+_GENERATION_MODEL_ALIASES: dict[str, DynamicGenerationModel] = {
+    "mechanics": "mechanics",
+    "small": "mechanics",
+    "pass1": "mechanics",
+    "pass_1": "mechanics",
+    "fast": "mechanics",
+    "narration": "narration",
+    "narrative": "narration",
+    "complex": "narration",
+    "story": "narration",
+    "pass2": "narration",
+    "pass_2": "narration",
+    "world_builder": "world_builder",
+    "worldbuilder": "world_builder",
+    "generator": "world_builder",
+    "world": "world_builder",
+    "pass3": "world_builder",
+    "pass_3": "world_builder",
+}
+
+
+def normalize_generation_model(
+    raw: Any, *, allow_none: bool = False
+) -> Optional[DynamicGenerationModel]:
+    """Normalize dynamic generation model tier to mechanics, narration, or world_builder."""
+    key = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower()).strip("_")
+    if not key or key in {"inherit", "default", "global"}:
+        return None if allow_none else "mechanics"
+    resolved = _GENERATION_MODEL_ALIASES.get(key)
+    if resolved is not None:
+        return resolved
+    return None if allow_none else "mechanics"
+
 
 _INSTRUCTION_SCOPE_ALIASES: dict[str, InstructionScope] = {
     "once": "once",
@@ -159,6 +196,7 @@ class DynamicZoneConfig(BaseModel):
     npc_type_caps: Optional[DynamicNpcTypeCapsOverride] = None
     spawn_chances: Optional[DynamicSpawnChancesOverride] = None
     audio_mode: Optional[AudioMode] = None
+    generation_model: Optional[DynamicGenerationModel] = None
     allowed_entity_types: list[str] = Field(
         default_factory=lambda: list(DEFAULT_ALLOWED_ENTITY_TYPES)
     )
@@ -175,6 +213,7 @@ class DynamicZoneConfig(BaseModel):
         self.instructions = raw_inst[:8000] if raw_inst else None
         self.instructions_scope = normalize_instructions_scope(self.instructions_scope)
         self.cluster_consistency = bool(self.cluster_consistency)
+        self.generation_model = normalize_generation_model(self.generation_model, allow_none=True)
         raw_root = str(self.root_theme).strip() if self.root_theme is not None else ""
         self.root_theme = raw_root[:1000] if raw_root else self.theme
         return self
@@ -187,6 +226,7 @@ class DynamicGenerationConfig(BaseModel):
     npc_image_mode: NpcImageMode = "simple"
     item_image_mode: NpcImageMode = "simple"
     audio_mode: AudioMode = "inherit"
+    generation_model: DynamicGenerationModel = "mechanics"
     max_npcs: int = Field(default=2, ge=0, le=5)
     npc_type_caps: DynamicNpcTypeCaps = Field(default_factory=DynamicNpcTypeCaps)
     spawn_chances: DynamicSpawnChances = Field(default_factory=DynamicSpawnChances)
@@ -204,7 +244,32 @@ class DynamicGeneratedNpc(BaseModel):
     visual_description: str = Field(default="", max_length=1000)
     attitude: Literal["friendly", "neutral", "hostile"] = "neutral"
     combat_role: Literal["none", "minion", "standard", "elite", "boss"] = "none"
+    attack_mode: Literal["PASSIVE", "ATTACK_ON_SIGHT"] = "PASSIVE"
     dialogue_style: str = Field(default="Speaks naturally in plain full sentences.", max_length=200)
+    is_recruitable_companion: bool = False
+    companion_tactics: Literal["BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT"] = "BALANCED"
+    companion_banter: Literal["NORMAL", "QUIET", "CHATTY"] = "NORMAL"
+    clone_count: int = Field(
+        default=1,
+        ge=1,
+        le=5,
+        description="For hostile packs/minions: number of identical clones to spawn (1-5).",
+    )
+    inventory: list[str] = Field(
+        default_factory=list,
+        description="IDs of objects in this scene's objects list carried as loot/keys by this NPC.",
+    )
+    on_defeat_script: Optional[str] = Field(default=None, max_length=1500)
+
+    @model_validator(mode="after")
+    def normalize_npc_inventory_ids(self) -> DynamicGeneratedNpc:
+        seen: list[str] = []
+        for raw in self.inventory or []:
+            token = re.sub(r"[^A-Z0-9]+", "_", str(raw or "").strip().upper()).strip("_")[:24]
+            if token and token not in seen:
+                seen.append(token)
+        self.inventory = seen
+        return self
 
 
 class DynamicGeneratedObject(BaseModel):
@@ -225,9 +290,9 @@ class DynamicGeneratedObject(BaseModel):
     stat_modifier_wisdom: int = Field(default=0, ge=-5, le=10)
     stat_modifier_charisma: int = Field(default=0, ge=-5, le=10)
     stat_modifier_armor_class: int = Field(default=0, ge=-5, le=10)
-    hp_change: int = Field(default=0, ge=-100, le=100)
-    stamina_change: int = Field(default=0, ge=-100, le=100)
-    mana_change: int = Field(default=0, ge=-100, le=100)
+    hp_change: int = Field(default=0, ge=-250, le=250)
+    stamina_change: int = Field(default=0, ge=-250, le=250)
+    mana_change: int = Field(default=0, ge=-250, le=250)
     damage_dice: Optional[str] = Field(default=None, max_length=20)
     effect_type: Optional[str] = Field(default=None, max_length=60)
     effect_value: Optional[int] = Field(default=None)
@@ -235,6 +300,15 @@ class DynamicGeneratedObject(BaseModel):
     inventory: list[str] = Field(
         default_factory=list,
         description="For CONTAINER objects: IDs of other objects in this scene's objects list that are placed inside this container.",
+    )
+    is_locked: bool = False
+    lock_description: Optional[str] = Field(default=None, max_length=300)
+    item_to_unlock: Optional[str] = Field(default=None, max_length=48)
+    on_interact_script: Optional[str] = Field(default=None, max_length=1500)
+    is_hidden: bool = False
+    is_zone_key: bool = Field(
+        default=False,
+        description="Set true when this object is the key/keycard/passkey/token carried by an enemy to unlock the zone's climax container.",
     )
 
     @model_validator(mode="after")
@@ -349,6 +423,17 @@ def resolve_effective_dynamic_rules(
     return eff_caps, eff_chances
 
 
+def _attach_runtime_zone_flags(dumped: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    """Preserve runtime materialization, consumption, and cluster-node flags."""
+    if raw.get("materialized"):
+        dumped["materialized"] = True
+    if raw.get("instructions_consumed"):
+        dumped["instructions_consumed"] = True
+    if isinstance(raw.get("cluster_node"), dict):
+        dumped["cluster_node"] = dict(raw["cluster_node"])
+    return dumped
+
+
 def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
     """Return a clean DynamicZoneConfig dict or None when disabled/empty."""
     if not isinstance(raw, dict):
@@ -373,6 +458,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
     zone_audio_mode: Optional[AudioMode] = (
         raw_audio if raw_audio in {"inherit", "empty", "generate"} else None  # type: ignore[assignment]
     )
+    zone_gen_model = normalize_generation_model(raw.get("generation_model"), allow_none=True)
 
     raw_types = raw.get("allowed_entity_types")
     if isinstance(raw_types, list) and raw_types:
@@ -414,6 +500,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
             else None
         ),
         audio_mode=zone_audio_mode,
+        generation_model=zone_gen_model,
         allowed_entity_types=allowed_types,
         cul_de_sac_on_max_depth=bool(cul_de_sac),
         instructions=instructions or None,
@@ -422,11 +509,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
         root_theme=root_theme,
         on_after_generated_script=after_script[:8000] if after_script else None,
     ).model_dump()
-    if raw.get("materialized"):
-        dumped["materialized"] = True
-    if raw.get("instructions_consumed"):
-        dumped["instructions_consumed"] = True
-    return dumped
+    return _attach_runtime_zone_flags(dumped, raw)
 
 
 def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
@@ -450,6 +533,8 @@ def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
     if audio_mode not in {"inherit", "empty", "generate"}:
         audio_mode = "inherit"
 
+    gen_model = normalize_generation_model(data.get("generation_model")) or "mechanics"
+
     max_npcs = _clamp_int(data.get("max_npcs"), default=2, low=0, high=5)
     npc_type_caps = _normalize_npc_type_caps(data.get("npc_type_caps"), partial=False)
     spawn_chances = _normalize_spawn_chances(data.get("spawn_chances"), partial=False)
@@ -463,6 +548,7 @@ def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
         npc_image_mode=npc_mode,  # type: ignore[arg-type]
         item_image_mode=item_mode,  # type: ignore[arg-type]
         audio_mode=audio_mode,  # type: ignore[arg-type]
+        generation_model=gen_model,
         max_npcs=max_npcs,
         npc_type_caps=DynamicNpcTypeCaps.model_validate(npc_type_caps),
         spawn_chances=DynamicSpawnChances.model_validate(spawn_chances),

@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.routes.adventures.turn_context_helpers import resolve_model_settings
 from backend.core.api_keys import has_api_key
 from backend.core.llm_router import GameMasterLLM
+from backend.engine.world.dynamic_cluster_blueprint import (
+    build_cluster_blueprint_prompt_section,
+    resolve_dynamic_llm_model,
+)
 from backend.engine.world.dynamic_instructions_helper import (
     adjust_plan_for_instructions,
     apply_instructions_backfill,
@@ -27,6 +31,7 @@ from backend.engine.world.dynamic_interlude_quote import (
     _strip_outer_quotes,
 )
 from backend.engine.world.dynamic_scene_schemas import (
+    DynamicGeneratedChildExit,
     DynamicGeneratedScenePayload,
     DynamicInterludeQuotePayload,
     normalize_dynamic_zone,
@@ -163,6 +168,41 @@ def _roll_npc_slots(
     return slots
 
 
+def _apply_cluster_node_floors(
+    npc_slots: list[dict[str, str]],
+    allow_items: bool,
+    target_objects: int,
+    *,
+    zone: dict[str, Any],
+    effective_danger: str,
+    npc_allowed: bool,
+    max_npcs: int,
+    spawn_chances: dict[str, int],
+    allowed_tokens: set[str],
+) -> tuple[list[dict[str, str]], bool, int]:
+    """Guarantee obstacle/branch blueprint roles have needed hostiles or loot."""
+    cluster_node = zone.get("cluster_node")
+    if not isinstance(cluster_node, dict):
+        return npc_slots, allow_items, target_objects
+    role = str(cluster_node.get("role") or "").lower()
+    can_spawn_enemy = (
+        effective_danger != "peaceful"
+        and npc_allowed
+        and max_npcs > 0
+        and spawn_chances["npc"] > 0
+        and spawn_chances["enemy"] > 0
+    )
+    if role == "obstacle" and can_spawn_enemy:
+        if not npc_slots:
+            npc_slots = [{"npc_type": "HUMANOID", "attitude": "hostile"}]
+        elif not any(slot["attitude"] == "hostile" for slot in npc_slots):
+            npc_slots[0]["attitude"] = "hostile"
+    if role in {"obstacle", "branch"} and "OBJECT" in allowed_tokens and spawn_chances["item"] > 0:
+        allow_items = True
+        target_objects = max(1, target_objects)
+    return npc_slots, allow_items, target_objects
+
+
 def _roll_scene_plan(
     zone: dict[str, Any],
     max_npcs: int,
@@ -190,11 +230,15 @@ def _roll_scene_plan(
     )
     rolled_npcs = random.randint(1, max_npcs) if npc_roll_passes else 0
     npc_slots = _roll_npc_slots(rolled_npcs, npc_type_caps, spawn_chances, effective_danger)
+    if is_climax and effective_danger != "peaceful" and npc_allowed and max_npcs > 0:
+        if not npc_slots:
+            npc_slots = [{"npc_type": "MONSTER", "attitude": "hostile"}]
+        elif not any(slot["attitude"] == "hostile" for slot in npc_slots):
+            npc_slots[0]["attitude"] = "hostile"
 
-    allow_container = (
-        ("CONTAINER" in allowed_tokens)
-        and spawn_chances["container"] > 0
-        and random.random() * 100 < spawn_chances["container"]
+    allow_container = ("CONTAINER" in allowed_tokens) and (
+        is_climax
+        or (spawn_chances["container"] > 0 and random.random() * 100 < spawn_chances["container"])
     )
     allow_switch = (
         ("SWITCH" in allowed_tokens)
@@ -202,14 +246,32 @@ def _roll_scene_plan(
         and spawn_chances["switch"] > 0
         and random.random() * 100 < spawn_chances["switch"]
     )
-    allow_items = spawn_chances["item"] > 0 and random.random() * 100 < spawn_chances["item"]
+    has_hostile_slot = any(slot["attitude"] == "hostile" for slot in npc_slots)
+    needs_zone_key = has_hostile_slot and not is_climax and ("OBJECT" in allowed_tokens)
+    allow_items = (
+        is_climax
+        or needs_zone_key
+        or (spawn_chances["item"] > 0 and random.random() * 100 < spawn_chances["item"])
+    )
 
     if allow_items:
-        target_objects = random.randint(1, 3)
+        target_objects = max(2, random.randint(2, 3)) if is_climax else random.randint(1, 3)
     elif allow_container or allow_switch:
         target_objects = 1
     else:
         target_objects = 0
+
+    npc_slots, allow_items, target_objects = _apply_cluster_node_floors(
+        npc_slots,
+        allow_items,
+        target_objects,
+        zone=zone,
+        effective_danger=effective_danger,
+        npc_allowed=npc_allowed,
+        max_npcs=max_npcs,
+        spawn_chances=spawn_chances,
+        allowed_tokens=allowed_tokens,
+    )
 
     allowed_item_types = (
         ["STANDARD", "CONSUMABLE", "WEARABLE", "WEAPON", "READABLE"] if allow_items else []
@@ -274,10 +336,16 @@ def _apply_scene_plan_to_payload(
     payload.npcs = _filter_planned_npcs(list(payload.npcs or []), scene_plan)
 
     max_cap = 5
+    carried_ids = {
+        re.sub(r"[^A-Z0-9]+", "_", str(item_id or "").strip().upper()).strip("_")
+        for npc in (payload.npcs or [])
+        for item_id in (npc.inventory or [])
+    }
     sliced_objects = select_planned_objects(
         list(payload.objects or []),
         int(scene_plan["target_objects"]),
         max_cap=max_cap,
+        carried_ids=carried_ids,
     )
     allow_switch = bool(scene_plan["allow_switch"])
     allow_container = bool(scene_plan["allow_container"])
@@ -320,13 +388,15 @@ def _build_scene_prompts(
         zone.get("allowed_entity_types") or ["NPC", "OBJECT", "CONTAINER", "SWITCH"]
     )
 
-    if existing_scene_hint:
-        depth_rule = "PRE-MAPPED DYNAMIC SCENE: Set forward_exits to [] (map exits are already defined by the author)."
-    elif is_climax:
+    if is_climax:
         depth_rule = (
             f"CLIMAX DEPTH ({depth}/{max_depth}): This is the end of the zone (cul-de-sac). "
             "Set forward_exits to an empty list []. Provide a memorable climax (reward container, lore discovery, or boss/guardian encounter)."
         )
+        if existing_scene_hint:
+            depth_rule += " Set forward_exits to []."
+    elif existing_scene_hint:
+        depth_rule = "PRE-MAPPED DYNAMIC SCENE: Set forward_exits to [] (map exits are already defined by the author)."
     else:
         depth_rule = f"EXPANSION DEPTH ({depth}/{max_depth}): Include 1 concise forward_exits entry leading deeper into the zone."
 
@@ -354,9 +424,9 @@ def _build_scene_prompts(
             "If you place item(s) inside a CONTAINER, include both the CONTAINER and each child object in `objects`, "
             "and list the child object ID(s) in the container's `inventory` field.\n"
             "- MIXED LOOT & ITEM STATS: Mix useful gear/consumables with occasional flavor trinkets (STANDARD/READABLE with 0 stats). "
-            "For CONSUMABLE items set hp_change, stamina_change, or mana_change (e.g. 10 to 30). "
+            "For CONSUMABLE items set hp_change, stamina_change, or mana_change (e.g. 20 to 35). "
             "For WEARABLE items set wearable_slots (e.g. ['Ring'], ['Neck'], ['Head'], ['Chest'], ['Hands'], ['Feet']) and 1-2 light stat modifiers (+1 or +2 on strength/dexterity/intelligence/wisdom/charisma/armor_class). "
-            "For WEAPON items set damage_dice (e.g. '1d6', '1d+2', or '1d8') and optional +1 stat modifier."
+            "For WEAPON items set damage_dice (e.g. '1d8+1', '2d6+2', or '2d8+2') and optional +1 stat modifier."
         )
     )
     peaceful_rule = (
@@ -370,6 +440,19 @@ def _build_scene_prompts(
         f"(even if the main adventure features a mute, gesture-only, or fictional-dialect faction — make dynamic humanoids outsiders, travelers, or speakers who use plain {language}). "
         "Never give humanoid NPCs a dialogue_style of grunts, single syllables, or non-verbal sounds."
     )
+    boss_role = "elite" if effective_danger == "low" else "boss"
+    challenge_rule = (
+        "\n- PACKS, LOOT, COMPANIONS & PUZZLES:\n"
+        "  * Enemy packs & aggression: For hostile 'minion' or 'standard' NPCs (when danger is medium/high/deadly), you may set `clone_count` (2 to 4) to spawn a pack without inventing extra NPC entries. Set `attack_mode='ATTACK_ON_SIGHT'` on ambush/aggressive enemies that attack immediately on entry (keep others 'PASSIVE').\n"
+        "  * Optional dynamic companions: Occasionally mark a friendly or neutral wanderer, mercenary, or creature (`HUMANOID`/`BEING`/`ANIMAL`) with `is_recruitable_companion=True` (and `companion_tactics` / `companion_banter`) so the player can recruit them.\n"
+        "  * Enemy loot & keys: Hostile NPCs may carry loot or a key from `objects` in `npc.inventory` (dropped on defeat). On non-climax depths with enemies, include a key item in `objects` with `is_zone_key=True` whose form, name, and `visual_description` fit the Adventure Tone and Zone Theme, and list its ID in one hostile NPC's `inventory`.\n"
+        "  * Simple scripted puzzles: For a SWITCH or puzzle prop, you may set `on_interact_script` using sandboxed `tw` calls such as `tw.objects.unlock('CHEST_ID')`, `tw.objects.reveal('HIDDEN_ID')`, `tw.story.narrate('...')` (no imports, no dunders, no `_` names; mark hidden rewards `is_hidden=True`)."
+    )
+    if is_climax and effective_danger != "peaceful":
+        challenge_rule += (
+            f"\n  * CLIMAX BOSS & LOOTBOX: Include a hostile `{boss_role}` NPC (`combat_role='{boss_role}'`) AND a reward `CONTAINER` chest with valuable loot in `inventory`. "
+            "If an earlier scene in the cluster has a key item (or if you include one), lock the reward chest with `is_locked=True`, `item_to_unlock=<KEY_ID>`, and `lock_description`."
+        )
 
     system_prompt = (
         "You are TaleWeaver's procedural location generator.\n"
@@ -379,13 +462,16 @@ def _build_scene_prompts(
         "- NEVER spawn, duplicate, or kill named core story NPCs.\n"
         "- Keep visual_description and music_prompt in concise English (comma-separated visual/audio descriptors) even when narration text is in another language.\n"
         "- Keep entity IDs short uppercase alphanumeric slugs (e.g. RUSTY_PICKAXE, CAVE_SPIDER).\n"
-        f"{npc_rule}{object_rule}{peaceful_rule}{speech_rule}"
+        f"{npc_rule}{object_rule}{peaceful_rule}{speech_rule}{challenge_rule}"
     )
+    blueprint_section = build_cluster_blueprint_prompt_section(zone)
     cluster_section = build_cluster_consistency_prompt_section(zone, cluster_context)
     instructions_section = build_instructions_prompt_section(zone, cluster_context)
     scene_hint_section = build_existing_scene_context_prompt_section(existing_scene_hint)
     extra_sections = "\n\n".join(
-        part for part in (cluster_section, scene_hint_section, instructions_section) if part
+        part
+        for part in (blueprint_section, cluster_section, scene_hint_section, instructions_section)
+        if part
     )
     user_prompt = (
         f"Adventure Title: {adventure_title}\n"
@@ -440,6 +526,30 @@ def _build_fallback_scene_payload(
     )
 
 
+def _sync_forward_exits_with_blueprint(
+    payload: DynamicGeneratedScenePayload,
+    zone: dict[str, Any],
+    existing_scene_hint: Optional[dict[str, Any]],
+) -> None:
+    """Align entry scene forward exits with planned outgoing edges on its cluster node."""
+    if existing_scene_hint or int(zone.get("depth") or 1) >= int(zone.get("max_depth") or 3):
+        return
+    cluster_node = zone.get("cluster_node")
+    if not isinstance(cluster_node, dict):
+        return
+    outgoing = list(cluster_node.get("outgoing_exits") or [])
+    if not outgoing:
+        return
+    current = list(payload.forward_exits or [])
+    synced: list[DynamicGeneratedChildExit] = []
+    for idx, edge in enumerate(outgoing[:2]):
+        cand = current[idx] if idx < len(current) else None
+        label = str(getattr(cand, "label", "") or edge.get("label") or "Passage")[:100]
+        hint = str(getattr(cand, "theme_hint", "") or edge.get("theme_hint") or "")[:300]
+        synced.append(DynamicGeneratedChildExit(label=label, theme_hint=hint))
+    payload.forward_exits = synced
+
+
 def _finalize_fallback_scene(
     exit_label: str,
     zone: dict[str, Any],
@@ -453,6 +563,8 @@ def _finalize_fallback_scene(
     if existing_scene_hint:
         fallback.forward_exits = []
         fallback.name = str(existing_scene_hint.get("label") or fallback.name)[:100]
+    else:
+        _sync_forward_exits_with_blueprint(fallback, zone, existing_scene_hint)
     if backfill:
         apply_instructions_backfill(fallback, zone, {}, cluster_context)
     return fallback
@@ -499,10 +611,7 @@ async def generate_dynamic_scene_payload(
     max_npcs = int(zone["max_npcs"] if raw_max_npcs is not None else max_npcs_default)
     max_npcs = max(0, min(5, max_npcs))
 
-    llm_settings = dict(getattr(user, "llm_settings", None) or {})
-    resolved = resolve_model_settings(llm_settings)
-    provider = str(resolved["small_model_provider"])
-    model = str(resolved["small_model"])
+    provider, model, model_category = resolve_dynamic_llm_model(user, zone, generation_config)
 
     if not _has_provider_credentials(user, provider):
         logger.info("No LLM credentials for provider %s; using fallback dynamic scene.", provider)
@@ -534,7 +643,7 @@ async def generate_dynamic_scene_payload(
     )
 
     try:
-        llm = GameMasterLLM(user, provider=provider, model_category="small")
+        llm = GameMasterLLM(user, provider=provider, model_category=model_category)
         payload = await llm.aexecute_complex_task(
             system_prompt,
             user_prompt,
@@ -554,6 +663,8 @@ async def generate_dynamic_scene_payload(
         )
         if existing_scene_hint or is_cul_de_sac:
             payload.forward_exits = []
+        else:
+            _sync_forward_exits_with_blueprint(payload, zone, existing_scene_hint)
         return payload
     except Exception as exc:
         logger.warning("Dynamic scene generation failed (%s); using fallback scene.", exc)

@@ -11,10 +11,22 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.dynamic_challenge_helper import (
+    apply_cluster_key_and_climax_progression,
+    apply_dynamic_scripts_and_locks,
+    build_dynamic_npc_clones,
+    compute_party_hp_budget,
+    link_dynamic_npc_inventories,
+    scale_dynamic_object_stats,
+)
 from backend.api.routes.adventures.dynamic_cluster_context import (
     collect_cluster_context,
     link_generated_container_inventories,
     normalize_match_token,
+)
+from backend.api.routes.adventures.dynamic_cluster_graph import (
+    ensure_cluster_blueprint,
+    persist_cluster_graph_from_entry,
 )
 from backend.api.routes.adventures.dynamic_scene_materialize import (
     _DYNAMIC_ZONE_META_KEY,
@@ -33,17 +45,14 @@ from backend.api.routes.adventures.dynamic_scene_media import (
     sync_dynamic_scene_audio,
 )
 from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
-from backend.engine.blueprint.parser import has_blueprint_tags
 from backend.engine.world.dynamic_scene_generator import (
     generate_dynamic_interlude_quote,
     generate_dynamic_scene_payload,
 )
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedScenePayload,
-    build_dynamic_placeholder_scene_id,
     normalize_dynamic_generation,
     normalize_dynamic_zone,
-    normalize_instructions_scope,
 )
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
@@ -52,7 +61,7 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 logger = logging.getLogger(__name__)
 
 
-def _persist_generated_scene_entities(
+async def _persist_generated_scene_entities(
     *,
     db: AsyncSession,
     state: SessionState,
@@ -65,6 +74,9 @@ def _persist_generated_scene_entities(
     npc_images: dict[int, Optional[str]],
     object_images: Optional[dict[int, Optional[str]]] = None,
     scene_audio_track_id: Optional[str],
+    dyn_cfg: Optional[dict[str, Any]] = None,
+    user: Any = None,
+    adventure: Any = None,
 ) -> tuple[WorldScene, dict[str, Any]]:
     new_scene = WorldScene(
         id=target_id,
@@ -94,75 +106,60 @@ def _persist_generated_scene_entities(
             )
         )
 
-    spawned_forward_exits: list[dict[str, str]] = []
-    if int(zone["depth"]) < int(zone["max_depth"]):
-        for idx, child_exit in enumerate(payload.forward_exits[:2], start=1):
-            child_target = build_dynamic_placeholder_scene_id(
-                zone["zone_id"],
-                int(zone["depth"]) + 1,
-                idx,
-                suffix=target_id[-4:],
-            )
-            child_scope = normalize_instructions_scope(zone.get("instructions_scope"))
-            child_consumed = bool(zone.get("instructions_consumed")) or (
-                child_scope in {"once", "first_scene"}
-                and not has_blueprint_tags(str(zone.get("instructions") or ""))
-            )
-            child_zone = {
-                **zone,
-                "depth": int(zone["depth"]) + 1,
-                "root_theme": zone.get("root_theme") or zone["theme"],
-                "theme": child_exit.theme_hint or zone["theme"],
-                "instructions_consumed": child_consumed,
-            }
-            db.add(
-                WorldExit(
-                    template_id=None,
-                    session_id=state.session_id,
-                    from_scene_id=target_id,
-                    to_scene_id=child_target,
-                    label=child_exit.label[:100],
-                    exit_type="bidirectional",
-                    is_locked=False,
-                    is_revealed=False,
-                    dynamic_zone=child_zone,
-                )
-            )
-            spawned_forward_exits.append(
-                {
-                    "to_scene_id": child_target,
-                    "label": child_exit.label[:100],
-                    "theme_hint": child_exit.theme_hint,
-                }
-            )
+    spawned_forward_exits = await persist_cluster_graph_from_entry(
+        db=db,
+        state=state,
+        target_id=target_id,
+        zone=zone,
+        payload=payload,
+    )
 
     spawned_npcs: list[dict[str, Any]] = []
+    npc_entries: list[tuple[Any, WorldEntity, bool]] = []
+    party_hp = await compute_party_hp_budget(db, state)
+    danger = str(zone.get("danger_level") or "medium")
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
     for idx, npc in enumerate(payload.npcs[:max_npcs]):
-        npc_entity = _build_npc_entity(
+        for npc_entity, is_primary in build_dynamic_npc_clones(
             session_id=state.session_id,
             target_id=target_id,
             npc=npc,
             image_url=npc_images.get(idx),
             state=state,
-        )
-        db.add(npc_entity)
-        spawned_npcs.append(
-            {
-                "id": npc_entity.id,
-                "name": npc_entity.name,
-                "npc_type": npc_entity.npc_type,
-                "role": npc.role,
-                "attitude": npc.attitude,
-                "combat_role": npc.combat_role,
-                "description": npc_entity.description,
-            }
-        )
+            party_hp=party_hp,
+            danger=danger,
+        ):
+            db.add(npc_entity)
+            npc_entries.append((npc, npc_entity, is_primary))
+            spawned_npcs.append(
+                {
+                    "id": npc_entity.id,
+                    "name": npc_entity.name,
+                    "npc_type": npc_entity.npc_type,
+                    "role": npc.role,
+                    "attitude": npc.attitude,
+                    "combat_role": npc.combat_role,
+                    "description": npc_entity.description,
+                }
+            )
 
     spawned_objects: list[dict[str, Any]] = []
     persisted_objects = list(payload.objects[:5])
+    object_entities: list[WorldEntity] = []
     raw_id_to_entity: dict[str, WorldEntity] = {}
+    enemy_hps = [int(ent.max_hp or ent.hp or 0) for _, ent, _ in npc_entries if ent.is_attackable]
+    is_climax = int(zone.get("depth") or 1) >= int(zone.get("max_depth") or 3) and bool(
+        zone.get("cul_de_sac_on_max_depth", True)
+    )
     for idx, obj in enumerate(persisted_objects):
+        scale_dynamic_object_stats(
+            obj,
+            party_hp=party_hp,
+            enemy_hps=enemy_hps,
+            danger=danger,
+            is_climax=is_climax,
+            instructions=str(zone.get("instructions") or ""),
+        )
         obj_entity = _build_object_entity(
             session_id=state.session_id,
             target_id=target_id,
@@ -170,6 +167,7 @@ def _persist_generated_scene_entities(
             image_url=(object_images or {}).get(idx),
         )
         db.add(obj_entity)
+        object_entities.append(obj_entity)
         raw_id_to_entity[normalize_match_token(obj.id)] = obj_entity
         raw_id_to_entity.setdefault(normalize_match_token(obj.name), obj_entity)
         spawned_objects.append(
@@ -186,6 +184,19 @@ def _persist_generated_scene_entities(
             }
         )
     link_generated_container_inventories(persisted_objects, raw_id_to_entity)
+    link_dynamic_npc_inventories(npc_entries, raw_id_to_entity)
+    apply_dynamic_scripts_and_locks(persisted_objects, npc_entries, raw_id_to_entity)
+    await apply_cluster_key_and_climax_progression(
+        db=db,
+        state=state,
+        zone=zone,
+        target_id=target_id,
+        npc_entities=[ent for _, ent, _ in npc_entries],
+        object_entities=object_entities,
+        dyn_cfg=dyn_cfg,
+        user=user,
+        adventure=adventure,
+    )
 
     entity_states = dict(state.entity_states or {})
     dyn_meta = dict(entity_states.get(_DYNAMIC_ZONE_META_KEY) or {})
@@ -268,7 +279,7 @@ async def materialize_dynamic_scene_for_exit(
     if emit_sse:
         await emit_sse("status", {"content": "Exploring uncharted territory..."})
 
-    tone_text = extract_tone_text(adventure)
+    tone_text = extract_tone_text(adventure, user)
     origin_name = origin_scene.label if origin_scene else world_exit.from_scene_id
     origin_desc = origin_scene.description if origin_scene else ""
     cluster_context = (
@@ -276,6 +287,24 @@ async def materialize_dynamic_scene_for_exit(
         if zone.get("cluster_consistency", True)
         else None
     )
+
+    if int(zone.get("depth") or 1) == 1:
+        await ensure_cluster_blueprint(
+            state=state,
+            target_id=target_id,
+            zone=zone,
+            adventure_title=adventure.title or "Adventure",
+            adventure_setting=adventure.plot or adventure.teaser or "",
+            adventure_tone=tone_text,
+            origin_scene_name=origin_name,
+            origin_scene_description=origin_desc,
+            exit_label=world_exit.label or "Passage",
+            user=user,
+            adventure_id=adventure.id,
+            game_id=state.session_id,
+            language=language or adventure.language or "English",
+            generation_config=dyn_cfg,
+        )
 
     scene_task = asyncio.create_task(
         generate_dynamic_scene_payload(
@@ -332,7 +361,7 @@ async def materialize_dynamic_scene_for_exit(
         payload=payload,
         adventure=adventure,
     )
-    new_scene, generated_scene_data = _persist_generated_scene_entities(
+    new_scene, generated_scene_data = await _persist_generated_scene_entities(
         db=db,
         state=state,
         world_exit=world_exit,
@@ -344,6 +373,9 @@ async def materialize_dynamic_scene_for_exit(
         npc_images=npc_images,
         object_images=object_images,
         scene_audio_track_id=scene_audio_track_id,
+        dyn_cfg=dyn_cfg,
+        user=user,
+        adventure=adventure,
     )
     await db.flush()
 
