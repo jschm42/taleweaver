@@ -23,6 +23,7 @@ from backend.engine.interaction.switch_states import (
 )
 from backend.engine.rules.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.models.world_entity import WorldEntity
+from backend.utils.text_utils import unescape_line_breaks
 
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
 _UNLOCK_SCRIPT_FIELDS = (
@@ -153,7 +154,9 @@ def update_readable(
             raise HTTPException(
                 status_code=400, detail="text_log_content must be at most 1000 characters."
             )
-        metadata_json["text_log_content"] = (payload.text_log_content or "").strip()
+        metadata_json["text_log_content"] = unescape_line_breaks(
+            payload.text_log_content or ""
+        ).strip()
     if given(payload, "text_log_format"):
         normalized_format = str(payload.text_log_format).strip().upper()
         if normalized_format not in _TEXT_LOG_FORMATS:

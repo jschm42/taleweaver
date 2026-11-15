@@ -47,6 +47,7 @@ from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit
 from backend.schemas.validation import FixProposalEntityPatch
+from backend.utils.text_utils import unescape_line_breaks
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,7 @@ def _patch_container_lock(
 
 def _patch_text_log(metadata_json: dict[str, Any], updates: dict[str, Any]) -> None:
     if "text_log_content" in updates:
-        text = str(updates["text_log_content"]).strip()
+        text = unescape_line_breaks(str(updates["text_log_content"])).strip()
         if len(text) > TEXT_LOG_CONTENT_MAX:
             raise HTTPException(
                 status_code=400,

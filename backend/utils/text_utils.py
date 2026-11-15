@@ -21,6 +21,20 @@ def slugify(text: str) -> str:
     return text.strip("-")
 
 
+_ESCAPED_BREAKS = re.compile(r"\\r\\n|\\n|\\r")
+
+
+def unescape_line_breaks(text: str) -> str:
+    """Turns literal ``\\n`` sequences (double-escaped LLM / JSON output) into real line breaks.
+
+    Readable texts sometimes arrive with the two characters backslash + ``n`` instead of a
+    newline, which the client then shows verbatim.
+    """
+    if not text or "\\" not in text:
+        return text or ""
+    return _ESCAPED_BREAKS.sub("\n", text)
+
+
 def generate_short_id(length: int = 8) -> str:
     """
     Generates a short alphanumeric ID.

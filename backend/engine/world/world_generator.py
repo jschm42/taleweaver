@@ -44,7 +44,7 @@ from backend.engine.world.world_schemas import (  # noqa: F401
 from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
 from backend.models.user import User
 from backend.utils.path_security import sanitize_path_component
-from backend.utils.text_utils import slugify
+from backend.utils.text_utils import slugify, unescape_line_breaks
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +239,7 @@ def _normalize_text_log_content(
     content = str(raw_content or "")
     if not content.strip():
         content = str(description_fallback or "")
-    content = content.replace("\r\n", "\n").replace("\r", "\n")
+    content = unescape_line_breaks(content).replace("\r\n", "\n").replace("\r", "\n")
     normalized_lines = [line.rstrip() for line in content.split("\n")]
     normalized = "\n".join(normalized_lines).strip()
     if not normalized:

@@ -26,6 +26,7 @@ from backend.api.routes.adventures.dynamic_cluster_context import (
     link_generated_container_inventories,
     normalize_match_token,
 )
+from backend.api.routes.adventures.dynamic_interlude_candidates import load_interlude_candidates
 from backend.api.routes.adventures.dynamic_scene_media import (
     PendingDynamicVisuals,
     extract_tone_text,
@@ -47,6 +48,7 @@ from backend.engine.world.dynamic_scene_schemas import (
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.utils.text_utils import unescape_line_breaks
 
 _DYNAMIC_ZONE_META_KEY = "__dynamic_zones__"
 
@@ -141,7 +143,7 @@ def _apply_item_type_metadata(obj: DynamicGeneratedObject, metadata: dict[str, A
         metadata["switch_initial_state"] = "OFF"
         metadata["switch"] = {"states": ["OFF", "ON"], "initial_state": "OFF"}
     elif obj.item_type == "READABLE" and obj.text_log_content:
-        metadata["text_log_content"] = obj.text_log_content[:1000]
+        metadata["text_log_content"] = unescape_line_breaks(obj.text_log_content)[:1000]
         metadata["text_log_format"] = "DOCUMENT"
     elif obj.item_type == "WEAPON" and obj.damage_dice:
         metadata["damage_dice"] = obj.damage_dice[:20]
@@ -201,34 +203,6 @@ def _build_object_entity(
         inventory=[],
         metadata_json=metadata,
     )
-
-
-async def load_interlude_candidates(db: AsyncSession, state: SessionState) -> list[dict[str, Any]]:
-    """Preload humanoid/being NPC candidates on ``db`` before starting concurrent tasks."""
-    npc_rows = (
-        await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.session_id == state.session_id,
-                WorldEntity.entity_type == "NPC",
-            )
-        )
-    ).scalars()
-    return [
-        {
-            "id": n.id,
-            "name": n.name,
-            "npc_type": str(n.npc_type or "HUMANOID").strip().upper(),
-            "goal": n.goal or "",
-            "role": str(n.npc_type or "HUMANOID").strip().upper(),
-            "character": n.character or "",
-            "description": n.description or "",
-            "image_url": n.image_url,
-            "voice": n.voice,
-            "is_defeated": bool((state.entity_states or {}).get(n.id, {}).get("is_defeated")),
-        }
-        for n in npc_rows
-        if str(n.npc_type or "HUMANOID").strip().upper() in {"HUMANOID", "BEING"}
-    ]
 
 
 async def _maybe_emit_interlude_quote(
