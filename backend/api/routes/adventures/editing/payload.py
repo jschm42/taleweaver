@@ -90,6 +90,10 @@ _NPC_METADATA_FIELDS = (
     "on_protagonist_enters_scene_text",
     "on_receive_item_script",
     "on_receive_item_text",
+    "on_recruit_success_script",
+    "on_recruit_success_text",
+    "on_recruit_failure_script",
+    "on_recruit_failure_text",
 )
 _OBJECT_STAT_LABELS = (
     ("stat_modifier_strength", "STR"),
@@ -167,6 +171,7 @@ def _object_extras(entity: WorldEntity) -> dict[str, Any]:
         },
         **_text_fields(metadata_json, _OBJECT_METADATA_FIELDS),
         "locked": locked,
+        "quest_item": metadata_json.get("quest_item") is True,
         "min_items": metadata_json.get("min_items"),
         "max_items": metadata_json.get("max_items"),
         **_switch_fields(metadata_json),

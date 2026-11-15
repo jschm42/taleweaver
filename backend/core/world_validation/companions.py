@@ -42,3 +42,23 @@ def check_starting_companions(ctx: ValidationContext) -> list[ValidationFinding]
         if entity_field(npc, "is_hidden")
     )
     return findings
+
+
+def check_recruit_items(ctx: ValidationContext) -> list[ValidationFinding]:
+    """A companion in recruit mode ITEM must want an item that exists in the world."""
+    findings: list[ValidationFinding] = []
+    for npc in ctx.entities_of("NPC"):
+        config = normalize_companion(entity_field(npc, COMPANION_KEY)) or {}
+        wanted = str(config.get("recruit_item_id") or "")
+        if config.get("recruit_mode") != "ITEM" or wanted in ctx.object_ids:
+            continue
+        findings.append(
+            finding(
+                "error",
+                "companion_recruit_item_missing",
+                f"{entity_id(npc)} wants the item {wanted} before joining, but no such item "
+                "exists, so the player can never recruit it.",
+                entity_id=entity_id(npc),
+            )
+        )
+    return findings

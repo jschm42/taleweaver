@@ -35,9 +35,15 @@ of the allowlist below.
   craft_guard_expression and on_craft_* only for CONSTRUCTABLE recipes.
 - `"locked": true` on a non-container object makes it TAKE-LOCKED: visible, but it cannot
   be picked up until a script calls tw.objects.unlock(id).
+- `"quest_item": true` marks an item the story depends on: the player can never give it to
+  an NPC or companion and the Game Master cannot take it away. A hand-in needs a script,
+  e.g. an NPC on_interact_script with tw.player.transfer_item(item_id, npc_id).
 - NPC hooks: on_defeat (the NPC is defeated), on_protagonist_enters_scene (the protagonist
   enters the NPC's scene), on_interact (the protagonist talks to or interacts with it),
-  on_receive_item (the protagonist gives it items; `received_item_ids` is in scope).
+  on_receive_item (the protagonist gives it items; `received_item_ids` is in scope),
+  on_recruit_success / on_recruit_failure (companions whose recruit_mode is INSTANT or ITEM:
+  the Recruit action succeeded, or the player offered the wrong item; `offered_item_id` is in
+  scope).
 - To give a NEW object or NPC hooks, create it first, then add a regular "object"/"npc"
   patch with the same id that sets the hook fields, in the same proposal.
 - Each entity in the context lists its existing hooks under "scripts". Reuse their

@@ -22,6 +22,7 @@ from backend.core.narration_styles import DEFAULT_NARRATION_STYLE
 from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY
 from backend.core.ui_theme import UI_SKIN_AUTO, normalize_ui_theme
 from backend.engine.rules.item_logic import get_item_slot, normalize_equipment_keys
+from backend.engine.rules.quest_items import mark_carried_quest_items
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -348,12 +349,12 @@ async def build_sheet_snapshot(
     image_map = await _entity_image_map(db, state, asset_snapshot)
     entity_lookup = await _item_entities(db, avatar, state.session_id)
     current_scene = await _current_scene(db, state)
+    inventory = _sync_inventory(avatar, entity_lookup, image_map, dict(state.entity_states or {}))
+    await mark_carried_quest_items(db, state.session_id, inventory)
     return {
         **_avatar_fields(avatar, calculate_total_stats(avatar)),
         "profile_image": await _profile_image(db, state, session_manifest, session_profile_image),
-        "inventory": _sync_inventory(
-            avatar, entity_lookup, image_map, dict(state.entity_states or {})
-        ),
+        "inventory": inventory,
         "equipment": _sync_equipment(avatar, entity_lookup, image_map),
         # The hero dialog's switch to the active companion (None without one).
         "companion": await build_companion_sheet(db, state, image_map),

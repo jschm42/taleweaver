@@ -6,7 +6,8 @@ inventory management: no Game Master turn and no ``on_receive_item`` trigger (un
 ``/give_items``). The moves go through the scripting engine's ``ItemMover``, so every item
 keeps exactly one holder, and are stored with the turn's changeset applier.
 
-The companion has to stand in the protagonist's scene and must not be defeated.
+The companion has to stand in the protagonist's scene and must not be defeated. Quest items
+(``metadata_json.quest_item``) cannot be handed to the companion.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from backend.api.routes.adventures.container_put import pick_items, split_item_r
 from backend.engine.party.follow import session_npc
 from backend.engine.party.orders import companion_refusal
 from backend.engine.party.party_state import read_party
+from backend.engine.rules.quest_items import quest_item_ids, quest_item_refusal
 from backend.engine.scripting.item_transfer import ref_id
 from backend.models.world_entity import WorldEntity
 
@@ -43,16 +45,23 @@ async def reachable_companion(manager: Any) -> tuple[WorldEntity | None, str | N
     return (None, refusal) if refusal else (row, None)
 
 
-def _give(mover: Any, avatar: Any, npc_id: str, refs: list[str]) -> tuple[list[str], list[str]]:
+def _give(
+    mover: Any, avatar: Any, npc_id: str, refs: list[str], quest_ids: set[str]
+) -> tuple[list[str], list[str], list[str]]:
+    """Moves the named carried items to the companion: (moved, missing, kept quest items)."""
     picked, missing = pick_items(list(avatar.inventory or []), refs, "")
     moved: list[str] = []
+    kept: list[str] = []
     for entry in picked:
+        if ref_id(entry) in quest_ids:
+            kept.append(str(entry.get("name") if isinstance(entry, dict) else ref_id(entry)))
+            continue
         item_id = mover.item_id(ref_id(entry))
         if item_id and mover.to_npc(item_id, npc_id):
             moved.append(str(entry.get("name") if isinstance(entry, dict) else item_id))
             continue
         missing.append(ref_id(entry))
-    return moved, missing
+    return moved, missing, kept
 
 
 def _take(mover: Any, npc_id: str, refs: list[str]) -> tuple[list[str], list[str]]:
@@ -80,11 +89,16 @@ async def transfer_companion_items(manager: Any, direction: str, args: str) -> E
         return [("system", refusal or "You have no companion.")]
     context = await manager._build_script_context()
     mover = context.objects.mover
+    kept: list[str] = []
     if direction == GIVE:
-        moved, missing = _give(mover, manager.avatar, row.id, refs)
+        carried = (ref_id(entry) for entry in manager.avatar.inventory or [])
+        quest_ids = await quest_item_ids(manager.db, manager.state.session_id, carried)
+        moved, missing, kept = _give(mover, manager.avatar, row.id, refs, quest_ids)
     else:
         moved, missing = _take(mover, row.id, refs)
     events: Events = []
+    if kept:
+        events.append(("system", quest_item_refusal(kept)))
     if moved:
         notices = await manager._apply_script_changeset(context.changeset)
         events.extend(("system", str(text)) for text in notices)

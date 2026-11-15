@@ -30,6 +30,9 @@ def test_normalize_companion_defaults_and_cleanup():
         "tactics": "BALANCED",
         "banter": "NORMAL",
         "downed_recovery": 0.25,
+        "recruit_mode": "SCRIPT",
+        "recruit_item_id": "",
+        "recruit_hint": "",
     }
     assert cleaned["tactics"] == "SUPPORT"
     assert cleaned["banter"] == "NORMAL"  # unknown values fall back to the default

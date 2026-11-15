@@ -490,6 +490,22 @@ class WorldNPCSchema(WorldBaseSchema):
         default="",
         description="Optional text output when the protagonist gives this NPC items. Use empty string for none.",
     )
+    on_recruit_success_script: Optional[str] = Field(
+        default="",
+        description="Companion NPCs with companion.recruit_mode INSTANT or ITEM only: script run when the player recruits it with the Recruit action; `offered_item_id` is in scope. Use empty string for none.",
+    )
+    on_recruit_success_text: Optional[str] = Field(
+        default="",
+        description="Companion NPCs only: narration shown when the player recruits it (without one, the GM narrates the greeting). Use empty string for none.",
+    )
+    on_recruit_failure_script: Optional[str] = Field(
+        default="",
+        description="Companion NPCs with companion.recruit_mode ITEM only: script run when the player offers the wrong item or none; `offered_item_id` is in scope. Use empty string for none.",
+    )
+    on_recruit_failure_text: Optional[str] = Field(
+        default="",
+        description="Companion NPCs with companion.recruit_mode ITEM only: narration shown when the offered item does not convince it. Use empty string for none.",
+    )
 
     model_config = {"extra": "forbid"}
 

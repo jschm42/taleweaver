@@ -7,11 +7,17 @@ An NPC with this block can join the protagonist's party. Example::
         "starts_in_party": false,
         "tactics": "SUPPORT",
         "banter": "NORMAL",
-        "downed_recovery": 0.25
+        "downed_recovery": 0.25,
+        "recruit_mode": "ITEM",
+        "recruit_item_id": "BOTTLE_OF_RUM",
+        "recruit_hint": "Bring me something to drink and I'm yours."
     }
 
-Recruiting is always done by a script (``tw.party.recruit``); ``recruitable`` only marks
-the NPC as a companion. ``starts_in_party`` puts it into the party when a session starts.
+``recruit_mode`` says how the player recruits the NPC: ``SCRIPT`` (default) only through a
+script (``tw.party.recruit``), ``INSTANT`` with the NPC's *Recruit* action, ``ITEM`` with the
+*Recruit* dialog in which the player offers ``recruit_item_id`` (the NPC keeps it; see
+``api/routes/adventures/companion_recruit.py``). ``recruit_hint`` is the dialog's text.
+``starts_in_party`` puts it into the party when a session starts.
 """
 
 from __future__ import annotations
@@ -23,6 +29,11 @@ COMPANION_KEY = "companion"
 TACTICS = ("BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT")
 BANTER_LEVELS = ("NORMAL", "QUIET", "CHATTY")
 DEFAULT_DOWNED_RECOVERY = 0.25
+RECRUIT_SCRIPT = "SCRIPT"
+RECRUIT_INSTANT = "INSTANT"
+RECRUIT_ITEM = "ITEM"
+RECRUIT_MODES = (RECRUIT_SCRIPT, RECRUIT_INSTANT, RECRUIT_ITEM)
+RECRUIT_HINT_MAX = 300
 
 
 @dataclass(frozen=True)
@@ -34,6 +45,14 @@ class CompanionConfig:
     tactics: str = TACTICS[0]
     banter: str = BANTER_LEVELS[0]
     downed_recovery: float = DEFAULT_DOWNED_RECOVERY
+    recruit_mode: str = RECRUIT_SCRIPT
+    recruit_item_id: str = ""
+    recruit_hint: str = ""
+
+    @property
+    def player_recruitable(self) -> bool:
+        """The player can recruit it with the Recruit action (not only a script)."""
+        return self.recruitable and self.recruit_mode != RECRUIT_SCRIPT
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -70,8 +89,23 @@ def normalize_companion(raw: Any) -> Optional[dict[str, Any]]:
         tactics=_choice(raw.get("tactics"), TACTICS),
         banter=_choice(raw.get("banter"), BANTER_LEVELS),
         downed_recovery=_ratio(raw.get("downed_recovery", DEFAULT_DOWNED_RECOVERY)),
+        **_recruit_fields(raw),
     )
     return config.to_dict()
+
+
+def _recruit_fields(raw: dict[str, Any]) -> dict[str, str]:
+    """Recruit mode, item and hint; ITEM without an item falls back to INSTANT."""
+    item_id = str(raw.get("recruit_item_id") or "").strip().upper()
+    mode = _choice(raw.get("recruit_mode"), RECRUIT_MODES)
+    if mode == RECRUIT_ITEM and not item_id:
+        mode = RECRUIT_INSTANT
+    hint = str(raw.get("recruit_hint") or "").strip()[:RECRUIT_HINT_MAX]
+    return {
+        "recruit_mode": mode,
+        "recruit_item_id": item_id if mode == RECRUIT_ITEM else "",
+        "recruit_hint": hint,
+    }
 
 
 def companion_config(metadata: Any) -> Optional[CompanionConfig]:

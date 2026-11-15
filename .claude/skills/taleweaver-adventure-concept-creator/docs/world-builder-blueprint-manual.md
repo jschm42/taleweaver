@@ -243,6 +243,24 @@ goal_item: OFFICE_KEY
   max: 1
 ```
 
+### A quest item that cannot be given away
+
+Mark the items the story cannot do without with `quest: yes`. The player can never hand them to an NPC or companion (`/give_items`, typed "give X to Y", the companion page), and the Game Master cannot take them away, so nobody can break the story by trading the MacGuffin to a random merchant. In the inventory and in the scene they carry a gold frame and a *Quest* tag. A real hand-in runs through a script:
+
+```text
+[Item: SEALED_LETTER] Sealed letter
+in: HARBOR
+quest: yes
+The duke's seal, unbroken.
+
+[NPC: MAYOR] Mayor Ilse Varn
+in: TOWN_HALL
+on_interact: |
+  if tw.player.has_item('SEALED_LETTER'):
+      tw.player.transfer_item('SEALED_LETTER', 'MAYOR')
+      tw.story.narrate('Ilse breaks the seal and goes pale.')
+```
+
 ### A lever that opens a door
 
 Switch outcomes can set flags but cannot unlock exits directly, so the exit checks the flag:
@@ -357,6 +375,24 @@ companions: no
 ```
 
 Lara starts in the party and follows the protagonist into every scene. She waits at the gate when the protagonist crawls through the vent, and she stays behind in every scene the protagonist leaves during chapter 3. Once the protagonist returns to her, she follows again.
+
+### A companion who joins for a price
+
+```text
+[Item: RUM] Bottle of dark rum
+in: CELLAR
+
+[NPC: GRULL] Grull the Sellsword
+in: TAVERN
+companion: yes
+recruit: item
+recruit_item: RUM
+recruit_hint: Nobody hires me sober. Bring me a bottle.
+on_recruit_text: Grull uncorks the rum, takes a long pull and grabs his axe.
+on_recruit_fail_text: Grull sniffs it and pushes it back. "That's not drink, friend."
+```
+
+Grull's card gets a softly glowing companion frame and an *Ally?* tag, and his context menu offers **Recruit**. The dialog shows his hint and lets the player offer one item: the rum makes him join (he keeps the bottle); anything else runs the failure text and stays in the inventory. With `recruit: instant` he joins at once; without `recruit` only a script recruits him (`tw.party.recruit('GRULL')`).
 
 ### An NPC whose mood changes with the player's behavior
 

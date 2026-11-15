@@ -87,6 +87,10 @@ export interface EntityEditData {
   on_protagonist_enters_scene_text?: string | null
   on_receive_item_script?: string | null
   on_receive_item_text?: string | null
+  on_recruit_success_script?: string | null
+  on_recruit_success_text?: string | null
+  on_recruit_failure_script?: string | null
+  on_recruit_failure_text?: string | null
   on_interact_script?: string | null
   on_interact_text?: string | null
 }
@@ -164,6 +168,10 @@ export interface EntityCreateData {
   on_protagonist_enters_scene_text?: string
   on_receive_item_script?: string
   on_receive_item_text?: string
+  on_recruit_success_script?: string
+  on_recruit_success_text?: string
+  on_recruit_failure_script?: string
+  on_recruit_failure_text?: string
   on_interact_script?: string
   on_interact_text?: string
 }

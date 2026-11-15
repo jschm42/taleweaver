@@ -27,6 +27,10 @@ class CompanionSettings(BaseModel):
     tactics: Literal["BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT"] = "BALANCED"
     banter: Literal["NORMAL", "QUIET", "CHATTY"] = "NORMAL"
     downed_recovery: float = Field(default=0.25, gt=0, le=1)
+    # How the player recruits it: SCRIPT (tw.party.recruit only), INSTANT, ITEM (Recruit dialog).
+    recruit_mode: Literal["SCRIPT", "INSTANT", "ITEM"] = "SCRIPT"
+    recruit_item_id: str = Field(default="", max_length=128)
+    recruit_hint: str = Field(default="", max_length=300)
 
 
 class NpcCompanionUpdateRequest(BaseModel):

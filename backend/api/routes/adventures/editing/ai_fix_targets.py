@@ -98,6 +98,7 @@ _FIX_OBJECT_FIELDS = frozenset(
         "is_portable",
         "current_scene_id",
         "locked",
+        "quest_item",
         "code_to_unlock",
         "item_to_unlock",
         "rule_to_unlock",

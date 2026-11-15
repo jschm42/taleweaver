@@ -7,6 +7,10 @@
  */
 
 .tw-skin {
+  /* Quest items (metadata_json.quest_item): frame and tag color. */
+  --tw-quest: #facc15;
+  /* Recruitable companion NPCs: frame and tag color. */
+  --tw-recruit: #38bdf8;
   --tw-accent: #f59e0b;
   --tw-accent-soft: #fbbf24;
   --tw-player: #34d399;
@@ -511,3 +515,81 @@
     animation: none;
   }
 }
+
+/* Quest items: a gold double frame and a small tag, so the player sees what the story needs. */
+.tw-quest-item {
+  border-color: var(--tw-quest, #facc15) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tw-quest, #facc15) 45%, transparent),
+    0 0 12px color-mix(in srgb, var(--tw-quest, #facc15) 28%, transparent);
+}
+
+.tw-quest-tag {
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--tw-quest, #facc15) 60%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--tw-quest, #facc15) 18%, rgb(0 0 0 / 0.55));
+  color: var(--tw-quest, #facc15);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* NPC cards the player can recruit: dashed companion frame and a small "Ally?" tag. */
+.tw-npc-recruitable {
+  border-color: color-mix(in srgb, var(--tw-recruit, #38bdf8) 65%, transparent);
+  animation: tw-recruit-glow 2.8s ease-in-out infinite;
+}
+
+.tw-npc-recruitable:hover {
+  border-color: var(--tw-recruit, #38bdf8);
+}
+
+/* A soft breathing glow around recruitable NPC cards (box-shadow keeps the card's own shadow). */
+@keyframes tw-recruit-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 20px rgb(0 0 0 / 0.7),
+      0 0 6px 0 color-mix(in srgb, var(--tw-recruit, #38bdf8) 25%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 6px 20px rgb(0 0 0 / 0.7),
+      0 0 16px 2px color-mix(in srgb, var(--tw-recruit, #38bdf8) 55%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-npc-recruitable {
+    animation: none;
+    box-shadow:
+      0 6px 20px rgb(0 0 0 / 0.7),
+      0 0 10px 1px color-mix(in srgb, var(--tw-recruit, #38bdf8) 40%, transparent) !important;
+  }
+}
+
+.tw-recruit-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--tw-recruit, #38bdf8) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tw-recruit, #38bdf8) 16%, rgb(0 0 0 / 0.6));
+  color: var(--tw-recruit, #38bdf8);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+

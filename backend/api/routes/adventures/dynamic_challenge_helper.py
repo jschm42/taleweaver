@@ -313,7 +313,10 @@ def build_dynamic_npc_clones(
                 "tactics": str(getattr(npc, "companion_tactics", "BALANCED") or "BALANCED"),
                 "banter": str(getattr(npc, "companion_banter", "NORMAL") or "NORMAL"),
                 "downed_recovery": 0.25,
+                # The player recruits it with the Recruit action (frame + tag in the play view).
+                "recruit_mode": "INSTANT",
             }
+            meta["on_recruit_success_text"] = f"{safe_name} eagerly joins your party!"
             comp_dice = "1d6" if party_hp <= 110 else dice_for_target_average(party_hp * 0.08)
             meta["main_attack"] = {
                 "name": "Strike",
@@ -324,10 +327,7 @@ def build_dynamic_npc_clones(
             meta["on_interact_script"] = (
                 f"if tw.party.is_member('{entity_id}'):\n"
                 f"    tw.party.dismiss('{entity_id}')\n"
-                f"    tw.story.narrate('{safe_name} steps back from your party.')\n"
-                f"else:\n"
-                f"    tw.party.recruit('{entity_id}')\n"
-                f"    tw.story.narrate('{safe_name} eagerly joins your party!')"
+                f"    tw.story.narrate('{safe_name} steps back from your party.')"
             )
         elif is_hostile:
             role_dmg = _ROLE_DMG_FACTORS.get(str(npc.combat_role or "").lower(), 0.09)

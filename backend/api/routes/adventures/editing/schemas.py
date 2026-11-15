@@ -40,6 +40,8 @@ class EntityUpdateRequest(BaseModel):
     item_type: Optional[str] = None
     is_portable: Optional[bool] = None
     locked: Optional[bool] = None
+    # Items: a quest item can never be given to NPCs or taken away by the Game Master.
+    quest_item: Optional[bool] = None
     # Exits: the target scene is known from the start.
     revealed: Optional[bool] = None
     # Exits: False makes it a solo passage (the companion stays behind).
@@ -102,6 +104,10 @@ class EntityUpdateRequest(BaseModel):
     on_protagonist_enters_scene_text: Optional[str] = None
     on_receive_item_script: Optional[str] = None
     on_receive_item_text: Optional[str] = None
+    on_recruit_success_script: Optional[str] = None
+    on_recruit_success_text: Optional[str] = None
+    on_recruit_failure_script: Optional[str] = None
+    on_recruit_failure_text: Optional[str] = None
     on_enter_scene_script: Optional[str] = None
     on_enter_scene_text: Optional[str] = None
     on_leave_scene_script: Optional[str] = None

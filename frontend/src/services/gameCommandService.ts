@@ -27,6 +27,8 @@ const COMBINE_WITH_PREFIX = '[COMBINE_WITH] '
 export const OPEN_COMPANION_SHEET_PREFIX = '[OPEN_COMPANION_SHEET] '
 /** Context menu action that opens the Give dialog for an NPC (handled in GameView). */
 export const GIVE_TO_PREFIX = '[GIVE_TO] '
+/** Opens the Recruit dialog of a companion NPC that wants an item (recruit_mode ITEM). */
+export const RECRUIT_PREFIX = '[RECRUIT] '
 
 export const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -192,6 +194,12 @@ export const gameCommandService = {
       if (!isDefeatedNpc) {
         items.push({ label: 'Give', action: `${GIVE_TO_PREFIX}${entity.id || entity.name}` })
       }
+      // Recruitable companions: join at once, or open the dialog that asks for an item.
+      if (!isDefeatedNpc && entity?.is_recruitable === true) {
+        items.push(entity.recruit_mode === 'ITEM'
+          ? { label: 'Recruit', action: `${RECRUIT_PREFIX}${entity.id}` }
+          : { label: 'Recruit', action: `/recruit ${entity.id}` })
+      }
       // The active companion takes orders: stay behind here, or come along again.
       if (!isDefeatedNpc && entity?.is_companion === true) {
         items.push(entity.companion_following === false
@@ -281,7 +289,8 @@ export const gameCommandService = {
 
     items.push({ label: 'Combine', action: `${COMBINE_WITH_PREFIX}${item.id || item.name}` })
     items.push({ label: 'Drop', action: `/drop ${item.name}` })
-    if (companion?.present && !companion.is_defeated && !isEquipped) {
+    // Quest items stay with the protagonist (the server refuses the handover too).
+    if (companion?.present && !companion.is_defeated && !isEquipped && !item.quest_item) {
       items.push({ label: `Give to ${companion.name}`, action: `/companion_give ${item.id || item.name}` })
     }
     items.push({ label: 'Inspect', action: `/inspect ${item.name}` })

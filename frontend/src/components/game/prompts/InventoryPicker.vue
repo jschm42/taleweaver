@@ -22,6 +22,8 @@ const props = withDefaults(defineProps<{
   actionLabel?: string
   /** Tooltip verb of an unselected tile ("Put in Sword", "Give Sword"). */
   tileVerb?: string
+  /** Replace the hint with the container capacity text when maxSelect is set. */
+  capacityHint?: boolean
 }>(), {
   excludeId: '',
   maxSelect: null,
@@ -29,6 +31,7 @@ const props = withDefaults(defineProps<{
   emptyHint: 'You carry nothing you could put inside.',
   actionLabel: 'Put In',
   tileVerb: 'Put in',
+  capacityHint: true,
 })
 
 const emit = defineEmits<{
@@ -51,7 +54,7 @@ const isSelected = (item: any) => selectedIds.value.includes(itemId(item))
 const canSelectMore = computed(() => props.maxSelect == null || selectedIds.value.length < props.maxSelect)
 
 const effectiveHint = computed(() => {
-  if (props.maxSelect != null && props.maxSelect > 0) {
+  if (props.capacityHint && props.maxSelect != null && props.maxSelect > 0) {
     return props.maxSelect === 1
       ? 'Select 1 item to put inside.'
       : `Select up to ${props.maxSelect} items to put inside.`

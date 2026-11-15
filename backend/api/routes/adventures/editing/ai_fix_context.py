@@ -81,6 +81,7 @@ def _object_summary(entity: dict[str, Any]) -> dict[str, Any]:
         "item_type": entity.get("item_type"),
         "is_portable": entity.get("is_portable"),
         "locked": entity.get("locked"),
+        "quest_item": entity.get("quest_item"),
         "code_to_unlock": entity.get("code_to_unlock"),
         "item_to_unlock": entity.get("item_to_unlock"),
         "rule_to_unlock": _short_state(entity.get("rule_to_unlock"), limit=200),

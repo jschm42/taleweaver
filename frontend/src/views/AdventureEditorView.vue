@@ -142,6 +142,7 @@ const editForm = ref({
   item_type: 'DEFAULT',
   is_portable: true,
   locked: false,
+  quest_item: false,
   code_to_unlock: '',
   item_to_unlock: '',
   inventory_input: [] as string[],
@@ -309,6 +310,7 @@ function openCreateNpc(targetSceneId?: string) {
     item_type: 'DEFAULT',
     is_portable: true,
     locked: false,
+    quest_item: false,
     code_to_unlock: '',
     item_to_unlock: '',
     inventory_input: [],
@@ -389,6 +391,7 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
     item_type: itemType,
     is_portable: !['SWITCH', 'CONTAINER_SWITCH'].includes(String(itemType).toUpperCase()),
     locked: false,
+    quest_item: false,
     code_to_unlock: '',
     item_to_unlock: '',
     inventory_input: [],
@@ -1128,6 +1131,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     item_type: selectedObject?.item_type || 'DEFAULT',
     is_portable: selectedObject?.is_portable !== false,
     locked: selectedObject?.locked === true,
+    quest_item: selectedObject?.quest_item === true,
     code_to_unlock: selectedObject?.code_to_unlock || '',
     item_to_unlock: selectedObject?.item_to_unlock || '',
     inventory_input: Array.isArray(selectedObject?.inventory)
@@ -1188,6 +1192,10 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     on_protagonist_enters_scene_text: selectedNpc?.on_protagonist_enters_scene_text || metadata?.on_protagonist_enters_scene_text || '',
     on_receive_item_script: selectedNpc?.on_receive_item_script || metadata?.on_receive_item_script || '',
     on_receive_item_text: selectedNpc?.on_receive_item_text || metadata?.on_receive_item_text || '',
+    on_recruit_success_script: selectedNpc?.on_recruit_success_script || metadata?.on_recruit_success_script || '',
+    on_recruit_success_text: selectedNpc?.on_recruit_success_text || metadata?.on_recruit_success_text || '',
+    on_recruit_failure_script: selectedNpc?.on_recruit_failure_script || metadata?.on_recruit_failure_script || '',
+    on_recruit_failure_text: selectedNpc?.on_recruit_failure_text || metadata?.on_recruit_failure_text || '',
     on_interact_script: selectedNpc?.on_interact_script || selectedObject?.on_interact_script || metadata?.on_interact_script || '',
     on_interact_text: selectedNpc?.on_interact_text || selectedObject?.on_interact_text || metadata?.on_interact_text || '',
     unlock_expression: selectedObject?.unlock_expression || metadata?.unlock_expression || '',
@@ -1298,6 +1306,10 @@ async function saveEntityText(data: any) {
           on_protagonist_enters_scene_text: data.on_protagonist_enters_scene_text || undefined,
           on_receive_item_script: data.on_receive_item_script || undefined,
           on_receive_item_text: data.on_receive_item_text || undefined,
+          on_recruit_success_script: data.on_recruit_success_script || undefined,
+          on_recruit_success_text: data.on_recruit_success_text || undefined,
+          on_recruit_failure_script: data.on_recruit_failure_script || undefined,
+          on_recruit_failure_text: data.on_recruit_failure_text || undefined,
           on_interact_script: data.on_interact_script || undefined,
           on_interact_text: data.on_interact_text || undefined,
         })
@@ -1340,6 +1352,12 @@ async function saveEntityText(data: any) {
           createPayload.metadata_json = {
             ...(createPayload.metadata_json || {}),
             locked: true,
+          }
+        }
+        if (data.quest_item) {
+          createPayload.metadata_json = {
+            ...(createPayload.metadata_json || {}),
+            quest_item: true,
           }
         }
         if (['CONTAINER', 'CONTAINER_SWITCH'].includes(itemType)) {
@@ -1509,6 +1527,7 @@ async function saveEntityText(data: any) {
       notes: editEntityContext.value.type === 'npc' ? data.notes : undefined,
       is_portable: editEntityContext.value.type === 'object' ? data.is_portable : undefined,
       locked: editEntityContext.value.type === 'object' ? data.locked : undefined,
+      quest_item: editEntityContext.value.type === 'object' ? Boolean(data.quest_item) : undefined,
       code_to_unlock: editEntityContext.value.type === 'object' ? data.code_to_unlock : undefined,
       item_to_unlock: editEntityContext.value.type === 'object' ? data.item_to_unlock : undefined,
       inventory: ['npc', 'object'].includes(editEntityContext.value.type) ? data.inventory : undefined,
@@ -1550,6 +1569,10 @@ async function saveEntityText(data: any) {
       on_protagonist_enters_scene_text: editEntityContext.value.type === 'npc' ? data.on_protagonist_enters_scene_text : undefined,
       on_receive_item_script: editEntityContext.value.type === 'npc' ? data.on_receive_item_script : undefined,
       on_receive_item_text: editEntityContext.value.type === 'npc' ? data.on_receive_item_text : undefined,
+      on_recruit_success_script: editEntityContext.value.type === 'npc' ? data.on_recruit_success_script : undefined,
+      on_recruit_success_text: editEntityContext.value.type === 'npc' ? data.on_recruit_success_text : undefined,
+      on_recruit_failure_script: editEntityContext.value.type === 'npc' ? data.on_recruit_failure_script : undefined,
+      on_recruit_failure_text: editEntityContext.value.type === 'npc' ? data.on_recruit_failure_text : undefined,
       on_interact_script: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_script : undefined,
       on_interact_text: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_text : undefined,
       on_enter_scene_script: editEntityContext.value.type === 'scene' ? data.on_enter_scene_script : undefined,

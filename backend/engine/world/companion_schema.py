@@ -28,5 +28,21 @@ class CompanionSchema(WorldBaseSchema):
         0.25,
         description="Share of max HP (0.01-1) the companion gets back after being downed in a fight.",
     )
+    recruit_mode: Literal["SCRIPT", "INSTANT", "ITEM"] = Field(
+        "SCRIPT",
+        description=(
+            "How the player recruits it: SCRIPT = only a script (tw.party.recruit) after story "
+            "events; INSTANT = the NPC's Recruit action makes it join at once; ITEM = the Recruit "
+            "dialog asks for recruit_item_id, which the NPC keeps (wrong item = failure)."
+        ),
+    )
+    recruit_item_id: str = Field(
+        "",
+        description="ITEM mode only: ID of an existing item the NPC wants before joining. Empty otherwise.",
+    )
+    recruit_hint: str = Field(
+        "",
+        description="Optional line shown in the Recruit dialog, e.g. 'Bring me something strong to drink.'",
+    )
 
     model_config = {"extra": "forbid"}

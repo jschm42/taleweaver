@@ -141,6 +141,7 @@ def _update_metadata(
     item_metadata.update_switch(metadata_json, payload, item_type in SWITCH_ITEM_TYPES)
     item_metadata.update_consumable(metadata_json, payload, item_type == "CONSUMABLE")
     item_metadata.update_weapon(metadata_json, payload, item_type == "WEAPON")
+    item_metadata.update_quest_item(metadata_json, payload)
     item.metadata_json = metadata_json
     flag_modified(item, "metadata_json")
 

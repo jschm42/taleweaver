@@ -354,3 +354,13 @@ def update_consumable(
         metadata_json.pop("effects", None)
     elif given(payload, "effects"):
         metadata_json["effects"] = payload.effects
+
+
+def update_quest_item(metadata_json: dict[str, Any], payload: EntityUpdateRequest) -> None:
+    """Sets or clears the quest-item flag (stored only when true)."""
+    if not given(payload, "quest_item"):
+        return
+    if payload.quest_item:
+        metadata_json["quest_item"] = True
+        return
+    metadata_json.pop("quest_item", None)

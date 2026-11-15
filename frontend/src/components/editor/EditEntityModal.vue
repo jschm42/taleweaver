@@ -7,6 +7,7 @@ import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InteractTriggerFields from '@/components/editor/InteractTriggerFields.vue'
 import ReceiveItemTriggerFields from '@/components/editor/ReceiveItemTriggerFields.vue'
+import RecruitTriggerFields from '@/components/editor/RecruitTriggerFields.vue'
 import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import NpcCompanionSettings from '@/components/editor/NpcCompanionSettings.vue'
 import AppearanceField from '@/components/editor/AppearanceField.vue'
@@ -23,7 +24,7 @@ import {
 import { DICE_PATTERN, readWeaponConfig, type WeaponConfig } from '@/utils/weaponConfig'
 import { AMOUNT_PATTERN } from '@/utils/specialAttacks'
 import type { TtsVoiceList } from '@/types'
-import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, ChevronDown, ChevronRight, Edit3 } from 'lucide-vue-next'
+import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, ChevronDown, ChevronRight, Edit3, Star } from 'lucide-vue-next'
 
 const props = defineProps<{
   show: boolean
@@ -44,6 +45,7 @@ const props = defineProps<{
     item_type: string
     is_portable: boolean
     locked: boolean
+    quest_item?: boolean
     code_to_unlock: string
     item_to_unlock: string
     inventory_input: string[]
@@ -112,7 +114,7 @@ const emit = defineEmits<{
   (e: 'combat-saved'): void
 }>()
 
-const activeTab = ref<'simple' | 'combat' | 'advanced'>('simple')
+const activeTab = ref<'simple' | 'combat' | 'companion' | 'advanced'>('simple')
 const editingTransitionIndex = ref<number | null>(null)
 const showTransitionGuards = ref<boolean>(false)
 const showTransitionScripts = ref<boolean>(false)
@@ -186,6 +188,10 @@ const localForm = ref({
   on_protagonist_enters_scene_text: '',
   on_receive_item_script: '',
   on_receive_item_text: '',
+  on_recruit_success_script: '',
+  on_recruit_success_text: '',
+  on_recruit_failure_script: '',
+  on_recruit_failure_text: '',
   on_interact_script: '',
   on_interact_text: '',
   on_success_script: '',
@@ -546,6 +552,10 @@ watch(() => props.initialForm, (newVal) => {
     on_protagonist_enters_scene_text: '',
     on_receive_item_script: '',
     on_receive_item_text: '',
+    on_recruit_success_script: '',
+    on_recruit_success_text: '',
+    on_recruit_failure_script: '',
+    on_recruit_failure_text: '',
     on_interact_script: '',
     on_interact_text: '',
     ...newVal
@@ -584,6 +594,10 @@ watch(() => props.show, (newVal) => {
       on_protagonist_enters_scene_text: '',
       on_receive_item_script: '',
       on_receive_item_text: '',
+      on_recruit_success_script: '',
+      on_recruit_success_text: '',
+      on_recruit_failure_script: '',
+      on_recruit_failure_text: '',
       on_interact_script: '',
       on_interact_text: '',
       ...props.initialForm
@@ -825,6 +839,10 @@ function handleSave() {
     on_protagonist_enters_scene_text: localForm.value.on_protagonist_enters_scene_text,
     on_receive_item_script: localForm.value.on_receive_item_script,
     on_receive_item_text: localForm.value.on_receive_item_text,
+    on_recruit_success_script: localForm.value.on_recruit_success_script,
+    on_recruit_success_text: localForm.value.on_recruit_success_text,
+    on_recruit_failure_script: localForm.value.on_recruit_failure_script,
+    on_recruit_failure_text: localForm.value.on_recruit_failure_text,
     on_interact_script: localForm.value.on_interact_script,
     on_interact_text: localForm.value.on_interact_text,
   })
@@ -956,6 +974,13 @@ const textLogPreviewClass = computed(() => {
               :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'combat' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
             >
               Combat
+            </button>
+            <button
+              v-if="context.type === 'npc'"
+              @click="activeTab = 'companion'"
+              :class="['pb-3 pt-4 text-xs font-black uppercase tracking-widest transition-colors border-b-2', activeTab === 'companion' ? 'text-emerald-500 border-emerald-500' : 'text-slate-500 border-transparent hover:text-white']"
+            >
+              Companion
             </button>
             <button
               @click="activeTab = 'advanced'"
@@ -1397,6 +1422,27 @@ const textLogPreviewClass = computed(() => {
                       :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1 shrink-0', localForm.locked ? 'bg-amber-600' : 'bg-slate-700']"
                     >
                       <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-6' : 'translate-x-0']"></div>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Quest item: can never be given to NPCs or taken away by the Game Master -->
+                <div v-if="currentItemType !== 'CONSTRUCTABLE'" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1 pr-4">
+                      <p class="text-xs font-black text-slate-200 uppercase tracking-widest flex items-center gap-1.5">
+                        <Star class="w-3.5 h-3.5 text-yellow-400" /> Quest Item
+                      </p>
+                      <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                        The story depends on it: the player can never give it to an NPC or companion, and the Game Master cannot take it away. Shown with a gold frame in-game. Scripts can still move it (e.g. <code class="text-yellow-400">tw.player.transfer_item('ID', 'NPC_ID')</code> for a hand-in).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.quest_item = !localForm.quest_item"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1 shrink-0', localForm.quest_item ? 'bg-yellow-600' : 'bg-slate-700']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.quest_item ? 'translate-x-6' : 'translate-x-0']"></div>
                     </button>
                   </div>
                 </div>
@@ -2308,7 +2354,7 @@ const textLogPreviewClass = computed(() => {
               <div class="space-y-2">
                 <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Combat</p>
                 <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
-                  How this NPC fights: damage, aggression, combat group, attributes, main attack and special attacks.
+                  How this NPC fights: damage, aggression, combat group, attributes, main attack and special attacks. Party settings are on the Companion tab.
                   The damage switch is saved with Apply Changes; the sections below have their own Save buttons.
                 </p>
               </div>
@@ -2341,6 +2387,17 @@ const textLogPreviewClass = computed(() => {
                 <p v-else class="text-[11px] text-slate-400">Save the NPC first to configure attack behaviour, combat group and special attacks.</p>
               </div>
 
+            </div> <!-- End combat tab -->
+
+            <div v-if="context.type === 'npc'" v-show="activeTab === 'companion'" class="space-y-6">
+              <div class="space-y-2">
+                <p class="text-xs font-black text-slate-500 uppercase tracking-widest">Companion</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">
+                  Whether this NPC can join the party, how the player recruits it, and what is narrated when recruiting succeeds or fails.
+                  The companion settings have their own Save button; the recruit triggers are saved with Apply Changes.
+                </p>
+              </div>
+
               <!-- Companion (sidekick) settings -->
               <div v-if="adventureId && npcData && !isCreateEntityMode" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
                 <NpcCompanionSettings
@@ -2349,7 +2406,15 @@ const textLogPreviewClass = computed(() => {
                   @saved="emit('combat-saved')"
                 />
               </div>
-            </div> <!-- End combat tab -->
+              <p v-else class="text-[11px] text-slate-400">Save the NPC first to make it a companion.</p>
+
+              <RecruitTriggerFields
+                v-model:success-script="localForm.on_recruit_success_script"
+                v-model:success-text="localForm.on_recruit_success_text"
+                v-model:failure-script="localForm.on_recruit_failure_script"
+                v-model:failure-text="localForm.on_recruit_failure_text"
+              />
+            </div> <!-- End companion tab -->
 
             <div v-show="activeTab === 'advanced'" class="space-y-6">
               <div class="space-y-2">

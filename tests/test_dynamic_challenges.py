@@ -246,10 +246,12 @@ def test_dynamic_attack_on_sight_and_recruitable_companion():
         "tactics": "OFFENSIVE",
         "banter": "QUIET",
         "downed_recovery": 0.25,
+        "recruit_mode": "INSTANT",
     }
     assert hound_ent.metadata_json["main_attack"]["damage_dice"] == "1d6"
+    assert "joins your party" in hound_ent.metadata_json["on_recruit_success_text"]
     script = hound_ent.metadata_json["on_interact_script"]
-    assert "tw.party.recruit(" in script
+    assert "tw.party.dismiss(" in script
     assert SafeAstInterpreter.check_syntax(script) == []
 
 

@@ -2,6 +2,8 @@ import { API_BASE, authHeaders } from '@/services/http'
 
 export type CompanionTactics = 'BALANCED' | 'OFFENSIVE' | 'DEFENSIVE' | 'SUPPORT'
 export type CompanionBanter = 'NORMAL' | 'QUIET' | 'CHATTY'
+/** SCRIPT: only tw.party.recruit; INSTANT: Recruit action; ITEM: Recruit dialog wants an item. */
+export type CompanionRecruitMode = 'SCRIPT' | 'INSTANT' | 'ITEM'
 
 /** The `companion` block of an NPC (see backend/engine/party/companion_config.py). */
 export interface CompanionSettings {
@@ -10,6 +12,9 @@ export interface CompanionSettings {
   tactics: CompanionTactics
   banter: CompanionBanter
   downed_recovery: number
+  recruit_mode: CompanionRecruitMode
+  recruit_item_id: string
+  recruit_hint: string
 }
 
 export const DEFAULT_COMPANION: CompanionSettings = {
@@ -18,6 +23,9 @@ export const DEFAULT_COMPANION: CompanionSettings = {
   tactics: 'BALANCED',
   banter: 'NORMAL',
   downed_recovery: 0.25,
+  recruit_mode: 'SCRIPT',
+  recruit_item_id: '',
+  recruit_hint: '',
 }
 
 function formatError(detail: unknown): string {

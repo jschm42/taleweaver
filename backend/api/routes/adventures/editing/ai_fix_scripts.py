@@ -25,7 +25,12 @@ EXIT_SCRIPT_FIELDS = (
     *_hooks("on_open_exit", "on_exit_used", "on_unlock_success", "on_unlock_failure"),
 )
 NPC_SCRIPT_FIELDS = _hooks(
-    "on_defeat", "on_protagonist_enters_scene", "on_interact", "on_receive_item"
+    "on_defeat",
+    "on_protagonist_enters_scene",
+    "on_interact",
+    "on_receive_item",
+    "on_recruit_success",
+    "on_recruit_failure",
 )
 ITEM_EVENT_FIELDS = _hooks("on_pickup", "on_drop", "on_equip", "on_unequip", "on_interact")
 OBJECT_SCRIPT_FIELDS = (

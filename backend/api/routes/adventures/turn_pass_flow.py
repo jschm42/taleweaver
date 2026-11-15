@@ -60,7 +60,8 @@ async def run_guardrail_chain(
         yield sse_system(message)
     await manager.guardrails._block_script_only_reveals(game_event)
     # Before crafting, which adds its own (legitimate) ingredient removals.
-    await manager.guardrails._enforce_inventory_removals(game_event, user_msg)
+    kept_quest_items = await manager.guardrails._enforce_inventory_removals(game_event, user_msg)
+    rule_violations.extend(kept_quest_items)
 
     for method_name, takes_user_msg in _GUARDRAIL_STEPS:
         enforce = getattr(manager, method_name)

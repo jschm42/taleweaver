@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Gift } from 'lucide-vue-next'
 import { getImageUrl } from '@/utils/game_icons'
 import InlinePromptPanel from './InlinePromptPanel.vue'
@@ -8,14 +9,17 @@ import InventoryPicker from './InventoryPicker.vue'
  * Give dialog, shown inline at the end of the story feed: the player selects inventory items
  * and hands them to an NPC (`/give_items <npc> | A, B`). The NPC's on_receive_item trigger
  * fires once for the whole batch, then the Game Master narrates the NPC's reaction.
+ * Quest items (`quest_item`) are left out: the server refuses to hand them over anyway.
  */
-defineProps<{
+const props = defineProps<{
   open: boolean
   npcName: string
   npcImageUrl?: string | null
   inventoryItems: any[]
   busy?: boolean
 }>()
+
+const giftableItems = computed(() => props.inventoryItems.filter((item) => !item?.quest_item))
 
 const emit = defineEmits<{
   close: []
@@ -39,10 +43,10 @@ const emit = defineEmits<{
 
     <InventoryPicker
       v-if="open"
-      :inventory-items="inventoryItems"
+      :inventory-items="giftableItems"
       :busy="busy"
       :hint="`Select the items to give to ${npcName}.`"
-      empty-hint="You carry nothing you could give."
+      empty-hint="You carry nothing you could give (quest items stay with you)."
       action-label="Give"
       tile-verb="Give"
       @confirm="(ids) => emit('give', ids)"

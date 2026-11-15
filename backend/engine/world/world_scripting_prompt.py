@@ -95,6 +95,16 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
             "the protagonist gives this NPC one or more items; `received_items` and "
             "`received_item_ids` are in scope",
         ),
+        (
+            "on_recruit_success",
+            "the player recruited this companion NPC with its Recruit action (recruit_mode "
+            "INSTANT or ITEM); `offered_item_id` is in scope",
+        ),
+        (
+            "on_recruit_failure",
+            "the player offered a recruit-mode ITEM companion the wrong item or none; "
+            "`offered_item_id` is in scope",
+        ),
     ),
     "PROTAGONIST": (
         ("on_hp_change", "the protagonist HP changes (e.g. damaged or healed)"),
@@ -156,6 +166,9 @@ TW_API_REFERENCE = (
     "- tw.objects.lock(item_id) / unlock(item_id) / is_locked(item_id): a locked CONTAINER or "
     "CONTAINER_SWITCH cannot be opened; any other locked item is TAKE-LOCKED (visible, cannot be "
     "picked up until unlocked; moving it to the player by script unlocks it)\n"
+    "- quest items (item field quest_item: true) cannot be given to NPCs or companions by the "
+    "player and the GM cannot remove them; scripts still move them, so a hand-in quest uses "
+    "e.g. tw.player.transfer_item('LETTER', 'NPC_MAYOR') in the NPC's on_interact_script\n"
     "- item operations on tw.objects (every item has exactly one holder: player, NPC, container "
     "or scene; moves take it from the old holder): clone(item_id, scene_id=None, hidden=None) -> "
     "proxy of a new copy with id <ITEM>_<n> for this game only (e.g. a dispenser: "

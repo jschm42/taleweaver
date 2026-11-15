@@ -9,6 +9,9 @@ reacts in character (``GiveOutcome.reaction_prompt``).
 A typed ``give <item> to <npc>`` only becomes this command when the NPC stands in the scene
 and the player carries at least one of the named items; anything else ("give the guard a
 nod") stays a normal Game Master turn.
+
+Quest items (``metadata_json.quest_item``) are refused and stay in the inventory
+(``backend.engine.rules.quest_items``).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.container_put import pick_items, split_item_refs
+from backend.engine.rules.quest_items import quest_item_refusal, split_quest_items
 from backend.engine.scripting.dialog import pending_dialog
 from backend.engine.scripting.item_ops import INVENTORY_SCENE_ID
 from backend.engine.scripting.item_transfer import ref_id
@@ -106,13 +110,16 @@ async def give_items_to_npc(manager: Any, args: str) -> GiveOutcome:
     if manager._is_npc_defeated(npc):
         return GiveOutcome([("system", f"{npc.name} cannot take anything anymore.")])
 
-    picked, missing = pick_items(list(manager.avatar.inventory or []), refs, str(npc.id))
+    picked, missing, refusal = await _giftable_items(manager, refs, str(npc.id))
     if not picked:
-        return GiveOutcome([("system", f"You don't carry {', '.join(missing)}.")])
+        text = refusal or f"You don't carry {', '.join(missing)}."
+        return GiveOutcome([await _say(manager, "system", text) if refusal else ("system", text)])
 
     await _hand_over(manager, npc, picked)
     names = ", ".join(_item_label(e) for e in picked)
     events = [await _say(manager, "system", f"You give {names} to {npc.name}.")]
+    if refusal:
+        events.append(await _say(manager, "system", refusal))
     if missing:
         events.append(await _say(manager, "system", f"You don't carry {', '.join(missing)}."))
     events.extend(await _run_receive_trigger(manager, npc, picked))
@@ -120,6 +127,16 @@ async def give_items_to_npc(manager: Any, args: str) -> GiveOutcome:
         # The receive script asked the player something; the answer drives the reaction.
         return GiveOutcome(events)
     return GiveOutcome(events, _reaction_prompt(npc, names))
+
+
+async def _giftable_items(
+    manager: Any, refs: list[str], npc_id: str
+) -> tuple[list[Any], list[str], str]:
+    """(carried items to hand over, refs not carried, refusal line for kept quest items)."""
+    picked, missing = pick_items(list(manager.avatar.inventory or []), refs, npc_id)
+    picked, kept = await split_quest_items(manager.db, manager.state.session_id, picked)
+    refusal = quest_item_refusal([_item_label(e) for e in kept]) if kept else ""
+    return picked, missing, refusal
 
 
 def _reaction_prompt(npc: WorldEntity, names: str) -> str:

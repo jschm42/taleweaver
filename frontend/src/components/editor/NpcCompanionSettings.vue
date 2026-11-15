@@ -5,6 +5,7 @@ import {
   companionService,
   DEFAULT_COMPANION,
   type CompanionBanter,
+  type CompanionRecruitMode,
   type CompanionSettings,
   type CompanionTactics,
 } from '@/services/companionService'
@@ -36,6 +37,12 @@ const BANTER: Array<{ value: CompanionBanter; label: string }> = [
   { value: 'CHATTY', label: 'Chatty' },
 ]
 
+const RECRUIT_MODES: Array<{ value: CompanionRecruitMode; label: string }> = [
+  { value: 'SCRIPT', label: 'Only by script (tw.party.recruit)' },
+  { value: 'INSTANT', label: 'Recruit action: joins at once' },
+  { value: 'ITEM', label: 'Recruit dialog: wants an item' },
+]
+
 const isCompanion = ref(false)
 const form = ref<CompanionSettings>({ ...DEFAULT_COMPANION })
 const saving = ref(false)
@@ -54,10 +61,16 @@ async function save(): Promise<void> {
   error.value = ''
   try {
     const recovery = Math.min(1, Math.max(0.01, Number(form.value.downed_recovery) || DEFAULT_COMPANION.downed_recovery))
+    if (isCompanion.value && form.value.recruit_mode === 'ITEM' && !form.value.recruit_item_id.trim()) {
+      error.value = 'Choose the item the NPC wants (or another recruit mode).'
+      return
+    }
     await companionService.saveNpcCompanion(
       props.adventureId,
       props.npc.id,
-      isCompanion.value ? { ...form.value, downed_recovery: recovery } : null,
+      isCompanion.value
+        ? { ...form.value, downed_recovery: recovery, recruit_item_id: form.value.recruit_item_id.trim().toUpperCase() }
+        : null,
     )
     note.value = 'Saved.'
     emit('saved')
@@ -114,6 +127,34 @@ async function save(): Promise<void> {
         <select v-model="form.banter" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none">
           <option v-for="opt in BANTER" :key="opt.value" :value="opt.value" class="bg-slate-900">{{ opt.label }}</option>
         </select>
+      </label>
+      <label class="text-xs text-slate-300 space-y-1 block sm:col-span-2">
+        <span>How the player recruits it</span>
+        <select v-model="form.recruit_mode" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none">
+          <option v-for="opt in RECRUIT_MODES" :key="opt.value" :value="opt.value" class="bg-slate-900">{{ opt.label }}</option>
+        </select>
+        <span class="block text-[11px] text-slate-500">
+          With a Recruit action the NPC shows a companion frame and tag in-game. In the item dialog only the item below convinces it; the NPC keeps that item. Success and failure narration: the NPC's "On Recruit" triggers.
+        </span>
+      </label>
+      <label v-if="form.recruit_mode === 'ITEM'" class="text-xs text-slate-300 space-y-1 block">
+        <span>Wanted item ID</span>
+        <input
+          v-model="form.recruit_item_id"
+          type="text"
+          placeholder="e.g. BOTTLE_OF_RUM"
+          class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none uppercase"
+        />
+      </label>
+      <label v-if="form.recruit_mode !== 'SCRIPT'" class="text-xs text-slate-300 space-y-1 block" :class="form.recruit_mode === 'ITEM' ? '' : 'sm:col-span-2'">
+        <span>Dialog hint (optional)</span>
+        <input
+          v-model="form.recruit_hint"
+          type="text"
+          maxlength="300"
+          placeholder="e.g. Bring me something strong to drink."
+          class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none"
+        />
       </label>
       <label class="text-xs text-slate-300 space-y-1 block sm:col-span-2" title="When the companion drops to 0 HP in a fight it is downed, not killed. After the fight it gets this share of its max HP back.">
         <span>HP after being downed (share of max HP, 0.01–1)</span>

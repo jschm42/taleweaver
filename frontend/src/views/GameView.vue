@@ -17,7 +17,9 @@ import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import ContainerPanel from '@/components/game/prompts/ContainerPanel.vue'
 import GivePanel from '@/components/game/prompts/GivePanel.vue'
+import RecruitPanel from '@/components/game/prompts/RecruitPanel.vue'
 import { useGivePanel } from '@/composables/useGivePanel'
+import { useRecruitPanel } from '@/composables/useRecruitPanel'
 import LockUnlockPanel from '@/components/game/prompts/LockUnlockPanel.vue'
 import SwitchStatePanel from '@/components/game/prompts/SwitchStatePanel.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
@@ -62,7 +64,7 @@ import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
 import { waitForSpeechToFinish } from '@/services/speechWait'
 import { type GameSettings } from '@/services/gameViewService'
-import { GIVE_TO_PREFIX, OPEN_COMPANION_SHEET_PREFIX, gameCommandService } from '@/services/gameCommandService'
+import { GIVE_TO_PREFIX, OPEN_COMPANION_SHEET_PREFIX, RECRUIT_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 import type { SheetTabId } from '@/components/game/sheet/types'
@@ -401,13 +403,24 @@ const { showGivePanel, giveTarget, giveBusy, openGivePanel, closeGivePanel, subm
     closeSheetForInlinePrompt()
   },
 })
+const {
+  showRecruitPanel, recruitTarget, recruitBusy, openRecruitPanel, closeRecruitPanel, submitRecruit,
+} = useRecruitPanel({
+  npcs: () => npcs.value,
+  sendMessage,
+  beforeOpen: () => {
+    closeInlinePrompts()
+    closeSheetForInlinePrompt()
+  },
+})
 const isInlinePromptOpen = computed(() => showUnlockModal.value || showExitUnlockModal.value
   || showSwitchStateModal.value || showSwitchUnlockModal.value || showTextLogModal.value
-  || showContainerModal.value || showCombinePanel.value || showGivePanel.value)
+  || showContainerModal.value || showCombinePanel.value || showGivePanel.value || showRecruitPanel.value)
 const closeInlinePrompts = (): void => {
   showContainerModal.value = false
   showCombinePanel.value = false
   closeGivePanel()
+  closeRecruitPanel()
   showUnlockModal.value = false
   showExitUnlockModal.value = false
   showSwitchStateModal.value = false
@@ -1807,6 +1820,9 @@ const {
       return true
     }
 
+    if (action.startsWith(RECRUIT_PREFIX)) {
+      return openRecruitPanel(action.replace(RECRUIT_PREFIX, '').trim())
+    }
     if (action.startsWith(GIVE_TO_PREFIX)) {
       return openGivePanel(action.replace(GIVE_TO_PREFIX, '').trim())
     }
@@ -2134,6 +2150,18 @@ usePlayAgentAutoLoop()
           @drop-to-scene="handleContainerDropToScene"
           @put-items="handleContainerPutItems"
           @select-switch-state="handleContainerSwitchStateSelect"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
+        />
+        <RecruitPanel
+          :open="showRecruitPanel"
+          :npc-name="recruitTarget?.name || ''"
+          :npc-image-url="recruitTarget?.imageUrl || null"
+          :hint="recruitTarget?.hint || ''"
+          :inventory-items="inventoryItems"
+          :busy="recruitBusy || isActionInputBlocked"
+          @close="closeRecruitPanel"
+          @offer="submitRecruit"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />

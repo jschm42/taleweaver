@@ -23,6 +23,7 @@ from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
 from backend.api.routes.adventures.companion_command import companion_order_command
 from backend.api.routes.adventures.companion_inventory import GIVE, TAKE, transfer_companion_items
+from backend.api.routes.adventures.companion_recruit import recruit_companion_command
 from backend.api.routes.adventures.companion_loadout import (
     equip_companion,
     toggle_companion_ability,
@@ -64,6 +65,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Party commands that chain a Game Master reaction turn: companion orders and recruiting.
+_PARTY_REACTION_TAGS = {
+    "[TRIGGER_COMPANION]": companion_order_command,
+    "[TRIGGER_COMPANION_RECRUIT]": recruit_companion_command,
+}
 # Hero dialog handovers between the protagonist and the companion (companion_inventory.py).
 _COMPANION_TRANSFER_TAGS = {"[TRIGGER_COMPANION_GIVE]": GIVE, "[TRIGGER_COMPANION_TAKE]": TAKE}
 # Hero dialog loadout of the companion: equipment and ability switches (companion_loadout.py).
@@ -1379,9 +1385,10 @@ class TurnInteractionsManager:
             self.pending_reaction_prompt = outcome.reaction_prompt
             response = ""
 
-        if response.startswith("[TRIGGER_COMPANION]"):
-            order_args = response.replace("[TRIGGER_COMPANION]", "").strip()
-            outcome = await companion_order_command(self.manager, order_args)
+        for tag, party_command in _PARTY_REACTION_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            outcome = await party_command(self.manager, response.replace(tag, "", 1).strip())
             for role, content in outcome.events:
                 yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             self.pending_reaction_prompt = outcome.reaction_prompt

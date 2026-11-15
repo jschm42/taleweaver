@@ -43,7 +43,8 @@ const itemAt = (idx: number): any => props.items[idx - 1]
         class="aspect-square flex items-center justify-center transition-all relative group"
         :class="[
           itemAt(idx) ? 'tw-card tw-dialog-slot-filled' : 'tw-dialog-slot',
-          itemAt(idx) ? (isInteractable(itemAt(idx)) ? 'cursor-pointer active:scale-95' : 'cursor-help') : ''
+          itemAt(idx) ? (isInteractable(itemAt(idx)) ? 'cursor-pointer active:scale-95' : 'cursor-help') : '',
+          itemAt(idx)?.quest_item ? 'tw-quest-item' : ''
         ]"
         @click="itemAt(idx) && emit('activate', itemAt(idx))"
         @mouseenter="itemAt(idx) && emit('itemHover', { ...itemAt(idx), entity_type: 'ITEM' }, $event)"
@@ -59,6 +60,8 @@ const itemAt = (idx: number): any => props.items[idx - 1]
           >
             {{ Boolean(itemAt(idx).is_read) ? 'READ' : 'NOTE' }}
           </div>
+
+          <span v-if="itemAt(idx).quest_item" class="tw-quest-tag absolute top-1 right-1 z-20">Quest</span>
 
           <div v-if="showImage(itemAt(idx).image_url)" class="w-full h-full p-1.5 sm:p-2">
             <img

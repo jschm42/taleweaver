@@ -298,6 +298,8 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                 "on_talk_script",
                 "on_interact_script",
                 "on_receive_item_script",
+                "on_recruit_success_script",
+                "on_recruit_failure_script",
             ):
                 code = ent.get(field) or meta_dict.get(field)
                 findings.extend(

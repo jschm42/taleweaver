@@ -177,6 +177,8 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
       on_items_added_text, on_items_removed_script, on_items_removed_text
     - object `locked`: on a CONTAINER / CONTAINER_SWITCH it must be unlocked to open; on any
       other item it is take-locked (visible, cannot be picked up until unlocked by a script)
+    - object `quest_item` (true/false, every item type except CONSTRUCTABLE): the story needs
+      it, so the player can never give it to an NPC and the Game Master cannot take it away
     - object (READABLE only): text_log_content, text_log_format, on_read_script, on_read_text
     - object (WEAPON/WEARABLE only): on_equip_script, on_equip_text, on_unequip_script,
       on_unequip_text
@@ -185,7 +187,9 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - npc: name, description, goal, character, is_killable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_defeat_script, on_defeat_text,
       on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
-      on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text
+      on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text,
+      on_recruit_success_script, on_recruit_success_text, on_recruit_failure_script,
+      on_recruit_failure_text (companions with a Recruit action only)
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
       rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
       on_exit_used_script, on_exit_used_text, on_unlock_success_script,

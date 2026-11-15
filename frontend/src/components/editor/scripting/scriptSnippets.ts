@@ -118,6 +118,18 @@ const CONTEXT_SNIPPETS: Record<string, ScriptSnippet[]> = {
       code: "if 'SILVER_RING' in received_item_ids:\n    tw.vars.set('ring_returned', True)\n    tw.story.direct('The NPC is deeply moved and thanks the player warmly.')\nelse:\n    for item_id in received_item_ids:\n        tw.npcs.give_to_player('NPC_ID', item_id)\n    tw.story.direct('The NPC politely hands the gift back.')\n",
     },
   ],
+  on_recruit_success: [
+    {
+      label: 'Remember the deal and react',
+      code: "tw.vars.set('companion_hired', True)\ntw.story.direct('The new companion grins and shoulders their pack, ready to go.')\n",
+    },
+  ],
+  on_recruit_failure: [
+    {
+      label: 'Hint at the wanted item',
+      code: "if offered_item_id:\n    tw.story.direct('The NPC turns the offered item down and hints at what they really want.')\nelse:\n    tw.story.direct('The NPC asks what the player has to offer.')\n",
+    },
+  ],
   on_defeat: [
     {
       label: 'Spawn reward on defeat',

@@ -13,6 +13,8 @@
  * The active companion (`is_companion`) stands as a smaller card right of the protagonist: a
  * narrower side column in row 1 that widens the stage instead of shrinking the other cards.
  * From eight characters on (two columns) it simply takes the cell next to the protagonist.
+ * NPCs the player can recruit (`is_recruitable`) get a softly pulsing companion-colored glow and a
+ * small "Ally?" tag (src/skins/base.css).
  */
 import { ref, watch, nextTick, computed, type CSSProperties } from 'vue'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
@@ -223,14 +225,25 @@ function cardBorderClass(npc: any): string {
   if (npc.id === 'PLAYER') {
     return playerCardClass(npc)
   }
-  return isStageCompanion(npc) ? 'border-sky-500/70 hover:border-sky-300' : 'border-slate-700/70 hover:border-cyan-400/80'
+  if (isStageCompanion(npc)) {
+    return 'border-sky-500/70 hover:border-sky-300'
+  }
+  return isRecruitable(npc) ? 'tw-npc-recruitable' : 'border-slate-700/70 hover:border-cyan-400/80'
+}
+
+/** NPCs the player can recruit with the Recruit action (backend flag `is_recruitable`). */
+function isRecruitable(npc: any): boolean {
+  return npc?.is_recruitable === true && !isDefeated(npc)
 }
 
 function cardTitle(npc: any): string | undefined {
   if (npc.id === 'PLAYER') {
     return playerDangerLevel(npc) ? `Open your hero (HP ${npc.hp}/${npc.max_hp})` : 'Open your hero'
   }
-  return isStageCompanion(npc) ? `${npc.name} · your companion` : undefined
+  if (isStageCompanion(npc)) {
+    return `${npc.name} · your companion`
+  }
+  return isRecruitable(npc) ? `${npc.name} · could join your party (right-click: Recruit)` : undefined
 }
 </script>
 
@@ -285,6 +298,9 @@ function cardTitle(npc: any): string | undefined {
         <!-- Entrance: one-off light sweep and a short "Enters" tag -->
         <div v-if="hasJustArrived(npc)" class="tw-npc-sweep" aria-hidden="true"></div>
         <div v-if="hasJustArrived(npc)" class="tw-npc-arrival-tag">Enters</div>
+        <span v-else-if="isRecruitable(npc) && cardDensity(npc) !== 'mini'" class="tw-recruit-tag" aria-label="Recruitable companion">
+          <i class="ra ra-double-team" aria-hidden="true"></i> Ally?
+        </span>
 
         <!-- Changed values float up from the top of the card -->
         <div v-if="statPopups[String(npc.id)]?.length" class="tw-stat-popups" aria-hidden="true">

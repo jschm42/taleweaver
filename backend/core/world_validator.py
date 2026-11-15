@@ -46,6 +46,7 @@ CHECKS: tuple[Check, ...] = (
     entities.check_npc_combat_profile,
     combat_groups.check_lonely_combat_groups,
     companions.check_starting_companions,
+    companions.check_recruit_items,
     entities.check_reveal_targets,
     entities.check_protagonist_items,
     story.check_image_coverage,

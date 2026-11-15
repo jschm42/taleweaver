@@ -106,7 +106,7 @@ async function takeAll() {
         v-for="item in props.items"
         :key="item.id"
         class="tw-card tw-card--interactive tw-discovery-card group relative flex flex-col items-center text-center"
-        :class="props.compact ? 'gap-1 p-1.5 pt-2' : 'gap-2 p-3 pt-4'"
+        :class="[props.compact ? 'gap-1 p-1.5 pt-2' : 'gap-2 p-3 pt-4', item.quest_item ? 'tw-quest-item' : '']"
         role="button"
         tabindex="0"
         :aria-label="`Examine ${item.name}`"
@@ -156,6 +156,7 @@ async function takeAll() {
           <i v-else :class="['ra', props.compact ? 'text-3xl' : 'text-4xl sm:text-5xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
         </div>
 
+        <span v-if="item.quest_item" class="tw-quest-tag absolute top-1 left-1 z-10">Quest</span>
         <p class="font-bold leading-snug line-clamp-2" :class="props.compact ? 'text-[11px]' : 'text-xs'">{{ item.name }}</p>
         <p v-if="!props.compact" class="tw-muted text-[10px] uppercase tracking-wider">{{ typeLabel(item) }}</p>
       </div>

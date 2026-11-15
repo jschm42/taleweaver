@@ -326,6 +326,9 @@ NPC_KEYS: dict[str, FieldSpec] = {
     ),
     "banter": FieldSpec("companion.banter", choice("NORMAL", "QUIET", "CHATTY")),
     "downed_recovery": FieldSpec("companion.downed_recovery"),
+    "recruit": FieldSpec("companion.recruit_mode", choice("SCRIPT", "INSTANT", "ITEM")),
+    "recruit_item": FieldSpec("companion.recruit_item_id", ident),
+    "recruit_hint": FieldSpec("companion.recruit_hint"),
 }
 for _alias, _stat in STAT_ALIASES.items():
     NPC_KEYS[_alias] = FieldSpec(_stat, integer)
@@ -333,6 +336,8 @@ _hook(NPC_KEYS, "on_defeat", "on_defeat")
 _hook(NPC_KEYS, "on_meet", "on_protagonist_enters_scene")
 _hook(NPC_KEYS, "on_interact", "on_interact")
 _hook(NPC_KEYS, "on_receive_item", "on_receive_item")
+_hook(NPC_KEYS, "on_recruit", "on_recruit_success")
+_hook(NPC_KEYS, "on_recruit_fail", "on_recruit_failure")
 
 ITEM_TYPES = (
     "CONSUMABLE",
@@ -358,6 +363,8 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "reveal": FieldSpec("reveal_rule"),
     "portable": FieldSpec("is_portable", boolean),
     "locked": FieldSpec("locked", boolean),
+    "quest": FieldSpec("quest_item", boolean),
+    "quest_item": FieldSpec("quest_item", boolean),
     "code": FieldSpec("code_to_unlock"),
     "unlock_item": _ref("item_to_unlock"),
     "unlock_rule": FieldSpec("rule_to_unlock"),

@@ -269,6 +269,11 @@ def _patch_object_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     _patch_container_lock(metadata_json, updates, item_type in {"CONTAINER", "CONTAINER_SWITCH"})
     if item_type == "READABLE":
         _patch_text_log(metadata_json, updates)
+    if "quest_item" in updates:
+        if updates["quest_item"] is True:
+            metadata_json["quest_item"] = True
+        else:
+            metadata_json.pop("quest_item", None)
     ent.metadata_json = metadata_json
     flag_modified(ent, "metadata_json")
     set_metadata(ent, OBJECT_SCRIPT_FIELDS, updates)

@@ -26,6 +26,10 @@ _NPC_SCRIPT_FIELDS = (
     "on_interact_text",
     "on_receive_item_script",
     "on_receive_item_text",
+    "on_recruit_success_script",
+    "on_recruit_success_text",
+    "on_recruit_failure_script",
+    "on_recruit_failure_text",
 )
 INVENTORY_LOCATION = "INVENTORY"
 

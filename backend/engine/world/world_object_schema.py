@@ -71,6 +71,15 @@ class WorldObjectSchema(WorldBaseSchema):
             "(tw.objects.unlock) or a switch outcome (unlock_item) releases it. Use null if not needed."
         ),
     )
+    quest_item: Optional[bool] = Field(
+        default=None,
+        description=(
+            "true = QUEST ITEM: the story depends on it, so the player can never give it to an "
+            "NPC or companion and the Game Master cannot take it away (scripts still can, e.g. "
+            "tw.player.transfer_item for a hand-in). Use for MacGuffins and plot keys. Use null "
+            "otherwise."
+        ),
+    )
     min_items: Optional[int] = Field(
         default=None,
         description="Only for CONTAINER/CONTAINER_SWITCH: minimum number of stored items the puzzle expects (e.g. 3 fuses in a fuse box); scripts read it via .has_min_items. Use null if none.",
