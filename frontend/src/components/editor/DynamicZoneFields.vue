@@ -328,14 +328,14 @@ function clearOverrides() {
           </div>
 
           <label v-if="!isSceneMode" class="text-xs text-slate-300 space-y-1">
-            <span>Max Depth (1–6)</span>
+            <span>Max Depth (1–10)</span>
             <input
               type="number"
               min="1"
-              max="6"
+              max="10"
               :value="zone.max_depth"
               class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
-              @input="updateField('max_depth', Math.min(6, Math.max(1, Number(($event.target as HTMLInputElement).value) || 1)))"
+              @input="updateField('max_depth', Math.min(10, Math.max(1, Number(($event.target as HTMLInputElement).value) || 1)))"
             />
           </label>
 

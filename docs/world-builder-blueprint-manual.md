@@ -551,7 +551,7 @@ The generator only stores the prompts. Render the tracks in the editor's **Audio
 
 Combine author-designed map topology with on-demand AI generation in two complementary ways:
 
-1. **Dynamic Exits (`[Exit: FROM -> ZONE]`)**: generate an uncharted multi-scene tree (`max_depth` 1–6) on first traversal.
+1. **Dynamic Exits (`[Exit: FROM -> ZONE]`)**: generate an uncharted multi-scene tree (`max_depth` 1–10) on first traversal.
 2. **Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]` or `[Scene: ID]` with `dynamic: yes`)**: you define the exact map connections (`Scene A <-> Dynamic Scene B <-> Dynamic Scene C`), locks, keys, and any pre-placed static NPCs or items. On first player entry, the scene is materialized in-place while preserving all authored exits and static entities. A pre-mapped Dynamic Scene can even have a dynamic exit attached to branch into an open procedural cluster afterward.
 
 ```text

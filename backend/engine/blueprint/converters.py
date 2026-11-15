@@ -332,10 +332,10 @@ def dynamic_zone_id(raw: str) -> str:
 
 
 def dynamic_max_depth(raw: str) -> int:
-    """Parse max_depth for a dynamic zone (1..6)."""
+    """Parse max_depth for a dynamic zone (1..10)."""
     val = integer(raw)
-    if not 1 <= val <= 6:
-        raise ValueError(f"expected a max_depth between 1 and 6, got '{raw.strip()}'")
+    if not 1 <= val <= 10:
+        raise ValueError(f"expected a max_depth between 1 and 10, got '{raw.strip()}'")
     return val
 
 

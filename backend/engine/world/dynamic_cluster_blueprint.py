@@ -15,6 +15,7 @@ from backend.engine.world.dynamic_cluster_node_zone import (
     fallback_generation_instructions,
 )
 from backend.engine.world.dynamic_scene_schemas import (
+    MAX_ZONE_DEPTH,
     build_dynamic_placeholder_scene_id,
 )
 
@@ -28,7 +29,7 @@ class DynamicClusterNodeSpec(BaseModel):
     """Single room node in a pre-planned dynamic cluster mini-adventure."""
 
     node_id: str = Field(min_length=1, max_length=24)
-    depth: int = Field(default=1, ge=1, le=6)
+    depth: int = Field(default=1, ge=1, le=MAX_ZONE_DEPTH)
     role: NodeRole = "entry"
     label: str = Field(min_length=1, max_length=100)
     theme_hint: str = Field(default="", max_length=300)
@@ -55,8 +56,8 @@ class DynamicClusterBlueprint(BaseModel):
     climax_goal: str = Field(min_length=1, max_length=500)
     key_item_concept: str = Field(default="", max_length=300)
     antagonist: str = Field(default="", max_length=300)
-    nodes: list[DynamicClusterNodeSpec] = Field(default_factory=list, max_length=8)
-    edges: list[DynamicClusterEdgeSpec] = Field(default_factory=list, max_length=12)
+    nodes: list[DynamicClusterNodeSpec] = Field(default_factory=list, max_length=12)
+    edges: list[DynamicClusterEdgeSpec] = Field(default_factory=list, max_length=16)
 
 
 def build_canonical_cluster_skeleton(
@@ -64,7 +65,7 @@ def build_canonical_cluster_skeleton(
     cul_de_sac: bool = True,
 ) -> tuple[list[tuple[str, int, NodeRole]], list[tuple[str, str, int]]]:
     """Return canonical ``(nodes, edges)`` skeleton matching ``max_depth``."""
-    clamped = max(1, min(6, int(max_depth or 3)))
+    clamped = max(1, min(MAX_ZONE_DEPTH, int(max_depth or 3)))
     if clamped == 1:
         return [("D1_1", 1, "climax" if cul_de_sac else "entry")], []
     if clamped == 2:

@@ -46,6 +46,9 @@ NpcImageMode = Literal["off", "simple", "hq"]
 AudioMode = Literal["inherit", "empty", "generate"]
 DynamicGenerationModel = Literal["mechanics", "narration", "world_builder"]
 DangerLevel = Literal["peaceful", "low", "medium", "high", "deadly", "random"]
+# Deepest dynamic-zone cluster (depth 10 = 11 rooms: depth 2 has a side branch).
+MAX_ZONE_DEPTH = 10
+
 InstructionScope = Literal["once", "first_scene", "max_depth", "all_scenes"]
 
 _GENERATION_MODEL_ALIASES: dict[str, DynamicGenerationModel] = {
@@ -190,7 +193,7 @@ class DynamicZoneConfig(BaseModel):
     zone_id: str = Field(..., min_length=1, max_length=40)
     theme: str = Field(..., min_length=1, max_length=1000)
     depth: int = Field(default=1, ge=1, le=10)
-    max_depth: int = Field(default=3, ge=1, le=6)
+    max_depth: int = Field(default=3, ge=1, le=MAX_ZONE_DEPTH)
     danger_level: DangerLevel = "medium"
     max_npcs: int = Field(default=2, ge=0, le=5)
     npc_type_caps: Optional[DynamicNpcTypeCapsOverride] = None
@@ -448,7 +451,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
         return None
 
     zone_id = _slugify_identifier(raw.get("zone_id") or theme[:24], fallback="dynamic_zone")
-    max_depth = _clamp_int(raw.get("max_depth"), default=3, low=1, high=6)
+    max_depth = _clamp_int(raw.get("max_depth"), default=3, low=1, high=MAX_ZONE_DEPTH)
     depth = _clamp_int(raw.get("depth"), default=1, low=1, high=max_depth)
     max_npcs = _clamp_int(raw.get("max_npcs"), default=2, low=0, high=5)
 
