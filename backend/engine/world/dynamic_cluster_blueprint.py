@@ -9,7 +9,7 @@ import logging
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.engine.world.dynamic_cluster_node_zone import (
     fallback_generation_instructions,
@@ -25,7 +25,37 @@ _NODE_COORDS_RX = re.compile(r"^D(\d+)_(\d+)$", re.IGNORECASE)
 NodeRole = Literal["entry", "obstacle", "branch", "climax"]
 
 
-class DynamicClusterNodeSpec(BaseModel):
+def _field_limits(model: type[BaseModel]) -> dict[str, int]:
+    """Field name -> ``max_length`` of the model's string and list fields."""
+    return {
+        name: meta.max_length
+        for name, info in model.model_fields.items()
+        for meta in info.metadata
+        if isinstance(getattr(meta, "max_length", None), int)
+    }
+
+
+class _ClipToLimits(BaseModel):
+    """Clips overlong LLM strings and lists to the field limits instead of rejecting them.
+
+    The JSON schema the model sees keeps its ``max_length``, so it is still asked to stay
+    short; one slightly overlong ``story_arc`` must not throw away the whole cluster plan.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _clip(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        clipped = dict(data)
+        for name, limit in _field_limits(cls).items():
+            value = clipped.get(name)
+            if isinstance(value, (str, list)) and len(value) > limit:
+                clipped[name] = value[:limit].rstrip() if isinstance(value, str) else value[:limit]
+        return clipped
+
+
+class DynamicClusterNodeSpec(_ClipToLimits):
     """Single room node in a pre-planned dynamic cluster mini-adventure."""
 
     node_id: str = Field(min_length=1, max_length=24)
@@ -39,7 +69,7 @@ class DynamicClusterNodeSpec(BaseModel):
     generation_instructions: str = Field(default="", max_length=1500)
 
 
-class DynamicClusterEdgeSpec(BaseModel):
+class DynamicClusterEdgeSpec(_ClipToLimits):
     """Directed passage between two nodes in a dynamic cluster graph."""
 
     from_node_id: str = Field(min_length=1, max_length=24)
@@ -48,7 +78,7 @@ class DynamicClusterEdgeSpec(BaseModel):
     theme_hint: str = Field(default="", max_length=300)
 
 
-class DynamicClusterBlueprint(BaseModel):
+class DynamicClusterBlueprint(_ClipToLimits):
     """Cohesive mini-adventure blueprint and topology for a dynamic cluster."""
 
     cluster_title: str = Field(min_length=1, max_length=120)

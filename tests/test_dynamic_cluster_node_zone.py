@@ -207,3 +207,29 @@ def test_architect_prompt_builds_cluster_around_premise_for_any_scope():
     # Assert
     assert f"CLUSTER PREMISE: {premise}" in user_prompt
     assert "story itself always spans the whole cluster" in system_prompt
+
+
+def test_overlong_llm_blueprint_fields_are_clipped_not_rejected():
+    # Arrange: the architect overshoots story_arc and key_item_concept (seen with deepseek)
+    from backend.engine.world.dynamic_cluster_blueprint import DynamicClusterBlueprint
+
+    raw = {
+        "cluster_title": "The White Stag's Trail",
+        "story_arc": "HOOK: " + "a" * 1400,
+        "climax_goal": "Reach the moonlit glade.",
+        "key_item_concept": "The Moonstone Acorn " + "b" * 400,
+        "nodes": [
+            {"node_id": f"D{i}_1", "label": f"Room {i}", "theme_hint": "c" * 500}
+            for i in range(1, 15)
+        ],
+    }
+
+    # Act
+    blueprint = DynamicClusterBlueprint.model_validate(raw)
+
+    # Assert
+    assert len(blueprint.story_arc) == 1000
+    assert blueprint.story_arc.startswith("HOOK: ")
+    assert len(blueprint.key_item_concept) == 300
+    assert len(blueprint.nodes) == 12
+    assert all(len(node.theme_hint) == 300 for node in blueprint.nodes)
