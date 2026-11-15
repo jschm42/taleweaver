@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any, Optional
@@ -17,6 +18,7 @@ from backend.api.routes.adventures.dynamic_challenge_helper import (
     build_dynamic_npc_clones,
     compute_party_hp_budget,
     link_dynamic_npc_inventories,
+    resolve_fallback_zone_key_prompt,
     scale_dynamic_object_stats,
 )
 from backend.api.routes.adventures.dynamic_cluster_context import (
@@ -25,9 +27,10 @@ from backend.api.routes.adventures.dynamic_cluster_context import (
     normalize_match_token,
 )
 from backend.api.routes.adventures.dynamic_scene_media import (
-    configure_scene_audio,
+    PendingDynamicVisuals,
     extract_tone_text,
-    generate_dynamic_visuals,
+    prepare_scene_audio_and_visuals,
+    register_pending_dynamic_visuals,
     sync_dynamic_scene_audio,
 )
 from backend.engine.world.dynamic_scene_generator import (
@@ -200,24 +203,8 @@ def _build_object_entity(
     )
 
 
-async def _maybe_emit_interlude_quote(
-    *,
-    db: AsyncSession,
-    state: SessionState,
-    adventure: AdventureTemplate,
-    user: Any,
-    origin_name: str,
-    tone_text: str,
-    zone: dict[str, Any],
-    language: str,
-    emit_sse: Callable[[str, dict[str, Any]], Awaitable[None]],
-    world_exit: Optional[WorldExit] = None,
-    exit_label: str = "Passage",
-    interlude_fn: Optional[Callable[..., Awaitable[Optional[dict[str, Any]]]]] = None,
-) -> None:
-    """Emit a brief NPC interlude quote SSE event while dynamic generation completes."""
-    resolved_label = (world_exit.label if world_exit else None) or exit_label or "Passage"
-    quote_fn = interlude_fn or generate_dynamic_interlude_quote
+async def load_interlude_candidates(db: AsyncSession, state: SessionState) -> list[dict[str, Any]]:
+    """Preload humanoid/being NPC candidates on ``db`` before starting concurrent tasks."""
     npc_rows = (
         await db.execute(
             select(WorldEntity).where(
@@ -226,7 +213,7 @@ async def _maybe_emit_interlude_quote(
             )
         )
     ).scalars()
-    candidates = [
+    return [
         {
             "id": n.id,
             "name": n.name,
@@ -242,7 +229,31 @@ async def _maybe_emit_interlude_quote(
         for n in npc_rows
         if str(n.npc_type or "HUMANOID").strip().upper() in {"HUMANOID", "BEING"}
     ]
-    if not candidates:
+
+
+async def _maybe_emit_interlude_quote(
+    *,
+    db: AsyncSession,
+    state: SessionState,
+    adventure: AdventureTemplate,
+    user: Any,
+    origin_name: str,
+    tone_text: str,
+    zone: dict[str, Any],
+    language: str,
+    emit_sse: Callable[[str, dict[str, Any]], Awaitable[None]],
+    world_exit: Optional[WorldExit] = None,
+    exit_label: str = "Passage",
+    interlude_fn: Optional[Callable[..., Awaitable[Optional[dict[str, Any]]]]] = None,
+    candidates: Optional[list[dict[str, Any]]] = None,
+) -> None:
+    """Emit a brief NPC interlude quote SSE event while dynamic generation completes."""
+    resolved_label = (world_exit.label if world_exit else None) or exit_label or "Passage"
+    quote_fn = interlude_fn or generate_dynamic_interlude_quote
+    npc_candidates = (
+        candidates if candidates is not None else await load_interlude_candidates(db, state)
+    )
+    if not npc_candidates:
         return
     quote_data = await quote_fn(
         adventure_title=adventure.title or "Adventure",
@@ -251,7 +262,7 @@ async def _maybe_emit_interlude_quote(
         origin_scene_name=origin_name,
         exit_label=resolved_label,
         zone_theme=zone["theme"],
-        candidate_npcs=candidates,
+        candidate_npcs=npc_candidates,
         user=user,
         db=db,
         adventure_id=adventure.id,
@@ -263,6 +274,54 @@ async def _maybe_emit_interlude_quote(
             "dynamic_interlude",
             {**quote_data, "target_scene_name": resolved_label or "Uncharted Area"},
         )
+
+
+async def start_interlude_task(
+    *,
+    dyn_cfg: dict[str, Any],
+    emit_sse: Optional[Callable[[str, dict[str, Any]], Awaitable[None]]],
+    db: AsyncSession,
+    state: SessionState,
+    adventure: AdventureTemplate,
+    user: Any,
+    origin_name: str,
+    tone_text: str,
+    zone: dict[str, Any],
+    language: str,
+    world_exit: Optional[WorldExit] = None,
+    exit_label: str = "Passage",
+    interlude_fn: Optional[Callable[..., Awaitable[Optional[dict[str, Any]]]]] = None,
+) -> Optional[asyncio.Task[None]]:
+    """Preload NPCs and launch interlude quote generation concurrently with scene LLM calls."""
+    if not (dyn_cfg.get("interlude_quote_enabled", True) and emit_sse):
+        return None
+    candidates = await load_interlude_candidates(db, state)
+    if not candidates:
+        return None
+    return asyncio.create_task(
+        _maybe_emit_interlude_quote(
+            db=db,
+            state=state,
+            adventure=adventure,
+            user=user,
+            origin_name=origin_name,
+            tone_text=tone_text,
+            zone=zone,
+            language=language,
+            emit_sse=emit_sse,
+            world_exit=world_exit,
+            exit_label=exit_label,
+            interlude_fn=interlude_fn,
+            candidates=candidates,
+        )
+    )
+
+
+async def finish_interlude_task(interlude_task: Optional[asyncio.Task[None]]) -> None:
+    """Await a background interlude quote task without surfacing secondary errors."""
+    if interlude_task is not None:
+        with contextlib.suppress(Exception):
+            await interlude_task
 
 
 def is_unmaterialized_dynamic_scene(state: SessionState, scene: Optional[WorldScene]) -> bool:
@@ -320,6 +379,42 @@ async def _existing_entity_ids(db: AsyncSession, session_id: str) -> set[str]:
     return set(rows)
 
 
+def _apply_existing_scene_header_and_meta(
+    *,
+    state: SessionState,
+    existing_scene: WorldScene,
+    origin_scene: Optional[WorldScene],
+    zone: dict[str, Any],
+    payload: DynamicGeneratedScenePayload,
+    scene_image: Optional[str],
+    scene_audio_track_id: Optional[str],
+) -> None:
+    target_id = existing_scene.id
+    if isinstance(zone.get("cluster_node"), dict):
+        existing_scene.label = (payload.name or existing_scene.label)[:100]
+    else:
+        existing_scene.label = (existing_scene.label or payload.name)[:100]
+    existing_scene.description = payload.description
+    if scene_image and not existing_scene.image_url:
+        existing_scene.image_url = scene_image
+    if scene_audio_track_id and not existing_scene.audio_track_id:
+        existing_scene.audio_track_id = scene_audio_track_id
+
+    materialized_zone = {**zone, "materialized": True}
+    existing_scene.dynamic_zone = materialized_zone
+    flag_modified(existing_scene, "dynamic_zone")
+
+    entity_states = dict(state.entity_states or {})
+    dyn_meta = dict(entity_states.get(_DYNAMIC_ZONE_META_KEY) or {})
+    dyn_meta[target_id] = {
+        **materialized_zone,
+        "origin_scene_id": origin_scene.id if origin_scene else target_id,
+    }
+    entity_states[_DYNAMIC_ZONE_META_KEY] = dyn_meta
+    state.entity_states = entity_states
+    flag_modified(state, "entity_states")
+
+
 async def _persist_existing_scene_contents(
     *,
     db: AsyncSession,
@@ -336,25 +431,26 @@ async def _persist_existing_scene_contents(
     dyn_cfg: Optional[dict[str, Any]] = None,
     user: Any = None,
     adventure: Any = None,
+    visuals_task: Optional[
+        asyncio.Task[tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]]
+    ] = None,
+    pending_visuals: Optional[list[PendingDynamicVisuals]] = None,
 ) -> tuple[WorldScene, dict[str, Any]]:
     """Populate a pre-mapped Dynamic Scene with generated narrative, media, and entities."""
     target_id = existing_scene.id
-    if isinstance(zone.get("cluster_node"), dict):
-        existing_scene.label = (payload.name or existing_scene.label)[:100]
-    else:
-        existing_scene.label = (existing_scene.label or payload.name)[:100]
-    existing_scene.description = payload.description
-    if scene_image and not existing_scene.image_url:
-        existing_scene.image_url = scene_image
-    if scene_audio_track_id and not existing_scene.audio_track_id:
-        existing_scene.audio_track_id = scene_audio_track_id
-
-    materialized_zone = {**zone, "materialized": True}
-    existing_scene.dynamic_zone = materialized_zone
-    flag_modified(existing_scene, "dynamic_zone")
+    _apply_existing_scene_header_and_meta(
+        state=state,
+        existing_scene=existing_scene,
+        origin_scene=origin_scene,
+        zone=zone,
+        payload=payload,
+        scene_image=scene_image,
+        scene_audio_track_id=scene_audio_track_id,
+    )
 
     spawned_npcs: list[dict[str, Any]] = []
     npc_entries: list[tuple[DynamicGeneratedNpc, WorldEntity, bool]] = []
+    npc_idx_by_id: dict[str, int] = {}
     party_hp = await compute_party_hp_budget(db, state)
     danger = str(zone.get("danger_level") or "medium")
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
@@ -370,6 +466,7 @@ async def _persist_existing_scene_contents(
             danger=danger,
         ):
             db.add(npc_entity)
+            npc_idx_by_id[npc_entity.id] = idx
             npc_entries.append((npc, npc_entity, is_primary))
             spawned_npcs.append(
                 {
@@ -386,6 +483,7 @@ async def _persist_existing_scene_contents(
     spawned_objects: list[dict[str, Any]] = []
     persisted_objects: list[DynamicGeneratedObject] = []
     object_entities: list[WorldEntity] = []
+    object_idx_by_id: dict[str, int] = {}
     raw_id_to_entity: dict[str, WorldEntity] = {}
     enemy_hps = [int(ent.max_hp or ent.hp or 0) for _, ent, _ in npc_entries if ent.is_attackable]
     is_climax = int(zone.get("depth") or 1) >= int(zone.get("max_depth") or 3) and bool(
@@ -410,6 +508,7 @@ async def _persist_existing_scene_contents(
             continue
         existing_ids.add(obj_entity.id)
         db.add(obj_entity)
+        object_idx_by_id[obj_entity.id] = idx
         persisted_objects.append(obj)
         object_entities.append(obj_entity)
         raw_id_to_entity[normalize_match_token(obj.id)] = obj_entity
@@ -430,7 +529,7 @@ async def _persist_existing_scene_contents(
     link_generated_container_inventories(persisted_objects, raw_id_to_entity)
     link_dynamic_npc_inventories(npc_entries, raw_id_to_entity)
     apply_dynamic_scripts_and_locks(persisted_objects, npc_entries, raw_id_to_entity)
-    await apply_cluster_key_and_climax_progression(
+    zone_key_entity = await apply_cluster_key_and_climax_progression(
         db=db,
         state=state,
         zone=zone,
@@ -440,17 +539,17 @@ async def _persist_existing_scene_contents(
         dyn_cfg=dyn_cfg,
         user=user,
         adventure=adventure,
+        pregenerated_key_image=(object_images or {}).get(-1),
+        key_image_pregenerated=True,
     )
-
-    entity_states = dict(state.entity_states or {})
-    dyn_meta = dict(entity_states.get(_DYNAMIC_ZONE_META_KEY) or {})
-    dyn_meta[target_id] = {
-        **materialized_zone,
-        "origin_scene_id": origin_scene.id if origin_scene else target_id,
-    }
-    entity_states[_DYNAMIC_ZONE_META_KEY] = dyn_meta
-    state.entity_states = entity_states
-    flag_modified(state, "entity_states")
+    register_pending_dynamic_visuals(
+        pending_visuals,
+        scene_id=target_id,
+        npc_idx_by_id=npc_idx_by_id,
+        object_idx_by_id=object_idx_by_id,
+        zone_key_entity=zone_key_entity,
+        visuals_task=visuals_task,
+    )
 
     generated_scene_data = {
         "id": target_id,
@@ -484,6 +583,7 @@ async def materialize_existing_dynamic_scene(
     emit_sse: Optional[Callable[[str, dict[str, Any]], Awaitable[None]]] = None,
     payload_fn: Optional[Callable[..., Awaitable[DynamicGeneratedScenePayload]]] = None,
     interlude_fn: Optional[Callable[..., Awaitable[Optional[dict[str, Any]]]]] = None,
+    pending_visuals: Optional[list[PendingDynamicVisuals]] = None,
 ) -> Optional[WorldScene]:
     """Materialize a pre-mapped dynamic WorldScene in-place while preserving authored exits."""
     if not is_unmaterialized_dynamic_scene(state, target_scene):
@@ -516,6 +616,20 @@ async def materialize_existing_dynamic_scene(
     existing_scene_hint = await _collect_existing_scene_hint(db, state.session_id, target_scene)
 
     generate_fn = payload_fn or generate_dynamic_scene_payload
+    interlude_task = await start_interlude_task(
+        dyn_cfg=dyn_cfg,
+        emit_sse=emit_sse,
+        db=db,
+        state=state,
+        adventure=adventure,
+        user=user,
+        origin_name=origin_name,
+        tone_text=tone_text,
+        zone=zone,
+        language=language or adventure.language or "English",
+        exit_label=exit_label or target_scene.label,
+        interlude_fn=interlude_fn,
+    )
     scene_task = asyncio.create_task(
         generate_fn(
             adventure_title=adventure.title or "Adventure",
@@ -536,60 +650,68 @@ async def materialize_existing_dynamic_scene(
             existing_scene_hint=existing_scene_hint,
         )
     )
+    try:
+        payload = await scene_task
+    except Exception:
+        if interlude_task and not interlude_task.done():
+            interlude_task.cancel()
+        raise
+    await finish_interlude_task(interlude_task)
 
-    if dyn_cfg.get("interlude_quote_enabled", True) and emit_sse:
-        await _maybe_emit_interlude_quote(
-            db=db,
-            state=state,
-            adventure=adventure,
-            user=user,
-            origin_name=origin_name,
-            tone_text=tone_text,
-            zone=zone,
-            language=language or adventure.language or "English",
-            emit_sse=emit_sse,
-            exit_label=exit_label or target_scene.label,
-            interlude_fn=interlude_fn,
-        )
-
-    payload = await scene_task
-    scene_image, npc_images, object_images = await generate_dynamic_visuals(
-        payload=payload,
-        dyn_cfg=dyn_cfg,
-        origin_scene=origin_scene,
-        user=user,
-        adventure=adventure,
+    zone_key_prompt_args = await resolve_fallback_zone_key_prompt(
+        db=db,
         session_id=state.session_id,
-        target_id=target_scene.id,
-        max_npcs=max_npcs,
-    )
-    scene_audio_track_id = configure_scene_audio(
-        state=state,
-        dyn_cfg=dyn_cfg,
-        origin_scene=origin_scene,
-        target_id=target_scene.id,
         zone=zone,
         payload=payload,
+        max_npcs=max_npcs,
         adventure=adventure,
+        user=user,
     )
-    existing_ids = await _existing_entity_ids(db, state.session_id)
-    updated_scene, generated_scene_data = await _persist_existing_scene_contents(
+    (
+        scene_image,
+        npc_images,
+        object_images,
+        scene_audio_track_id,
+        visuals_task,
+    ) = await prepare_scene_audio_and_visuals(
         db=db,
         state=state,
-        existing_scene=target_scene,
-        existing_ids=existing_ids,
+        dyn_cfg=dyn_cfg,
         origin_scene=origin_scene,
+        target_id=target_scene.id,
         zone=zone,
         payload=payload,
-        scene_image=scene_image,
-        npc_images=npc_images,
-        object_images=object_images,
-        scene_audio_track_id=scene_audio_track_id,
-        dyn_cfg=dyn_cfg,
-        user=user,
         adventure=adventure,
+        user=user,
+        max_npcs=max_npcs,
+        zone_key_prompt_args=zone_key_prompt_args,
+        defer_visuals=pending_visuals is not None,
     )
-    await db.flush()
+    existing_ids = await _existing_entity_ids(db, state.session_id)
+    try:
+        updated_scene, generated_scene_data = await _persist_existing_scene_contents(
+            db=db,
+            state=state,
+            existing_scene=target_scene,
+            existing_ids=existing_ids,
+            origin_scene=origin_scene,
+            zone=zone,
+            payload=payload,
+            scene_image=scene_image,
+            npc_images=npc_images,
+            object_images=object_images,
+            scene_audio_track_id=scene_audio_track_id,
+            dyn_cfg=dyn_cfg,
+            user=user,
+            adventure=adventure,
+            visuals_task=visuals_task,
+            pending_visuals=pending_visuals,
+        )
+        await db.flush()
+    except Exception:
+        if visuals_task and not visuals_task.done():
+            visuals_task.cancel()
+        raise
 
     after_script = str(zone.get("on_after_generated_script") or "").strip()
     if after_script:
@@ -615,6 +737,9 @@ __all__ = [
     "_find_session_scene",
     "_maybe_emit_interlude_quote",
     "_safe_slug",
+    "finish_interlude_task",
     "is_unmaterialized_dynamic_scene",
+    "load_interlude_candidates",
     "materialize_existing_dynamic_scene",
+    "start_interlude_task",
 ]

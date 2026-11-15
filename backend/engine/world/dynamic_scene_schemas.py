@@ -431,6 +431,9 @@ def _attach_runtime_zone_flags(dumped: dict[str, Any], raw: dict[str, Any]) -> d
         dumped["instructions_consumed"] = True
     if isinstance(raw.get("cluster_node"), dict):
         dumped["cluster_node"] = dict(raw["cluster_node"])
+    for key in ("instructions_source", "root_instructions", "root_instructions_scope"):
+        if raw.get(key):
+            dumped[key] = raw[key]
     return dumped
 
 

@@ -12,10 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.routes.adventures.turn_context_helpers import resolve_model_settings
 from backend.core.api_keys import has_api_key
 from backend.core.llm_router import GameMasterLLM
-from backend.engine.world.dynamic_cluster_blueprint import (
-    build_cluster_blueprint_prompt_section,
-    resolve_dynamic_llm_model,
-)
+from backend.engine.world.dynamic_cluster_architect import resolve_dynamic_llm_model
+from backend.engine.world.dynamic_cluster_blueprint import build_cluster_blueprint_prompt_section
 from backend.engine.world.dynamic_instructions_helper import (
     adjust_plan_for_instructions,
     apply_instructions_backfill,

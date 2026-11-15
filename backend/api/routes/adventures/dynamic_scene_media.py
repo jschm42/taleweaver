@@ -6,17 +6,28 @@ import asyncio
 import hashlib
 import logging
 from collections.abc import Awaitable
+from dataclasses import dataclass
 from typing import Any, Optional
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.audio_snapshot import start_missing_tracks
 from backend.api.routes.adventures.script_image import (
     LOCAL_PROVIDERS,
     _style_instruction,
     _tier_options,
 )
+from backend.core.audio_settings import (
+    audio_api_key,
+    is_audio_available,
+    normalize_audio_settings,
+)
+from backend.core.global_settings import read_server_settings
 from backend.core.style_catalog import resolve_tone_instruction
 from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
+from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.image_prompt_context import (
     build_npc_image_prompt,
@@ -27,7 +38,8 @@ from backend.engine.media.media_engine import MediaEngine
 from backend.engine.world.dynamic_scene_schemas import DynamicGeneratedScenePayload
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene
+from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_map import WorldMap
 from backend.utils.path_security import safe_data_path, sanitize_path_component
 
 logger = logging.getLogger(__name__)
@@ -156,6 +168,35 @@ async def generate_dynamic_object_image(
     )
 
 
+def inherited_scene_image(
+    dyn_cfg: dict[str, Any], origin_scene: Optional[WorldScene]
+) -> Optional[str]:
+    """Return the origin scene image immediately when scene_image_mode is 'inherit'."""
+    if str(dyn_cfg.get("scene_image_mode") or "simple") == "inherit" and origin_scene:
+        return origin_scene.image_url
+    return None
+
+
+def _has_visual_generation_tasks(
+    *,
+    payload: DynamicGeneratedScenePayload,
+    dyn_cfg: dict[str, Any],
+    npc_limit: int,
+    zone_key_prompt_args: Optional[tuple[str, str, str]],
+) -> bool:
+    scene_mode = str(dyn_cfg.get("scene_image_mode") or "simple")
+    npc_mode = str(dyn_cfg.get("npc_image_mode") or "simple")
+    item_mode = str(dyn_cfg.get("item_image_mode") or "simple")
+    return (
+        scene_mode in {"simple", "hq"}
+        or (npc_mode in {"simple", "hq"} and bool(payload.npcs[:npc_limit]))
+        or (
+            item_mode in {"simple", "hq"}
+            and (bool(payload.objects[:5]) or bool(zone_key_prompt_args))
+        )
+    )
+
+
 async def generate_dynamic_visuals(
     *,
     payload: DynamicGeneratedScenePayload,
@@ -166,8 +207,9 @@ async def generate_dynamic_visuals(
     session_id: str,
     target_id: str,
     max_npcs: Optional[int] = None,
+    zone_key_prompt_args: Optional[tuple[str, str, str]] = None,
 ) -> tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]:
-    """Generate dynamic scene backdrop, NPC portraits, and item artwork according to config."""
+    """Generate dynamic scene backdrop, NPC portraits, and item artwork in parallel."""
     scene_mode = str(dyn_cfg.get("scene_image_mode") or "simple")
     npc_mode = str(dyn_cfg.get("npc_image_mode") or "simple")
     item_mode = str(dyn_cfg.get("item_image_mode") or "simple")
@@ -209,7 +251,7 @@ async def generate_dynamic_visuals(
         task_keys=task_keys,
     )
     _append_entity_image_tasks(
-        entities=payload.objects[:3],
+        entities=payload.objects[:5],
         mode=item_mode,
         kind="obj",
         prefix_base=f"dyn_obj_{target_id.lower()}",
@@ -220,6 +262,19 @@ async def generate_dynamic_visuals(
         tasks=tasks,
         task_keys=task_keys,
     )
+    if zone_key_prompt_args and item_mode in {"simple", "hq"}:
+        key_name, key_desc, key_appearance = zone_key_prompt_args
+        tasks.append(
+            _generate_tier_image(
+                prompt=build_object_image_prompt(key_name, key_desc, appearance=key_appearance),
+                tier=item_mode,
+                user=user,
+                adventure=adventure,
+                session_id=session_id,
+                prefix=f"{target_id.lower()}_zone_key",
+            )
+        )
+        task_keys.append(("zone_key", -1))
 
     npc_images: dict[int, Optional[str]] = {}
     object_images: dict[int, Optional[str]] = {}
@@ -236,6 +291,219 @@ async def generate_dynamic_visuals(
         else:
             object_images[idx] = url
     return scene_image, npc_images, object_images
+
+
+@dataclass
+class PendingDynamicVisuals:
+    """In-flight background visual generation task for a dynamic scene."""
+
+    scene_id: str
+    npc_idx_by_id: dict[str, int]
+    object_idx_by_id: dict[str, int]
+    task: asyncio.Task[tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]]
+
+    def cancel(self) -> None:
+        if not self.task.done():
+            self.task.cancel()
+
+
+def register_pending_dynamic_visuals(
+    pending_visuals: Optional[list[PendingDynamicVisuals]],
+    *,
+    scene_id: str,
+    npc_idx_by_id: dict[str, int],
+    object_idx_by_id: dict[str, int],
+    zone_key_entity: Optional[WorldEntity],
+    visuals_task: Optional[
+        asyncio.Task[tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]]
+    ],
+) -> None:
+    """Register background visual task and optional Zone Key mapping for end-of-turn drain."""
+    if zone_key_entity is not None:
+        object_idx_by_id[zone_key_entity.id] = -1
+    if visuals_task is None or pending_visuals is None:
+        return
+    pending_visuals.append(
+        PendingDynamicVisuals(
+            scene_id=scene_id,
+            npc_idx_by_id=npc_idx_by_id,
+            object_idx_by_id=object_idx_by_id,
+            task=visuals_task,
+        )
+    )
+
+
+async def start_dynamic_scene_audio_generation(
+    db: AsyncSession, state: SessionState, user: Any
+) -> None:
+    """Trigger background audio rendering immediately for newly registered dynamic tracks."""
+    if not getattr(state, "session_id", None):
+        return
+    audio = read_audio_state(state.entity_states)
+    if not audio["tracks"]:
+        return
+    raw = (await read_server_settings(db)).audio_settings
+    if not is_audio_available(raw):
+        return
+    api_key = audio_api_key(user, normalize_audio_settings(raw))
+    start_missing_tracks(state.session_id, audio["tracks"], raw, api_key)
+
+
+async def prepare_scene_audio_and_visuals(
+    *,
+    db: AsyncSession,
+    state: SessionState,
+    dyn_cfg: dict[str, Any],
+    origin_scene: Optional[WorldScene],
+    target_id: str,
+    zone: dict[str, Any],
+    payload: DynamicGeneratedScenePayload,
+    adventure: AdventureTemplate,
+    user: Any,
+    max_npcs: int,
+    zone_key_prompt_args: Optional[tuple[str, str, str]],
+    defer_visuals: bool,
+) -> tuple[
+    Optional[str],
+    dict[int, Optional[str]],
+    dict[int, Optional[str]],
+    Optional[str],
+    Optional[
+        asyncio.Task[tuple[Optional[str], dict[int, Optional[str]], dict[int, Optional[str]]]]
+    ],
+]:
+    """Start music generation immediately and either await or background-launch image generation."""
+    scene_audio_track_id = configure_scene_audio(
+        state=state,
+        dyn_cfg=dyn_cfg,
+        origin_scene=origin_scene,
+        target_id=target_id,
+        zone=zone,
+        payload=payload,
+        adventure=adventure,
+    )
+    await start_dynamic_scene_audio_generation(db, state, user)
+
+    visuals_coro = generate_dynamic_visuals(
+        payload=payload,
+        dyn_cfg=dyn_cfg,
+        origin_scene=origin_scene,
+        user=user,
+        adventure=adventure,
+        session_id=state.session_id,
+        target_id=target_id,
+        max_npcs=max_npcs,
+        zone_key_prompt_args=zone_key_prompt_args,
+    )
+    if defer_visuals and _has_visual_generation_tasks(
+        payload=payload,
+        dyn_cfg=dyn_cfg,
+        npc_limit=max_npcs,
+        zone_key_prompt_args=zone_key_prompt_args,
+    ):
+        task = asyncio.create_task(visuals_coro)
+        return inherited_scene_image(dyn_cfg, origin_scene), {}, {}, scene_audio_track_id, task
+
+    scene_image, npc_images, object_images = await visuals_coro
+    return scene_image, npc_images, object_images, scene_audio_track_id, None
+
+
+async def _apply_pending_scene_image(
+    db: AsyncSession, session_id: str, scene_id: str, scene_image: Optional[str]
+) -> None:
+    if not scene_image:
+        return
+    scene_res = await db.execute(
+        select(WorldScene).where(WorldScene.session_id == session_id, WorldScene.id == scene_id)
+    )
+    scene_row = scene_res.scalars().first()
+    if not scene_row or scene_row.image_url:
+        return
+    scene_row.image_url = scene_image
+    map_res = await db.execute(select(WorldMap).where(WorldMap.session_id == session_id))
+    world_map = map_res.scalars().first()
+    if not world_map or not isinstance(world_map.nodes, dict):
+        return
+    sid = MapEngine._safe_id(scene_row.id)
+    if sid not in world_map.nodes:
+        return
+    nodes = dict(world_map.nodes)
+    nodes[sid] = {**nodes[sid], "image_url": scene_image}
+    world_map.nodes = nodes
+    flag_modified(world_map, "nodes")
+
+
+async def _apply_pending_entity_images(
+    db: AsyncSession,
+    session_id: str,
+    entry: PendingDynamicVisuals,
+    npc_images: dict[int, Optional[str]],
+    object_images: dict[int, Optional[str]],
+) -> None:
+    target_entity_ids = list(entry.npc_idx_by_id) + list(entry.object_idx_by_id)
+    if not target_entity_ids:
+        return
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.session_id == session_id,
+            WorldEntity.id.in_(target_entity_ids),
+        )
+    )
+    for ent in ent_res.scalars().all():
+        if ent.id in entry.npc_idx_by_id:
+            url = npc_images.get(entry.npc_idx_by_id[ent.id])
+        else:
+            url = object_images.get(entry.object_idx_by_id[ent.id])
+        if url and not ent.image_url:
+            ent.image_url = url
+
+
+async def _apply_pending_entry(
+    db: AsyncSession, state: SessionState, entry: PendingDynamicVisuals
+) -> None:
+    scene_image, npc_images, object_images = await entry.task
+    await _apply_pending_scene_image(db, state.session_id, entry.scene_id, scene_image)
+    await _apply_pending_entity_images(db, state.session_id, entry, npc_images, object_images)
+
+
+async def drain_pending_dynamic_visuals(
+    db: AsyncSession,
+    state: SessionState,
+    pending_list: Optional[list[PendingDynamicVisuals]],
+    *,
+    only_done: bool = False,
+) -> bool:
+    """Apply completed (or all) background dynamic visual tasks onto session DB rows."""
+    if not pending_list:
+        return False
+    applied_any = False
+    remaining: list[PendingDynamicVisuals] = []
+    for entry in list(pending_list):
+        if only_done and not entry.task.done():
+            remaining.append(entry)
+            continue
+        try:
+            await _apply_pending_entry(db, state, entry)
+            applied_any = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Applying background dynamic visuals failed (%s): %s", entry.scene_id, exc
+            )
+    pending_list[:] = remaining
+    if applied_any:
+        await db.flush()
+    return applied_any
+
+
+def cancel_pending_dynamic_visuals(pending_list: Optional[list[PendingDynamicVisuals]]) -> None:
+    """Cancel any remaining background dynamic visual tasks on aborted turns."""
+    if not pending_list:
+        return
+    for entry in pending_list:
+        entry.cancel()
+    pending_list.clear()
 
 
 def configure_scene_audio(

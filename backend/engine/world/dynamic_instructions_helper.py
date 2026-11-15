@@ -10,6 +10,10 @@ from typing import Any, Optional
 from backend.engine.blueprint.models import Blueprint
 from backend.engine.blueprint.parser import has_blueprint_tags, parse_blueprint
 from backend.engine.blueprint.prompt import blueprint_payload
+from backend.engine.world.dynamic_cluster_node_zone import (
+    adjust_plan_for_room_brief,
+    is_room_brief_only,
+)
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedNpc,
     DynamicGeneratedObject,
@@ -211,6 +215,8 @@ def adjust_plan_for_instructions(
         updated["has_instructions"] = False
         return updated
 
+    if is_room_brief_only(zone):
+        return adjust_plan_for_room_brief(updated)
     updated["has_instructions"] = True
     updated["allow_items"] = True
     updated["allow_container"] = True

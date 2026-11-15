@@ -118,3 +118,74 @@ async def test_goto_runs_global_enter_scripts_without_a_target(setup_test_db):
         await db.refresh(state)
         assert state.entity_states["__script_vars__"]["entered"] == "VAULT"
         assert any("You feel watched." in c and "event: assistant" in c for c in chunks)
+
+
+async def test_session_debug_payload_exposes_exit_type_and_dynamic_zone(setup_test_db):
+    from backend.api.routes.adventures.session_debug_payload import build_session_debug_payload
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        _user, adv, avatar, state = await _seed_game_context(db)
+        await _seed_world(db, state)
+        dyn_cfg = {
+            "zone_id": "dungeon",
+            "theme": "Stone crypt",
+            "instructions": "Keep it atmospheric",
+            "max_depth": 4,
+            "materialized": False,
+        }
+        db.add(
+            WorldScene(
+                id="DYN_CRYPT",
+                session_id=state.session_id,
+                label="Crypt",
+                description="",
+                dynamic_zone=dyn_cfg,
+            )
+        )
+        db.add(
+            WorldExit(
+                id="EXIT_CRYPT",
+                session_id=state.session_id,
+                from_scene_id="START",
+                to_scene_id="DYN_CRYPT",
+                label="stone stair",
+                exit_type="bidirectional",
+                dynamic_zone=dyn_cfg,
+            )
+        )
+        await db.commit()
+        await db.refresh(state, attribute_names=["session"])
+
+        # Act
+        payload = await build_session_debug_payload(db, state, adv, avatar)
+
+        # Assert
+        exits_by_id = {ex["id"]: ex for ex in payload["map"]["exits"]}
+        assert exits_by_id["EXIT_VAULT"]["exit_type"] == "bidirectional"
+        assert exits_by_id["EXIT_CRYPT"]["exit_type"] == "bidirectional"
+        assert exits_by_id["EXIT_CRYPT"]["dynamic_zone"]["zone_id"] == "dungeon"
+        assert payload["map"]["nodes"]["DYN_CRYPT"]["dynamic_zone"]["theme"] == "Stone crypt"
+        assert payload["map"]["nodes"]["DYN_CRYPT"]["dynamic_zone"]["materialized"] is False
+
+        # Legacy dynamic_scene_flow stored runtime metadata in __dynamic_zones__ without materialized=True.
+        db.add(
+            WorldScene(
+                id="DYN_ENTRY",
+                session_id=state.session_id,
+                label="Dungeon Threshold",
+                description="Already generated.",
+                dynamic_zone=None,
+            )
+        )
+        state.entity_states = {
+            "__dynamic_zones__": {
+                "DYN_ENTRY": {"zone_id": "dungeon", "theme": "Stone crypt", "depth": 1},
+            }
+        }
+        await db.commit()
+        await db.refresh(state, attribute_names=["session"])
+
+        payload_after = await build_session_debug_payload(db, state, adv, avatar)
+        assert payload_after["map"]["nodes"]["DYN_ENTRY"]["dynamic_zone"]["materialized"] is True

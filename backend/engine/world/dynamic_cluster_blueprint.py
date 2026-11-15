@@ -1,47 +1,27 @@
-"""Cluster Blueprint schema, LLM generator, fallback builder, and prompt formatter."""
+"""Cluster Blueprint schema, fallback builder, normalizer, and prompt formatter.
+
+The LLM architect that writes the blueprint lives in ``dynamic_cluster_architect``.
+"""
 
 from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from backend.api.routes.adventures.turn_context_helpers import resolve_model_settings
-from backend.core.api_keys import has_api_key
-from backend.core.llm_router import GameMasterLLM
+from backend.engine.world.dynamic_cluster_node_zone import (
+    fallback_generation_instructions,
+)
 from backend.engine.world.dynamic_scene_schemas import (
     build_dynamic_placeholder_scene_id,
-    normalize_generation_model,
 )
 
 logger = logging.getLogger(__name__)
 
-_LOCAL_LLM_PROVIDERS = {"ollama", "lmstudio"}
 _NODE_COORDS_RX = re.compile(r"^D(\d+)_(\d+)$", re.IGNORECASE)
-_DYNAMIC_MODEL_CATEGORY_MAP: dict[str, tuple[str, str, str]] = {
-    "mechanics": ("small_model_provider", "small_model", "small"),
-    "narration": ("complex_model_provider", "complex_model", "complex"),
-    "world_builder": ("generator_model_provider", "generator_model", "generator"),
-}
 NodeRole = Literal["entry", "obstacle", "branch", "climax"]
-
-
-def resolve_dynamic_llm_model(
-    user: Any,
-    zone: Optional[dict[str, Any]] = None,
-    generation_config: Optional[dict[str, Any]] = None,
-) -> tuple[str, str, str]:
-    """Resolve (provider, model, category) for dynamic cluster and scene generation."""
-    llm_settings = dict(getattr(user, "llm_settings", None) or {})
-    resolved = resolve_model_settings(llm_settings)
-    raw_choice = (zone or {}).get("generation_model") or (generation_config or {}).get(
-        "generation_model"
-    )
-    tier = normalize_generation_model(raw_choice) or "mechanics"
-    prov_key, model_key, category = _DYNAMIC_MODEL_CATEGORY_MAP[tier]
-    return str(resolved[prov_key]), str(resolved[model_key]), category
 
 
 class DynamicClusterNodeSpec(BaseModel):
@@ -55,6 +35,7 @@ class DynamicClusterNodeSpec(BaseModel):
     story_beat: str = Field(default="", max_length=600)
     npc_hint: str = Field(default="", max_length=300)
     object_hint: str = Field(default="", max_length=300)
+    generation_instructions: str = Field(default="", max_length=1500)
 
 
 class DynamicClusterEdgeSpec(BaseModel):
@@ -73,6 +54,7 @@ class DynamicClusterBlueprint(BaseModel):
     story_arc: str = Field(min_length=1, max_length=1000)
     climax_goal: str = Field(min_length=1, max_length=500)
     key_item_concept: str = Field(default="", max_length=300)
+    antagonist: str = Field(default="", max_length=300)
     nodes: list[DynamicClusterNodeSpec] = Field(default_factory=list, max_length=8)
     edges: list[DynamicClusterEdgeSpec] = Field(default_factory=list, max_length=12)
 
@@ -114,17 +96,30 @@ def _fallback_node_details(
     node_id: str,
     depth: int,
     role: NodeRole,
-    clean_zone: str,
-    theme: str,
+    zone: dict[str, Any],
     exit_label: str,
 ) -> DynamicClusterNodeSpec:
+    spec = _fallback_node_base(node_id, depth, role, zone, exit_label)
+    spec.generation_instructions = fallback_generation_instructions(role, depth, zone)
+    return spec
+
+
+def _fallback_node_base(
+    node_id: str,
+    depth: int,
+    role: NodeRole,
+    zone: dict[str, Any],
+    exit_label: str,
+) -> DynamicClusterNodeSpec:
+    theme = zone_root_theme(zone)
+    clean_zone = _clean_zone_name(zone)
     if role == "entry":
         return DynamicClusterNodeSpec(
             node_id=node_id,
             depth=depth,
             role=role,
             label=f"{clean_zone} Threshold"[:100],
-            theme_hint=theme[:300],
+            theme_hint=f"{theme} — entrance where the first signs of danger appear"[:300],
             story_beat=f"Step beyond {exit_label or 'the passage'} into {theme} and discover clues pointing deeper inside.",
             npc_hint="A wary lookout or traveler who hints at the danger ahead.",
             object_hint="Clues or light supplies near the threshold.",
@@ -164,19 +159,27 @@ def _fallback_node_details(
     )
 
 
+def zone_root_theme(zone: dict[str, Any]) -> str:
+    return str(zone.get("root_theme") or zone.get("theme") or "uncharted reach").strip()
+
+
+def _clean_zone_name(zone: dict[str, Any]) -> str:
+    return re.sub(r"[_-]+", " ", str(zone.get("zone_id") or "uncharted")).title()
+
+
 def build_fallback_cluster_blueprint(
     exit_label: str,
     zone: dict[str, Any],
 ) -> DynamicClusterBlueprint:
     """Build a deterministic mini-adventure blueprint when no LLM runs."""
-    theme = str(zone.get("root_theme") or zone.get("theme") or "uncharted reach").strip()
-    clean_zone = re.sub(r"[_-]+", " ", str(zone.get("zone_id") or "uncharted")).title()
+    theme = zone_root_theme(zone)
+    clean_zone = _clean_zone_name(zone)
     max_depth = int(zone.get("max_depth") or 3)
     cul_de_sac = bool(zone.get("cul_de_sac_on_max_depth", True))
     skel_nodes, skel_edges = build_canonical_cluster_skeleton(max_depth, cul_de_sac)
 
     nodes = [
-        _fallback_node_details(node_id, depth, role, clean_zone, theme, exit_label)
+        _fallback_node_details(node_id, depth, role, zone, exit_label)
         for node_id, depth, role in skel_nodes
     ]
     edge_labels = {
@@ -199,6 +202,7 @@ def build_fallback_cluster_blueprint(
         story_arc=f"Venture past {exit_label or 'the threshold'} into {theme}, uncover what threatens it, and reach its heart.",
         climax_goal=f"Overcome the guardian of {clean_zone} and unlock its final cache.",
         key_item_concept=f"An emblem or passkey tied to {clean_zone}",
+        antagonist=f"The guardian of the {clean_zone} sanctum",
         nodes=nodes,
         edges=edges,
     )
@@ -261,6 +265,18 @@ def _match_edge_spec(
     return fb_edge
 
 
+def _distinct_theme_hint(
+    spec: DynamicClusterNodeSpec,
+    fallback: DynamicClusterNodeSpec,
+    zone: dict[str, Any],
+) -> str:
+    """Use the room's own sub-theme; a copy of the zone theme falls back to the role hint."""
+    hint = str(spec.theme_hint or "").strip()
+    if not hint or hint.casefold() == zone_root_theme(zone).casefold():
+        return fallback.theme_hint[:300]
+    return hint[:300]
+
+
 def normalize_cluster_blueprint(
     blueprint: DynamicClusterBlueprint,
     zone: dict[str, Any],
@@ -294,10 +310,13 @@ def normalize_cluster_blueprint(
                 "depth": depth,
                 "role": role,
                 "label": (spec.label or fb_nodes[node_id].label)[:100],
-                "theme_hint": (spec.theme_hint or fb_nodes[node_id].theme_hint)[:300],
                 "story_beat": (spec.story_beat or fb_nodes[node_id].story_beat)[:600],
                 "npc_hint": (spec.npc_hint or fb_nodes[node_id].npc_hint)[:300],
                 "object_hint": (spec.object_hint or fb_nodes[node_id].object_hint)[:300],
+                "theme_hint": _distinct_theme_hint(spec, fb_nodes[node_id], zone),
+                "generation_instructions": (
+                    spec.generation_instructions or fb_nodes[node_id].generation_instructions
+                )[:1500],
             }
         )
 
@@ -320,6 +339,7 @@ def normalize_cluster_blueprint(
         "story_arc": (blueprint.story_arc or fallback.story_arc)[:1000],
         "climax_goal": (blueprint.climax_goal or fallback.climax_goal)[:500],
         "key_item_concept": (blueprint.key_item_concept or fallback.key_item_concept)[:300],
+        "antagonist": (blueprint.antagonist or fallback.antagonist)[:300],
         "nodes": norm_nodes,
         "edges": norm_edges,
     }
@@ -340,10 +360,12 @@ def build_node_zone_context(cluster_bp: dict[str, Any], node_id: str) -> dict[st
         "story_beat": node["story_beat"],
         "npc_hint": node["npc_hint"],
         "object_hint": node["object_hint"],
+        "generation_instructions": node.get("generation_instructions") or "",
         "cluster_title": cluster_bp.get("cluster_title") or "",
         "story_arc": cluster_bp.get("story_arc") or "",
         "climax_goal": cluster_bp.get("climax_goal") or "",
         "key_item_concept": cluster_bp.get("key_item_concept") or "",
+        "antagonist": cluster_bp.get("antagonist") or "",
         "outgoing_exits": [
             {
                 "to_node_id": edge["to_node_id"],
@@ -367,6 +389,8 @@ def build_cluster_blueprint_prompt_section(zone: dict[str, Any]) -> str:
         f"- Mini-Story Arc: {node.get('story_arc') or ''}",
         f"- Climax Goal: {node.get('climax_goal') or ''}",
     ]
+    if node.get("antagonist"):
+        lines.append(f"- Antagonist: {node['antagonist']}")
     if node.get("key_item_concept"):
         lines.append(f"- Key Item Concept: {node['key_item_concept']}")
     lines.append(
@@ -378,76 +402,12 @@ def build_cluster_blueprint_prompt_section(zone: dict[str, Any]) -> str:
         lines.append(f"- Planned NPCs Hint: {node['npc_hint']}")
     if node.get("object_hint"):
         lines.append(f"- Planned Objects Hint: {node['object_hint']}")
+    if node.get("generation_instructions") and zone.get("instructions") != node.get(
+        "generation_instructions"
+    ):
+        lines.append(f"- Room Generation Brief: {node['generation_instructions']}")
     outgoing = list(node.get("outgoing_exits") or [])
     if outgoing:
         ex_text = "; ".join(f"{ex.get('label')} -> {ex.get('to_node_id')}" for ex in outgoing)
         lines.append(f"- Planned Outgoing Exits: {ex_text}")
     return "\n".join(lines)
-
-
-async def generate_dynamic_cluster_blueprint(
-    *,
-    adventure_title: str,
-    adventure_setting: str,
-    adventure_tone: str,
-    origin_scene_name: str,
-    origin_scene_description: str,
-    exit_label: str,
-    zone: dict[str, Any],
-    user: Any,
-    adventure_id: Optional[str] = None,
-    game_id: Optional[str] = None,
-    language: str = "English",
-    generation_config: Optional[dict[str, Any]] = None,
-) -> DynamicClusterBlueprint:
-    """Generate a cohesive mini-adventure blueprint for a dynamic cluster via LLM or fallback."""
-    provider, model, model_category = resolve_dynamic_llm_model(user, zone, generation_config)
-
-    has_creds = provider in _LOCAL_LLM_PROVIDERS or has_api_key(
-        getattr(user, "encrypted_api_keys", None) or {},
-        provider,
-    )
-    if not has_creds:
-        return build_fallback_cluster_blueprint(exit_label, zone)
-
-    max_depth = int(zone.get("max_depth") or 3)
-    cul_de_sac = bool(zone.get("cul_de_sac_on_max_depth", True))
-    skel_nodes, skel_edges = build_canonical_cluster_skeleton(max_depth, cul_de_sac)
-    nodes_spec = ", ".join(f"{nid} (depth={d}, role={r})" for nid, d, r in skel_nodes)
-    edges_spec = ", ".join(f"{src}->{dst}" for src, dst, _ in skel_edges) or "none"
-
-    system_prompt = (
-        "You are TaleWeaver's mini-adventure cluster architect.\n"
-        f"Design a cohesive, self-contained side-cluster mini-story written strictly in {language}.\n"
-        "- NEVER reference or alter main-quest core story items or major main-plot NPCs.\n"
-        f"- Populate EXACTLY these skeleton nodes using the exact node_id values: {nodes_spec}.\n"
-        f"- Populate EXACTLY these edges (from_node_id -> to_node_id): {edges_spec}.\n"
-        "- Ensure the story_arc connects entry clues, obstacles/branches, a key_item_concept, and the climax_goal."
-    )
-    instructions = str(zone.get("instructions") or "").strip()[:1200]
-    user_prompt = (
-        f"Adventure Title: {adventure_title}\n"
-        f"Adventure Tone: {adventure_tone or 'Atmospheric'}\n"
-        f"Setting Context: {adventure_setting[:450]}\n"
-        f"Origin Scene: {origin_scene_name} — {origin_scene_description[:240]}\n"
-        f"Entry Exit Label: {exit_label}\n"
-        f"Zone Theme: {zone.get('root_theme') or zone.get('theme')}\n"
-        f"Danger Level: {zone.get('danger_level') or 'medium'}\n"
-        f"Max NPCs Per Scene: {zone.get('max_npcs', 2)}"
-        + (f"\nAuthor Instructions: {instructions}" if instructions else "")
-    )
-    try:
-        llm = GameMasterLLM(user, provider=provider, model_category=model_category)
-        return await llm.aexecute_complex_task(
-            system_prompt,
-            user_prompt,
-            DynamicClusterBlueprint,
-            model,
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation="dynamic_cluster.blueprint",
-            phase="expansion",
-        )
-    except Exception as exc:
-        logger.warning("Cluster blueprint generation failed (%s); using fallback.", exc)
-        return build_fallback_cluster_blueprint(exit_label, zone)

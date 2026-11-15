@@ -602,6 +602,13 @@ async def _seed_cluster_blueprint_session(db):
     return user, adv, state, origin_scene, dyn_exit, sess_id, zone_id
 
 
+def _assert_rooms_have_own_briefs(room_zones: list[dict]) -> None:
+    assert len({z["theme"] for z in room_zones}) == len(room_zones)
+    assert len({z["instructions"] for z in room_zones}) == len(room_zones)
+    assert all(z["instructions_source"] == "cluster_blueprint" for z in room_zones)
+    assert all(z["root_theme"] == "Flooded catacombs under the chapel" for z in room_zones)
+
+
 @pytest.mark.asyncio
 async def test_cluster_blueprint_diamond_graph_and_lazy_materialization():
     from sqlalchemy import select
@@ -681,6 +688,11 @@ async def test_cluster_blueprint_diamond_graph_and_lazy_materialization():
             scene_rows[sid].dynamic_zone["materialized"] for sid in (d2_1_sid, d2_2_sid, d3_1_sid)
         )
         assert scene_rows[d3_1_sid].dynamic_zone["cluster_node"]["role"] == "climax"
+
+        # Every room carries its own sub-theme and generation instructions from the blueprint
+        _assert_rooms_have_own_briefs(
+            [scene_rows[sid].dynamic_zone for sid in (scene_d1.id, d2_1_sid, d2_2_sid, d3_1_sid)]
+        )
 
         # 3. Blueprint prompt section injects story arc, climax goal, and climax depth rule
         bp_text = build_cluster_blueprint_prompt_section(scene_rows[d3_1_sid].dynamic_zone)
@@ -871,6 +883,7 @@ async def test_dynamic_generation_model_config_override_and_blueprint(monkeypatc
     from types import SimpleNamespace
 
     from backend.engine.blueprint import analyze_blueprint, apply_blueprint
+    from backend.engine.world import dynamic_cluster_architect as arch_mod
     from backend.engine.world import dynamic_cluster_blueprint as bp_mod
     from backend.engine.world import dynamic_scene_generator as gen_mod
     from backend.engine.world.dynamic_scene_schemas import (
@@ -910,15 +923,15 @@ async def test_dynamic_generation_model_config_override_and_blueprint(monkeypatc
         },
         encrypted_api_keys={},
     )
-    assert bp_mod.resolve_dynamic_llm_model(fake_user, zone_default, None) == (
+    assert arch_mod.resolve_dynamic_llm_model(fake_user, zone_default, None) == (
         "ollama",
         "mech-model",
         "small",
     )
-    assert bp_mod.resolve_dynamic_llm_model(
+    assert arch_mod.resolve_dynamic_llm_model(
         fake_user, zone_default, {"generation_model": "narration"}
     ) == ("ollama", "narr-model", "complex")
-    assert bp_mod.resolve_dynamic_llm_model(
+    assert arch_mod.resolve_dynamic_llm_model(
         fake_user, zone_wb, {"generation_model": "narration"}
     ) == ("ollama", "wb-model", "generator")
 
@@ -937,10 +950,10 @@ async def test_dynamic_generation_model_config_override_and_blueprint(monkeypatc
                 description="Columns of volcanic glass frame a quiet chamber.",
             )
 
-    monkeypatch.setattr(bp_mod, "GameMasterLLM", _StubLLM)
+    monkeypatch.setattr(arch_mod, "GameMasterLLM", _StubLLM)
     monkeypatch.setattr(gen_mod, "GameMasterLLM", _StubLLM)
 
-    await bp_mod.generate_dynamic_cluster_blueprint(
+    await arch_mod.generate_dynamic_cluster_blueprint(
         adventure_title="Test",
         adventure_setting="Plot",
         adventure_tone="Dark",

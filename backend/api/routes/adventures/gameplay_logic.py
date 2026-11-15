@@ -100,6 +100,11 @@ from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
 from backend.engine.rules.sequence_scripts import sequence_scripts
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.dynamic_scene_media import (
+    PendingDynamicVisuals,
+    cancel_pending_dynamic_visuals,
+    drain_pending_dynamic_visuals,
+)
 from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.scripting.narration_skip import (
     no_narration,
@@ -367,6 +372,7 @@ class GameTurnManager:
         self._llm_context_builder = TurnLlmContextBuilder(self)
         self.combat = TurnCombatManager(self)
         self.pending_npc_attacks: list[str] = []
+        self.pending_dynamic_visuals: list[PendingDynamicVisuals] = []
         self.guardrails = TurnGuardrailsManager(self)
         self.interactions = TurnInteractionsManager(self)
         self.state_applier = TurnStateApplier(self)
@@ -786,15 +792,18 @@ class GameTurnManager:
     ) -> AsyncGenerator[str, None]:
         """Runs one turn and applies post-turn hooks (special unlocks, NPC attacks) before its final event."""
         hooks = PostTurnHooks(self)
-        async for chunk in self._process_turn_inner(message, auto_visualize, language):
-            if not chunk.startswith("event: final"):
-                yield chunk
-                continue
-            # Commands that skip the narration pass still save their checkpoints here.
-            for checkpoint_event in await self._persist_pending_checkpoints():
-                yield checkpoint_event
-            async for hooked in hooks.process_final(chunk):
-                yield hooked
+        try:
+            async for chunk in self._process_turn_inner(message, auto_visualize, language):
+                if not chunk.startswith("event: final"):
+                    yield chunk
+                    continue
+                # Commands that skip the narration pass still save their checkpoints here.
+                for checkpoint_event in await self._persist_pending_checkpoints():
+                    yield checkpoint_event
+                async for hooked in hooks.process_final(chunk):
+                    yield hooked
+        finally:
+            cancel_pending_dynamic_visuals(self.pending_dynamic_visuals)
 
     async def _command_final_event(self) -> str:
         """Final SSE event for commands that skip the narration pass (state snapshot only)."""
@@ -1784,6 +1793,9 @@ class GameTurnManager:
         ctx = await self._llm_context_builder.build_context(user_msg=user_msg, language=language)
 
         # Push a state snapshot before narration so scene/entity images can update immediately on scene changes.
+        await drain_pending_dynamic_visuals(
+            self.db, self.state, self.pending_dynamic_visuals, only_done=True
+        )
         await self.db.flush()
         pre_narration_state = jsonable_encoder(
             {
@@ -2263,6 +2275,9 @@ class GameTurnManager:
         # on_turn_end / on_turn_start run at the in-game turn boundary (scene/sequence change),
         # see advance_in_game_turn above.
 
+        await drain_pending_dynamic_visuals(
+            self.db, self.state, self.pending_dynamic_visuals, only_done=False
+        )
         await self.db.commit()
 
         async for comp_event in self._compress_history_if_needed():

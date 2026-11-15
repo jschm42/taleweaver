@@ -2162,7 +2162,13 @@ async def test_instructions_scope_controls_cluster_expansion(db_session, monkeyp
 
     # Assert
     assert child_exit is not None
-    assert child_exit.dynamic_zone["instructions_consumed"] is True
+    child_zone = child_exit.dynamic_zone
+    # The deeper room follows its own cluster-blueprint brief; outside its 'once' scope the
+    # author text is only story context (no re-spawn) and stays as root_instructions.
+    assert child_zone["instructions_source"] == "cluster_blueprint"
+    assert "Cluster premise (story context only" in child_zone["instructions"]
+    assert child_zone["root_instructions"] == "Generate a loot chest with a bronze key."
+    assert child_zone["root_instructions_scope"] == "once"
 
 
 def test_blueprint_instructions_deduplicate_across_cluster_and_honor_depth() -> None:
@@ -2612,3 +2618,380 @@ async def test_dynamic_zone_update_enable_disable_and_exit_scripts(db_session) -
     assert created["exit"]["on_exit_used_script"] == "tw.vars['entered_crypt'] = True"
     assert created["exit"]["on_exit_used_text"] == "The rune flares."
     assert created["exit"]["dynamic_zone"]["zone_id"] == "zone_crypts"
+
+
+@pytest.mark.asyncio
+async def test_generate_dynamic_visuals_batches_five_objects_and_zone_key(monkeypatch) -> None:
+    """generate_dynamic_visuals batches scene, NPCs, up to 5 objects, and fallback Zone Key in parallel."""
+    import asyncio
+
+    from backend.api.routes.adventures import dynamic_scene_media
+
+    # Arrange
+    in_flight = 0
+    max_concurrent = 0
+    calls: list[tuple[str, str]] = []
+
+    async def _fake_generate_tier_image(**kwargs):
+        nonlocal in_flight, max_concurrent
+        in_flight += 1
+        max_concurrent = max(max_concurrent, in_flight)
+        calls.append((kwargs["prefix"], kwargs["tier"]))
+        await asyncio.sleep(0)
+        in_flight -= 1
+        return f"/data/adventures/sessions/s1/dynamic_assets/{kwargs['prefix']}.webp"
+
+    monkeypatch.setattr(dynamic_scene_media, "_generate_tier_image", _fake_generate_tier_image)
+
+    payload = DynamicGeneratedScenePayload(
+        name="Sunken Forge",
+        description="A flooded dwarven smithy.",
+        npcs=[
+            DynamicGeneratedNpc(
+                id="FORGE_GUARD",
+                name="Rust Sentinel",
+                description="An iron construct.",
+            )
+        ],
+        objects=[
+            DynamicGeneratedObject(
+                id=f"OBJ_{idx}",
+                name=f"Relic {idx}",
+                description=f"Anvil relic {idx}.",
+            )
+            for idx in range(6)
+        ],
+    )
+
+    # Act
+    scene_img, npc_imgs, obj_imgs = await dynamic_scene_media.generate_dynamic_visuals(
+        payload=payload,
+        dyn_cfg={"scene_image_mode": "simple", "npc_image_mode": "simple", "item_image_mode": "hq"},
+        origin_scene=None,
+        user=object(),
+        adventure=AdventureTemplate(id="adv1", owner_id="u1", title="Forge"),
+        session_id="s1",
+        target_id="DYN_FORGE_D1_1",
+        zone_key_prompt_args=("Zone Key", "An iron passkey.", "ornate dwarven key"),
+    )
+
+    # Assert
+    assert scene_img == "/data/adventures/sessions/s1/dynamic_assets/dyn_scene_dyn_forge_d1_1.webp"
+    assert npc_imgs == {
+        0: "/data/adventures/sessions/s1/dynamic_assets/dyn_npc_dyn_forge_d1_1_0.webp"
+    }
+    assert set(obj_imgs) == {0, 1, 2, 3, 4, -1}
+    assert 5 not in obj_imgs
+    assert (
+        obj_imgs[-1] == "/data/adventures/sessions/s1/dynamic_assets/dyn_forge_d1_1_zone_key.webp"
+    )
+    assert max_concurrent == 8
+    assert ("dyn_obj_dyn_forge_d1_1_5", "hq") not in calls
+
+
+@pytest.mark.asyncio
+async def test_materialize_dynamic_scene_defers_visuals_and_drains_into_db_and_map(
+    db_session, monkeypatch
+) -> None:
+    """Deferred dynamic visuals persist scene/entities immediately and populate DB + map once drained."""
+    import asyncio
+
+    from backend.api.routes.adventures import dynamic_scene_media
+    from backend.models.world_map import WorldMap
+
+    # Arrange
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(
+        db_session, audio_mode="inherit"
+    )
+    adv.dynamic_generation = {
+        "scene_image_mode": "simple",
+        "npc_image_mode": "simple",
+        "item_image_mode": "hq",
+        "audio_mode": "inherit",
+        "interlude_quote_enabled": False,
+    }
+    world_map = WorldMap(
+        session_id=state.session_id,
+        template_id=adv.id,
+        nodes={
+            "TOWN_GATE": {"label": "Town Gate", "image_url": None},
+            "DYN_IRON_MINES_D1_1": {"label": "Flooded Gallery", "image_url": None},
+        },
+        edges=[],
+        current_scene_id="TOWN_GATE",
+    )
+    db_session.add(world_map)
+    await db_session.commit()
+
+    release_visuals = asyncio.Event()
+
+    async def _fake_generate_tier_image(**kwargs):
+        await release_visuals.wait()
+        return (
+            f"/data/adventures/sessions/{state.session_id}/dynamic_assets/{kwargs['prefix']}.webp"
+        )
+
+    async def _fake_blueprint(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        return DynamicGeneratedScenePayload(
+            name="Flooded Gallery",
+            description="Dark water laps against rotted beams.",
+            visual_description="Flooded timber mine gallery",
+            npcs=[
+                DynamicGeneratedNpc(
+                    id="TUNNEL_BRUTE",
+                    name="Cave Brute",
+                    role="Guard",
+                    description="Blocks the passage.",
+                    attitude="hostile",
+                    combat_role="standard",
+                )
+            ],
+            objects=[
+                DynamicGeneratedObject(
+                    id="MINER_LAMP",
+                    name="Oil Lamp",
+                    item_type="STANDARD",
+                    description="Brass mining lamp.",
+                )
+            ],
+            forward_exits=[],
+        )
+
+    monkeypatch.setattr(dynamic_scene_media, "_generate_tier_image", _fake_generate_tier_image)
+    monkeypatch.setattr(dynamic_scene_flow, "ensure_cluster_blueprint", _fake_blueprint)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    pending: list[dynamic_scene_media.PendingDynamicVisuals] = []
+
+    # Act 1: Materialize with pending_visuals -> persists rows right away while visuals are in flight
+    scene = await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+        pending_visuals=pending,
+    )
+    await db_session.commit()
+
+    # Assert 1: Scene, entities, and fallback Zone Key exist immediately with image_url=None
+    assert scene.image_url is None
+    assert len(pending) == 1
+    assert not pending[0].task.done()
+    assert not await dynamic_scene_media.drain_pending_dynamic_visuals(
+        db_session, state, pending, only_done=True
+    )
+    assert len(pending) == 1
+
+    entities_before = (
+        (
+            await db_session.execute(
+                select(WorldEntity).where(WorldEntity.session_id == state.session_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_id_before = {ent.id: ent for ent in entities_before}
+    assert "DYN_IRON_MINES_D1_1_TUNNEL_BRUTE" in by_id_before
+    assert "DYN_IRON_MINES_D1_1_MINER_LAMP" in by_id_before
+    assert "DYN_IRON_MINES_D1_1_ZONE_KEY" in by_id_before
+    assert by_id_before["DYN_IRON_MINES_D1_1_ZONE_KEY"].image_url is None
+
+    # Act 2: Release background tasks and drain them into DB + WorldMap
+    release_visuals.set()
+    applied = await dynamic_scene_media.drain_pending_dynamic_visuals(
+        db_session, state, pending, only_done=False
+    )
+    await db_session.commit()
+
+    # Assert 2: Scene, NPC, object, fallback Zone Key, and WorldMap node all receive generated URLs
+    assert applied is True
+    assert pending == []
+    await db_session.refresh(scene)
+    await db_session.refresh(world_map)
+    entities_after = (
+        (
+            await db_session.execute(
+                select(WorldEntity).where(WorldEntity.session_id == state.session_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_id_after = {ent.id: ent for ent in entities_after}
+
+    assert scene.image_url is not None
+    assert scene.image_url.endswith("dyn_scene_dyn_iron_mines_d1_1.webp")
+    assert world_map.nodes["DYN_IRON_MINES_D1_1"]["image_url"] == scene.image_url
+    assert by_id_after["DYN_IRON_MINES_D1_1_TUNNEL_BRUTE"].image_url is not None
+    assert by_id_after["DYN_IRON_MINES_D1_1_MINER_LAMP"].image_url is not None
+    assert by_id_after["DYN_IRON_MINES_D1_1_ZONE_KEY"].image_url is not None
+    assert by_id_after["DYN_IRON_MINES_D1_1_ZONE_KEY"].image_url.endswith(
+        "dyn_iron_mines_d1_1_zone_key.webp"
+    )
+
+
+@pytest.mark.asyncio
+async def test_start_dynamic_scene_audio_generation_triggers_immediately_during_materialization(
+    db_session, monkeypatch
+) -> None:
+    """audio_mode='generate' launches start_missing_tracks immediately before visual generation completes."""
+    from types import SimpleNamespace
+
+    from backend.api.routes.adventures import dynamic_scene_media
+
+    # Arrange
+    user, adv, state, origin_scene, dyn_exit = await _seed_dynamic_session(
+        db_session, audio_mode="generate"
+    )
+    adv.dynamic_generation = {
+        "scene_image_mode": "simple",
+        "npc_image_mode": "off",
+        "item_image_mode": "off",
+        "audio_mode": "generate",
+        "interlude_quote_enabled": False,
+    }
+    await db_session.commit()
+
+    started_audio_calls: list[tuple[str, list[str], str | None]] = []
+    audio_seen_before_visuals: list[int] = []
+
+    async def _fake_read_server_settings(_db):
+        return SimpleNamespace(audio_settings={"enabled": True, "provider": "lyria"})
+
+    def _fake_start_missing_tracks(session_id, tracks, raw, api_key):
+        started_audio_calls.append((session_id, list(tracks.keys()), api_key))
+
+    async def _fake_visuals(**kwargs):
+        # Music rendering must already have been triggered before visuals run/finish
+        audio_seen_before_visuals.append(len(started_audio_calls))
+        return None, {}, {}
+
+    async def _fake_blueprint(**kwargs):
+        return None
+
+    async def _fake_scene_payload(**kwargs):
+        return DynamicGeneratedScenePayload(
+            name="Resonant Vault",
+            description="Crystal stalactites hum softly.",
+            music_prompt="Eerie crystalline cavern drone",
+            npcs=[],
+            objects=[],
+            forward_exits=[],
+        )
+
+    monkeypatch.setattr(dynamic_scene_media, "read_server_settings", _fake_read_server_settings)
+    monkeypatch.setattr(dynamic_scene_media, "is_audio_available", lambda _raw: True)
+    monkeypatch.setattr(dynamic_scene_media, "audio_api_key", lambda _u, _s: "sk-audio")
+    monkeypatch.setattr(dynamic_scene_media, "start_missing_tracks", _fake_start_missing_tracks)
+    monkeypatch.setattr(dynamic_scene_media, "generate_dynamic_visuals", _fake_visuals)
+    monkeypatch.setattr(dynamic_scene_flow, "ensure_cluster_blueprint", _fake_blueprint)
+    monkeypatch.setattr(dynamic_scene_flow, "generate_dynamic_scene_payload", _fake_scene_payload)
+
+    # Act
+    await materialize_dynamic_scene_for_exit(
+        db=db_session,
+        state=state,
+        adventure=adv,
+        user=user,
+        world_exit=dyn_exit,
+        origin_scene=origin_scene,
+    )
+    await db_session.commit()
+
+    # Assert
+    assert audio_seen_before_visuals == [1]
+    assert len(started_audio_calls) == 1
+    assert started_audio_calls[0][0] == state.session_id
+    assert len(started_audio_calls[0][1]) == 1
+    assert started_audio_calls[0][2] == "sk-audio"
+    audio = read_audio_state(state.entity_states)
+    assert started_audio_calls[0][1][0] in audio["tracks"]
+
+
+def test_turn_llm_context_accepts_resolved_generator_model_settings() -> None:
+    """TurnLlmContext accepts all kwargs returned by resolve_model_settings, including generator_model."""
+    from backend.api.routes.adventures.turn_context_helpers import resolve_model_settings
+    from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContext
+
+    # Arrange
+    resolved = resolve_model_settings(
+        {
+            "small_model_provider": "openrouter",
+            "small_model": "deepseek/deepseek-flash",
+            "complex_model_provider": "openai",
+            "complex_model": "gpt-4o",
+            "generator_model_provider": "ollama",
+            "generator_model": "qwen3-coder",
+        }
+    )
+
+    # Act
+    ctx = TurnLlmContext(
+        history=[],
+        entities=[],
+        all_entities=[],
+        exits=[],
+        all_scenes=[],
+        global_unlock_rules_prompt_block="",
+        mechanics_static_prompt="",
+        narration_static_prompt="",
+        mechanics_state_block="",
+        narration_state_block="",
+        mechanics_awards=[],
+        **resolved,
+    )
+
+    # Assert
+    assert ctx.generator_model_provider == "ollama"
+    assert ctx.generator_model == "qwen3-coder"
+    assert ctx.small_model_provider == "openrouter"
+
+
+def test_tw_inventory_proxy_and_switch_guard() -> None:
+    """tw.inventory and tw.player.has evaluate inventory checks and mutations inside sandbox/switch guards."""
+    from backend.engine.interaction.switch_service import SwitchService
+    from backend.engine.scripting.context import GameContext
+    from backend.engine.scripting.sandbox import SafeAstInterpreter
+
+    # Arrange
+    expr = (
+        "tw.inventory.has('TEST_PROBE') or tw.inventory.has('SECRET_ROOM_KEY') "
+        "or tw.inventory.has('RESEARCH_TOKEN')"
+    )
+    empty_ctx = GameContext(avatar_data={"inventory": []})
+    key_ctx = GameContext(
+        avatar_data={"inventory": [{"id": "SECRET_ROOM_KEY", "name": "Secret Key"}]}
+    )
+
+    # Act & Assert: switch guard evaluation + sandbox membership/aliases
+    ok_empty, reason_empty = SwitchService.evaluate_gate_expression(expr, empty_ctx)
+    assert ok_empty is False
+    assert reason_empty is not None
+
+    ok_key, reason_key = SwitchService.evaluate_gate_expression(expr, key_ctx)
+    assert ok_key is True
+    assert reason_key is None
+    assert key_ctx.player.has("secret_room_key") is True
+
+    interp = SafeAstInterpreter()
+    assert interp.evaluate_expression("'SECRET_ROOM_KEY' in tw.inventory", {"tw": key_ctx}) is True
+    assert key_ctx.inventory.count() == 1
+    assert len(key_ctx.inventory) == 1
+
+    script_scope = {"tw": empty_ctx}
+    interp.execute(
+        "tw.inventory.add('RESEARCH_TOKEN', 'Research Token')\n"
+        "has_before = tw.inventory.has('RESEARCH_TOKEN')\n"
+        "tw.inventory.remove('RESEARCH_TOKEN')\n"
+        "has_after = tw.inventory.has('RESEARCH_TOKEN')\n",
+        script_scope,
+    )
+    assert script_scope["has_before"] is True
+    assert script_scope["has_after"] is False
+    assert empty_ctx.player.has("RESEARCH_TOKEN") is False

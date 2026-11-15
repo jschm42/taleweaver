@@ -59,6 +59,8 @@ class TurnLlmContext:
     complex_model_provider: str
     small_model: str
     complex_model: str
+    generator_model_provider: str = "openai"
+    generator_model: str = "gpt-4o"
     compression_model_provider: str = "openai"
     compression_model: str = ""
     compression_max_tokens: int = 4096

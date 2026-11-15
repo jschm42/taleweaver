@@ -33,7 +33,7 @@ from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPers
 from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
 from backend.engine.scripting.party_proxy import PartyProxy
-from backend.engine.scripting.player_inventory import PlayerInventoryMixin
+from backend.engine.scripting.player_inventory import InventoryProxy, PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
 
@@ -1790,6 +1790,7 @@ class GameContext:
         self.turn = TurnProxy(player_message=player_message, language=language)
         self.player_turn = self.turn
         self.player = PlayerProxy(avatar_data or {}, self.changeset)
+        self.inventory = InventoryProxy(self.player)
         entity_dict = entities or {}
         npc_entities = {
             k: v

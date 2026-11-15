@@ -38,9 +38,10 @@ LIMIT_MESSAGE = "This session reached its audio generation limit."
 SCENE_FADE_SECONDS = 1.0
 
 
-def _start_missing_tracks(
+def start_missing_tracks(
     session_id: str, tracks: dict[str, dict], raw: Optional[dict], api_key: Optional[str]
 ) -> None:
+    """Start background rendering for any unrendered session tracks up to the session limit."""
     limit = normalize_audio_settings(raw)["max_generations_per_session"]
     for index, (track_id, track) in enumerate(tracks.items()):
         if index >= limit:
@@ -165,7 +166,7 @@ async def build_audio_snapshot(
     enabled = is_audio_available(raw)
     if enabled and audio["tracks"]:
         api_key = audio_api_key(user, normalize_audio_settings(raw))
-        _start_missing_tracks(state.session_id, audio["tracks"], raw, api_key)
+        start_missing_tracks(state.session_id, audio["tracks"], raw, api_key)
     now = _script_payload(state.session_id, audio)
     if audio["now"] and audio["now"].get("library_id"):
         now = await _library_payload(db, state, audio["now"])

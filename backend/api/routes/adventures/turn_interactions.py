@@ -32,6 +32,7 @@ from backend.api.routes.adventures.dynamic_scene_flow import (
     prepare_dynamic_traversal_sse,
     sync_dynamic_scene_audio,
 )
+from backend.api.routes.adventures.dynamic_scene_media import drain_pending_dynamic_visuals
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -406,6 +407,12 @@ class TurnInteractionsManager:
             self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
         await self._record_map_traversal(current_scene_id, scene, world_exit)
+        await drain_pending_dynamic_visuals(
+            self.db,
+            self.state,
+            getattr(self.manager, "pending_dynamic_visuals", None),
+            only_done=True,
+        )
         await self.db.commit()
 
         if scene.on_enter_scene_script or scene.on_enter_scene_text:
@@ -454,6 +461,10 @@ class TurnInteractionsManager:
             yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
         finally:
             self.manager.arrival_narration = False
+            pending_visuals = getattr(self.manager, "pending_dynamic_visuals", None)
+            if pending_visuals:
+                await drain_pending_dynamic_visuals(self.db, self.state, pending_visuals)
+                await self.db.commit()
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()

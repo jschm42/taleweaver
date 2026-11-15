@@ -551,6 +551,8 @@ allowed_entities: hostile_npc, container, consumable, scenery
 
 You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster. With `instructions_scope: once` (the default), freeform instructions run only on the first generated scene in a cluster and Blueprint blocks automatically skip entities that were already spawned (with optional per-block `depth: 1` or `depth: max` inside Blueprint instructions).
 
+When the player enters a dynamic cluster, the engine first plans the whole cluster as a small in-game adventure (one LLM call): story arc, antagonist, key item, and for every room a label, a room-specific sub-theme and concrete generation instructions (which NPCs, items, puzzles, where the key lies and what it opens). Every room is then generated from its own brief, so the rooms follow one red thread instead of repeating the same theme and prompt. Your freeform `instructions` are the premise of this cluster adventure (e.g. `Alex fights through the dungeon to free Edgar from his cell; goblins captured him.`): the arc, antagonist, key item and climax are built around them. `instructions_scope` only limits where entities or loot named in the premise are spawned; the story always spans the whole cluster. The in-game debug inspector shows each room's brief.
+
 ## 7. Strict Adherence or Creative Expansion
 
 Choose the builder mode below the Story Idea field:

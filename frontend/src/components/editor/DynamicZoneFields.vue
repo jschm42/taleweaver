@@ -87,7 +87,7 @@ const isSceneMode = computed(() => props.mode === 'scene')
 const activeDynamicTab = ref<'setup' | 'spawns' | 'after_generated'>('setup')
 
 const zone = computed<DynamicZoneForm>(() => ({
-  zone_id: props.modelValue?.zone_id || 'ZONE_WILD',
+  zone_id: (props.modelValue?.zone_id || 'ZONE_WILD').toUpperCase(),
   theme: props.modelValue?.theme || '',
   instructions: props.modelValue?.instructions ?? '',
   instructions_scope: props.modelValue?.instructions_scope ?? 'once',
@@ -208,7 +208,7 @@ function clearOverrides() {
 </script>
 
 <template>
-  <div class="border border-emerald-500/20 rounded-2xl p-4 bg-emerald-950/10 space-y-4">
+  <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
       <div class="space-y-0.5">
         <p class="text-xs font-black uppercase tracking-wider text-emerald-400">
@@ -462,6 +462,11 @@ function clearOverrides() {
             class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none resize-y"
             @input="updateField('instructions', ($event.target as HTMLTextAreaElement).value)"
           />
+          <p v-if="!isSceneMode" class="text-[11px] text-slate-400">
+            Describe what this cluster adventure is about, e.g. <em>"Alex fights through the dungeon to free Edgar from his cell; goblins captured him."</em>
+            On entry, a cluster blueprint (story arc, antagonist, key item, climax) is planned around this premise and every room gets its own theme and generation brief.
+            The scope only limits where entities or loot named here are spawned; the story always spans the whole cluster.
+          </p>
           <p class="text-[11px] text-slate-400">
             Accepts freeform instructions or World-Builder Blueprint blocks ([Scene:], [NPC:], [Container:], [Weapon:], [Item:], ...). In Blueprint blocks, optional <code>depth: 1</code> or <code>depth: max</code> targets specific depths, and spawned entities are automatically deduplicated across the cluster.
           </p>

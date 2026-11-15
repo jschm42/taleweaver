@@ -10,11 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.engine.blueprint.parser import has_blueprint_tags
+from backend.engine.world.dynamic_cluster_architect import generate_dynamic_cluster_blueprint
 from backend.engine.world.dynamic_cluster_blueprint import (
     build_fallback_cluster_blueprint,
     build_node_zone_context,
-    generate_dynamic_cluster_blueprint,
     normalize_cluster_blueprint,
+)
+from backend.engine.world.dynamic_cluster_node_zone import (
+    apply_cluster_node_to_zone,
+    restore_root_zone,
 )
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedScenePayload,
@@ -78,7 +82,7 @@ async def ensure_cluster_blueprint(
     """Ensure a cluster blueprint exists on ``state`` and attach entry ``cluster_node``."""
     existing = get_cluster_blueprint(state, zone["zone_id"])
     if existing is not None:
-        zone["cluster_node"] = build_node_zone_context(existing, "D1_1")
+        apply_cluster_node_to_zone(zone, build_node_zone_context(existing, "D1_1"))
         return existing
 
     raw_bp = await generate_dynamic_cluster_blueprint(
@@ -97,11 +101,12 @@ async def ensure_cluster_blueprint(
     )
     cluster_bp = normalize_cluster_blueprint(raw_bp, zone, entry_scene_id=target_id)
     _store_cluster_blueprint(state, zone["zone_id"], cluster_bp)
-    zone["cluster_node"] = build_node_zone_context(cluster_bp, "D1_1")
+    apply_cluster_node_to_zone(zone, build_node_zone_context(cluster_bp, "D1_1"))
     return cluster_bp
 
 
-def _build_child_base_zone(zone: dict[str, Any]) -> dict[str, Any]:
+def _build_child_base_zone(raw_zone: dict[str, Any]) -> dict[str, Any]:
+    zone = restore_root_zone(raw_zone)
     child_scope = normalize_instructions_scope(zone.get("instructions_scope"))
     child_consumed = bool(zone.get("instructions_consumed")) or (
         child_scope in {"once", "first_scene"}
@@ -256,13 +261,10 @@ async def persist_cluster_graph_from_entry(
         scene_id = str(node.get("scene_id") or "")
         if node_id not in reachable_ids or int(node.get("depth") or 1) < 2:
             continue
-        node_zone = {
-            **child_base,
-            "depth": int(node["depth"]),
-            "theme": str(node.get("theme_hint") or zone["theme"]),
-            "materialized": False,
-            "cluster_node": build_node_zone_context(cluster_bp, node_id),
-        }
+        node_zone = apply_cluster_node_to_zone(
+            {**child_base, "depth": int(node["depth"]), "materialized": False},
+            build_node_zone_context(cluster_bp, node_id),
+        )
         node_zone_by_id[node_id] = node_zone
         if scene_id and scene_id not in existing_scene_ids:
             existing_scene_ids.add(scene_id)

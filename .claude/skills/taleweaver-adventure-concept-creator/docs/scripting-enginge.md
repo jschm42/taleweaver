@@ -390,12 +390,13 @@ Inspects and modifies the avatar's state:
 - `tw.player.damage(amount: int)`: Inflicts `amount` direct damage to the avatar.
 - `tw.player.xp` *(int)*: The protagonist's experience points, including changes made earlier in the same script.
 - `tw.player.add_xp(amount: int)` (also `modify_xp(delta)`): Gives the protagonist `amount` XP; a negative amount takes XP away (never below 0). The player sees `You gain 25 XP (Script).`
-- `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory (case-insensitive).
+- `tw.player.has_item(item_id: str) -> bool` (alias `tw.player.has(item_id)`): Returns `True` if `item_id` is in the inventory (case-insensitive).
 - `tw.player.take_item(item_id: str) -> bool`: Moves an existing world item into the inventory, wherever it is (scene, container, NPC inventory). The entry keeps the item's world data (name, description, image, effects). Returns `False` for an unknown ID.
 - `tw.player.drop_item(item_id: str, scene_id: str = None) -> bool`: Drops a carried item into a scene (default: the protagonist's scene).
 - `tw.player.transfer_item(item_id: str, target_id: str) -> bool`: Hands a carried item to an NPC or puts it into a container.
 - `tw.player.remove_item(item_id: str)`: Takes an item out of the inventory without placing it anywhere.
 - `tw.player.give_item(item_id: str, name: str = None, description: str = None)`: Adds a *new* inventory entry that is not a world item (no image, no effects). To hand over an item that exists in the world, use `take_item` instead.
+- **`tw.inventory` shortcut**: Shorthand namespace delegating to `tw.player` (`tw.inventory.has(item_id)` / `has_item`, `take` / `take_item`, `drop` / `drop_item`, `transfer` / `transfer_item`, `remove` / `remove_item`, `give` / `give_item` / `add` / `add_item`, `items`, `item_ids`, `all()`, `count()`, `'ITEM_ID' in tw.inventory`).
 - To move the protagonist to another scene, use `tw.scene.teleport(scene_id)` (see [`tw.scene`](#twscene)).
 
 ### `tw.scene`

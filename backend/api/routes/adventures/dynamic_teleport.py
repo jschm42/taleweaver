@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.dynamic_scene_media import sync_dynamic_scene_audio
+from backend.engine.world.dynamic_cluster_node_zone import restore_root_zone
 from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
@@ -108,7 +109,7 @@ def _merge_dynamic_teleport_zone(
     req: dict[str, Any], matched_exit: Optional[WorldExit]
 ) -> dict[str, Any]:
     base_zone = (
-        dict(matched_exit.dynamic_zone)
+        restore_root_zone(matched_exit.dynamic_zone)
         if matched_exit and isinstance(matched_exit.dynamic_zone, dict)
         else {}
     )

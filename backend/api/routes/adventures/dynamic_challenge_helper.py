@@ -20,6 +20,7 @@ from backend.engine.scripting.sandbox import SafeAstInterpreter
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedNpc,
     DynamicGeneratedObject,
+    DynamicGeneratedScenePayload,
 )
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -505,6 +506,133 @@ def _promote_climax_boss(
     flag_modified(state, "entity_states")
 
 
+_DEFAULT_ZONE_KEY_NAME = "Zone Key"
+_DEFAULT_ZONE_KEY_DESC = "A distinctive key recovered from a guardian of this area, made to unlock a sealed container nearby."
+
+
+async def resolve_fallback_zone_key_prompt(
+    *,
+    db: AsyncSession,
+    session_id: str,
+    zone: dict[str, Any],
+    payload: DynamicGeneratedScenePayload,
+    max_npcs: int,
+    adventure: Any = None,
+    user: Any = None,
+) -> Optional[tuple[str, str, str]]:
+    """Return ``(name, desc, appearance)`` if this scene needs a fallback Zone Key artwork task."""
+    danger = str(zone.get("danger_level") or "medium").strip().lower()
+    if danger == "peaceful":
+        return None
+    depth = int(zone.get("depth") or 1)
+    max_depth = int(zone.get("max_depth") or 3)
+    if depth >= max_depth and bool(zone.get("cul_de_sac_on_max_depth", True)):
+        return None
+    if not any(npc.attitude == "hostile" for npc in payload.npcs[:max_npcs]):
+        return None
+    for obj in payload.objects[:5]:
+        haystack = f"{obj.id} {obj.name}".lower()
+        if getattr(obj, "is_zone_key", False) or any(
+            tok in haystack for tok in ("key", "schlüssel", "schluessel")
+        ):
+            return None
+    existing_key = await _find_cluster_key(db, session_id, str(zone.get("zone_id") or ""), [])
+    if existing_key is not None:
+        return None
+    return (
+        _DEFAULT_ZONE_KEY_NAME,
+        _DEFAULT_ZONE_KEY_DESC,
+        _build_fallback_key_appearance(zone, adventure, user),
+    )
+
+
+async def _ensure_non_climax_zone_key(
+    *,
+    db: AsyncSession,
+    state: SessionState,
+    zone: dict[str, Any],
+    zone_id: str,
+    target_id: str,
+    hostile_npcs: list[WorldEntity],
+    object_entities: list[WorldEntity],
+    dyn_cfg: Optional[dict[str, Any]],
+    user: Any,
+    adventure: Any,
+    pregenerated_key_image: Optional[str],
+    key_image_pregenerated: bool,
+) -> Optional[WorldEntity]:
+    if not hostile_npcs:
+        return None
+    existing_key = await _find_cluster_key(db, state.session_id, zone_id, object_entities)
+    if existing_key is not None:
+        meta = dict(existing_key.metadata_json or {})
+        meta["dynamic_zone_key_for"] = zone_id
+        existing_key.metadata_json = meta
+        return None
+
+    key_appearance = _build_fallback_key_appearance(zone, adventure, user)
+    key_image = (
+        pregenerated_key_image
+        if key_image_pregenerated
+        else await generate_dynamic_object_image(
+            name=_DEFAULT_ZONE_KEY_NAME,
+            description=_DEFAULT_ZONE_KEY_DESC,
+            appearance=key_appearance,
+            dyn_cfg=dyn_cfg,
+            user=user,
+            adventure=adventure,
+            session_id=state.session_id,
+            prefix=f"{target_id}_zone_key",
+        )
+    )
+    key_entity = WorldEntity(
+        id=f"{target_id}_ZONE_KEY"[:50],
+        template_id=None,
+        session_id=state.session_id,
+        entity_type="OBJECT",
+        name=_DEFAULT_ZONE_KEY_NAME,
+        description=_DEFAULT_ZONE_KEY_DESC,
+        current_scene_id="INVENTORY",
+        image_url=key_image,
+        item_type="STANDARD",
+        is_portable=True,
+        inventory=[],
+        metadata_json={
+            "dynamic_generated": True,
+            "is_zone_key": True,
+            "dynamic_zone_key_for": zone_id,
+        },
+    )
+    db.add(key_entity)
+    carrier = hostile_npcs[0]
+    carrier.inventory = [*list(carrier.inventory or []), key_entity.id]
+    return key_entity
+
+
+async def _lock_climax_chest(
+    db: AsyncSession,
+    session_id: str,
+    zone_id: str,
+    object_entities: list[WorldEntity],
+) -> None:
+    containers = [o for o in object_entities if o.item_type == "CONTAINER"]
+    if not containers:
+        return
+    chest = containers[0]
+    chest_meta = dict(chest.metadata_json or {})
+    if chest_meta.get("locked") and chest_meta.get("item_to_unlock"):
+        return
+    cluster_key = await _find_cluster_key(db, session_id, zone_id, object_entities)
+    if cluster_key is None:
+        return
+    chest_meta["locked"] = True
+    chest_meta["item_to_unlock"] = cluster_key.id
+    chest_meta["lock_description"] = (
+        chest_meta.get("lock_description") or f"Locked. Requires {cluster_key.name}."
+    )
+    chest.metadata_json = chest_meta
+
+
 async def apply_cluster_key_and_climax_progression(
     *,
     db: AsyncSession,
@@ -516,11 +644,13 @@ async def apply_cluster_key_and_climax_progression(
     dyn_cfg: Optional[dict[str, Any]] = None,
     user: Any = None,
     adventure: Any = None,
-) -> None:
+    pregenerated_key_image: Optional[str] = None,
+    key_image_pregenerated: bool = False,
+) -> Optional[WorldEntity]:
     """Tag or spawn an enemy-held zone key on non-climax depth, and enforce boss + locked chest at climax."""
     danger = str(zone.get("danger_level") or "medium").strip().lower()
     if danger == "peaceful":
-        return
+        return None
 
     depth = int(zone.get("depth") or 1)
     max_depth = int(zone.get("max_depth") or 3)
@@ -529,67 +659,22 @@ async def apply_cluster_key_and_climax_progression(
     hostile_npcs = [n for n in npc_entities if n.is_attackable]
 
     if not is_climax:
-        if not hostile_npcs:
-            return
-        existing_key = await _find_cluster_key(db, state.session_id, zone_id, object_entities)
-        if existing_key is not None:
-            meta = dict(existing_key.metadata_json or {})
-            meta["dynamic_zone_key_for"] = zone_id
-            existing_key.metadata_json = meta
-            return
-        key_name = "Zone Key"
-        key_desc = (
-            "A distinctive key recovered from a guardian of this area, "
-            "made to unlock a sealed container nearby."
-        )
-        key_appearance = _build_fallback_key_appearance(zone, adventure, user)
-        key_image = await generate_dynamic_object_image(
-            name=key_name,
-            description=key_desc,
-            appearance=key_appearance,
+        return await _ensure_non_climax_zone_key(
+            db=db,
+            state=state,
+            zone=zone,
+            zone_id=zone_id,
+            target_id=target_id,
+            hostile_npcs=hostile_npcs,
+            object_entities=object_entities,
             dyn_cfg=dyn_cfg,
             user=user,
             adventure=adventure,
-            session_id=state.session_id,
-            prefix=f"{target_id}_zone_key",
+            pregenerated_key_image=pregenerated_key_image,
+            key_image_pregenerated=key_image_pregenerated,
         )
-        key_entity = WorldEntity(
-            id=f"{target_id}_ZONE_KEY"[:50],
-            template_id=None,
-            session_id=state.session_id,
-            entity_type="OBJECT",
-            name=key_name,
-            description=key_desc,
-            current_scene_id="INVENTORY",
-            image_url=key_image,
-            item_type="STANDARD",
-            is_portable=True,
-            inventory=[],
-            metadata_json={
-                "dynamic_generated": True,
-                "is_zone_key": True,
-                "dynamic_zone_key_for": zone_id,
-            },
-        )
-        db.add(key_entity)
-        carrier = hostile_npcs[0]
-        carrier.inventory = [*list(carrier.inventory or []), key_entity.id]
-        return
 
     party_hp = await compute_party_hp_budget(db, state)
     _promote_climax_boss(hostile_npcs, danger, state, party_hp)
-    containers = [o for o in object_entities if o.item_type == "CONTAINER"]
-    if not containers:
-        return
-    chest = containers[0]
-    chest_meta = dict(chest.metadata_json or {})
-    if chest_meta.get("locked") and chest_meta.get("item_to_unlock"):
-        return
-    cluster_key = await _find_cluster_key(db, state.session_id, zone_id, object_entities)
-    if cluster_key is not None:
-        chest_meta["locked"] = True
-        chest_meta["item_to_unlock"] = cluster_key.id
-        chest_meta["lock_description"] = (
-            chest_meta.get("lock_description") or f"Locked. Requires {cluster_key.name}."
-        )
-        chest.metadata_json = chest_meta
+    await _lock_climax_chest(db, state.session_id, zone_id, object_entities)
+    return None

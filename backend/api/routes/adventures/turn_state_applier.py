@@ -540,6 +540,7 @@ class TurnStateApplier:
                         world_exit=valid_exit,
                         origin_scene=old_sc_db,
                         language=self.manager.adventure.language or "English",
+                        pending_visuals=getattr(self.manager, "pending_dynamic_visuals", None),
                     )
                 elif target_sc_db and is_unmaterialized_dynamic_scene(self.state, target_sc_db):
                     await materialize_existing_dynamic_scene(
@@ -553,6 +554,7 @@ class TurnStateApplier:
                         or event.exit_label
                         or "Passage",
                         language=self.manager.adventure.language or "English",
+                        pending_visuals=getattr(self.manager, "pending_dynamic_visuals", None),
                     )
 
                 self.state.current_scene_id = event.new_scene_id
