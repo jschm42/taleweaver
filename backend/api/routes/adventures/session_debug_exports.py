@@ -3,7 +3,9 @@
 ``GET /adventures/{game_id}/session-debug/images.zip`` collects the images of the session's
 scenes (template scenes and dynamically generated ones), NPCs and objects (session rows,
 including dynamic spawns) plus the protagonist portrait. Only local ``/data/...`` files are
-packed; remote URLs and missing files are listed in ``missing.txt`` inside the archive.
+packed, and only real image files (``utils.image_files``): ``image_url`` may come from imported
+data, and ``DATA_DIR`` also holds the database. Remote URLs, missing files and non-images are
+listed in ``missing.txt`` inside the archive.
 
 ``GET /adventures/{game_id}/session-debug/export/{entity_id}`` downloads one session NPC or
 item (dynamic spawns too) as the editor's ``.twe`` bundle, with its current session values.
@@ -39,7 +41,7 @@ from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldScene
 from backend.utils.download_headers import attachment_disposition
-from backend.utils.path_security import data_url_to_local_path
+from backend.utils.image_files import local_image_file
 
 router = APIRouter(tags=["Gameplay"])
 
@@ -77,9 +79,8 @@ def _image_url(row: Any, entity_states: dict[str, Any]) -> str:
 
 
 def _local_path(url: str) -> Optional[str]:
-    """The validated local file of a /data URL (query string dropped), or None."""
-    path = data_url_to_local_path(url.split("?", 1)[0].split("#", 1)[0])
-    return path if path and os.path.isfile(path) else None
+    """The validated local image file of a /data URL, or None (non-images are never packed)."""
+    return local_image_file(url)
 
 
 def _archive_name(ref: ImageRef, path: str, used: set[str]) -> str:

@@ -5,6 +5,7 @@ import os
 import zipfile
 
 import pytest
+from PIL import Image
 
 from backend.api.routes.adventures.session_debug_exports import ImageRef, build_image_zip
 from backend.core.config import settings
@@ -13,8 +14,8 @@ from backend.core.config import settings
 def _write_image(relative: str) -> str:
     path = os.path.join(settings.DATA_DIR, *relative.split("/"))
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as handle:
-        handle.write(b"PNGDATA")
+    fmt = "WEBP" if relative.endswith(".webp") else "PNG"
+    Image.new("RGB", (4, 4), (200, 30, 30)).save(path, format=fmt)
     return f"/data/{relative}"
 
 
@@ -41,6 +42,27 @@ def test_zip_packs_local_images_and_lists_the_rest(tmp_path, monkeypatch):
     assert "npcs/DIRE_WOLF__Fang_the_Dire_Wolf.webp" in names
     assert "missing.txt" in names
     assert len(result.missing) == 3
+
+
+def test_zip_never_packs_non_image_files(tmp_path, monkeypatch):
+    # Arrange: an entity whose image_url points at the database (e.g. from a crafted import)
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    (tmp_path / "taleweaver.db").write_bytes(b"SQLite format 3" + bytes(100))
+    disguised = tmp_path / "sessions" / "s1" / "fake.png"
+    disguised.parent.mkdir(parents=True)
+    disguised.write_bytes(b"SQLite format 3" + bytes(100))
+    refs = [
+        ImageRef("npcs", "THIEF", "Thief", "/data/taleweaver.db"),
+        ImageRef("npcs", "THIEF2", "Thief", "/data/sessions/s1/fake.png"),
+    ]
+
+    # Act
+    result = build_image_zip(refs)
+
+    # Assert
+    names = zipfile.ZipFile(io.BytesIO(result.data)).namelist()
+    assert result.packed == 0
+    assert names == ["missing.txt"]
 
 
 @pytest.mark.asyncio

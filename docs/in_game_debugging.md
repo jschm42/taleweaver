@@ -82,7 +82,7 @@ The **World Map** tab of the debug inspector (bug icon) shows every scene, unmas
 The inspector reloads its data after each action.
 
 ### Downloading Images and Entities
-- **Images ZIP** (inspector header) downloads every image of the session in one archive: scenes (template and dynamically generated), NPCs and items (including dynamic spawns) and the protagonist portrait, sorted into `scenes/`, `npcs/`, `items/` and `protagonist/`. Images that are not stored locally (remote URLs, missing files) are listed in `missing.txt`.
+- **Images ZIP** (inspector header) downloads every image of the session in one archive: scenes (template and dynamically generated), NPCs and items (including dynamic spawns) and the protagonist portrait, sorted into `scenes/`, `npcs/`, `items/` and `protagonist/`. Only real image files are packed (PNG, JPEG, WebP, GIF, checked by content); remote URLs, missing files and anything that is not an image are listed in `missing.txt`.
 - The **download icon** next to an NPC's or item's ID exports that entity with its current session values and image as a `.twe` bundle, the same format as the editor's *Export (.twe)*, so it can be imported into any adventure (editor: *Import NPC* / *Import Item*).
 
 Both need debug mode and only work for your own session (`GET /adventures/{game_id}/session-debug/images.zip`, `GET /adventures/{game_id}/session-debug/export/{entity_id}`).
