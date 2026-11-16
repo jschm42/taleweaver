@@ -21,6 +21,7 @@ from backend.api.routes.adventures.agent_instruction import (
     normalize_instruction,
 )
 from backend.api.routes.adventures.agent_known_map import format_known_map, load_known_map
+from backend.api.routes.adventures.agent_objectives import format_objectives
 from backend.api.routes.adventures.agent_party_view import format_abilities_and_party
 from backend.api.routes.adventures.agent_persona import format_protagonist_profile
 from backend.api.routes.adventures.agent_travel import TRAVEL_KEY
@@ -489,6 +490,7 @@ class AgentService:
             mechanics_system_prompt=player_world_context,
             visible_scene_items_text=visible_scene_items_text,
             abilities_text=await format_abilities_and_party(db, state, avatar),
+            objectives_text=format_objectives(adventure, state),
             walkthrough_text=walkthrough_text,
             instruction_text=instruction_prompt(agent_state),
             objective_block=objective_block,

@@ -31,6 +31,7 @@ from backend.api.routes.adventures.dialog_service import (
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import database as core_database
+from backend.core.global_settings import apply_global_settings
 from backend.engine.scripting.dialog import pending_dialog
 from backend.models.chat import ChatMessage
 from backend.models.user import User
@@ -250,11 +251,25 @@ async def _agent_finish_events(db, manager: GameTurnManager) -> AsyncGenerator[s
     yield _sse("agent_state", build_agent_snapshot(manager.state, manager.adventure))
 
 
+async def _user_in_session(db, current_user: User) -> User:
+    """The player loaded in the turn's own session, so changes to it (earned awards) persist.
+
+    ``current_user`` belongs to the request's session; the agent turn streams with its own
+    session, where changes to a foreign instance would never be committed.
+    """
+    user = await db.get(User, current_user.id)
+    if user is None:
+        return current_user
+    await apply_global_settings(db, user)
+    return user
+
+
 async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[str, None]:
     yield _sse("status", {"content": "Agent is thinking..."})
 
     async with core_database.AsyncSessionLocal() as db:
-        manager = GameTurnManager(db, game_id, current_user)
+        user = await _user_in_session(db, current_user)
+        manager = GameTurnManager(db, game_id, user)
         await manager.initialize()
         try:
             before = await take_snapshot(db, game_id, manager.avatar.id)
@@ -263,7 +278,7 @@ async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[
                 async for event in _agent_dialog_events(db, manager, dialog, before):
                     yield event
                 return
-            decision, decision_failed = await _decide(db, game_id, current_user, manager)
+            decision, decision_failed = await _decide(db, game_id, user, manager)
             if not decision or decision.is_stuck_or_bug:
                 events = _agent_issue_events(db, game_id, manager, decision, decision_failed)
             else:

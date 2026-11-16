@@ -361,3 +361,21 @@ async def test_agent_turn_clears_instruction_when_done(auth_client, setup_test_d
             .first()
         )
         assert AgentService.get_agent_state(state)["instruction"] == ""
+
+
+async def test_agent_turn_uses_the_player_of_its_own_db_session(setup_test_db):
+    """Earned awards live on the user: the agent's session must own that instance to save them."""
+    from backend.api.routes.adventures.agent_turn_stream import _user_in_session
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as request_db:
+        request_user = User(username="agent_award_user", hashed_password="hash", role="user")
+        request_db.add(request_user)
+        await request_db.commit()
+
+        async with TestSessionLocal() as turn_db:
+            user = await _user_in_session(turn_db, request_user)
+
+            assert user is not request_user
+            assert user in turn_db  # changes such as earned_awards are committed with the turn
+            assert user.id == request_user.id

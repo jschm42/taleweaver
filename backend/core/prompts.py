@@ -1102,6 +1102,8 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "{mechanics_system_prompt}\n\n"
     "--- CURRENT SCENE ITEMS (VISIBLE NOW) ---\n"
     "{visible_scene_items_text}\n\n"
+    "--- OBJECTIVES (your quest log and the clock) ---\n"
+    "{objectives_text}\n\n"
     "--- ABILITIES & PARTY ---\n"
     "{abilities_text}\n\n"
     "--- OFFICIAL ADVENTURE WALKTHROUGH/SOLUTION ---\n"

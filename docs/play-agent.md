@@ -78,6 +78,10 @@ sheet). It speaks with `/say` in the hero's voice and has the same actions as yo
   the hero (or a badly wounded companion with an "ally" ability), marks its focus target for the
   companion, drinks potions, rests or runs, and collects the loot afterwards.
 
+It knows its goals like you do: the current chapter and the quests of your quest log, and, in
+adventures with a clock, the in-game time and how many minutes one action costs, so it works
+towards the chapter goal instead of wandering until a deadline passes.
+
 It sees only what you see: hidden objects and exits, lock codes and game master notes stay
 hidden, and unexplored places stay unnamed on its map. A new instruction from you ends a trip.
 
