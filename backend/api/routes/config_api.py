@@ -27,6 +27,7 @@ from backend.api.routes.settings_normalization import (
 )
 from backend.api.routes.tts_api import test_tts_connection_v2
 from backend.core.api_keys import (
+    SPEECH_KEY_PROVIDERS,
     PersonalKeyRequiredError,
     has_api_key,
     personal_key_message,
@@ -622,6 +623,7 @@ async def get_settings(
             {p["id"] for p in LLM_PROVIDERS}
             | {p["id"] for p in IMAGE_PROVIDERS}
             | {p["id"] for p in TTS_PROVIDERS}
+            | {p["id"] for p in SPEECH_KEY_PROVIDERS}
         )
         for p in all_providers:
             # Check environment first

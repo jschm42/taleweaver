@@ -34,6 +34,8 @@ from backend.engine.audio.tts_helpers import (
 logger = logging.getLogger(__name__)
 
 OPENAI_COMPATIBLE_PROVIDER: Final = "custom_openai"
+# Vault entry of the speech server's key (apart from the OpenAI-compatible LLM key).
+OPENAI_COMPATIBLE_SPEECH_KEY: Final = "custom_openai_tts"
 RESPONSE_FORMATS: Final = ("mp3", "wav", "pcm")
 DEFAULT_RESPONSE_FORMAT: Final = "mp3"
 _DISCOVERY_TIMEOUT_SECONDS: Final = 15.0
@@ -85,14 +87,15 @@ def normalize_response_format(value: object) -> str:
 
 
 def resolve_speech_api_key(keys: Optional[Mapping[str, str]], base_url: str) -> Optional[str]:
-    """Same rule as the OpenAI-compatible LLM: own key, else OpenRouter's for openrouter.ai.
+    """The speech key (``custom_openai_tts``), else OpenRouter's for openrouter.ai, else none.
 
-    Raises ``PersonalKeyRequiredError`` when the ``custom_openai`` key is blocked for the user.
+    The OpenAI-compatible LLM key is never used, so it cannot leak to a speech server.
+    Raises ``PersonalKeyRequiredError`` when the speech key is blocked for the user.
     """
-    if has_api_key(keys, OPENAI_COMPATIBLE_PROVIDER) or is_blocked(
-        keys, OPENAI_COMPATIBLE_PROVIDER
+    if has_api_key(keys, OPENAI_COMPATIBLE_SPEECH_KEY) or is_blocked(
+        keys, OPENAI_COMPATIBLE_SPEECH_KEY
     ):
-        return resolve_api_key(keys, OPENAI_COMPATIBLE_PROVIDER)
+        return resolve_api_key(keys, OPENAI_COMPATIBLE_SPEECH_KEY)
     if _is_openrouter(base_url) and has_api_key(keys, "openrouter"):
         return resolve_api_key(keys, "openrouter")
     return None

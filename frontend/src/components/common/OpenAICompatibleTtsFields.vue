@@ -118,7 +118,7 @@ onBeforeUnmount(() => clearTimeout(voiceTimer))
       <p class="text-[11px] text-slate-500">
         Ends in <code class="text-slate-400">/v1</code>. Examples: <code class="text-slate-400">http://127.0.0.1:8880/v1</code> (Kokoro-FastAPI),
         <code class="text-slate-400">https://api.openai.com/v1</code>, <code class="text-slate-400">https://openrouter.ai/api/v1</code>.
-        The key is the <strong>OpenAI-Compatible API Key</strong> from Provider Keys (optional; OpenRouter URLs fall back to the OpenRouter key).
+        The key is the <strong>OpenAI-Compatible Speech</strong> key from the Provider Vault (optional, separate from the LLM key; OpenRouter URLs fall back to the OpenRouter key).
       </p>
       <p v-if="loadError" class="text-[11px] text-amber-400">{{ loadError }}</p>
     </div>

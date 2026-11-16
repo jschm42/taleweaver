@@ -76,8 +76,9 @@ export async function refreshConfig() {
       }
       // Speech starts on its own when TTS is usable (enabled + provider key) and the admin
       // has "start automatically" on; players can still switch it off.
-      // Browser speech needs no key.
-      const ttsConfigured = !!tts.enabled && (provider === 'browser' || !!data.keys?.[provider])
+      // Browser speech and OpenAI-compatible speech servers (key optional) need no vault key.
+      const keyless = provider === 'browser' || provider === 'custom_openai'
+      const ttsConfigured = !!tts.enabled && (keyless || !!data.keys?.[provider])
       audioService.applyAutoSpeechDefault(ttsConfigured && tts.auto_speak !== false)
     }
     
