@@ -30,6 +30,9 @@ import ImmersiveInputBar from './immersive/ImmersiveInputBar.vue'
 import TalentMenu from '@/components/game/TalentMenu.vue'
 import SceneTransitionOverlay from './immersive/SceneTransitionOverlay.vue'
 import PlayAgentPanel from './immersive/PlayAgentPanel.vue'
+import PlayAgentMiniDock from './immersive/PlayAgentMiniDock.vue'
+import { usePlayAgent } from '@/composables/usePlayAgent'
+import { useNotifications } from '@/composables/useNotifications'
 import SceneSidebar from './immersive/SceneSidebar.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useSceneSidebar } from '@/skins/useSceneSidebar'
@@ -191,6 +194,47 @@ const {
   sheet: toRef(props, 'sheet'),
 })
 
+// --- Play-Agent: floating controls (minimizable) and the Auto-Play card ---
+const {
+  isMinimized: playAgentMinimized,
+  start: startPlayAgent,
+  sendInstruction: sendAgentInstruction,
+} = usePlayAgent()
+const { addNotification } = useNotifications()
+
+// While the agent plays, the chat input talks to the agent (also during a running step).
+const canSendChat = computed((): boolean => {
+  if (!props.sheet?.agent_active) return canSendInput.value
+  const running = ['connected', 'completed', 'loading', 'connecting'].includes(props.status)
+  return running && !props.inputLocked
+})
+
+const AGENT_COMMANDS = ['/playagent', '/play-agent']
+const INSTRUCT_COMMAND = '/instruct'
+
+/**
+ * Chat input while the Play-Agent plays: plain text and `/instruct <text>` become its
+ * instruction, `/playagent ...` runs as usual, other commands wait until the player is back.
+ * Returns true when the input was handled here.
+ */
+function routeToPlayAgent(content: string): boolean {
+  const text = content.trim()
+  const [head = '', ...rest] = text.split(/\s+/)
+  const command = head.toLowerCase()
+  if (AGENT_COMMANDS.includes(command)) return false
+  if (command === INSTRUCT_COMMAND) {
+    if (!rest.length) return false
+    void sendAgentInstruction(rest.join(' '))
+    return true
+  }
+  if (text.startsWith('/')) {
+    addNotification('While the Play-Agent plays, use /instruct <text> or /playagent.', 'info')
+    return true
+  }
+  void sendAgentInstruction(text)
+  return true
+}
+
 // --- Dialog skin ---
 const { textDensity } = useTextDensity()
 const { textScale } = useTextScale()
@@ -254,6 +298,7 @@ useGameShortcuts({
 })
 
 function handleSend(content: string) {
+  if (props.sheet?.agent_active && routeToPlayAgent(content)) return
   showStory()
   emit('send', content)
   storyFeedRef.value?.showLatest()
@@ -455,8 +500,17 @@ defineExpose({
         @take-direct="(item) => emit('takeDirect', item)"
       />
 
-      <!-- 3D. RIGHT / PLAY-AGENT CONTROL PANEL -->
-      <PlayAgentPanel v-if="props.sheet?.agent_active" class="ml-2 sm:ml-3 lg:ml-4" />
+      <!-- 3D. PLAY-AGENT CONTROLS: float over the stage so the story keeps its full width -->
+      <template v-if="props.sheet?.agent_active">
+        <PlayAgentMiniDock
+          v-if="playAgentMinimized"
+          class="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 max-h-[calc(100%_-_1rem)] overflow-y-auto tw-agent-scroll"
+        />
+        <PlayAgentPanel
+          v-else
+          class="absolute top-2 right-2 sm:top-3 sm:right-3 z-30 max-h-[calc(100%_-_1rem)] sm:max-h-[calc(100%_-_1.5rem)]"
+        />
+      </template>
     </div>
 
     <!-- 4. BOTTOM ACTION BAR & USER INPUT -->
@@ -484,6 +538,8 @@ defineExpose({
           :clock-tick="props.clockTick"
           :exp="props.exp"
           :hero-image="props.sheet?.profile_image"
+          :agent-active="!!props.sheet?.agent_active"
+          :can-start-agent="props.status === 'connected' && !props.inputLocked"
           @open-quests="emit('openQuests')"
           @open-map="emit('openMap')"
           @open-sheet="emit('openSheet')"
@@ -491,6 +547,7 @@ defineExpose({
           @open-walkthrough="emit('openWalkthrough')"
           @open-memories="emit('openMemories')"
           @open-debug="emit('openDebug')"
+          @open-play-agent="startPlayAgent"
           @select-suggestion="handleSuggestionSelect"
           @shuffle-suggestions="handleSuggestionShuffle"
         />
@@ -498,7 +555,7 @@ defineExpose({
 
       <ImmersiveInputBar
         ref="inputBarRef"
-        :can-send-input="canSendInput"
+        :can-send-input="canSendChat"
         :is-evaluating="isEvaluating"
         :status-text="props.statusText"
         :locked-text="props.status === 'game_over' && props.inputLocked ? 'Game over: this story has ended. Load a save to play on.' : ''"

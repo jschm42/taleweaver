@@ -1,38 +1,54 @@
 <script setup lang="ts">
 /**
- * PlayAgentPanel — Right-side control panel for the autonomous Play-Agent.
+ * PlayAgentPanel — Floating control panel of the Play-Agent, in the adventure's skin.
  *
- * Shown while the agent is active. Lets the player switch between Auto and Step mode,
- * trigger the next step, pause/resume, set the pause between steps (fixed delay and/or
- * waiting for text-to-speech), change the personality and stop the agent.
+ * Shown while the agent plays for the player. Lets the player switch between Auto and Step
+ * mode, trigger the next step, pause/resume, set the pause between steps, change the
+ * personality and dialogue level, give it an instruction for what to do next, and stop it.
+ * The minimize button shrinks it to PlayAgentMiniDock.
+ * Walkthrough guidance is only selectable once the current chapter's walkthrough is unlocked
+ * with XP (always in debug mode); Monkey mode only appears in debug mode.
  */
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
-import { PLAY_AGENT_PERSONALITIES, PLAY_AGENT_STEP_DELAYS, usePlayAgent } from '@/composables/usePlayAgent'
+import { computed, nextTick, ref, watch } from 'vue'
+import { ChevronDown, Minus, Pause, Play, Square, StepForward } from 'lucide-vue-next'
+import {
+  PLAY_AGENT_DIALOGUE_LEVELS,
+  PLAY_AGENT_PERSONALITIES,
+  PLAY_AGENT_STEP_DELAYS,
+  usePlayAgent,
+  usePlayAgentStatusLabel,
+} from '@/composables/usePlayAgent'
+import PlayAgentInstruction from './PlayAgentInstruction.vue'
 
 const {
   sheet,
   agentPaused,
   agentLog,
-  statusText,
   isStepMode,
   stepDelay,
   waitForTts,
-  autoLoopPhase,
-  nextStepAt,
+  personality,
+  dialogueLevel,
   isBusy,
   canRunStep,
+  walkthroughUnlocked,
+  debugTools,
+  setMinimized,
   setStepMode,
   setPersonality,
   setWalkthroughAllowed,
   setMonkeyMode,
   setStepDelay,
   setWaitForTts,
+  setDialogueLevel,
   nextStep,
   togglePause,
   stop,
 } = usePlayAgent()
 
-const personality = computed(() => sheet.value?.agent_personality || 'casual')
+const statusLabel = usePlayAgentStatusLabel()
+
+const heroName = computed(() => sheet.value?.name || 'your hero')
 const allowWalkthrough = computed(() => sheet.value?.agent_allow_walkthrough ?? true)
 const monkeyMode = computed(() => Boolean(sheet.value?.agent_monkey_mode))
 
@@ -53,27 +69,43 @@ watch(() => agentLog.value.length, async () => {
   logContainer.value?.scrollTo({ top: logContainer.value.scrollHeight, behavior: 'smooth' })
 })
 
-// Ticks once per second while a countdown to the next step is shown.
-const now = ref(Date.now())
-const clockTimer = window.setInterval(() => {
-  now.value = Date.now()
-}, 1000)
-onUnmounted(() => window.clearInterval(clockTimer))
+// Settings start collapsed so the essentials fit; the choice is remembered per browser.
+const SETTINGS_STORAGE_KEY = 'tw.playAgent.settingsOpen'
 
-const secondsToNextStep = computed(() =>
-  nextStepAt.value ? Math.max(0, Math.ceil((nextStepAt.value - now.value) / 1000)) : 0
+function readSettingsOpen(): boolean {
+  try {
+    return window.localStorage.getItem(SETTINGS_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const settingsOpen = ref(readSettingsOpen())
+
+function toggleSettings(): void {
+  settingsOpen.value = !settingsOpen.value
+  try {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, settingsOpen.value ? '1' : '0')
+  } catch {
+    // Blocked storage: the section just starts collapsed next time.
+  }
+}
+
+const walkthroughTitle = computed(() =>
+  walkthroughUnlocked.value
+    ? 'Let the agent follow the walkthrough of the current chapter'
+    : "Unlock the current chapter's walkthrough under Hints (costs XP) to let the agent use it"
 )
 
-const statusLabel = computed(() => {
-  if (isBusy.value) return statusText.value || 'Agent is thinking...'
-  if (isStepMode.value) return 'Waiting for next step'
-  if (agentPaused.value) return 'Paused - press Resume to continue'
-  if (autoLoopPhase.value === 'speech') return 'Waiting for the narration to finish...'
-  if (autoLoopPhase.value === 'delay' && secondsToNextStep.value > 1) {
-    return `Next step in ${secondsToNextStep.value} s`
-  }
-  return 'Playing autonomously'
-})
+const dialogueIndex = computed(() =>
+  Math.max(0, PLAY_AGENT_DIALOGUE_LEVELS.findIndex(level => level.id === dialogueLevel.value))
+)
+const dialogueOption = computed(() => PLAY_AGENT_DIALOGUE_LEVELS[dialogueIndex.value])
+
+async function handleDialogueChange(event: Event): Promise<void> {
+  const level = PLAY_AGENT_DIALOGUE_LEVELS[Number((event.target as HTMLInputElement).value)]
+  if (level) await setDialogueLevel(level.id)
+}
 
 const delayOptions = computed(() => {
   const known = PLAY_AGENT_STEP_DELAYS.some(d => d.seconds === stepDelay.value)
@@ -104,158 +136,183 @@ async function applyCustomPersonality(): Promise<void> {
 
 <template>
   <aside
-    class="flex flex-col shrink-0 w-64 lg:w-72 max-h-full min-h-0 bg-slate-950/90 backdrop-blur-xl border border-indigo-500/30 rounded-2xl shadow-[0_0_25px_rgba(99,102,241,0.15)] text-slate-200 overflow-hidden"
+    class="tw-agent-panel flex flex-col w-72 max-w-[calc(100vw-2rem)] min-h-0 overflow-hidden"
     aria-label="Play-Agent controls"
   >
     <!-- Header -->
-    <header class="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-800/80">
+    <header class="flex items-center justify-between gap-2 px-4 py-3 border-b tw-agent-divider">
       <div class="flex items-center gap-2 min-w-0">
-        <span
-          :class="[
-            'w-2.5 h-2.5 rounded-full shrink-0',
-            isBusy ? 'bg-indigo-400 animate-ping' : agentPaused ? 'bg-amber-400' : 'bg-emerald-400'
-          ]"
-        ></span>
-        <h2 class="text-xs font-black uppercase tracking-[0.2em] text-indigo-200">Play-Agent</h2>
+        <span :class="['tw-agent-dot', { 'is-busy': isBusy, 'is-paused': !isBusy && agentPaused }]"></span>
+        <div class="min-w-0">
+          <h2 class="tw-panel-title truncate">Play-Agent</h2>
+          <p class="text-[10px] tw-muted truncate">Plays as {{ heroName }}</p>
+        </div>
       </div>
-      <button
-        class="px-2.5 py-1 bg-red-600/80 hover:bg-red-600 border border-red-500/50 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
-        title="Stop the Play-Agent and take back control"
-        @click="stop"
-      >
-        Stop
-      </button>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button
+          class="tw-dialog-icon-button w-7 h-7"
+          title="Minimize: keep the agent playing with a small control dock"
+          aria-label="Minimize Play-Agent panel"
+          @click="setMinimized(true)"
+        >
+          <Minus class="w-3.5 h-3.5" />
+        </button>
+        <button
+          class="tw-dialog-icon-button w-7 h-7"
+          title="Stop the Play-Agent and take back control"
+          aria-label="Stop Play-Agent"
+          @click="stop"
+        >
+          <Square class="w-3 h-3" />
+        </button>
+      </div>
     </header>
 
-    <div class="flex flex-col gap-4 px-4 py-3 border-b border-slate-800/80">
-      <p class="text-[11px] text-slate-400 truncate" :title="statusLabel">{{ statusLabel }}</p>
+    <!-- One scrolling body: essentials first, settings collapsible, thoughts last. -->
+    <div class="flex-auto min-h-0 overflow-y-auto tw-agent-scroll">
+      <div class="flex flex-col gap-3 px-4 py-3">
+        <p class="text-[11px] tw-muted truncate" :title="statusLabel" aria-live="polite">{{ statusLabel }}</p>
 
-      <!-- Mode -->
-      <div class="flex flex-col gap-1.5">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Mode</span>
-        <div class="grid grid-cols-2 gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800">
+        <!-- What the agent should do next (same as /instruct in the chat) -->
+        <PlayAgentInstruction />
+
+        <!-- Mode and primary action -->
+        <div class="flex items-stretch gap-2">
+          <div class="tw-agent-segment flex-1" role="group" aria-label="Mode">
+            <button :aria-pressed="!isStepMode" @click="setStepMode(false)">Auto</button>
+            <button :aria-pressed="isStepMode" @click="setStepMode(true)">Step</button>
+          </div>
           <button
-            :class="[
-              'py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors',
-              !isStepMode ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
-            ]"
-            @click="setStepMode(false)"
+            v-if="isStepMode"
+            :disabled="!canRunStep"
+            class="tw-dialog-button flex-1 !px-2"
+            @click="nextStep"
           >
-            Auto
+            <StepForward class="w-3.5 h-3.5" />
+            {{ isBusy ? 'Running' : 'Next' }}
           </button>
-          <button
-            :class="[
-              'py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors',
-              isStepMode ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
-            ]"
-            @click="setStepMode(true)"
-          >
-            Step
+          <button v-else class="tw-dialog-button flex-1 !px-2" @click="togglePause">
+            <component :is="agentPaused ? Play : Pause" class="w-3.5 h-3.5" />
+            {{ agentPaused ? 'Resume' : 'Pause' }}
           </button>
+        </div>
+
+        <!-- Settings (collapsible) -->
+        <button
+          class="tw-agent-label flex items-center justify-between gap-2 pt-2 border-t tw-agent-divider hover:opacity-80"
+          :aria-expanded="settingsOpen"
+          @click="toggleSettings"
+        >
+          <span>Settings</span>
+          <ChevronDown :class="['w-3.5 h-3.5 transition-transform', settingsOpen ? 'rotate-180' : '']" />
+        </button>
+
+        <div v-if="settingsOpen" class="flex flex-col gap-3">
+          <!-- Personality -->
+          <label class="flex flex-col gap-1.5">
+            <span class="tw-agent-label">Play style</span>
+            <select v-model="selectedPersonality" class="tw-agent-field" @change="handlePersonalityChange">
+              <option v-for="p in PLAY_AGENT_PERSONALITIES" :key="p.id" :value="p.id">{{ p.label }}</option>
+            </select>
+          </label>
+          <div v-if="selectedPersonality === 'custom'" class="flex flex-col gap-1.5">
+            <textarea
+              v-model="customText"
+              rows="3"
+              placeholder="Describe how the agent should play..."
+              class="tw-agent-field resize-none"
+            ></textarea>
+            <button
+              :disabled="!customText.trim() || !customDirty"
+              class="tw-dialog-button tw-dialog-button--ghost self-end !px-2.5 !py-1 !text-[10px]"
+              @click="applyCustomPersonality"
+            >
+              Apply
+            </button>
+          </div>
+
+          <!-- Dialogue with characters: taciturn ... full roleplay -->
+          <label class="flex flex-col gap-1" :title="dialogueOption.hint">
+            <span class="flex items-baseline justify-between gap-2">
+              <span class="tw-agent-label">Dialogue</span>
+              <span class="text-[11px] font-bold">{{ dialogueOption.label }}</span>
+            </span>
+            <input
+              type="range"
+              min="0"
+              :max="PLAY_AGENT_DIALOGUE_LEVELS.length - 1"
+              step="1"
+              :value="dialogueIndex"
+              class="tw-agent-range"
+              :aria-valuetext="dialogueOption.label"
+              @change="handleDialogueChange"
+            />
+            <span class="flex justify-between text-[9px] tw-muted uppercase tracking-wider">
+              <span>Taciturn</span>
+              <span>Full roleplay</span>
+            </span>
+            <span class="text-[10px] tw-muted leading-snug">{{ dialogueOption.hint }}</span>
+          </label>
+
+          <!-- Pacing (Auto mode) -->
+          <div v-if="!isStepMode" class="flex flex-col gap-1.5">
+            <label class="flex flex-col gap-1.5">
+              <span class="tw-agent-label">Delay between steps</span>
+              <select
+                :value="stepDelay"
+                class="tw-agent-field"
+                title="Extra pause before the agent plays its next step"
+                @change="handleDelayChange"
+              >
+                <option v-for="d in delayOptions" :key="d.seconds" :value="d.seconds">{{ d.label }}</option>
+              </select>
+            </label>
+            <label
+              class="tw-agent-check"
+              title="Only continue once text-to-speech has finished reading the narration (needs auto-speech)"
+            >
+              <input type="checkbox" :checked="waitForTts" @change="setWaitForTts(!waitForTts)" />
+              Wait for speech to finish
+            </label>
+          </div>
+
+          <!-- Options -->
+          <div class="flex flex-col gap-1.5">
+            <label :class="['tw-agent-check', { 'is-disabled': !walkthroughUnlocked }]" :title="walkthroughTitle">
+              <input
+                type="checkbox"
+                :checked="allowWalkthrough && walkthroughUnlocked"
+                :disabled="!walkthroughUnlocked"
+                @change="setWalkthroughAllowed(!allowWalkthrough)"
+              />
+              Use walkthrough
+            </label>
+            <p v-if="!walkthroughUnlocked" class="text-[10px] tw-muted leading-snug pl-6">
+              Unlock this chapter's walkthrough under Hints first (costs XP).
+            </p>
+            <label
+              v-if="debugTools"
+              class="tw-agent-check"
+              title="Debug: deliberately try invalid or chaotic actions to stress-test the engine"
+            >
+              <input type="checkbox" :checked="monkeyMode" @change="setMonkeyMode(!monkeyMode)" />
+              Monkey mode (debug)
+            </label>
+          </div>
         </div>
       </div>
 
-      <!-- Primary action -->
-      <button
-        v-if="isStepMode"
-        :disabled="!canRunStep"
-        class="w-full py-2 bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-[11px] font-black uppercase tracking-[0.15em] transition-all active:scale-95"
-        @click="nextStep"
-      >
-        {{ isBusy ? 'Running...' : 'Next Step' }}
-      </button>
-      <button
-        v-else
-        class="w-full py-2 bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-500/50 text-white rounded-lg text-[11px] font-black uppercase tracking-[0.15em] transition-all active:scale-95"
-        @click="togglePause"
-      >
-        {{ agentPaused ? 'Resume' : 'Pause' }}
-      </button>
-
-      <!-- Pacing (Auto mode) -->
-      <div v-if="!isStepMode" class="flex flex-col gap-1.5">
-        <label class="flex flex-col gap-1.5">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Delay between steps</span>
-          <select
-            :value="stepDelay"
-            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
-            title="Extra pause before the agent plays its next step"
-            @change="handleDelayChange"
-          >
-            <option v-for="d in delayOptions" :key="d.seconds" :value="d.seconds">{{ d.label }}</option>
-          </select>
-        </label>
-        <label
-          class="flex items-center gap-2 cursor-pointer select-none text-[11px]"
-          title="Only continue once text-to-speech has finished reading the narration (needs auto-speech)"
-        >
-          <input
-            type="checkbox"
-            :checked="waitForTts"
-            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1"
-            @change="setWaitForTts(!waitForTts)"
-          />
-          Wait for speech to finish
-        </label>
-      </div>
-
-      <!-- Personality -->
-      <label class="flex flex-col gap-1.5">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Personality</span>
-        <select
-          v-model="selectedPersonality"
-          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
-          @change="handlePersonalityChange"
-        >
-          <option v-for="p in PLAY_AGENT_PERSONALITIES" :key="p.id" :value="p.id">{{ p.label }}</option>
-        </select>
-      </label>
-      <div v-if="selectedPersonality === 'custom'" class="flex flex-col gap-1.5">
-        <textarea
-          v-model="customText"
-          rows="3"
-          placeholder="Describe how the agent should play..."
-          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
-        ></textarea>
-        <button
-          :disabled="!customText.trim() || !customDirty"
-          class="self-end px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700 rounded-md text-[10px] font-bold uppercase tracking-wider"
-          @click="applyCustomPersonality"
-        >
-          Apply
-        </button>
-      </div>
-
-      <!-- Options -->
-      <div class="flex flex-col gap-1.5 text-[11px]">
-        <label class="flex items-center gap-2 cursor-pointer select-none" title="Allow the agent to consult the sequence walkthrough">
-          <input
-            type="checkbox"
-            :checked="allowWalkthrough"
-            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-cyan-600 focus:ring-cyan-500/50 focus:ring-offset-slate-950 focus:ring-1"
-            @change="setWalkthroughAllowed(!allowWalkthrough)"
-          />
-          Use walkthrough
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer select-none" title="Deliberately try invalid or chaotic actions to stress-test the engine">
-          <input
-            type="checkbox"
-            :checked="monkeyMode"
-            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-amber-600 focus:ring-amber-500/50 focus:ring-offset-slate-950 focus:ring-1"
-            @change="setMonkeyMode(!monkeyMode)"
-          />
-          Monkey mode
-        </label>
-      </div>
-    </div>
-
-    <!-- Decision log -->
-    <div ref="logContainer" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col gap-3">
-      <p v-if="agentLog.length === 0" class="text-[11px] text-slate-500 italic">No decisions yet.</p>
-      <div v-for="(entry, idx) in agentLog" :key="idx" class="flex flex-col gap-1 text-[11px]">
-        <span class="text-[9px] font-mono text-slate-600">{{ entry.timestamp }}</span>
-        <p class="text-indigo-200/90 italic leading-snug">{{ entry.thought }}</p>
-        <p v-if="entry.action" class="font-mono text-emerald-300">&gt; {{ entry.action }}</p>
+      <!-- Inner voice / decision log (own height limit, newest at the bottom) -->
+      <div class="flex flex-col gap-2 px-4 py-3 border-t tw-agent-divider">
+        <span class="tw-agent-label">{{ heroName }}'s thoughts</span>
+        <div ref="logContainer" class="flex flex-col gap-3 max-h-48 overflow-y-auto tw-agent-scroll pr-1">
+          <p v-if="agentLog.length === 0" class="text-[11px] tw-muted italic">No decisions yet.</p>
+          <div v-for="(entry, idx) in agentLog" :key="idx" class="flex flex-col gap-1 text-[11px]">
+            <span class="text-[9px] font-mono tw-muted">{{ entry.timestamp }}</span>
+            <p class="tw-agent-thought">{{ entry.thought }}</p>
+            <p v-if="entry.action" class="tw-agent-action">&gt; {{ entry.action }}</p>
+          </div>
+        </div>
       </div>
     </div>
   </aside>

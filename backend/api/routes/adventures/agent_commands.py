@@ -7,6 +7,17 @@ import os
 from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
+from backend.api.routes.adventures.agent_access import is_debug_session, walkthrough_unlocked
+from backend.api.routes.adventures.agent_dialogue import (
+    DIALOGUE_LEVELS,
+    dialogue_level_label,
+    normalize_dialogue_level,
+)
+from backend.api.routes.adventures.agent_instruction import (
+    INSTRUCT_COMMAND,
+    current_instruction,
+    instruction_message,
+)
 from backend.api.routes.adventures.agent_logic import MAX_STEP_DELAY_SECONDS, AgentService
 from backend.api.routes.adventures.agent_settings import (
     activate_with_defaults,
@@ -14,14 +25,19 @@ from backend.api.routes.adventures.agent_settings import (
     personality_label,
 )
 from backend.core.config import settings
+from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.utils.path_security import ensure_within_data_dir, sanitize_path_component
 
 PLAYAGENT_COMMANDS = ("/playagent", "/play-agent")
+# Every console command handled here; `/instruct <text>` is short for `/playagent do <text>`.
+AGENT_CONSOLE_COMMANDS = (*PLAYAGENT_COMMANDS, INSTRUCT_COMMAND)
 
 USAGE_TEXT = (
     "Usage: /playagent [on/off] | /playagent [casual|bureaucrat|powerplayer] | "
     "/playagent personality <casual|bureaucrat|powerplayer|custom <text>> | "
     "/playagent walkthrough on/off | /playagent step on/off | /playagent monkey on/off | "
+    "/playagent dialogue <taciturn|normal|talkative|roleplay> | "
+    "/playagent do <instruction> (or /instruct <instruction>, /instruct clear) | "
     "/playagent delay <seconds> | /playagent tts on/off"
 )
 
@@ -59,7 +75,36 @@ def _issue_log_hint(manager: Any) -> str:
 
 def _deactivate(manager: Any) -> str:
     AgentService.set_agent_active(manager.state, False)
-    return f"Play-Agent disabled. You are now back in control.\n\n{_issue_log_hint(manager)}"
+    msg = "Play-Agent disabled. You are now back in control."
+    if not is_debug_session(manager.state):
+        return msg
+    return f"{msg}\n\n{_issue_log_hint(manager)}"
+
+
+DEBUG_ONLY_MSG = "Monkey Mode is a debug tool and only available in debug mode."
+
+
+def _walkthrough_on(manager: Any) -> str:
+    AgentService.set_walkthrough_allowed(manager.state, True)
+    if walkthrough_unlocked(manager.adventure, manager.state):
+        return (
+            "Play-Agent Sequence Walkthrough guidance enabled. "
+            "The agent may consult the current sequence walkthrough for strategic guidance."
+        )
+    return (
+        "Play-Agent Sequence Walkthrough guidance enabled. The current chapter's walkthrough is "
+        f"still sealed: unlock it for {WALKTHROUGH_REVEAL_COST} XP (Hints) so the agent can use it."
+    )
+
+
+def _monkey_on(manager: Any) -> str:
+    if not is_debug_session(manager.state):
+        return DEBUG_ONLY_MSG
+    AgentService.set_monkey_mode(manager.state, True)
+    return (
+        "Play-Agent Monkey Mode enabled. The agent will now deliberately try invalid, chaotic, "
+        "or context-inappropriate actions to stress-test engine robustness."
+    )
 
 
 def _set_personality(manager: Any, args: str) -> str:
@@ -103,12 +148,7 @@ _FIXED_HANDLERS: dict[str, Callable[[Any], str]] = {
     "enable": _activate,
     "off": _deactivate,
     "stop": _deactivate,
-    "walkthrough on": _toggle(
-        AgentService.set_walkthrough_allowed,
-        True,
-        "Play-Agent Sequence Walkthrough guidance enabled. "
-        "The agent may consult the current sequence walkthrough for strategic guidance.",
-    ),
+    "walkthrough on": _walkthrough_on,
     "walkthrough off": _toggle(
         AgentService.set_walkthrough_allowed,
         False,
@@ -125,12 +165,7 @@ _FIXED_HANDLERS: dict[str, Callable[[Any], str]] = {
         False,
         "Play-Agent Auto mode enabled. The agent will play until the adventure is won or lost.",
     ),
-    "monkey on": _toggle(
-        AgentService.set_monkey_mode,
-        True,
-        "Play-Agent Monkey Mode enabled. The agent will now deliberately try invalid, chaotic, "
-        "or context-inappropriate actions to stress-test engine robustness.",
-    ),
+    "monkey on": _monkey_on,
     "tts on": _toggle(
         AgentService.set_wait_for_tts,
         True,
@@ -158,6 +193,47 @@ def _set_delay(manager: Any, args: str) -> tuple[str, bool]:
     return f"Play-Agent waits {int(args)} seconds between two steps in Auto mode.", True
 
 
+def _set_dialogue(manager: Any, args: str) -> tuple[str, bool]:
+    level = normalize_dialogue_level(args)
+    if not level:
+        options = " | ".join(DIALOGUE_LEVELS)
+        return f"Usage: /playagent dialogue <{options}>", False
+    AgentService.set_dialogue_level(manager.state, level)
+    return f"Play-Agent dialogue with characters: {dialogue_level_label(level)}.", True
+
+
+def _set_instruction(manager: Any, args: str) -> tuple[str, bool]:
+    if not args:
+        current = current_instruction(AgentService.get_agent_state(manager.state))
+        if current:
+            return (
+                f'Current Play-Agent instruction: "{current}". Clear it with /instruct clear.',
+                False,
+            )
+        return "Usage: /instruct <what the Play-Agent should do next> | /instruct clear", False
+    instruction = AgentService.set_instruction(manager.state, args)
+    active = bool(AgentService.get_agent_state(manager.state).get("active"))
+    return instruction_message(instruction, active), True
+
+
+def console_args(command: str, args: str) -> str:
+    """Sub-command text for ``resolve_playagent_message`` (``/instruct x`` -> ``do x``)."""
+    return f"do {args}".strip() if command.lower() == INSTRUCT_COMMAND else args
+
+
+def _personality_command(manager: Any, args: str) -> tuple[str, bool]:
+    return _set_personality(manager, args), True
+
+
+# Sub-commands with an argument: keyword -> handler(manager, argument) -> (message, changed).
+_ARG_HANDLERS: dict[str, Callable[[Any, str], tuple[str, bool]]] = {
+    "do": _set_instruction,
+    "dialogue": _set_dialogue,
+    "delay": lambda manager, args: _set_delay(manager, args.lower()),
+    "personality": _personality_command,
+}
+
+
 def resolve_playagent_message(manager: Any, cmd_args: str) -> tuple[str, bool]:
     """Applies the sub-command and returns (message, whether state changed)."""
     args_lower = cmd_args.lower()
@@ -165,11 +241,10 @@ def resolve_playagent_message(manager: Any, cmd_args: str) -> tuple[str, bool]:
     if handler:
         return handler(manager), True
 
-    if args_lower.startswith("delay"):
-        return _set_delay(manager, args_lower[len("delay") :].strip())
-
-    if args_lower.startswith("personality"):
-        return _set_personality(manager, cmd_args[len("personality") :].strip()), True
+    keyword, _, rest = cmd_args.partition(" ")
+    sub_command = _ARG_HANDLERS.get(keyword.lower())
+    if sub_command:
+        return sub_command(manager, rest.strip())
 
     personality = normalize_personality(args_lower)
     if personality and personality != "custom":

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 
+from backend.api.routes.adventures.agent_access import is_debug_session
 from backend.api.routes.adventures.agent_actions import execute_agent_action
 from backend.api.routes.adventures.agent_change_log import (
     WorldSnapshot,
@@ -94,6 +95,21 @@ async def _recent_history_summary(db, game_id: str) -> str:
     return " | ".join(f"{m.role}: {m.content}" for m in recent_msgs)
 
 
+def _issue_message(state: Any, description: str, decision_failed: bool, failures: int) -> str:
+    """Technical details in debug mode; a short note for regular players."""
+    if is_debug_session(state):
+        msg = f"Agent issue detected: {description} (Attempt {failures}/{MAX_AGENT_FAILURES})"
+    elif decision_failed:
+        msg = (
+            f"The Play-Agent could not decide on a next step (try {failures}/{MAX_AGENT_FAILURES})."
+        )
+    else:
+        msg = f"The Play-Agent is stuck: {description} (try {failures}/{MAX_AGENT_FAILURES})"
+    if failures >= MAX_AGENT_FAILURES:
+        msg += " - The Play-Agent has stopped; you are back in control."
+    return msg
+
+
 async def _agent_issue_events(
     db, game_id: str, manager: GameTurnManager, decision: Any, decision_failed: bool
 ) -> AsyncGenerator[str, None]:
@@ -108,9 +124,7 @@ async def _agent_issue_events(
     AgentService.log_issue(state.session_id, thoughts, action, description, history_summary)
     await db.commit()
 
-    msg = f"Agent issue detected: {description} (Attempt {failures}/{MAX_AGENT_FAILURES})"
-    if failures >= MAX_AGENT_FAILURES:
-        msg += " - Agent mode has been deactivated."
+    msg = _issue_message(state, description, decision_failed, failures)
     await manager._save_chat_message("system", msg)
     yield _sse("system", {"role": "system", "content": msg})
     yield await _final_event(db, manager)
@@ -158,6 +172,9 @@ async def _agent_action_events(
     yield _sse("status", {"content": f"Agent decides: {decision.action}"})
 
     AgentService.reset_failures(manager.state)
+    if decision.instruction_done:
+        # The action finishes the player's instruction; the next decision is the agent's own again.
+        AgentService.set_instruction(manager.state, "")
     await db.commit()
 
     outcome = await execute_agent_action(manager, decision.action)
@@ -222,7 +239,7 @@ async def _agent_finish_events(db, manager: GameTurnManager) -> AsyncGenerator[s
     msg = f"Play-Agent finished: the adventure was {outcome}. You are back in control."
     await manager._save_chat_message("system", msg)
     yield _sse("system", {"role": "system", "content": msg})
-    yield _sse("agent_state", build_agent_snapshot(manager.state))
+    yield _sse("agent_state", build_agent_snapshot(manager.state, manager.adventure))
 
 
 async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[str, None]:

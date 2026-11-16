@@ -126,6 +126,7 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 * **Chronicles Timeline + Rollback:** Open the new Chronicles timeline in-game and restore to any recent checkpoint. Rollback performs a hard timeline rewind by restoring stored state and removing future messages after that checkpoint.
 * **Retention Policy:** To keep sessions fast and compact, each game session keeps its five most recent automatic checkpoints and, separately, its ten most recent saves (`/save`, `tw.save()`).
 * **Walkthrough per Chapter:** The in-game walkthrough (`/walkthrough`) only ever unlocks the guide of the current sequence, for 150 XP each time (`/walkthrough reveal`). Unlocked chapters stay readable; later chapters stay hidden until you reach them.
+* **Play-Agent (Auto-Play):** Let the AI play as your hero: pick the **Auto-Play** card in the action bar (or type `/playagent`). It plays in character with every action you have (exits, items, containers, switches, talents, companion orders and combat), in Auto mode or step by step. Tell it what to do next (`/instruct <text>` or the panel's instruction field) and choose how much it talks with characters, from taciturn to full roleplay. Its control panel wears the adventure's skin, floats over the stage and can be minimized to a small dock at the bottom right. It only follows the walkthrough of chapters you unlocked with XP. See [Play-Agent](docs/play-agent.md).
 
 ### Media & Immersion
 * Optional AI-generated images to enhance the aesthetic.

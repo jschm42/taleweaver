@@ -111,6 +111,14 @@ export interface CharacterSheet {
   agent_step_delay?: number
   /** In Auto mode, the next Play-Agent step waits until text-to-speech has finished. */
   agent_wait_for_tts?: boolean
+  /** The Play-Agent may use the current chapter's walkthrough (unlocked with XP, or debug). */
+  agent_walkthrough_unlocked?: boolean
+  /** Debug-only Play-Agent options (Monkey mode) are available. */
+  agent_debug_tools?: boolean
+  /** How much the Play-Agent talks with characters: taciturn, normal, talkative, roleplay. */
+  agent_dialogue_level?: string
+  /** The player's current instruction for the Play-Agent ("" = none). */
+  agent_instruction?: string
   agent_personality?: string
   agent_custom_personality?: string
   max_memory_turns?: number

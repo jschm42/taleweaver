@@ -14,7 +14,8 @@ from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 from backend.api.routes.adventures.agent_commands import (
-    PLAYAGENT_COMMANDS,
+    AGENT_CONSOLE_COMMANDS,
+    console_args,
     handle_playagent_command,
 )
 from backend.api.routes.adventures.after_narration import run_after_narration
@@ -863,8 +864,10 @@ class GameTurnManager:
             return
 
         cmd_parts = user_msg.strip().split(None, 1)
-        if cmd_parts and cmd_parts[0].lower() in PLAYAGENT_COMMANDS:
-            cmd_args = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
+        if cmd_parts and cmd_parts[0].lower() in AGENT_CONSOLE_COMMANDS:
+            cmd_args = console_args(
+                cmd_parts[0], cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
+            )
             async for chunk in handle_playagent_command(self, cmd_args):
                 yield chunk
 

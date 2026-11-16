@@ -45,6 +45,9 @@ export interface AgentSettingsPatch {
   monkey_mode?: boolean
   step_delay?: number
   wait_for_tts?: boolean
+  dialogue_level?: string
+  /** What the agent should do next; "" clears it. */
+  instruction?: string
 }
 
 export interface UseGameSocket {

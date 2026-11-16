@@ -21,6 +21,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 
+from backend.api.routes.adventures.agent_access import is_blocked_command
 from backend.api.routes.adventures.agent_item_actions import (
     AgentActionOutcome,
     execute_item_action,
@@ -276,6 +277,10 @@ async def execute_agent_action(manager: Any, action: str) -> AgentActionOutcome:
     parts = (action or "").strip().split(None, 1)
     command = parts[0].lower() if parts else ""
     args = parts[1].strip() if len(parts) > 1 else ""
+    if is_blocked_command(action):
+        return AgentActionOutcome(
+            message=f"{parts[0]} is the player's own control; the agent skips it."
+        )
     if command in GO_COMMANDS:
         return await _go(manager, args)
     if command == UNLOCK_COMMAND:
