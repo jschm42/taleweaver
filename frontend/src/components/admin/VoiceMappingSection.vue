@@ -18,6 +18,8 @@ const compatibleVoices = ref<string[]>([])
 const filter = ref('')
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isResetting = ref(false)
+const showResetConfirm = ref(false)
 const error = ref('')
 const notice = ref('')
 const importInput = ref<HTMLInputElement | null>(null)
@@ -108,6 +110,21 @@ async function save(): Promise<void> {
     error.value = errorText(err)
   } finally {
     isSaving.value = false
+  }
+}
+
+async function confirmReset(): Promise<void> {
+  isResetting.value = true
+  error.value = ''
+  notice.value = ''
+  try {
+    rows.value = (await api.resetVoiceMap()).items
+    notice.value = 'Voice mapping reset to defaults.'
+    showResetConfirm.value = false
+  } catch (err) {
+    error.value = errorText(err)
+  } finally {
+    isResetting.value = false
   }
 }
 
@@ -203,6 +220,15 @@ async function onImportFile(event: Event): Promise<void> {
         <button type="button" class="vm-btn" @click="importInput?.click()">Import…</button>
         <button type="button" class="vm-btn" @click="exportTable('csv')">Export CSV</button>
         <button type="button" class="vm-btn" @click="exportTable('json')">Export JSON</button>
+        <button
+          type="button"
+          class="vm-btn vm-btn-danger"
+          :disabled="isLoading || isSaving || isResetting"
+          title="Clear all saved voice mappings and restore the voice list defaults"
+          @click="showResetConfirm = true"
+        >
+          Reset
+        </button>
         <input ref="importInput" type="file" accept=".csv,.json,text/csv,application/json" class="hidden" @change="onImportFile" />
       </div>
 
@@ -268,6 +294,38 @@ async function onImportFile(event: Event): Promise<void> {
       </div>
 
     </div>
+
+    <!-- Reset Confirmation Modal -->
+    <div
+      v-if="showResetConfirm"
+      class="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-sm bg-black/60"
+      @click.self="!isResetting && (showResetConfirm = false)"
+    >
+      <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4">
+        <h2 class="text-lg font-bold text-white">Reset Voice Mapping?</h2>
+        <p class="text-sm text-slate-300">
+          This clears all saved Google TTS and OpenAI-compatible voice mappings and restores the default suggestions from the voice list.
+        </p>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            class="vm-btn cursor-pointer"
+            :disabled="isResetting"
+            @click="showResetConfirm = false"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+            :disabled="isResetting"
+            @click="confirmReset"
+          >
+            {{ isResetting ? 'Resetting...' : 'Reset Mapping' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -297,6 +355,10 @@ async function onImportFile(event: Event): Promise<void> {
 .vm-btn:hover:not(:disabled) {
   color: white;
   border-color: rgb(59 130 246 / 0.6);
+}
+.vm-btn-danger:hover:not(:disabled) {
+  color: rgb(254 205 211);
+  border-color: rgb(244 63 94 / 0.6);
 }
 .vm-input {
   width: 100%;

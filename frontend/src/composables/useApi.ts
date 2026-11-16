@@ -846,6 +846,10 @@ export const api = {
     return request('/settings/voice-map', { method: 'PUT', body: JSON.stringify({ items: toVoiceMapCells(items) }) })
   },
 
+  resetVoiceMap(): Promise<{ status: string; items: VoiceMapRow[] }> {
+    return request('/settings/voice-map', { method: 'DELETE' })
+  },
+
   /** Lays an import file over the edited table; nothing is saved until `saveVoiceMap`. */
   importVoiceMap(content: string, format: VoiceMapFileFormat, items: VoiceMapRow[]): Promise<VoiceMapImportResult> {
     return request('/settings/voice-map/import', {

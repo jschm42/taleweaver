@@ -346,3 +346,22 @@ async def test_admin_saves_imports_and_exports_the_table(auth_client: AsyncClien
     assert imported["matched"] == 1
     assert voices["supports_npc_voices"] is True
     assert voices["provider_voices"] == {ARIA: "Kore"}
+
+
+@pytest.mark.asyncio
+async def test_admin_resets_voice_map_to_defaults(auth_client: AsyncClient):
+    # Arrange
+    await _seed_tts("google", {})
+    await auth_client.put(
+        "/api/settings/voice-map", json={"items": [{"id": ARIA, "google": "Kore"}]}
+    )
+
+    # Act
+    reset = await auth_client.delete("/api/settings/voice-map")
+    table = (await auth_client.get("/api/settings/voice-map")).json()
+
+    # Assert
+    assert reset.status_code == 200
+    assert reset.json()["status"] == "success"
+    assert len(table["items"]) == len(reset.json()["items"])
+    assert any(r["google"] for r in table["items"])

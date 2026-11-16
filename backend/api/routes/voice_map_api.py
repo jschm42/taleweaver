@@ -120,6 +120,19 @@ async def update_voice_map(
     return {"status": "success", "items": mapping_rows(voices, voice_map)}
 
 
+@router.delete("")
+async def reset_voice_map(
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    """Clears saved mappings so the voice list's default suggestions apply again."""
+    _ = current_admin
+    server = await get_server_settings_for_update(db)
+    server.voice_provider_map = None
+    await db.commit()
+    return {"status": "success", "items": await _saved_rows(db)}
+
+
 @router.post("/import")
 async def import_voice_map(
     payload: VoiceMapImportPayload,
