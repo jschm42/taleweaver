@@ -7,6 +7,7 @@ import { extractCodePlaceholders } from '@/utils/codeMarkup'
 import { extractStoryImages, STORY_IMAGE_ATTRS, STORY_IMAGE_TAGS } from '@/utils/storyImages'
 import { attachCueToSpeech } from './comicTagOnlyLines'
 import { uniqueShortNameMatch } from '@/utils/speakerNames'
+import { canBeSpeakerName } from '@/utils/speakerLabel'
 
 export type { ComicExchange, ComicTurn, DialogueSegment } from './comicPages'
 
@@ -312,8 +313,10 @@ export function parseAssistantContent(
         speechText = speechText.replace(/^["“„»\s]+/, '').trim()
       }
 
-      // Guard against non-speaker labels (e.g. "Hinweis: ...", "Note: ...") when unquoted and not bold
-      if (!hasQuotes && !isBold && NON_SPEAKER_LABELS.has(speakerName.toLowerCase())) {
+      // Guard against non-speaker labels (e.g. "Hinweis: ...", "Note: ...") when unquoted and not bold,
+      // and against times or numbers ("16:30 sharp: ...") that are never a speaker.
+      const isLabel = !hasQuotes && !isBold && NON_SPEAKER_LABELS.has(speakerName.toLowerCase())
+      if (isLabel || !canBeSpeakerName(speakerName, rawSpeech)) {
         const last = dialogues[dialogues.length - 1]
         if (last && last.isNarration) {
           last.text += '\n\n' + line

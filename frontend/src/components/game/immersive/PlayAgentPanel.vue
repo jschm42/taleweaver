@@ -10,7 +10,7 @@
  * with XP (always in debug mode); Monkey mode only appears in debug mode.
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { ChevronDown, Minus, Pause, Play, Square, StepForward } from 'lucide-vue-next'
+import { ChevronDown, Minus, Pause, Play, StepForward, X } from 'lucide-vue-next'
 import {
   PLAY_AGENT_DIALOGUE_LEVELS,
   PLAY_AGENT_PERSONALITIES,
@@ -163,7 +163,7 @@ async function applyCustomPersonality(): Promise<void> {
           aria-label="Stop Play-Agent"
           @click="stop"
         >
-          <Square class="w-3 h-3" />
+          <X class="w-3.5 h-3.5" />
         </button>
       </div>
     </header>

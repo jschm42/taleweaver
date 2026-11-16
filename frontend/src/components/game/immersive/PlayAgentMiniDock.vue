@@ -8,7 +8,7 @@
  * the full panel.
  */
 import { computed } from 'vue'
-import { Maximize2, Pause, Play, Square, StepForward } from 'lucide-vue-next'
+import { Maximize2, Pause, Play, StepForward, X } from 'lucide-vue-next'
 import {
   PLAY_AGENT_DIALOGUE_LEVELS,
   PLAY_AGENT_PERSONALITIES,
@@ -135,7 +135,7 @@ function handlePrimary(): void {
         aria-label="Stop Play-Agent"
         @click="stop"
       >
-        <Square class="w-3 h-3" />
+        <X class="w-3.5 h-3.5" />
       </button>
     </div>
   </div>
