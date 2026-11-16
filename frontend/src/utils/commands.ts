@@ -23,6 +23,8 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/roll', label: '/roll [2-30]', description: 'Roll a die with 2-30 sides (default d6)', category: 'game' },
   { id: '/playagent', label: '/playagent [on/off]', description: 'Activate or deactivate the autonomous Play-Agent', category: 'game' },
   { id: '/playagent personality', label: '/playagent personality <type>', description: 'Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom)', category: 'game' },
+  { id: '/instruct', label: '/instruct <text>', description: 'Tell the Play-Agent what to do next (/instruct clear removes it)', category: 'game' },
+  { id: '/playagent dialogue', label: '/playagent dialogue <level>', description: 'How much the Play-Agent talks with characters (taciturn, normal, talkative, roleplay)', category: 'game' },
   { id: '/playagent delay', label: '/playagent delay <seconds>', description: 'Pause between two Play-Agent steps in Auto mode (0 = none)', category: 'game' },
   { id: '/playagent tts', label: '/playagent tts [on/off]', description: 'Let the Play-Agent wait until text-to-speech has finished', category: 'game' },
   // Debug Commands

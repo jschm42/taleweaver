@@ -192,11 +192,13 @@ async def test_private_server_needs_explicit_opt_in(monkeypatch):
         checked_base_url(LOCAL)
 
 
-async def test_key_rules_follow_the_llm_provider():
-    own = {"custom_openai": encryption_util.encrypt_key("own-key")}
+async def test_speech_uses_its_own_key_never_the_llm_key():
+    own = {"custom_openai_tts": encryption_util.encrypt_key("own-key")}
+    llm_only = {"custom_openai": encryption_util.encrypt_key("llm-key")}
     router_only = {"openrouter": encryption_util.encrypt_key("or-key")}
 
     assert resolve_speech_api_key(own, "https://openrouter.ai/api/v1") == "own-key"
+    assert resolve_speech_api_key(llm_only, LOCAL) is None
     assert resolve_speech_api_key(router_only, "https://openrouter.ai/api/v1") == "or-key"
     assert resolve_speech_api_key(router_only, LOCAL) is None
     # A URL that only contains the name never receives the OpenRouter key.
@@ -338,7 +340,7 @@ async def test_generate_endpoint_works_without_any_key(auth_client: AsyncClient,
 
 
 async def test_generate_endpoint_uses_the_vault_key(auth_client: AsyncClient, monkeypatch):
-    await _enable_compatible_tts(keys={"custom_openai": encryption_util.encrypt_key("sk-x")})
+    await _enable_compatible_tts(keys={"custom_openai_tts": encryption_util.encrypt_key("sk-x")})
     captured: dict = {}
 
     async def fake_generate_speech(**kwargs):
@@ -409,3 +411,19 @@ async def test_discovery_rejects_invalid_base_url(auth_client: AsyncClient, loca
     )
 
     assert resp.status_code == 400
+
+
+async def test_vault_has_a_separate_speech_key(auth_client: AsyncClient):
+    from backend.core.api_keys import KEY_PROVIDER_IDS
+
+    # Act
+    saved = await auth_client.post(
+        "/api/settings/keys", json={"provider": "custom_openai_tts", "api_key": "sk-speech"}
+    )
+    keys = (await auth_client.get("/api/settings")).json()["keys"]
+
+    # Assert
+    assert "custom_openai_tts" in KEY_PROVIDER_IDS
+    assert saved.status_code == 200
+    assert "custom_openai_tts" in keys
+    assert "custom_openai" not in keys

@@ -72,10 +72,10 @@ from backend.core.prompts import (
 from backend.core.turn_key_preflight import ensure_turn_providers_available
 from backend.engine.adventures.adventure_updates import is_legacy_session
 from backend.engine.interaction.trigger_service import TriggerService
-from backend.engine.party.follow import bring_companion_along
 from backend.engine.rules.walkthrough_unlocks import walkthrough_payload, walkthrough_status
 from backend.engine.scripting.dialog import client_dialog, pending_dialog
 from backend.engine.scripting.llm_proxy import LlmAsker
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.world.exit_labels import exit_sentence_name
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -943,7 +943,7 @@ async def traverse_exit(
     await _fire_gameplay_exit_triggers(db, state, world_exit, current_scene_id, llm_asker)
 
     state.current_scene_id = target_scene_id
-    for msg in await bring_companion_along(db, state, current_scene_id, world_exit=world_exit):
+    for msg in await enter_scene(db, state, current_scene_id, world_exit=world_exit):
         db.add(ChatMessage(session_id=state.session_id, role="system", content=msg))
 
     db.add(

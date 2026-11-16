@@ -6,33 +6,33 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "4c7b7287676f5744340d511bfc1c788998bb49f4e200df1549299b4bb3823bd2",
-      "size": 36031
+      "sha256": "73895107abdc39a66cfe42b65b67b6bf17e91f0fa05d1156891d2ea9c2d6eaa6",
+      "size": 36211
     },
     {
       "path": "docs/scripting-enginge.md",
-      "sha256": "1a1011ff89c890c2bdf14642f0759284c4fc39a957bdd184480f843c1713d795",
-      "size": 133002
+      "sha256": "b1713300dd5675c6844f5f2f78a32968c12a9e1f32f0ae944a68a9189c82bb1e",
+      "size": 134384
     },
     {
       "path": "docs/scripting_engine.md",
-      "sha256": "1a1011ff89c890c2bdf14642f0759284c4fc39a957bdd184480f843c1713d795",
-      "size": 133002
+      "sha256": "b1713300dd5675c6844f5f2f78a32968c12a9e1f32f0ae944a68a9189c82bb1e",
+      "size": 134384
     },
     {
       "path": "docs/specs/adventure_format.md",
-      "sha256": "a753f44dec0e6a6a0c629652e182c2d9387a7cfc90dd8efa36efb298478ece51",
-      "size": 31605
+      "sha256": "9240f10c509121a8f53236e4282c84e827e220e73dc2f42baaf8ad9642da65bd",
+      "size": 33646
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",
-      "sha256": "622c413690537638a77506da2069bb0f9b28c2f714dc1562b7b065a6a09f9977",
-      "size": 28387
+      "sha256": "ec60d270452d70553b432e04be2207f56ce0bfc30f8fe2e208fb78e42fcf274f",
+      "size": 28985
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "a86335466d6f1b3d485f418278ba22ffda3c104cf944858dba7249db902dccaa",
-      "size": 31616
+      "sha256": "cd4a730799f63b28ec2034b0303debab556ce4b670874cda047f77a8597d7bf0",
+      "size": 32060
     },
     {
       "path": "package.json",

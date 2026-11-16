@@ -128,6 +128,7 @@ const modalSequence = ref<any>({
   required_defeated_npc_id: '',
   activation_scene_id: '',
   companions_allowed: true,
+  respawn_allowed: true,
   guard_expression: '',
   exp_reward: 50,
   on_start_sequence_script: '',
@@ -166,6 +167,7 @@ function openAddModal() {
     required_defeated_npc_id: '',
     activation_scene_id: '',
     companions_allowed: true,
+    respawn_allowed: true,
     guard_expression: '',
     exp_reward: 50,
     on_start_sequence_script: '',
@@ -194,6 +196,7 @@ function openEditModal(seq: any) {
     required_defeated_npc_id: seq.required_defeated_npc_id || '',
     activation_scene_id: seq.activation_scene_id || '',
     companions_allowed: seq.companions_allowed !== false,
+    respawn_allowed: seq.respawn_allowed !== false,
     guard_expression: seq.guard_expression || seq.completion_guard_expression || '',
     exp_reward: seq.exp_reward ?? 50,
     on_start_sequence_script: seq.on_start_sequence_script || '',
@@ -701,6 +704,15 @@ function confirmDelete() {
               <span>
                 Companions follow the protagonist in this chapter
                 <span class="block text-[11px] text-slate-500">Turn off for a solo chapter: the companion stays behind when the protagonist changes scenes.</span>
+              </span>
+            </label>
+
+            <!-- Deadly chapter: 0 HP ends the adventure even in respawn mode -->
+            <label class="flex items-start gap-2 p-4 rounded-2xl bg-black/40 border border-white/5 text-xs text-slate-300 cursor-pointer">
+              <input v-model="modalSequence.respawn_allowed" type="checkbox" class="mt-0.5 accent-amber-500" />
+              <span>
+                Respawn allowed in this chapter
+                <span class="block text-[11px] text-slate-500">Only matters when the adventure respawns at 0 HP (Plot → Loss Conditions). Turn off for a deadly chapter: 0 HP ends the adventure here.</span>
               </span>
             </label>
 

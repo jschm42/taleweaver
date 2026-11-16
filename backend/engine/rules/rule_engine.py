@@ -11,6 +11,12 @@ class GameOverError(Exception):
     pass
 
 
+class ProtagonistDownError(GameOverError):
+    """The protagonist fell to 0 HP. Adventures with respawn mode revive them instead."""
+
+    pass
+
+
 # Backward-compatible alias for modules not yet migrated to GameOverError
 GameOverException = GameOverError
 
@@ -70,6 +76,13 @@ class EntityMovement(BaseModel):
     entity_id: str = Field(..., validation_alias=AliasChoices("entity_id", "id"))
     to_scene_id: Optional[str] = None
     to_spatial_position: Optional[str] = None
+
+
+class ItemHandover(BaseModel):
+    """A carried item the player hands to a character in the scene (see ``given_items``)."""
+
+    item_id: str = Field(..., validation_alias=AliasChoices("item_id", "id", "item"))
+    npc_id: str = Field(..., validation_alias=AliasChoices("npc_id", "npc", "to", "recipient"))
 
 
 class ExitUpdate(BaseModel):
@@ -220,6 +233,15 @@ class AdventureGeneratorToolIntent(BaseModel):
     removed_inventory_item_ids: Optional[list[str]] = None
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
+    given_items: Optional[list[ItemHandover]] = Field(
+        None,
+        description=(
+            "Carried items the player hands to a character present in the scene this turn, "
+            "in any wording or language (gives, hands over, offers and the character takes "
+            "it). The engine moves each item into that character's inventory and runs its "
+            "receive trigger; do not also list it in removed_inventory_item_ids or move it."
+        ),
+    )
     completed_quest_ids: Optional[list[str]] = None
     sequence_completed: bool = False
     earned_award_keys: Optional[list[str]] = None
@@ -278,6 +300,15 @@ class GameEvent(BaseModel):
     )
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
+    given_items: Optional[list[ItemHandover]] = Field(
+        None,
+        description=(
+            "Carried items the player hands to a character present in the scene this turn, "
+            "in any wording or language (gives, hands over, offers and the character takes "
+            "it). The engine moves each item into that character's inventory and runs its "
+            "receive trigger; do not also list it in removed_inventory_item_ids or move it."
+        ),
+    )
 
     # Mapping & Navigation
     new_scene_id: Optional[str] = Field(
@@ -463,7 +494,7 @@ class RuleEngine:
 
         if avatar.hp <= 0:
             avatar.hp = 0
-            raise GameOverError(f"{avatar.name} has fallen! Game Over.")
+            raise ProtagonistDownError(f"{avatar.name} has fallen! Game Over.")
 
         avatar.stamina = max(avatar.stamina, 0)
         avatar.mana = max(avatar.mana, 0)

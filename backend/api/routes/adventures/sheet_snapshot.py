@@ -8,6 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.agent_access import access_fields
 from backend.api.routes.adventures.asset_url_healing import (
     heal_template_avatar_profile_image,
     resolve_existing_data_asset_url,
@@ -39,7 +40,7 @@ _AGENT_FLAGS = {
     "agent_monkey_mode": ("monkey_mode", False),
     "agent_allow_walkthrough": ("allow_walkthrough", True),
     "agent_step_by_step": ("step_by_step", False),
-    "agent_wait_for_tts": ("wait_for_tts", False),
+    "agent_wait_for_tts": ("wait_for_tts", True),
 }
 
 
@@ -270,6 +271,8 @@ def _agent_fields(state: SessionState) -> dict[str, Any]:
     fields["agent_personality"] = str(agent.get("personality", "casual"))
     fields["agent_custom_personality"] = str(agent.get("custom_personality", ""))
     fields["agent_step_delay"] = _as_int(agent.get("step_delay")) or 0
+    fields["agent_dialogue_level"] = str(agent.get("dialogue_level") or "normal")
+    fields["agent_instruction"] = str(agent.get("instruction") or "")
     return fields
 
 
@@ -369,6 +372,7 @@ async def build_sheet_snapshot(
         "tts_auto_speak": (state.entity_states or {}).get(TTS_AUTO_SPEAK_KEY),
         "compressed_history": getattr(state, "compressed_history", None),
         **_agent_fields(state),
+        **access_fields(ctx.adventure, state),
         "is_debug_enabled": bool(state.is_debug_enabled),
         "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled),
     }

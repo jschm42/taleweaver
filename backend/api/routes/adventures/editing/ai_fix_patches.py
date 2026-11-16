@@ -160,6 +160,8 @@ async def _patch_scene(
         flag_modified(scene, "decorative_objects")
     if "audio_track_id" in updates:
         scene.audio_track_id = track_id_or_none(updates["audio_track_id"])
+    if "is_respawn_point" in updates:
+        scene.is_respawn_point = updates["is_respawn_point"] is True
     set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 

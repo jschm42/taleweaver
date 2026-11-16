@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from sqlalchemy.orm.attributes import flag_modified
@@ -211,6 +211,7 @@ class TurnProgressionBuilder:
             removed_inventory_item_ids=intent.removed_inventory_item_ids,
             updated_inventory_items=intent.updated_inventory_items or [],
             spawned_items=intent.spawned_items,
+            given_items=intent.given_items,
             completed_quest_ids=intent.completed_quest_ids,
             earned_award_keys=intent.earned_award_keys,
             remember_notes=intent.remember_notes,
@@ -423,7 +424,7 @@ class TurnCombatStateHelper:
             "round": combat.get("round", 1),
             "type": entry_type,
             "text": text,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if data:
             entry["data"] = data

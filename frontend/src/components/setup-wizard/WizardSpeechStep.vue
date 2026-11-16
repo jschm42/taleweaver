@@ -5,6 +5,7 @@ import { testService } from '@/services/testService'
 import WizardTestResult from './WizardTestResult.vue'
 import ElevenLabsVoiceField from '@/components/common/ElevenLabsVoiceField.vue'
 import OpenAICompatibleTtsFields from '@/components/common/OpenAICompatibleTtsFields.vue'
+import BrowserVoiceFields from '@/components/common/BrowserVoiceFields.vue'
 import { TTS_MODELS, needsKey, wizardStyles } from './wizardPresets'
 
 const ttsForm = settingsService.ttsForm
@@ -14,6 +15,7 @@ const PROVIDERS = [
   { id: 'google', name: 'Google Gemini TTS' },
   { id: 'elevenlabs', name: 'ElevenLabs' },
   { id: 'custom_openai', name: 'OpenAI-Compatible (local or hosted)' },
+  { id: 'browser', name: 'Browser Voice (free, local, for testing)' },
 ]
 
 const enabled = ref(ttsForm.value.enabled)
@@ -25,7 +27,10 @@ const compatUrl = ref(ttsForm.value.custom_openai_url || '')
 const compatVoice = ref(ttsForm.value.custom_openai_voice || '')
 const compatFormat = ref(ttsForm.value.custom_openai_format || 'mp3')
 const compatInstructions = ref(ttsForm.value.custom_openai_instructions || '')
+const browserVoice = ref(ttsForm.value.browser_voice || '')
+const browserCharacterVoices = ref<string[]>([...(ttsForm.value.browser_character_voices || [])])
 const isCompatible = computed((): boolean => provider.value === 'custom_openai')
+const isBrowser = computed((): boolean => provider.value === 'browser')
 const errorMessage = ref('')
 
 const models = computed(() => TTS_MODELS[provider.value] ?? [])
@@ -33,6 +38,7 @@ const voices = computed(() => ttsForm.value.voice_catalog)
 const providerNeedsKey = computed((): boolean => needsKey(provider.value, configuredKeys.value))
 
 watch(provider, () => {
+  if (isBrowser.value) return
   if (isCompatible.value) {
     if (/^(gemini-|eleven_)/.test(model.value)) model.value = ''
     return
@@ -63,6 +69,8 @@ async function save(): Promise<boolean> {
     custom_openai_voice: compatVoice.value.trim(),
     custom_openai_format: compatFormat.value,
     custom_openai_instructions: compatInstructions.value.trim(),
+    browser_voice: browserVoice.value,
+    browser_character_voices: browserCharacterVoices.value,
   })
   if (settingsService.statusMessage.value?.type === 'error') {
     errorMessage.value = settingsService.statusMessage.value.text
@@ -104,7 +112,7 @@ defineExpose({ save })
             </option>
           </select>
         </div>
-        <div v-if="!isCompatible">
+        <div v-if="!isCompatible && !isBrowser">
           <label :class="wizardStyles.label" for="wizard-tts-model">Model</label>
           <select id="wizard-tts-model" v-model="model" :class="wizardStyles.input">
             <option v-for="entry in models" :key="entry.id" :value="entry.id" class="bg-slate-900">
@@ -118,7 +126,18 @@ defineExpose({ save })
         No API key for this provider yet. Go back to the API keys page to add it.
       </p>
 
-      <div v-if="provider === 'google'">
+      <div v-if="isBrowser" class="space-y-3">
+        <p class="text-xs text-slate-400">
+          Each player's browser reads the story with its own voices: free, no key, works offline. Quality depends on
+          the browser (Edge has the best free voices). Good for testing; switch to a server provider later.
+        </p>
+        <BrowserVoiceFields
+          v-model:narrator="browserVoice"
+          v-model:characters="browserCharacterVoices"
+          :input-class="wizardStyles.input"
+        />
+      </div>
+      <div v-else-if="provider === 'google'">
         <label :class="wizardStyles.label" for="wizard-tts-voice">Narrator voice</label>
         <select id="wizard-tts-voice" v-model="voice" :class="wizardStyles.input">
           <option v-for="entry in voices" :key="entry.name" :value="entry.name" class="bg-slate-900">

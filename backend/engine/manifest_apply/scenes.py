@@ -121,6 +121,7 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                 audio_track_id=track_id_or_none(
                     scene.get("audio_track_id") or scene.get("music_track_id")
                 ),
+                is_respawn_point=scene.get("is_respawn_point") is True,
             )
         )
 

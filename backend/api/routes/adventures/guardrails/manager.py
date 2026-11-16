@@ -8,6 +8,8 @@ from backend.api.routes.adventures.guardrails.base import GuardrailBase
 from backend.api.routes.adventures.guardrails.containers import ContainerGuardMixin
 from backend.api.routes.adventures.guardrails.crafting import CraftingGuardMixin
 from backend.api.routes.adventures.guardrails.exits import ExitGuardMixin
+from backend.api.routes.adventures.guardrails.handover_recovery import HandoverRecoveryMixin
+from backend.api.routes.adventures.guardrails.handovers import ItemHandoverGuardMixin
 from backend.api.routes.adventures.guardrails.inspect import InspectGuardMixin
 from backend.api.routes.adventures.guardrails.items import ItemIntegrityMixin
 from backend.api.routes.adventures.guardrails.locks import LockEngineMixin
@@ -28,6 +30,8 @@ class TurnGuardrailsManager(
     ExitGuardMixin,
     LockEngineMixin,
     ItemIntegrityMixin,
+    ItemHandoverGuardMixin,
+    HandoverRecoveryMixin,
     InventoryRemovalGuardMixin,
     CraftingGuardMixin,
     RevealGuardMixin,

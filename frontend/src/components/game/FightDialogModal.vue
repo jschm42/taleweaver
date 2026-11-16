@@ -20,7 +20,12 @@ const FAST_STORAGE_KEY = 'taleweaver.combat.fast'
 const COMBAT_AUDIO_DUCK = 0.55
 /** At or below this share of max HP the stage warns with a pulsing red vignette. */
 const LOW_HEALTH_RATIO = 0.25
-const OUTCOME_TITLES = { victory: 'Victory', defeat: 'Defeat', escaped: 'Escaped' } as const
+const OUTCOME_TITLES = {
+  victory: 'Victory',
+  defeat: 'Defeat',
+  escaped: 'Escaped',
+  knocked_out: 'Knocked Out',
+} as const
 
 const props = defineProps<{
   open: boolean
@@ -181,7 +186,8 @@ const turnLabel = computed(() => {
 const outcomeShown = computed(() => isFinished.value && !arenaPlaying.value)
 const outcomeKind = computed<keyof typeof OUTCOME_TITLES>(() => {
   const outcome = props.combat?.outcome
-  return outcome === 'defeat' || outcome === 'escaped' ? outcome : 'victory'
+  // Knocked out (respawn mode): the protagonist wakes up at the revival point.
+  return outcome === 'defeat' || outcome === 'escaped' || outcome === 'knocked_out' ? outcome : 'victory'
 })
 
 /** Closes a finished fight. After a defeat the adventure ending follows in the story feed. */

@@ -43,14 +43,19 @@ SOURCE_MISSING = "missing"
 SOURCE_DISABLED = "disabled"
 
 # Local providers never use a key, so they are always server-provided.
-KEYLESS_PROVIDERS = frozenset(("ollama", "stable_diffusion", "comfyui", "qwen"))
+KEYLESS_PROVIDERS = frozenset(("ollama", "stable_diffusion", "comfyui", "qwen", "browser"))
 MAX_API_KEY_LENGTH = 512
+
+
+# Vault entries that are not a provider of their own: the OpenAI-compatible speech server keeps
+# a key apart from the OpenAI-compatible LLM endpoint, so the LLM key never reaches it.
+SPEECH_KEY_PROVIDERS = [{"id": "custom_openai_tts", "name": "OpenAI-Compatible Speech"}]
 
 
 def key_providers() -> list[dict[str, str]]:
     """Providers that take an API key: ``[{"id", "name"}]``, LLM first, without duplicates."""
     seen: dict[str, str] = {}
-    for provider in (*LLM_PROVIDERS, *IMAGE_PROVIDERS, *TTS_PROVIDERS):
+    for provider in (*LLM_PROVIDERS, *IMAGE_PROVIDERS, *TTS_PROVIDERS, *SPEECH_KEY_PROVIDERS):
         if provider["id"] not in KEYLESS_PROVIDERS:
             seen.setdefault(provider["id"], provider["name"])
     return [{"id": pid, "name": name} for pid, name in seen.items()]

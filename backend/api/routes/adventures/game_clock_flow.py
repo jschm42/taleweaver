@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.api.routes.adventures.turn_pass_flow import sse_role_message
 from backend.engine.rules.game_clock import (
     collect_due_events,
@@ -25,7 +26,7 @@ from backend.engine.rules.game_clock import (
     time_event_payload,
     write_clock,
 )
-from backend.engine.rules.rule_engine import GameEvent, GameOverError
+from backend.engine.rules.rule_engine import GameOverError
 from backend.engine.scripting.context import ScriptMessage
 from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
 
@@ -115,10 +116,7 @@ async def stream_time_events(manager: Any, game_event: Any = None) -> AsyncGener
         for message in await run_due_time_events(manager):
             yield sse_role_message(message)
     except GameOverError as goe:
-        await manager._finalize_session("game_over", str(goe))
-        if isinstance(game_event, GameEvent):
-            game_event.game_over = True
-            game_event.status_note = str(goe)
+        await end_or_respawn(manager, goe, game_event)
 
 
 async def tick_after_narration(manager: Any, game_event: Any = None) -> AsyncGenerator[str, None]:

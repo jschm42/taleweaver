@@ -393,7 +393,11 @@ def _build_special_attack_requirement(
         "Narrate the outcome with on_recruit_success_text and on_recruit_failure_text. The "
         "companion follows the "
         "protagonist through exits; set `companions_allowed: false` on an exit or a sequence for "
-        "solo sections. All other NPCs get `companion: null`."
+        "solo sections. All other NPCs get `companion: null`.\n"
+        "DEFEAT: leave `game_over_rules` null (0 HP = game over) unless the story idea asks for "
+        "respawning; then set {on_zero_hp: 'respawn', respawn_hp_percent: 25} and mark safe "
+        "places (a camp, a shrine) with `is_respawn_point: true`. Use `respawn_allowed: false` "
+        "on a sequence that must stay deadly."
     )
 
 

@@ -12,6 +12,10 @@ nod") stays a normal Game Master turn.
 
 Quest items (``metadata_json.quest_item``) are refused and stay in the inventory
 (``backend.engine.rules.quest_items``).
+
+Handovers that Pass 1 reports in ``given_items`` (the player gives an item in other words,
+e.g. inside dialogue) use the same ``hand_over_and_trigger`` within the turn
+(``handover_flow.py``); there the turn's own narration is the NPC's reaction.
 """
 
 from __future__ import annotations
@@ -115,14 +119,13 @@ async def give_items_to_npc(manager: Any, args: str) -> GiveOutcome:
         text = refusal or f"You don't carry {', '.join(missing)}."
         return GiveOutcome([await _say(manager, "system", text) if refusal else ("system", text)])
 
-    await _hand_over(manager, npc, picked)
-    names = ", ".join(_item_label(e) for e in picked)
-    events = [await _say(manager, "system", f"You give {names} to {npc.name}.")]
+    notes: list[str] = []
     if refusal:
-        events.append(await _say(manager, "system", refusal))
+        notes.append(refusal)
     if missing:
-        events.append(await _say(manager, "system", f"You don't carry {', '.join(missing)}."))
-    events.extend(await _run_receive_trigger(manager, npc, picked))
+        notes.append(f"You don't carry {', '.join(missing)}.")
+    events = await hand_over_and_trigger(manager, npc, picked, notes)
+    names = ", ".join(_item_label(e) for e in picked)
     if pending_dialog(manager.state.entity_states):
         # The receive script asked the player something; the answer drives the reaction.
         return GiveOutcome(events)
@@ -137,6 +140,23 @@ async def _giftable_items(
     picked, kept = await split_quest_items(manager.db, manager.state.session_id, picked)
     refusal = quest_item_refusal([_item_label(e) for e in kept]) if kept else ""
     return picked, missing, refusal
+
+
+async def hand_over_and_trigger(
+    manager: Any, npc: WorldEntity, picked: list[Any], notes: list[str] | None = None
+) -> list[tuple[str, str]]:
+    """Moves carried items into the NPC's inventory and runs its receive trigger.
+
+    Returns the (role, text) messages to stream: the handover note, the extra ``notes``
+    (e.g. items the player does not carry), then the trigger's output.
+    """
+    await _hand_over(manager, npc, picked)
+    names = ", ".join(_item_label(e) for e in picked)
+    events = [await _say(manager, "system", f"You give {names} to {npc.name}.")]
+    for note in notes or []:
+        events.append(await _say(manager, "system", note))
+    events.extend(await _run_receive_trigger(manager, npc, picked))
+    return events
 
 
 def _reaction_prompt(npc: WorldEntity, names: str) -> str:

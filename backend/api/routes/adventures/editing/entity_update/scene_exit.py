@@ -22,7 +22,11 @@ from backend.engine.world.dynamic_scene_schemas import (
     build_dynamic_placeholder_scene_id,
     normalize_dynamic_zone,
 )
-from backend.engine.world.scene_fields import SCENE_AUDIO_FIELDS, SCENE_SCRIPT_FIELDS
+from backend.engine.world.scene_fields import (
+    SCENE_AUDIO_FIELDS,
+    SCENE_RESPAWN_FIELDS,
+    SCENE_SCRIPT_FIELDS,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -112,7 +116,8 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
     if entry is None:
         entry = {"id": scene.id, "name": scene.label, "description": scene.description}
         scenes.append(entry)
-    entry.update({f: getattr(scene, f) for f in (*SCENE_SCRIPT_FIELDS, *SCENE_AUDIO_FIELDS)})
+    fields = (*SCENE_SCRIPT_FIELDS, *SCENE_AUDIO_FIELDS, *SCENE_RESPAWN_FIELDS)
+    entry.update({f: getattr(scene, f) for f in fields})
     entry["dynamic_zone"] = scene.dynamic_zone
     manifest["scenes"] = scenes
     adv.original_manifest = manifest
@@ -149,6 +154,8 @@ async def update_scene(
     if given(payload, "audio_track_id"):
         scene.audio_track_id = track_id_or_none(payload.audio_track_id)
     _update_scene_dynamic_zone(scene, payload)
+    if given(payload, "is_respawn_point"):
+        scene.is_respawn_point = payload.is_respawn_point is True
     copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
     _sync_scene_manifest(adv, scene)
 

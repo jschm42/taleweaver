@@ -305,6 +305,8 @@ class CommandParser:
             "- `/sheet`: Open your character sheet.",
             "- `/playagent [on/off]`: Activate or deactivate the autonomous Play-Agent.",
             "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom).",
+            "- `/playagent dialogue <taciturn|normal|talkative|roleplay>`: How much the Play-Agent talks with characters.",
+            "- `/instruct <text>`: Tell the Play-Agent what to do next (`/instruct clear` removes it). While it plays, plain chat text works too.",
             "- `/playagent delay <seconds>`: Pause between two Play-Agent steps in Auto mode (0 = none).",
             "- `/playagent tts on/off`: Let the Play-Agent wait until text-to-speech has finished.",
         ]

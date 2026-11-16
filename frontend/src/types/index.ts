@@ -113,6 +113,14 @@ export interface CharacterSheet {
   agent_step_delay?: number
   /** In Auto mode, the next Play-Agent step waits until text-to-speech has finished. */
   agent_wait_for_tts?: boolean
+  /** The Play-Agent may use the current chapter's walkthrough (unlocked with XP, or debug). */
+  agent_walkthrough_unlocked?: boolean
+  /** Debug-only Play-Agent options (Monkey mode) are available. */
+  agent_debug_tools?: boolean
+  /** How much the Play-Agent talks with characters: taciturn, normal, talkative, roleplay. */
+  agent_dialogue_level?: string
+  /** The player's current instruction for the Play-Agent ("" = none). */
+  agent_instruction?: string
   agent_personality?: string
   agent_custom_personality?: string
   max_memory_turns?: number
@@ -260,7 +268,7 @@ export interface AppliedEffect {
 export interface CombatEventData {
   kind:
     | 'attack' | 'special' | 'initiative' | 'turn' | 'rest' | 'consume' | 'run'
-    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'banter'
+    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'knocked_out' | 'banter'
   actor?: string | null
   /** Spoken line of a `banter` event (without the speaker name). */
   line?: string
@@ -595,6 +603,8 @@ export interface CreateAdventurePayload {
   pacing_minutes?: number
   max_time_per_turn?: number | null
   gm_time_control?: boolean
+  /** At 0 HP: `{ on_zero_hp: 'game_over' | 'respawn', respawn_hp_percent }`. */
+  game_over_rules?: Record<string, unknown> | null
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean

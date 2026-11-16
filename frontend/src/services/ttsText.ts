@@ -3,6 +3,7 @@
  */
 
 import { uniqueShortNameMatch } from '@/utils/speakerNames'
+import { canBeSpeakerName } from '@/utils/speakerLabel'
 
 export type SpeechSegment ={ speaker?: string, text: string }
 export type SegmentRequest = { requestText: string, voiceOverride?: string, speaker?: string }
@@ -26,7 +27,7 @@ export function normalizeDialoguePrefixes(text: string): string {
 
 function looksLikeSpeakerLabel(value: string): boolean {
   const normalized = String(value || '').trim()
-  if (!normalized || normalized.length > 50) return false
+  if (!normalized || normalized.length > 50 || !canBeSpeakerName(normalized)) return false
   const words = normalized.split(/\s+/).filter(Boolean)
   if (words.length > 6) return false
   return /^[\p{L}\p{N}][\p{L}\p{N} '\-.,()]*$/u.test(normalized)
@@ -37,7 +38,12 @@ function parseParagraph(paragraph: string): SpeechSegment {
   if (!match) return { text: paragraph }
   const rawSpeaker = (match[1] || match[2] || '').trim()
   const spokenText = (match[3] || '').trim()
-  if (!spokenText || NON_SPEAKER_LABELS.has(rawSpeaker.toLowerCase()) || !looksLikeSpeakerLabel(rawSpeaker)) {
+  if (
+    !spokenText ||
+    NON_SPEAKER_LABELS.has(rawSpeaker.toLowerCase()) ||
+    !looksLikeSpeakerLabel(rawSpeaker) ||
+    !canBeSpeakerName(rawSpeaker, spokenText)
+  ) {
     return { text: paragraph }
   }
   return { speaker: rawSpeaker, text: spokenText }

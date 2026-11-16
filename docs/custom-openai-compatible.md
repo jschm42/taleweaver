@@ -8,7 +8,7 @@ For speech, see [OpenAI-Compatible Speech (TTS)](openai-compatible-tts.md); it u
 
 ## Authentication and headers
 
-Store optional API keys in the Provider Vault under **OpenAI-Compatible API Key**. When pointing an OpenAI-compatible endpoint to OpenRouter (`https://openrouter.ai/api/v1`) without a custom OpenAI key, TaleWeaver automatically falls back to your saved OpenRouter vault key. TaleWeaver sends the key as `Authorization: Bearer <key>`. Endpoints that do not require authentication can leave the vault key empty. TaleWeaver sets standard headers for hosted gateways.
+Store optional API keys in the Provider Vault under **OpenAI-Compatible LLM**. Speech servers have their own entry (**OpenAI-Compatible Speech**, see [OpenAI-compatible speech](openai-compatible-tts.md)), so the LLM key is never sent to them. When pointing an OpenAI-compatible endpoint to OpenRouter (`https://openrouter.ai/api/v1`) without a custom OpenAI key, TaleWeaver automatically falls back to your saved OpenRouter vault key. TaleWeaver sends the key as `Authorization: Bearer <key>`. Endpoints that do not require authentication can leave the vault key empty. TaleWeaver sets standard headers for hosted gateways.
 
 ## Local networking
 

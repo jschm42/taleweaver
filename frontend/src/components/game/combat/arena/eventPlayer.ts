@@ -60,6 +60,7 @@ export class ArenaEventPlayer {
       turn: (d) => this.turn(d),
       victory: () => this.victory(),
       game_over: () => this.gameOver(),
+      knocked_out: () => this.knockedOut(),
       run: (d) => this.announce(
         d.success ? 'ESCAPED!' : 'NO ESCAPE',
         d.success ? COLORS.player : COLORS.enemy,
@@ -323,6 +324,14 @@ export class ArenaEventPlayer {
     void this.arena.flash(COLORS.hp, 0.4)
     void this.arena.quake(10)
     await this.arena.effects.banner(this.arena.center(), 'DEFEAT', COLORS.hp, 900, 64, this.arena.width)
+  }
+
+  /** Respawn mode: the protagonist is knocked out instead of killed. */
+  private async knockedOut(): Promise<void> {
+    this.sounds.play('defeat')
+    void this.arena.flash(COLORS.passive, 0.4)
+    void this.arena.quake(6)
+    await this.arena.effects.banner(this.arena.center(), 'KNOCKED OUT', COLORS.passive, 900, 56, this.arena.width)
   }
 
   private async applyEffects(effects: AppliedEffect[] | undefined, options: HitOptions = {}): Promise<void> {

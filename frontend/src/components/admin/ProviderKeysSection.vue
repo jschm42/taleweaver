@@ -26,10 +26,17 @@ interface ProviderMeta {
 const PROVIDERS: ProviderMeta[] = [
   {
     id: 'custom_openai',
-    name: 'OpenAI-Compatible API',
+    name: 'OpenAI-Compatible LLM',
     category: 'specialized',
     capabilities: ['LLM'],
-    description: 'API key for a hosted OpenAI-compatible gateway or self-hosted endpoint. Optional for unauthenticated servers.'
+    description: 'API key for a hosted OpenAI-compatible LLM gateway or self-hosted endpoint. Optional for unauthenticated servers.'
+  },
+  {
+    id: 'custom_openai_tts',
+    name: 'OpenAI-Compatible Speech',
+    category: 'specialized',
+    capabilities: ['TTS'],
+    description: 'API key for the OpenAI-compatible speech server (e.g. OpenAI TTS). Leave empty for local servers like Piper or Kokoro; the LLM key is never sent there.'
   },
   {
     id: 'openai',

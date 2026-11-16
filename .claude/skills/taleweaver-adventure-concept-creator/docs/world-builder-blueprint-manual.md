@@ -394,6 +394,26 @@ on_recruit_fail_text: Grull sniffs it and pushes it back. "That's not drink, fri
 
 Grull's card gets a softly glowing companion frame and an *Ally?* tag, and his context menu offers **Recruit**. The dialog shows his hint and lets the player offer one item: the rum makes him join (he keeps the bottle); anything else runs the failure text and stays in the inventory. With `recruit: instant` he joins at once; without `recruit` only a script recruits him (`tw.party.recruit('GRULL')`).
 
+### Waking up at the camp instead of dying
+
+```text
+[World]
+at_zero_hp: respawn
+respawn_hp: 30%
+
+[Scene: CAMP] The Ranger Camp
+respawn: yes
+
+[Sequence: 5] The Dragon's Lair
+respawn: no
+
+[Script: FEE] The healer's fee
+trigger: on_respawn
+code: tw.player.add_xp(-10 * tw.game.respawns)
+```
+
+A protagonist who falls to 0 HP wakes up at the ranger camp (once reached; before that at the start scene) with 30 % of their max HP, and every knockout costs a little more EXP. Only in the dragon's lair is 0 HP still the end. Scripted defeats (`lose_guard`, `tw.game.game_over()`) always end the adventure.
+
 ### An NPC whose mood changes with the player's behavior
 
 ```text

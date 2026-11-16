@@ -49,7 +49,7 @@ async def update_agent_settings(
         raise HTTPException(status_code=404, detail="Game session not found.")
     try:
         apply_settings_update(manager.state, payload, current_user.llm_settings)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Unknown play-agent personality.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     await db.commit()
-    return build_agent_snapshot(manager.state)
+    return build_agent_snapshot(manager.state, manager.adventure)

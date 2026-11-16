@@ -52,6 +52,14 @@ def integer(raw: str) -> int:
         raise ValueError(f"expected a whole number, got '{raw.strip()}'") from exc
 
 
+def percent(raw: str) -> int:
+    """A share in percent (1-100); accepts "25" and "25%"."""
+    value = integer(raw.strip().rstrip("%"))
+    if not 1 <= value <= 100:
+        raise ValueError(f"expected a percentage from 1 to 100, got '{raw.strip()}'")
+    return value
+
+
 def boolean(raw: str) -> bool:
     word = raw.strip().lower()
     if word in _TRUE_WORDS:

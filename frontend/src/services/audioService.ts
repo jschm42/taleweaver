@@ -18,6 +18,13 @@ import {
   prepareStreamElement,
   releaseStreamElement,
 } from '@/services/ttsStream'
+import {
+  BROWSER_TTS_PROVIDER,
+  cancelBrowserSpeech,
+  pauseBrowserSpeech,
+  resumeBrowserSpeech,
+  speakWithBrowser,
+} from '@/services/browserTts'
 
 type SpeakOptions = {
   sceneDescription?: string
@@ -56,8 +63,11 @@ type QueuedSegment = {
   speaker?: string
 }
 
-/** A streaming <audio> element (ElevenLabs) or a whole clip (Gemini, fallback). */
-type PlayableAudio = HTMLAudioElement | Blob
+/** Marker: the browser reads the segment itself (provider "browser", see browserTts.ts). */
+const BROWSER_SPEECH = Symbol('browserSpeech')
+
+/** A streaming <audio> element (ElevenLabs), a whole clip (Gemini, fallback) or browser speech. */
+type PlayableAudio = HTMLAudioElement | Blob | typeof BROWSER_SPEECH
 type PreparedSegment = { segment: QueuedSegment, audio: Promise<PlayableAudio | null> }
 
 // Retrying with simplified text cannot help when the provider is overloaded or rate-limited.
@@ -143,6 +153,8 @@ class AudioService {
   private lastTtsRequestAt = 0
   private audioContext: AudioContext | null = null
   private segmentQueue: QueuedSegment[] = []
+  /** Configured TTS provider (from the server settings); "browser" speaks locally. */
+  private provider = ''
   private pipeline: { token: number, promise: Promise<void> } | null = null
 
   public isUnlocked = ref(false)
@@ -388,6 +400,7 @@ class AudioService {
 
   /** A streaming <audio> element (ElevenLabs), else the whole clip as a blob (Gemini, fallback). */
   private async prepareSegmentAudio(segment: QueuedSegment, token: number): Promise<PlayableAudio | null> {
+    if (this.usesBrowserSpeech()) return BROWSER_SPEECH
     if (this.streamingAvailable === false) return this.fetchSegmentAudio(segment, token)
     try {
       await this.waitForTtsRequestSlot()
@@ -430,9 +443,29 @@ class AudioService {
     }
   }
 
+  /** Browser speech for one segment; skip() and stop() end it through resolveCurrentPlayback. */
+  private async playBrowserSpeech(segment: QueuedSegment): Promise<void> {
+    this.resolveCurrentPlayback = cancelBrowserSpeech
+    try {
+      await speakWithBrowser(segment.request.requestText, {
+        voiceKey: segment.request.voiceOverride || segment.request.speaker || undefined,
+        rate: this.getSafeSpeechRate(),
+        language: segment.context.language,
+      })
+    } catch (err) {
+      this.setPlaybackError(err)
+    } finally {
+      this.resolveCurrentPlayback = null
+    }
+  }
+
   private async playPrepared(playable: PlayableAudio, segment: QueuedSegment, token: number): Promise<void> {
     this.currentText.value = segment.ttsText
     this.currentSpeaker.value = segment.speaker ?? null
+    if (playable === BROWSER_SPEECH) {
+      await this.playBrowserSpeech(segment)
+      return
+    }
     if (playable instanceof HTMLAudioElement) {
       await this.playStream(playable, segment, token)
       return
@@ -540,6 +573,10 @@ class AudioService {
   public async download(text: unknown, options: SpeakOptions = {}): Promise<void> {
     const normalizedText = normalizeText(text)
     if (!normalizedText) return
+    if (this.usesBrowserSpeech()) {
+      this.lastError.value = 'Browser speech cannot be saved as a file. Ask the admin for a server TTS provider to download audio.'
+      return
+    }
 
     const [request] = buildSegmentRequests(buildWholeTextSegment(normalizeDialoguePrefixes(normalizedText)), options.npcMetadata)
     if (!request) return
@@ -578,6 +615,7 @@ class AudioService {
     if (this.isPaused.value) return
     this.isPaused.value = true
     this.currentAudio?.pause()
+    if (this.usesBrowserSpeech()) pauseBrowserSpeech()
     if (this.audioContext?.state === 'running') {
       this.audioContext.suspend().catch(() => {})
     }
@@ -589,6 +627,7 @@ class AudioService {
     if (this.audioContext?.state === 'suspended') {
       this.audioContext.resume().catch(() => {})
     }
+    if (this.usesBrowserSpeech()) resumeBrowserSpeech()
     this.currentAudio?.play().catch((err) => this.logDebug('TTS resume failed', { error: String(err) }))
     this.releasePauseWaiters()
   }
@@ -607,6 +646,7 @@ class AudioService {
     if (this.currentBufferSource) {
       try { this.currentBufferSource.stop() } catch { /* already stopped */ }
     }
+    if (this.usesBrowserSpeech()) cancelBrowserSpeech()
     if (this.currentAudio) {
       this.currentAudio.pause()
       const settle = this.resolveCurrentPlayback
@@ -629,6 +669,17 @@ class AudioService {
   /** Forget whether the provider streams (call after the speech settings change). */
   public resetProviderCapabilities(): void {
     this.streamingAvailable = null
+  }
+
+  /** The configured TTS provider; "browser" makes the browser read the text itself. */
+  public setProvider(provider: string): void {
+    if (this.provider === provider) return
+    this.stop()
+    this.provider = provider
+  }
+
+  public usesBrowserSpeech(): boolean {
+    return this.provider === BROWSER_TTS_PROVIDER
   }
 
   /**
@@ -686,6 +737,7 @@ class AudioService {
     // Prepared streams keep downloading (and costing credits) unless released.
     for (const element of this.streamElements) releaseStreamElement(element)
     this.streamElements.clear()
+    if (this.usesBrowserSpeech()) cancelBrowserSpeech()
     if (this.currentBufferSource) {
       try { this.currentBufferSource.stop() } catch { /* already stopped */ }
       this.currentBufferSource = null

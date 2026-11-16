@@ -932,6 +932,7 @@ class AdventureTemplateImporter:
             max_time_per_turn=adv_meta.get("max_time_per_turn")
             or manifest.get("max_time_per_turn"),
             gm_time_control=_gm_time_control(adv_meta, manifest),
+            game_over_rules=adv_meta.get("game_over_rules") or manifest.get("game_over_rules"),
             max_memory_turns=adv_meta.get("max_memory_turns")
             or manifest.get("max_memory_turns")
             or 10,

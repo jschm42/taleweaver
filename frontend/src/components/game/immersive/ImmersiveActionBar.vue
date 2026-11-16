@@ -20,6 +20,7 @@ import {
   RefreshCw,
   X,
   HelpCircle,
+  Bot,
 } from 'lucide-vue-next'
 import { useDockMagnification } from '@/composables/useDockMagnification'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
@@ -49,6 +50,10 @@ const props = defineProps<{
   exp?: number
   /** The protagonist's portrait; the Hero card shows it instead of the generic artwork. */
   heroImage?: string | null
+  /** The Play-Agent plays for the player; the Auto-Play card then opens its panel. */
+  agentActive?: boolean
+  /** The Auto-Play card can start the agent (game running, input not locked). */
+  canStartAgent?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -59,6 +64,7 @@ const emit = defineEmits<{
   openWalkthrough: []
   openMemories: []
   openDebug: []
+  openPlayAgent: []
   shuffleSuggestions: []
   selectSuggestion: [suggestion: string]
 }>()
@@ -164,6 +170,19 @@ const dockItems = computed<DockItem[]>(() => {
       action: () => emit('openMemories'),
     },
   ]
+  if (props.agentActive || props.canStartAgent) {
+    items.push({
+      id: 'autoplay',
+      label: 'Auto-Play',
+      title: props.agentActive
+        ? 'Show the Play-Agent panel'
+        : 'Let the Play-Agent play as your hero (you can pause or stop it at any time)',
+      icon: Bot,
+      tint: '#2dd4bf',
+      dot: props.agentActive,
+      action: () => emit('openPlayAgent'),
+    })
+  }
   if (props.debugMode) {
     items.push({
       id: 'debug',

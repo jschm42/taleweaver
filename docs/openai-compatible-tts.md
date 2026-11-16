@@ -25,11 +25,11 @@ The settings are stored server-wide in `tts_settings`: `provider: "custom_openai
 
 The key is optional, so local servers need nothing. TaleWeaver uses the same rule as the OpenAI-compatible LLM provider:
 
-1. the **OpenAI-Compatible API Key** from **Provider Keys**, if stored (or required by the key policy);
+1. the **OpenAI-Compatible Speech** key from the **Provider Vault**, if stored (or required by the key policy);
 2. otherwise, for `openrouter.ai` URLs, the **OpenRouter** key;
 3. otherwise no `Authorization` header.
 
-The key is sent as `Authorization: Bearer <key>`. Because the same vault entry is used for the LLM and the speech endpoint, point both at the same service when they need different keys, or keep speech on a keyless local server.
+The key is sent as `Authorization: Bearer <key>`. The speech key is a vault entry of its own (`custom_openai_tts`), separate from the **OpenAI-Compatible LLM** key: the LLM key is never sent to the speech server, so a local server such as Piper or Kokoro needs no key at all. Installations that used the shared key for a hosted speech service (e.g. OpenAI TTS) enter it again under **OpenAI-Compatible Speech**.
 
 ## Model and voice discovery
 
@@ -68,6 +68,6 @@ Kokoro-82M speaks English (US/UK), Spanish, French, Italian, Portuguese (BR), Hi
 
 * **"Speech server URL rejected"**: the URL does not end in `/v1`, or it is a local/LAN address without the explicit `ALLOW_PRIVATE_NETWORK_MODELS=true`.
 * **"Speech server not reachable"**: the server is not running, or the host is wrong (see the Docker note above).
-* **401/403 from the server**: store or fix the OpenAI-Compatible API Key (or the OpenRouter key for OpenRouter).
+* **401/403 from the server**: store or fix the **OpenAI-Compatible Speech** key (or the OpenRouter key for OpenRouter).
 * **"Voice ... not found" / "Provider returned 400"**: the voice id is unknown to the model. Clear the voice to use the model's default voice, or enter a voice id from the provider's own catalog.
 * **Unsupported format**: switch the Audio Format (some models only return PCM, others only MP3).

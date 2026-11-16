@@ -25,6 +25,8 @@ export interface EntityEditData {
   revealed?: boolean
   /** Exits: false makes a solo passage (the companion stays behind). */
   companions_allowed?: boolean
+  /** Scenes: revival point for the respawn mode. */
+  is_respawn_point?: boolean
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string

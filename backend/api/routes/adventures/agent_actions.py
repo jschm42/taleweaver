@@ -5,6 +5,7 @@ play-agent can only type, so this module translates a small set of agent command
 the same engine operations:
 
 - `/go <exit or destination>`          -> `/traverse_exit <exit id>` (regular turn)
+- `/travel <visited place>`            -> next exit of the known route (see `agent_travel`)
 - `/unlock <target> with <item>`       -> exit/container unlock with a key item
 - `/unlock <target> code <code>`       -> exit/container unlock with a code
 - `/unlock <target>`                   -> exit/container unlock guarded by a script expression
@@ -21,10 +22,12 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 
+from backend.api.routes.adventures.agent_access import is_blocked_command
 from backend.api.routes.adventures.agent_item_actions import (
     AgentActionOutcome,
     execute_item_action,
 )
+from backend.api.routes.adventures.agent_travel import TRAVEL_COMMAND, travel
 from backend.api.routes.adventures.agent_world_view import CONTAINER_TYPES, lock_hint
 from backend.api.routes.adventures.turn_context_helpers import orient_exits
 from backend.engine.world.exit_labels import exit_display_name
@@ -276,8 +279,14 @@ async def execute_agent_action(manager: Any, action: str) -> AgentActionOutcome:
     parts = (action or "").strip().split(None, 1)
     command = parts[0].lower() if parts else ""
     args = parts[1].strip() if len(parts) > 1 else ""
+    if is_blocked_command(action):
+        return AgentActionOutcome(
+            message=f"{parts[0]} is the player's own control; the agent skips it."
+        )
     if command in GO_COMMANDS:
         return await _go(manager, args)
+    if command == TRAVEL_COMMAND:
+        return await travel(manager, args)
     if command == UNLOCK_COMMAND:
         return await _unlock(manager, args)
     item_outcome = await execute_item_action(manager, command, args)

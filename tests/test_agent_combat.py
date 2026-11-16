@@ -250,3 +250,58 @@ async def test_tactician_plays_a_real_fight_round(setup_test_db, monkeypatch):
     assert decision.action == "Attack Goblin"
     assert decision.thoughts.startswith("[Combat tactician]")
     assert not any(INVALID_ACTION_MSG in chunk for chunk in chunks)
+
+
+MEND_ALLY = {
+    "id": "MEND",
+    "name": "Mend Ally",
+    "cost_type": "mana",
+    "cost": 10,
+    "locked": False,
+    "targets_enemy": False,
+    "success_stat": "wisdom",
+    "difficulty": None,
+    "effects": [{"target": "ally", "stat": "hp", "amount": "+20"}],
+}
+
+
+def _companion(hp, mark_id=None):
+    return {"id": "BRAN", "name": "Bran", "hp": hp, "max_hp": 50, "mark_id": mark_id}
+
+
+def test_tactician_heals_badly_wounded_companion_with_ally_ability():
+    # Arrange
+    situation = _situation(player=_player(special_actions=[MEND_ALLY]), party=[_companion(10)])
+
+    # Act
+    action, reason = choose_combat_action(situation)
+
+    # Assert
+    assert action == "/special MEND"
+    assert "Bran" in reason
+
+
+def test_tactician_marks_focus_target_for_companion():
+    situation = _situation(party=[_companion(50)])
+
+    action, reason = choose_combat_action(situation)
+
+    assert action == "Mark Orc"
+    assert "Bran" in reason
+
+
+def test_tactician_attacks_once_companion_has_the_mark():
+    situation = _situation(party=[_companion(50, mark_id="ORC")])
+
+    action, _ = choose_combat_action(situation)
+
+    assert action == "Attack Orc"
+
+
+def test_tactician_ignores_downed_companion():
+    downed = {**_companion(0), "downed": True}
+    situation = _situation(player=_player(special_actions=[MEND_ALLY]), party=[downed])
+
+    action, _ = choose_combat_action(situation)
+
+    assert action == "Attack Orc"

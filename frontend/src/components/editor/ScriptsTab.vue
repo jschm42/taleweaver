@@ -87,6 +87,7 @@ const TRIGGER_OPTIONS = [
   { value: 'on_narration_done', label: 'On Narration Done', desc: 'Runs after narration generation completes' },
   { value: 'on_turn_end', label: 'On Turn End', desc: 'Runs after scene narrative and entity mutations' },
   { value: 'on_time_reached', label: 'On Time Reached', desc: 'Runs once when the in-game clock passes the target time (e.g. 90, 2h 30m, 1d)' },
+  { value: 'on_respawn', label: 'On Respawn', desc: 'Respawn mode: runs after the fallen protagonist woke up at the revival point (penalties, healing enemies)' },
 ] as const
 
 function getTriggerBadgeClass(trigger: string): string {
@@ -107,6 +108,8 @@ function getTriggerBadgeClass(trigger: string): string {
       return 'bg-purple-500/15 text-purple-300 border-purple-500/30'
     case 'on_time_reached':
       return 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+    case 'on_respawn':
+      return 'bg-red-500/15 text-red-300 border-red-500/30'
     default:
       return 'bg-slate-500/15 text-slate-300 border-slate-500/30'
   }

@@ -1,5 +1,8 @@
 import { ref } from 'vue'
 import { api } from '@/composables/useApi'
+import { speakWithBrowser } from '@/services/browserTts'
+
+const BROWSER_TTS_SAMPLE = 'Welcome, traveller. This is the browser voice of TaleWeaver.'
 
 /**
  * TestService manages API connectivity and model tests:
@@ -51,7 +54,14 @@ class TestService {
     try {
       const data = await api.testTTS()
 
-      if (data.status === 'success' && data.audio_url) {
+      if (data.status === 'success' && data.browser) {
+        // Browser speech: the server creates no audio, this browser reads the sample itself.
+        await speakWithBrowser(BROWSER_TTS_SAMPLE)
+        this.testResults.value['tts'] = {
+          status: 'success',
+          message: 'Browser voice played. Each player hears the voices of their own browser.',
+        }
+      } else if (data.status === 'success' && data.audio_url) {
         // Attempt to play the generated audio
         const audio = new Audio(data.audio_url)
         await audio.play()

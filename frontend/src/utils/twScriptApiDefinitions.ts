@@ -287,6 +287,9 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'game_won', kind: 'method', signature: '(message: str = None)', snippet: 'game_won("${1:Victory achieved!}")', doc: 'Alias for win(). Concludes adventure with victory.' },
       { name: 'game_over', kind: 'method', signature: '(reason: str = None)', snippet: 'game_over("${1:Defeat reason}")', doc: 'Ends adventure with game-over defeat.' },
       { name: 'time', kind: 'property', signature: 'int', doc: 'Elapsed minutes (tw.time.now).' },
+      { name: 'respawn_point', kind: 'property', signature: 'str | None', doc: 'Respawn mode: scene the protagonist wakes up in after falling to 0 HP (None = start scene).' },
+      { name: 'respawns', kind: 'property', signature: 'int', doc: 'How often the protagonist has been revived in this session.' },
+      { name: 'set_respawn_point', kind: 'method', signature: '(scene_id: str = None)', snippet: 'set_respawn_point("${1:SCENE_ID}")', doc: 'Sets the revival point; None or "" falls back to the start scene.' },
     ],
   },
   quests: {

@@ -16,6 +16,7 @@ from backend.engine.world.combat_profile_schemas import (
     TalentSchema,
 )
 from backend.engine.world.companion_schema import CompanionSchema
+from backend.engine.world.defeat_schemas import GameOverRulesSchema
 from backend.engine.world.schema_base import WorldBaseSchema
 from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
     SwitchEffectSchema,
@@ -76,6 +77,14 @@ class WorldSceneSchema(WorldBaseSchema):
         description=(
             "Optional `id` of the entry in `audio_tracks` that plays in this scene. "
             "Use empty string for a silent scene."
+        ),
+    )
+    is_respawn_point: bool = Field(
+        default=False,
+        description=(
+            "True for a revival point (a shrine, a camp, a healer's hut). Only matters when "
+            "`game_over_rules.on_zero_hp` is `respawn`: a protagonist who falls to 0 HP wakes "
+            "up at the last revival point reached. Usually False."
         ),
     )
     helpers_script: Optional[str] = Field(
@@ -547,6 +556,7 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -635,6 +645,13 @@ class SequenceSchema(WorldBaseSchema):
         description=(
             "False for a solo chapter: the protagonist's companion does not follow into new "
             "scenes while this sequence is active."
+        ),
+    )
+    respawn_allowed: bool = Field(
+        default=True,
+        description=(
+            "False for a deadly chapter: falling to 0 HP while this sequence is active ends "
+            "the adventure even in respawn mode. Usually True."
         ),
     )
     soft_rules: list[SoftRuleSchema] = Field(
@@ -804,9 +821,10 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m')",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None)",
     )
     target_id: Optional[str] = Field(
         None,
@@ -879,6 +897,10 @@ class WorldManifesto(WorldBaseSchema):
     gameover_guard_expression: Optional[str] = Field(
         default="",
         description="Deterministic Python boolean guard expression evaluated with tw for losing the adventure.",
+    )
+    game_over_rules: Optional[GameOverRulesSchema] = Field(
+        default=None,
+        description="Optional: what happens at 0 HP (game over or respawn). Omit for game over.",
     )
     can_damage_npcs: bool = Field(
         True, description="Global flag: whether the protagonist can damage NPCs."

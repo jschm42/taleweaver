@@ -22,6 +22,7 @@ from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.history_compression_window import CHOICE_MESSAGE_PREFIX
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks
+from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.api.routes.adventures.story_continuation import continuation_due
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.rules.rule_engine import GameOverError
@@ -178,8 +179,7 @@ class DialogChoiceResolver:
         try:
             return await self.manager._apply_script_changeset(context.changeset), False
         except GameOverError as goe:
-            await self.manager._finalize_session("game_over", str(goe))
-            return [], True
+            return [], await end_or_respawn(self.manager, goe)
 
     async def _narrate(
         self,

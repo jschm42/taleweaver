@@ -3,6 +3,7 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { api } from '@/composables/useApi'
 import ElevenLabsVoiceField from '@/components/common/ElevenLabsVoiceField.vue'
 import OpenAICompatibleTtsFields from '@/components/common/OpenAICompatibleTtsFields.vue'
+import BrowserVoiceFields from '@/components/common/BrowserVoiceFields.vue'
 
 const props = defineProps<{
   ttsForm: any
@@ -60,11 +61,14 @@ const vocalTagsSupported = computed(() => {
 })
 
 const isCompatible = computed((): boolean => localForm.value.provider === 'custom_openai')
+// Browser speech runs in each player's browser: no key, no model, no vocal tags.
+const isBrowser = computed((): boolean => localForm.value.provider === 'browser')
+const hasServerModel = computed((): boolean => !isCompatible.value && !isBrowser.value)
 
-// The OpenAI-compatible provider works without a key (local servers), so it never warns.
+// The OpenAI-compatible and browser providers work without a key, so they never warn.
 const isTtsKeyMissing = computed(() => {
   const provider = localForm.value.provider
-  if (provider === 'custom_openai') return false
+  if (provider === 'custom_openai' || provider === 'browser') return false
   return !props.configuredKeys[provider]
 })
 
@@ -100,7 +104,7 @@ const handleSave = () => {
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-3xl font-extrabold text-white tracking-tight">Speech Generation (TTS)</h1>
-        <p class="text-slate-400 text-sm mt-1">Narration with Gemini, ElevenLabs or any OpenAI-compatible speech server (local or hosted).</p>
+        <p class="text-slate-400 text-sm mt-1">Narration with Gemini, ElevenLabs, any OpenAI-compatible speech server (local or hosted), or the free browser voice.</p>
       </div>
 
       <button 
@@ -173,6 +177,7 @@ const handleSave = () => {
               <option value="google">Google Cloud TTS</option>
               <option value="elevenlabs">ElevenLabs</option>
               <option value="custom_openai">OpenAI-Compatible (local or hosted)</option>
+              <option value="browser">Browser Voice (free, local, for testing)</option>
             </select>
           </div>
           
@@ -199,6 +204,25 @@ const handleSave = () => {
           </template>
         </div>
 
+        <!-- BROWSER VOICE -->
+        <div v-if="isBrowser" class="space-y-4">
+        <div class="p-4 bg-slate-900/60 rounded-xl border border-white/5 text-[11px] text-slate-400 space-y-1">
+          <p>
+            Each player's browser reads the story with its own built-in voices (Web Speech API): free, no key,
+            no server load, and offline with the system voices. Quality depends on the browser: Edge has very good
+            "Natural" voices, Chrome Google voices, Firefox the system voices.
+          </p>
+          <p>
+            Vocal tags and audio downloads are not available.
+          </p>
+        </div>
+        <BrowserVoiceFields
+          v-model:narrator="localForm.browser_voice"
+          v-model:characters="localForm.browser_character_voices"
+          input-class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50"
+        />
+        </div>
+
         <!-- OPENAI-COMPATIBLE SETTINGS -->
         <div v-if="isCompatible" class="space-y-3">
           <OpenAICompatibleTtsFields
@@ -216,7 +240,7 @@ const handleSave = () => {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div v-if="!isCompatible" class="space-y-2">
+          <div v-if="hasServerModel" class="space-y-2">
              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                {{ localForm.provider === 'google' ? 'Gemini Model' : 'ElevenLabs Model' }}
              </label>
@@ -229,7 +253,7 @@ const handleSave = () => {
                </template>
              </select>
           </div>
-          <div v-if="!isCompatible" class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5" :class="{'opacity-50': !vocalTagsSupported}">
+          <div v-if="hasServerModel" class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5" :class="{'opacity-50': !vocalTagsSupported}">
             <div>
               <div class="text-xs font-bold text-white uppercase tracking-wider">Vocal Tags</div>
               <div class="text-[10px] text-slate-500">
@@ -283,8 +307,8 @@ const handleSave = () => {
           </div>
         </div>
 
-        <!-- Character voices: per-provider voice ids for the voice list -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/60 rounded-xl border border-white/5">
+        <!-- Character voices: per-provider voice ids for the voice list (browser voices are chosen above) -->
+        <div v-if="!isBrowser" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/60 rounded-xl border border-white/5">
           <div>
             <div class="text-xs font-bold text-white uppercase tracking-wider">Character Voices</div>
             <div class="text-[10px] text-slate-400 mt-1 pr-8">

@@ -39,6 +39,7 @@ class SequenceScriptSchema(BaseModel):
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
     ]
     target_id: Optional[str] = ""
     code: str = ""

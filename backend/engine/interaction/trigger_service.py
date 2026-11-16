@@ -16,10 +16,10 @@ from backend.engine.interaction.script_item_apply import (
     sync_exit_rows,
 )
 from backend.engine.interaction.switch_service import SwitchService
-from backend.engine.party.follow import bring_companion_along
 from backend.engine.party.party_ops import apply_party_ops
 from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
+from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
 from backend.engine.scripting.gm_directions import store_gm_directions
@@ -28,6 +28,7 @@ from backend.engine.scripting.narration_skip import store_skip_narration
 from backend.engine.scripting.npc_persona import PERSONA_FIELDS, apply_persona
 from backend.engine.scripting.runner import ScriptRunner
 from backend.engine.scripting.scene_helpers import runner_for_manifest
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -105,6 +106,7 @@ class TriggerService:
             audio=read_audio_state(state.entity_states),
             audio_library=getattr(adventure, "audio_tracks", None) if adventure else None,
             party=session_overrides.get(PARTY_KEY),
+            respawn=session_overrides.get(RESPAWN_KEY),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -254,7 +256,7 @@ class TriggerService:
         await insert_cloned_entities(db, state, changeset)
         cls._persist_entity_states(state, changeset)
         if state.current_scene_id != left_scene_id:
-            for msg in await bring_companion_along(db, state, left_scene_id, adventure=adventure):
+            for msg in await enter_scene(db, state, left_scene_id, adventure=adventure):
                 db.add(ChatMessage(session_id=state.session_id, role="system", content=msg))
                 messages.append(msg)
 
@@ -318,6 +320,7 @@ class TriggerService:
         apply_changeset_clock(state, cur_states, changeset.clock_ops)
         apply_audio_ops(cur_states, changeset.audio_ops)
         apply_party_ops(cur_states, changeset.party_ops)
+        apply_respawn_point(cur_states, changeset.respawn_point)
         store_skip_narration(cur_states, changeset.skip_narration)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")

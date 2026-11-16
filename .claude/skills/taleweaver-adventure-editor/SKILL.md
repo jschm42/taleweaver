@@ -77,14 +77,14 @@ fields are rejected (no silent typos).
 | `set_init_script` / `append_init_script` | Replace / extend the global init script (helpers, dialog handlers, dialogue trees) | `code` |
 | `create_quest` / `create_award` | Quest / award | see `ops` |
 | `set_start_scene` | Start scene | `scene_id` |
-| `update_adventure` | Adventure settings (plot, rules, sequences, ...) | see `ops` |
+| `update_adventure` | Adventure settings (plot, rules, sequences, ...; `game_over_rules: {on_zero_hp: "respawn", respawn_hp_percent: 25}` turns on respawning at 0 HP) | see `ops` |
 | `delete_scene` / `delete_exit` / `delete_entity` / `delete_script` / `delete_quest` / `delete_award` | Remove | the one ID field |
 
 ### Field mapping of `update` (editor naming)
 
 - **scene**: `name` sets the label; `description`, `decorative_objects`, `audio_track_id` (a track id of
   the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab),
-  `dynamic_zone` (turn into a pre-mapped Dynamic Scene or clear with `null`), `on_enter_scene_script/_text`,
+  `dynamic_zone` (turn into a pre-mapped Dynamic Scene or clear with `null`), `is_respawn_point` (revival point for the respawn mode), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
   `companions_allowed` (`false` = solo passage), `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,

@@ -125,6 +125,9 @@ class SettingsService {
     custom_openai_voice: '',
     custom_openai_format: 'mp3',
     custom_openai_instructions: '',
+    /** Browser speech: narrator voice name ('' = automatic) and voices for characters. */
+    browser_voice: '',
+    browser_character_voices: [] as string[],
     use_vocal_tags: true,
     use_streaming: false,
     auto_speak: true,
