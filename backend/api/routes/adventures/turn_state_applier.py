@@ -22,7 +22,7 @@ from backend.api.routes.adventures.quest_completion import (
 )
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
-from backend.engine.party.follow import bring_companion_along
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.party.orders import give_companion_order
 from backend.engine.rules.game_clock import apply_gm_time_request
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
@@ -519,7 +519,7 @@ class TurnStateApplier:
 
                 self.state.current_scene_id = event.new_scene_id
                 state_dirty = True
-                for msg in await bring_companion_along(
+                for msg in await enter_scene(
                     self.db,
                     self.state,
                     old_scene_id,

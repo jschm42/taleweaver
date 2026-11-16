@@ -19,6 +19,7 @@ SEQUENCE_SCRIPT_TRIGGERS = frozenset(
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
     }
 )
 

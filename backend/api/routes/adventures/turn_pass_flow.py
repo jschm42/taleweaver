@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.engine.rules.rule_engine import GameEvent, GameOverException, RuleEngine
 
 logger = logging.getLogger(__name__)
@@ -146,7 +147,4 @@ async def advance_in_game_turn(
             async for event in _run_turn_script(manager, script_runner, "on_turn_start"):
                 yield event
     except GameOverException as goe:
-        await manager._finalize_session("game_over", str(goe))
-        if isinstance(game_event, GameEvent):
-            game_event.game_over = True
-            game_event.status_note = str(goe)
+        await end_or_respawn(manager, goe, game_event)

@@ -12,6 +12,7 @@ from backend.api.routes.adventures.combat.context import (
     system_event,
 )
 from backend.api.routes.adventures.combat.party import is_member_standing, party_members
+from backend.api.routes.adventures.respawn_flow import can_respawn, respawn_protagonist
 from backend.engine.combat.initiative import PLAYER_ID, describe_initiative, roll_initiative
 from backend.models.world_entity import WorldEntity
 
@@ -196,7 +197,14 @@ class CombatRoundMixin:
     async def _handle_player_defeat(
         self, combat: dict[str, Any], note: str, log_outcome: bool = True
     ) -> None:
-        """Ends fight and adventure. The defeat card and the Game Over screen show the same note."""
+        """Ends fight and adventure. The defeat card and the Game Over screen show the same note.
+
+        In respawn mode the protagonist is knocked out instead: the fight ends without loot,
+        the enemies keep their HP, and the protagonist wakes up at the revival point.
+        """
+        if can_respawn(self.manager):
+            await self._knock_out_player(combat)
+            return
         fallen = f"{self.avatar.name} has fallen in battle."
         await self._finalize_session("game_over", fallen if log_outcome else note)
         self._sync_combat_player_snapshot(combat)
@@ -206,3 +214,15 @@ class CombatRoundMixin:
         if log_outcome:
             self._append_combat_log(combat, note, "outcome", {"kind": "game_over"})
         self._set_combat_state(combat)
+
+    async def _knock_out_player(self, combat: dict[str, Any]) -> None:
+        """Respawn mode: the fight ends with ``knocked_out`` and the protagonist is revived."""
+        note = f"{self.avatar.name} is knocked out."
+        self._sync_combat_player_snapshot(combat)
+        combat["active"] = False
+        combat["outcome"] = "knocked_out"
+        combat["status_note"] = note
+        self._recover_party(combat)
+        self._append_combat_log(combat, note, "outcome", {"kind": "knocked_out"})
+        self._set_combat_state(combat)
+        await respawn_protagonist(self.manager)

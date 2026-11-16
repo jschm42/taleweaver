@@ -136,6 +136,8 @@ class ScriptChangeset:
     audio_ops: list[dict[str, Any]] = field(default_factory=list)
     # Ordered tw.party operations, replayed by party_ops.apply_party_ops.
     party_ops: list[dict[str, Any]] = field(default_factory=list)
+    # tw.game.set_respawn_point: new revival point ("" = back to the start scene).
+    respawn_point: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -193,6 +195,7 @@ class ScriptChangeset:
             or self.clock_ops
             or self.audio_ops
             or self.party_ops
+            or self.respawn_point is not None
             or self.skip_narration
         )
 
@@ -1362,10 +1365,30 @@ class GameProxy:
         changeset: ScriptChangeset,
         in_game_time: int = 0,
         clock: Optional[TimeProxy] = None,
+        respawn: Optional[dict[str, Any]] = None,
     ):
         self._changeset = changeset
         self.in_game_time = in_game_time
         self._clock = clock
+        record = respawn if isinstance(respawn, dict) else {}
+        self._respawn_point = record.get("point") or None
+        self._respawns = int(record.get("count") or 0)
+
+    @property
+    def respawn_point(self) -> Optional[str]:
+        """Scene the protagonist wakes up in after falling to 0 HP (None = the start scene)."""
+        if self._changeset.respawn_point is not None:
+            return self._changeset.respawn_point or None
+        return self._respawn_point
+
+    @property
+    def respawns(self) -> int:
+        """How often the protagonist has been revived in this session (respawn mode)."""
+        return self._respawns
+
+    def set_respawn_point(self, scene_id: Optional[str] = None) -> None:
+        """Sets the revival point (respawn mode); None or "" falls back to the start scene."""
+        self._changeset.respawn_point = str(scene_id or "").strip().upper()
 
     @property
     def time(self) -> int:
@@ -1712,6 +1735,7 @@ class GameContext:
         audio: Optional[dict[str, Any]] = None,
         audio_library: Optional[list[dict[str, Any]]] = None,
         party: Optional[dict[str, Any]] = None,
+        respawn: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1764,7 +1788,7 @@ class GameContext:
         self.memories = MemoriesProxy(self.changeset)
         # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
         self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
-        self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
+        self.game = GameProxy(self.changeset, in_game_time, clock=self.time, respawn=respawn)
         self.session = self.game
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)

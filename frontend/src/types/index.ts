@@ -258,7 +258,7 @@ export interface AppliedEffect {
 export interface CombatEventData {
   kind:
     | 'attack' | 'special' | 'initiative' | 'turn' | 'rest' | 'consume' | 'run'
-    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'banter'
+    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'knocked_out' | 'banter'
   actor?: string | null
   /** Spoken line of a `banter` event (without the speaker name). */
   line?: string
@@ -593,6 +593,8 @@ export interface CreateAdventurePayload {
   pacing_minutes?: number
   max_time_per_turn?: number | null
   gm_time_control?: boolean
+  /** At 0 HP: `{ on_zero_hp: 'game_over' | 'respawn', respawn_hp_percent }`. */
+  game_over_rules?: Record<string, unknown> | null
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean

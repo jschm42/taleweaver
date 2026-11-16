@@ -37,6 +37,12 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
         "once, when the in-game clock reaches the target time (elapsed since the start)",
         "Elapsed in-game time, e.g. '90' or '2h 30m' (required)",
     ),
+    (
+        "on_respawn",
+        "respawn mode only: after a protagonist who fell to 0 HP woke up at the revival point "
+        "(penalties, a healer's line, healing the enemies)",
+        "None (global)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a
@@ -193,6 +199,8 @@ TW_API_REFERENCE = (
     "'correct_index': {'type': 'int', 'min': 0, 'max': 3}}). Returns None on error or invalid JSON.\n"
     "- tw.json: loads(text, schema=None, default=None), dumps(value) -> str, validate(data, schema) -> bool\n"
     "- tw.game (alias tw.session): time | win(reason) / game_won(reason), game_over(reason). "
+    "Respawn mode: respawn_point (scene id or None), respawns (count), "
+    "set_respawn_point(scene_id); on_respawn scripts run after a revival. "
     "Completing the last sequence does NOT win the adventure; use completed_guard_expression or tw.game.win()\n"
     "- tw.time: now, day, hour, minute, format() | set(t), advance(t), rewind(t), pause(), resume(), "
     "set_minutes_per_tick(t), allow_gm_time(bool) | at(t, handler), after(t, handler), "

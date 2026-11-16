@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.engine.rules.rule_engine import GameOverError
 from backend.engine.scripting.dialog import pending_dialog, store_pending_dialog
 from backend.engine.scripting.dialog_tree import chosen_response, node_dialog, record_step
@@ -57,8 +58,7 @@ class DialogTreeStep:
             messages.extend(await self._run_handler(handler, "dialog_path", scope, "end"))
             return messages, False
         except GameOverError as goe:
-            await self.manager._finalize_session("game_over", str(goe))
-            return [], True
+            return [], await end_or_respawn(self.manager, goe)
 
     async def _run_response(
         self, dialog: dict[str, Any], response: dict[str, Any], scope: dict[str, Any]

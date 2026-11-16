@@ -307,6 +307,7 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_leave_scene_text=s.on_leave_scene_text,
             helpers_script=s.helpers_script,
             audio_track_id=s.audio_track_id,
+            is_respawn_point=bool(s.is_respawn_point),
         )
         db.add(cloned)
 

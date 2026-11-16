@@ -27,6 +27,7 @@ from backend.engine.blueprint.converters import (
     main_attack,
     movement,
     one_way,
+    percent,
     stat_bonus,
     switch_outcome,
     switch_states,
@@ -93,6 +94,12 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "title_music": _ref("title_track_id"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
+    # At 0 HP: game_over (default) or respawn at the last revival point with a share of max HP.
+    "at_zero_hp": FieldSpec(
+        "game_over_rules.on_zero_hp",
+        choice("game_over", "respawn", aliases={"gameover": "game_over", "revive": "respawn"}),
+    ),
+    "respawn_hp": FieldSpec("game_over_rules.respawn_hp_percent", percent),
     "win_guard": _expr("completed_guard_expression"),
     "lose_guard": _expr("gameover_guard_expression"),
     "init_script": _script("init_script"),
@@ -123,6 +130,9 @@ SCENE_KEYS: dict[str, FieldSpec] = {
     # Track of the audio library ([Audio: ID]) that plays in this scene.
     "audio": _ref("audio_track_id"),
     "music": _ref("audio_track_id"),
+    # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
+    "respawn": FieldSpec("is_respawn_point", boolean),
+    "revival_point": FieldSpec("is_respawn_point", boolean),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
 }
@@ -308,6 +318,8 @@ SEQUENCE_KEYS: dict[str, FieldSpec] = {
     # Solo chapter: the companion does not follow into new scenes.
     "companions": FieldSpec("companions_allowed", boolean),
     "solo": FieldSpec("companions_allowed", one_way),
+    # Deadly chapter: 0 HP ends the adventure even in respawn mode.
+    "respawn": FieldSpec("respawn_allowed", boolean),
 }
 for _alias in ("lore", "intro", "chapter_description"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]
@@ -352,6 +364,7 @@ SCRIPT_TRIGGERS = (
     "on_logic_pass_done",
     "on_narration_done",
     "on_time_reached",
+    "on_respawn",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),

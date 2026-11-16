@@ -358,6 +358,26 @@ companions: no
 
 Lara starts in the party and follows the protagonist into every scene. She waits at the gate when the protagonist crawls through the vent, and she stays behind in every scene the protagonist leaves during chapter 3. Once the protagonist returns to her, she follows again.
 
+### Waking up at the camp instead of dying
+
+```text
+[World]
+at_zero_hp: respawn
+respawn_hp: 30%
+
+[Scene: CAMP] The Ranger Camp
+respawn: yes
+
+[Sequence: 5] The Dragon's Lair
+respawn: no
+
+[Script: FEE] The healer's fee
+trigger: on_respawn
+code: tw.player.add_xp(-10 * tw.game.respawns)
+```
+
+A protagonist who falls to 0 HP wakes up at the ranger camp (once reached; before that at the start scene) with 30 % of their max HP, and every knockout costs a little more EXP. Only in the dragon's lair is 0 HP still the end. Scripted defeats (`lose_guard`, `tw.game.game_over()`) always end the adventure.
+
 ### An NPC whose mood changes with the player's behavior
 
 ```text

@@ -59,6 +59,7 @@ _FIX_SCENE_FIELDS = frozenset(
         "description",
         "decorative_objects",
         "audio_track_id",
+        "is_respawn_point",
         *SCENE_SCRIPT_FIELDS,
     }
 )

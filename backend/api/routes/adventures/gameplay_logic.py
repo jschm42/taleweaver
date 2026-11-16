@@ -73,9 +73,10 @@ from backend.core.llm_request_tuning import bind_llm_session
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.interaction.command_parser import CommandParser
 from backend.engine.interaction.map_engine import MapEngine
-from backend.engine.party.follow import bring_companion_along
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.party.party_ops import apply_session_party_ops
 from backend.engine.party.party_state import PARTY_KEY
+from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
 from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.interaction.llm_intents import (
@@ -90,6 +91,7 @@ from backend.engine.rules.rule_engine import (
     AttackResult,
     GameEvent,
     GameOverError,
+    ProtagonistDownError,
     SkillCheckResult,
     WorldEntityUpdate,
 )
@@ -324,6 +326,7 @@ from backend.api.routes.adventures.turn_combat import TurnCombatManager  # noqa:
 from backend.api.routes.adventures.post_turn_hooks import PostTurnHooks  # noqa: E402
 from backend.api.routes.adventures.turn_guardrails import TurnGuardrailsManager  # noqa: E402
 from backend.api.routes.adventures.turn_checkpoints import TurnCheckpoints  # noqa: E402
+from backend.api.routes.adventures.respawn_flow import end_or_respawn  # noqa: E402
 from backend.api.routes.adventures.turn_interactions import TurnInteractionsManager  # noqa: E402
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier  # noqa: E402
 from backend.api.routes.adventures.turn_suggestions import TurnSuggestionsManager  # noqa: E402
@@ -1505,10 +1508,7 @@ class GameTurnManager:
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
             except GameOverError as goe:
-                await self._finalize_session("game_over", str(goe))
-                # Ensure the narration knows about the game over
-                game_event.game_over = True
-                game_event.status_note = str(goe)
+                await end_or_respawn(self, goe, game_event)
 
         elif run_generator_tool_intent_pass and not handled_generator_confirmation:
             yield f"event: status\ndata: {json.dumps({'content': 'Checking generator tools...'})}\n\n"
@@ -1716,9 +1716,7 @@ class GameTurnManager:
                         "game_over", game_event.status_note or "Game over."
                     )
             except GameOverError as goe:
-                await self._finalize_session("game_over", str(goe))
-                game_event.game_over = True
-                game_event.status_note = str(goe)
+                await end_or_respawn(self, goe, game_event)
 
         # Entity interactions: scripted and inline on_interact triggers. Runs in every rule
         # mode; without the mechanics pass only entities named in the message count. An
@@ -1742,10 +1740,7 @@ class GameTurnManager:
                 for sm in sys_msgs:
                     yield sse_role_message(sm)
         except GameOverError as goe:
-            await self._finalize_session("game_over", str(goe))
-            if isinstance(game_event, GameEvent):
-                game_event.game_over = True
-                game_event.status_note = str(goe)
+            await end_or_respawn(self, goe, game_event)
 
         # Logic-pass completion scripts (on_logic_pass_done)
         if script_runner.scripts:
@@ -1758,10 +1753,7 @@ class GameTurnManager:
                     for sm in sys_msgs:
                         yield sse_role_message(sm)
             except GameOverError as goe:
-                await self._finalize_session("game_over", str(goe))
-                if isinstance(game_event, GameEvent):
-                    game_event.game_over = True
-                    game_event.status_note = str(goe)
+                await end_or_respawn(self, goe, game_event)
 
         # The scripts above ran after the logic pass evaluated quests, awards and sequences;
         # re-check so what they changed (e.g. a console setting a quest variable) counts now.
@@ -1770,7 +1762,7 @@ class GameTurnManager:
             for pm in progress_msgs:
                 yield sse_role_message(pm)
         except GameOverError as goe:
-            await self._finalize_session("game_over", str(goe))
+            await end_or_respawn(self, goe, game_event)
 
         # In-game turn: only a scene or sequence change advances time, ticks, and turn scripts.
         turn_advanced = crossed_turn_boundary(self.state, self._turn_anchor)
@@ -2079,10 +2071,7 @@ class GameTurnManager:
                     for sm in sys_msgs:
                         yield sse_role_message(sm)
             except GameOverError as goe:
-                await self._finalize_session("game_over", str(goe))
-                if isinstance(game_event, GameEvent):
-                    game_event.game_over = True
-                    game_event.status_note = str(goe)
+                await end_or_respawn(self, goe, game_event)
 
         # Narration tick: the clock advances once per narrated player message.
         async for clock_event in tick_after_narration(self, game_event):
@@ -2925,6 +2914,7 @@ class GameTurnManager:
             audio=read_audio_state(self.state.entity_states),
             audio_library=getattr(self.adventure, "audio_tracks", None),
             party=session_overrides.get(PARTY_KEY),
+            respawn=session_overrides.get(RESPAWN_KEY),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3022,7 +3012,7 @@ class GameTurnManager:
                 finally:
                     self._in_protagonist_hp_trigger = False
             if self.avatar.hp <= 0:
-                raise GameOverError(f"{self.avatar.name} has fallen! Game Over.")
+                raise ProtagonistDownError(f"{self.avatar.name} has fallen! Game Over.")
 
         if changeset.player_mana_change:
             self.avatar.mana = max(
@@ -3097,10 +3087,15 @@ class GameTurnManager:
 
         # Party changes first, so a companion recruited by this script follows its teleport.
         apply_session_party_ops(self.state, changeset.party_ops)
+        if changeset.respawn_point is not None:
+            states = dict(self.state.entity_states or {})
+            apply_respawn_point(states, changeset.respawn_point)
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
         if changeset.teleport_scene_id:
             left_scene_id = self.state.current_scene_id
             self.state.current_scene_id = changeset.teleport_scene_id
-            for msg in await bring_companion_along(
+            for msg in await enter_scene(
                 self.db, self.state, left_scene_id, adventure=self.adventure
             ):
                 system_messages.append(await self._save_script_notice(msg))

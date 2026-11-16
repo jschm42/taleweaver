@@ -134,6 +134,7 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_logic_pass_done` | After game mechanics and state mutations finish, before narration is generated. | Global (`*` or empty). |
 | `on_narration_done` | After narration generation completes, before final turn persistence. | Global (`*` or empty). |
 | `on_turn_end` | When the current in-game turn ends, i.e. when the player's scene or the active sequence changed (before `on_turn_start` of the next turn). | Global (`*` or empty). |
+| `on_respawn` | Respawn mode only (`game_over_rules.on_zero_hp: "respawn"`): after a protagonist who fell to 0 HP woke up at the revival point, after the revival scene's `on_enter_scene` scripts. Use it for penalties (e.g. `tw.player.add_xp(-25)`), a healer's line, or to heal the enemies. A `tw.game.game_over()` here ends the adventure. | Global (`*` or empty). |
 | `on_time_reached` | Once, when the in-game clock reaches the target time (elapsed time since the adventure started). It fires again only after the time was set back below the target. See [tw.time](#twtime-in-game-clock). | **Required**: the elapsed time, e.g. `90`, `2h 30m`, `1d 4h`, `1:30`. |
 
 > **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Status-effect ticks and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. The **clock** is different: it advances once per narrated player message (see [tw.time](#twtime-in-game-clock)). Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
@@ -627,6 +628,17 @@ Controls session outcome conditions (alias: `tw.session`):
 - `tw.game.game_over(reason: str = None)`: Ends the adventure in defeat with `reason`.
 - What the player sees: once the current turn (or dialog step) is done, the Game Master tells a short epilogue and an ending card follows in the story feed (**Victory** or **Game Over**, with `message` / `reason`, EXP, quests and awards). After a win the player can keep playing in the world; after a game over the input is locked and the card offers **Load a Save** (Chronicles). To let a character react before the end, end the game in an `after=` callback of a direction (see [Running code after the narration](#running-code-after-the-narration-after)).
 - `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
+- Respawn mode (`game_over_rules.on_zero_hp: "respawn"`, see *Respawn* in `docs/specs/adventure_format.md`): a protagonist who falls to 0 HP wakes up at the revival point instead of dying; `tw.game.game_over()` stays final.
+  - `tw.game.respawn_point`: Scene ID the protagonist wakes up in (`None` = the start scene). Entering a scene marked as revival point sets it.
+  - `tw.game.set_respawn_point(scene_id: str = None)`: Moves the revival point, e.g. after resting at a camp; `None` or `""` falls back to the start scene.
+  - `tw.game.respawns`: How often the protagonist has been revived in this session (read it in `on_respawn` for growing penalties).
+
+```python
+# on_respawn: every knockout costs more experience, and the ogre recovers too
+tw.player.add_xp(-10 * tw.game.respawns)
+tw.story.narrate("Mother Agnes patched you up. 'Mind that ogre next time.'")
+tw.npcs.get('OGRE').heal(999)
+```
 
 > [!NOTE]
 > **When finishing the last sequence ends the adventure** (linear and dynamic modes): if the adventure has a deterministic win guard (`completed_guard_expression`), completing the final sequence does **not** end it; only that guard or a script calling `tw.game.win()` / `tw.game.game_won()` does, and the player stays in the world until then (e.g. for a finale scripted at a later time). Without a win guard, completing every sequence ends the adventure in victory. The Game Master can additionally end it when the soft `completed_condition` is met.

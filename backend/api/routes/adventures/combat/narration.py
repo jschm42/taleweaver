@@ -13,7 +13,7 @@ from backend.core.prompts import (
     COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT,
     COMBAT_SPECIAL_EVENT_USER_PROMPT_TEMPLATE,
 )
-from backend.engine.rules.rule_engine import GameOverException
+from backend.engine.rules.rule_engine import ProtagonistDownError
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +180,7 @@ class CombatNarrationMixin:
         }
         self._append_combat_log(combat, text, "special", data)
         if self.avatar.hp <= 0:
-            raise GameOverException(f"{self.avatar.name} has fallen! Game Over.")
+            raise ProtagonistDownError(f"{self.avatar.name} has fallen! Game Over.")
         return text
 
     async def _maybe_trigger_special_event(self, combat: dict[str, Any]) -> str | None:

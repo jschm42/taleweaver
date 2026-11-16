@@ -37,6 +37,8 @@ class WorldScene(Base, TimestampMixin):
     on_leave_scene_text = Column(String(5000), nullable=True)
     # Helper functions/constants (like init_script) available to every script run.
     helpers_script = Column(Text, nullable=True)
+    # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
+    is_respawn_point = Column(Boolean, nullable=False, default=False, server_default="0")
     adventure_id = synonym("template_id")
 
 

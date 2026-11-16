@@ -686,6 +686,7 @@ const form = ref({
   time_per_turn: 5,
   max_time_per_turn: null as number | null,
   gm_time_control: true,
+  game_over_rules: null as Record<string, any> | null,
   max_memory_turns: 10,
   clock_enabled: false,
   time_system: 'calendar' as string,
@@ -864,6 +865,7 @@ async function fetchAdventure() {
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
     form.value.gm_time_control = data.gm_time_control ?? true
+    form.value.game_over_rules = data.game_over_rules ?? null
     form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 10
     form.value.clock_enabled = data.clock_enabled ?? false
     form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'

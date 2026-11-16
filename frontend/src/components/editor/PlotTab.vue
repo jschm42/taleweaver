@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
+import DefeatRuleSettings from '@/components/editor/DefeatRuleSettings.vue'
 import { formatObjectIds } from '@/utils/editor_utils'
 
 defineProps<{
@@ -355,6 +356,13 @@ const emit = defineEmits<{
                   <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-2 font-sans">Click to set scripted loss guard</p>
                 </div>
               </div>
+
+              <!-- At 0 HP: game over or respawn (game_over_rules) -->
+              <DefeatRuleSettings
+                :model-value="form.game_over_rules"
+                :saving="isSaving"
+                @save="(rules) => { form.game_over_rules = rules; emit('save-changes') }"
+              />
             </div>
           </div>
         </div>

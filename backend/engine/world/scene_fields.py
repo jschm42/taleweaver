@@ -16,6 +16,8 @@ SCENE_SCRIPT_FIELDS = (
 )
 # The scene's track of the adventure's audio library travels with the scene.
 SCENE_AUDIO_FIELDS = ("audio_track_id",)
+# Respawn mode: a fallen protagonist wakes up at the last revival point reached.
+SCENE_RESPAWN_FIELDS = ("is_respawn_point",)
 SCENE_CONTENT_FIELDS = (
     "id",
     "label",
@@ -23,12 +25,15 @@ SCENE_CONTENT_FIELDS = (
     "decorative_objects",
     *SCENE_SCRIPT_FIELDS,
     *SCENE_AUDIO_FIELDS,
+    *SCENE_RESPAWN_FIELDS,
 )
 
 
 def scene_content(scene: Any) -> dict[str, Any]:
     """Content columns of a ``WorldScene`` row, as keyword arguments for a copy."""
-    return {field: deepcopy(getattr(scene, field, None)) for field in SCENE_CONTENT_FIELDS}
+    content = {field: deepcopy(getattr(scene, field, None)) for field in SCENE_CONTENT_FIELDS}
+    content["is_respawn_point"] = bool(content.get("is_respawn_point"))
+    return content
 
 
 def scene_content_from_dict(data: dict[str, Any]) -> dict[str, Any]:
@@ -38,4 +43,5 @@ def scene_content_from_dict(data: dict[str, Any]) -> dict[str, Any]:
     content["description"] = data.get("description") or ""
     # Session exports written before the rename to audio.
     content["audio_track_id"] = data.get("audio_track_id") or data.get("music_track_id")
+    content["is_respawn_point"] = data.get("is_respawn_point") is True
     return content

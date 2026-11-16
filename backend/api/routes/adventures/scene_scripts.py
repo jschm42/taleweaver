@@ -29,6 +29,9 @@ async def run_global_scene_scripts(manager: Any, trigger: str, scene_id: str) ->
         changeset = runner.run_trigger(trigger, context, target_id=scene_id)
         return list(await manager._apply_script_changeset(changeset))
     except GameOverError as goe:
+        from backend.api.routes.adventures.respawn_flow import end_or_respawn
+
         logger.info("[Scene Scripts] %s on %s ended the game: %s", trigger, scene_id, goe)
-        await manager._finalize_session("game_over", str(goe))
-        return [str(goe)]
+        if await end_or_respawn(manager, goe):
+            return [str(goe)]
+        return []

@@ -49,7 +49,7 @@ from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
-from backend.engine.party.follow import bring_companion_along
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.interaction.switch_states import state_label
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -379,7 +379,7 @@ class TurnInteractionsManager:
             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         self.state.current_scene_id = scene.id
-        for msg in await bring_companion_along(
+        for msg in await enter_scene(
             self.db,
             self.state,
             current_scene_id,

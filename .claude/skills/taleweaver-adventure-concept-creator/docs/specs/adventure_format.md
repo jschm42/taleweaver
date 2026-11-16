@@ -42,7 +42,7 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.4.0` (current) | Current format. Adds companions: NPC `companion`, exit and sequence `companions_allowed`. |
+| `1.4.0` (current) | Current format. Adds companions (NPC `companion`, exit and sequence `companions_allowed`) and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
 | `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions; such adventures simply have no companions. |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
@@ -88,6 +88,13 @@ General configuration, narrative constraints, and gameplay settings.
 | `copyright` | `string` | Optional copyright notice (max 100 chars). |
 | `license` | `string` | Optional license string or identifier (max 100 chars). |
 | `init_script` | `string \| null` | Optional global Python initialization script executed when a new game session starts. Sets up starting variables, narrative messages, and shared helper functions. |
+| `game_over_rules` | `object \| null` | Optional. What happens when the protagonist falls to 0 HP: `{on_zero_hp: "game_over" \| "respawn", respawn_hp_percent: 1-100}`. Default (`null` or `game_over`): the adventure ends. See [Respawn](#respawn). *(respawn since 1.4.0)* |
+
+#### Respawn
+
+With `game_over_rules.on_zero_hp: "respawn"` a protagonist who falls to 0 HP is knocked out instead of dying. They wake up at the last **revival point** they reached (a scene with `is_respawn_point: true`), or at the start scene when they have not reached one yet, with `respawn_hp_percent` (default `25`) of their max HP. All status effects are cleared; inventory, quests, the clock and the world stay as they are. In a fight the battle ends with the outcome `knocked_out` (no loot); the enemies keep their HP, and a downed companion gets its `downed_recovery` back and follows if it was at the protagonist's side. The revival scene's `on_enter_scene` scripts run, then the global and sequence scripts with the trigger `on_respawn` (the place for penalties, e.g. losing EXP, or for healing the enemies). The draft narration of the turn is replaced, so the Game Master tells of the knockout and the awakening.
+
+Only falling to 0 HP respawns. `tw.game.game_over()`, the defeat condition (`gameover_condition` / `gameover_guard_expression`) and a Game Master `game_over` always end the adventure. A sequence with `respawn_allowed: false` keeps 0 HP deadly while it is active. Scripts read and move the revival point with `tw.game.respawn_point` / `tw.game.set_respawn_point(scene_id)` and read the count with `tw.game.respawns`. The session record lives in `entity_states["__respawn__"]` (`point`, `count`) and is part of every checkpoint.
 
 ---
 
@@ -121,6 +128,7 @@ The physical locations composing the world map.
 | `image_url` | `string` | Path or URL to the background scenery image. |
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `audio_track_id` | `string` \| `null` | Optional `id` of the `adventure.audio_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the audio fades out. |
+| `is_respawn_point` | `boolean` | Optional, default `false`. A revival point: in respawn mode a protagonist who falls to 0 HP wakes up at the last one reached (see [Respawn](#respawn)). *(since 1.4.0)* |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
 | `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |

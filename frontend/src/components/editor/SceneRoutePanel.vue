@@ -16,6 +16,7 @@ import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
 import SceneAudioSelect from '@/components/editor/SceneAudioSelect.vue'
+import SceneRespawnToggle from '@/components/editor/SceneRespawnToggle.vue'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -740,6 +741,15 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           :track-id="routeSceneDetails.audio_track_id"
           @refresh="emit('refresh')"
           @open-library="emit('open-audio-library')"
+        />
+
+        <!-- Respawn mode: a fallen protagonist wakes up at the last revival point reached -->
+        <SceneRespawnToggle
+          v-if="routeSceneDetails"
+          :adventure-id="adventureId"
+          :scene-id="String(routeSceneDetails.id)"
+          :value="routeSceneDetails.is_respawn_point"
+          @refresh="emit('refresh')"
         />
       </div>
     </div>

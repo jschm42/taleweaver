@@ -85,6 +85,7 @@ class EntityUpdateRequest(BaseModel):
     equipment: Optional[dict[str, Any]] = None
     decorative_objects: Optional[list[str]] = None
     audio_track_id: Optional[str] = Field(default=None, max_length=50)
+    is_respawn_point: Optional[bool] = None
     on_pickup_script: Optional[str] = None
     on_pickup_text: Optional[str] = None
     on_drop_script: Optional[str] = None

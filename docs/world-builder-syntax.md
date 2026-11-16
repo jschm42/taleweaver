@@ -40,14 +40,14 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `at_zero_hp` (`game_over` default, or `respawn`: the protagonist wakes up at the last revival point instead of dying, see [Respawn](specs/adventure_format.md#respawn)), `respawn_hp` (share of max HP after waking up, e.g. `25%`), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
 Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: ID] Name` blocks define non-combat talents (see below).
 
 ### `[Scene: ID] Name`
-`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
+`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `respawn` (yes = revival point: in respawn mode the protagonist wakes up at the last one reached; alias `revival_point`), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
@@ -148,7 +148,7 @@ In the World-Editor, the companion settings are in the **Combat** tab of the NPC
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `respawn` (no = deadly chapter: 0 HP ends the adventure even in respawn mode), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
 The free text becomes the chapter's description or walkthrough. When `walkthrough:` is provided, free text is treated as the lore description. Keep `description` spoiler-free.
 
 **Sequence progression** is set with `progression:` in `[World]`:
@@ -172,7 +172,7 @@ Nested blocks (indent them for readability; they always belong to the **latest**
 - `[Script: ID] Name` (indented): a chapter script that only runs while this sequence is active. Keys: `trigger`, `target`, `at` (for `on_time_reached`), `code`.
 
 ### `[Script: ID] Name`
-A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`), `target` (entity ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
+A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`, `on_respawn`), `target` (entity ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
 
 ```
 [Script: NIGHTFALL] Night falls

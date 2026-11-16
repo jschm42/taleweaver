@@ -42,6 +42,7 @@ const TRIGGERS: { value: string; label: string; target: TargetKind }[] = [
   { value: 'on_logic_pass_done', label: 'On Logic Pass Done (every message)', target: null },
   { value: 'on_narration_done', label: 'On Narration Done (every message)', target: null },
   { value: 'on_time_reached', label: 'On Time Reached (elapsed in-game time)', target: 'time' },
+  { value: 'on_respawn', label: 'On Respawn (protagonist revived)', target: null },
 ]
 
 const scripts = computed<SequenceScript[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))

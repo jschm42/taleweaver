@@ -11,6 +11,12 @@ class GameOverError(Exception):
     pass
 
 
+class ProtagonistDownError(GameOverError):
+    """The protagonist fell to 0 HP. Adventures with respawn mode revive them instead."""
+
+    pass
+
+
 # Backward-compatible alias for modules not yet migrated to GameOverError
 GameOverException = GameOverError
 
@@ -463,7 +469,7 @@ class RuleEngine:
 
         if avatar.hp <= 0:
             avatar.hp = 0
-            raise GameOverError(f"{avatar.name} has fallen! Game Over.")
+            raise ProtagonistDownError(f"{avatar.name} has fallen! Game Over.")
 
         avatar.stamina = max(avatar.stamina, 0)
         avatar.mana = max(avatar.mana, 0)
