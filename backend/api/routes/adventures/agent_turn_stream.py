@@ -21,8 +21,9 @@ from backend.api.routes.adventures.agent_change_log import (
 )
 from backend.api.routes.adventures.agent_combat import decide_combat_turn
 from backend.api.routes.adventures.agent_dialog import decide_dialog_option
-from backend.api.routes.adventures.agent_logic import AgentService
+from backend.api.routes.adventures.agent_logic import AgentDecision, AgentService
 from backend.api.routes.adventures.agent_settings import build_agent_snapshot
+from backend.api.routes.adventures.agent_travel import next_travel_step
 from backend.api.routes.adventures.dialog_service import (
     CHOICE_MESSAGE_PREFIX,
     DialogChoiceResolver,
@@ -63,6 +64,13 @@ async def _decide(db, game_id: str, current_user: User, manager: GameTurnManager
     try:
         if manager._has_combat_phase():
             return await decide_combat_turn(manager), False
+        travel_step = await next_travel_step(manager)
+        if travel_step:
+            # A running trip continues without asking the LLM.
+            thought, action = travel_step
+            return AgentDecision(
+                thoughts=thought, action=action, is_stuck_or_bug=False, issue_description=""
+            ), False
         decision = await AgentService.get_decision(
             db, game_id, current_user, manager.state, manager.avatar, manager.adventure, manager
         )

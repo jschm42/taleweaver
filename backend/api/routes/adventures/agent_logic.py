@@ -20,8 +20,10 @@ from backend.api.routes.adventures.agent_instruction import (
     instruction_prompt,
     normalize_instruction,
 )
+from backend.api.routes.adventures.agent_known_map import format_known_map, load_known_map
 from backend.api.routes.adventures.agent_party_view import format_abilities_and_party
 from backend.api.routes.adventures.agent_persona import format_protagonist_profile
+from backend.api.routes.adventures.agent_travel import TRAVEL_KEY
 from backend.api.routes.adventures.agent_world_view import (
     format_room_objects,
     load_room_entities,
@@ -287,6 +289,9 @@ class AgentService:
         agent_state["active"] = active
         if active:
             agent_state["failure_count"] = 0
+        else:
+            # A trip started by the agent does not resume when the player starts it again.
+            agent_state.pop(TRAVEL_KEY, None)
         state.entity_states["__agent__"] = agent_state
         flag_modified(state, "entity_states")
 
@@ -353,6 +358,9 @@ class AgentService:
         agent_state = AgentService.get_agent_state(state)
         instruction = normalize_instruction(text)
         agent_state["instruction"] = instruction
+        if instruction:
+            # The player's instruction replaces a trip the agent was on.
+            agent_state.pop(TRAVEL_KEY, None)
         state.entity_states["__agent__"] = agent_state
         flag_modified(state, "entity_states")
         return instruction
@@ -440,8 +448,9 @@ class AgentService:
             adventure, state, agent_state
         )
         scene_exits = await load_scene_exits(db, game_id, state.current_scene_id)
+        known_map = format_known_map(await load_known_map(db, game_id, state))
         player_world_context = build_player_perception_context(
-            adventure, state, ctx, format_exits_for_agent(scene_exits)
+            adventure, state, ctx, f"{format_exits_for_agent(scene_exits)}\n\n{known_map}"
         )
 
         inventory_names = [

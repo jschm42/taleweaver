@@ -63,6 +63,10 @@ The agent plays in the role of the protagonist (biography, personality and goal 
 sheet). It speaks with `/say` in the hero's voice and has the same actions as you:
 
 * moving through exits and unlocking doors or containers with keys and discovered codes,
+* using the **known map**: it sees the places you visited, their exits (open or locked) and
+  which exits lead somewhere unexplored, exactly like your map. With `/travel <place>` it walks
+  back to a visited place over open exits, one exit per step (each step is a normal move, so
+  your companion follows and scene events run; it needs no extra AI decisions on the way),
 * inspecting, searching, reading, taking, dropping, using, combining, crafting and consuming items,
 * opening containers, taking items out, putting items in, giving items to characters,
 * setting switches and levers,
@@ -74,7 +78,8 @@ sheet). It speaks with `/say` in the hero's voice and has the same actions as yo
   the hero (or a badly wounded companion with an "ally" ability), marks its focus target for the
   companion, drinks potions, rests or runs, and collects the loot afterwards.
 
-It sees only what you see: hidden objects, lock codes and game master notes stay hidden.
+It sees only what you see: hidden objects and exits, lock codes and game master notes stay
+hidden, and unexplored places stay unnamed on its map. A new instruction from you ends a trip.
 
 ## Commands
 
