@@ -31,6 +31,12 @@ const emit = defineEmits<{
   (e: 'switchSection', section: string): void
 }>()
 
+const LIKELY_THINKING_MODEL_RE =
+  /(?:^|\/)(?:o1|o3|o4-mini|qwq|qwen3|deepseek-r1|deepseek-reasoner|glm-(?:4\.[5-9]|5)|minimax-m2|kimi-k2-thinking|claude-(?:haiku|sonnet|opus)-(?:[5-9]|\d{2})|claude-(?:fable|mythos))|[-/](?:thinking|reasoner)(?:$|:|-)/i
+
+const isLikelyThinkingModel = (modelId: unknown): boolean =>
+  typeof modelId === 'string' && LIKELY_THINKING_MODEL_RE.test(modelId.trim())
+
 const normalizeLocalForm = (data: any) => ({
   ...data,
   turns_before_compacting: typeof data?.turns_before_compacting === 'number' ? data.turns_before_compacting : 10,
@@ -520,27 +526,44 @@ const triggerTest = (
           </div>
 
           <!-- Thinking Mode -->
-          <div class="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between gap-4">
-            <div>
-              <span class="text-xs font-bold text-slate-200">Reasoning / Thinking Mode</span>
-              <p class="text-[11px] text-slate-400 mt-0.5">Enables extended internal reasoning tokens for models that support it.</p>
-            </div>
-            <div class="flex items-center gap-3">
-              <div v-if="localForm.small_enable_thinking" class="flex items-center gap-1.5">
-                <span class="text-[11px] text-slate-400">Budget:</span>
+          <div class="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2.5">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <span class="text-xs font-bold text-slate-200">Reasoning / Thinking Mode</span>
+                <p class="text-[11px] text-slate-400 mt-0.5">Enables extended internal reasoning tokens for models that support it.</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <div v-if="localForm.small_enable_thinking" class="flex items-center gap-1.5">
+                  <span class="text-[11px] text-slate-400">Budget:</span>
+                  <input
+                    v-model.number="localForm.small_max_thinking_tokens"
+                    type="number"
+                    min="256"
+                    max="32768"
+                    class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white text-center"
+                  />
+                </div>
                 <input
-                  v-model.number="localForm.small_max_thinking_tokens"
-                  type="number"
-                  min="256"
-                  max="32768"
-                  class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white text-center"
+                  v-model="localForm.small_enable_thinking"
+                  type="checkbox"
+                  class="w-4 h-4 rounded accent-purple-500 cursor-pointer"
                 />
               </div>
-              <input
-                v-model="localForm.small_enable_thinking"
-                type="checkbox"
-                class="w-4 h-4 rounded accent-purple-500 cursor-pointer"
-              />
+            </div>
+            <div
+              v-if="isLikelyThinkingModel(localForm.small_model) && !localForm.small_enable_thinking"
+              class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200"
+            >
+              <span>
+                <strong class="font-mono">{{ localForm.small_model }}</strong> likely uses internal thinking tokens by default. Enable Thinking Mode if responses come back empty.
+              </span>
+              <button
+                type="button"
+                class="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 font-bold uppercase tracking-wider text-[10px] shrink-0 cursor-pointer"
+                @click="localForm.small_enable_thinking = true"
+              >
+                Enable
+              </button>
             </div>
           </div>
         </div>
@@ -683,27 +706,44 @@ const triggerTest = (
             </div>
           </div>
 
-          <div class="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between gap-4">
-            <div>
-              <span class="text-xs font-bold text-slate-200">Reasoning / Thinking Mode</span>
-              <p class="text-[11px] text-slate-400 mt-0.5">Allows deep narrative planning tokens before generating text.</p>
-            </div>
-            <div class="flex items-center gap-3">
-              <div v-if="localForm.complex_enable_thinking" class="flex items-center gap-1.5">
-                <span class="text-[11px] text-slate-400">Budget:</span>
+          <div class="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2.5">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <span class="text-xs font-bold text-slate-200">Reasoning / Thinking Mode</span>
+                <p class="text-[11px] text-slate-400 mt-0.5">Allows deep narrative planning tokens before generating text.</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <div v-if="localForm.complex_enable_thinking" class="flex items-center gap-1.5">
+                  <span class="text-[11px] text-slate-400">Budget:</span>
+                  <input
+                    v-model.number="localForm.complex_max_thinking_tokens"
+                    type="number"
+                    min="256"
+                    max="32768"
+                    class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white text-center"
+                  />
+                </div>
                 <input
-                  v-model.number="localForm.complex_max_thinking_tokens"
-                  type="number"
-                  min="256"
-                  max="32768"
-                  class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white text-center"
+                  v-model="localForm.complex_enable_thinking"
+                  type="checkbox"
+                  class="w-4 h-4 rounded accent-purple-500 cursor-pointer"
                 />
               </div>
-              <input
-                v-model="localForm.complex_enable_thinking"
-                type="checkbox"
-                class="w-4 h-4 rounded accent-purple-500 cursor-pointer"
-              />
+            </div>
+            <div
+              v-if="isLikelyThinkingModel(localForm.complex_model) && !localForm.complex_enable_thinking"
+              class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200"
+            >
+              <span>
+                <strong class="font-mono">{{ localForm.complex_model }}</strong> likely uses internal thinking tokens by default. Enable Thinking Mode so narration does not run out of output tokens.
+              </span>
+              <button
+                type="button"
+                class="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 font-bold uppercase tracking-wider text-[10px] shrink-0 cursor-pointer"
+                @click="localForm.complex_enable_thinking = true"
+              >
+                Enable
+              </button>
             </div>
           </div>
         </div>

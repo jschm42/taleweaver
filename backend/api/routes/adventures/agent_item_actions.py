@@ -169,6 +169,22 @@ async def _container_put_items(manager: Any, args: str) -> AgentActionOutcome:
     return await _store(manager, container_ref, items_raw)
 
 
+async def _use_on_container(manager: Any, args: str) -> AgentActionOutcome | None:
+    """Routes `/use <carried item> on/in <unlocked container>` to `/container_put_items`."""
+    match = _PUT_INTO.match(args)
+    if not match:
+        return None
+    room = await _room(manager)
+    container = find_entity(room, _clean(match["target"]), is_container)
+    if not container or container.get("locked"):
+        return None
+    inv = _inventory(manager)
+    refs = _split_items(match["items"])
+    if not refs or not all(find_entity(inv, r) for r in refs):
+        return None
+    return await _store(manager, match["target"], match["items"])
+
+
 async def _hand_over(manager: Any, npc_ref: str, items_raw: str) -> AgentActionOutcome:
     room = await _room(manager)
     npc = find_entity(room, _clean(npc_ref), is_npc)
@@ -251,6 +267,8 @@ _HANDLERS: dict[str, Callable[[Any, str], Awaitable[AgentActionOutcome | None]]]
     "/put": _put,
     "/place": _put,
     "/store": _put,
+    "/insert": _put,
+    "/use": _use_on_container,
     "/container_put_items": _container_put_items,
     "/give": _give,
     "/give_items": _give_items,

@@ -980,6 +980,15 @@ async def test_llm_connection(
         response = await _execute_test_probe(gm, payload)
         end_time = time.perf_counter()
         latency = round(end_time - start_time, 2)
+        if not (response or "").strip():
+            return {
+                "status": "error",
+                "message": (
+                    f"Model '{payload.model}' returned no visible text (it likely spent its output "
+                    "budget on internal thinking). Enable Reasoning / Thinking Mode or increase "
+                    "Max Thinking Tokens."
+                ),
+            }
         return {"status": "success", "message": response, "response_time": latency}
     except Exception as exc:
         diag = (

@@ -22,6 +22,7 @@ from backend.api.routes.adventures.agent_change_log import (
 from backend.api.routes.adventures.agent_combat import decide_combat_turn
 from backend.api.routes.adventures.agent_dialog import decide_dialog_option
 from backend.api.routes.adventures.agent_logic import AgentDecision, AgentService
+from backend.api.routes.adventures.agent_memory import apply_memory_updates
 from backend.api.routes.adventures.agent_settings import build_agent_snapshot
 from backend.api.routes.adventures.agent_travel import next_travel_step
 from backend.api.routes.adventures.dialog_service import (
@@ -184,6 +185,8 @@ async def _agent_action_events(
     if decision.instruction_done:
         # The action finishes the player's instruction; the next decision is the agent's own again.
         AgentService.set_instruction(manager.state, "")
+    if getattr(decision, "remember", None) or getattr(decision, "forget", None):
+        apply_memory_updates(manager.state, decision.remember, decision.forget)
     await db.commit()
 
     outcome = await execute_agent_action(manager, decision.action)

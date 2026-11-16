@@ -93,12 +93,29 @@ def _switch_line(entity: dict[str, Any]) -> str:
         for s in states
         if s != current and s not in disabled
     ]
+    blocked = [
+        f"{s} ({state_label(config, s)})" if state_label(config, s) != s else s
+        for s in states
+        if s != current and s in disabled
+    ]
     target = f"/switch {entity.get('name')} <STATE>"
     line = f"switch, currently {state_label(config, current)} [{current}]"
     if options:
         line += f"; can be set to: {', '.join(options)} -> `{target}`"
+    if blocked:
+        line += f"; currently disabled: {', '.join(blocked)}"
     status = str(entity.get("switch_status_text") or "").strip()
     return f"{line}; display: {status}" if status else line
+
+
+def _capacity_hint(meta: dict[str, Any], count: int) -> str:
+    min_items = meta.get("min_items")
+    max_items = meta.get("max_items")
+    if isinstance(max_items, int) and max_items > 0:
+        return f" ({count}/{max_items} items)"
+    if isinstance(min_items, int) and min_items > 0:
+        return f" ({count} items, needs >= {min_items})"
+    return ""
 
 
 def _container_line(entity: dict[str, Any], opened: set[str]) -> str:
@@ -109,16 +126,21 @@ def _container_line(entity: dict[str, Any], opened: set[str]) -> str:
             name, meta.get("code_to_unlock"), meta.get("item_to_unlock")
         )
     if str(entity.get("id")) not in opened:
+        if is_switch(entity):
+            return (
+                f"container, closed -> look inside with `/open {name}`, or `/put <item> in {name}`"
+            )
         return f"container, closed -> look inside with `/open {name}`"
     contents = [
         f"{i.get('name') or i.get('id')}{' (locked)' if i.get('locked') else ''}"
         for i in entity.get("inventory") or []
         if isinstance(i, dict) and not i.get("is_hidden")
     ]
+    cap = _capacity_hint(meta, len(contents))
     if not contents:
-        return f"container, opened, empty -> store items with `/put <item> in {name}`"
+        return f"container, opened, empty{cap} -> store items with `/put <item> in {name}`"
     return (
-        f"container, opened, contains: {', '.join(contents)} -> "
+        f"container, opened{cap}, contains: {', '.join(contents)} -> "
         f"`/take <item> from {name}`, `/container_take_all {name}`, `/put <item> in {name}`"
     )
 

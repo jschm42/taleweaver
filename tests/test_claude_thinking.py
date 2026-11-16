@@ -122,3 +122,27 @@ def test_router_json_mode_suppresses_default_thinking(monkeypatch):
     kwargs = {"model": "openrouter/anthropic/claude-haiku-5.5", "max_tokens": 4000}
     router._suppress_default_thinking(kwargs)
     assert kwargs["extra_body"]["reasoning"] == {"enabled": False}
+
+
+def test_router_disables_glm_5_thinking_via_openrouter(monkeypatch):
+    router = _openrouter_router(monkeypatch)
+    kwargs = {"model": "openrouter/z-ai/glm-5.3-flash", "max_tokens": 800}
+    router._apply_thinking_settings(kwargs)
+    assert kwargs["extra_body"]["reasoning"] == {"effort": "low"}
+    assert kwargs["max_tokens"] == 800 + router.max_thinking_tokens
+    assert "thinking" not in kwargs
+
+
+def test_router_enables_glm_5_thinking_via_openrouter_when_requested(monkeypatch):
+    router = _openrouter_router(monkeypatch, {"small_enable_thinking": True})
+    kwargs = {"model": "openrouter/z-ai/glm-5.3-flash", "max_tokens": 1824}
+    router._apply_thinking_settings(kwargs)
+    assert kwargs["extra_body"]["reasoning"] == {"enabled": True}
+
+
+def test_router_json_mode_suppresses_glm_5_thinking(monkeypatch):
+    router = _openrouter_router(monkeypatch, {"small_enable_thinking": True})
+    kwargs = {"model": "openrouter/z-ai/glm-5.3-flash", "max_tokens": 4000}
+    router._suppress_default_thinking(kwargs)
+    assert kwargs["extra_body"]["reasoning"] == {"effort": "low"}
+    assert kwargs["max_tokens"] == 4000 + router.max_thinking_tokens

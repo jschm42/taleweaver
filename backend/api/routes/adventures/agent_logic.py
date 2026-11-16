@@ -21,6 +21,7 @@ from backend.api.routes.adventures.agent_instruction import (
     normalize_instruction,
 )
 from backend.api.routes.adventures.agent_known_map import format_known_map, load_known_map
+from backend.api.routes.adventures.agent_memory import format_memories
 from backend.api.routes.adventures.agent_objectives import format_objectives
 from backend.api.routes.adventures.agent_party_view import format_abilities_and_party
 from backend.api.routes.adventures.agent_persona import format_protagonist_profile
@@ -91,6 +92,17 @@ class AgentDecision(BaseModel):
             "True when this action completes the player's instruction, or when it clearly "
             "cannot be done. False without an instruction."
         ),
+    )
+    remember: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional short notes to save in persistent memory for later turns (codes, clues, "
+            "facts, or 'Already read <item>'). Keep empty if nothing new needs remembering."
+        ),
+    )
+    forget: list[str] = Field(
+        default_factory=list,
+        description="Optional note snippets from YOUR MEMORY / NOTES that are now obsolete and can be removed.",
     )
 
 
@@ -489,6 +501,7 @@ class AgentService:
             dialogue_prompt=dialogue_prompt(agent_state.get("dialogue_level")),
             mechanics_system_prompt=player_world_context,
             visible_scene_items_text=visible_scene_items_text,
+            memories_text=format_memories(agent_state),
             abilities_text=await format_abilities_and_party(db, state, avatar),
             objectives_text=format_objectives(adventure, state),
             walkthrough_text=walkthrough_text,

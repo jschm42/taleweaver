@@ -814,6 +814,34 @@ class GameMasterLLM:
         kwargs["messages"] = deepcopy(messages)
         apply_prompt_cache_markers(kwargs["messages"], self.provider, normalized_model)
 
+    _GLM_THINKING_RE = re.compile(r"(?:^|/)glm-(?:4\.[5-9]|5\b|[5-9]\.)", re.I)
+    _GLM_MANDATORY_THINKING_RE = re.compile(r"(?:^|/)glm-[5-9](?:\.|\b|-)", re.I)
+
+    @classmethod
+    def _is_glm_thinking_model(cls, model: str) -> bool:
+        return bool(cls._GLM_THINKING_RE.search((model or "").strip()))
+
+    def _apply_glm_thinking(self, kwargs: dict, enable_thinking: bool) -> None:
+        model_name = str(kwargs.get("model") or "").strip()
+        mandatory = bool(self._GLM_MANDATORY_THINKING_RE.search(model_name))
+        if self._uses_openrouter():
+            extra_body = dict(kwargs.get("extra_body") or {})
+            if enable_thinking:
+                extra_body["reasoning"] = {"enabled": True}
+            elif mandatory:
+                # Endpoints with mandatory reasoning reject {"enabled": False} with HTTP 400.
+                extra_body["reasoning"] = {"effort": "low"}
+                if kwargs.get("max_tokens") is not None:
+                    kwargs["max_tokens"] = int(kwargs["max_tokens"]) + self.max_thinking_tokens
+            else:
+                extra_body["reasoning"] = {"enabled": False}
+            kwargs["extra_body"] = extra_body
+            return
+        if enable_thinking or not mandatory:
+            kwargs["thinking"] = {"type": "enabled" if enable_thinking else "disabled"}
+        elif kwargs.get("max_tokens") is not None:
+            kwargs["max_tokens"] = int(kwargs["max_tokens"]) + self.max_thinking_tokens
+
     def _apply_thinking_settings(self, kwargs: dict) -> None:
         """Inject thinking parameters based on user settings and provider."""
         # MiniMax defaults to thinking-on server-side, so we must explicitly opt-out
@@ -824,7 +852,8 @@ class GameMasterLLM:
             )
             return
 
-        profile = claude_thinking_profile(str(kwargs.get("model") or ""))
+        model_name = str(kwargs.get("model") or "")
+        profile = claude_thinking_profile(model_name)
         if profile is not None and not profile.budget_tokens:
             # Claude 5.x: thinks by default and rejects budget_tokens.
             apply_claude_thinking(
@@ -836,6 +865,10 @@ class GameMasterLLM:
             )
             return
 
+        if self._is_glm_thinking_model(model_name):
+            self._apply_glm_thinking(kwargs, self.enable_thinking)
+            return
+
         if not self.enable_thinking:
             return
 
@@ -843,8 +876,12 @@ class GameMasterLLM:
         kwargs["thinking"] = {"type": "enabled", "budget_tokens": self.max_thinking_tokens}
 
     def _suppress_default_thinking(self, kwargs: dict) -> None:
-        """JSON-mode requests run without thinking; Claude 5.x thinks unless told otherwise."""
-        profile = claude_thinking_profile(str(kwargs.get("model") or ""))
+        """JSON-mode requests run without thinking; Claude 5.x and GLM-4.5+/5 think unless told otherwise."""
+        model_name = str(kwargs.get("model") or "")
+        if self._is_glm_thinking_model(model_name):
+            self._apply_glm_thinking(kwargs, False)
+            return
+        profile = claude_thinking_profile(model_name)
         if profile is None or profile.budget_tokens or not profile.on_by_default:
             return
         apply_claude_thinking(

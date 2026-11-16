@@ -190,14 +190,28 @@ export class CombatantCard extends Container {
       this.portrait.destroy({ texture: false })
       this.portrait = null
     }
+    this.portraitMask.visible = false
+    this.placeholder.visible = true
     if (!url) {
       this.redraw()
       return
     }
     try {
       const img = await loadImage(url)
+      if (typeof img.decode === 'function') {
+        await img.decode().catch(() => {})
+      }
       if (this.destroyed || url !== this.portraitUrl) return
-      this.portrait = new Sprite(Texture.from(img))
+      if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+        this.redraw()
+        return
+      }
+      const tex = Texture.from(img)
+      if (tex.width <= 0 || tex.height <= 0) {
+        this.redraw()
+        return
+      }
+      this.portrait = new Sprite(tex)
       this.portrait.mask = this.portraitMask
       this.addChildAt(this.portrait, this.getChildIndex(this.portraitMask))
       this.redraw()
@@ -236,13 +250,14 @@ export class CombatantCard extends Container {
     this.portraitBg.clear()
       .roundRect(6, 6, w - 12, ph - 6, RADIUS - 6).fill({ color: COLORS.panelLight })
       .circle(w / 2, ph / 2, Math.min(w, ph) * 0.3).fill({ color: accent, alpha: 0.08 })
+    const tex = this.portrait?.texture
+    const hasPortrait = Boolean(this.portrait && tex && tex.width > 0 && tex.height > 0)
     this.portraitMask.clear().roundRect(6, 6, w - 12, ph - 6, RADIUS - 6).fill({ color: 0xffffff })
-    this.portraitMask.visible = !!this.portrait
+    this.portraitMask.visible = hasPortrait
     this.placeholder.position.set(w / 2, ph / 2)
     this.placeholder.style.fontSize = Math.round(Math.min(w, ph) * 0.3)
-    this.placeholder.visible = !this.portrait
-    if (!this.portrait) return
-    const tex = this.portrait.texture
+    this.placeholder.visible = !hasPortrait
+    if (!hasPortrait || !this.portrait || !tex) return
     const scale = Math.max((w - 12) / tex.width, (ph - 6) / tex.height)
     this.portrait.scale.set(scale)
     this.portrait.position.set(w / 2 - (tex.width * scale) / 2, 6)

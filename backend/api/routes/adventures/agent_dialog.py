@@ -19,6 +19,7 @@ from backend.api.routes.adventures.agent_logic import (
     _build_agent_objective_and_walkthrough,
     format_agent_history,
 )
+from backend.api.routes.adventures.agent_memory import apply_memory_updates, format_memories
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import get_play_agent_personality_prompt
 from backend.engine.scripting.dialog_tree import chosen_response, is_tree
@@ -41,6 +42,10 @@ _SYSTEM_PROMPT = (
 class AgentDialogDecision(BaseModel):
     thoughts: str = Field(description="Short in-character reasoning for the choice.")
     option_number: int = Field(description="1-based number of the chosen option.")
+    remember: list[str] = Field(
+        default_factory=list,
+        description="Optional short notes (codes, clues, facts learned in this dialog) to remember later.",
+    )
 
 
 def _seen_indices_at_node(dialog: dict[str, Any]) -> set[int]:
@@ -109,6 +114,7 @@ async def _ask_model(
     )
     speaker = f"{dialog['speaker']} asks: " if dialog.get("speaker") else ""
     user_prompt = (
+        f"YOUR MEMORY / NOTES:\n{format_memories(agent_state)}\n\n"
         f"RECENT GAME HISTORY (oldest first):\n{await _recent_history(manager)}\n\n"
         f"CHOICE DIALOG:\n{speaker}{dialog.get('prompt') or ''}\n\n"
         f"OPTIONS:\n{_options_text(dialog)}\n\n"
@@ -171,6 +177,8 @@ async def decide_dialog_option(manager: Any, dialog: dict[str, Any]) -> tuple[st
             return "Monkey mode: leaving the dialog after exploring.", exit_opt
         return "Monkey mode: picking a random answer.", secrets.choice(options)
     decision = await _ask_model(manager, dialog, agent_state)
+    if decision is not None and getattr(decision, "remember", None):
+        apply_memory_updates(manager.state, decision.remember, [])
     if decision is None or not 1 <= decision.option_number <= len(options):
         if exit_opt is not None:
             return "No usable decision; leaving the dialog.", exit_opt

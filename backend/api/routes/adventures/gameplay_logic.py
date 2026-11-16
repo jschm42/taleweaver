@@ -2049,6 +2049,24 @@ class GameTurnManager:
             response_text = fallback
             yield f"event: chunk\ndata: {json.dumps({'content': fallback})}\n\n"
 
+            completion_tokens = token_usage.get("completion_tokens") or 0
+            if finish_reason == "length" and completion_tokens > 0:
+                thinking_on = bool(
+                    (self.user.llm_settings or {}).get("complex_enable_thinking")
+                    or (self.user.llm_settings or {}).get("enable_thinking")
+                )
+                hint = (
+                    "Increase Max Thinking Tokens in Admin -> Intelligence, or switch to a non-thinking model."
+                    if thinking_on
+                    else "Enable Reasoning / Thinking Mode for this model in Admin -> Intelligence, or switch to a non-thinking model."
+                )
+                thinking_notice = (
+                    f"Model '{complex_model}' spent all {completion_tokens} output tokens on "
+                    f"internal thinking without producing narration. {hint}"
+                )
+                await self._save_chat_message("system", thinking_notice)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': thinking_notice})}\n\n"
+
         id_to_name: dict[str, str] = {}
         for entity in all_entities:
             entity_id = str(getattr(entity, "id", "") or "").strip()
