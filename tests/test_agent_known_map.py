@@ -155,6 +155,8 @@ async def test_known_map_reaches_the_agent_prompt(setup_test_db, monkeypatch):
 
     assert "KNOWN MAP" in captured["system_prompt"]
     assert "/travel <place>" in captured["system_prompt"]
+    # Handovers need /give; a /say offer does not move the item (receive triggers).
+    assert "HANDOVERS ONLY HAPPEN WITH `/give`" in captured["system_prompt"]
 
 
 async def test_running_trip_needs_no_llm_decision(monkeypatch):

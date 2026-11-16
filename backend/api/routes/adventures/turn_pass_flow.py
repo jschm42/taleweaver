@@ -60,8 +60,12 @@ async def run_guardrail_chain(
     for message in await manager.guardrails._enforce_soft_rules(game_event, active_sequence):
         yield sse_system(message)
     await manager.guardrails._block_script_only_reveals(game_event)
+    # Handovers first: a handed item is moved by the engine, never removed by the GM.
+    await manager.guardrails._enforce_item_handovers(game_event, user_msg)
     # Before crafting, which adds its own (legitimate) ingredient removals.
     await manager.guardrails._enforce_inventory_removals(game_event, user_msg)
+    # Pass 1 sometimes books a handover as a plain removal: let the small model sort it out.
+    await manager.guardrails._recover_handovers_from_removals(game_event, user_msg)
 
     for method_name, takes_user_msg in _GUARDRAIL_STEPS:
         enforce = getattr(manager, method_name)

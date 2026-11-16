@@ -78,6 +78,13 @@ class EntityMovement(BaseModel):
     to_spatial_position: Optional[str] = None
 
 
+class ItemHandover(BaseModel):
+    """A carried item the player hands to a character in the scene (see ``given_items``)."""
+
+    item_id: str = Field(..., validation_alias=AliasChoices("item_id", "id", "item"))
+    npc_id: str = Field(..., validation_alias=AliasChoices("npc_id", "npc", "to", "recipient"))
+
+
 class ExitUpdate(BaseModel):
     from_scene_id: str
     to_scene_id: str
@@ -226,6 +233,15 @@ class AdventureGeneratorToolIntent(BaseModel):
     removed_inventory_item_ids: Optional[list[str]] = None
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
+    given_items: Optional[list[ItemHandover]] = Field(
+        None,
+        description=(
+            "Carried items the player hands to a character present in the scene this turn, "
+            "in any wording or language (gives, hands over, offers and the character takes "
+            "it). The engine moves each item into that character's inventory and runs its "
+            "receive trigger; do not also list it in removed_inventory_item_ids or move it."
+        ),
+    )
     completed_quest_ids: Optional[list[str]] = None
     sequence_completed: bool = False
     earned_award_keys: Optional[list[str]] = None
@@ -284,6 +300,15 @@ class GameEvent(BaseModel):
     )
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
+    given_items: Optional[list[ItemHandover]] = Field(
+        None,
+        description=(
+            "Carried items the player hands to a character present in the scene this turn, "
+            "in any wording or language (gives, hands over, offers and the character takes "
+            "it). The engine moves each item into that character's inventory and runs its "
+            "receive trigger; do not also list it in removed_inventory_item_ids or move it."
+        ),
+    )
 
     # Mapping & Navigation
     new_scene_id: Optional[str] = Field(

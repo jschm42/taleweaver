@@ -9,6 +9,10 @@ reacts in character (``GiveOutcome.reaction_prompt``).
 A typed ``give <item> to <npc>`` only becomes this command when the NPC stands in the scene
 and the player carries at least one of the named items; anything else ("give the guard a
 nod") stays a normal Game Master turn.
+
+Handovers that Pass 1 reports in ``given_items`` (the player gives an item in other words,
+e.g. inside dialogue) use the same ``hand_over_and_trigger`` within the turn
+(``handover_flow.py``); there the turn's own narration is the NPC's reaction.
 """
 
 from __future__ import annotations
@@ -110,16 +114,30 @@ async def give_items_to_npc(manager: Any, args: str) -> GiveOutcome:
     if not picked:
         return GiveOutcome([("system", f"You don't carry {', '.join(missing)}.")])
 
-    await _hand_over(manager, npc, picked)
+    notes = [f"You don't carry {', '.join(missing)}."] if missing else []
+    events = await hand_over_and_trigger(manager, npc, picked, notes)
     names = ", ".join(_item_label(e) for e in picked)
-    events = [await _say(manager, "system", f"You give {names} to {npc.name}.")]
-    if missing:
-        events.append(await _say(manager, "system", f"You don't carry {', '.join(missing)}."))
-    events.extend(await _run_receive_trigger(manager, npc, picked))
     if pending_dialog(manager.state.entity_states):
         # The receive script asked the player something; the answer drives the reaction.
         return GiveOutcome(events)
     return GiveOutcome(events, _reaction_prompt(npc, names))
+
+
+async def hand_over_and_trigger(
+    manager: Any, npc: WorldEntity, picked: list[Any], notes: list[str] | None = None
+) -> list[tuple[str, str]]:
+    """Moves carried items into the NPC's inventory and runs its receive trigger.
+
+    Returns the (role, text) messages to stream: the handover note, the extra ``notes``
+    (e.g. items the player does not carry), then the trigger's output.
+    """
+    await _hand_over(manager, npc, picked)
+    names = ", ".join(_item_label(e) for e in picked)
+    events = [await _say(manager, "system", f"You give {names} to {npc.name}.")]
+    for note in notes or []:
+        events.append(await _say(manager, "system", note))
+    events.extend(await _run_receive_trigger(manager, npc, picked))
+    return events
 
 
 def _reaction_prompt(npc: WorldEntity, names: str) -> str:

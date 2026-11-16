@@ -99,6 +99,11 @@ from backend.engine.rules.rule_engine import (
 )
 from backend.engine.scripting import GameContext, ScriptChangeset, ScriptRunner, ScriptMessage
 from backend.api.routes.adventures.award_granting import grant_awards
+from backend.api.routes.adventures.dialog_narration import open_choice_reminder
+from backend.api.routes.adventures.handover_flow import (
+    apply_item_handovers,
+    handover_recipients,
+)
 from backend.api.routes.adventures.interaction_hooks import fire_interact_triggers
 from backend.api.routes.adventures.out_of_turn_progress import apply_out_of_turn_progress
 from backend.engine.interaction.interaction_targets import interacted_entity_ids
@@ -1722,6 +1727,15 @@ class GameTurnManager:
             except GameOverError as goe:
                 await end_or_respawn(self, goe, game_event)
 
+        # Item handovers Pass 1 reported (given_items): move the items, fire receive triggers.
+        # Before the interaction triggers: the handover is the interaction with the recipient,
+        # so its receive trigger (e.g. a choice dialog) is not pre-empted by on_interact.
+        try:
+            async for handover_event in apply_item_handovers(self, game_event):
+                yield handover_event
+        except GameOverError as goe:
+            await end_or_respawn(self, goe, game_event)
+
         # Entity interactions: scripted and inline on_interact triggers. Runs in every rule
         # mode; without the mechanics pass only entities named in the message count. An
         # arrival or opening narration only describes the scene: the player touched nothing.
@@ -1736,6 +1750,8 @@ class GameTurnManager:
                     [ue.entity_id for ue in getattr(game_event, "updated_entities", None) or []],
                 )
             )
+            recipients = handover_recipients(game_event)
+            interacted_ids = [i for i in interacted_ids if str(i).upper() not in recipients]
             for entity_id in interacted_ids:
                 sys_msgs, rejected = await fire_interact_triggers(
                     self, script_runner, entity_id, game_event
@@ -1853,6 +1869,10 @@ class GameTurnManager:
         ]
         if use_vocal_tags:
             reminders.append(vocal_tag_reminder())
+        choice_note = open_choice_reminder(self.state.entity_states)
+        if choice_note:
+            # A trigger of this turn opened a choice dialog: its answer decides, not Pass 2.
+            reminders.append(choice_note)
         if language:
             reminders.append(
                 f"Respond in {language.upper()} only (except voice tags like [curious], which MUST always remain in English). "
