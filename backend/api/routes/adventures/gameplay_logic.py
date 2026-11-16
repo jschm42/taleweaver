@@ -78,6 +78,7 @@ from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.party.party_ops import apply_session_party_ops
 from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
+from backend.engine.audio.browser_tts import uses_vocal_tags
 from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
 from backend.engine.interaction.llm_intents import (
@@ -1822,7 +1823,7 @@ class GameTurnManager:
             yield f"event: error\ndata: {json.dumps({'detail': 'Narration model configuration is invalid. Please check your settings and try again.'})}\n\n"
             return
         tts_settings = self.user.tts_settings or {}
-        use_vocal_tags = tts_settings.get("use_vocal_tags", True)
+        use_vocal_tags = uses_vocal_tags(tts_settings)
 
         if rule_violations and game_event:
             game_event.narrative_description = (

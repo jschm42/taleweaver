@@ -822,7 +822,7 @@ export const api = {
     return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 120000 })
   },
 
-  testTTS(): Promise<{ status: string; audio_url?: string; message?: string }> {
+  testTTS(): Promise<{ status: string; audio_url?: string; message?: string; browser?: boolean }> {
     return request('/tts/test-connection', { method: 'POST', timeoutMs: 60000 })
   },
 

@@ -55,6 +55,7 @@ from backend.core.models_config import (
 )
 from backend.core.security import encryption_util
 from backend.core.turn_key_preflight import missing_turn_keys
+from backend.engine.audio.browser_tts import is_browser_provider
 from backend.engine.audio.openai_compatible_tts import OPENAI_COMPATIBLE_PROVIDER
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
@@ -575,6 +576,8 @@ class TTSSettingsPayload(BaseModel):
     custom_openai_voice: str = Field(default="", max_length=200)
     custom_openai_format: str = Field(default="mp3", max_length=8)
     custom_openai_instructions: str = Field(default="", max_length=2000)
+    browser_voice: str = Field(default="", max_length=200)
+    browser_character_voices: list[str] = Field(default_factory=list, max_length=40)
     use_vocal_tags: bool = True
     use_streaming: bool = False
     auto_speak: bool = True
@@ -1100,6 +1103,9 @@ async def test_tts_connection(
     provider = str((current_user.tts_settings or {}).get("provider", "google")).lower()
     if provider == OPENAI_COMPATIBLE_PROVIDER:
         return await test_tts_connection_v2(db=db, current_user=current_user)
+    if is_browser_provider(provider):
+        # The client plays the sample with its own speech synthesis.
+        return {"status": "success", "browser": True, "message": "Browser voice"}
     return await _test_keyed_tts_provider(current_user, provider)
 
 

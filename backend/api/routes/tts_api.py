@@ -14,6 +14,7 @@ from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.error_diagnostics import diagnose_provider_error
 from backend.core.global_settings import read_server_settings
+from backend.engine.audio.browser_tts import NO_SERVER_AUDIO_DETAIL, is_browser_provider
 from backend.engine.audio.openai_compatible_tts import (
     OPENAI_COMPATIBLE_PROVIDER,
     SpeechEndpoint,
@@ -141,6 +142,8 @@ async def _resolve_tts_config(
     if require_enabled and not _coerce_bool(tts_settings.get("enabled"), False):
         raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
     provider = str(tts_settings.get("provider", "google")).lower()
+    if is_browser_provider(provider):
+        raise HTTPException(status_code=409, detail=NO_SERVER_AUDIO_DETAIL)
     model = _resolve_model(provider, tts_settings.get("selected_model"))
     is_compatible = provider == OPENAI_COMPATIBLE_PROVIDER
     endpoint = _speech_endpoint(tts_settings, model, current_user) if is_compatible else None
@@ -361,7 +364,15 @@ async def test_tts_connection_v2(
     current_user: User = Depends(get_current_user),
 ):
     """Generates a short test sentence to verify TTS configuration."""
-    config = await _resolve_tts_config(db, current_user)
+    tts_settings = (await _resolve_tts_settings_source(db)).tts_settings or {}
+    if is_browser_provider(tts_settings.get("provider")):
+        # No server audio: the client plays the sample with its own speech synthesis.
+        return {"status": "success", "browser": True, "message": "Browser voice"}
+    return await _server_tts_test(await _resolve_tts_config(db, current_user))
+
+
+async def _server_tts_test(config: ResolvedTTSConfig) -> dict[str, Any]:
+    """Creates the test sentence with the server provider and reports the outcome."""
     test_text = "Tale Weaver connection test successful!"
     if config.use_vocal_tags:
         test_text = f"[excited] {test_text}"

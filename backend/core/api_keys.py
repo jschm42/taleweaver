@@ -43,7 +43,7 @@ SOURCE_MISSING = "missing"
 SOURCE_DISABLED = "disabled"
 
 # Local providers never use a key, so they are always server-provided.
-KEYLESS_PROVIDERS = frozenset(("ollama", "stable_diffusion", "comfyui", "qwen"))
+KEYLESS_PROVIDERS = frozenset(("ollama", "stable_diffusion", "comfyui", "qwen", "browser"))
 MAX_API_KEY_LENGTH = 512
 
 

@@ -13,7 +13,7 @@ export interface ModelPreset {
 }
 
 /** Providers that run locally and need no API key. */
-export const KEYLESS_PROVIDERS = new Set(['ollama', 'stable_diffusion', 'comfyui', 'custom_openai'])
+export const KEYLESS_PROVIDERS = new Set(['ollama', 'stable_diffusion', 'comfyui', 'custom_openai', 'browser'])
 
 export interface KeyProvider {
   id: string

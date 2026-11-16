@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from backend.core.comfyui import ComfySettings
 from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
+from backend.engine.audio.browser_tts import normalize_browser_voices
 
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
@@ -257,6 +258,9 @@ def _tts_fallback() -> dict[str, Any]:
         "custom_openai_voice": "",
         "custom_openai_format": "mp3",
         "custom_openai_instructions": "",
+        # Browser speech (provider "browser"): voice names, empty = automatic choice.
+        "browser_voice": "",
+        "browser_character_voices": [],
         "use_vocal_tags": True,
         "use_streaming": False,
         # Speech starts on its own for players when TTS is configured (they can switch it off).
@@ -296,6 +300,7 @@ def normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     normalized["provider"] = normalized.get("provider") or "google"
     normalized["elevenlabs_voice_id"] = normalized.get("elevenlabs_voice_id", "")
     _apply_openai_compatible_defaults(normalized, fallback)
+    normalize_browser_voices(normalized)
 
     # Only fill flags that are missing entirely; explicit False values must survive.
     normalized.pop("use_text_chunking", None)  # retired: speech is split per speaker line
