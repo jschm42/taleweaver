@@ -21,14 +21,19 @@ from backend.api.routes.adventures.agent_logic import (
 )
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import get_play_agent_personality_prompt
+from backend.engine.scripting.dialog_tree import chosen_response, is_tree
 from backend.models.chat import ChatMessage
 
 logger = logging.getLogger(__name__)
 
-_HISTORY_LIMIT = 8
+_HISTORY_LIMIT = 12
+_MAX_TREE_STEPS_BEFORE_EXIT = 6
 _SYSTEM_PROMPT = (
     "You are an autonomous player of a text adventure. The game shows you a choice dialog and "
-    "you must pick exactly one of the numbered options.\n\n"
+    "you must pick exactly one of the numbered options.\n"
+    "Do not repeat options you have already chosen in this dialog or in recent history. Once you "
+    "have the information you need or have explored a branch, choose an option that ends or "
+    "leaves the dialog so you can continue the adventure.\n\n"
     "{personality_prompt}\n\n{objective_block}\n\n{walkthrough_text}"
 )
 
@@ -38,8 +43,41 @@ class AgentDialogDecision(BaseModel):
     option_number: int = Field(description="1-based number of the chosen option.")
 
 
+def _seen_indices_at_node(dialog: dict[str, Any]) -> set[int]:
+    if not is_tree(dialog):
+        return set()
+    node = dialog.get("node")
+    return {
+        int(step["response"])
+        for step in (dialog.get("path") or [])
+        if isinstance(step, dict) and step.get("node") == node and "response" in step
+    }
+
+
+def _ends_dialog(dialog: dict[str, Any], option: dict[str, Any]) -> bool:
+    if not is_tree(dialog):
+        return False
+    return chosen_response(dialog, option["index"]).get("next_node") is None
+
+
+def _exit_option(dialog: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_tree(dialog):
+        return None
+    return next((o for o in dialog["options"] if _ends_dialog(dialog, o)), None)
+
+
 def _options_text(dialog: dict[str, Any]) -> str:
-    return "\n".join(f"{n}. {o['label']}" for n, o in enumerate(dialog["options"], start=1))
+    seen = _seen_indices_at_node(dialog)
+    lines: list[str] = []
+    for n, o in enumerate(dialog["options"], start=1):
+        tags: list[str] = []
+        if o["index"] in seen:
+            tags.append("already chosen")
+        if _ends_dialog(dialog, o):
+            tags.append("ends dialog")
+        suffix = f" ({', '.join(tags)})" if tags else ""
+        lines.append(f"{n}. {o['label']}{suffix}")
+    return "\n".join(lines)
 
 
 async def _recent_history(manager: Any) -> str:
@@ -100,13 +138,42 @@ async def _ask_model(
         return None
 
 
+def _tree_loop_override(
+    dialog: dict[str, Any], chosen: dict[str, Any]
+) -> tuple[str, dict[str, Any]] | None:
+    """Breaks out of repeated or overly long dialog-tree browsing."""
+    if not is_tree(dialog):
+        return None
+    exit_opt = _exit_option(dialog)
+    path_len = len(dialog.get("path") or [])
+    if path_len >= _MAX_TREE_STEPS_BEFORE_EXIT and exit_opt is not None:
+        if chosen["index"] == exit_opt["index"]:
+            return None
+        return "Already explored enough of this dialog; leaving.", exit_opt
+    seen = _seen_indices_at_node(dialog)
+    if chosen["index"] not in seen:
+        return None
+    if exit_opt is not None:
+        return "Already chose that option; leaving the dialog.", exit_opt
+    unchosen = [o for o in dialog["options"] if o["index"] not in seen]
+    return (
+        ("Already chose that option; picking an unexplored one.", unchosen[0]) if unchosen else None
+    )
+
+
 async def decide_dialog_option(manager: Any, dialog: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Returns (thoughts, chosen option) for the open dialog."""
     options = dialog["options"]
     agent_state = AgentService.get_agent_state(manager.state)
+    exit_opt = _exit_option(dialog)
     if agent_state.get("monkey_mode"):
+        if len(dialog.get("path") or []) >= _MAX_TREE_STEPS_BEFORE_EXIT and exit_opt is not None:
+            return "Monkey mode: leaving the dialog after exploring.", exit_opt
         return "Monkey mode: picking a random answer.", secrets.choice(options)
     decision = await _ask_model(manager, dialog, agent_state)
     if decision is None or not 1 <= decision.option_number <= len(options):
+        if exit_opt is not None:
+            return "No usable decision; leaving the dialog.", exit_opt
         return "No usable decision; taking the first answer.", options[0]
-    return decision.thoughts, options[decision.option_number - 1]
+    chosen = options[decision.option_number - 1]
+    return _tree_loop_override(dialog, chosen) or (decision.thoughts, chosen)

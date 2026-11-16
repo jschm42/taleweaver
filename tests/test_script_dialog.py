@@ -463,3 +463,65 @@ def test_dialog_preserves_multiline_code_indentation_in_prompt_and_options():
     assert "    print(i)" in dialog["prompt"]
     assert dialog["options"][0]["label"] == "    Indented option"
     assert "    return 42" in dialog["options"][1]["label"]
+
+
+def _faq_tree_dialog(path: list[dict] | None = None) -> dict:
+    return {
+        "id": "faq-1",
+        "kind": "tree",
+        "node": "root",
+        "prompt": "Which department's waiver would you like to read?",
+        "speaker": "FAQ_INFO CONSOLE",
+        "options": [
+            {"index": 0, "label": "Time Machine Lab"},
+            {"index": 1, "label": "Leave console"},
+        ],
+        "path": path or [],
+        "tree": {
+            "nodes": {
+                "root": {
+                    "prompt": "Which department's waiver would you like to read?",
+                    "responses": [
+                        {"text": "Time Machine Lab", "next_node": "time_lab", "action": ""},
+                        {"text": "Leave console", "next_node": None, "action": ""},
+                    ],
+                },
+                "time_lab": {
+                    "prompt": "TIME MACHINE LAB info.",
+                    "responses": [{"text": "Check the other rooms.", "next_node": "root"}],
+                },
+            }
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_agent_exits_tree_dialog_when_repeating_seen_option(monkeypatch):
+    async with TestSessionLocal() as db:
+        # Arrange: agent already chose option 0 ("Time Machine Lab") at root, model picks 1 again
+        monkeypatch.setattr(agent_dialog, "GameMasterLLM", _fake_agent_llm(1))
+        manager = await _manager(db)
+        dialog = _faq_tree_dialog(
+            path=[{"node": "root", "response": 0, "text": "Time Machine Lab"}]
+        )
+
+        # Act
+        _thoughts, option = await agent_dialog.decide_dialog_option(manager, dialog)
+
+        # Assert
+        assert option == {"index": 1, "label": "Leave console"}
+
+
+@pytest.mark.asyncio
+async def test_agent_exits_tree_dialog_on_invalid_model_answer(monkeypatch):
+    async with TestSessionLocal() as db:
+        # Arrange
+        monkeypatch.setattr(agent_dialog, "GameMasterLLM", _fake_agent_llm(99))
+        manager = await _manager(db)
+        dialog = _faq_tree_dialog()
+
+        # Act
+        _thoughts, option = await agent_dialog.decide_dialog_option(manager, dialog)
+
+        # Assert
+        assert option == {"index": 1, "label": "Leave console"}
