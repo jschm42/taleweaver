@@ -3,6 +3,9 @@ import { useEntityFormContext } from '@/composables/editor/entityFormContext'
 import NpcCombatSettings from '@/components/editor/NpcCombatSettings.vue'
 import UiNotice from '@/components/ui/UiNotice.vue'
 import UiToggle from '@/components/ui/UiToggle.vue'
+import type { NpcCombatProfileState } from '@/composables/editor/useNpcCombatProfile'
+
+defineProps<{ profile: NpcCombatProfileState | null }>()
 
 const ef = useEntityFormContext()
 </script>
@@ -10,8 +13,8 @@ const ef = useEntityFormContext()
 <template>
   <div class="space-y-6">
     <p class="wb-body text-wb-muted">
-      How this character fights: damage, aggression, combat group, attributes, main attack and special attacks. Party
-      settings are on the Companion tab.
+      How this character fights: damage, aggression, combat group, main attack and special attacks. Attributes and AC
+      are on the Stats tab, party settings on the Companion tab.
     </p>
 
     <UiToggle
@@ -26,6 +29,7 @@ const ef = useEntityFormContext()
           :adventure-id="ef.props.adventureId"
           :npc="ef.props.npcData"
           :reference-options="ef.props.referenceOptions"
+          :profile="profile"
           @saved="ef.emit('combat-saved')"
         />
       </template>

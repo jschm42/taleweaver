@@ -39,7 +39,7 @@ const pageKey = computed(() => (isEntityPage.value ? `entity-${String(route.para
 function selectPage(key: string): void {
   if (!(key in EDITOR_PAGES)) return
   if (route.name !== 'adventure-editor') {
-    void router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: { ...route.query, tab: key } })
+    void router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: { ...route.query, tab: key, panel: undefined } })
   }
   editor.activeTab = key as typeof editor.activeTab
 }
@@ -59,7 +59,8 @@ watch(
   () => editor.activeTab,
   (tab) => {
     if (route.name === 'adventure-editor' && route.query.tab !== tab) {
-      void router.replace({ query: { ...route.query, tab } })
+      // A page's own tab (?panel=) does not carry over to the next page.
+      void router.replace({ query: { ...route.query, tab, panel: undefined } })
     }
   },
 )

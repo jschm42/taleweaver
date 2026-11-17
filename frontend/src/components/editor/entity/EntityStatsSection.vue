@@ -19,7 +19,7 @@ const outOfRange = (value: unknown): boolean => typeof value === 'number' && (va
       <UiInput v-model="ef.localForm.name" maxlength="50" class="!h-11 !text-base font-semibold" />
     </UiField>
 
-    <div v-if="['protagonist', 'npc'].includes(ef.type) && ef.props.ruleEnforcementMode !== 'chat'" class="grid grid-cols-3 gap-4">
+    <div v-if="ef.type === 'protagonist' && ef.props.ruleEnforcementMode !== 'chat'" class="grid grid-cols-3 gap-4">
       <UiField label="Health (HP)" :error="outOfRange(ef.localForm.hp) ? '0–999' : null">
         <UiInput v-model="ef.localForm.hp" type="number" min="0" max="999" />
       </UiField>

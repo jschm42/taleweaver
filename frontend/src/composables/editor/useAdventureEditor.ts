@@ -423,7 +423,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'memory' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -1719,39 +1719,41 @@ async function onSpecialAttacksSaved() {
   addNotification('Combat & talent settings saved.', 'success')
 }
 
-async function saveProtagonistField(field: string, newValue: any) {
+/** Saves one protagonist field, or several at once when `field` is a map of field -> value. */
+async function saveProtagonistField(field: string | Record<string, any>, newValue?: any) {
   const p = debugData.value?.protagonist
   if (!p) return
+  const changes: Record<string, any> = typeof field === 'string' ? { [field]: newValue } : field
   isSavingText.value = true
   try {
     const updatePayload = {
       target_type: 'protagonist',
       target_id: p.id,
-      name: field === 'name' ? String(newValue).trim() : p.name,
-      description: field === 'description' ? String(newValue).trim() : p.description,
-      hp: field === 'hp' ? Number(newValue) : p.hp,
-      stamina: field === 'stamina' ? Number(newValue) : p.stamina,
-      mana: field === 'mana' ? Number(newValue) : p.mana,
-      goal: field === 'goal' ? String(newValue).trim() : p.goal,
-      character: field === 'character' ? String(newValue).trim() : p.character,
-      appearance: field === 'appearance' ? String(newValue || '').trim() : p.appearance,
-      voice: field === 'voice' ? String(newValue || '') : (p.voice ?? undefined),
-      strength: field === 'strength' ? Number(newValue) : p.strength,
-      intelligence: field === 'intelligence' ? Number(newValue) : p.intelligence,
-      wisdom: field === 'wisdom' ? Number(newValue) : p.wisdom,
-      dexterity: field === 'dexterity' ? Number(newValue) : p.dexterity,
-      charisma: field === 'charisma' ? Number(newValue) : p.charisma,
-      armor_class: field === 'armor_class' ? Number(newValue) : p.armor_class,
-      exp: field === 'exp' ? Number(newValue) : p.exp,
-      inventory: field === 'inventory' ? newValue : (p.inventory ? p.inventory.map((i: any) => typeof i === 'string' ? i : (i?.id || '')) : []),
-      equipment: field === 'equipment' ? newValue : (p.equipment ? Object.entries(p.equipment).reduce((acc: any, [k, v]: [string, any]) => {
+      name: 'name' in changes ? String(changes.name).trim() : p.name,
+      description: 'description' in changes ? String(changes.description).trim() : p.description,
+      hp: 'hp' in changes ? Number(changes.hp) : p.hp,
+      stamina: 'stamina' in changes ? Number(changes.stamina) : p.stamina,
+      mana: 'mana' in changes ? Number(changes.mana) : p.mana,
+      goal: 'goal' in changes ? String(changes.goal).trim() : p.goal,
+      character: 'character' in changes ? String(changes.character).trim() : p.character,
+      appearance: 'appearance' in changes ? String(changes.appearance || '').trim() : p.appearance,
+      voice: 'voice' in changes ? String(changes.voice || '') : (p.voice ?? undefined),
+      strength: 'strength' in changes ? Number(changes.strength) : p.strength,
+      intelligence: 'intelligence' in changes ? Number(changes.intelligence) : p.intelligence,
+      wisdom: 'wisdom' in changes ? Number(changes.wisdom) : p.wisdom,
+      dexterity: 'dexterity' in changes ? Number(changes.dexterity) : p.dexterity,
+      charisma: 'charisma' in changes ? Number(changes.charisma) : p.charisma,
+      armor_class: 'armor_class' in changes ? Number(changes.armor_class) : p.armor_class,
+      exp: 'exp' in changes ? Number(changes.exp) : p.exp,
+      inventory: 'inventory' in changes ? changes.inventory : (p.inventory ? p.inventory.map((i: any) => typeof i === 'string' ? i : (i?.id || '')) : []),
+      equipment: 'equipment' in changes ? changes.equipment : (p.equipment ? Object.entries(p.equipment).reduce((acc: any, [k, v]: [string, any]) => {
         acc[k] = v ? (typeof v === 'string' ? v : (v?.id || null)) : null
         return acc
       }, {}) : {}),
-      on_hp_change_script: field === 'on_hp_change_script' ? String(newValue || '') : p.on_hp_change_script,
-      on_hp_change_text: field === 'on_hp_change_text' ? String(newValue || '') : p.on_hp_change_text,
-      on_status_change_script: field === 'on_status_change_script' ? String(newValue || '') : p.on_status_change_script,
-      on_status_change_text: field === 'on_status_change_text' ? String(newValue || '') : p.on_status_change_text,
+      on_hp_change_script: 'on_hp_change_script' in changes ? String(changes.on_hp_change_script || '') : p.on_hp_change_script,
+      on_hp_change_text: 'on_hp_change_text' in changes ? String(changes.on_hp_change_text || '') : p.on_hp_change_text,
+      on_status_change_script: 'on_status_change_script' in changes ? String(changes.on_status_change_script || '') : p.on_status_change_script,
+      on_status_change_text: 'on_status_change_text' in changes ? String(changes.on_status_change_text || '') : p.on_status_change_text,
     }
 
     await entityService.saveEntityText(props.adventureId, updatePayload as any)

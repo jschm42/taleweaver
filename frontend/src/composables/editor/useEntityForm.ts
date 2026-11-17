@@ -114,8 +114,8 @@ export type EntityFormEmits = {
 export function useEntityForm(props: EntityFormProps, emit: EntityFormEmits) {
 
 
-type FormTab = 'simple' | 'combat' | 'companion' | 'advanced'
-const FORM_TABS: FormTab[] = ['simple', 'combat', 'companion', 'advanced']
+type FormTab = 'simple' | 'stats' | 'movement' | 'inventory' | 'combat' | 'companion' | 'advanced'
+const FORM_TABS: FormTab[] = ['simple', 'stats', 'movement', 'inventory', 'combat', 'companion', 'advanced']
 const activeTab = ref<FormTab>('simple')
 const isPage = computed(() => props.variant === 'page')
 

@@ -9,7 +9,7 @@ const ef = useEntityFormContext()
 </script>
 
 <template>
-  <UiSection v-if="ef.type === 'npc'" title="Movement" class="border-t border-wb-line pt-6">
+  <UiSection v-if="ef.type === 'npc'" title="Movement">
     <UiToggle
       v-model="ef.localForm.moveable"
       label="Can move between scenes"

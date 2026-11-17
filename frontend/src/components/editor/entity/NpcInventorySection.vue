@@ -22,7 +22,6 @@ function addItem(): void {
     v-if="ef.type === 'npc'"
     title="Inventory"
     description="Items the character carries; dropped as loot when defeated."
-    class="border-t border-wb-line pt-6"
   >
     <div class="space-y-2">
       <div v-for="(_item, idx) in ef.localForm.inventory_input" :key="idx" class="flex items-center gap-2">

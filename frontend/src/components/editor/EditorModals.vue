@@ -1,5 +1,7 @@
 <script setup lang="ts">
 /** Dialogs, tooltip and toasts shared by all editor pages. */
+import { computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useEditor } from '@/composables/editor/editorContext'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import ManualVisionModal from '@/components/editor/ManualVisionModal.vue'
@@ -15,11 +17,19 @@ import { formatBytes } from '@/utils/editor_utils'
 import { visualService } from '@/services/visualService'
 
 const editor = useEditor()
+const route = useRoute()
+
+// Hover cards belong to the lists. On a detail page or with a dialog open they would cover the
+// form; a card left behind by a click into a detail page (no mouseleave) is cleared here too.
+const hideTooltip = computed(
+  () => route.name !== 'adventure-editor' || editor.showEditModal || editor.isCreateEntityMode,
+)
+watch(() => route.fullPath, () => editor.clearHover())
 </script>
 
 <template>
   <EntityTooltip 
-    :hovered-entity="editor.canShowSceneRoutePanel ? null : editor.hoveredEntity"
+    :hovered-entity="hideTooltip ? null : editor.hoveredEntity"
     :active-menu-id="editor.activeMenuId"
     :mouse-pos="editor.mousePos"
     :tooltip-align-top="editor.tooltipAlignTop"

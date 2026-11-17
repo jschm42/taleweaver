@@ -14,6 +14,7 @@ import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
 import NpcCombatProfile from '@/components/editor/NpcCombatProfile.vue'
 import { specialAttackService, type NpcAssistMode } from '@/services/specialAttackService'
 import { useEntitySubform } from '@/components/editor/entity/entitySubforms'
+import type { NpcCombatProfileState } from '@/composables/editor/useNpcCombatProfile'
 
 type NpcLike = {
   id: string
@@ -41,6 +42,8 @@ const props = defineProps<{
   adventureId: string
   npc: NpcLike
   referenceOptions?: Array<{ id: string; name?: string; type?: string }>
+  /** Profile kept by the entity form (attributes on its Stats tab); omitted: own profile. */
+  profile?: NpcCombatProfileState | null
 }>()
 
 const emit = defineEmits<{
@@ -171,7 +174,7 @@ async function saveBehaviour(): Promise<void> {
     </UiSection>
 
     <div class="border-t border-wb-line pt-6">
-      <NpcCombatProfile :adventure-id="adventureId" :npc="npc" @saved="emit('saved')" />
+      <NpcCombatProfile :adventure-id="adventureId" :npc="npc" :profile="profile" @saved="emit('saved')" />
     </div>
 
     <div class="border-t border-wb-line pt-6">

@@ -25,13 +25,28 @@ import NpcCompanionPanel from './NpcCompanionPanel.vue'
 import ItemTriggersPanel from './ItemTriggersPanel.vue'
 import SceneTriggersPanel from './SceneTriggersPanel.vue'
 import NpcTriggersPanel from './NpcTriggersPanel.vue'
+import NpcStatsPanel from './NpcStatsPanel.vue'
+import { useNpcCombatProfile } from '@/composables/editor/useNpcCombatProfile'
 
 /** Image row, tabs and tab panels of the entity form (shared by the modal and the detail page). */
 const ef = useEntityFormContext()
 
+// Attributes (Stats tab) and main attack (Combat tab) are saved together, so both tabs share one profile.
+const savedNpc = computed(() => (ef.type === 'npc' && !ef.props.isCreateEntityMode ? (ef.props.npcData ?? null) : null))
+const npcProfile = useNpcCombatProfile(() => ef.props.adventureId, () => savedNpc.value)
+const profile = computed(() => (savedNpc.value && ef.props.adventureId ? npcProfile : null))
+
+const NPC_TABS = [
+  { id: 'stats' as const, label: 'Stats' },
+  { id: 'movement' as const, label: 'Movement' },
+  { id: 'inventory' as const, label: 'Inventory' },
+  { id: 'combat' as const, label: 'Combat' },
+  { id: 'companion' as const, label: 'Companion' },
+]
+
 const tabs = computed(() => [
   { id: 'simple' as const, label: 'General' },
-  ...(ef.type === 'npc' ? [{ id: 'combat' as const, label: 'Combat' }, { id: 'companion' as const, label: 'Companion' }] : []),
+  ...(ef.type === 'npc' ? NPC_TABS : []),
   { id: 'advanced' as const, label: ef.type === 'scene' ? 'Triggers' : 'Advanced' },
 ])
 </script>
@@ -53,9 +68,7 @@ const tabs = computed(() => [
       <EntityStatsSection />
       <ProtagonistTraitsSection />
       <NpcProfileSection />
-      <NpcMovementSection />
       <NpcNotesSection />
-      <NpcInventorySection />
       <NpcVisibilitySection />
       <div v-if="ef.type === 'object'" class="space-y-6">
         <ItemBasicsSection />
@@ -70,8 +83,20 @@ const tabs = computed(() => [
       <EntityDescriptionSection />
     </div>
 
+    <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'stats'">
+      <NpcStatsPanel :profile="profile" />
+    </div>
+
+    <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'movement'">
+      <NpcMovementSection />
+    </div>
+
+    <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'inventory'">
+      <NpcInventorySection />
+    </div>
+
     <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'combat'">
-      <NpcCombatPanel />
+      <NpcCombatPanel :profile="profile" />
     </div>
 
     <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'companion'">
