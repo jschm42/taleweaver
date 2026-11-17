@@ -12,6 +12,7 @@ export interface Adventure {
   creator?: string
   copyright?: string
   license?: string
+  license_url?: string
   original_prompt?: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number

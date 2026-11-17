@@ -2,6 +2,8 @@ import { API_BASE, authHeaders } from '@/services/http'
 
 export interface EntityEditData {
   target_type: string
+  /** NPC kind (HUMANOID, BEING, ANIMAL, MONSTER). */
+  npc_type?: string
   target_id: string
   new_id?: string
   name?: string
@@ -132,6 +134,8 @@ export interface ExitCreateData {
 
 export interface EntityCreateData {
   entity_id: string
+  /** NPC kind (HUMANOID, BEING, ANIMAL, MONSTER). */
+  npc_type?: string
   entity_type: 'NPC' | 'OBJECT'
   scene_id: string
   name: string

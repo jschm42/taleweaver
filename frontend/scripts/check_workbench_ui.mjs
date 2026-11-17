@@ -29,6 +29,13 @@ export const MIGRATED = [
   'src/components/common/OpenAICompatibleTtsFields.vue',
   'src/components/common/BrowserVoiceFields.vue',
   'src/components/common/ElevenLabsVoiceField.vue',
+  // Editor shell (phase 2); the tab components inside the pages follow in phases 3 and 4
+  'src/views/AdventureEditorView.vue',
+  'src/components/editor/pages',
+  'src/components/editor/EditorModals.vue',
+  'src/components/editor/WorldBuilderDrawer.vue',
+  'src/components/editor/editorNavigation.ts',
+  'src/composables/editor',
 ]
 
 const PALETTE =

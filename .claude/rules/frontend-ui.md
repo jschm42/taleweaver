@@ -98,10 +98,11 @@ everything you **add or change**; do not restyle untouched code in the same task
 18. Views only compose (target < 300 lines). Components < 400 lines (warning 600). A
     template over ~150 lines is split into child components; logic moves into composables
     or services.
-19. Do not add features to oversized files (`AdventureEditorView.vue`,
-    `EditEntityModal.vue`, `SceneRoutePanel.vue`, `ScriptEditor.vue`,
-    `IntelligenceSection.vue`, `ValidationTab.vue`). Extract the touched part into a new
-    component first, then change it there.
+19. Do not add features to oversized files (`composables/editor/useAdventureEditor.ts`,
+    `EditEntityModal.vue`, `SceneRoutePanel.vue`, `ScriptEditor.vue`, `ValidationTab.vue`).
+    Extract the touched part into a new component or composable first, then change it there.
+    New editor pages go into `components/editor/pages/`, read the state with `useEditor()`
+    and are registered in `components/editor/editorNavigation.ts`.
 20. Every input has a label (`UiField` wires `for` / `aria-describedby`), every button has
     `type="button"` unless it submits, focus stays visible, dialogs trap focus and close on
     Esc.

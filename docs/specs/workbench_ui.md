@@ -1,7 +1,7 @@
 # Workbench UI: one design system for Admin, Editor and Creation
 
-> **Status (2026-11-17):** Phase 0 (foundation) and Phase 1 (admin console) implemented.
-> Phases 2–5 (editor, entity pages, remaining editor pages, creation and setup wizard) open.
+> **Status (2026-11-17):** Phases 0 (foundation), 1 (admin console) and 2 (editor shell)
+> implemented. Phases 3–5 (entity pages, remaining editor pages, creation and setup wizard) open.
 > Agent rules for new work:
 > [.claude/rules/frontend-ui.md](../../.claude/rules/frontend-ui.md).
 
@@ -383,6 +383,7 @@ screenshots.
 | **0. Foundation** | `workbench.css` tokens, Tailwind mapping, Inter font, `src/components/ui/` (Button, IconButton, Field, inputs, Toggle, Card, Section, Disclosure, Modal, Drawer, ConfirmDialog, PromptDialog, Toast, Badge, Spinner, EmptyState, InfoPopover), `useDraft`, `useConfirm`, `usePrompt`, `useToast`. Replace every `window.alert` / `confirm` / `prompt` in the frontend. A check script `scripts/check_workbench_ui.mjs` (run in `npm run lint`) that flags native dialogs everywhere, and `text-[Npx]`, hex colors and raw palette colors in migrated folders. | Components exist with a demo route `/dev/ui` (debug only); no native dialog left. |
 | **1. Admin (pilot)** | `WorkbenchShell` for Admin, new navigation groups, all admin sections on `Ui*` components and the save bar; `statusMessage` → toasts. | Admin folder passes the check script. |
 | **2. Editor shell** | Editor in `WorkbenchShell`, grouped navigation, Validation pinned, World-Builder as AI drawer, `AdventureEditorView` split into pages. | View < 300 lines. |
+| | *Phase 2 as built:* the editor's script moved unchanged into `composables/editor/useAdventureEditor.ts` (about 3,000 lines, provided to the pages through `editorContext.ts` / `useEditor()`); each tab is a thin page in `components/editor/pages/`; navigation in `components/editor/editorNavigation.ts` (open page in `?tab=`); World-Builder in `WorldBuilderDrawer.vue` (`Ctrl+K`); `notificationService` forwards to the app-wide toasts. Phases 3 and 4 split `useAdventureEditor` by theme (entity editing, images, routes, updates). | |
 | **3. Entity editing** | Editor routes for entity detail pages; `EditEntityModal` → `EntityDetailPage` with per-tab components; `EditExitModal`, scene and exit route panels on the same pattern. | No editor file > 600 lines; every entity has a URL. |
 | **4. Remaining editor pages** | Scripts, Map, Time, Quests, Awards, Sequences, Audio, Dynamic, Validation on `Ui*` and the draft model. | Editor folder passes the check script. |
 | **5. Creation & setup** | `CreateAdventureView` and setup wizard on the same components (`UiRadioCards`, `UiField`). | Whole Workbench passes the check script. |
