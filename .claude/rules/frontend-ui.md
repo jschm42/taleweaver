@@ -89,7 +89,9 @@ everything you **add or change**; do not restyle untouched code in the same task
     per-field save buttons and no click-to-edit fields in new code. In the adventure editor,
     pages bind adventure settings directly to `editor.form`; the shell's save bar
     (`useEditorFormDraft`) saves them, and AI text goes into the draft via
-    `useFormFieldGenerator`.
+    `useFormFieldGenerator`. Entity form parts with their own endpoint register via
+    `useEntitySubform` (`components/editor/entity/entitySubforms.ts`) instead of showing a
+    save button of their own.
 15. Actions that are not form edits (generate, validate, delete) run immediately;
     destructive ones confirm with `useConfirm({ danger: true })`.
 16. Every list has an empty state (`UiEmptyState`), every async load a `UiSpinner` or

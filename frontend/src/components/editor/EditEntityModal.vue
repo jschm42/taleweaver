@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Save } from 'lucide-vue-next'
 import { provideEntityForm } from '@/composables/editor/entityFormContext'
+import { useToast } from '@/composables/useToast'
+import { provideEntitySubforms } from '@/components/editor/entity/entitySubforms'
 import type { EntityFormEmits, EntityFormProps } from '@/composables/editor/useEntityForm'
 import EntityFormContent from '@/components/editor/entity/EntityFormContent.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -15,6 +17,26 @@ const props = defineProps<EntityFormProps>()
 const emit = defineEmits<EntityFormEmits>()
 
 const ef = provideEntityForm(props, emit)
+// Combat and companion settings save through their own endpoints; "Save changes" saves them first.
+const subforms = provideEntitySubforms()
+const toast = useToast()
+const savingParts = ref(false)
+const busy = computed(() => ef.props.isSaving || savingParts.value)
+
+async function save(): Promise<void> {
+  if (ef.isFormInvalid || busy.value) return
+  savingParts.value = true
+  try {
+    const problem = await subforms.saveDirty()
+    if (problem) {
+      toast.error(problem, 'Not saved')
+      return
+    }
+  } finally {
+    savingParts.value = false
+  }
+  ef.handleSave()
+}
 
 const KIND_LABELS: Record<string, string> = {
   npc: 'character',
@@ -39,13 +61,13 @@ function handleOpenChange(open: boolean): void {
       :open="true"
       :title="title"
       size="xl"
-      :persistent="ef.props.isSaving"
+      :persistent="busy"
       @update:open="handleOpenChange"
     >
       <EntityFormContent />
       <template #footer>
-        <UiButton :disabled="ef.props.isSaving" @click="ef.emit('close')">Discard</UiButton>
-        <UiButton variant="primary" :icon="Save" :loading="ef.props.isSaving" :disabled="ef.isFormInvalid" @click="ef.handleSave">
+        <UiButton :disabled="busy" @click="ef.emit('close')">Discard</UiButton>
+        <UiButton variant="primary" :icon="Save" :loading="busy" :disabled="ef.isFormInvalid" @click="save">
           {{ saveLabel }}
         </UiButton>
       </template>
@@ -56,8 +78,8 @@ function handleOpenChange(open: boolean): void {
         <EntityFormContent />
       </div>
       <footer class="sticky bottom-0 z-20 flex items-center justify-end gap-2 rounded-b-xl border-t border-wb-line bg-wb-overlay px-5 py-3">
-        <UiButton variant="ghost" :disabled="ef.props.isSaving" @click="ef.emit('close')">Back without saving</UiButton>
-        <UiButton variant="primary" :icon="Save" :loading="ef.props.isSaving" :disabled="ef.isFormInvalid" @click="ef.handleSave">
+        <UiButton variant="ghost" :disabled="busy" @click="ef.emit('close')">Back without saving</UiButton>
+        <UiButton variant="primary" :icon="Save" :loading="busy" :disabled="ef.isFormInvalid" @click="save">
           {{ saveLabel }}
         </UiButton>
       </footer>

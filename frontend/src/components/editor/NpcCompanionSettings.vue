@@ -16,6 +16,7 @@ import {
   type CompanionSettings,
   type CompanionTactics,
 } from '@/services/companionService'
+import { useEntitySubform } from '@/components/editor/entity/entitySubforms'
 
 type NpcLike = {
   id: string
@@ -56,29 +57,50 @@ const saving = ref(false)
 const note = ref('')
 const error = ref('')
 
+// Last loaded state, to tell whether the settings changed.
+const loaded = ref('')
+
+function companionPayload(): CompanionSettings | null {
+  if (!isCompanion.value) return null
+  const recovery = Math.min(1, Math.max(0.01, Number(form.value.downed_recovery) || DEFAULT_COMPANION.downed_recovery))
+  return { ...form.value, downed_recovery: recovery, recruit_item_id: form.value.recruit_item_id.trim().toUpperCase() }
+}
+
+function validationError(): string | null {
+  if (isCompanion.value && form.value.recruit_mode === 'ITEM' && !form.value.recruit_item_id.trim()) {
+    return 'Choose the item the NPC wants (or another recruit mode).'
+  }
+  return null
+}
+
 watch(() => [props.npc.id, JSON.stringify(props.npc.metadata_json?.companion ?? null)], () => {
   const stored = props.npc.metadata_json?.companion
   isCompanion.value = Boolean(stored)
   form.value = { ...DEFAULT_COMPANION, ...(stored ?? {}) }
+  loaded.value = JSON.stringify(companionPayload())
 }, { immediate: true })
+
+async function persist(): Promise<void> {
+  const problem = validationError()
+  if (problem) throw new Error(problem)
+  await companionService.saveNpcCompanion(props.adventureId, props.npc.id, companionPayload())
+  loaded.value = JSON.stringify(companionPayload())
+}
+
+// Inside the entity form, "Save changes" saves these settings; elsewhere the own button does.
+const embedded = useEntitySubform({
+  label: 'Companion',
+  isDirty: () => JSON.stringify(companionPayload()) !== loaded.value,
+  error: validationError,
+  save: persist,
+})
 
 async function save(): Promise<void> {
   saving.value = true
   note.value = ''
   error.value = ''
   try {
-    const recovery = Math.min(1, Math.max(0.01, Number(form.value.downed_recovery) || DEFAULT_COMPANION.downed_recovery))
-    if (isCompanion.value && form.value.recruit_mode === 'ITEM' && !form.value.recruit_item_id.trim()) {
-      error.value = 'Choose the item the NPC wants (or another recruit mode).'
-      return
-    }
-    await companionService.saveNpcCompanion(
-      props.adventureId,
-      props.npc.id,
-      isCompanion.value
-        ? { ...form.value, downed_recovery: recovery, recruit_item_id: form.value.recruit_item_id.trim().toUpperCase() }
-        : null,
-    )
+    await persist()
     note.value = 'Saved.'
     emit('saved')
   } catch (err) {
@@ -142,7 +164,7 @@ async function save(): Promise<void> {
     </div>
 
     <div class="flex items-center gap-3">
-      <UiButton :icon="Save" :loading="saving" @click="save">Save companion</UiButton>
+      <UiButton v-if="!embedded" :icon="Save" :loading="saving" @click="save">Save companion</UiButton>
       <span v-if="note" class="wb-hint !text-wb-accent-text" role="status">{{ note }}</span>
       <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>
     </div>

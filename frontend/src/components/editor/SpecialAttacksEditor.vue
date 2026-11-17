@@ -8,6 +8,7 @@ import UiIconButton from '@/components/ui/UiIconButton.vue'
 import UiSection from '@/components/ui/UiSection.vue'
 import SpecialAttackForm, { type SpecialAttackDraft } from '@/components/editor/SpecialAttackForm.vue'
 import { specialAttackService, type SpecialAttackOwner } from '@/services/specialAttackService'
+import { useEntitySubform } from '@/components/editor/entity/entitySubforms'
 import {
   AMOUNT_PATTERN,
   CATEGORY_META,
@@ -103,9 +104,13 @@ function toDraft(attack: SpecialAttack): SpecialAttackDraft {
 }
 
 // Keyed by content so parents may pass freshly built arrays without wiping unsaved edits.
+// Last loaded attacks (serialized), to tell whether the list changed.
+const loaded = ref('')
+
 watch(() => `${props.targetId}:${JSON.stringify(props.attacks ?? [])}`, () => {
   drafts.value = (props.attacks ?? []).map(toDraft)
   expanded.value = null
+  loaded.value = serializedDrafts()
 }, { immediate: true })
 
 function addAttack(presetName?: string): void {
@@ -172,13 +177,34 @@ function serialize(d: SpecialAttackDraft): SpecialAttack {
   }
 }
 
+function serializedDrafts(): string {
+  return JSON.stringify(drafts.value.map(serialize))
+}
+
+async function persist(): Promise<SpecialAttack[]> {
+  if (problems.value.length) throw new Error(problems.value[0])
+  const saved = await specialAttackService.save(props.adventureId, props.targetType, props.targetId, drafts.value.map(serialize))
+  loaded.value = serializedDrafts()
+  return saved
+}
+
+// Inside the entity form, "Save changes" saves the attacks; elsewhere the own button does.
+const embedded = useEntitySubform({
+  label: 'Special attacks',
+  isDirty: () => serializedDrafts() !== loaded.value,
+  error: () => problems.value[0] ?? null,
+  save: async () => {
+    await persist()
+  },
+})
+
 async function save(): Promise<void> {
   if (problems.value.length) return
   saving.value = true
   error.value = ''
   savedNote.value = ''
   try {
-    const saved = await specialAttackService.save(props.adventureId, props.targetType, props.targetId, drafts.value.map(serialize))
+    const saved = await persist()
     savedNote.value = 'Saved.'
     emit('saved', saved)
   } catch (err) {
@@ -241,7 +267,7 @@ function summary(d: SpecialAttackDraft): string {
     </article>
 
     <div class="flex flex-wrap items-center gap-3">
-      <UiButton :icon="Save" :loading="saving" :disabled="problems.length > 0" @click="save">Save special attacks</UiButton>
+      <UiButton v-if="!embedded" :icon="Save" :loading="saving" :disabled="problems.length > 0" @click="save">Save special attacks</UiButton>
       <span v-if="savedNote" class="wb-hint !text-wb-accent-text" role="status">{{ savedNote }}</span>
       <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>
       <span v-for="p in problems" :key="p" class="wb-hint !text-wb-warn-text">{{ p }}</span>

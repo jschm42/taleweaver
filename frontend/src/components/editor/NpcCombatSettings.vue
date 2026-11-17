@@ -13,6 +13,7 @@ import HardRuleTriggersEditor, { type HardRule } from '@/components/editor/HardR
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
 import NpcCombatProfile from '@/components/editor/NpcCombatProfile.vue'
 import { specialAttackService, type NpcAssistMode } from '@/services/specialAttackService'
+import { useEntitySubform } from '@/components/editor/entity/entitySubforms'
 
 type NpcLike = {
   id: string
@@ -62,6 +63,20 @@ const saving = ref(false)
 const note = ref('')
 const error = ref('')
 
+function behaviourPayload() {
+  const hasRule = Object.values(trigger.value).some((v) => !!String(v ?? '').trim())
+  return {
+    attack_mode: attackOnSight.value ? 'ATTACK_ON_SIGHT' : 'PASSIVE',
+    attack_trigger: hasRule ? trigger.value : null,
+    special_chance: specialChance.value,
+    combat_group: combatGroup.value.trim() || null,
+    assist_mode: assistMode.value || null,
+  } as const
+}
+
+// Last loaded state, to tell whether the settings changed.
+const loaded = ref('')
+
 watch(() => [props.npc.id, JSON.stringify(props.npc.metadata_json ?? {})], () => {
   const meta = props.npc.metadata_json ?? {}
   attackOnSight.value = meta.attack_mode === 'ATTACK_ON_SIGHT'
@@ -69,21 +84,28 @@ watch(() => [props.npc.id, JSON.stringify(props.npc.metadata_json ?? {})], () =>
   specialChance.value = typeof meta.special_chance === 'number' ? meta.special_chance : 40
   combatGroup.value = meta.combat_group ?? ''
   assistMode.value = meta.assist_mode ?? ''
+  loaded.value = JSON.stringify(behaviourPayload())
 }, { immediate: true })
+
+async function persist(): Promise<void> {
+  await specialAttackService.saveNpcCombat(props.adventureId, props.npc.id, behaviourPayload())
+  loaded.value = JSON.stringify(behaviourPayload())
+}
+
+// Inside the entity form, "Save changes" saves these settings; elsewhere the own button does.
+const embedded = useEntitySubform({
+  label: 'Aggression',
+  isDirty: () => JSON.stringify(behaviourPayload()) !== loaded.value,
+  error: () => null,
+  save: persist,
+})
 
 async function saveBehaviour(): Promise<void> {
   saving.value = true
   note.value = ''
   error.value = ''
   try {
-    const hasRule = Object.values(trigger.value).some((v) => !!String(v ?? '').trim())
-    await specialAttackService.saveNpcCombat(props.adventureId, props.npc.id, {
-      attack_mode: attackOnSight.value ? 'ATTACK_ON_SIGHT' : 'PASSIVE',
-      attack_trigger: hasRule ? trigger.value : null,
-      special_chance: specialChance.value,
-      combat_group: combatGroup.value.trim() || null,
-      assist_mode: assistMode.value || null,
-    })
+    await persist()
     note.value = 'Saved.'
     emit('saved')
   } catch (err) {
@@ -141,7 +163,7 @@ async function saveBehaviour(): Promise<void> {
         <UiRange v-model="specialChance" :min="0" :max="100" :step="5" unit="%" />
       </UiField>
 
-      <div class="flex items-center gap-3">
+      <div v-if="!embedded" class="flex items-center gap-3">
         <UiButton :icon="Save" :loading="saving" @click="saveBehaviour">Save aggression</UiButton>
         <span v-if="note" class="wb-hint !text-wb-accent-text" role="status">{{ note }}</span>
         <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>

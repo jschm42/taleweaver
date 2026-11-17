@@ -10,6 +10,7 @@ import UiSection from '@/components/ui/UiSection.vue'
 import type { NpcMainAttack, SuccessStat } from '@/types'
 import WeaponCombatSettings from '@/components/editor/WeaponCombatSettings.vue'
 import { specialAttackService } from '@/services/specialAttackService'
+import { useEntitySubform } from '@/components/editor/entity/entitySubforms'
 import { AMOUNT_PATTERN, STAT_SHORT, SUCCESS_STATS } from '@/utils/specialAttacks'
 import { DEFAULT_WEAPON_HIT_STAT, DICE_PATTERN, type WeaponConfig } from '@/utils/weaponConfig'
 
@@ -49,6 +50,8 @@ const attack = ref<WeaponConfig>(emptyAttack())
 const saving = ref(false)
 const note = ref('')
 const error = ref('')
+// Last loaded state, to tell whether the profile changed.
+const loaded = ref('')
 
 function emptyAttack(): WeaponConfig {
   return { damage_dice: '1d6', cost_type: 'stamina', cost_value: 0, category: 'MELEE', hit_stat: null, effects: [] }
@@ -81,6 +84,7 @@ watch(() => `${props.npc.id}:${JSON.stringify(props.npc)}`, () => {
         effects: (stored.effects ?? []).map((e) => ({ ...e })),
       }
     : emptyAttack()
+  loaded.value = JSON.stringify(profilePayload())
 }, { immediate: true })
 
 const legacyItems = computed(() => {
@@ -134,17 +138,35 @@ function mainAttackPayload(): NpcMainAttack | null {
   }
 }
 
+function profilePayload() {
+  return {
+    ...stats.value,
+    armor_class: Number(armorClass.value),
+    main_attack: mainAttackPayload(),
+  }
+}
+
+async function persist(): Promise<void> {
+  if (problems.value.length) throw new Error(problems.value[0])
+  await specialAttackService.saveNpcProfile(props.adventureId, props.npc.id, profilePayload())
+  loaded.value = JSON.stringify(profilePayload())
+}
+
+// Inside the entity form, "Save changes" saves the profile; elsewhere the own button does.
+const embedded = useEntitySubform({
+  label: 'Combat profile',
+  isDirty: () => JSON.stringify(profilePayload()) !== loaded.value,
+  error: () => problems.value[0] ?? null,
+  save: persist,
+})
+
 async function save(): Promise<void> {
   if (problems.value.length) return
   saving.value = true
   note.value = ''
   error.value = ''
   try {
-    await specialAttackService.saveNpcProfile(props.adventureId, props.npc.id, {
-      ...stats.value,
-      armor_class: Number(armorClass.value),
-      main_attack: mainAttackPayload(),
-    })
+    await persist()
     note.value = 'Saved.'
     emit('saved')
   } catch (err) {
@@ -211,7 +233,7 @@ function toInt(value: string | number | null): number {
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <UiButton :icon="Save" :loading="saving" :disabled="problems.length > 0" @click="save">Save combat profile</UiButton>
+      <UiButton v-if="!embedded" :icon="Save" :loading="saving" :disabled="problems.length > 0" @click="save">Save combat profile</UiButton>
       <span v-if="note" class="wb-hint !text-wb-accent-text" role="status">{{ note }}</span>
       <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>
       <span v-for="p in problems" :key="p" class="wb-hint !text-wb-warn-text">{{ p }}</span>

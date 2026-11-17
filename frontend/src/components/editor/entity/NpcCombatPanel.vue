@@ -17,12 +17,11 @@ const ef = useEntityFormContext()
     <UiToggle
       v-model="ef.localForm.is_killable"
       label="Can be damaged"
-      description="Off: never loses HP (scripts, Game Master, combat) and cannot be fought. Saved with the form."
+      description="Off: never loses HP (scripts, Game Master, combat) and cannot be fought."
     />
 
     <div class="space-y-6 border-t border-wb-line pt-6">
       <template v-if="ef.props.adventureId && ef.props.npcData && !ef.props.isCreateEntityMode">
-        <UiNotice>Aggression, combat profile and special attacks are saved with their own buttons.</UiNotice>
         <NpcCombatSettings
           :adventure-id="ef.props.adventureId"
           :npc="ef.props.npcData"

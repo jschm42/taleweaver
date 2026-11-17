@@ -16,12 +16,11 @@ const ef = useEntityFormContext()
     </p>
 
     <template v-if="ef.props.adventureId && ef.props.npcData && !ef.props.isCreateEntityMode">
-      <UiNotice>Companion settings are saved with their own button; the recruit triggers below are saved with the form.</UiNotice>
       <NpcCompanionSettings :adventure-id="ef.props.adventureId" :npc="ef.props.npcData" @saved="ef.emit('combat-saved')" />
     </template>
     <UiNotice v-else>Save the character first to make it a companion.</UiNotice>
 
-    <UiSection title="Recruit triggers" description="Saved with the form." class="border-t border-wb-line pt-6">
+    <UiSection title="Recruit triggers" class="border-t border-wb-line pt-6">
       <RecruitTriggerFields
         v-model:success-script="ef.localForm.on_recruit_success_script"
         v-model:success-text="ef.localForm.on_recruit_success_text"
