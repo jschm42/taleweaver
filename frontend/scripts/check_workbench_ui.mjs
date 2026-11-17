@@ -44,6 +44,7 @@ export const MIGRATED = [
   'src/components/editor/DefeatRuleSettings.vue',
   'src/components/editor/chapters',
   'src/components/editor/quests',
+  'src/components/editor/awards',
   'src/components/editor/SoftRulesEditor.vue',
   'src/components/editor/SequenceScriptsEditor.vue',
   // Shared fields used by the entity form
