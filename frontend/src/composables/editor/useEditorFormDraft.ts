@@ -10,6 +10,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } fr
 import { onBeforeRouteLeave } from 'vue-router'
 import { confirmDialog } from '@/composables/useDialogs'
 import type { EditorContext } from '@/composables/editor/editorContext'
+import { timeSettingErrors, type TimeForm } from '@/utils/timeSettings'
 
 /** Character limits of the text settings (mirrors the backend template schema). */
 export const FORM_LIMITS: Record<string, number> = {
@@ -78,8 +79,11 @@ export function useEditorFormDraft(editor: EditorContext): EditorFormDraft {
     return Object.keys(current).filter((key) => current[key] !== saved.value[key])
   })
   const isDirty = computed(() => changedFields.value.length > 0)
+  // Text limits plus the clock settings of the Time & pacing page.
   const errorCount = computed(
-    () => Object.keys(FORM_LIMITS).filter((field) => formFieldError(editor.form as FormRecord, field)).length,
+    () =>
+      Object.keys(FORM_LIMITS).filter((field) => formFieldError(editor.form as FormRecord, field)).length +
+      Object.keys(timeSettingErrors(editor.form as TimeForm)).length,
   )
 
   function discard(): void {

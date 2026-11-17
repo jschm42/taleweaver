@@ -8,7 +8,7 @@ const model = defineModel<string | number | null>({ default: '' })
 
 const props = withDefaults(
   defineProps<{
-    type?: 'text' | 'email' | 'password' | 'url' | 'search' | 'number'
+    type?: 'text' | 'email' | 'password' | 'url' | 'search' | 'number' | 'time'
     id?: string
     invalid?: boolean
     required?: boolean
