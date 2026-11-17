@@ -126,6 +126,7 @@ _NPC_ENTITY_KEYS = {
     "on_recruit_success_text",
     "on_recruit_failure_script",
     "on_recruit_failure_text",
+    "reveal_guard_expression",
 }
 
 _SYSTEM_ENTITY_KEYS = {"pk", "session_id", "created_at", "updated_at", "template_id"}
@@ -353,6 +354,7 @@ def _normalize_exported_npc_metadata(filtered: dict[str, Any]) -> None:
         "on_recruit_success_text",
         "on_recruit_failure_script",
         "on_recruit_failure_text",
+        "reveal_guard_expression",
     ):
         val = metadata.pop(script_key, None)
         if val:

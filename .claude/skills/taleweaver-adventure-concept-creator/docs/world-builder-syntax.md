@@ -84,7 +84,7 @@ Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak 
 Write the label as the passage itself, not as the way: `an old rusty gate`, `a narrow spiral staircase`, not `Way to the Combat Lab` or `Back to the hall`. A two-way exit shows the same label in both scenes, and the game already adds the target. The World-Builder AI follows the same rule for the labels it writes.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal_guard` (Python condition; the hidden NPC appears once it is True, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 **Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
 
@@ -129,15 +129,24 @@ assist: anyone
 in: ROAD
 ```
 
-Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. In the World-Editor, every combat setting of an NPC (the **NPC can be damaged** switch, aggression, combat group, *Joins a fight*, attributes, main attack and special attacks) is in the **Combat** tab of the NPC dialog. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
+Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. In the World-Editor, the **Stats** tab of a character holds HP, stamina, mana, the attributes and AC; every other combat setting (the **NPC can be damaged** switch, aggression, combat group, *Joins a fight*, main attack and special attacks) is in the **Combat** tab. Movement and inventory have their own tabs. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
 
 #### Hidden entities and `reveal`
 
-`hidden: yes` makes an NPC or item start invisible. How it becomes visible depends on `reveal`:
+`hidden: yes` makes an NPC or item start invisible.
+
+**Items** become visible depending on `reveal`:
 
 - `reveal: <condition>`: the Game Master reveals it when the condition is met (e.g. `reveal: The player searches the keeper's coat.`).
-- no `reveal`: the default applies. The entity is revealed when the protagonist searches the scene (an NPC also when it starts speaking).
-- `reveal: script`: **only scripts** reveal it (`tw.npcs.reveal`, `tw.objects.reveal`, `.set_hidden(False)`); for items also crafting and another item's `reveals`. The Game Master is not told about the entity, and searching, narration or the discovery check never reveal it. Use this for things a console, a dialog or a puzzle script must bring in.
+- no `reveal`: the default applies. The item is revealed when the protagonist searches the scene.
+- `reveal: script`: **only scripts** reveal it (`tw.objects.reveal`, `.set_hidden(False)`), crafting and another item's `reveals`. The Game Master is not told about the item, and searching, narration or the discovery check never reveal it. Use this for things a console, a dialog or a puzzle script must bring in.
+
+**NPCs** are never discovered by the Game Master (not by searching, not by speaking). They appear in two ways:
+
+- `reveal_guard: <expression>`: a sandboxed Python condition. After every player message the engine checks it while the NPC is hidden in the protagonist's scene; as soon as it is True, the NPC appears (e.g. `reveal_guard: tw.player.has_item('LANTERN')` or `reveal_guard: tw.vars.get('bell_rung') == True`).
+- scripts: `tw.npcs.reveal(id)` or the NPC proxy's `reveal()` / `set_hidden(False)`.
+
+An NPC `reveal:` text from older adventures is kept on import and export but has no effect; the validator warns about it (`npc_reveal_rule_ignored`). In the World-Editor the guard is the **Reveal guard** field in the character's *Visibility* section.
 
 ### `[Item: ID] Name`
 Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switch: ...]`/`[Mechanism: ...]`, `[ContainerSwitch: ...]`, `[Weapon: ...]`, `[Recipe: ...]` (CONSTRUCTABLE). `portable` defaults to `no` for STATIC items, switches and container-switches and to `yes` for everything else; a `portable: yes` switch (e.g. a remote) can be taken and flipped from the inventory.

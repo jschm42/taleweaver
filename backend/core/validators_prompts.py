@@ -186,7 +186,8 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - object (CONSTRUCTABLE only): craft_guard_expression, on_craft_success_script,
       on_craft_success_text, on_craft_failure_script, on_craft_failure_text
     - npc: name, description, goal, character, is_killable, current_scene_id, is_hidden,
-      reveal_rule, spatial_position, on_defeat_script, on_defeat_text,
+      reveal_guard_expression (Python condition; the engine reveals the hidden NPC once it is
+      True, the Game Master never discovers hidden NPCs), spatial_position, on_defeat_script, on_defeat_text,
       on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
       on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text,
       on_recruit_success_script, on_recruit_success_text, on_recruit_failure_script,

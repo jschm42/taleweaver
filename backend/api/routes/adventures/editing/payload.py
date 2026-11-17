@@ -94,6 +94,7 @@ _NPC_METADATA_FIELDS = (
     "on_recruit_success_text",
     "on_recruit_failure_script",
     "on_recruit_failure_text",
+    "reveal_guard_expression",
 )
 _OBJECT_STAT_LABELS = (
     ("stat_modifier_strength", "STR"),

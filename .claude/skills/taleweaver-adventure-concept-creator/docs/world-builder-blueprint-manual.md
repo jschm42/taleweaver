@@ -123,7 +123,7 @@ Wet stone stairs, a smashed oil lantern.
 [NPC: KEEPER] Old Haldor
 in: LAMP_ROOM
 hidden: yes
-reveal: The apprentice searches behind the lamp housing.
+reveal_guard: tw.player.has_item('OIL_CAN')
 Unconscious, a bruise on his temple.
 
 [Item: OIL_CAN] Can of Lamp Oil
@@ -315,7 +315,6 @@ A raised metal platform hums next to a control console.
 in: PAD_ROOM
 position: standing on the raised metal platform
 hidden: yes
-reveal: script
 
 [Item: PAD_CONSOLE] Teleporter Console
 in: PAD_ROOM
@@ -325,7 +324,7 @@ on_use: |
   tw.story.narrate('With a pop, a bewildered stowaway materializes on the platform.')
 ```
 
-Without `reveal: script`, the hidden stowaway could already turn up when the player looks at the platform, because a hidden entity without a reveal condition is revealed by searching. With `reveal: script` the Game Master is not told about it, and only the console script brings it in.
+Hidden NPCs are never discovered by the Game Master, so the stowaway needs no extra key: without a `reveal_guard` only the console script brings it in. A hidden item, by contrast, would turn up when the player searches the scene; give it `reveal: script` to keep it for scripts only.
 
 ### An ally who turns hostile after the twist
 

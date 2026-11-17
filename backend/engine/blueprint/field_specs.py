@@ -303,7 +303,7 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "attackable": FieldSpec("is_attackable", boolean),
     "killable": FieldSpec("is_killable", boolean),
     "hidden": FieldSpec("is_hidden", boolean),
-    "reveal": FieldSpec("reveal_rule"),
+    "reveal_guard": _expr("reveal_guard_expression"),
     "inventory": _refs("inventory"),
     "main_attack": FieldSpec("main_attack", main_attack),
     # Deprecated: NPC equipment items (fallback only). Use main_attack and ac instead.

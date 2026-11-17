@@ -115,6 +115,7 @@ export interface EntityEditData {
   on_recruit_success_text?: string | null
   on_recruit_failure_script?: string | null
   on_recruit_failure_text?: string | null
+  reveal_guard_expression?: string | null
   on_interact_script?: string | null
   on_interact_text?: string | null
 }
@@ -201,6 +202,7 @@ export interface EntityCreateData {
   on_recruit_success_text?: string
   on_recruit_failure_script?: string
   on_recruit_failure_text?: string
+  reveal_guard_expression?: string
   on_interact_script?: string
   on_interact_text?: string
 }

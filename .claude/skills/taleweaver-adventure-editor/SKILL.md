@@ -94,14 +94,14 @@ fields are rejected (no silent typos).
   or `lock_description` on `create_exit`).
 - **object**: `item_type` (`CONTAINER`, `SWITCH`, `CONTAINER_SWITCH`, ...), `locked` (locks a container/container-switch, or take-locks a regular item so it is visible/inspectable in the scene or container but cannot be picked up until unlocked), `quest_item` (`true`: the player can never give it to an NPC or companion and the GM cannot take it away; scripts still can), scripts such as `on_interact_*`, `on_pickup_*`, `on_read_*`, `unlock_expression`,
   container `on_unlock_success_*`, `on_items_added_script/_text`, `inventory` (container contents),
-  switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it; npc too),
+  switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it),
   `current_scene_id`, ...
   Weapons: `damage_dice`, `weapon_category` (`MELEE`/`RANGED`/`MAGIC`), `weapon_hit_stat`,
   `weapon_cost_type`/`weapon_cost_value`, `weapon_effects`. Equipment bonuses while worn or held:
   `stat_modifier_strength`, `_dexterity`, `_intelligence`, `_wisdom`, `_charisma`,
   `_armor_class` (also accepted by `create_entity`), plus `wearable_slots` (`Head`, `Chest`,
   `Arms`, `Legs`, `Hands`, `Feet`, `Ring_1`, `Ring_2`, `Neck`, `MainHand`, `OffHand`).
-- **npc**: `goal`, `character`, `inventory`, `on_interact_*`, `on_defeat_*`,
+- **npc**: `goal`, `character`, `inventory`, `reveal_guard_expression` (hidden NPC appears once it is True; the GM never discovers hidden NPCs), `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.
   The companion block is not an `update` field either: use `set_npc_companion`.

@@ -9,7 +9,7 @@ from backend.core.voice_tags import build_voice_tag_catalog_prompt_block
 PUZZLE_JSON_ENFORCEMENT_BLOCK = (
     "PUZZLE ENGINE CONTRACT (CRITICAL):\n"
     "Every narrative puzzle must map to deterministic engine fields. Do not invent free-form puzzle logic without state bindings.\n"
-    "Use these fields explicitly where applicable: `is_locked`, `lock_description`, `combination_ingredients`, `reveals_item_id`, `is_hidden`, `reveal_rule`, `is_portable`, `spatial_position`, `wearable_slots`, `item_type`, `stat_modifier_strength`, `metadata_json.code_to_unlock`, `metadata_json.item_to_unlock`, `metadata_json.rule_to_unlock`, `rule_to_unlock`, `voice`, and time controls like `extra_time_minutes`.\n"
+    "Use these fields explicitly where applicable: `is_locked`, `lock_description`, `combination_ingredients`, `reveals_item_id`, `is_hidden`, `reveal_rule` (items), `reveal_guard_expression` (hidden NPCs: Python condition that reveals them), `is_portable`, `spatial_position`, `wearable_slots`, `item_type`, `stat_modifier_strength`, `metadata_json.code_to_unlock`, `metadata_json.item_to_unlock`, `metadata_json.rule_to_unlock`, `rule_to_unlock`, `voice`, and time controls like `extra_time_minutes`.\n"
     "Design puzzles so they can be resolved by concrete world state changes (entity updates, inventory/equipment changes, unlocks, reveals, movement), not by vague narration alone.\n"
     "PICKUP REACTIONS: For narratively important portable items (e.g. a contract an NPC wants the player to take), you may set `metadata_json.pickup_trigger` with a `mode` of `narration` or `turn` and an optional short `cue` GM hint. `narration` triggers a short GM reaction only; `turn` lets NPCs and rules react. Omit it (silent) for ordinary items.\n"
 )
@@ -20,7 +20,7 @@ PUZZLE_DESIGN_PATTERNS_BLOCK = (
     "- Hide any `code_to_unlock` (which can be a numeric PIN OR a text-based word password) behind one of these three engaging patterns:\n"
     "  1. CLASSIC RIDDLES & METAPHORS: The code is the exact answer to a classic 'What am I?' linguistic riddle (e.g., 'I have cities, but no houses' -> Answer/Code: 'map') or a logic/lore puzzle. The riddle MUST be physically integrated into the world: carved into a door (in `lock_description`), written in a READABLE book, or spoken by a statue/entity.\n"
     "  2. SPLIT CODES (FRAGMENTS): Divide the code into 2 or 3 separate parts. Distribute these fragments across different READABLE objects (documents, scrolls, signs) or scene details in different locations, forcing the player to explore, collect, and combine them.\n"
-    "  3. NPC COAXING / INTERROGATION: An NPC knows the code or a crucial riddle clue. The player must coax, persuade, bribe, or interrogate the NPC. Detail this in the NPC's `reveal_rule`/biography or place a READABLE clue in their starting inventory.\n"
+    "  3. NPC COAXING / INTERROGATION: An NPC knows the code or a crucial riddle clue. The player must coax, persuade, bribe, or interrogate the NPC. Detail this in the NPC's biography or place a READABLE clue in their starting inventory.\n"
     "- Every puzzle's exact solution (the riddle's answer word, how a calculation works, where fragments are, or how to manipulate the NPC) MUST be clearly documented in the dedicated `walkthrough` of the sequence where the puzzle occurs.\n"
     "- Include varied puzzle types (combination, spatial clue, social/roleplay, optional time pressure).\n"
     "- Prefer deterministic state bindings. For item combinations, define the result as a regular hidden item of any type (is_hidden=true) and add a CONSTRUCTABLE recipe object (item_type CONSTRUCTABLE, >=2 `combination_ingredients`, >=1 `result_item_ids`): the engine consumes the ingredients (except `kept_ingredients`) and reveals the result item(s). No purely narrative combining.\n"
@@ -323,7 +323,7 @@ _GM_MECHANICS_SHARED_RULES = (
     "report it ONLY in `given_items` as {item_id, npc_id}: the engine moves the item into the character's inventory and runs its receive trigger. "
     "Do not also list that item in `removed_inventory_item_ids` or in NPC `inventory` updates.\n"
     "- Other transfers between player, NPCs, and scene combine these fields with NPC `inventory` in `updated_entities`.\n"
-    "REVEALING HIDDEN ITEMS & NPCS (CRITICAL): When the player searches the scene, inspects a hiding spot, or fulfills a `reveal_rule`, add the entity ID to `discovered_entity_ids`.\n"
+    "REVEALING HIDDEN ITEMS (CRITICAL): When the player searches the scene, inspects a hiding spot, or fulfills a `reveal_rule`, add the entity ID to `discovered_entity_ids`. Hidden NPCs are never discovered this way; the engine reveals them.\n"
     "LOCKS (CRITICAL): A locked exit or container stays locked until its lock condition is met. "
     "If the player's message contains a required `code_to_unlock` or references a carried `item_to_unlock` (any language or phrasing; no 'unlock'/'open' keyword required), unlock it: "
     "`updated_entities` with `locked=false` (containers), `updated_exits` with `is_locked=false` (exits), or `updated_entities.switch_state` (switch gates). "

@@ -113,7 +113,8 @@ CREATING NPCS AND OBJECTS
   NPC or object in the context (e.g. "OLD_FISHERMAN", "BRASS_KEY").
 - Required field_updates: name, description, current_scene_id (an existing scene id).
 - new_npc may also set: goal, character, appearance (max 100 chars), is_killable, hp,
-  is_hidden, reveal_rule.
+  is_hidden. A hidden NPC appears only through scripts or its reveal_guard_expression (set it
+  with a regular "npc" patch after the creation patch).
 - new_object may also set: item_type (DEFAULT, CONSUMABLE, READABLE, WEARABLE, WEAPON or
   CONTAINER; default DEFAULT), is_portable, appearance (max 100 chars), is_hidden,
   reveal_rule. SWITCH, CONTAINER_SWITCH and CONSTRUCTABLE items cannot be created here.

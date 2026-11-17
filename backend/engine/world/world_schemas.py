@@ -386,13 +386,13 @@ class WorldNPCSchema(WorldBaseSchema):
     source_asset_id: Optional[str] = Field(
         None, description="Optional source NPC ID to reuse an old portrait image."
     )
-    reveal_rule: Optional[str] = Field(
+    reveal_guard_expression: Optional[str] = Field(
         default="",
         description=(
-            "If is_hidden=True: the condition that reveals this NPC. "
-            "E.g. 'If the prot searches under the table', 'If the prot picks up BRASS_KEY', or 'If the NPC speaks'. "
-            "Use 'script' if only a script may reveal it (the GM never discovers it). "
-            "Use empty string if not hidden."
+            "If is_hidden=True: sandboxed Python condition; the engine reveals the NPC as soon as it "
+            "is True while the protagonist is in its scene, e.g. tw.player.has_item('LANTERN') or "
+            "tw.vars.get('bell_rung') == True. The Game Master never discovers hidden NPCs; without "
+            "a guard only scripts (tw.npcs.reveal) reveal it. Use empty string if not hidden."
         ),
     )
     inventory: list[str] = Field(

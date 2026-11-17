@@ -7,6 +7,7 @@ import logging
 from pydantic import BaseModel, Field
 
 from backend.api.routes.adventures.guardrails.base import item_id_upper
+from backend.api.routes.adventures.guardrails.npc_reveal import NpcRevealGuardMixin
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core.prompts import HIDDEN_ENTITY_DISCOVERY_SYSTEM_PROMPT
 from backend.engine.rules.crafting_recipes import (
@@ -55,8 +56,9 @@ def _parent_reveals(event: GameEvent, ent: WorldEntity, by_id: dict[str, WorldEn
     return False
 
 
-class RevealGuardMixin:
-    """Reveals hidden scene entities that the turn discovered."""
+class RevealGuardMixin(NpcRevealGuardMixin):
+    """Reveals hidden scene entities that the turn discovered, and hidden NPCs whose reveal
+    guard holds."""
 
     def _is_entity_hidden_now(self, ent: WorldEntity) -> bool:
         override = (self.state.entity_states or {}).get(ent.id, {})
@@ -187,15 +189,17 @@ class RevealGuardMixin:
     ) -> list[str]:
         """Auto-reveals hidden entities in the current scene that this turn discovered.
 
-        Deterministic reveals come first; the rest is checked with one small-model call, which
-        is skipped on movement turns and when there is no text to check.
+        Deterministic reveals come first (NPC reveal guards, then the turn's own discoveries);
+        the rest is checked with one small-model call, which is skipped on movement turns and
+        when there is no text to check.
         """
         entities = await self._session_entities()
+        revealed: list[str] = []
+        await self._reveal_guarded_npcs(event, entities, revealed)
         hidden = self._hidden_scene_entities(entities)
         if not hidden:
-            return []
+            return revealed
         by_id = {e.id: e for e in entities if e.id}
-        revealed: list[str] = []
         candidates: list[WorldEntity] = []
         for ent in hidden:
             already = any(

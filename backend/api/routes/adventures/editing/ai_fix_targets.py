@@ -86,7 +86,6 @@ _FIX_NPC_FIELDS = frozenset(
         "is_killable",
         "current_scene_id",
         "is_hidden",
-        "reveal_rule",
         "spatial_position",
         *NPC_SCRIPT_FIELDS,
     }

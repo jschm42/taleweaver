@@ -205,6 +205,7 @@ const localForm = ref({
   on_recruit_success_text: '',
   on_recruit_failure_script: '',
   on_recruit_failure_text: '',
+  reveal_guard_expression: '',
   on_interact_script: '',
   on_interact_text: '',
   on_success_script: '',
@@ -569,6 +570,7 @@ watch(() => props.initialForm, (newVal) => {
     on_recruit_success_text: '',
     on_recruit_failure_script: '',
     on_recruit_failure_text: '',
+    reveal_guard_expression: '',
     on_interact_script: '',
     on_interact_text: '',
     ...newVal
@@ -611,6 +613,7 @@ watch(() => props.show, (newVal) => {
       on_recruit_success_text: '',
       on_recruit_failure_script: '',
       on_recruit_failure_text: '',
+      reveal_guard_expression: '',
       on_interact_script: '',
       on_interact_text: '',
       ...props.initialForm
@@ -856,6 +859,7 @@ function handleSave() {
     on_recruit_success_text: localForm.value.on_recruit_success_text,
     on_recruit_failure_script: localForm.value.on_recruit_failure_script,
     on_recruit_failure_text: localForm.value.on_recruit_failure_text,
+    reveal_guard_expression: String(localForm.value.reveal_guard_expression || '').trim(),
     on_interact_script: localForm.value.on_interact_script,
     on_interact_text: localForm.value.on_interact_text,
   })

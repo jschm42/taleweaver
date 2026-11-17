@@ -310,6 +310,17 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                         extra_context={"entity_id": eid, "kind": "NPC"},
                     )
                 )
+            reveal_guard = ent.get("reveal_guard_expression") or meta_dict.get(
+                "reveal_guard_expression"
+            )
+            findings.extend(
+                _validate_guard_expression(
+                    reveal_guard,
+                    "reveal_guard_expression",
+                    location=loc,
+                    extra_context={"entity_id": eid},
+                )
+            )
 
         if kind == "OBJECT":
             for field in (
