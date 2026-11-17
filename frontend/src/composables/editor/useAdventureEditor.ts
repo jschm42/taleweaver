@@ -1053,7 +1053,8 @@ function resolveEditVoice(type: string, npc: any): string {
   return ''
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
+/** Fills the entity form (context and editForm) without opening anything. */
+function loadEntityEditor(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
   if (type === 'npc' && (id === 'NEW_NPC' || id.startsWith('NEW_'))) {
     openCreateNpc()
     return
@@ -1191,8 +1192,49 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     helpers_script: selectedScene?.helpers_script || '',
     weapon_config: type === 'object' ? readWeaponConfig(metadata, selectedObject) : undefined,
   }
-  showEditModal.value = true
 
+}
+
+const ENTITY_PAGE_TYPES = new Set(['npc', 'object'])
+
+/**
+ * Opens an entity for editing: characters and items get their detail page
+ * (route adventure-editor-entity); scenes, cover and protagonist keep the modal.
+ */
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
+  if (ENTITY_PAGE_TYPES.has(type) && !id.startsWith('NEW_')) {
+    openEntityPage(type, id)
+    return
+  }
+  loadEntityEditor(type, id, currentName, currentDesc, currentTeaser, hp, stamina, mana, goal, character, isKillable)
+  if (editEntityContext.value) {
+    showEditModal.value = true
+  }
+}
+
+function openEntityPage(type: string, id: string) {
+  activeMenuId.value = null
+  clearHover()
+  router.push({
+    name: 'adventure-editor-entity',
+    params: { adventureId: props.adventureId, entityId: id },
+    query: { ...route.query, tab: type === 'npc' ? 'inhabitants' : 'items' },
+  })
+}
+
+/** Loads a character or item into the entity form by id; returns its type, or null when unknown. */
+function loadEntityFromWorld(id: string): 'npc' | 'object' | null {
+  const npc = (debugData.value?.npcs || []).find((entry: any) => String(entry.id) === String(id))
+  if (npc) {
+    loadEntityEditor('npc', npc.id, npc.name, npc.description, '', npc.hp, npc.stamina, npc.mana, npc.goal, npc.character, npc.is_killable)
+    return 'npc'
+  }
+  const item = editorAllItems.value.find((entry: any) => String(entry.id) === String(id))
+  if (item) {
+    loadEntityEditor('object', item.id, item.name, item.description || '')
+    return 'object'
+  }
+  return null
 }
 
 async function saveEntityText(data: any) {
@@ -2926,6 +2968,9 @@ watch(
     resolveEditAppearance,
     resolveEditVoice,
     openTextEdit,
+    loadEntityEditor,
+    openEntityPage,
+    loadEntityFromWorld,
     saveEntityText,
     handleUpdateRuleMode,
     saveChanges,

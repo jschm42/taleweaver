@@ -5,6 +5,7 @@ import { Sparkles, Square } from 'lucide-vue-next'
 import { provideEditor } from '@/composables/editor/editorContext'
 import { EDITOR_PAGES, useEditorNavigation } from '@/components/editor/editorNavigation'
 import EditorModals from '@/components/editor/EditorModals.vue'
+import EntityDetailPage from '@/components/editor/pages/EntityDetailPage.vue'
 import WorldBuilderDrawer from '@/components/editor/WorldBuilderDrawer.vue'
 import WorkbenchNav from '@/components/workbench/WorkbenchNav.vue'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell.vue'
@@ -27,7 +28,9 @@ const { groups, validation } = useEditorNavigation(editor)
 const worldBuilderOpen = ref(false)
 
 const WIDE_PAGES = new Set(['map', 'scenes', 'scripts', 'triggers', 'validation'])
-const page = computed(() => EDITOR_PAGES[editor.activeTab] ?? EDITOR_PAGES.world)
+const isEntityPage = computed(() => route.name === 'adventure-editor-entity')
+const page = computed(() => (isEntityPage.value ? EntityDetailPage : (EDITOR_PAGES[editor.activeTab] ?? EDITOR_PAGES.world)))
+const pageKey = computed(() => (isEntityPage.value ? `entity-${String(route.params.entityId)}` : editor.activeTab))
 
 function selectPage(key: string): void {
   if (!(key in EDITOR_PAGES)) return
@@ -73,8 +76,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
     :title="editor.adventure?.title || 'Adventure editor'"
     subtitle="Adventure editor"
     back-label="Back to the portal"
-    :page-key="editor.activeTab"
-    :wide="WIDE_PAGES.has(editor.activeTab)"
+    :page-key="pageKey"
+    :wide="!isEntityPage && WIDE_PAGES.has(editor.activeTab)"
     @back="editor.goBack"
   >
     <template #nav>
@@ -100,7 +103,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
     <div v-if="editor.isLoading" class="flex justify-center py-24">
       <UiSpinner size="lg" label="Loading the adventure" />
     </div>
-    <component :is="page" v-else :key="editor.activeTab" />
+    <component :is="page" v-else :key="pageKey" />
 
     <EditorModals />
     <WorldBuilderDrawer

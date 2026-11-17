@@ -28,6 +28,10 @@ import { Plus, Trash2, Key, FileText, Lock, Code2, Sparkles, ToggleLeft, Chevron
 
 const props = defineProps<{
   show: boolean
+  /** `page`: rendered inline on the entity detail page instead of as an overlay. */
+  variant?: 'modal' | 'page'
+  /** Active form tab (simple, combat, companion, advanced); use with v-model:tab. */
+  tab?: string
   context: { type: string; id: string } | null
   initialForm: {
     name: string
@@ -110,11 +114,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'update:tab', tab: string): void
   (e: 'save', data: any): void
   (e: 'combat-saved'): void
 }>()
 
-const activeTab = ref<'simple' | 'combat' | 'companion' | 'advanced'>('simple')
+type FormTab = 'simple' | 'combat' | 'companion' | 'advanced'
+const FORM_TABS: FormTab[] = ['simple', 'combat', 'companion', 'advanced']
+const activeTab = ref<FormTab>('simple')
+const isPage = computed(() => props.variant === 'page')
+
+// On the detail page the tab lives in the URL; the page passes it in and receives changes.
+watch(
+  () => props.tab,
+  (tab) => {
+    if (tab && (FORM_TABS as string[]).includes(tab)) activeTab.value = tab as FormTab
+  },
+  { immediate: true },
+)
+watch(activeTab, (tab) => emit('update:tab', tab))
 const editingTransitionIndex = ref<number | null>(null)
 const showTransitionGuards = ref<boolean>(false)
 const showTransitionScripts = ref<boolean>(false)
@@ -565,7 +583,7 @@ watch(() => props.initialForm, (newVal) => {
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    activeTab.value = 'simple'
+    activeTab.value = isPage.value && props.tab && (FORM_TABS as string[]).includes(props.tab) ? (props.tab as FormTab) : 'simple'
     localForm.value = {
       npc_type: 'HUMANOID',
       is_hidden: false,
@@ -942,10 +960,17 @@ const textLogPreviewClass = computed(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div v-if="show && context" class="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60">
-        <div class="modal-content w-full max-w-4xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+  <Teleport to="body" :disabled="isPage">
+    <Transition :name="isPage ? '' : 'modal'">
+      <div
+        v-if="show && context"
+        :class="isPage ? '' : 'fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60'"
+      >
+        <div
+          :class="isPage
+            ? 'w-full bg-slate-900 border border-white/10 rounded-xl overflow-hidden flex flex-col'
+            : 'modal-content w-full max-w-4xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col'"
+        >
           <!-- Fixed Header -->
           <div class="px-8 py-5 flex justify-between items-center border-b border-white/5">
             <div class="flex items-center gap-4">
@@ -955,7 +980,7 @@ const textLogPreviewClass = computed(() => {
                 <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">{{ isCreateEntityMode ? 'New Entity' : 'ID: ' + context.id }}</p>
               </div>
             </div>
-            <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
+            <button v-if="!isPage" @click="emit('close')" class="text-slate-500 hover:text-white transition-colors" aria-label="Close">
               <i class="ra ra-cancel text-xl"></i>
             </button>
           </div>
@@ -991,7 +1016,7 @@ const textLogPreviewClass = computed(() => {
           </div>
 
           <!-- Scrollable Content -->
-          <div class="px-8 py-6 space-y-6 overflow-y-auto flex-1">
+          <div :class="['px-8 py-6 space-y-6 flex-1', isPage ? '' : 'overflow-y-auto']">
             <div v-show="activeTab === 'simple'" class="space-y-6">
               <!-- Editable ID (create mode or scene/npc/object edit mode) -->
               <div v-if="isCreateEntityMode || ['npc', 'object', 'scene'].includes(context.type)" class="space-y-2">
@@ -2714,7 +2739,7 @@ const textLogPreviewClass = computed(() => {
 
             </div>
           </div>
-          <div class="px-8 py-5 border-t border-white/5 flex justify-end gap-4 bg-slate-900/55 rounded-b-[2.5rem]">
+          <div :class="['px-8 py-5 border-t border-white/5 flex justify-end gap-4 bg-slate-900/55', isPage ? 'sticky bottom-0 z-20 backdrop-blur-md' : 'rounded-b-[2.5rem]']">
             <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
             <button @click="handleSave" :disabled="isSaving || isFormInvalid" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
               <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>

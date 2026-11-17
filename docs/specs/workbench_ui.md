@@ -1,7 +1,8 @@
 # Workbench UI: one design system for Admin, Editor and Creation
 
-> **Status (2026-11-17):** Phases 0 (foundation), 1 (admin console) and 2 (editor shell)
-> implemented. Phases 3–5 (entity pages, remaining editor pages, creation and setup wizard) open.
+> **Status (2026-11-17):** Phases 0 (foundation), 1 (admin console), 2 (editor shell) and 3a
+> (entity detail pages) implemented. Phases 3b–5 (entity form split, remaining editor pages,
+> creation and setup wizard) open.
 > Agent rules for new work:
 > [.claude/rules/frontend-ui.md](../../.claude/rules/frontend-ui.md).
 
@@ -182,7 +183,7 @@ logic and stay under 200 lines.
 | `UiRadioCards` | Mode, role and type tiles | Generic value type; `radiogroup` with arrow keys. |
 | `UiSegmented` | Filter chips, two-way switches | "All / Ready / Missing", "Standard / High fidelity". |
 | `UiInfoPopover` | `InfoPopoverButton`, long help paragraphs | Moved from `create-adventure/`. |
-| `UiIdTag` | `object-id-tag`, mono ID chips | Copy on click. Not built yet. |
+| `UiIdTag` | `object-id-tag`, mono ID chips | Copy on click. |
 | `UiSaveBar` | Save buttons per field and section | See 6.1. |
 
 `useDraft` also offers `adopt(value)` (replace saved state and draft at once, e.g. after a server reset)
@@ -385,6 +386,7 @@ screenshots.
 | **2. Editor shell** | Editor in `WorkbenchShell`, grouped navigation, Validation pinned, World-Builder as AI drawer, `AdventureEditorView` split into pages. | View < 300 lines. |
 | | *Phase 2 as built:* the editor's script moved unchanged into `composables/editor/useAdventureEditor.ts` (about 3,000 lines, provided to the pages through `editorContext.ts` / `useEditor()`); each tab is a thin page in `components/editor/pages/`; navigation in `components/editor/editorNavigation.ts` (open page in `?tab=`); World-Builder in `WorldBuilderDrawer.vue` (`Ctrl+K`); `notificationService` forwards to the app-wide toasts. Phases 3 and 4 split `useAdventureEditor` by theme (entity editing, images, routes, updates). | |
 | **3. Entity editing** | Editor routes for entity detail pages; `EditEntityModal` → `EntityDetailPage` with per-tab components; `EditExitModal`, scene and exit route panels on the same pattern. | No editor file > 600 lines; every entity has a URL. |
+| | *Phase 3a as built:* characters and items open on `/adventures/:id/editor/entities/:entityId` (`EntityDetailPage.vue`, form tab in `?panel=`, previous / next, breadcrumb). The existing form renders inline (`EditEntityModal` with `variant="page"`); the modal stays for cover, protagonist, scene text and creating new entities. *3b:* split the form into section components on the `Ui*` building blocks. | |
 | **4. Remaining editor pages** | Scripts, Map, Time, Quests, Awards, Sequences, Audio, Dynamic, Validation on `Ui*` and the draft model. | Editor folder passes the check script. |
 | **5. Creation & setup** | `CreateAdventureView` and setup wizard on the same components (`UiRadioCards`, `UiField`). | Whole Workbench passes the check script. |
 

@@ -43,6 +43,13 @@ const router = createRouter({
       props: true,
     },
     {
+      // Detail page of a character or item (docs/specs/workbench_ui.md, 6.2).
+      path: '/adventures/:adventureId/editor/entities/:entityId',
+      name: 'adventure-editor-entity',
+      component: () => import('@/views/AdventureEditorView.vue'),
+      props: true,
+    },
+    {
       path: '/adventures/:adventureId/editor/exits/:exitId',
       name: 'adventure-editor-exit',
       component: () => import('@/views/AdventureEditorView.vue'),
