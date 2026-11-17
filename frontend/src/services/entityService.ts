@@ -2,6 +2,26 @@ import { API_BASE, authHeaders } from '@/services/http'
 
 export interface EntityEditData {
   target_type: string
+  /** Items: the story depends on it (never given away or taken by the GM). */
+  quest_item?: boolean
+  switch_disabled_states?: string[]
+  switch_status_text?: string
+  on_success_script?: string
+  on_failure_script?: string
+  on_items_added_script?: string
+  on_items_added_text?: string
+  on_items_removed_script?: string
+  on_items_removed_text?: string
+  /** Containers: item count bounds. */
+  min_items?: number | null
+  max_items?: number | null
+  craft_guard_expression?: string
+  on_craft_success_script?: string
+  on_craft_success_text?: string
+  on_craft_failure_script?: string
+  on_craft_failure_text?: string
+  on_read_script?: string
+  on_read_text?: string
   /** NPC kind (HUMANOID, BEING, ANIMAL, MONSTER). */
   npc_type?: string
   target_id: string
@@ -134,6 +154,9 @@ export interface ExitCreateData {
 
 export interface EntityCreateData {
   entity_id: string
+  is_hidden?: boolean
+  reveal_rule?: string
+  spatial_position?: string
   /** NPC kind (HUMANOID, BEING, ANIMAL, MONSTER). */
   npc_type?: string
   entity_type: 'NPC' | 'OBJECT'

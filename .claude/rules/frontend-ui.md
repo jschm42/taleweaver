@@ -99,7 +99,9 @@ everything you **add or change**; do not restyle untouched code in the same task
     template over ~150 lines is split into child components; logic moves into composables
     or services.
 19. Do not add features to oversized files (`composables/editor/useAdventureEditor.ts`,
-    `EditEntityModal.vue`, `SceneRoutePanel.vue`, `ScriptEditor.vue`, `ValidationTab.vue`).
+    `composables/editor/useEntityForm.ts`, `SceneRoutePanel.vue`, `ScriptEditor.vue`,
+    `ValidationTab.vue`). Entity form fields go into the matching section component in
+    `components/editor/entity/` (state via `useEntityFormContext()`).
     Extract the touched part into a new component or composable first, then change it there.
     New editor pages go into `components/editor/pages/`, read the state with `useEditor()`
     and are registered in `components/editor/editorNavigation.ts`.
