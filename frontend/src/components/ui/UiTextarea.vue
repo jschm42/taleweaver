@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CONTROL_CLASS, controlBorder, useFieldControl } from '@/components/ui/fieldContext'
 
 defineOptions({ inheritAttrs: false })
@@ -43,7 +43,8 @@ const classes = computed(() => [
 ])
 
 function resize(): void {
-  if (!props.autoGrow || !el.value) {
+  // A hidden textarea (v-show tab, closed disclosure) measures 0; it is sized once it appears.
+  if (!props.autoGrow || !el.value || el.value.clientWidth === 0) {
     return
   }
   const lineHeight = parseFloat(getComputedStyle(el.value).lineHeight) || 22
@@ -53,7 +54,21 @@ function resize(): void {
 }
 
 watch(model, () => nextTick(resize))
-onMounted(resize)
+
+let observer: ResizeObserver | null = null
+let wasHidden = false
+onMounted(() => {
+  resize()
+  if (!el.value || typeof ResizeObserver === 'undefined') return
+  wasHidden = el.value.clientWidth === 0
+  observer = new ResizeObserver(() => {
+    const hidden = (el.value?.clientWidth ?? 0) === 0
+    if (wasHidden && !hidden) resize()
+    wasHidden = hidden
+  })
+  observer.observe(el.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>

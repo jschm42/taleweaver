@@ -8,7 +8,15 @@ import {
   generateEditorId,
   sanitizeEditorId,
 } from '@/utils/editor_utils'
-import { Plus, Trash2, ChevronDown, ChevronUp, MessageSquareQuote } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
+import TriggerScriptField from '@/components/editor/entity/TriggerScriptField.vue'
+import UiBadge from '@/components/ui/UiBadge.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiIconButton from '@/components/ui/UiIconButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiTextarea from '@/components/ui/UiTextarea.vue'
 
 export interface SoftRule {
   id: string
@@ -75,93 +83,72 @@ function toggle(index: number) {
 
 <template>
   <div class="space-y-4">
-    <div class="space-y-1">
-      <p class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
-        <MessageSquareQuote class="w-4 h-4" /> Soft Rules
-      </p>
-      <p class="text-[11px] text-slate-400">
-        Narrative rules that are only active during this sequence. The GM judges whether the condition
-        happened; the engine then checks the optional guard and trigger limit and runs the script.
-        The GM never sees the script or guard.
-      </p>
-    </div>
-
-    <p v-if="rules.length === 0" class="text-[11px] text-slate-500 italic">
-      No soft rules yet. Example: "Arthur flirts with Brenda" → Brenda hands over her key.
+    <p class="wb-hint">
+      Narrative rules that are only active during this chapter. The Game Master judges whether the condition happened;
+      the engine then checks the optional guard and trigger limit and runs the script. The Game Master never sees the
+      script or the guard.
     </p>
 
-    <div
-      v-for="(rule, index) in rules"
-      :key="index"
-      class="border border-white/5 bg-black/30 rounded-2xl"
-    >
-      <!-- Header -->
-      <div class="flex items-center gap-3 px-4 py-3">
+    <UiEmptyState
+      v-if="rules.length === 0"
+      title="No soft rules yet"
+      description="Example: &quot;Arthur flirts with Brenda&quot; makes Brenda hand over her key."
+    />
+
+    <article v-for="(rule, index) in rules" :key="index" class="rounded-xl border border-wb-line bg-wb-raised">
+      <div class="flex items-center gap-2 px-3 py-2">
         <button
           type="button"
-          class="flex-1 min-w-0 flex items-center gap-2 text-left"
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent"
+          :aria-expanded="expandedIndex === index"
           @click="toggle(index)"
         >
-          <component :is="expandedIndex === index ? ChevronUp : ChevronDown" class="w-4 h-4 shrink-0 text-slate-500" />
-          <span class="text-[10px] font-mono text-amber-300 shrink-0">{{ rule.id || '(no id)' }}</span>
-          <span class="text-xs text-slate-300 truncate">{{ rule.condition || 'No condition yet' }}</span>
+          <component :is="expandedIndex === index ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0 text-wb-muted" />
+          <span class="wb-mono shrink-0 text-wb-strong">{{ rule.id || '(no ID)' }}</span>
+          <span class="wb-body truncate text-wb-muted">{{ rule.condition || 'No condition yet' }}</span>
         </button>
-        <span v-if="rule.max_triggers" class="shrink-0 text-[10px] text-slate-500">max {{ rule.max_triggers }}×</span>
-        <button
-          type="button"
-          class="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-          title="Remove soft rule"
-          @click="removeRule(index)"
-        >
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
+        <UiBadge v-if="rule.max_triggers">max {{ rule.max_triggers }}×</UiBadge>
+        <UiIconButton :icon="Trash2" label="Remove soft rule" size="sm" variant="danger" @click="removeRule(index)" />
       </div>
 
-      <!-- Body -->
-      <div v-if="expandedIndex === index" class="space-y-4 px-4 pb-4 border-t border-white/5 pt-4">
-        <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-3">
-          <div class="space-y-1">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Rule ID</label>
+      <div v-if="expandedIndex === index" class="space-y-4 border-t border-wb-line p-4">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+          <UiField label="Rule ID" required>
             <EditorIdInput
               :model-value="rule.id"
               :prefix="EDITOR_ID_PREFIXES.RULE"
               :source-name="rule.condition"
               :taken-ids="rules.filter((_, i) => i !== index).map((r) => String(r.id || ''))"
               :max-length="MAX_EDITOR_ID_LENGTH"
-              :compact="true"
               :required="true"
               placeholder="RULE_FLIRT_KEY"
               aria-label="Rule ID"
               @update:model-value="(val) => updateId(index, val)"
             />
-          </div>
-          <div class="space-y-1">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Max Triggers</label>
-            <input
-              :value="rule.max_triggers ?? ''"
+          </UiField>
+          <UiField label="Max triggers">
+            <UiInput
               type="number"
               min="1"
               placeholder="Unlimited"
-              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none"
-              @input="updateMaxTriggers(index, ($event.target as HTMLInputElement).value)"
+              :model-value="rule.max_triggers ?? null"
+              @update:model-value="(v) => updateMaxTriggers(index, String(v ?? ''))"
             />
-          </div>
+          </UiField>
         </div>
 
-        <div class="space-y-1">
-          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Condition (judged by the GM)</label>
-          <textarea
-            :value="rule.condition"
-            rows="2"
+        <UiField label="Condition" hint="Judged by the Game Master.">
+          <UiTextarea
+            :model-value="rule.condition"
+            :rows="2"
             placeholder="e.g. Arthur flirts with Brenda"
-            class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
-            @input="updateRule(index, { condition: ($event.target as HTMLTextAreaElement).value })"
-          ></textarea>
-        </div>
+            @update:model-value="(v) => updateRule(index, { condition: v })"
+          />
+        </UiField>
 
         <ScriptEditor
           :model-value="rule.guard_expression || ''"
-          label="Guard Expression (optional precondition)"
+          label="Guard expression (optional precondition)"
           help-text="Deterministic Python condition that must also hold. The guard can only block the rule, never trigger it."
           context="guard_expression"
           placeholder="e.g. tw.vars.get('BRENDA_TRUST', 0) >= 0"
@@ -169,35 +156,19 @@ function toggle(index: number) {
           @update:model-value="updateRule(index, { guard_expression: $event })"
         />
 
-        <ScriptEditor
-          :model-value="rule.script || ''"
-          label="Script (runs when the rule fires)"
-          help-text="Executed by the engine once the GM reports the condition and the guard passes."
+        <TriggerScriptField
+          :script="rule.script || ''"
+          :text="rule.text || ''"
+          label="When it fires"
+          help="Runs once the Game Master reports the condition and the guard passes."
           context="soft_rule"
-          placeholder="e.g. tw.npcs.give_to_player('BRENDA', 'BRENDA_KEY')"
-          min-height="100px"
-          @update:model-value="updateRule(index, { script: $event })"
+          text-placeholder="e.g. Brenda's expression cools noticeably."
+          @update:script="(v: string) => updateRule(index, { script: v })"
+          @update:text="(v: string) => updateRule(index, { text: v })"
         />
-
-        <div class="space-y-1">
-          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Text (optional)</label>
-          <textarea
-            :value="rule.text || ''"
-            rows="2"
-            placeholder="e.g. Brenda's expression cools noticeably."
-            class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
-            @input="updateRule(index, { text: ($event.target as HTMLTextAreaElement).value })"
-          ></textarea>
-        </div>
       </div>
-    </div>
+    </article>
 
-    <button
-      type="button"
-      class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-white/15 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-amber-300 hover:border-amber-500/40 transition-colors"
-      @click="addRule"
-    >
-      <Plus class="w-4 h-4" /> Add Soft Rule
-    </button>
+    <UiButton size="sm" :icon="Plus" @click="addRule">Add soft rule</UiButton>
   </div>
 </template>

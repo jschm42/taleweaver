@@ -42,6 +42,9 @@ export const MIGRATED = [
   // Editor pages (phase 4)
   'src/components/editor/overview',
   'src/components/editor/DefeatRuleSettings.vue',
+  'src/components/editor/chapters',
+  'src/components/editor/SoftRulesEditor.vue',
+  'src/components/editor/SequenceScriptsEditor.vue',
   // Shared fields used by the entity form
   'src/components/editor/AppearanceField.vue',
   'src/components/editor/EditorIdInput.vue',
