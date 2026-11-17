@@ -26,9 +26,11 @@ everything you **add or change**; do not restyle untouched code in the same task
 1. Build with `src/components/ui/` (`UiButton`, `UiIconButton`, `UiField`, `UiInput`,
    `UiTextarea`, `UiSelect`, `UiToggle`, `UiCheckbox`, `UiCard`, `UiSection`,
    `UiDisclosure`, `UiModal`, `UiDrawer`, `UiBadge`, `UiEmptyState`, `UiSpinner`,
-   `UiInfoPopover`, `UiSaveBar`) and the composables `useDialogs` (`useConfirm`,
+   `UiInfoPopover`, `UiSaveBar`, `UiMenu`, `UiNotice`, `UiRadioCards`, `UiSegmented`),
+   the layout (`WorkbenchShell`, `WorkbenchNav`, `PageHeader`) and the composables `useDialogs` (`useConfirm`,
    `usePrompt`), `useToast`, `useDraft`, `useUnsavedGuard`. Never style a raw `<button>`,
-   `<input>` or overlay inline. All components are shown at `/dev/ui` (dev server).
+   `<input>` or overlay inline. All components are shown at `/dev/ui` (dev server); the
+   admin console (`views/AdminView.vue`, `components/admin/`) is the reference implementation.
 2. A component you need does not exist yet: add it to `components/ui/` (typed props, no
    business logic, < 200 lines), then use it. Do not create a local one-off variant.
 3. **No native browser dialogs, anywhere in the frontend** (Workbench, play view and

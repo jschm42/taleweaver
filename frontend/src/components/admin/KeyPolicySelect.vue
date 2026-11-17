@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { KeyPolicy } from '@/composables/useApi'
+import UiSelect from '@/components/ui/UiSelect.vue'
 import { KEY_POLICY_OPTIONS } from './useKeyPolicy'
 
 /** Who pays for one provider. ``inherit`` adds a "use server default" choice (user overrides). */
@@ -14,21 +15,25 @@ const emit = defineEmits<{ (e: 'update:modelValue', value: KeyPolicy | ''): void
 
 const hint = computed(() => KEY_POLICY_OPTIONS.find(o => o.value === props.modelValue)?.hint || 'Uses the server-wide policy.')
 
-function onChange(event: Event): void {
-  emit('update:modelValue', (event.target as HTMLSelectElement).value as KeyPolicy | '')
+const options = computed(() => [
+  ...(props.inherit ? [{ value: '', label: 'Server default' }] : []),
+  ...KEY_POLICY_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+])
+
+function onChange(value: string | number | null): void {
+  emit('update:modelValue', (value ?? '') as KeyPolicy | '')
 }
 </script>
 
 <template>
-  <select
-    :value="modelValue"
+  <UiSelect
+    :model-value="modelValue"
+    :options="options"
     :disabled="disabled"
     :title="hint"
     :aria-label="`Who pays for ${providerName}`"
-    class="cursor-pointer rounded-lg border border-slate-700/60 bg-slate-950 px-2 py-1 text-[11px] font-bold text-slate-200 outline-none focus:border-emerald-500/50 disabled:opacity-50"
-    @change="onChange"
-  >
-    <option v-if="inherit" value="">Server default</option>
-    <option v-for="option in KEY_POLICY_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
-  </select>
+    size="sm"
+    class="w-44 shrink-0"
+    @update:model-value="onChange"
+  />
 </template>

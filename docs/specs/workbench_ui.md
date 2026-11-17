@@ -1,8 +1,8 @@
 # Workbench UI: one design system for Admin, Editor and Creation
 
-> **Status (2026-11-17):** Phase 0 (foundation) implemented: tokens, Inter, `src/components/ui/`,
-> dialogs, toasts, draft model, check script, showcase at `/dev/ui` (dev server only).
-> Phases 1–5 open. Agent rules for new work:
+> **Status (2026-11-17):** Phase 0 (foundation) and Phase 1 (admin console) implemented.
+> Phases 2–5 (editor, entity pages, remaining editor pages, creation and setup wizard) open.
+> Agent rules for new work:
 > [.claude/rules/frontend-ui.md](../../.claude/rules/frontend-ui.md).
 
 **Scope.** The tool surfaces of TaleWeaver, called the *Workbench* below: the Admin Console
@@ -176,10 +176,19 @@ logic and stay under 200 lines.
 | `UiToast` + `useToast()` | `NotificationToast`, `statusMessage` banners | One queue for the whole app. |
 | `UiBadge` | Counters, status chips | Tones `neutral`, `accent`, `ai`, `info`, `warn`, `danger`. |
 | `UiEmptyState` | "No items yet" blocks | Icon, text, primary action. |
-| `UiSkeleton` | Loading placeholders | Not built yet (Phase 1). |
+| `UiSkeleton` | Loading placeholders | Not built yet. |
+| `UiMenu` | Hand-made "…" dropdowns (`AudioTrackMenu`, catalog tiles) | Items with icon, `danger` / `ai` tone, separators; arrow keys, Esc, outside click. |
+| `UiNotice` | Warning / info boxes | Tones `info`, `warn`, `danger`, `success`, `ai`; optional title and action slot. |
+| `UiRadioCards` | Mode, role and type tiles | Generic value type; `radiogroup` with arrow keys. |
+| `UiSegmented` | Filter chips, two-way switches | "All / Ready / Missing", "Standard / High fidelity". |
 | `UiInfoPopover` | `InfoPopoverButton`, long help paragraphs | Moved from `create-adventure/`. |
 | `UiIdTag` | `object-id-tag`, mono ID chips | Copy on click. Not built yet. |
 | `UiSaveBar` | Save buttons per field and section | See 6.1. |
+
+`useDraft` also offers `adopt(value)` (replace saved state and draft at once, e.g. after a server reset)
+and treats a source that arrives equal to the draft as saved, so a page may emit its draft to a
+parent that saves it. For shared components that only take a class string, use
+`CONTROL_INPUT_CLASS` from `components/ui/fieldContext.ts`.
 
 Layout components (`src/components/workbench/`): `WorkbenchShell`, `WorkbenchNav`,
 `PageHeader`.

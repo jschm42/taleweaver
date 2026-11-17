@@ -51,9 +51,9 @@ watch(isListed, (listed) => {
 <template>
   <div class="space-y-2">
     <select :id="inputId" v-model="selection" :class="[inputClass, '[color-scheme:dark]']">
-      <option v-if="!modelValue && !isCustom" value="" disabled class="bg-slate-900 text-slate-200">Choose a narrator voice…</option>
-      <option v-for="voice in voices" :key="voice.id" :value="voice.id" class="bg-slate-900 text-slate-200">{{ voiceLabel(voice) }}</option>
-      <option :value="CUSTOM" class="bg-slate-900 text-slate-200">Other voice ID…</option>
+      <option v-if="!modelValue && !isCustom" value="" disabled>Choose a narrator voice…</option>
+      <option v-for="voice in voices" :key="voice.id" :value="voice.id">{{ voiceLabel(voice) }}</option>
+      <option :value="CUSTOM">Other voice ID…</option>
     </select>
     <input
       v-if="selection === CUSTOM"

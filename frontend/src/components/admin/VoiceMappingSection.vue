@@ -8,19 +8,31 @@
  * table; Save stores it). Until a mapping is saved, the voice list's suggestions are shown.
  */
 import { computed, onMounted, ref } from 'vue'
+import { Download, FileUp, RotateCcw, Search, Wand2 } from 'lucide-vue-next'
 import { api } from '@/composables/useApi'
+import { confirmDialog } from '@/composables/useDialogs'
+import { useDraft } from '@/composables/useDraft'
+import { useToast } from '@/composables/useToast'
 import type { VoiceMapFileFormat, VoiceMapRow, VoiceMapTable } from '@/types'
+import PageHeader from '@/components/workbench/PageHeader.vue'
+import UiBadge from '@/components/ui/UiBadge.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiMenu, { type MenuItem } from '@/components/ui/UiMenu.vue'
+import UiNotice from '@/components/ui/UiNotice.vue'
+import UiSaveBar from '@/components/ui/UiSaveBar.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
+import UiSpinner from '@/components/ui/UiSpinner.vue'
 
-
-const rows = ref<VoiceMapRow[]>([])
+const toast = useToast()
+const saved = ref<VoiceMapRow[]>([])
+const { draft: rows, isDirty, changedCount, isSaving, reset, adopt, commit } = useDraft(() => saved.value)
 const googleVoices = ref<VoiceMapTable['google_voices']>([])
 const compatibleVoices = ref<string[]>([])
 const filter = ref('')
 const isLoading = ref(false)
-const isSaving = ref(false)
-const isResetting = ref(false)
-const showResetConfirm = ref(false)
-const error = ref('')
+const loadError = ref('')
 const notice = ref('')
 const importInput = ref<HTMLInputElement | null>(null)
 
@@ -49,6 +61,11 @@ const compatibleCount = computed((): number => rows.value.filter((row) => row.cu
 const suggestionCount = computed((): number =>
   rows.value.filter((row) => (!row.google && row.suggested_google) || (!row.custom_openai && row.suggested_custom_openai)).length,
 )
+
+const googleOptions = computed(() => [
+  { value: '', label: 'Narrator voice' },
+  ...googleVoices.value.map((voice) => ({ value: voice.name, label: googleLabel(voice) })),
+])
 
 /** Fills empty cells with the voice list's suggestions; filled cells are kept. */
 function applySuggestions(): void {
@@ -83,14 +100,14 @@ async function loadCompatibleVoices(): Promise<void> {
 
 async function load(): Promise<void> {
   isLoading.value = true
-  error.value = ''
+  loadError.value = ''
   notice.value = ''
   try {
     const table = await api.getVoiceMap()
-    rows.value = table.items
+    saved.value = table.items
     googleVoices.value = table.google_voices
   } catch (err) {
-    error.value = `Could not load the voice mapping: ${errorText(err)}`
+    loadError.value = `Could not load the voice mapping: ${errorText(err)}`
   } finally {
     isLoading.value = false
   }
@@ -100,31 +117,36 @@ async function load(): Promise<void> {
 onMounted(load)
 
 async function save(): Promise<void> {
-  isSaving.value = true
-  error.value = ''
   notice.value = ''
   try {
-    rows.value = (await api.saveVoiceMap(rows.value)).items
-    notice.value = 'Voice mapping saved.'
+    let result: VoiceMapRow[] = []
+    await commit(async (list) => {
+      result = (await api.saveVoiceMap(list)).items
+    })
+    saved.value = result
+    toast.success('Voice mapping saved.')
   } catch (err) {
-    error.value = errorText(err)
-  } finally {
-    isSaving.value = false
+    toast.error(errorText(err))
   }
 }
 
-async function confirmReset(): Promise<void> {
-  isResetting.value = true
-  error.value = ''
+async function resetToDefaults(): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: 'Reset the voice mapping?',
+    message:
+      'This clears all saved Google TTS and OpenAI-compatible voices and restores the suggestions from the voice list.',
+    confirmLabel: 'Reset mapping',
+    danger: true,
+  })
+  if (!confirmed) return
   notice.value = ''
   try {
-    rows.value = (await api.resetVoiceMap()).items
-    notice.value = 'Voice mapping reset to defaults.'
-    showResetConfirm.value = false
+    const items = (await api.resetVoiceMap()).items
+    saved.value = items
+    adopt(items)
+    toast.success('Voice mapping reset to defaults.')
   } catch (err) {
-    error.value = errorText(err)
-  } finally {
-    isResetting.value = false
+    toast.error(errorText(err))
   }
 }
 
@@ -141,12 +163,11 @@ function downloadFile(filename: string, content: string, format: VoiceMapFileFor
 }
 
 async function exportTable(format: VoiceMapFileFormat): Promise<void> {
-  error.value = ''
   try {
     const { filename, content } = await api.exportVoiceMap(format, rows.value)
     downloadFile(filename, content, format)
   } catch (err) {
-    error.value = `Export failed: ${errorText(err)}`
+    toast.error(`Export failed: ${errorText(err)}`)
   }
 }
 
@@ -162,7 +183,6 @@ async function onImportFile(event: Event): Promise<void> {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
-  error.value = ''
   notice.value = ''
   const format: VoiceMapFileFormat = file.name.toLowerCase().endsWith('.json') ? 'json' : 'csv'
   try {
@@ -170,121 +190,97 @@ async function onImportFile(event: Event): Promise<void> {
     rows.value = result.items
     notice.value = importSummary(result.matched, result.unknown, result.errors)
   } catch (err) {
-    error.value = `Import failed: ${errorText(err)}`
+    toast.error(`Import failed: ${errorText(err)}`)
   }
 }
+
+const menuItems = computed<MenuItem[]>(() => [
+  { label: 'Import CSV or JSON…', icon: FileUp, onSelect: () => importInput.value?.click() },
+  { label: 'Export CSV', icon: Download, onSelect: () => void exportTable('csv') },
+  { label: 'Export JSON', icon: Download, onSelect: () => void exportTable('json') },
+  {
+    label: 'Reset to defaults',
+    icon: RotateCcw,
+    tone: 'danger',
+    separated: true,
+    disabled: isLoading.value || isSaving.value,
+    onSelect: () => void resetToDefaults(),
+  },
+])
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in max-w-6xl">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-extrabold text-white tracking-tight">Character Voices</h1>
-        <p class="text-slate-400 text-sm mt-1 max-w-3xl">
-          Characters pick their voice from the voice list. ElevenLabs speaks the listed ids; for Google TTS and the
-          OpenAI-compatible server, enter the voice that should speak each one. An empty cell uses the narrator (GM) voice.
-        </p>
-      </div>
-      <button
-        type="button"
-        :disabled="isSaving || isLoading"
-        class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-blue-900/30 disabled:opacity-50 flex items-center gap-2 self-start sm:self-auto cursor-pointer shrink-0"
-        @click="save"
-      >
-        <i v-if="isSaving" class="ra ra-recycle animate-spin"></i>
-        <i v-else class="ra ra-save"></i>
-        <span>{{ isSaving ? 'Saving...' : 'Save Mapping' }}</span>
-      </button>
-    </div>
+  <div class="space-y-6">
+    <PageHeader
+      title="Character voices"
+      description="Characters pick a voice from the voice list. ElevenLabs speaks the listed ids; for Google TTS and the OpenAI-compatible server, choose the voice that speaks each one. Empty cells use the narrator voice."
+    />
 
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4">
-      <div class="flex flex-wrap items-center gap-2">
-        <input
-          v-model="filter"
-          type="search"
-          placeholder="Filter voices…"
-          aria-label="Filter voices"
-          class="flex-1 min-w-[12rem] bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50"
-        />
-        <span class="text-[11px] text-slate-500">Google {{ googleCount }}/{{ rows.length }} · OpenAI-compatible {{ compatibleCount }}/{{ rows.length }}</span>
-        <button
-          type="button"
-          class="vm-btn"
+    <p v-if="loadError" class="wb-body text-wb-danger-text" role="alert">{{ loadError }}</p>
+    <UiNotice v-if="notice" tone="info">{{ notice }}</UiNotice>
+
+    <UiCard :padded="false">
+      <div class="flex flex-wrap items-center gap-2 border-b border-wb-line p-3">
+        <div class="relative min-w-[12rem] flex-1">
+          <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-wb-faint" aria-hidden="true" />
+          <UiInput v-model="filter" type="search" placeholder="Filter voices…" aria-label="Filter voices" class="pl-9" />
+        </div>
+        <UiBadge>Google {{ googleCount }}/{{ rows.length }}</UiBadge>
+        <UiBadge>OpenAI-compatible {{ compatibleCount }}/{{ rows.length }}</UiBadge>
+        <UiButton
+          size="sm"
+          :icon="Wand2"
           :disabled="!suggestionCount"
           title="Fill empty cells with the voices suggested in the voice list"
           @click="applySuggestions"
         >
-          Use Suggestions
-        </button>
-        <button type="button" class="vm-btn" @click="importInput?.click()">Import…</button>
-        <button type="button" class="vm-btn" @click="exportTable('csv')">Export CSV</button>
-        <button type="button" class="vm-btn" @click="exportTable('json')">Export JSON</button>
-        <button
-          type="button"
-          class="vm-btn vm-btn-danger"
-          :disabled="isLoading || isSaving || isResetting"
-          title="Clear all saved voice mappings and restore the voice list defaults"
-          @click="showResetConfirm = true"
-        >
-          Reset
-        </button>
+          Use suggestions
+        </UiButton>
+        <UiMenu :items="menuItems" label="Import, export and reset" />
         <input ref="importInput" type="file" accept=".csv,.json,text/csv,application/json" class="hidden" @change="onImportFile" />
       </div>
 
-      <p v-if="error" class="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2" role="alert">{{ error }}</p>
-      <p v-if="notice" class="text-xs text-emerald-200 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-2" role="status">{{ notice }}</p>
-
-      <div class="max-h-[65vh] overflow-auto rounded-2xl border border-slate-800">
-        <p v-if="isLoading" class="p-6 text-sm text-slate-400">Loading voices…</p>
-        <table v-else class="w-full text-sm">
-          <thead class="sticky top-0 bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500">
-            <tr>
-              <th class="text-left px-3 py-2 font-bold">Voice</th>
-              <th class="text-left px-3 py-2 font-bold">Best For</th>
-              <th class="text-left px-3 py-2 font-bold">ElevenLabs ID</th>
-              <th class="text-left px-3 py-2 font-bold">Google TTS</th>
-              <th class="text-left px-3 py-2 font-bold">OpenAI-compatible</th>
+      <div class="max-h-[65vh] overflow-auto">
+        <div v-if="isLoading" class="flex justify-center p-8"><UiSpinner label="Loading voices" /></div>
+        <table v-else class="w-full">
+          <thead class="sticky top-0 z-10 bg-wb-surface">
+            <tr class="border-b border-wb-line">
+              <th scope="col" class="wb-label px-3 py-2 text-left !text-wb-muted">Voice</th>
+              <th scope="col" class="wb-label px-3 py-2 text-left !text-wb-muted">Best for</th>
+              <th scope="col" class="wb-label px-3 py-2 text-left !text-wb-muted">ElevenLabs ID</th>
+              <th scope="col" class="wb-label px-3 py-2 text-left !text-wb-muted">Google TTS</th>
+              <th scope="col" class="wb-label px-3 py-2 text-left !text-wb-muted">OpenAI-compatible</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="row in filteredRows" :key="row.id" class="border-t border-slate-800/70 align-top">
+          <tbody class="divide-y divide-wb-line">
+            <tr v-for="row in filteredRows" :key="row.id" class="align-top">
               <td class="px-3 py-2">
-                <div class="font-bold text-white">{{ row.name }}</div>
-                <div class="text-[11px] text-slate-500">{{ traits(row) }}</div>
+                <div class="wb-body font-medium text-wb-strong">{{ row.name }}</div>
+                <div class="wb-hint">{{ traits(row) }}</div>
               </td>
               <td class="px-3 py-2">
-                <div v-if="bestForTags(row).length" class="flex flex-wrap gap-1 max-w-xs">
-                  <span
-                    v-for="tag in bestForTags(row)"
-                    :key="tag"
-                    class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-medium border border-slate-700/50"
-                  >
-                    {{ tag }}
-                  </span>
+                <div v-if="bestForTags(row).length" class="flex max-w-xs flex-wrap gap-1">
+                  <UiBadge v-for="tag in bestForTags(row)" :key="tag">{{ tag }}</UiBadge>
                 </div>
-                <span v-else class="text-[11px] text-slate-600">—</span>
+                <span v-else class="wb-hint">–</span>
               </td>
-              <td class="px-3 py-2 font-mono text-[11px] text-slate-400 whitespace-nowrap">{{ row.elevenlabs }}</td>
-              <td class="px-3 py-2">
-                <select v-model="row.google" :aria-label="`Google voice for ${row.name}`" class="vm-input" style="color-scheme: dark">
-                  <option value="">Narrator voice</option>
-                  <option v-for="voice in googleVoices" :key="voice.name" :value="voice.name">{{ googleLabel(voice) }}</option>
-                </select>
+              <td class="whitespace-nowrap px-3 py-2 wb-mono text-wb-muted">{{ row.elevenlabs }}</td>
+              <td class="min-w-[11rem] px-3 py-2">
+                <UiSelect v-model="row.google" :options="googleOptions" size="sm" :aria-label="`Google voice for ${row.name}`" />
               </td>
-              <td class="px-3 py-2">
-                <input
-                  v-model.trim="row.custom_openai"
+              <td class="min-w-[11rem] px-3 py-2">
+                <UiInput
+                  v-model="row.custom_openai"
+                  size="sm"
                   list="vm-compatible-voices"
                   maxlength="200"
                   placeholder="Narrator voice"
                   :aria-label="`OpenAI-compatible voice for ${row.name}`"
-                  class="vm-input"
                 />
               </td>
             </tr>
             <tr v-if="!filteredRows.length">
-              <td colspan="5" class="px-3 py-6 text-center text-slate-500">No voices match.</td>
+              <td colspan="5" class="px-3 py-6 text-center wb-body text-wb-muted">No voices match.</td>
             </tr>
           </tbody>
         </table>
@@ -292,90 +288,8 @@ async function onImportFile(event: Event): Promise<void> {
           <option v-for="voice in compatibleVoices" :key="voice" :value="voice" />
         </datalist>
       </div>
+    </UiCard>
 
-    </div>
-
-    <!-- Reset Confirmation Modal -->
-    <div
-      v-if="showResetConfirm"
-      class="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-sm bg-black/60"
-      @click.self="!isResetting && (showResetConfirm = false)"
-    >
-      <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4">
-        <h2 class="text-lg font-bold text-white">Reset Voice Mapping?</h2>
-        <p class="text-sm text-slate-300">
-          This clears all saved Google TTS and OpenAI-compatible voice mappings and restores the default suggestions from the voice list.
-        </p>
-        <div class="flex items-center justify-end gap-2 pt-2">
-          <button
-            type="button"
-            class="vm-btn cursor-pointer"
-            :disabled="isResetting"
-            @click="showResetConfirm = false"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
-            :disabled="isResetting"
-            @click="confirmReset"
-          >
-            {{ isResetting ? 'Resetting...' : 'Reset Mapping' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <UiSaveBar :dirty="isDirty" :count="changedCount" :saving="isSaving" @save="save" @discard="reset" />
   </div>
 </template>
-
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.vm-btn {
-  padding: 0.5rem 0.9rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgb(51 65 85 / 0.8);
-  background: rgb(15 23 42 / 0.8);
-  color: rgb(203 213 225);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.vm-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.vm-btn:hover:not(:disabled) {
-  color: white;
-  border-color: rgb(59 130 246 / 0.6);
-}
-.vm-btn-danger:hover:not(:disabled) {
-  color: rgb(254 205 211);
-  border-color: rgb(244 63 94 / 0.6);
-}
-.vm-input {
-  width: 100%;
-  min-width: 10rem;
-  background: rgb(2 6 23);
-  border: 1px solid rgb(30 41 59);
-  border-radius: 0.6rem;
-  padding: 0.4rem 0.6rem;
-  color: white;
-  font-size: 0.8rem;
-  outline: none;
-}
-.vm-input:focus {
-  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.5);
-}
-.vm-input option {
-  background: rgb(15 23 42);
-  color: white;
-}
-</style>

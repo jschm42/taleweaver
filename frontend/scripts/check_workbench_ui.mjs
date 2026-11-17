@@ -18,7 +18,18 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-export const MIGRATED = ['src/components/ui', 'src/components/workbench', 'src/views/dev']
+export const MIGRATED = [
+  'src/components/ui',
+  'src/components/workbench',
+  'src/views/dev',
+  'src/components/admin',
+  'src/views/AdminView.vue',
+  // Shared fields of admin and setup wizard
+  'src/components/common/ModelCombobox.vue',
+  'src/components/common/OpenAICompatibleTtsFields.vue',
+  'src/components/common/BrowserVoiceFields.vue',
+  'src/components/common/ElevenLabsVoiceField.vue',
+]
 
 const PALETTE =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose'

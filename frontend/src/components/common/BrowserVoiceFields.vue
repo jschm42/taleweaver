@@ -10,11 +10,18 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Volume2 } from 'lucide-vue-next'
 import { isBrowserTtsSupported, loadBrowserVoices, previewBrowserVoice } from '@/services/browserTts'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiIconButton from '@/components/ui/UiIconButton.vue'
+import UiNotice from '@/components/ui/UiNotice.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const narrator = defineModel<string>('narrator', { default: '' })
 const characters = defineModel<string[]>('characters', { default: () => [] })
 
-const props = defineProps<{
+/** `inputClass` is kept for callers that still pass it; the fields use the Workbench inputs. */
+defineProps<{
   inputClass?: string
 }>()
 
@@ -56,6 +63,20 @@ const missingNames = computed(() => {
   return [narrator.value, ...characters.value].filter(name => name && !known.has(name))
 })
 
+const languageOptions = computed(() => [
+  { value: ALL_LANGUAGES, label: `All languages (${voices.value.length} voices)` },
+  ...languages.value.map((code) => ({ value: code, label: code.toUpperCase() })),
+])
+
+const narratorOptions = computed(() => {
+  const keepUnknown = narrator.value && !shownVoices.value.some((v) => v.name === narrator.value)
+  return [
+    { value: '', label: 'Automatic (best voice for the story language)' },
+    ...(keepUnknown ? [{ value: narrator.value, label: narrator.value }] : []),
+    ...shownVoices.value.map((v) => ({ value: v.name, label: `${v.name} (${v.lang})` })),
+  ]
+})
+
 function isCharacterVoice(name: string): boolean {
   return characters.value.includes(name)
 }
@@ -78,94 +99,67 @@ async function preview(name: string): Promise<void> {
 
 <template>
   <div class="space-y-4">
-    <p v-if="!supported" class="text-xs text-amber-400">
+    <UiNotice v-if="!supported" tone="warn">
       This browser has no built-in speech. Open the settings in Edge, Chrome or Firefox to choose voices.
-    </p>
+    </UiNotice>
     <template v-else>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="space-y-2">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider" for="browser-voice-language">
-            Language filter
-          </label>
-          <select id="browser-voice-language" v-model="language" :class="props.inputClass">
-            <option :value="ALL_LANGUAGES">All languages ({{ voices.length }} voices)</option>
-            <option v-for="code in languages" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-          </select>
-        </div>
-        <div class="space-y-2">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider" for="browser-voice-narrator">
-            Narrator voice
-          </label>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <UiField id="browser-voice-language" label="Language filter">
+          <UiSelect v-model="language" :options="languageOptions" />
+        </UiField>
+        <UiField id="browser-voice-narrator" label="Narrator voice">
           <div class="flex gap-2">
-            <select id="browser-voice-narrator" v-model="narrator" :class="[props.inputClass, 'min-w-0']">
-              <option value="">Automatic (best voice for the story's language)</option>
-              <option v-if="narrator && !shownVoices.some(v => v.name === narrator)" :value="narrator">{{ narrator }}</option>
-              <option v-for="voice in shownVoices" :key="voice.name" :value="voice.name">
-                {{ voice.name }} ({{ voice.lang }})
-              </option>
-            </select>
-            <button
-              type="button"
-              class="shrink-0 px-3 rounded-xl border border-blue-500/40 bg-blue-500/10 text-blue-200 text-xs font-bold hover:bg-blue-500/20 disabled:opacity-40"
+            <UiSelect
+              :model-value="narrator"
+              :options="narratorOptions"
+              class="min-w-0"
+              @update:model-value="(value) => (narrator = String(value ?? ''))"
+            />
+            <UiIconButton
+              :icon="Volume2"
+              label="Play a sample with the narrator voice"
+              variant="secondary"
               :disabled="!narrator"
-              title="Play a sample with the narrator voice"
               @click="preview(narrator)"
-            >
-              <Volume2 class="w-4 h-4" />
-            </button>
+            />
           </div>
-        </div>
+        </UiField>
       </div>
 
       <div class="space-y-2">
         <div class="flex items-baseline justify-between gap-2">
-          <span class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Character voices
-            <span class="normal-case font-normal text-slate-400">({{ characters.length }} chosen; none = automatic)</span>
-          </span>
-          <button
-            v-if="characters.length"
-            type="button"
-            class="text-[11px] text-slate-400 hover:text-white underline"
-            @click="characters = []"
-          >
-            Clear
-          </button>
+          <p class="wb-label">
+            Character voices <span class="wb-hint">({{ characters.length }} chosen; none means automatic)</span>
+          </p>
+          <UiButton v-if="characters.length" variant="ghost" size="sm" @click="characters = []">Clear</UiButton>
         </div>
-        <div class="max-h-64 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/60 divide-y divide-slate-800">
-          <p v-if="shownVoices.length === 0" class="p-3 text-xs text-slate-500">No voices for this language.</p>
-          <div v-for="voice in shownVoices" :key="voice.name" class="flex items-center gap-3 px-3 py-2">
-            <label class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
-              <input
-                type="checkbox"
-                class="accent-blue-500"
-                :checked="isCharacterVoice(voice.name)"
-                @change="toggleCharacterVoice(voice.name)"
-              />
-              <span class="text-sm text-white truncate">{{ voice.name }}</span>
-              <span class="text-[10px] text-slate-500 shrink-0">{{ voice.lang }}{{ voice.localService ? '' : ' · online' }}</span>
-            </label>
-            <button
-              type="button"
-              class="shrink-0 text-xs text-blue-300 hover:text-white"
-              :class="{ 'animate-pulse': previewing === voice.name }"
-              :title="`Play a sample with ${voice.name}`"
-              @click="preview(voice.name)"
-            >
-              <Volume2 class="w-4 h-4" />
-            </button>
+        <div class="max-h-64 divide-y divide-wb-line overflow-y-auto rounded-xl border border-wb-line-strong bg-wb-raised">
+          <p v-if="shownVoices.length === 0" class="wb-hint p-3">No voices for this language.</p>
+          <div v-for="entry in shownVoices" :key="entry.name" class="flex items-center gap-3 px-3 py-2">
+            <UiCheckbox
+              :model-value="isCharacterVoice(entry.name)"
+              :label="entry.name"
+              :description="`${entry.lang}${entry.localService ? '' : ' · online'}`"
+              class="min-w-0 flex-1"
+              @update:model-value="toggleCharacterVoice(entry.name)"
+            />
+            <UiIconButton
+              :icon="Volume2"
+              :label="`Play a sample with ${entry.name}`"
+              size="sm"
+              :class="{ '!text-wb-accent-text': previewing === entry.name }"
+              @click="preview(entry.name)"
+            />
           </div>
         </div>
       </div>
 
-      <p class="text-[11px] text-slate-500">
-        Every character keeps one of the chosen voices for the whole session. Players hear these voices only if
-        their browser has them (voices differ between browsers and systems); otherwise their browser picks voices
-        for the story's language itself. "Online" voices need an internet connection.
+      <p class="wb-hint">
+        Every character keeps one of the chosen voices for the whole session. Players hear these voices only if their browser
+        has them (voices differ between browsers and systems); otherwise their browser picks voices for the story language.
+        "Online" voices need an internet connection.
       </p>
-      <p v-if="missingNames.length" class="text-[11px] text-amber-400/80">
-        Not available in this browser: {{ missingNames.join(', ') }}
-      </p>
+      <p v-if="missingNames.length" class="wb-hint !text-wb-warn-text">Not available in this browser: {{ missingNames.join(', ') }}</p>
     </template>
   </div>
 </template>

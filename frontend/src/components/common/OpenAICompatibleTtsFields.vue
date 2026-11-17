@@ -6,8 +6,14 @@
  * it lists them; any id can be typed in.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Download } from 'lucide-vue-next'
 import { api } from '@/composables/useApi'
 import type { SpeechVoiceList } from '@/types'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
+import UiTextarea from '@/components/ui/UiTextarea.vue'
 
 const baseUrl = defineModel<string>('baseUrl', { required: true })
 const model = defineModel<string>('model', { required: true })
@@ -16,10 +22,11 @@ const format = defineModel<string>('format', { required: true })
 const instructions = defineModel<string>('instructions', { required: true })
 
 const props = withDefaults(defineProps<{
-  inputClass: string
+  /** Kept for callers that still pass it; the fields use the Workbench inputs. */
+  inputClass?: string
   idPrefix?: string
   showAdvanced?: boolean
-}>(), { idPrefix: 'tts-compat', showAdvanced: true })
+}>(), { inputClass: '', idPrefix: 'tts-compat', showAdvanced: true })
 
 const VOICE_SOURCE_TEXT: Record<SpeechVoiceList['source'], string> = {
   server: 'Voices listed by the server.',
@@ -27,6 +34,12 @@ const VOICE_SOURCE_TEXT: Record<SpeechVoiceList['source'], string> = {
   suggested: 'OpenAI\'s voice names (the server lists none). Any voice id can be typed.',
   none: 'No voice list for this model. Leave empty for the model\'s default voice, or enter a voice id of the provider.',
 }
+
+const FORMATS = [
+  { value: 'mp3', label: 'MP3' },
+  { value: 'wav', label: 'WAV' },
+  { value: 'pcm', label: 'PCM (24 kHz, stored as WAV)' },
+]
 
 const models = ref<string[]>([])
 const voices = ref<string[]>([])
@@ -48,6 +61,8 @@ function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+const trimmed = (value: string | number | null): string => String(value ?? '').trim()
+
 async function loadVoices(): Promise<void> {
   if (!baseUrl.value.trim()) return
   try {
@@ -63,7 +78,7 @@ async function loadVoices(): Promise<void> {
 
 async function loadFromServer(): Promise<void> {
   if (!baseUrl.value.trim()) {
-    loadError.value = 'Enter the Base URL first.'
+    loadError.value = 'Enter the base URL first.'
     return
   }
   isLoading.value = true
@@ -96,91 +111,71 @@ onBeforeUnmount(() => clearTimeout(voiceTimer))
 
 <template>
   <div class="space-y-4">
-    <div class="space-y-2">
-      <label :for="ids.url" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Base URL</label>
-      <div class="flex gap-2">
-        <input
-          :id="ids.url"
-          v-model.trim="baseUrl"
+    <UiField :id="ids.url" label="Base URL" :error="loadError || null">
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <UiInput
+          :model-value="baseUrl"
           type="url"
           placeholder="http://127.0.0.1:8880/v1"
-          :class="[inputClass, 'font-mono flex-1']"
+          class="wb-mono"
+          @update:model-value="(value) => (baseUrl = trimmed(value))"
         />
-        <button
-          type="button"
-          :disabled="isLoading"
-          class="px-4 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-50 cursor-pointer"
-          @click="loadFromServer"
-        >
-          {{ isLoading ? 'Loading…' : 'Load models & voices' }}
-        </button>
+        <UiButton :icon="Download" :loading="isLoading" class="shrink-0" @click="loadFromServer">Load models and voices</UiButton>
       </div>
-      <p class="text-[11px] text-slate-500">
-        Ends in <code class="text-slate-400">/v1</code>. Examples: <code class="text-slate-400">http://127.0.0.1:8880/v1</code> (Kokoro-FastAPI),
-        <code class="text-slate-400">https://api.openai.com/v1</code>, <code class="text-slate-400">https://openrouter.ai/api/v1</code>.
-        The key is the <strong>OpenAI-Compatible Speech</strong> key from the Provider Vault (optional, separate from the LLM key; OpenRouter URLs fall back to the OpenRouter key).
-      </p>
-      <p v-if="loadError" class="text-[11px] text-amber-400">{{ loadError }}</p>
-    </div>
+    </UiField>
+    <p class="wb-hint">
+      Ends in <code class="wb-mono">/v1</code>, e.g. <code class="wb-mono">http://127.0.0.1:8880/v1</code> (Kokoro-FastAPI),
+      <code class="wb-mono">https://api.openai.com/v1</code> or <code class="wb-mono">https://openrouter.ai/api/v1</code>.
+      The key is the optional OpenAI-compatible speech key under API keys (separate from the LLM key; OpenRouter URLs fall
+      back to the OpenRouter key).
+    </p>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="space-y-2">
-        <label :for="ids.model" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model</label>
-        <input
-          :id="ids.model"
-          v-model.trim="model"
-          type="text"
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <UiField :id="ids.model" label="Model" :hint="models.length ? `${models.length} models from the server.` : ''">
+        <UiInput
+          :model-value="model"
           :list="ids.modelList"
           autocomplete="off"
           placeholder="e.g. kokoro, tts-1, openai/gpt-4o-mini-tts"
-          :class="[inputClass, 'font-mono']"
+          class="wb-mono"
+          @update:model-value="(value) => (model = trimmed(value))"
         />
         <datalist :id="ids.modelList">
           <option v-for="entry in models" :key="entry" :value="entry" />
         </datalist>
-        <p v-if="models.length" class="text-[11px] text-slate-500">{{ models.length }} models from the server.</p>
-      </div>
+      </UiField>
 
-      <div class="space-y-2">
-        <label :for="ids.voice" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Narrator Voice <span class="normal-case font-normal text-slate-600">(optional)</span></label>
-        <input
-          :id="ids.voice"
-          v-model.trim="voice"
-          type="text"
+      <UiField
+        :id="ids.voice"
+        label="Narrator voice"
+        :hint="voiceSource ? VOICE_SOURCE_TEXT[voiceSource] : 'Optional; empty uses the model default.'"
+      >
+        <UiInput
+          :model-value="voice"
           :list="ids.voiceList"
           autocomplete="off"
-          placeholder="empty = model default; e.g. af_heart, alloy"
-          :class="[inputClass, 'font-mono']"
+          placeholder="e.g. af_heart, alloy"
+          class="wb-mono"
+          @update:model-value="(value) => (voice = trimmed(value))"
         />
         <datalist :id="ids.voiceList">
           <option v-for="entry in voices" :key="entry" :value="entry" />
         </datalist>
-        <p v-if="voiceSource" class="text-[11px] text-slate-500">{{ VOICE_SOURCE_TEXT[voiceSource] }}</p>
-      </div>
+      </UiField>
     </div>
 
-    <div v-if="showAdvanced" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="space-y-2">
-        <label :for="ids.format" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Audio Format</label>
-        <select :id="ids.format" v-model="format" :class="[inputClass, '[color-scheme:dark]']">
-          <option value="mp3" class="bg-slate-900">MP3</option>
-          <option value="wav" class="bg-slate-900">WAV</option>
-          <option value="pcm" class="bg-slate-900">PCM (24 kHz, stored as WAV)</option>
-        </select>
-        <p class="text-[11px] text-slate-500">Some models only return PCM.</p>
-      </div>
-      <div class="space-y-2 md:col-span-2">
-        <label :for="ids.instructions" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Instructions (optional)</label>
-        <textarea
-          :id="ids.instructions"
-          v-model="instructions"
-          rows="2"
-          maxlength="2000"
-          placeholder="e.g. Calm, warm storyteller voice with dramatic pauses."
-          :class="inputClass"
-        ></textarea>
-        <p class="text-[11px] text-slate-500">Sent only when filled; models without support ignore or reject it.</p>
-      </div>
+    <div v-if="showAdvanced" class="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <UiField :id="ids.format" label="Audio format" hint="Some models only return PCM.">
+        <UiSelect v-model="format" :options="FORMATS" />
+      </UiField>
+      <UiField
+        :id="ids.instructions"
+        label="Instructions"
+        hint="Optional; sent only when filled. Models without support ignore or reject it."
+        class="md:col-span-2"
+      >
+        <UiTextarea v-model="instructions" :rows="2" maxlength="2000" placeholder="e.g. Calm, warm storyteller voice with dramatic pauses." />
+      </UiField>
     </div>
   </div>
 </template>

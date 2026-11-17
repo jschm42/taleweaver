@@ -36,6 +36,14 @@ export const CONTROL_CLASS =
   'transition-colors focus:outline-none focus:ring-2 ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
+/**
+ * Full input look for shared components that only accept a class string
+ * (e.g. `input-class` of ElevenLabsVoiceField). Prefer UiInput / UiSelect everywhere else.
+ */
+export const CONTROL_INPUT_CLASS =
+  'w-full rounded-md bg-wb-raised border border-wb-line-strong text-wb-strong wb-body placeholder:text-wb-faint ' +
+  'h-9 px-3 transition-colors focus:outline-none focus:ring-2 focus:border-wb-accent focus:ring-wb-accent/40'
+
 /** Border and focus ring: accent normally, danger for an invalid value. */
 export function controlBorder(invalid: boolean): string {
   return invalid

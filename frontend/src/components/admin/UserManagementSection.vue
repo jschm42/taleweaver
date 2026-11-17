@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Check, Copy, KeyRound, Pencil, Trash2, User, UserPlus, X } from 'lucide-vue-next'
 import { api } from '@/composables/useApi'
+import PageHeader from '@/components/workbench/PageHeader.vue'
+import UiBadge from '@/components/ui/UiBadge.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiIconButton from '@/components/ui/UiIconButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 defineProps<{
   usersList: any[]
@@ -43,129 +51,106 @@ async function copyResetLink() {
     copied.value = false
   }
 }
+
+function overrideCount(user: any): number {
+  return Object.keys(user.api_key_policy_overrides || {}).length
+}
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-4xl font-extrabold text-white mb-2">User Management</h1>
-        <p class="text-slate-400 text-sm">Create and manage accounts for your TaleWeaver domain.</p>
-      </div>
-      <button @click="emit('addUser')" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-900/20 flex items-center gap-2 transition-all">
-        <i class="ra ra-plus"></i> Add User
-      </button>
-    </div>
+  <div class="space-y-6">
+    <PageHeader title="Users" description="Accounts on this server, their roles and recovery options.">
+      <template #actions>
+        <UiButton variant="primary" :icon="UserPlus" @click="emit('addUser')">Add user</UiButton>
+      </template>
+    </PageHeader>
 
-    <div v-if="resetLink" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3">
+    <div v-if="resetLink" class="space-y-3 rounded-xl border border-wb-warn/30 bg-wb-warn-soft p-4" role="status">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm font-bold text-amber-300">Password reset link for {{ resetLink.username }}</p>
-          <p class="text-xs text-slate-400">
+          <p class="wb-subheading">Password reset link for {{ resetLink.username }}</p>
+          <p class="wb-hint mt-0.5">
             Works once and expires in {{ resetLink.expiresInHours }} hours. Share it privately; it is not shown again.
           </p>
         </div>
-        <button class="text-slate-500 hover:text-white" title="Dismiss" @click="resetLink = null">
-          <i class="ra ra-cancel"></i>
-        </button>
+        <UiIconButton :icon="X" label="Dismiss" size="sm" @click="resetLink = null" />
       </div>
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input
-          :value="resetLink.url"
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <UiInput
+          :model-value="resetLink.url"
           readonly
-          class="flex-1 min-w-0 rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-slate-200"
+          aria-label="Password reset link"
+          class="wb-mono"
           @focus="($event.target as HTMLInputElement).select()"
         />
-        <button class="rounded-xl bg-amber-500/20 px-4 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/30" @click="copyResetLink">
-          {{ copied ? 'Copied' : 'Copy link' }}
-        </button>
+        <UiButton :icon="copied ? Check : Copy" @click="copyResetLink">{{ copied ? 'Copied' : 'Copy link' }}</UiButton>
       </div>
     </div>
-    <p v-if="resetLinkError" class="text-sm text-red-400">{{ resetLinkError }}</p>
+    <p v-if="resetLinkError" class="wb-body text-wb-danger-text" role="alert">{{ resetLinkError }}</p>
 
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-      <table class="w-full text-left">
-        <thead>
-          <tr class="border-b border-slate-800 bg-slate-950/50">
-            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">User</th>
-            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Role</th>
-            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Recovery codes</th>
-            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest" title="Personal API keys (names only) and key policy exceptions">Own keys</th>
-            <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-800">
-          <tr v-for="user in usersList" :key="user.id" class="hover:bg-white/[0.02] transition-colors group">
-            <td class="px-6 py-4">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 overflow-hidden">
-                  <img v-if="user.profile_image_url" :src="user.profile_image_url" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center text-slate-600">
-                    <i class="ra ra-hood"></i>
+    <UiEmptyState v-if="usersList.length === 0" :icon="User" title="No users yet">
+      <template #action>
+        <UiButton variant="primary" :icon="UserPlus" @click="emit('addUser')">Add user</UiButton>
+      </template>
+    </UiEmptyState>
+
+    <UiCard v-else :padded="false">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="border-b border-wb-line">
+              <th scope="col" class="wb-label px-5 py-3 !text-wb-muted">User</th>
+              <th scope="col" class="wb-label px-5 py-3 !text-wb-muted">Role</th>
+              <th scope="col" class="wb-label px-5 py-3 !text-wb-muted">Recovery codes</th>
+              <th scope="col" class="wb-label px-5 py-3 !text-wb-muted" title="Personal API keys (names only) and key policy exceptions">Own keys</th>
+              <th scope="col" class="px-5 py-3"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-wb-line">
+            <tr v-for="user in usersList" :key="user.id" class="hover:bg-wb-raised/50">
+              <td class="px-5 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-wb-line bg-wb-raised">
+                    <img v-if="user.profile_image_url" :src="user.profile_image_url" alt="" class="h-full w-full object-cover" />
+                    <User v-else class="m-2 h-4 w-4 text-wb-faint" aria-hidden="true" />
                   </div>
+                  <span class="wb-body font-medium text-wb-strong">{{ user.username }}</span>
                 </div>
-                <span class="font-bold text-white">{{ user.username }}</span>
-              </div>
-            </td>
-            <td class="px-6 py-4">
-              <span :class="['px-2 py-0.5 rounded text-xxs font-black uppercase tracking-tighter', user.role === 'admin' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400']">
-                {{ user.role }}
-              </span>
-            </td>
-            <td class="px-6 py-4">
-              <span :class="['text-xs font-bold', user.recovery_codes_remaining ? 'text-emerald-400' : 'text-slate-600']">
-                {{ user.recovery_codes_remaining ? `${user.recovery_codes_remaining} left` : 'None' }}
-              </span>
-            </td>
-            <td class="px-6 py-4">
-              <div class="flex flex-wrap items-center gap-1">
-                <span
-                  v-for="provider in user.personal_key_providers || []"
-                  :key="provider"
-                  class="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300"
-                >{{ provider }}</span>
-                <span
-                  v-if="Object.keys(user.api_key_policy_overrides || {}).length"
-                  class="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300"
-                  :title="JSON.stringify(user.api_key_policy_overrides)"
-                >{{ Object.keys(user.api_key_policy_overrides).length }} exception(s)</span>
-                <span
-                  v-if="!(user.personal_key_providers || []).length && !Object.keys(user.api_key_policy_overrides || {}).length"
-                  class="text-xs text-slate-600"
-                >—</span>
-              </div>
-            </td>
-            <td class="px-6 py-4 text-right">
-              <div class="flex items-center justify-end gap-2">
-                <button @click="emit('editUser', user)" class="p-2 text-slate-500 hover:text-white transition-colors" title="Edit">
-                  <i class="ra ra-quill-ink"></i>
-                </button>
-                <button
-                  :disabled="generatingFor === user.id"
-                  class="p-2 text-slate-500 hover:text-amber-400 transition-colors disabled:opacity-40"
-                  title="Create password reset link"
-                  @click="createResetLink(user)"
-                >
-                  <i :class="generatingFor === user.id ? 'ra ra-cycle animate-spin' : 'ra ra-key'"></i>
-                </button>
-                <button @click="emit('removeUser', user)" class="p-2 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
-                  <i class="ra ra-cancel"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+              </td>
+              <td class="px-5 py-3">
+                <UiBadge :tone="user.role === 'admin' ? 'warn' : 'neutral'">{{ user.role === 'admin' ? 'Admin' : 'Player' }}</UiBadge>
+              </td>
+              <td class="px-5 py-3">
+                <span :class="['wb-body', user.recovery_codes_remaining ? 'text-wb-body' : 'text-wb-faint']">
+                  {{ user.recovery_codes_remaining ? `${user.recovery_codes_remaining} left` : 'None' }}
+                </span>
+              </td>
+              <td class="px-5 py-3">
+                <div class="flex flex-wrap items-center gap-1">
+                  <UiBadge v-for="provider in user.personal_key_providers || []" :key="provider" tone="accent">{{ provider }}</UiBadge>
+                  <UiBadge v-if="overrideCount(user)" tone="warn" :title="JSON.stringify(user.api_key_policy_overrides)">
+                    {{ overrideCount(user) }} {{ overrideCount(user) === 1 ? 'exception' : 'exceptions' }}
+                  </UiBadge>
+                  <span v-if="!(user.personal_key_providers || []).length && !overrideCount(user)" class="wb-body text-wb-faint">–</span>
+                </div>
+              </td>
+              <td class="px-5 py-3">
+                <div class="flex items-center justify-end gap-1">
+                  <UiIconButton :icon="Pencil" :label="`Edit ${user.username}`" size="sm" @click="emit('editUser', user)" />
+                  <UiIconButton
+                    :icon="KeyRound"
+                    :label="`Create a password reset link for ${user.username}`"
+                    size="sm"
+                    :disabled="generatingFor === user.id"
+                    @click="createResetLink(user)"
+                  />
+                  <UiIconButton :icon="Trash2" :label="`Delete ${user.username}`" size="sm" variant="danger" @click="emit('removeUser', user)" />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </UiCard>
   </div>
 </template>
-
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-</style>

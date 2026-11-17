@@ -2,8 +2,9 @@
  * Draft editing for Workbench pages: edit a local copy, save once.
  *
  * `draft` is a deep copy of the source. While it is unchanged, a new source value replaces
- * it (e.g. after a reload); while it has changes, the user's edits win. `commit` runs the
- * save function with the draft and makes the saved state the new baseline.
+ * it (e.g. after a reload); while it has changes, the user's edits win. A source that
+ * arrives equal to the draft marks it as saved, so a page may also emit the draft to a
+ * parent that saves it. `commit` runs a save function itself and then marks it saved.
  */
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 
@@ -15,6 +16,8 @@ export interface DraftApi<T> {
   changedCount: ComputedRef<number>
   isSaving: Ref<boolean>
   reset: () => void
+  /** Replaces saved state and draft at once, dropping unsaved edits (e.g. after a server reset). */
+  adopt: (value: T) => void
   commit: (save: (value: T) => Promise<unknown> | unknown) => Promise<boolean>
 }
 
@@ -30,6 +33,12 @@ export function sameValue(a: unknown, b: unknown): boolean {
 }
 
 export function changedTopLevelKeys(draft: unknown, baseline: unknown): string[] {
+  if (Array.isArray(draft) && Array.isArray(baseline)) {
+    const length = Math.max(draft.length, baseline.length)
+    return Array.from({ length }, (_, index) => String(index)).filter(
+      (key) => !sameValue(draft[Number(key)], baseline[Number(key)]),
+    )
+  }
   if (!isRecord(draft) || !isRecord(baseline)) {
     return sameValue(draft, baseline) ? [] : ['value']
   }
@@ -53,6 +62,11 @@ export function useDraft<T>(source: () => T): DraftApi<T> {
   watch(
     source,
     (value) => {
+      // The source now holds exactly the draft (e.g. a parent saved it): nothing is unsaved.
+      if (sameValue(value, draft.value)) {
+        baseline.value = cloneValue(value)
+        return
+      }
       if (isDirty.value) {
         return
       }
@@ -64,6 +78,11 @@ export function useDraft<T>(source: () => T): DraftApi<T> {
 
   function reset(): void {
     draft.value = cloneValue(baseline.value)
+  }
+
+  function adopt(value: T): void {
+    baseline.value = cloneValue(value)
+    draft.value = cloneValue(value)
   }
 
   async function commit(save: (value: T) => Promise<unknown> | unknown): Promise<boolean> {
@@ -81,5 +100,5 @@ export function useDraft<T>(source: () => T): DraftApi<T> {
     }
   }
 
-  return { draft, isDirty, changedKeys, changedCount, isSaving, reset, commit }
+  return { draft, isDirty, changedKeys, changedCount, isSaving, reset, adopt, commit }
 }

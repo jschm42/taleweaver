@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Compiled SFCs of tests/helpers/loadSfc.mjs
+tests/.sfc-cache/

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { CONTROL_INPUT_CLASS } from '@/components/ui/fieldContext'
 import { ChevronDown, RefreshCw } from 'lucide-vue-next'
 import type { ModelKind } from '@/composables/useApi'
 import { getProviderModelsEntry, loadProviderModels, providerModelsKey } from '@/store/providerModels'
@@ -21,7 +22,7 @@ const props = withDefaults(defineProps<{
   baseUrl: '',
   inputId: undefined,
   placeholder: 'Choose or type a model ID',
-  inputClass: 'w-full bg-slate-950 border border-slate-800 rounded-xl pl-4 pr-10 py-2.5 text-sm text-white font-mono outline-none focus:ring-2 focus:ring-purple-500/50',
+  inputClass: `${CONTROL_INPUT_CLASS} wb-mono pr-10`,
 })
 
 const MAX_OPTIONS = 200
@@ -242,14 +243,14 @@ onBeforeUnmount(() => {
         @keydown.enter="onEnter"
         @keydown.esc="isOpen = false"
       />
-      <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+      <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-wb-muted pointer-events-none" />
 
       <!-- Dropdown list with smart positioning and generous width for long model paths -->
       <ul
         v-if="isOpen && filtered.length > 0"
         :id="listId"
         role="listbox"
-        class="absolute z-40 mt-1 max-h-80 overflow-y-auto rounded-xl border border-white/10 bg-[#0a111c] shadow-2xl py-1 divide-y divide-white/[0.04] left-0 w-full min-w-full sm:w-max sm:min-w-[460px] md:min-w-[520px] max-w-[calc(100vw-2rem)] sm:max-w-xl md:max-w-2xl"
+        class="absolute z-40 mt-1 max-h-80 overflow-y-auto rounded-xl border border-wb-line-strong bg-wb-overlay shadow-wb-float py-1 divide-y divide-wb-line font-wb left-0 w-full min-w-full sm:w-max sm:min-w-[460px] md:min-w-[520px] max-w-[calc(100vw-2rem)] sm:max-w-xl md:max-w-2xl"
         :class="isRightAligned ? 'sm:right-0 sm:left-auto' : 'sm:left-0 sm:right-auto'"
         @mousedown.prevent
       >
@@ -262,10 +263,10 @@ onBeforeUnmount(() => {
           class="px-3.5 py-2 cursor-pointer flex flex-col gap-0.5 transition-colors"
           :class="[
             index === activeIndex
-              ? 'bg-purple-600/25 text-white'
+              ? 'bg-wb-accent-soft text-wb-strong'
               : option.id === model
-              ? 'bg-purple-500/10 text-white'
-              : 'hover:bg-white/5 text-slate-200'
+              ? 'bg-wb-raised text-wb-strong'
+              : 'hover:bg-wb-raised text-wb-body'
           ]"
           :title="formatTooltip(option)"
           @mousedown.prevent="choose(option.id)"
@@ -273,23 +274,23 @@ onBeforeUnmount(() => {
           <div class="flex items-start justify-between gap-2 min-w-0">
             <div class="min-w-0 flex-1">
               <div class="text-xs sm:text-sm font-mono break-all leading-snug">
-                <span v-if="splitPath(option.id).prefix" class="text-slate-400 font-normal">
+                <span v-if="splitPath(option.id).prefix" class="text-wb-muted font-normal">
                   {{ splitPath(option.id).prefix }}
                 </span>
-                <span class="font-medium text-slate-100">
+                <span class="font-medium text-wb-strong">
                   {{ splitPath(option.id).name }}
                 </span>
               </div>
               <div
                 v-if="hasDistinctLabel(option)"
-                class="text-[11px] text-slate-400 mt-0.5 break-words line-clamp-1 leading-tight"
+                class="wb-hint mt-0.5 break-words line-clamp-1"
               >
                 {{ option.label }}
               </div>
             </div>
             <span
               v-if="option.id === model"
-              class="shrink-0 text-[10px] font-mono font-bold text-purple-300 bg-purple-500/20 px-1.5 py-0.5 rounded border border-purple-500/30"
+              class="shrink-0 wb-hint font-medium text-wb-accent-text bg-wb-accent-soft px-1.5 py-0.5 rounded-md border border-wb-accent/30"
             >
               active
             </span>
@@ -300,26 +301,26 @@ onBeforeUnmount(() => {
       <!-- Informative hint when filter has no matches -->
       <div
         v-else-if="isOpen && filter.trim().length > 0"
-        class="absolute z-40 mt-1 rounded-xl border border-white/10 bg-[#0a111c] shadow-2xl p-3 text-xs text-slate-400 left-0 w-full min-w-full sm:min-w-[360px]"
+        class="absolute z-40 mt-1 rounded-xl border border-wb-line-strong bg-wb-overlay shadow-wb-float p-3 wb-hint font-wb left-0 w-full min-w-full sm:min-w-[360px]"
         :class="isRightAligned ? 'sm:right-0 sm:left-auto' : 'sm:left-0 sm:right-auto'"
         @mousedown.prevent
       >
-        No matching models for "<span class="text-white font-mono break-all">{{ filter }}</span>". Custom model ID will be used.
+        No matching models for "<span class="text-wb-strong wb-mono break-all">{{ filter }}</span>". Custom model ID will be used.
       </div>
     </div>
 
     <!-- Status row with count, reload button, and active model display name -->
     <div class="space-y-1">
       <div class="flex items-start justify-between gap-3">
-        <p class="text-[11px] leading-snug" :class="status.tone === 'warn' ? 'text-amber-400' : 'text-slate-500'">
+        <p class="wb-hint" :class="status.tone === 'warn' ? '!text-wb-warn-text' : ''">
           {{ status.text }}
-          <span v-if="isUnlisted" class="block text-amber-400 break-all">
+          <span v-if="isUnlisted" class="block text-wb-warn-text break-all">
             "{{ model }}" is not in the provider's list — it will be used as entered.
           </span>
         </p>
         <button
           type="button"
-          class="shrink-0 flex items-center gap-1 text-[11px] text-slate-400 hover:text-white disabled:opacity-40"
+          class="shrink-0 flex items-center gap-1 wb-hint hover:!text-wb-strong disabled:opacity-40"
           title="Reload the model list from the provider"
           :disabled="isLoading || !props.provider"
           @click="load(true)"
@@ -330,11 +331,11 @@ onBeforeUnmount(() => {
       </div>
       <p
         v-if="selectedModelLabel && !isUnlisted"
-        class="text-[11px] text-slate-400 truncate"
+        class="wb-hint truncate"
         :title="selectedModelLabel"
       >
-        <span class="text-slate-500 font-semibold uppercase text-[10px] tracking-wider">Model:</span>
-        <span class="text-slate-300 ml-1.5 font-medium">{{ selectedModelLabel }}</span>
+        <span class="text-wb-faint">Model:</span>
+        <span class="text-wb-body ml-1.5 font-medium">{{ selectedModelLabel }}</span>
       </p>
     </div>
   </div>

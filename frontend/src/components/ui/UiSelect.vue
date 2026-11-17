@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { CONTROL_CLASS, controlBorder, useFieldControl } from '@/components/ui/fieldContext'
 
@@ -29,6 +29,12 @@ const props = withDefaults(
 
 const control = useFieldControl(props)
 
+// Width and layout classes size the wrapper; everything else (aria, title, data-*) goes to <select>.
+const attrs = useAttrs()
+const selectAttrs = computed(() =>
+  Object.fromEntries(Object.entries(attrs).filter(([name]) => name !== 'class' && name !== 'style')),
+)
+
 const classes = computed(() => [
   CONTROL_CLASS,
   controlBorder(control.invalid.value),
@@ -44,9 +50,9 @@ function handleChange(event: Event): void {
 </script>
 
 <template>
-  <div class="relative">
+  <div :class="['relative', $attrs.class]" :style="$attrs.style as any">
     <select
-      v-bind="$attrs"
+      v-bind="selectAttrs"
       :id="control.id.value"
       :value="model ?? ''"
       :class="classes"

@@ -1,46 +1,49 @@
 <script setup lang="ts">
+import UiBadge from '@/components/ui/UiBadge.vue'
+import UiCard from '@/components/ui/UiCard.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
+
 type Workflow = 'sd15' | 'sdxl'
 const url = defineModel<string>('url', { default: 'http://127.0.0.1:8188' })
 const timeout = defineModel<number>('timeout', { default: 600 })
 const simpleWorkflow = defineModel<Workflow>('simpleWorkflow', { default: 'sdxl' })
 const advancedWorkflow = defineModel<Workflow>('advancedWorkflow', { default: 'sdxl' })
 defineProps<{ simple: boolean; advanced: boolean }>()
+
+const WORKFLOWS = [
+  { value: 'sd15', label: 'SD 1.5 – text to image' },
+  { value: 'sdxl', label: 'SDXL – text to image' },
+]
 </script>
 
 <template>
-  <section class="space-y-4 rounded-3xl border border-amber-500/30 bg-slate-900 p-6">
-    <h3 class="font-bold text-white">ComfyUI <span class="ml-2 text-xs text-amber-400">Experimental</span></h3>
-    <p class="text-xs leading-relaxed text-slate-400">
-      Use your own ComfyUI server. Choose installed checkpoints in the model pickers below.
-      Built-in workflows use core nodes; each checkpoint must match the selected model family.
-    </p>
-    <div class="grid gap-4 sm:grid-cols-2">
-      <label class="text-xs text-slate-300">ComfyUI server URL
-        <input v-model="url" type="url" placeholder="http://127.0.0.1:8188"
-          class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white" />
-      </label>
-      <label class="text-xs text-slate-300">Generation timeout (seconds)
-        <input v-model.number="timeout" type="number" min="1" max="3600"
-          class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white" />
-      </label>
-      <label v-if="simple" class="text-xs text-slate-300">Standard model workflow
-        <select v-model="simpleWorkflow" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white">
-          <option value="sd15">SD 1.5 — text to image</option>
-          <option value="sdxl">SDXL — text to image</option>
-        </select>
-      </label>
-      <label v-if="advanced" class="text-xs text-slate-300">High-fidelity model workflow
-        <select v-model="advancedWorkflow" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white">
-          <option value="sd15">SD 1.5 — text to image</option>
-          <option value="sdxl">SDXL — text to image</option>
-        </select>
-      </label>
+  <UiCard title="ComfyUI" description="Your own ComfyUI server; pick installed checkpoints in the model fields above.">
+    <template #actions>
+      <UiBadge tone="warn">Experimental</UiBadge>
+    </template>
+    <div class="space-y-4">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <UiField label="ComfyUI server URL">
+          <UiInput v-model="url" type="url" placeholder="http://127.0.0.1:8188" />
+        </UiField>
+        <UiField label="Generation timeout" hint="Seconds, 1–3600.">
+          <UiInput v-model="timeout" type="number" min="1" max="3600" />
+        </UiField>
+        <UiField v-if="simple" label="Workflow for the standard model">
+          <UiSelect v-model="simpleWorkflow" :options="WORKFLOWS" />
+        </UiField>
+        <UiField v-if="advanced" label="Workflow for the high-fidelity model">
+          <UiSelect v-model="advancedWorkflow" :options="WORKFLOWS" />
+        </UiField>
+      </div>
+      <p class="wb-hint">
+        Built-in workflows use core nodes; each checkpoint must match the chosen model family. The backend connects to the
+        URL, not your browser; private or LAN addresses need ALLOW_PRIVATE_NETWORK_MODELS=true. SD 1.5 usually uses a
+        512 px edge, SDXL 1024 px (set under Local diffusion parameters). A timeout stops waiting and removes a queued job;
+        it does not interrupt a running one.
+      </p>
     </div>
-    <p class="text-xs text-slate-400">
-      The URL is reached from the TaleWeaver backend, not your browser. Private/LAN endpoints
-      require ALLOW_PRIVATE_NETWORK_MODELS=true. SD 1.5 usually uses a 512 px edge;
-      SDXL uses 1024 px. Set resolution and sampling under Local Diffusion Parameters.
-      Timing out stops waiting and removes this job if still queued; it does not interrupt a running job.
-    </p>
-  </section>
+  </UiCard>
 </template>

@@ -74,6 +74,17 @@ test('changed keys compare top-level values deeply', () => {
   assert.deepEqual(keys.sort(), ['nested', 'tags'])
 })
 
+test('changed entries of a list are counted one by one', () => {
+  // Arrange
+  const base = [{ name: 'A' }, { name: 'B' }]
+
+  // Act
+  const keys = draftModule.changedTopLevelKeys([{ name: 'A' }, { name: 'B2' }, { name: 'C' }], base)
+
+  // Assert
+  assert.deepEqual(keys, ['1', '2'])
+})
+
 test('a draft tracks edits, resets and commits', async () => {
   // Arrange
   let source = { title: 'Old', count: 1 }
@@ -115,6 +126,22 @@ test('a clean draft follows its source, a dirty one keeps the edits', async () =
   // Assert
   assert.equal(followed, 'B')
   assert.equal(draft.value.title, 'Mine')
+})
+
+test('a dirty draft becomes clean when the source arrives with the same values', async () => {
+  // Arrange
+  const { ref } = await import('vue')
+  const source = ref({ title: 'A', mode: 'x' })
+  const { draft, isDirty } = draftModule.useDraft(() => source.value)
+  draft.value.title = 'B'
+
+  // Act
+  source.value = { title: 'B', mode: 'x' }
+  await nextTick()
+
+  // Assert
+  assert.equal(isDirty.value, false)
+  assert.equal(draft.value.title, 'B')
 })
 
 test('the UI check flags off-token styling', () => {
