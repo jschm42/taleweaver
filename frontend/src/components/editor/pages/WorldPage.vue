@@ -1,39 +1,21 @@
 <script setup lang="ts">
-import { useEditor } from '@/composables/editor/editorContext'
-import WorldTab from '@/components/editor/WorldTab.vue'
-import { fixNewlines } from '@/utils/editor_utils'
+import OverviewCreditsCard from '@/components/editor/overview/OverviewCreditsCard.vue'
+import OverviewDetailsCard from '@/components/editor/overview/OverviewDetailsCard.vue'
+import OverviewMemoryCard from '@/components/editor/overview/OverviewMemoryCard.vue'
+import OverviewOutcomeCard from '@/components/editor/overview/OverviewOutcomeCard.vue'
+import OverviewStoryCard from '@/components/editor/overview/OverviewStoryCard.vue'
+import PageHeader from '@/components/workbench/PageHeader.vue'
 
-const editor = useEditor()
+/** Overview: the adventure's core settings. Changes are saved through the editor's save bar. */
 </script>
 
 <template>
-  <WorldTab
-    :form="editor.form"
-    :adventure="editor.adventure"
-    :debug-data="editor.debugData"
-    :reference-options="editor.referenceOptions"
-    :editing-field="editor.editingField"
-    :temp-value="editor.tempValue"
-    :is-saving="editor.isSaving"
-    :is-batch-generating="editor.isBatchGenerating"
-    :is-quick-generating="editor.isQuickGenerating"
-    :is-generating-field="editor.isGeneratingField"
-    :active-menu-id="editor.activeMenuId"
-    :fix-newlines="fixNewlines"
-    @quick-regen="editor.quickRegenerateVisual"
-    @open-regen-dialog="editor.openRegenerateDialog"
-    @open-upload-picker="editor.openUploadPicker"
-    @download-asset="editor.downloadVisualAsset"
-    @open-text-edit="editor.openTextEdit"
-    @toggle-menu="editor.toggleMenu"
-    @start-edit="editor.startEditing"
-    @save-field="editor.saveField"
-    @cancel-edit="editor.cancelEditing"
-    @generate-field="editor.handleGenerateField"
-    @update:temp-value="editor.tempValue = $event"
-    @update:max-memory-turns="editor.form.max_memory_turns = $event"
-    @update:mode="editor.handleUpdateRuleMode"
-    @save-changes="editor.saveChanges"
-    @notify="editor.addNotification"
-  />
+  <div class="space-y-6">
+    <PageHeader title="Overview" description="Title, play style, story and how the adventure is won or lost." />
+    <OverviewDetailsCard />
+    <OverviewStoryCard />
+    <OverviewOutcomeCard />
+    <OverviewMemoryCard />
+    <OverviewCreditsCard />
+  </div>
 </template>

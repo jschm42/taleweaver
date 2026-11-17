@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Sparkles, Square } from 'lucide-vue-next'
 import { provideEditor } from '@/composables/editor/editorContext'
+import { useEditorFormDraft } from '@/composables/editor/useEditorFormDraft'
 import { EDITOR_PAGES, useEditorNavigation } from '@/components/editor/editorNavigation'
 import EditorModals from '@/components/editor/EditorModals.vue'
 import EntityDetailPage from '@/components/editor/pages/EntityDetailPage.vue'
@@ -11,6 +12,7 @@ import WorkbenchNav from '@/components/workbench/WorkbenchNav.vue'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiNotice from '@/components/ui/UiNotice.vue'
+import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import UiSpinner from '@/components/ui/UiSpinner.vue'
 
 /**
@@ -26,6 +28,8 @@ const router = useRouter()
 const editor = provideEditor(props)
 const { groups, validation } = useEditorNavigation(editor)
 const worldBuilderOpen = ref(false)
+// Adventure settings: edited on several pages, saved together through the save bar.
+const formDraft = useEditorFormDraft(editor)
 
 const WIDE_PAGES = new Set(['map', 'scenes', 'scripts', 'triggers', 'validation'])
 const isEntityPage = computed(() => route.name === 'adventure-editor-entity')
@@ -104,6 +108,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
       <UiSpinner size="lg" label="Loading the adventure" />
     </div>
     <component :is="page" v-else :key="pageKey" />
+
+    <UiSaveBar
+      v-if="!isEntityPage"
+      :dirty="formDraft.isDirty.value"
+      :count="formDraft.changedFields.value.length"
+      :saving="editor.isSaving"
+      :error-count="formDraft.errorCount.value"
+      @save="formDraft.save"
+      @discard="formDraft.discard"
+    />
 
     <EditorModals />
     <WorldBuilderDrawer

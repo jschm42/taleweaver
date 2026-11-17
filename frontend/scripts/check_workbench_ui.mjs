@@ -39,6 +39,9 @@ export const MIGRATED = [
   // Entity form (phase 4)
   'src/components/editor/entity',
   'src/components/editor/EditEntityModal.vue',
+  // Editor pages (phase 4)
+  'src/components/editor/overview',
+  'src/components/editor/DefeatRuleSettings.vue',
   // Shared fields used by the entity form
   'src/components/editor/AppearanceField.vue',
   'src/components/editor/EditorIdInput.vue',
