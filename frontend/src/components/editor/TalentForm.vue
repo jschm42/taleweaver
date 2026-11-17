@@ -113,9 +113,9 @@ const unlockRule = computed<HardRule>({
         <HardRuleTriggersEditor
           v-model="unlockRule"
           :reference-options="referenceOptions"
-          title="Unlock Conditions (Hard Rules)"
+          title="Unlock conditions"
           description="The talent unlocks automatically once every configured condition is met. A system message announces it."
-          guard-label="Unlock Guard (Python Expression)"
+          guard-label="Unlock guard (Python expression)"
           guard-help="Optional sandboxed Python condition, e.g. tw.vars.get('met_the_oracle') == True."
         />
         <label class="block space-y-1">

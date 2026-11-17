@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { CONTROL_TEXTAREA_CLASS, useFieldControl } from '@/components/ui/fieldContext'
 
 interface ReferenceOption {
   id: string
@@ -19,6 +20,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
 }>()
+
+const field = useFieldControl({})
 
 const textAreaRef = ref<HTMLTextAreaElement | null>(null)
 const suggestStartIndex = ref<number | null>(null)
@@ -258,7 +261,9 @@ onBeforeUnmount(() => {
       :rows="rows || 3"
       :maxlength="maxlength"
       :placeholder="placeholder"
-      :class="className || 'w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner'"
+      :id="field.id.value"
+      :aria-describedby="field.describedBy.value"
+      :class="className || CONTROL_TEXTAREA_CLASS"
       @input="handleInput"
       @click="handleCaretInteraction"
       @keyup="handleCaretInteraction"
@@ -270,7 +275,7 @@ onBeforeUnmount(() => {
       <div
         v-if="isSuggestionOpen"
         :id="popupId"
-        class="fixed z-[4000] bg-slate-950 border border-white/10 rounded-lg shadow-2xl overflow-hidden"
+        class="fixed z-[4000] overflow-hidden rounded-md border border-wb-line-strong bg-wb-overlay font-wb shadow-wb-float"
         :style="{
           top: `${popupPosition.top}px`,
           left: `${popupPosition.left}px`,
@@ -278,7 +283,7 @@ onBeforeUnmount(() => {
           transform: popupPosition.placeAbove ? 'translateY(-100%)' : 'none',
         }"
       >
-        <div class="px-3 py-2 text-[11px] text-slate-400 border-b border-white/10">
+        <div class="wb-hint border-b border-wb-line px-3 py-2">
           Insert reference with ##OBJECT_ID
         </div>
         <div class="max-h-56 overflow-auto">
@@ -286,8 +291,8 @@ onBeforeUnmount(() => {
             v-for="(option, index) in filteredOptions"
             :key="option.id"
             type="button"
-            class="w-full text-left px-3 py-2 border-b border-white/5 last:border-b-0"
-            :class="index === activeSuggestionIndex ? 'bg-emerald-500/20' : 'hover:bg-emerald-500/10'"
+            class="w-full border-b border-wb-line px-3 py-2 text-left last:border-b-0"
+            :class="index === activeSuggestionIndex ? 'bg-wb-accent-soft' : 'hover:bg-wb-raised'"
             :data-suggestion-index="index"
             @mousedown.prevent="applyOption(option.id)"
             @mouseenter="activeSuggestionIndex = index"
@@ -296,16 +301,16 @@ onBeforeUnmount(() => {
               <img
                 v-if="option.imageUrl"
                 :src="option.imageUrl"
-                class="w-6 h-6 rounded object-cover border border-white/10"
+                class="h-6 w-6 rounded-md border border-wb-line object-cover"
                 alt=""
               />
               <div class="min-w-0">
-                <div class="text-xs text-white truncate">{{ option.name || option.id }}</div>
-                <div class="text-[11px] text-slate-400 truncate">{{ option.id }}</div>
+                <div class="wb-body truncate text-wb-strong">{{ option.name || option.id }}</div>
+                <div class="wb-hint truncate">{{ option.id }}</div>
               </div>
             </div>
           </button>
-          <div v-if="filteredOptions.length === 0" class="px-3 py-3 text-xs text-slate-500">
+          <div v-if="filteredOptions.length === 0" class="wb-hint px-3 py-3">
             No matching IDs.
           </div>
         </div>

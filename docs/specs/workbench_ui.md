@@ -1,8 +1,8 @@
 # Workbench UI: one design system for Admin, Editor and Creation
 
 > **Status (2026-11-17):** Phases 0–3 implemented (foundation, admin console, editor shell,
-> entity detail pages and form split). Phases 4–5 (restyling the editor pages and form sections,
-> creation and setup wizard) open.
+> entity detail pages and form split). Phase 4 started: the entity form and its shared fields are
+> restyled; the remaining editor pages and phase 5 (creation and setup wizard) are open.
 > Agent rules for new work:
 > [.claude/rules/frontend-ui.md](../../.claude/rules/frontend-ui.md).
 
@@ -162,14 +162,15 @@ logic and stay under 200 lines.
 | `UiButton` | 731 inline buttons | Variants `primary`, `secondary`, `ghost`, `danger`, `ai`; sizes `sm`, `md`; `loading`, `icon`, `iconRight`; `type="button"` by default. |
 | `UiIconButton` | Close, edit, delete icons | Requires `label` (used for `aria-label` and tooltip). |
 | `UiField` | Hand-made labels | `label`, `hint`, `error`, `counter`, `required`, `info` (opens `UiInfoPopover`); wires `id`/`for`/`aria-describedby`. |
-| `UiInput`, `UiTextarea`, `UiSelect` | Inline inputs | One look, one focus ring; `UiInput type="number"` yields numbers (`null` when empty); textarea auto-grows. |
+| `UiInput`, `UiTextarea`, `UiSelect` | Inline inputs | One look, one focus ring; `UiInput type="number"` yields numbers (`null` when empty), `mono` for IDs, dice and codes; textarea auto-grows. |
+| `UiRange` | Hand-made `type="range"` sliders | Shows the current value (optional `unit`) next to the track. |
 | `UiToggle`, `UiCheckbox`, `UiRadioCards` | `sr-only peer` switches, checkboxes, mode tiles | `UiRadioCards` for rule mode, item type and similar choices. |
 | `UiCombobox` | `ModelCombobox`, `EntityReferenceCombobox` (base) | Search, keyboard navigation, groups. Not built yet. |
 | `UiSpinner` | 4 spinner variants | |
 | `UiCard` | 8 panel recipes | Optional header (title, description, actions slot). Never nested. |
 | `UiSection` | Page sections | Title, description, actions, `collapsible`, `advanced` (collapsed by default). |
 | `UiDisclosure` | Ad-hoc "show more" blocks | Used for "Advanced", "Scripts & triggers". |
-| `UiTabs` | Hand-made tab rows | Underline style, keyboard accessible, optional counts. Not built yet (Phase 2). |
+| `UiTabs` | Hand-made tab rows | Underline style, arrow keys, optional counts; the caller renders the panels. |
 | `UiModal` | 29 overlays | Teleport, focus trap, Esc, sizes `sm`/`md`/`lg`, header/body/footer slots, `guardUnsaved`. For short tasks and confirmations. |
 | `UiDrawer` | World-Builder prompt block | Slides in from the right, 560–720 px, same slots as `UiModal`. For side panels that keep the page visible (AI panel), not for entity editing. |
 | `UiConfirmDialog` + `useConfirm()` | `window.confirm`, custom delete modals | Promise based: `await confirm({ title, body, danger: true })`. One dialog host mounted in `App.vue`, state at module level, so services and composables can ask too. Asks once per action: either the component or the service, not both. |
@@ -388,6 +389,7 @@ screenshots.
 | **3. Entity editing** | Editor routes for entity detail pages; `EditEntityModal` → `EntityDetailPage` with per-tab components; `EditExitModal`, scene and exit route panels on the same pattern. | No editor file > 600 lines; every entity has a URL. |
 | | *Phase 3a as built:* characters and items open on `/adventures/:id/editor/entities/:entityId` (`EntityDetailPage.vue`, form tab in `?panel=`, previous / next, breadcrumb). The existing form renders inline (`EditEntityModal` with `variant="page"`); the modal stays for cover, protagonist, scene text and creating new entities. *3b as built:* the form's script moved unchanged into `composables/editor/useEntityForm.ts` (shared through `entityFormContext.ts` / `useEntityFormContext()`); the template is cut into 22 section components in `components/editor/entity/` (ID, stats, character profile / movement / notes / inventory / visibility, item basics / visibility / equipment / consumable / recipe / switch / container / readable, description, combat, companion and trigger panels); `EditEntityModal` keeps only frame, tabs and footer. Restyling the sections on the `Ui*` building blocks follows in phase 4. | |
 | **4. Remaining editor pages** | Scripts, Map, Time, Quests, Awards, Sequences, Audio, Dynamic, Validation on `Ui*` and the draft model. | Editor folder passes the check script. |
+| | *Phase 4 so far:* the entity form sections (`components/editor/entity/`) and the shared fields they use (ID input, reference combobox and textarea, voice picker, weapon, switch-state, recipe, combat, special-attack and companion editors, trigger fields) are on `Ui*` and in the check script. `EntityFormContent.vue` holds the image row, `UiTabs` and the panels; `TriggerScriptField` is the one script + text trigger field. An unchanged legacy ID longer than 20 characters stays valid and is no longer shortened on blur. Open: the combat profile, aggression, special attacks and companion settings still save with their own buttons (separate endpoints); folding them into the form's save bar is a follow-up. `ScriptEditor` keeps its own look until it is split. | |
 | **5. Creation & setup** | `CreateAdventureView` and setup wizard on the same components (`UiRadioCards`, `UiField`). | Whole Workbench passes the check script. |
 
 Folders are added to the check script's list as they are migrated, so finished areas cannot

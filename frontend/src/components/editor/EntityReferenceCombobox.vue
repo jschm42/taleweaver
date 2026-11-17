@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, onMounted, onUnmounted } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
+import { CONTROL_INPUT_CLASS } from '@/components/ui/fieldContext'
 
 export interface ReferenceOption {
   id: string
@@ -126,21 +128,19 @@ watch(
 </script>
 
 <template>
-  <div class="relative" ref="root" :data-ref-id="rootId">
+  <div ref="root" class="relative w-full min-w-0" :data-ref-id="rootId">
     <button
       type="button"
-      class="w-full bg-slate-900 border border-white/10 rounded px-3 py-2 text-left text-sm text-white flex items-center justify-between gap-3"
+      :class="[CONTROL_INPUT_CLASS, 'flex items-center justify-between gap-3 text-left']"
+      :aria-expanded="isOpen"
+      aria-haspopup="listbox"
       @click="toggleOpen"
     >
-      <span class="truncate">
-        <template v-if="selectedOption">
-          {{ selectedOption.name || selectedOption.id }} ({{ selectedOption.id }})
-        </template>
-        <template v-else>
-          {{ placeholder || 'Select reference' }}
-        </template>
+      <span :class="['truncate', selectedOption ? '' : 'text-wb-faint']">
+        <template v-if="selectedOption">{{ selectedOption.name || selectedOption.id }} ({{ selectedOption.id }})</template>
+        <template v-else>{{ placeholder || 'Select reference' }}</template>
       </span>
-      <span class="text-slate-400 text-xs">▼</span>
+      <ChevronDown class="h-4 w-4 shrink-0 text-wb-muted" aria-hidden="true" />
     </button>
 
     <Teleport to="body">
@@ -148,21 +148,22 @@ watch(
         v-if="isOpen"
         :id="`entity-ref-dropdown-${rootId}`"
         :style="dropdownStyle"
-        class="bg-slate-950 border border-white/10 rounded-lg shadow-2xl overflow-hidden"
+        class="overflow-hidden rounded-md border border-wb-line-strong bg-wb-overlay font-wb shadow-wb-float"
       >
-        <div class="p-2 border-b border-white/10" v-if="enableSearch !== false">
+        <div v-if="enableSearch !== false" class="border-b border-wb-line p-2">
           <input
             v-model="searchText"
             type="text"
-            class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm text-white"
+            :class="[CONTROL_INPUT_CLASS, '!h-8 !px-2.5']"
             :placeholder="searchPlaceholder || 'Search by ID or name'"
+            aria-label="Search"
           />
         </div>
 
-        <div class="overflow-auto" :style="{ maxHeight: '240px' }">
+        <div class="max-h-60 overflow-auto" role="listbox">
           <button
             type="button"
-            class="w-full text-left px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/10 border-b border-white/5"
+            class="w-full border-b border-wb-line px-3 py-2 text-left wb-hint !text-wb-danger-text hover:bg-wb-danger-soft"
             @click="clearSelection"
           >
             Clear selection
@@ -172,29 +173,25 @@ watch(
             v-for="option in filteredOptions"
             :key="option.id"
             type="button"
-            class="w-full px-3 py-2 text-left hover:bg-emerald-500/10 border-b border-white/5 last:border-b-0"
+            role="option"
+            :aria-selected="option.id === selectedOption?.id"
+            class="w-full border-b border-wb-line px-3 py-2 text-left last:border-b-0 hover:bg-wb-raised focus-visible:bg-wb-raised focus-visible:outline-none"
             @click="selectOption(option.id)"
           >
             <div class="flex items-center gap-2">
-              <img
-                v-if="option.imageUrl"
-                :src="option.imageUrl"
-                class="w-8 h-8 rounded object-cover border border-white/10"
-                alt=""
-              />
+              <img v-if="option.imageUrl" :src="option.imageUrl" class="h-8 w-8 rounded-md border border-wb-line object-cover" alt="" />
               <div class="min-w-0">
-                <div class="text-sm text-white truncate">{{ option.name || option.id }}</div>
-                <div class="text-[11px] text-slate-400 truncate">{{ option.id }}<template v-if="option.subtitle"> · {{ option.subtitle }}</template></div>
+                <div class="wb-body truncate text-wb-strong">{{ option.name || option.id }}</div>
+                <div class="wb-hint truncate">
+                  {{ option.id }}<template v-if="option.subtitle"> · {{ option.subtitle }}</template>
+                </div>
               </div>
             </div>
           </button>
 
-          <div v-if="filteredOptions.length === 0" class="px-3 py-3 text-xs text-slate-500">
-            No matching entries.
-          </div>
+          <p v-if="filteredOptions.length === 0" class="wb-hint px-3 py-3">No matching entries.</p>
         </div>
       </div>
     </Teleport>
   </div>
 </template>
-

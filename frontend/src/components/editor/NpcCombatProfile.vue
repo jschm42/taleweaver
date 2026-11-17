@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Save, Shield, AlertTriangle } from 'lucide-vue-next'
+import { Save } from 'lucide-vue-next'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiNotice from '@/components/ui/UiNotice.vue'
+import UiSection from '@/components/ui/UiSection.vue'
 import type { NpcMainAttack, SuccessStat } from '@/types'
 import WeaponCombatSettings from '@/components/editor/WeaponCombatSettings.vue'
 import { specialAttackService } from '@/services/specialAttackService'
@@ -148,78 +154,67 @@ async function save(): Promise<void> {
   }
 }
 
-const inputClass = 'w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-white font-bold focus:border-cyan-500/50 outline-none transition-all'
+function toInt(value: string | number | null): number {
+  return value === null || value === '' ? Number.NaN : Number(value)
+}
 </script>
 
 <template>
-  <section class="space-y-4">
-    <h4 class="text-xs font-black text-cyan-400 uppercase tracking-[0.2em] flex items-center gap-2">
-      <Shield class="w-4 h-4" /> Combat Profile · {{ npc.name }}
-    </h4>
-
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-3 p-4 bg-black/30 border border-white/10 rounded-2xl">
-      <label v-for="s in SUCCESS_STATS" :key="s" class="space-y-1">
-        <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">{{ STAT_SHORT[s] }}</span>
-        <input v-model.number="stats[s]" type="number" :min="STAT_RANGE.min" :max="STAT_RANGE.max" :class="inputClass" />
-      </label>
-      <label class="space-y-1" title="Armor class: the attack roll an attacker must reach to hit this NPC.">
-        <span class="block text-[10px] font-bold text-cyan-400 uppercase tracking-widest">AC</span>
-        <input v-model.number="armorClass" type="number" :min="AC_RANGE.min" :max="AC_RANGE.max" :class="inputClass" />
-      </label>
-      <p class="col-span-3 md:col-span-6 text-[10px] text-slate-500">
-        10 is average. Stats feed the NPC's attack and special rolls; AC is what the protagonist must roll to hit it
-        (10 unarmored, 14 leather, 18 plate).
-      </p>
+  <UiSection title="Combat profile" description="Stats, armor and the main attack this character fights with.">
+    <div class="grid grid-cols-3 gap-3 md:grid-cols-6">
+      <UiField v-for="s in SUCCESS_STATS" :key="s" :label="STAT_SHORT[s]">
+        <UiInput
+          type="number"
+          :min="STAT_RANGE.min"
+          :max="STAT_RANGE.max"
+          :model-value="stats[s]"
+          @update:model-value="(value) => (stats[s] = toInt(value))"
+        />
+      </UiField>
+      <UiField label="AC" info="Armor class: the attack roll an attacker must reach to hit this character.">
+        <UiInput
+          type="number"
+          :min="AC_RANGE.min"
+          :max="AC_RANGE.max"
+          :model-value="armorClass"
+          @update:model-value="(value) => (armorClass = toInt(value))"
+        />
+      </UiField>
     </div>
+    <p class="wb-hint">
+      10 is average. Stats feed the attack and special rolls; AC is what the protagonist must roll to hit
+      (10 unarmored, 14 leather, 18 plate).
+    </p>
 
-    <div class="space-y-3 p-4 bg-black/30 border border-white/10 rounded-2xl">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <label class="flex items-center gap-2 text-xs font-black text-slate-300 uppercase tracking-widest">
-          <input v-model="hasAttack" type="checkbox" class="accent-cyan-500" /> Main attack
-        </label>
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <UiCheckbox v-model="hasAttack" label="Main attack" />
         <div class="flex flex-wrap items-center gap-1.5">
-          <span class="text-[10px] text-slate-500 uppercase tracking-widest mr-1">Preset</span>
-          <button
-            v-for="preset in PRESETS"
-            :key="preset.label"
-            type="button"
-            class="px-2 py-1 rounded-lg border border-white/10 bg-slate-800/60 text-[11px] font-bold text-slate-300 hover:border-cyan-400/50 hover:text-white"
-            @click="applyPreset(preset)"
-          >{{ preset.label }}</button>
+          <span class="wb-hint mr-1">Preset</span>
+          <UiButton v-for="preset in PRESETS" :key="preset.label" size="sm" @click="applyPreset(preset)">{{ preset.label }}</UiButton>
         </div>
       </div>
-      <p v-if="!hasAttack" class="text-[11px] text-slate-500">
-        Without a main attack the NPC fights {{ legacyItems.length ? 'with its equipped weapon item (deprecated)' : 'unarmed (1d6)' }}.
+      <p v-if="!hasAttack" class="wb-hint">
+        Without a main attack it fights {{ legacyItems.length ? 'with its equipped weapon item (deprecated)' : 'unarmed (1d6)' }}.
       </p>
       <template v-else>
-        <label class="block space-y-1">
-          <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Attack name (shown in the combat log)</span>
-          <input v-model="attackName" maxlength="60" placeholder="e.g. Longsword, Bite, Magic Missile" :class="inputClass" />
-        </label>
+        <UiField label="Attack name" hint="Shown in the combat log.">
+          <UiInput v-model="attackName" maxlength="60" placeholder="e.g. Longsword, Bite, Magic Missile" />
+        </UiField>
         <WeaponCombatSettings v-model="attack" title="Attack settings" />
       </template>
-      <p v-if="legacyItems.length" class="flex items-start gap-2 text-[11px] text-amber-400">
-        <AlertTriangle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
-        <span>
-          This NPC still uses deprecated equipment items ({{ legacyItems.join(', ') }}).
-          {{ hasAttack ? 'The main attack replaces the weapon item.' : 'Configure a main attack to replace the weapon item.' }}
-          Set the armor bonus via AC instead of an armor item.
-        </span>
-      </p>
+      <UiNotice v-if="legacyItems.length" tone="warn">
+        Still uses deprecated equipment items ({{ legacyItems.join(', ') }}).
+        {{ hasAttack ? 'The main attack replaces the weapon item.' : 'Configure a main attack to replace the weapon item.' }}
+        Set the armor bonus via AC instead of an armor item.
+      </UiNotice>
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-40"
-        :disabled="saving || problems.length > 0"
-        @click="save"
-      >
-        <Save class="w-3.5 h-3.5" /> {{ saving ? 'Saving…' : 'Save Combat Profile' }}
-      </button>
-      <span v-if="note" class="text-xs text-emerald-400">{{ note }}</span>
-      <span v-if="error" class="text-xs text-rose-400">{{ error }}</span>
-      <span v-for="p in problems" :key="p" class="text-xs text-amber-400">{{ p }}</span>
+      <UiButton :icon="Save" :loading="saving" :disabled="problems.length > 0" @click="save">Save combat profile</UiButton>
+      <span v-if="note" class="wb-hint !text-wb-accent-text" role="status">{{ note }}</span>
+      <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>
+      <span v-for="p in problems" :key="p" class="wb-hint !text-wb-warn-text">{{ p }}</span>
     </div>
-  </section>
+  </UiSection>
 </template>

@@ -14,10 +14,12 @@ import UiField from '@/components/ui/UiField.vue'
 import UiIconButton from '@/components/ui/UiIconButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiModal from '@/components/ui/UiModal.vue'
+import UiRange from '@/components/ui/UiRange.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import UiSection from '@/components/ui/UiSection.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import UiSpinner from '@/components/ui/UiSpinner.vue'
+import UiTabs from '@/components/ui/UiTabs.vue'
 import UiTextarea from '@/components/ui/UiTextarea.vue'
 import UiToggle from '@/components/ui/UiToggle.vue'
 
@@ -35,6 +37,15 @@ const toneOptions = [
   { value: 'cozy', label: 'Cozy' },
   { value: 'noir', label: 'Noir' },
 ]
+
+const tabs = [
+  { id: 'general', label: 'General' },
+  { id: 'combat', label: 'Combat' },
+  { id: 'triggers', label: 'Triggers', count: 3 },
+]
+const activeTab = ref('general')
+const chance = ref(40)
+const diceExample = ref('1d8+1')
 
 const modalOpen = ref(false)
 const drawerOpen = ref(false)
@@ -102,11 +113,22 @@ async function askName(): Promise<void> {
           <UiField label="Author notes">
             <UiTextarea v-model="draft.notes" placeholder="Only visible in the editor." />
           </UiField>
+          <UiField label="Damage (dice)" hint="`mono` for IDs, dice and codes.">
+            <UiInput v-model="diceExample" mono />
+          </UiField>
+          <UiField label="Special attack chance">
+            <UiRange v-model="chance" :step="5" unit="%" />
+          </UiField>
           <UiToggle v-model="draft.clock" label="In-game clock" description="Advance time with every message." />
           <UiSection title="Advanced" description="2 options" collapsible>
             <UiCheckbox v-model="draft.autosave" label="Save before each chapter" />
           </UiSection>
         </div>
+      </UiCard>
+
+      <UiCard title="Tabs" description="Arrow keys move between tabs; the caller renders the panels.">
+        <UiTabs v-model="activeTab" :tabs="tabs" label="Demo tabs" />
+        <p class="wb-body mt-4 text-wb-muted">Panel: {{ activeTab }}</p>
       </UiCard>
 
       <UiCard title="Dialogs and feedback">

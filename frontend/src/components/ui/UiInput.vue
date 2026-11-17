@@ -15,8 +15,10 @@ const props = withDefaults(
     disabled?: boolean
     placeholder?: string
     size?: 'sm' | 'md'
+    /** Monospace text for IDs, dice and codes. */
+    mono?: boolean
   }>(),
-  { type: 'text', id: undefined, invalid: false, required: false, disabled: false, placeholder: '', size: 'md' },
+  { type: 'text', id: undefined, invalid: false, required: false, disabled: false, placeholder: '', size: 'md', mono: false },
 )
 
 const control = useFieldControl(props)
@@ -25,6 +27,7 @@ const classes = computed(() => [
   CONTROL_CLASS,
   controlBorder(control.invalid.value),
   props.size === 'sm' ? 'h-8 px-2.5' : 'h-9 px-3',
+  props.mono ? '!font-mono' : '',
 ])
 
 function handleInput(event: Event): void {

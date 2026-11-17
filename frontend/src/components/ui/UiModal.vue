@@ -14,7 +14,7 @@ const props = withDefaults(
   defineProps<{
     title: string
     description?: string
-    size?: 'sm' | 'md' | 'lg'
+    size?: 'sm' | 'md' | 'lg' | 'xl'
     /** No close on Esc, backdrop or X (e.g. while saving). */
     persistent?: boolean
     /** Use alertdialog semantics (questions that need an answer). */
@@ -29,7 +29,7 @@ const panel = ref<HTMLElement | null>(null)
 const titleId = `modal-${useId()}`
 const descriptionId = `${titleId}-description`
 
-const SIZE_CLASS = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl' }
+const SIZE_CLASS = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-4xl' }
 const panelClass = computed(() => SIZE_CLASS[props.size])
 
 function requestClose(): void {

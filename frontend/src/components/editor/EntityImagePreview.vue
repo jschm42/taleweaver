@@ -24,13 +24,13 @@ function openLightbox() {
   <button
     v-if="imageUrl"
     type="button"
-    class="group relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden border border-white/10 bg-black/40 hover:border-emerald-500/60 transition-colors"
-    :title="`View ${label || 'image'} in full size`"
+    class="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-wb-line bg-wb-raised transition-colors hover:border-wb-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent"
+    :aria-label="`View ${label || 'image'} in full size`"
     @click="openLightbox"
   >
-    <img :src="imageUrl" :alt="label || 'Entity image'" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+    <img :src="imageUrl" :alt="label || 'Entity image'" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
     <span class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-      <Maximize2 class="w-4 h-4 text-white" />
+      <Maximize2 class="h-4 w-4 text-wb-strong" />
     </span>
   </button>
 

@@ -36,6 +36,28 @@ export const MIGRATED = [
   'src/components/editor/WorldBuilderDrawer.vue',
   'src/components/editor/editorNavigation.ts',
   'src/composables/editor',
+  // Entity form (phase 4)
+  'src/components/editor/entity',
+  'src/components/editor/EditEntityModal.vue',
+  // Shared fields used by the entity form
+  'src/components/editor/AppearanceField.vue',
+  'src/components/editor/EditorIdInput.vue',
+  'src/components/editor/EntityImagePreview.vue',
+  'src/components/editor/EntityReferenceCombobox.vue',
+  'src/components/editor/HardRuleTriggersEditor.vue',
+  'src/components/editor/InteractTriggerFields.vue',
+  'src/components/editor/NpcCombatProfile.vue',
+  'src/components/editor/NpcCombatSettings.vue',
+  'src/components/editor/NpcCompanionSettings.vue',
+  'src/components/editor/NpcVoicePicker.vue',
+  'src/components/editor/ReceiveItemTriggerFields.vue',
+  'src/components/editor/RecipeEditorPanel.vue',
+  'src/components/editor/RecruitTriggerFields.vue',
+  'src/components/editor/ReferenceTextarea.vue',
+  'src/components/editor/SpecialAttackForm.vue',
+  'src/components/editor/SpecialAttacksEditor.vue',
+  'src/components/editor/SwitchStatesEditor.vue',
+  'src/components/editor/WeaponCombatSettings.vue',
 ]
 
 const PALETTE =

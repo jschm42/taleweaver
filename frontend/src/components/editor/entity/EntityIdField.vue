@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { useEntityFormContext } from '@/composables/editor/entityFormContext'
 import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import UiField from '@/components/ui/UiField.vue'
 import { MAX_EDITOR_ID_LENGTH } from '@/utils/editor_utils'
 
 const ef = useEntityFormContext()
 </script>
 
 <template>
-  <!-- Editable ID (create mode or scene/npc/object edit mode) -->
-  <div v-if="ef.props.isCreateEntityMode || ['npc', 'object', 'scene'].includes(ef.type)" class="space-y-2">
-    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
-      {{ ef.type === 'scene' ? 'Scene ID' : 'Entity ID' }} <span class="text-red-400">*</span>
-    </label>
+  <UiField
+    v-if="ef.props.isCreateEntityMode || ['npc', 'object', 'scene'].includes(ef.type)"
+    :label="ef.type === 'scene' ? 'Scene ID' : 'ID'"
+    required
+    :hint="`Unique; A–Z, 0–9 and underscores, up to ${MAX_EDITOR_ID_LENGTH} characters.`"
+  >
     <EditorIdInput
       v-model="ef.localForm.entity_id"
       :prefix="ef.entityIdPrefix"
@@ -21,10 +23,7 @@ const ef = useEntityFormContext()
       :max-length="MAX_EDITOR_ID_LENGTH"
       :required="true"
       :placeholder="`${ef.entityIdPrefix}001`"
-      :aria-label="ef.type === 'scene' ? 'Scene ID' : 'Entity ID'"
+      :aria-label="ef.type === 'scene' ? 'Scene ID' : 'ID'"
     />
-    <p class="text-[10px] text-slate-500 uppercase tracking-wider">
-      Unique identifier. Uppercase A-Z, digits 0-9, and underscores only (max 20 chars).
-    </p>
-  </div>
+  </UiField>
 </template>

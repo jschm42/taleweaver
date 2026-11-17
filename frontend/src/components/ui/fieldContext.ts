@@ -44,6 +44,11 @@ export const CONTROL_INPUT_CLASS =
   'w-full rounded-md bg-wb-raised border border-wb-line-strong text-wb-strong wb-body placeholder:text-wb-faint ' +
   'h-9 px-3 transition-colors focus:outline-none focus:ring-2 focus:border-wb-accent focus:ring-wb-accent/40'
 
+/** Multi-line counterpart of CONTROL_INPUT_CLASS (e.g. `class-name` of ReferenceTextarea). */
+export const CONTROL_TEXTAREA_CLASS =
+  'w-full rounded-md bg-wb-raised border border-wb-line-strong text-wb-strong wb-body placeholder:text-wb-faint ' +
+  'px-3 py-2 resize-y transition-colors focus:outline-none focus:ring-2 focus:border-wb-accent focus:ring-wb-accent/40'
+
 /** Border and focus ring: accent normally, danger for an invalid value. */
 export function controlBorder(invalid: boolean): string {
   return invalid

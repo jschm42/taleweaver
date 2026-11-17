@@ -2,6 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, ChevronRight, Lock, Plus, Save, Trash2 } from 'lucide-vue-next'
 import type { SpecialAttack } from '@/types'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiIconButton from '@/components/ui/UiIconButton.vue'
+import UiSection from '@/components/ui/UiSection.vue'
 import SpecialAttackForm, { type SpecialAttackDraft } from '@/components/editor/SpecialAttackForm.vue'
 import { specialAttackService, type SpecialAttackOwner } from '@/services/specialAttackService'
 import {
@@ -191,62 +195,56 @@ function summary(d: SpecialAttackDraft): string {
 </script>
 
 <template>
-  <section class="space-y-3">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <h4 class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Special Attacks · {{ ownerName }}</h4>
+  <UiSection title="Special attacks" :description="`Abilities ${ownerName} can use besides the main attack.`">
+    <template #actions>
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-[10px] text-slate-500 uppercase tracking-widest mr-1">Add</span>
-        <button
+        <span class="wb-hint mr-1">Add</span>
+        <UiButton
           v-for="name in Object.keys(PRESETS)"
           :key="name"
-          type="button"
-          class="px-2 py-1 rounded-lg border border-white/10 bg-slate-800/60 text-[11px] font-bold text-slate-300 hover:border-emerald-400/50 hover:text-white disabled:opacity-40"
+          size="sm"
           :disabled="drafts.length >= MAX_ATTACKS"
           @click="addAttack(name)"
-        >{{ name }}</button>
+        >
+          {{ name }}
+        </UiButton>
+        <UiButton size="sm" :icon="Plus" :disabled="drafts.length >= MAX_ATTACKS" @click="addAttack()">Blank</UiButton>
+      </div>
+    </template>
+
+    <UiEmptyState v-if="!drafts.length" title="No special attacks yet" description="Add a preset or start from a blank attack." />
+
+    <article v-for="(d, idx) in drafts" :key="d._key" class="rounded-xl border border-wb-line bg-wb-raised">
+      <div class="flex items-center gap-2 px-3 py-2">
         <button
           type="button"
-          class="px-2 py-1 rounded-lg border border-emerald-500/40 bg-emerald-950/40 text-[11px] font-bold text-emerald-300 flex items-center gap-1 disabled:opacity-40"
-          :disabled="drafts.length >= MAX_ATTACKS"
-          @click="addAttack()"
-        ><Plus class="w-3 h-3" /> Blank</button>
-      </div>
-    </div>
-
-    <p v-if="!drafts.length" class="text-xs text-slate-500 italic">No special attacks yet. Add a preset or start from scratch.</p>
-
-    <article v-for="(d, idx) in drafts" :key="d._key" class="rounded-xl border border-white/10 bg-slate-950/40">
-      <header class="flex items-center gap-2 px-3 py-2 cursor-pointer" @click="expanded = expanded === d._key ? null : d._key">
-        <component :is="expanded === d._key ? ChevronDown : ChevronRight" class="w-4 h-4 text-slate-500" />
-        <i :class="['ra text-base text-slate-300', CATEGORY_META[normalizeSpecialAttack(d).category].icon]"></i>
-        <span class="font-bold text-sm text-white truncate">{{ d.name || 'Unnamed' }}</span>
-        <Lock v-if="targetType === 'protagonist' && d.is_locked" class="w-3.5 h-3.5 text-amber-400" />
-        <span class="text-[10px] font-mono text-slate-400 truncate">{{ summary(d) }}</span>
-        <button type="button" class="ml-auto p-1 text-slate-500 hover:text-rose-400" title="Remove attack" @click.stop="removeAttack(d._key)">
-          <Trash2 class="w-4 h-4" />
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent"
+          :aria-expanded="expanded === d._key"
+          @click="expanded = expanded === d._key ? null : d._key"
+        >
+          <component :is="expanded === d._key ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0 text-wb-muted" />
+          <i :class="['ra text-base text-wb-muted', CATEGORY_META[normalizeSpecialAttack(d).category].icon]" aria-hidden="true" />
+          <span class="wb-label truncate !text-wb-strong">{{ d.name || 'Unnamed' }}</span>
+          <Lock v-if="targetType === 'protagonist' && d.is_locked" class="h-3.5 w-3.5 shrink-0 text-wb-warn" aria-label="Locked" />
+          <span class="wb-mono truncate text-wb-muted">{{ summary(d) }}</span>
         </button>
-      </header>
-      <SpecialAttackForm
-        v-if="expanded === d._key"
-        v-model="drafts[idx]"
-        :is-protagonist="targetType === 'protagonist'"
-        :reference-options="referenceOptions"
-        :taken-ids="drafts.filter((o) => o._key !== d._key).map((o) => o.id)"
-      />
+        <UiIconButton :icon="Trash2" label="Remove attack" size="sm" variant="danger" @click="removeAttack(d._key)" />
+      </div>
+      <div v-if="expanded === d._key" class="border-t border-wb-line p-4">
+        <SpecialAttackForm
+          v-model="drafts[idx]"
+          :is-protagonist="targetType === 'protagonist'"
+          :reference-options="referenceOptions"
+          :taken-ids="drafts.filter((o) => o._key !== d._key).map((o) => o.id)"
+        />
+      </div>
     </article>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-40"
-        :disabled="saving || problems.length > 0"
-        @click="save"
-      >
-        <Save class="w-3.5 h-3.5" /> {{ saving ? 'Saving…' : 'Save Special Attacks' }}
-      </button>
-      <span v-if="savedNote" class="text-xs text-emerald-400">{{ savedNote }}</span>
-      <span v-if="error" class="text-xs text-rose-400">{{ error }}</span>
-      <span v-for="p in problems" :key="p" class="text-xs text-amber-400">{{ p }}</span>
+      <UiButton :icon="Save" :loading="saving" :disabled="problems.length > 0" @click="save">Save special attacks</UiButton>
+      <span v-if="savedNote" class="wb-hint !text-wb-accent-text" role="status">{{ savedNote }}</span>
+      <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>
+      <span v-for="p in problems" :key="p" class="wb-hint !text-wb-warn-text">{{ p }}</span>
     </div>
-  </section>
+  </UiSection>
 </template>

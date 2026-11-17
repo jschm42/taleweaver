@@ -1,45 +1,53 @@
 <script setup lang="ts">
+import { Sparkles } from 'lucide-vue-next'
 import { useEntityFormContext } from '@/composables/editor/entityFormContext'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiSection from '@/components/ui/UiSection.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const ef = useEntityFormContext()
+
+const FORMATS = [
+  { value: 'DOCUMENT', label: 'Document' },
+  { value: 'SCROLL', label: 'Scroll' },
+  { value: 'BOOK', label: 'Book' },
+  { value: 'SIGN', label: 'Sign' },
+]
+
+// Box from the Workbench tokens; font and color come from the in-game format preview.
+const TEXT_BOX =
+  'w-full rounded-md bg-wb-raised border border-wb-line-strong px-3 py-2 resize-y placeholder:text-wb-faint ' +
+  'focus:outline-none focus:ring-2 focus:border-wb-accent focus:ring-wb-accent/40'
 </script>
 
 <template>
-
-  <!-- READABLE -->
-  <div v-if="ef.currentItemType === 'READABLE'" class="space-y-2">
-    <div class="space-y-2">
-      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Format</label>
-      <select v-model="ef.localForm.text_log_format" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-cyan-500/50 outline-none transition-all">
-        <option value="DOCUMENT">DOCUMENT</option>
-        <option value="SCROLL">SCROLL</option>
-        <option value="BOOK">BOOK</option>
-        <option value="SIGN">SIGN</option>
-      </select>
-    </div>
-    <div class="flex justify-between items-center">
-      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Content</label>
-      <span :class="['text-xs font-bold tracking-widest', (ef.localForm.text_log_content || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
-        {{ (ef.localForm.text_log_content || '').length }} / 1000
-      </span>
-    </div>
-    <ReferenceTextarea
-      v-model="ef.localForm.text_log_content"
-      :maxlength="1000"
-      :rows="3"
-      :options="ef.props.referenceOptions || []"
-      :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all', ef.textLogPreviewClass].join(' ')"
-      placeholder="Readable note text shown to the player."
-    />
-    <button
-      v-if="ef.localForm.name"
-      @click="ef.handleGenerateTextLogContent"
-      :disabled="ef.isGenerating['text_log']"
-      class="w-full py-2 bg-cyan-500/5 border border-cyan-500/10 hover:bg-cyan-500/10 hover:border-cyan-500/30 rounded-xl text-[10px] font-black text-cyan-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
-    >
-      <i class="ra ra-crystals" :class="{ 'animate-spin': ef.isGenerating['text_log'] }"></i>
-      <span>Quick-Gen Text Log</span>
-    </button>
-  </div>
+  <UiSection v-if="ef.currentItemType === 'READABLE'" title="Readable text" class="border-t border-wb-line pt-6">
+    <UiField label="Format" hint="The preview below shows how it looks in the game." class="sm:max-w-xs">
+      <UiSelect v-model="ef.localForm.text_log_format" :options="FORMATS" />
+    </UiField>
+    <UiField label="Text" :count="(ef.localForm.text_log_content || '').length" :max-length="1000">
+      <div class="space-y-2">
+        <ReferenceTextarea
+          v-model="ef.localForm.text_log_content"
+          :maxlength="1000"
+          :rows="4"
+          :options="ef.props.referenceOptions || []"
+          :class-name="`${TEXT_BOX} ${ef.textLogPreviewClass}`"
+          placeholder="The text the player reads."
+        />
+        <UiButton
+          v-if="ef.localForm.name"
+          variant="ai"
+          size="sm"
+          :icon="Sparkles"
+          :loading="ef.isGenerating['text_log']"
+          @click="ef.handleGenerateTextLogContent"
+        >
+          Generate text
+        </UiButton>
+      </div>
+    </UiField>
+  </UiSection>
 </template>
