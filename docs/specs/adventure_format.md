@@ -278,8 +278,9 @@ data from other forks and shared runtimes is not lost.
 "extensions": {
   "agent_runtime": {
     "schema_version": 1,
-    "archetype": "reactive_npc",
-    "memory_depth": 5
+    "fallback": "core",
+    "required_features": ["npc.autonomy.v1"],
+    "autonomy": { "enabled": true, "max_active_npcs": 3 }
   },
   "comfyui-scenes": {
     "schema_version": 1,
@@ -306,6 +307,39 @@ Implementations that do not recognize an extension namespace ignore it. Put fork
 feature-specific data here rather than adding new top-level keys: unknown top-level keys
 are ignored on import but are not written back on export. For per-entity data, NPCs and
 objects also accept a free-form `metadata_json` object that survives import and export.
+
+`agent_runtime` is the namespace of a shared contract for NPC-side runtime behavior
+(autonomous NPCs, NPC psychology, retrieval, a living world), specified in the
+[Portable agent runtime contract, version 1](https://github.com/Gam1409/taleweaver/blob/5cd0453db6f24c5068dd5d09dce2527366c2aca7/docs/specs/agent_runtime.md).
+It is unrelated to the Play-Agent, which plays an adventure for the player. TaleWeaver
+keeps the block but does not run it, and does not evaluate its `fallback` setting.
+
+#### NPC extension namespaces (`npcs[].metadata_json.<namespace>`)
+
+Per-NPC data of a fork or shared runtime goes into the NPC's `metadata_json`, under its
+namespace and next to the engine's own NPC settings:
+
+```json
+{
+  "id": "NPC_GUARD",
+  "metadata_json": {
+    "agent_runtime": {
+      "schema_version": 1,
+      "autonomy": "reactive",
+      "initial_state": { "situation": "Guards the gate since dawn." }
+    }
+  }
+}
+```
+
+| Rule | Detail |
+| :--- | :--- |
+| Detection | A `metadata_json` key is an extension namespace when its value is a JSON object with a `schema_version`. Engine settings never carry one, so the field is required here. |
+| Namespaces | Same key pattern as top-level `extensions` (lower case, 1-64 characters, `a-z`, `0-9`, `_`, `.`, `-`). |
+| Preservation | The object is kept unchanged on import, while the adventure is edited and on export, including unknown fields and `null` values. |
+| Limits | At most 32 namespaces and 64 KB (UTF-8 JSON) per NPC. |
+| Invalid entries | Namespaces with an invalid key or past the limits are dropped on import and export. The NPC and the rest of the manifest are not affected. |
+| References | IDs inside a namespace (other NPCs, items) are opaque. Renaming an entity in the editor does not update them. |
 
 ---
 
