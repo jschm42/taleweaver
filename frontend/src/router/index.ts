@@ -48,6 +48,10 @@ const router = createRouter({
       component: () => import('@/views/AdventureEditorView.vue'),
       props: true,
     },
+    // Workbench component showcase (docs/specs/workbench_ui.md); dev server only.
+    ...(import.meta.env.DEV
+      ? [{ path: '/dev/ui', name: 'dev-ui', component: () => import('@/views/dev/UiShowcaseView.vue') }]
+      : []),
     {
       path: '/login',
       name: 'login',

@@ -9,6 +9,7 @@ export default {
         fantasy: ['Cinzel', 'Newsreader', 'serif'],
         ui: ['Acme', 'sans-serif'],
         sans: ['Acme', 'sans-serif'], // Default to UI font
+        wb: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'], // Workbench body font
       },
       fontSize: {
         'xxs': ['0.75rem', { lineHeight: '1rem' }],    // 12px
@@ -17,6 +18,44 @@ export default {
         'base': ['1.0625rem', { lineHeight: '1.5rem' }], // 17px
       },
       colors: {
+        // Workbench tokens (docs/specs/workbench_ui.md); values live in src/assets/workbench.css.
+        wb: {
+          canvas: 'rgb(var(--wb-canvas) / <alpha-value>)',
+          surface: 'rgb(var(--wb-surface) / <alpha-value>)',
+          raised: 'rgb(var(--wb-raised) / <alpha-value>)',
+          overlay: 'rgb(var(--wb-overlay) / <alpha-value>)',
+          line: 'var(--wb-line)',
+          'line-strong': 'var(--wb-line-strong)',
+          strong: 'rgb(var(--wb-strong) / <alpha-value>)',
+          body: 'rgb(var(--wb-body) / <alpha-value>)',
+          muted: 'rgb(var(--wb-muted) / <alpha-value>)',
+          faint: 'rgb(var(--wb-faint) / <alpha-value>)',
+          accent: {
+            DEFAULT: 'rgb(var(--wb-accent) / <alpha-value>)',
+            text: 'rgb(var(--wb-accent-text) / <alpha-value>)',
+            soft: 'rgb(var(--wb-accent) / 0.12)',
+          },
+          ai: {
+            DEFAULT: 'rgb(var(--wb-ai) / <alpha-value>)',
+            text: 'rgb(var(--wb-ai-text) / <alpha-value>)',
+            soft: 'rgb(var(--wb-ai) / 0.12)',
+          },
+          info: {
+            DEFAULT: 'rgb(var(--wb-info) / <alpha-value>)',
+            text: 'rgb(var(--wb-info-text) / <alpha-value>)',
+            soft: 'rgb(var(--wb-info) / 0.12)',
+          },
+          warn: {
+            DEFAULT: 'rgb(var(--wb-warn) / <alpha-value>)',
+            text: 'rgb(var(--wb-warn-text) / <alpha-value>)',
+            soft: 'rgb(var(--wb-warn) / 0.12)',
+          },
+          danger: {
+            DEFAULT: 'rgb(var(--wb-danger) / <alpha-value>)',
+            text: 'rgb(var(--wb-danger-text) / <alpha-value>)',
+            soft: 'rgb(var(--wb-danger) / 0.12)',
+          },
+        },
         aether: {
           background: '#081425',
           surface: '#152031',
@@ -32,6 +71,7 @@ export default {
         }
       },
       boxShadow: {
+        'wb-float': '0 16px 40px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.06)',
         'ambient-emerald': '0 0 20px rgba(78, 222, 163, 0.15)',
         'ambient-purple': '0 0 20px rgba(208, 188, 255, 0.15)',
         'glass': 'inset 0 0 0 1px rgba(255, 255, 255, 0.05)',

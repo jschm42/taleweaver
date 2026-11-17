@@ -14,6 +14,8 @@ module.exports = {
   },
   rules: {
     'vue/multi-word-component-names': 'off',
+    // Questions to the user go through useConfirm()/usePrompt() (docs/specs/workbench_ui.md).
+    'no-alert': 'error',
     'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
     'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off'
   }

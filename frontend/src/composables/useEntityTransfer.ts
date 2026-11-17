@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import { entityService } from '@/services/entityService'
 import type { EntityBundleKind } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
+import { confirmDialog } from '@/composables/useDialogs'
 import { makeSafeFilename } from '@/utils/editor_utils'
 
 const BUNDLE_EXTENSION = 'twe'
@@ -11,14 +12,14 @@ const KIND_LABELS: Record<EntityBundleKind, string> = {
   npc: 'NPC',
   item: 'Item',
 }
-const PROTAGONIST_IMPORT_CONFIRM =
-  'Importing replaces the current protagonist profile, stats, and portrait. Inventory and equipment are kept. Continue?'
+const PROTAGONIST_IMPORT_MESSAGE =
+  'Importing replaces the current protagonist profile, stats, and portrait. Inventory and equipment are kept.'
 
 export interface UseEntityTransferResult {
   isTransferring: Ref<boolean>
   exportEntity: (kind: EntityBundleKind, entityId: string | null, label: string) => Promise<void>
   /** ``sceneId`` places an imported NPC or item in that scene (scene editor). */
-  importEntity: (kind: EntityBundleKind, sceneId?: string) => void
+  importEntity: (kind: EntityBundleKind, sceneId?: string) => Promise<void>
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -71,8 +72,15 @@ export function useEntityTransfer(
     }
   }
 
-  function importEntity(kind: EntityBundleKind, sceneId?: string): void {
-    if (kind === 'protagonist' && !confirm(PROTAGONIST_IMPORT_CONFIRM)) {
+  async function importEntity(kind: EntityBundleKind, sceneId?: string): Promise<void> {
+    const confirmed =
+      kind !== 'protagonist' ||
+      (await confirmDialog({
+        title: 'Replace the protagonist?',
+        message: PROTAGONIST_IMPORT_MESSAGE,
+        confirmLabel: 'Choose file',
+      }))
+    if (!confirmed) {
       return
     }
     const input = document.createElement('input')

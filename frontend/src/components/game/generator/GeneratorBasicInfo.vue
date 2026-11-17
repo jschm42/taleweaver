@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
 import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
 
@@ -48,9 +48,9 @@ const emit = defineEmits<{
             <Sparkles class="w-3.5 h-3.5 text-cyan-400" />
             <span>Story Blueprint & World Vision</span>
           </label>
-          <InfoPopoverButton title="Structured Syntax">
+          <UiInfoPopover title="Structured Syntax">
             <BlueprintSyntaxHelp />
-          </InfoPopoverButton>
+          </UiInfoPopover>
         </div>
       </div>
       <textarea

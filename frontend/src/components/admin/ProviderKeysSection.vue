@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import KeyPolicySelect from './KeyPolicySelect.vue'
 import { useKeyPolicy } from './useKeyPolicy'
+import { confirmDialog } from '@/composables/useDialogs'
 
 const props = defineProps<{
   configuredKeys: Record<string, { masked: string; is_env: boolean }>
@@ -181,8 +182,14 @@ const handleSave = () => {
   closeConfig()
 }
 
-const handleDelete = (providerId: string) => {
-  if (confirm(`Remove the API key for ${providerId}? Models requiring this key will stop functioning.`)) {
+const handleDelete = async (providerId: string): Promise<void> => {
+  const confirmed = await confirmDialog({
+    title: `Remove the ${providerId} API key?`,
+    message: 'Models that need this key stop working until a new key is saved.',
+    confirmLabel: 'Remove key',
+    danger: true,
+  })
+  if (confirmed) {
     emit('delete', providerId)
   }
 }

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { api } from '@/composables/useApi'
+import { confirmDialog } from '@/composables/useDialogs'
 
 /**
  * UserService manages user administration operations:
@@ -86,7 +87,13 @@ class UserService {
    * Requires user confirmation before deletion.
    */
   async deleteUser(userId: string, username: string) {
-    if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
+    const confirmed = await confirmDialog({
+      title: `Delete user "${username}"?`,
+      message: 'The account and its game sessions are removed. This cannot be undone.',
+      confirmLabel: 'Delete user',
+      danger: true,
+    })
+    if (!confirmed) {
       return
     }
 

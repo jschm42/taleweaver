@@ -1,0 +1,138 @@
+/*
+ * Workbench design tokens and type scale (Admin, Editor, adventure creation, setup wizard).
+ * Concept: docs/specs/workbench_ui.md. Rules: .claude/rules/frontend-ui.md.
+ *
+ * Colors are RGB channel triplets so Tailwind can add opacity (`bg-wb-accent/20`); the
+ * semantic classes are mapped in tailwind.config.js (`bg-wb-surface`, `text-wb-muted`, ...).
+ * Plain CSS (no Tailwind directives), imported after main.css.
+ */
+
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+
+:root {
+  /* Surfaces, from the page background up to floating layers. */
+  --wb-canvas: 11 18 32;
+  --wb-surface: 17 26 43;
+  --wb-raised: 23 34 56;
+  --wb-overlay: 29 42 67;
+
+  /* Lines */
+  --wb-line: rgb(255 255 255 / 0.08);
+  --wb-line-strong: rgb(255 255 255 / 0.16);
+
+  /* Text */
+  --wb-strong: 241 245 249;
+  --wb-body: 203 213 225;
+  --wb-muted: 148 163 184;
+  --wb-faint: 100 116 139;
+
+  /* Meaningful colors: solid value and a lighter tint for text on dark surfaces. */
+  --wb-accent: 16 185 129;
+  --wb-accent-text: 52 211 153;
+  --wb-ai: 139 92 246;
+  --wb-ai-text: 196 181 253;
+  --wb-info: 14 165 233;
+  --wb-info-text: 125 211 252;
+  --wb-warn: 245 158 11;
+  --wb-warn-text: 252 211 77;
+  --wb-danger: 244 63 94;
+  --wb-danger-text: 253 164 175;
+
+  --wb-font: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --wb-font-display: 'Acme', 'Inter', sans-serif;
+  --wb-font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+/* Root of a Workbench page: Inter instead of the play-view display font. */
+.wb-root {
+  font-family: var(--wb-font);
+}
+:where(.wb-root) {
+  color: rgb(var(--wb-body));
+}
+
+/* ---------- Type scale (the only text sizes on Workbench pages) ----------
+ * Family, size (and the weight of headings) use normal class specificity: they must beat
+ * the global h1-h6 rules of main.css and Tailwind's preflight. Other weights and colors sit
+ * in :where() so utilities such as `text-white` or `font-medium`
+ * can still override them. */
+
+.wb-title {
+  font-family: var(--wb-font-display);
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+:where(.wb-title) {
+  color: rgb(var(--wb-strong));
+}
+
+.wb-heading {
+  font-family: var(--wb-font);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+:where(.wb-heading) {
+  color: rgb(var(--wb-strong));
+}
+
+.wb-subheading {
+  font-family: var(--wb-font);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+:where(.wb-subheading) {
+  color: rgb(var(--wb-strong));
+}
+
+.wb-body {
+  font-family: var(--wb-font);
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+:where(.wb-body) {
+  font-weight: 400;
+}
+
+.wb-label {
+  font-family: var(--wb-font);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+:where(.wb-label) {
+  font-weight: 500;
+  color: rgb(var(--wb-body));
+}
+
+.wb-hint {
+  font-family: var(--wb-font);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+:where(.wb-hint) {
+  font-weight: 400;
+  color: rgb(var(--wb-muted));
+}
+
+.wb-overline {
+  font-family: var(--wb-font);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:where(.wb-overline) {
+  font-weight: 600;
+  color: rgb(var(--wb-faint));
+}
+
+.wb-mono {
+  font-family: var(--wb-font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}

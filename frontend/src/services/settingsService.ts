@@ -336,13 +336,9 @@ class SettingsService {
 
   /**
    * Delete an API key for a provider.
-   * Requires user confirmation before deletion.
+   * The caller (ProviderKeysSection) has already asked the user.
    */
   async deleteApiKey(provider: string) {
-    if (!confirm(`Are you sure you want to remove the API key for ${provider}? This will stop related AI services from functioning.`)) {
-      return
-    }
-
     this.isSubmitting.value = true
 
     try {

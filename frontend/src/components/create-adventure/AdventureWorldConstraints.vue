@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { AlertTriangle, Box, Check } from 'lucide-vue-next'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 const props = withDefaults(
@@ -218,7 +218,7 @@ function updateAwardMax(val: number) {
           <span class="text-[10px] text-white/40 uppercase tracking-widest">Configure generation asset bounds</span>
         </div>
       </div>
-      <InfoPopoverButton title="World Constraints" :text="CREATE_ADVENTURE_HELP_TEXTS.sceneComplexity" />
+      <UiInfoPopover title="World Constraints" :text="CREATE_ADVENTURE_HELP_TEXTS.sceneComplexity" />
     </div>
 
     <div class="overflow-x-auto custom-scrollbar -mx-4 sm:mx-0 px-4 sm:px-0">

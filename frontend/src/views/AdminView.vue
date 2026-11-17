@@ -196,8 +196,10 @@ const handleSaveCatalogItem = async (item: CatalogTile) => {
 }
 
 const handleRemoveCatalogItem = async (index: number) => {
-  catalogService.removeItem(catalogModalType.value, index)
-  await catalogService.saveCurrentCatalog(catalogModalType.value)
+  const removed = await catalogService.removeItem(catalogModalType.value, index)
+  if (removed) {
+    await catalogService.saveCurrentCatalog(catalogModalType.value)
+  }
 }
 
 const openPromptModal = (type: 'styles' | 'tones', item: CatalogTile, index: number) => {
