@@ -4,6 +4,7 @@
  */
 import { computed, type ComputedRef } from 'vue'
 import type { EditorContext } from '@/composables/editor/editorContext'
+import { useEntityReferences, type EntityReference } from '@/composables/editor/useEntityReferences'
 import { EDITOR_ID_PREFIXES, MAX_EDITOR_ID_LENGTH, generateEditorId, isValidEditorId } from '@/utils/editor_utils'
 
 export const MAX_CHAPTERS = 15
@@ -13,11 +14,7 @@ export type ProgressionMode = 'linear' | 'dynamic'
 /** One chapter as stored in `AdventureTemplate.sequences`. */
 export type Chapter = Record<string, any>
 
-export interface ChapterReference {
-  id: string
-  name: string
-  type: 'OBJECT' | 'SCENE' | 'NPC'
-}
+export type ChapterReference = EntityReference
 
 export interface Chapters {
   chapters: ComputedRef<Chapter[]>
@@ -47,16 +44,6 @@ function parseSequences(raw: unknown): Chapter[] {
   return [...list].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
 }
 
-function references(list: any[], type: ChapterReference['type'], fallback: string): ChapterReference[] {
-  return list
-    .map((entry) => ({
-      id: String(entry.id || entry.entity_id || '').trim(),
-      name: String(entry.label || entry.name || entry.id || fallback),
-      type,
-    }))
-    .filter((entry) => Boolean(entry.id))
-}
-
 function renumber(list: Chapter[]): Chapter[] {
   return list.map((item, i) => ({ ...item, order: i + 1 }))
 }
@@ -69,11 +56,7 @@ export function useChapters(editor: EditorContext): Chapters {
     return raw === 'dynamic' ? 'dynamic' : 'linear'
   })
 
-  const pick = (editorList: unknown, fallbackKey: string): any[] =>
-    Array.isArray(editorList) && editorList.length ? editorList : (adventure.value?.[fallbackKey] ?? [])
-  const scenes = computed(() => references(pick(editor.editorScenes, 'scenes'), 'SCENE', 'Unnamed scene'))
-  const items = computed(() => references(pick(editor.editorAllItems, 'objects'), 'OBJECT', 'Unnamed item'))
-  const npcs = computed(() => references(pick(editor.editorNpcs, 'npcs'), 'NPC', 'Unnamed character'))
+  const { scenes, items, npcs } = useEntityReferences(editor)
 
   function newChapter(): Chapter {
     return editableCopy({
