@@ -1168,6 +1168,7 @@ function loadEntityEditor(type: string, id: string, currentName: string, current
     on_recruit_failure_script: selectedNpc?.on_recruit_failure_script || metadata?.on_recruit_failure_script || '',
     on_recruit_failure_text: selectedNpc?.on_recruit_failure_text || metadata?.on_recruit_failure_text || '',
     reveal_guard_expression: selectedNpc?.reveal_guard_expression || metadata?.reveal_guard_expression || '',
+    memory_slots: Number(selectedNpc?.memory_slots ?? metadata?.memory_slots ?? 0) || 0,
     on_interact_script: selectedNpc?.on_interact_script || selectedObject?.on_interact_script || metadata?.on_interact_script || '',
     on_interact_text: selectedNpc?.on_interact_text || selectedObject?.on_interact_text || metadata?.on_interact_text || '',
     unlock_expression: selectedObject?.unlock_expression || metadata?.unlock_expression || '',
@@ -1326,6 +1327,7 @@ async function saveEntityText(data: any) {
           reveal_guard_expression: data.reveal_guard_expression || undefined,
           on_interact_script: data.on_interact_script || undefined,
           on_interact_text: data.on_interact_text || undefined,
+          metadata_json: Number(data.memory_slots) > 0 ? { memory_slots: Number(data.memory_slots) } : undefined,
         })
       } else {
         const itemType = String(data.item_type || 'DEFAULT').toUpperCase()
@@ -1588,6 +1590,7 @@ async function saveEntityText(data: any) {
       on_recruit_failure_script: editEntityContext.value.type === 'npc' ? data.on_recruit_failure_script : undefined,
       on_recruit_failure_text: editEntityContext.value.type === 'npc' ? data.on_recruit_failure_text : undefined,
       reveal_guard_expression: editEntityContext.value.type === 'npc' ? data.reveal_guard_expression : undefined,
+      memory_slots: editEntityContext.value.type === 'npc' ? Number(data.memory_slots) || 0 : undefined,
       on_interact_script: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_script : undefined,
       on_interact_text: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_text : undefined,
       on_enter_scene_script: editEntityContext.value.type === 'scene' ? data.on_enter_scene_script : undefined,

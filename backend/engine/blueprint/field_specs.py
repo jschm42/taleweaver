@@ -328,6 +328,8 @@ NPC_KEYS: dict[str, FieldSpec] = {
         ),
     ),
     "special_chance": FieldSpec("special_chance", integer),
+    # NPC memory: lasting facts about the protagonist (0 = off).
+    "memory": FieldSpec("memory_slots", integer),
     # Companion (sidekick): any of these keys makes the NPC a companion.
     "companion": FieldSpec("companion.recruitable", boolean),
     "in_party": FieldSpec("companion.starts_in_party", boolean),

@@ -110,6 +110,7 @@ class EntityUpdateRequest(BaseModel):
     on_recruit_failure_script: Optional[str] = None
     on_recruit_failure_text: Optional[str] = None
     reveal_guard_expression: Optional[str] = None
+    memory_slots: Optional[int] = Field(default=None, ge=0, le=8)
     on_enter_scene_script: Optional[str] = None
     on_enter_scene_text: Optional[str] = None
     on_leave_scene_script: Optional[str] = None

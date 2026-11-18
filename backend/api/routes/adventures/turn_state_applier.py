@@ -30,6 +30,8 @@ from backend.api.routes.adventures.quest_completion import (
 from backend.api.routes.adventures.sequence_hooks import run_sequence_transition_hooks
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
 from backend.engine.sessions.scene_entry import enter_scene
+from backend.api.routes.adventures.npc_memory_flow import apply_npc_memories
+from backend.api.routes.adventures.world_memory_flow import apply_world_memories
 from backend.engine.party.orders import give_companion_order
 from backend.engine.rules.game_clock import apply_gm_time_request
 from backend.engine.rules.npc_damage import blocks_hp_loss, can_be_damaged
@@ -463,6 +465,9 @@ class TurnStateApplier:
             event.new_scene_id = None
             event.scene_label = None
             event.exit_label = None
+
+        # Before a scene change: the character the protagonist leaves still remembers it.
+        await apply_npc_memories(self.manager, event)
 
         # Before a scene change, so "wait here" in the same message leaves the companion behind.
         if event.companion_order and not getattr(self.manager, "arrival_narration", False):
@@ -1164,56 +1169,7 @@ class TurnStateApplier:
                     states[npc.id]["inventory"] = cleaned_inv
                     state_dirty = True
 
-        if event.new_world_memories:
-            import uuid
-
-            existing_memories = list(self.state.world_memories or [])
-            for mem in event.new_world_memories:
-                target_scene_id = mem.scene_id or (
-                    self.state.current_scene_id if self.state else None
-                )
-                # Deduplication check: prevent identical memories in the same scene/scope
-                is_duplicate = any(
-                    (m.get("description") or "").strip().lower()
-                    == (mem.description or "").strip().lower()
-                    and (m.get("scope") == mem.scope)
-                    and (
-                        mem.scope == "global"
-                        or (m.get("scene_id") or "") == (target_scene_id or "")
-                    )
-                    for m in existing_memories
-                )
-                if is_duplicate:
-                    logger.info(
-                        "[Turn %s] Skipping duplicate world memory: %s",
-                        self.game_id,
-                        mem.description,
-                    )
-                    continue
-
-                new_mem = {
-                    "id": str(uuid.uuid4()),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "description": mem.description,
-                    "npc_id": mem.npc_id,
-                    "emotion": mem.emotion,
-                    "scope": mem.scope,
-                    "scene_id": target_scene_id,
-                }
-                existing_memories.append(new_mem)
-                emotion_label = (
-                    "positiv"
-                    if mem.emotion == "positive"
-                    else ("negativ" if mem.emotion == "negative" else "neutral")
-                )
-                scope_label = "szenen-lokal" if mem.scope == "local" else "global"
-                msg = f"Erinnerung gespeichert ({scope_label}, {emotion_label}): {mem.description}"
-                await self._save_chat_message("system", msg)
-                system_messages.append(msg)
-            self.state.world_memories = existing_memories
-            flag_modified(self.state, "world_memories")
-            self._queue_checkpoint("world_memories_updated")
-            event.new_world_memories = None
+        system_messages.extend(await apply_world_memories(self, event))
 
         # Time Management: GM time requests, unless GM time control is off or time is paused.
         if apply_gm_time_request(self.state, self.adventure, event):

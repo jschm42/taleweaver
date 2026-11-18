@@ -459,6 +459,15 @@ class WorldNPCSchema(WorldBaseSchema):
             "Use null for every other NPC."
         ),
     )
+    memory_slots: Optional[int] = Field(
+        None,
+        description=(
+            "NPC memory (1-8): how many lasting facts about the protagonist (their name, deals, "
+            "how they were treated) this character remembers. Only for recurring characters the "
+            "player talks to (quest givers, allies, companions, rivals); null for enemies, "
+            "monsters and extras."
+        ),
+    )
     assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
         None,
         description=(

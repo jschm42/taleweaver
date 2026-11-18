@@ -19,6 +19,7 @@ from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.party.party_ops import apply_party_ops
 from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
+from backend.engine.rules.npc_memory import NPC_MEMORY_STATE_KEY, apply_npc_memory_ops
 from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
 from backend.engine.scripting.context import GameContext, ScriptChangeset
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -107,6 +108,7 @@ class TriggerService:
             audio_library=getattr(adventure, "audio_tracks", None) if adventure else None,
             party=session_overrides.get(PARTY_KEY),
             respawn=session_overrides.get(RESPAWN_KEY),
+            npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -321,6 +323,7 @@ class TriggerService:
         apply_audio_ops(cur_states, changeset.audio_ops)
         apply_party_ops(cur_states, changeset.party_ops)
         apply_respawn_point(cur_states, changeset.respawn_point)
+        apply_npc_memory_ops(cur_states, changeset.npc_memory_ops)
         store_skip_narration(cur_states, changeset.skip_narration)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")

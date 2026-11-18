@@ -15,6 +15,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.engine.audio.elevenlabs_voices import storable_voice_or_none
 from backend.engine.interaction.location_context import normalize_npc_type
+from backend.engine.rules.npc_memory import store_memory_slots
 from backend.models.world_entity import WorldEntity
 
 _NPC_SCRIPT_FIELDS = (
@@ -78,6 +79,8 @@ async def update_npc(
 
     metadata_json = dict(npc.metadata_json or {})
     put_metadata(metadata_json, payload, _NPC_SCRIPT_FIELDS, empty_as_none=False)
+    if given(payload, "memory_slots"):
+        store_memory_slots(metadata_json, payload.memory_slots)
     npc.metadata_json = metadata_json
     flag_modified(npc, "metadata_json")
 

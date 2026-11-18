@@ -28,6 +28,7 @@ from backend.engine.manifest_apply.visuals import (
 )
 from backend.engine.media.image_prompt_context import build_npc_image_prompt, clean_appearance
 from backend.engine.party.companion_config import COMPANION_KEY, normalize_companion
+from backend.engine.rules.npc_memory import MEMORY_SLOTS_KEY, normalize_memory_slots
 from backend.models.world_entity import WorldEntity
 
 # NPC settings that may appear at the top level (generated manifests) or inside
@@ -57,6 +58,7 @@ _METADATA_FIELDS = (
     "on_recruit_failure_script",
     "on_recruit_failure_text",
     "reveal_guard_expression",
+    MEMORY_SLOTS_KEY,
 )
 _METADATA_DEFAULTS: dict[str, Any] = {"special_actions": [], "attack_mode": "PASSIVE"}
 
@@ -88,6 +90,7 @@ def npc_metadata(npc: dict[str, Any]) -> dict[str, Any]:
             value = _METADATA_DEFAULTS.get(key)
         metadata[key] = value
     metadata[COMPANION_KEY] = normalize_companion(metadata.get(COMPANION_KEY))
+    metadata[MEMORY_SLOTS_KEY] = normalize_memory_slots(metadata.get(MEMORY_SLOTS_KEY))
     return metadata
 
 

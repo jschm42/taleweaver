@@ -9,6 +9,7 @@ import ProtagonistTraitsSection from './ProtagonistTraitsSection.vue'
 import NpcProfileSection from './NpcProfileSection.vue'
 import NpcMovementSection from './NpcMovementSection.vue'
 import NpcNotesSection from './NpcNotesSection.vue'
+import NpcMemorySection from './NpcMemorySection.vue'
 import NpcInventorySection from './NpcInventorySection.vue'
 import NpcVisibilitySection from './NpcVisibilitySection.vue'
 import ItemBasicsSection from './ItemBasicsSection.vue'
@@ -69,6 +70,7 @@ const tabs = computed(() => [
       <ProtagonistTraitsSection />
       <NpcProfileSection />
       <NpcNotesSection />
+      <NpcMemorySection />
       <NpcVisibilitySection />
       <div v-if="ef.type === 'object'" class="space-y-6">
         <ItemBasicsSection />

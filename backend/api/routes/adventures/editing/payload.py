@@ -26,6 +26,7 @@ from backend.core.database import get_db
 from backend.core.global_settings import apply_global_settings
 from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.media.media_engine import MediaEngine
+from backend.engine.rules.npc_memory import memory_slots
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -186,6 +187,7 @@ def _entity_extras(entity: WorldEntity, _data: dict[str, Any]) -> dict[str, Any]
             "npc_type": normalize_npc_type(entity.npc_type),
             "stats": {"hp": entity.hp, "mana": entity.mana, "stamina": entity.stamina},
             **_text_fields(dict(entity.metadata_json or {}), _NPC_METADATA_FIELDS),
+            "memory_slots": memory_slots(entity.metadata_json),
         }
     if entity.entity_type == "OBJECT":
         return _object_extras(entity)

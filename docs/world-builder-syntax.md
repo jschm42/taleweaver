@@ -84,7 +84,7 @@ Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak 
 Write the label as the passage itself, not as the way: `an old rusty gate`, `a narrow spiral staircase`, not `Way to the Combat Lab` or `Back to the hall`. A two-way exit shows the same label in both scenes, and the game already adds the target. The World-Builder AI follows the same rule for the labels it writes.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal_guard` (Python condition; the hidden NPC appears once it is True, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal_guard` (Python condition; the hidden NPC appears once it is True, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `memory` (NPC memory slots 1-8, see [NPC memory](#npc-memory)), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 **Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
 
@@ -130,6 +130,20 @@ in: ROAD
 ```
 
 Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. In the World-Editor, the **Stats** tab of a character holds HP, stamina, mana, the attributes and AC; every other combat setting (the **NPC can be damaged** switch, aggression, combat group, *Joins a fight*, main attack and special attacks) is in the **Combat** tab. Movement and inventory have their own tabs. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
+
+#### NPC memory
+
+```text
+[NPC: BRAN] Bran the Innkeeper
+in: INN
+memory: 4
+```
+
+`memory: <1-8>` lets a character keep that many short facts about the protagonist across scenes: the name the protagonist told it, a deal or promise, an important topic, how the protagonist treated it. The Game Master writes them while the protagonist talks to the character; a known topic is updated in place, and when all slots are full the oldest fact is forgotten. Each fact is one short English sentence (at most 120 characters), and at most 3 facts are stored per player message.
+
+The facts are only sent to the AI while the character is in the protagonist's scene, but every slot still costs prompt tokens. Give memory to recurring characters the player talks to more than once (quest givers, allies, rivals, companions: 2-4 slots, a companion up to 6) and leave it off for enemies, monsters and extras. The validator warns about memory on an NPC that attacks on sight (`npc_memory_on_hostile`). In the World-Editor the setting is **Memory** on the character's main tab. Scripts read and write the same facts with `tw.npcs.remember`, `recall`, `recalls`, `forget` and `memories` (see [scripting_engine.md](scripting_engine.md#twnpcs)), e.g. a guard `tw.npcs.recalls('BRAN', 'player_name')`.
+
+Characters without memory still remember the current scene's conversation. No character knows the protagonist's name, deeds or goals unless it witnessed them, has them in its memory, or the plot, the rules or its description establish that they know each other.
 
 #### Hidden entities and `reveal`
 

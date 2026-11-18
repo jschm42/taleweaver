@@ -428,6 +428,17 @@ character: Grieving, polite, talkative
 
 The GM reads `character` on every turn, so from then on Tobin talks like a bitter man, in this game only. Use `tw.npcs.add_trait('CLERK', 'drunk')` / `remove_trait(...)` for a single trait, or `set_goal(...)` to change what the NPC wants. The change affects dialogue, not combat: pair it with `attack_guard` (see above) if the NPC should also fight.
 
+### An innkeeper who remembers the hero
+
+```text
+[NPC: BRAN] Bran the Innkeeper
+in: INN
+character: Gruff, fair, never forgets a debt
+memory: 4
+```
+
+Bran keeps up to four short facts about the protagonist: the name once it was told, the room that is still unpaid, the insult from yesterday. When the hero comes back after three scenes, he greets them by name and asks for his money. Strangers without `memory` only know what happens in the current scene and never use the hero's name before they hear it. Leave `memory` off for enemies and extras: every slot costs prompt tokens while the character is present.
+
 ### A guard with a real weapon and armor (no items needed)
 
 ```text

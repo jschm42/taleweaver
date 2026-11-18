@@ -43,6 +43,7 @@ from backend.api.routes.adventures.editing.entity_update.protagonist import (
     update_protagonist_scripts,
 )
 from backend.engine.audio.audio_library import track_id_or_none
+from backend.engine.rules.npc_memory import store_memory_slots
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit
@@ -232,6 +233,11 @@ def _patch_npc_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     if "notes" in updates:
         ent.notes = str(updates["notes"]).strip() or None
     set_metadata(ent, NPC_SCRIPT_FIELDS, updates)
+    if "memory_slots" in updates:
+        metadata_json = dict(ent.metadata_json or {})
+        store_memory_slots(metadata_json, updates["memory_slots"])
+        ent.metadata_json = metadata_json
+        flag_modified(ent, "metadata_json")
 
 
 def _patch_container_lock(

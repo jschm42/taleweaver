@@ -101,7 +101,7 @@ fields are rejected (no silent typos).
   `stat_modifier_strength`, `_dexterity`, `_intelligence`, `_wisdom`, `_charisma`,
   `_armor_class` (also accepted by `create_entity`), plus `wearable_slots` (`Head`, `Chest`,
   `Arms`, `Legs`, `Hands`, `Feet`, `Ring_1`, `Ring_2`, `Neck`, `MainHand`, `OffHand`).
-- **npc**: `goal`, `character`, `inventory`, `reveal_guard_expression` (hidden NPC appears once it is True; the GM never discovers hidden NPCs), `on_interact_*`, `on_defeat_*`,
+- **npc**: `goal`, `character`, `inventory`, `reveal_guard_expression` (hidden NPC appears once it is True; the GM never discovers hidden NPCs), `memory_slots` (0-8: facts about the protagonist the character remembers; 0 = off, leave it off for enemies), `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.
   The companion block is not an `update` field either: use `set_npc_companion`.

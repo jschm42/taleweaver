@@ -191,7 +191,9 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
       on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
       on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text,
       on_recruit_success_script, on_recruit_success_text, on_recruit_failure_script,
-      on_recruit_failure_text (companions with a Recruit action only)
+      on_recruit_failure_text (companions with a Recruit action only), memory_slots (0-8;
+      how many facts about the protagonist the character remembers, 0 = off; only for
+      recurring characters the player talks to, never enemies)
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
       rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
       on_exit_used_script, on_exit_used_text, on_unlock_success_script,

@@ -9,6 +9,8 @@ def test_game_master_system_prompt_keeps_walkthrough_confidentiality_guardrail()
     assert "provide subtle hints and broad strategy only" in template
     assert "OFF-SCENE NPC DIALOGUE RULE (CRITICAL)" in template
     assert "Only NPCs listed in the current location as PRESENT may speak directly" in template
+    assert "NPC KNOWLEDGE (CRITICAL)" in template
+    assert "treats the protagonist as a stranger" in template
 
 
 def test_chat_narration_suffix_enforces_hint_only_behavior() -> None:
@@ -25,7 +27,9 @@ def test_chat_tool_intent_suffix_blocks_walkthrough_spoilers() -> None:
 
 def test_chat_rule_pass_prompt_requires_executed_movement_for_scene_change() -> None:
     chat_rule_pass = prompts.GM_CHAT_PROGRESSION_RULES_PROMPT
-    assert "Set `new_scene_id` ONLY when the movement is actually executed this turn" in chat_rule_pass
+    assert (
+        "Set `new_scene_id` ONLY when the movement is actually executed this turn" in chat_rule_pass
+    )
     assert "not for plans, intentions, hypotheticals, or future goals" in chat_rule_pass
 
 
@@ -113,6 +117,8 @@ def test_world_generation_prompts_define_directional_exit_contract() -> None:
 
     assert "Every exit object represents ONE defined path." in system_prompt
     assert "Use `is_bidirectional: true` (the default) for all normal passages" in system_prompt
-    assert "Set `is_bidirectional: false` ONLY for intentionally one-way transitions" in system_prompt
+    assert (
+        "Set `is_bidirectional: false` ONLY for intentionally one-way transitions" in system_prompt
+    )
     assert "Use `is_bidirectional: true` (default) for every normal passage" in user_prompt
     assert "Only set `is_bidirectional: false` for genuinely one-way transitions" in user_prompt

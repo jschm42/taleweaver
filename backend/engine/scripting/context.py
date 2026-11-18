@@ -29,6 +29,7 @@ from backend.engine.scripting.npc_combat_group import (
     NPCCombatGroupMixin,
 )
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
+from backend.engine.scripting.npc_memory_proxy import NPCMemoryManagerMixin, NPCMemoryMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
 from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
@@ -141,6 +142,8 @@ class ScriptChangeset:
     party_ops: list[dict[str, Any]] = field(default_factory=list)
     # tw.game.set_respawn_point: new revival point ("" = back to the start scene).
     respawn_point: Optional[str] = None
+    # Ordered tw.npcs memory operations, replayed by npc_memory.apply_npc_memory_ops.
+    npc_memory_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -200,6 +203,7 @@ class ScriptChangeset:
             or self.audio_ops
             or self.party_ops
             or self.respawn_point is not None
+            or self.npc_memory_ops
             or self.skip_narration
         )
 
@@ -569,6 +573,7 @@ class NPCProxy(
     NPCDirectionMixin,
     NPCVitalsMixin,
     NPCVisibilityMixin,
+    NPCMemoryMixin,
     ItemHolderMixin,
 ):
     """Safe proxy for Non-Player Characters."""
@@ -1174,6 +1179,7 @@ class NPCManagerProxy(
     NPCDirectionManagerMixin,
     NPCVitalsManagerMixin,
     NPCVisibilityManagerMixin,
+    NPCMemoryManagerMixin,
     EntityManagerProxy,
 ):
     """``tw.npcs``: entity access plus the NPC persona, directed-speech and vitals shortcuts."""
@@ -1416,12 +1422,20 @@ class MemoriesProxy:
     def __init__(self, changeset: ScriptChangeset):
         self._changeset = changeset
 
-    def add(self, description: str, scope: str = "global", emotion: str = "neutral") -> None:
+    def add(
+        self,
+        description: str,
+        scope: str = "global",
+        emotion: str = "neutral",
+        npc_id: Optional[str] = None,
+    ) -> None:
+        """Records a lasting consequence; with ``npc_id`` it is only shown while that NPC is present."""
         self._changeset.new_memories.append(
             {
                 "description": str(description).strip(),
                 "scope": scope if scope in ("local", "global") else "global",
                 "emotion": emotion if emotion in ("positive", "negative", "neutral") else "neutral",
+                "npc_id": str(npc_id).strip().upper() if npc_id else None,
             }
         )
 
@@ -1805,6 +1819,7 @@ class GameContext:
         audio_library: Optional[list[dict[str, Any]]] = None,
         party: Optional[dict[str, Any]] = None,
         respawn: Optional[dict[str, Any]] = None,
+        npc_memory: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1838,6 +1853,8 @@ class GameContext:
             current_player_scene_id=current_scene_id,
         )
         self.items = self.objects
+        # NPC memory (entity_states["__npc_memory__"]) for npc.remember / recall / forget.
+        self.npcs.load_memories(npc_memory)
         mover = ItemMover(self.changeset, self.player, self.npcs, self.objects, current_scene_id)
         self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)
@@ -1856,6 +1873,7 @@ class GameContext:
         )
         self.log = LogProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.console = self.log
+        self.npcs.debug = lambda message: self.log.debug(message, in_game=True)
         self.memories = MemoriesProxy(self.changeset)
         # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
         self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)

@@ -200,11 +200,12 @@ def test_prompt_builders():
 
     # Assert
     assert "WORLD MEMORIES" in memories_tavern_prompt
-    assert "- Helped Bob (Emotion: positive)" in memories_tavern_prompt
-    assert "- Stole bread in the tavern (Emotion: negative)" in memories_tavern_prompt
+    assert "- Helped Bob (positive)" in memories_tavern_prompt
+    assert "- Stole bread in the tavern (negative)" in memories_tavern_prompt
     assert "Found a map" not in memories_tavern_prompt
 
     assert "WORLD MEMORIES" in memories_forest_prompt
-    assert "- Helped Bob (Emotion: positive)" in memories_forest_prompt
-    assert "- Found a map in the forest (Emotion: neutral)" in memories_forest_prompt
+    assert "- Helped Bob (positive)" in memories_forest_prompt
+    assert "- Found a map in the forest" in memories_forest_prompt
+    assert "neutral" not in memories_forest_prompt
     assert "Stole bread" not in memories_forest_prompt

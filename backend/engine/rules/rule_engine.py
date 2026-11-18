@@ -216,6 +216,16 @@ class WorldMemoryUpdate(BaseModel):
     scene_id: Optional[str] = None
 
 
+class NpcMemoryUpdate(BaseModel):
+    """One lasting fact a character with NPC MEMORY keeps about the protagonist."""
+
+    npc_id: str
+    key: str = Field(
+        "", description="Short topic slug, e.g. player_name, deal, treatment; reuse to update."
+    )
+    text: str = Field("", description="One short English sentence; empty forgets the key.")
+
+
 class AdventureGeneratorToolIntent(BaseModel):
     """Lightweight intent payload for adventure-generator tools in chat mode."""
 
@@ -388,6 +398,13 @@ class GameEvent(BaseModel):
     forget_notes: Optional[NoteTexts] = None
     clear_notes: bool = False
     new_world_memories: Optional[list[WorldMemoryUpdate]] = None
+    npc_memories: Optional[list[NpcMemoryUpdate]] = Field(
+        None,
+        description=(
+            "Lasting facts a character listed under NPC MEMORY (CURRENT STATE) will remember "
+            "about the protagonist. Usually null."
+        ),
+    )
 
     # Status Updates
     game_over: bool = False

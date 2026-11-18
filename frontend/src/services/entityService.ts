@@ -116,6 +116,7 @@ export interface EntityEditData {
   on_recruit_failure_script?: string | null
   on_recruit_failure_text?: string | null
   reveal_guard_expression?: string | null
+  memory_slots?: number | null
   on_interact_script?: string | null
   on_interact_text?: string | null
 }

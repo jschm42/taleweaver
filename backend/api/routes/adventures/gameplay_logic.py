@@ -5,7 +5,7 @@ import logging
 import random
 import re
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from datetime import datetime, UTC
 from typing import Any
 
@@ -77,7 +77,9 @@ from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.party.party_ops import apply_session_party_ops
 from backend.engine.party.party_state import PARTY_KEY
+from backend.engine.rules.npc_memory import NPC_MEMORY_STATE_KEY, apply_npc_memory_ops
 from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
+from backend.engine.rules.world_memories import add_world_memory, make_world_memory
 from backend.engine.audio.browser_tts import uses_vocal_tags
 from backend.engine.rules.walkthrough_unlocks import WALKTHROUGH_REVEAL_COST
 from backend.engine.sessions.session_checkpoint_service import SessionCheckpointService
@@ -723,9 +725,11 @@ class GameTurnManager:
     def _build_gm_notes_prompt_block(self) -> str:
         return self._session_helper.build_gm_notes_prompt_block()
 
-    def _build_world_memories_prompt_block(self) -> str:
+    def _build_world_memories_prompt_block(self, present_npc_ids: Iterable[str] = ()) -> str:
         current_scene_id = self.state.current_scene_id if self.state else "START"
-        return self._session_helper.build_world_memories_prompt_block(current_scene_id)
+        return self._session_helper.build_world_memories_prompt_block(
+            current_scene_id, present_npc_ids
+        )
 
     def _build_compressed_history_prompt_block(self) -> str:
         return self._session_helper.build_compressed_history_prompt_block()
@@ -2972,6 +2976,7 @@ class GameTurnManager:
             audio_library=getattr(self.adventure, "audio_tracks", None),
             party=session_overrides.get(PARTY_KEY),
             respawn=session_overrides.get(RESPAWN_KEY),
+            npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3144,9 +3149,10 @@ class GameTurnManager:
 
         # Party changes first, so a companion recruited by this script follows its teleport.
         apply_session_party_ops(self.state, changeset.party_ops)
-        if changeset.respawn_point is not None:
+        if changeset.respawn_point is not None or changeset.npc_memory_ops:
             states = dict(self.state.entity_states or {})
             apply_respawn_point(states, changeset.respawn_point)
+            apply_npc_memory_ops(states, changeset.npc_memory_ops)
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
         if changeset.teleport_scene_id or getattr(changeset, "teleport_dynamic_request", None):
@@ -3277,15 +3283,14 @@ class GameTurnManager:
         if changeset.new_memories:
             memories = list(self.state.world_memories or [])
             for m in changeset.new_memories:
-                is_dup = any(
-                    (em.get("description") or "").strip().lower()
-                    == (m.get("description") or "").strip().lower()
-                    and em.get("scope") == m.get("scope")
-                    and (m.get("scope") == "global" or em.get("scene_id") == m.get("scene_id"))
-                    for em in memories
+                entry = make_world_memory(
+                    m.get("description"),
+                    scope=m.get("scope"),
+                    emotion=m.get("emotion"),
+                    npc_id=m.get("npc_id"),
+                    scene_id=m.get("scene_id") or self.state.current_scene_id,
                 )
-                if not is_dup:
-                    memories.append(m)
+                memories, _ = add_world_memory(memories, entry)
             self.state.world_memories = memories
 
         for qid in changeset.completed_quest_ids:

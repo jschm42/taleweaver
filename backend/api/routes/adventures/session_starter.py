@@ -36,6 +36,7 @@ from backend.engine.party.party_start import seed_starting_party, sync_starting_
 from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.rules.npc_memory import NPC_MEMORY_STATE_KEY, apply_npc_memory_ops
 from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
 from backend.engine.scripting.context import GameContext
 from backend.engine.scripting.dialog import store_pending_dialog
@@ -254,6 +255,7 @@ def _run_init_scripts(
         audio_library=getattr(adventure, "audio_tracks", None),
         party=entity_states.get(PARTY_KEY),
         respawn=entity_states.get(RESPAWN_KEY),
+        npc_memory=entity_states.get(NPC_MEMORY_STATE_KEY),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
         active_sequence_id=str(first_seq.get("id") or "") if first_seq else None,
@@ -286,6 +288,7 @@ def _run_init_scripts(
     apply_audio_ops(entity_states, changes.audio_ops)
     apply_party_ops(entity_states, changes.party_ops)
     apply_respawn_point(entity_states, changes.respawn_point)
+    apply_npc_memory_ops(entity_states, changes.npc_memory_ops)
     store_skip_narration(entity_states, changes.skip_narration)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)

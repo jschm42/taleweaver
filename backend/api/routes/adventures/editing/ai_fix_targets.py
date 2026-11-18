@@ -87,6 +87,7 @@ _FIX_NPC_FIELDS = frozenset(
         "current_scene_id",
         "is_hidden",
         "spatial_position",
+        "memory_slots",
         *NPC_SCRIPT_FIELDS,
     }
 )

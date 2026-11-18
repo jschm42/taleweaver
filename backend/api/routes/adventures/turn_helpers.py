@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.engine.rules.rule_engine import AdventureGeneratorToolIntent, GameEvent
+from backend.engine.rules.world_memories import world_memories_prompt_block
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 
@@ -356,22 +358,11 @@ class TurnSessionStateHelper:
         lines = "\n".join(f"- {note}" for note in notes)
         return "\n\nSESSION NOTES:\n" + lines
 
-    def build_world_memories_prompt_block(self, current_scene_id: str) -> str:
+    def build_world_memories_prompt_block(
+        self, current_scene_id: str, present_npc_ids: Iterable[str] = ()
+    ) -> str:
         memories = getattr(self.manager.state, "world_memories", None) or []
-        if not memories:
-            return ""
-        active_memories = []
-        for m in memories:
-            scope = m.get("scope", "global")
-            scene_id = m.get("scene_id")
-            if scope == "global" or (scope == "local" and scene_id == current_scene_id):
-                active_memories.append(m)
-        if not active_memories:
-            return ""
-        lines = "\n".join(
-            f"- {m['description']} (Emotion: {m['emotion']})" for m in active_memories
-        )
-        return "\n\nWORLD MEMORIES (LONG-TERM CONSEQUENCES):\n" + lines
+        return world_memories_prompt_block(memories, current_scene_id, present_npc_ids)
 
     def build_compressed_history_prompt_block(self) -> str:
         data = getattr(self.manager.state, "compressed_history", None)
