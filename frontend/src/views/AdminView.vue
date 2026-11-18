@@ -15,7 +15,6 @@ import VoiceMappingSection from '@/components/admin/VoiceMappingSection.vue'
 import AudioSection from '@/components/admin/AudioSection.vue'
 import CatalogSection from '@/components/admin/CatalogSection.vue'
 import NarratorVoicesSection from '@/components/admin/NarratorVoicesSection.vue'
-import GameSettingsSection from '@/components/admin/GameSettingsSection.vue'
 import UserManagementSection from '@/components/admin/UserManagementSection.vue'
 import UserEditModal from '@/components/admin/UserEditModal.vue'
 import CatalogEditModal from '@/components/admin/CatalogEditModal.vue'
@@ -152,13 +151,6 @@ onMounted(() => {
     />
 
     <NarratorVoicesSection v-if="activeSection === 'voices'" />
-
-    <GameSettingsSection
-      v-if="activeSection === 'game'"
-      :game-form="settingsService.gameForm.value"
-      :is-submitting="settingsService.isSubmitting.value"
-      @save="settings.saveGame"
-    />
 
     <UserManagementSection
       v-if="activeSection === 'users'"

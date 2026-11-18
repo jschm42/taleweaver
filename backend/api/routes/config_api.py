@@ -406,18 +406,12 @@ async def _build_available_constants(
 
 
 def _normalize_game_settings(game_settings: Optional[dict]) -> dict:
-    fallback = {
-        "clock_24h": False,
-        "date_format": "DD.MM.YY",
-        "whisper_model": "tiny",
+    # The clock format is a player preference now (User.game_settings["clock_format"]).
+    normalized = {
+        key: value
+        for key, value in (game_settings or {}).items()
+        if key not in ("clock_24h", "date_format")
     }
-    if not game_settings:
-        return fallback
-    normalized = dict(game_settings)
-    if "clock_24h" not in normalized:
-        normalized["clock_24h"] = False
-    if "date_format" not in normalized:
-        normalized["date_format"] = "DD.MM.YY"
     if "whisper_model" not in normalized:
         normalized["whisper_model"] = "tiny"
     return normalized
@@ -562,8 +556,6 @@ class T2ISettingsPayload(ComfySettings):
 
 
 class GameSettingsPayload(BaseModel):
-    clock_24h: bool = False
-    date_format: str = "DD.MM.YY"
     whisper_model: str = "tiny"
 
 

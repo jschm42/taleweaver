@@ -6,7 +6,7 @@ import { computed, type ComputedRef, type WritableComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   AudioLines, Brain, Feather, Image, KeyRound, Mic, Music, Palette, ScrollText,
-  SlidersHorizontal, Users, UsersRound,
+  Users, UsersRound,
 } from 'lucide-vue-next'
 import type { WorkbenchNavGroup } from '@/components/workbench/WorkbenchNav.vue'
 import { settingsService } from '@/services/settingsService'
@@ -14,9 +14,9 @@ import { userService } from '@/services/userService'
 import { catalogService } from '@/services/catalogService'
 
 export type AdminSection =
-  | 'keys' | 'llm' | 't2i' | 'tts' | 'voice-map' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'game' | 'users'
+  | 'keys' | 'llm' | 't2i' | 'tts' | 'voice-map' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'users'
 
-const SECTIONS: AdminSection[] = ['keys', 'llm', 't2i', 'tts', 'voice-map', 'stt', 'audio', 'styles', 'tones', 'voices', 'game', 'users']
+const SECTIONS: AdminSection[] = ['keys', 'llm', 't2i', 'tts', 'voice-map', 'stt', 'audio', 'styles', 'tones', 'voices', 'users']
 
 export interface AdminNavigation {
   activeSection: WritableComputedRef<AdminSection>
@@ -83,7 +83,6 @@ export function useAdminNavigation(): AdminNavigation {
     {
       title: 'System',
       items: [
-        { id: 'game', label: 'Game settings', icon: SlidersHorizontal },
         { id: 'users', label: 'Users', icon: Users, badge: userService.usersList.value.length },
       ],
     },

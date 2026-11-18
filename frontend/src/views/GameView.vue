@@ -219,9 +219,7 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
   }
 }
 const { notifications, removeNotification, addNotification } = useNotifications()
-const gameSettings = ref<GameSettings>({
-  clock_24h: false,
-})
+const gameSettings = ref<GameSettings>({})
 
 const {
   sheet,

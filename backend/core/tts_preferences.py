@@ -18,14 +18,24 @@ DEFAULT_TTS_PREFERENCES: dict[str, bool] = {
     "readables": False,
 }
 
+# Player's clock display for calendar adventures: "adventure" (the adventure's own format), "24h" or "12h".
+CLOCK_FORMAT_KEY = "clock_format"
+CLOCK_FORMATS = ("adventure", "24h", "12h")
+
 # game_settings keys that belong to one player; they stay in User.game_settings, never in ServerSettings.
-USER_SCOPED_GAME_SETTING_KEYS = (TTS_PREFERENCES_KEY,)
+USER_SCOPED_GAME_SETTING_KEYS = (TTS_PREFERENCES_KEY, CLOCK_FORMAT_KEY)
 
 
 def resolve_tts_preferences(game_settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     """Return the stored preferences of a player, or a fresh copy of the defaults."""
     stored = (game_settings or {}).get(TTS_PREFERENCES_KEY)
     return dict(stored or DEFAULT_TTS_PREFERENCES)
+
+
+def resolve_clock_format(game_settings: Optional[dict[str, Any]]) -> str:
+    """The player's clock format, ``"adventure"`` when unset or unknown."""
+    value = (game_settings or {}).get(CLOCK_FORMAT_KEY)
+    return value if value in CLOCK_FORMATS else "adventure"
 
 
 def with_user_scoped_settings(

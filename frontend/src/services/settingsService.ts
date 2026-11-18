@@ -111,8 +111,6 @@ class SettingsService {
   })
 
   gameForm = ref({
-    clock_24h: false,
-    date_format: 'DD.MM.YY',
     whisper_model: 'tiny',
   })
 

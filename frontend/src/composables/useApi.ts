@@ -974,7 +974,11 @@ export const api = {
     })
   },
 
-  updateMyPreferences(payload: { default_language?: string | null; tts_preferences?: TtsPreferences }): Promise<any> {
+  updateMyPreferences(payload: {
+    default_language?: string | null
+    tts_preferences?: TtsPreferences
+    clock_format?: 'adventure' | '24h' | '12h'
+  }): Promise<any> {
     return request('/users/me/preferences', { method: 'PUT', body: JSON.stringify(payload) })
   },
 

@@ -295,7 +295,7 @@ button in the page header and the shortcut `Ctrl+K` open it as a drawer (decisio
 | **Media** | Images, Music & audio |
 | **Voice** | Text-to-speech, Voice mapping, Speech-to-text |
 | **Catalogs** | Image styles, Tones, Narrator personas |
-| **System** | Game settings, Users, Setup assistant |
+| **System** | Users, Setup assistant |
 
 ---
 

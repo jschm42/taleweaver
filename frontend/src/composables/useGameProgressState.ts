@@ -1,5 +1,6 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import type { GameSettings } from '@/services/gameViewService'
+import { authState } from '@/store/auth'
 
 type UseGameProgressStateOptions = {
   sheet: Ref<any>
@@ -73,7 +74,10 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     const currentMin = remDayMins % 60
 
     let timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`
-    if (timeConfig.time_format === '12h') {
+    // The player's profile choice wins over the adventure's format (day clocks only).
+    const playerFormat = authState.user?.clock_format
+    const timeFormat = playerFormat && playerFormat !== 'adventure' ? playerFormat : timeConfig.time_format
+    if (timeFormat === '12h') {
       const h12 = currentHour % 12 || 12
       const ampm = currentHour >= 12 ? 'PM' : 'AM'
       timeStr = `${h12.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')} ${ampm}`
