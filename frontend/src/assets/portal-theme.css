@@ -367,11 +367,9 @@
   to { transform: scale(1.04); }
 }
 
-/* Full 2:3 portrait cover on the right edge (its width follows the banner height); only the
-   left edge fades into the ambient backdrop */
-.hero-cover {
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 22%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 22%);
+/* Uncropped 2:3 cover in the Continue cards and the featured hero, lifted off the backdrop */
+.continue-cover {
+  box-shadow: 0 0 0 1px rgb(251 191 36 / 0.25), 0 12px 28px -8px rgb(0 0 0 / 0.8);
 }
 
 /* Blurred copy of the cover that tints the whole banner in its colors */
