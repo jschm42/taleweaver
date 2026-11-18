@@ -27,7 +27,7 @@ everything you **add or change**; do not restyle untouched code in the same task
    `UiTextarea`, `UiSelect`, `UiToggle`, `UiCheckbox`, `UiCard`, `UiSection`,
    `UiDisclosure`, `UiModal`, `UiDrawer`, `UiBadge`, `UiEmptyState`, `UiSpinner`,
    `UiInfoPopover`, `UiSaveBar`, `UiMenu`, `UiNotice`, `UiRadioCards`, `UiSegmented`, `UiIdTag`,
-   `UiTabs`, `UiRange`),
+   `UiTabs`, `UiRange`, `UiCombobox`),
    the layout (`WorkbenchShell`, `WorkbenchNav`, `PageHeader`) and the composables `useDialogs` (`useConfirm`,
    `usePrompt`), `useToast`, `useDraft`, `useUnsavedGuard`. Never style a raw `<button>`,
    `<input>` or overlay inline. All components are shown at `/dev/ui` (dev server); the

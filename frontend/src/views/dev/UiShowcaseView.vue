@@ -8,6 +8,7 @@ import UiBadge from '@/components/ui/UiBadge.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiCombobox from '@/components/ui/UiCombobox.vue'
 import UiDrawer from '@/components/ui/UiDrawer.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiField from '@/components/ui/UiField.vue'
@@ -46,6 +47,8 @@ const tabs = [
 const activeTab = ref('general')
 const chance = ref(40)
 const diceExample = ref('1d8+1')
+const voiceExample = ref('my_custom_voice')
+const voiceOptions = ['af_heart', 'af_bella', 'am_adam', 'bf_emma', 'bm_george']
 
 const modalOpen = ref(false)
 const drawerOpen = ref(false)
@@ -115,6 +118,9 @@ async function askName(): Promise<void> {
           </UiField>
           <UiField label="Damage (dice)" hint="`mono` for IDs, dice and codes.">
             <UiInput v-model="diceExample" mono />
+          </UiField>
+          <UiField label="Voice" hint="Free text with suggestions; the chevron always lists every option.">
+            <UiCombobox v-model="voiceExample" :options="voiceOptions" mono />
           </UiField>
           <UiField label="Special attack chance">
             <UiRange v-model="chance" :step="5" unit="%" />

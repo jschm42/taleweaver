@@ -165,7 +165,7 @@ logic and stay under 200 lines.
 | `UiInput`, `UiTextarea`, `UiSelect` | Inline inputs | One look, one focus ring; `UiInput type="number"` yields numbers (`null` when empty), `mono` for IDs, dice and codes; textarea auto-grows. |
 | `UiRange` | Hand-made `type="range"` sliders | Shows the current value (optional `unit`) next to the track. |
 | `UiToggle`, `UiCheckbox`, `UiRadioCards` | `sr-only peer` switches, checkboxes, mode tiles | `UiRadioCards` for rule mode, item type and similar choices. |
-| `UiCombobox` | `ModelCombobox`, `EntityReferenceCombobox` (base) | Search, keyboard navigation, groups. Not built yet. |
+| `UiCombobox` | Native `<datalist>` inputs; later `ModelCombobox`, `EntityReferenceCombobox` (base) | Free text with a suggestion list: typing filters, the chevron always shows every option (a datalist hides them once a value is typed); arrow keys, Enter, Esc; `mono`. Groups not built yet. |
 | `UiSpinner` | 4 spinner variants | |
 | `UiCard` | 8 panel recipes | Optional header (title, description, actions slot). Never nested. |
 | `UiSection` | Page sections | Title, description, actions, `collapsible`, `advanced` (collapsed by default). |

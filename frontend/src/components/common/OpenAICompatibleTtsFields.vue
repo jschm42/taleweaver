@@ -10,6 +10,7 @@ import { Download } from 'lucide-vue-next'
 import { api } from '@/composables/useApi'
 import type { SpeechVoiceList } from '@/types'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiCombobox from '@/components/ui/UiCombobox.vue'
 import UiField from '@/components/ui/UiField.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
@@ -50,9 +51,7 @@ const loadError = ref('')
 const ids = computed(() => ({
   url: `${props.idPrefix}-url`,
   model: `${props.idPrefix}-model`,
-  modelList: `${props.idPrefix}-model-list`,
   voice: `${props.idPrefix}-voice`,
-  voiceList: `${props.idPrefix}-voice-list`,
   format: `${props.idPrefix}-format`,
   instructions: `${props.idPrefix}-instructions`,
 }))
@@ -132,17 +131,14 @@ onBeforeUnmount(() => clearTimeout(voiceTimer))
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <UiField :id="ids.model" label="Model" :hint="models.length ? `${models.length} models from the server.` : ''">
-        <UiInput
+        <UiCombobox
           :model-value="model"
-          :list="ids.modelList"
-          autocomplete="off"
+          :options="models"
+          mono
+          toggle-label="Show all models"
           placeholder="e.g. kokoro, tts-1, openai/gpt-4o-mini-tts"
-          class="wb-mono"
           @update:model-value="(value) => (model = trimmed(value))"
         />
-        <datalist :id="ids.modelList">
-          <option v-for="entry in models" :key="entry" :value="entry" />
-        </datalist>
       </UiField>
 
       <UiField
@@ -150,17 +146,14 @@ onBeforeUnmount(() => clearTimeout(voiceTimer))
         label="Narrator voice"
         :hint="voiceSource ? VOICE_SOURCE_TEXT[voiceSource] : 'Optional; empty uses the model default.'"
       >
-        <UiInput
+        <UiCombobox
           :model-value="voice"
-          :list="ids.voiceList"
-          autocomplete="off"
+          :options="voices"
+          mono
+          toggle-label="Show all voices"
           placeholder="e.g. af_heart, alloy"
-          class="wb-mono"
           @update:model-value="(value) => (voice = trimmed(value))"
         />
-        <datalist :id="ids.voiceList">
-          <option v-for="entry in voices" :key="entry" :value="entry" />
-        </datalist>
       </UiField>
     </div>
 
