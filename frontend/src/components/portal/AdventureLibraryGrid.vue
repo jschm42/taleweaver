@@ -18,6 +18,8 @@ const props = defineProps<{
   updatingTemplateIds?: Set<string>
   hasMore?: boolean
   totalFilteredCount?: number
+  /** Adventure the hero banner already offers to continue; left out of "In progress". */
+  heroTemplateId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -48,7 +50,7 @@ const emit = defineEmits<{
  */
 const inProgressTemplates = computed(() =>
   props.visibleTemplates
-    .filter((t) => t.has_active_session && t.last_played_at)
+    .filter((t) => t.has_active_session && t.last_played_at && t.template_id !== props.heroTemplateId)
     .sort((a, b) => lastPlayedMs(b) - lastPlayedMs(a))
 )
 

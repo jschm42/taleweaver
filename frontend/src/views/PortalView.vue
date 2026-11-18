@@ -17,6 +17,7 @@ import UserProfileContent from '@/components/portal/UserProfileContent.vue'
 import LeaderboardView from '@/components/portal/LeaderboardView.vue'
 import PortalFooter from '@/components/portal/PortalFooter.vue'
 import PortalHeroBanner from '@/components/portal/PortalHeroBanner.vue'
+import { pickResumableSession, sessionTemplateId } from '@/components/portal/heroSession'
 import { ambientAccent } from '@/store/portalAmbient'
 import {
   usePortalFilters,
@@ -173,6 +174,11 @@ function handleImport(kind?: 'templates' | 'sessions') {
 }
 
 /** The hero only shows on the unfiltered grid so it never pushes search results down. */
+/** Adventure the hero continues; the "In progress" shelf leaves it out to avoid a duplicate. */
+const heroTemplateId = computed(() =>
+  showHero.value ? sessionTemplateId(pickResumableSession(sessions.value)) : null
+)
+
 const showHero = computed(
   () =>
     activeSection.value === 'templates' &&
@@ -478,6 +484,7 @@ onUnmounted(() => {
               :updating-template-ids="updatingTemplateIds"
               :has-more="templateFilters.hasMore.value"
               :total-filtered-count="templateFilters.filteredCount.value"
+              :hero-template-id="heroTemplateId"
               @load-more="templateFilters.loadMore"
               @create="createEmptyAdventure"
               @generate-world="openCreateModal"

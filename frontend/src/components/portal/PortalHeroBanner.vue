@@ -4,7 +4,8 @@ import type { AdventureTemplateSummary, GameSession } from '@/types'
 import { Play } from 'lucide-vue-next'
 import ProgressRing from './ProgressRing.vue'
 import { resolveGenreAccent, toneToLabel } from '@/composables/useGenreAccent'
-import { formatRelative, lastPlayedMs } from '@/utils/relativeTime'
+import { formatRelative } from '@/utils/relativeTime'
+import { pickResumableSession, sessionTemplateId } from './heroSession'
 
 const props = defineProps<{
   sessions: GameSession[]
@@ -27,11 +28,7 @@ interface HeroModel {
 }
 
 /** The playable session the player opened most recently. */
-const resumable = computed(() => {
-  const playable = props.sessions.filter((s) => s.is_ready && (!s.status || s.status === 'active'))
-  if (playable.length === 0) return null
-  return playable.reduce((latest, s) => (lastPlayedMs(s) > lastPlayedMs(latest) ? s : latest))
-})
+const resumable = computed(() => pickResumableSession(props.sessions))
 
 /** Fallback when nothing is in progress: the first playable adventure with cover art. */
 const featured = computed(() =>
@@ -41,7 +38,7 @@ const featured = computed(() =>
 const hero = computed<HeroModel | null>(() => {
   const session = resumable.value
   if (session) {
-    const template = props.templates.find((t) => t.template_id === (session.template_id || session.adventure_id))
+    const template = props.templates.find((t) => t.template_id === sessionTemplateId(session))
     return {
       title: session.adventure_title,
       imageUrl: session.image_url,
@@ -76,8 +73,8 @@ const teaser = computed(() => (hero.value?.teaser || '').replace(/\\n/g, '\n'))
     <div class="absolute inset-0 bg-[#050b14]"></div>
     <template v-if="hero.imageUrl">
       <img :src="hero.imageUrl" alt="" aria-hidden="true" class="hero-ambient absolute inset-0 w-full h-full object-cover" />
-      <div class="hero-cover absolute inset-y-0 right-0 w-[70%] sm:w-[55%] lg:w-[42%] overflow-hidden">
-        <img :src="hero.imageUrl" alt="" class="hero-kenburns absolute inset-0 w-full h-full object-cover object-[center_30%]" />
+      <div class="hero-cover absolute inset-y-0 right-0 aspect-[2/3] overflow-hidden">
+        <img :src="hero.imageUrl" alt="" class="hero-kenburns absolute inset-0 w-full h-full object-cover" />
       </div>
     </template>
     <div
@@ -116,7 +113,7 @@ const teaser = computed(() => (hero.value?.teaser || '').replace(/\\n/g, '\n'))
       <div class="flex flex-wrap gap-2.5 pt-1">
         <button
           v-if="hero.session"
-          class="tale-action px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all"
+          class="tale-action tale-action--solid px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all"
           :disabled="props.isStartingSession"
           @click="emit('resume', hero.session.game_id)"
         >
