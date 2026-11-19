@@ -8,6 +8,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiNotice from '@/components/ui/UiNotice.vue'
 import ProviderKeysSection from '@/components/admin/ProviderKeysSection.vue'
 import IntelligenceSection from '@/components/admin/IntelligenceSection.vue'
+import PlayAgentSection from '@/components/admin/PlayAgentSection.vue'
 import VisualsSection from '@/components/admin/VisualsSection.vue'
 import SpeechSection from '@/components/admin/SpeechSection.vue'
 import SpeechToTextSection from '@/components/admin/SpeechToTextSection.vue'
@@ -93,6 +94,19 @@ onMounted(() => {
       :configured-keys="settingsService.configuredKeys.value"
       :is-submitting="settingsService.isSubmitting.value"
       :is-loading-ollama-models="settingsService.isLoadingOllamaModels.value"
+      :test-results="testService.testResults.value"
+      @save="settings.saveLlm"
+      @test="settings.testLlm"
+      @refresh-ollama-models="settings.refreshOllamaModels"
+      @switch-section="select"
+    />
+
+    <PlayAgentSection
+      v-if="activeSection === 'play-agent'"
+      :llm-form="settingsService.llmForm.value"
+      :available-constants="settingsService.availableConstants.value"
+      :configured-keys="settingsService.configuredKeys.value"
+      :is-submitting="settingsService.isSubmitting.value"
       :test-results="testService.testResults.value"
       @save="settings.saveLlm"
       @test="settings.testLlm"

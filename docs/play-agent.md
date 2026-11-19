@@ -112,4 +112,4 @@ Only in debug mode (server setting `TALEWEAVER_DEBUG_ENABLED` or `/debug on`):
 * Agent problems are reported with their technical details in the chat.
 
 Defaults for new sessions (play style, walkthrough, step mode, monkey mode) and the agent's
-model are set by the admin under **Intelligence → Play Agent**.
+model are set by the admin on the admin page **AI models → Play-Agent**.

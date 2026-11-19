@@ -2,7 +2,7 @@
 
 Use any hosted OpenAI-compatible provider (e.g. OpenRouter, Groq, Together, DeepInfra) or self-hosted inference server (vLLM, Ollama, llama.cpp, LM Studio, TGI) with an OpenAI-compatible Chat Completions API.
 
-Configure OpenAI-compatible endpoints directly within the Intelligence settings cards for Pass 1 (Mechanics), Pass 2 (Narration), Worldbuilder Generator, Autonomous Play Agent, or History Compression. Each pass can either inherit the global base URL or specify its own dedicated endpoint (e.g. `http://localhost:8001/v1` for mechanics and `https://openrouter.ai/api/v1` for narration). Detection is optional: you can detect models from the endpoint's `/models` route or enter any custom model ID manually.
+Configure OpenAI-compatible endpoints directly within the model cards for Pass 1 (Mechanics), Pass 2 (Narration), Worldbuilder Generator and History Compression (admin page **Intelligence**), and for the Play-Agent (admin page **Play-Agent**). Each pass can either inherit the global base URL or specify its own dedicated endpoint (e.g. `http://localhost:8001/v1` for mechanics and `https://openrouter.ai/api/v1` for narration). Detection is optional: you can detect models from the endpoint's `/models` route or enter any custom model ID manually.
 
 For speech, see [OpenAI-Compatible Speech (TTS)](openai-compatible-tts.md); it uses the same Base URL rules and vault key.
 

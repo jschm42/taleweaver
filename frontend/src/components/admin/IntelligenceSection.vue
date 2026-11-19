@@ -11,8 +11,6 @@ import UiInput from '@/components/ui/UiInput.vue'
 import UiNotice from '@/components/ui/UiNotice.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
-import UiSelect from '@/components/ui/UiSelect.vue'
-import UiTextarea from '@/components/ui/UiTextarea.vue'
 import UiToggle from '@/components/ui/UiToggle.vue'
 import LlmPassCard from './LlmPassCard.vue'
 
@@ -56,10 +54,6 @@ const normalizeLocalForm = (data: any) => {
     complex_max_tokens: num(data?.complex_max_tokens, 24576),
     generator_max_tokens: num(data?.generator_max_tokens, 32768),
     compression_max_tokens: num(data?.compression_max_tokens, 4096),
-    play_agent_allow_walkthrough: bool(data?.play_agent_allow_walkthrough, true),
-    play_agent_monkey_mode: bool(data?.play_agent_monkey_mode, false),
-    play_agent_personality: data?.play_agent_personality || 'casual',
-    play_agent_custom_personality: data?.play_agent_custom_personality || '',
     custom_openai_url: data?.custom_openai_url || '',
     custom_openai_timeout: num(data?.custom_openai_timeout, 300),
     custom_openai_response_format: sharedFormat,
@@ -71,8 +65,6 @@ const normalizeLocalForm = (data: any) => {
     generator_custom_openai_url: data?.generator_custom_openai_url || '',
     generator_custom_openai_timeout: num(data?.generator_custom_openai_timeout, sharedTimeout),
     generator_custom_openai_response_format: data?.generator_custom_openai_response_format || sharedFormat,
-    play_agent_custom_openai_url: data?.play_agent_custom_openai_url || '',
-    play_agent_custom_openai_timeout: num(data?.play_agent_custom_openai_timeout, sharedTimeout),
     compression_custom_openai_url: data?.compression_custom_openai_url || '',
     compression_custom_openai_timeout: num(data?.compression_custom_openai_timeout, sharedTimeout),
   }
@@ -86,19 +78,13 @@ const FILTERS: { value: TabFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'core', label: 'Play' },
   { value: 'world', label: 'World-Builder' },
-  { value: 'aux', label: 'Play-Agent & memory' },
+  { value: 'aux', label: 'Memory' },
   { value: 'endpoints', label: 'Local endpoints' },
 ]
 const shows = (tab: TabFilter): boolean => activeTab.value === 'all' || activeTab.value === tab
 
-const PASSES = ['small', 'complex', 'generator', 'play_agent', 'compression']
-
-const PERSONALITIES = [
-  { value: 'casual', label: 'Casual – relaxed, curious, plays for fun' },
-  { value: 'bureaucrat', label: 'Bureaucrat – formal, protocol-obsessed' },
-  { value: 'powerplayer', label: 'Powerplayer – min-maxer, optimal path' },
-  { value: 'custom', label: 'Custom – your own directives' },
-]
+// The Play-Agent (pass 4) has its own admin page: PlayAgentSection.vue.
+const PASSES = ['small', 'complex', 'generator', 'compression']
 
 const missingProviders = computed(() => {
   const providers = new Set(PASSES.map((pass) => localForm.value[`${pass}_model_provider`]))
@@ -148,7 +134,7 @@ function runTest(payload: Record<string, unknown>): void {
 
 <template>
   <div class="space-y-6">
-    <PageHeader title="Intelligence" description="Which AI model runs each part of the game: rules, narration, world creation, Play-Agent and memory.">
+    <PageHeader title="Intelligence" description="Which AI model runs each part of the game: rules, narration, world creation and memory. The Play-Agent has its own page.">
       <template #actions>
         <UiButton :icon="Copy" title="Use the provider and model of pass 1 for all other passes" @click="syncFromPass1">
           Copy pass 1 to all
@@ -217,47 +203,6 @@ function runTest(payload: Record<string, unknown>): void {
       @test="runTest"
       @vault="emit('switchSection', 'keys')"
     />
-
-    <LlmPassCard
-      v-if="shows('aux')"
-      v-model:form="localForm"
-      pass="play_agent"
-      title="Pass 4 · Play-Agent"
-      description="Plays the adventure for the player (Auto-Play) and for automated test runs."
-      :available-constants="availableConstants"
-      :configured-keys="configuredKeys"
-      :test-result="testResults.play_agent"
-      openrouter-placeholder="e.g. Together, Grok"
-      @test="runTest"
-      @vault="emit('switchSection', 'keys')"
-    >
-      <div class="space-y-4 border-t border-wb-line pt-4">
-        <UiField label="Personality">
-          <UiSelect v-model="localForm.play_agent_personality" :options="PERSONALITIES" />
-        </UiField>
-        <UiField
-          v-if="localForm.play_agent_personality === 'custom'"
-          label="Custom directives"
-          hint="Roleplay guidelines and play habits for the Play-Agent."
-        >
-          <UiTextarea
-            v-model="localForm.play_agent_custom_personality"
-            :rows="3"
-            placeholder="e.g. A paranoid rogue who never trusts chests, checks for traps everywhere and speaks in underworld slang."
-          />
-        </UiField>
-        <UiToggle
-          v-model="localForm.play_agent_allow_walkthrough"
-          label="Walkthrough by default"
-          description="The agent may read the walkthrough of chapters the player unlocked."
-        />
-        <UiToggle
-          v-model="localForm.play_agent_monkey_mode"
-          label="Monkey mode by default"
-          description="Start in chaos-testing mode (debug only)."
-        />
-      </div>
-    </LlmPassCard>
 
     <LlmPassCard
       v-if="shows('aux')"
