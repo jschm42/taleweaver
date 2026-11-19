@@ -43,6 +43,11 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
         "(penalties, a healer's line, healing the enemies)",
         "None (global)",
     ),
+    (
+        "on_conversation_heard",
+        "once the protagonist overheard an NPC conversation topic (conversation_topics)",
+        "Topic id (or None for any topic)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a

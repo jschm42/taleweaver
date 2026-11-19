@@ -6,6 +6,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.tts_preferences import DEFAULT_TTS_PREFERENCES, TTS_AUTO_SPEAK_KEY
 from backend.core.ui_theme import UI_SKIN_AUTO
+from backend.engine.conversations.state import set_player_chatter
 from backend.models.session_state import SessionState
 from backend.schemas.session import GameSessionUpdate
 
@@ -20,6 +21,7 @@ def has_state_settings(payload: GameSessionUpdate) -> bool:
             payload.narration_style,
             payload.ui_skin,
             payload.tts_auto_speak,
+            payload.npc_chatter,
         )
     )
 
@@ -48,3 +50,6 @@ def apply_state_settings(state: SessionState, payload: GameSessionUpdate) -> Non
         state.ui_skin = None if payload.ui_skin == UI_SKIN_AUTO else payload.ui_skin
     if payload.tts_auto_speak is not None:
         _apply_auto_speak(state, payload.tts_auto_speak)
+    if payload.npc_chatter is not None:
+        state.entity_states = set_player_chatter(state.entity_states or {}, payload.npc_chatter)
+        flag_modified(state, "entity_states")

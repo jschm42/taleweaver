@@ -102,6 +102,7 @@ _FIXED_TRIGGERS = {
     "/lookaround": "[TRIGGER_LOOKAROUND]",
     "/look": "[TRIGGER_LOOKAROUND]",
     "/rest": "[TRIGGER_REST]",
+    "/listen": "[TRIGGER_LISTEN]",
     "/rule-pass": "[RULE_PASS]",
 }
 
@@ -280,6 +281,7 @@ class CommandParser:
             "- `/pull <target>`: Pull an object, lever, mechanism, or obstacle.",
             "- `/switch <target> <state> [code]`: Set a switch/mechanism to a target state.",
             "- `/rest`: Take a short rest if the situation allows it.",
+            "- `/listen`: Keep quiet and listen to what the people around you are saying.",
             "- `/equip <item>`: Equip an item from your inventory.",
             "- `/drop <item>`: Drop an item into the current room.",
             "- `/take <item>`: Pick up an item from the room.",

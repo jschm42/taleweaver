@@ -115,7 +115,8 @@ CREATING NPCS AND OBJECTS
 - new_npc may also set: goal, character, appearance (max 100 chars), is_killable, hp,
   is_hidden. A hidden NPC appears only through scripts or its reveal_guard_expression (set it
   with a regular "npc" patch after the creation patch). The same goes for memory_slots (0-8,
-  facts the character remembers about the protagonist; only for recurring characters).
+  facts the character remembers about the protagonist; only for recurring characters), and
+  for relations, chatty and conversation_topics (NPCs talking with each other).
 - new_object may also set: item_type (DEFAULT, CONSUMABLE, READABLE, WEARABLE, WEAPON or
   CONTAINER; default DEFAULT), is_portable, appearance (max 100 chars), is_hidden,
   reveal_rule. SWITCH, CONTAINER_SWITCH and CONSTRUCTABLE items cannot be created here.

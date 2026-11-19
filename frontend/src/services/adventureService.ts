@@ -20,6 +20,7 @@ export interface Adventure {
   max_time_per_turn?: number | null
   gm_time_control?: boolean
   game_over_rules?: Record<string, unknown> | null
+  npc_conversations?: Record<string, unknown> | null
   max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string
@@ -81,6 +82,7 @@ export interface AdventureFormData {
   max_time_per_turn?: number | null
   gm_time_control?: boolean
   game_over_rules?: Record<string, unknown> | null
+  npc_conversations?: Record<string, unknown> | null
   max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string

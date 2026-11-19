@@ -31,6 +31,8 @@ from backend.api.routes.adventures.session_items import (
 from backend.core.config import settings
 from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY, resolve_tts_preferences
 from backend.engine.audio.audio_state import apply_audio_ops
+from backend.engine.conversations.ops import apply_conversation_ops
+from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
 from backend.engine.party.party_ops import apply_party_ops
 from backend.engine.party.party_start import seed_starting_party, sync_starting_party_rows
 from backend.engine.party.party_state import PARTY_KEY
@@ -256,6 +258,7 @@ def _run_init_scripts(
         party=entity_states.get(PARTY_KEY),
         respawn=entity_states.get(RESPAWN_KEY),
         npc_memory=entity_states.get(NPC_MEMORY_STATE_KEY),
+        conversations=entity_states.get(CONVERSATIONS_STATE_KEY),
         story_flags={},
         is_debug_enabled=bool(settings.TALEWEAVER_DEBUG_ENABLED),
         active_sequence_id=str(first_seq.get("id") or "") if first_seq else None,
@@ -289,6 +292,7 @@ def _run_init_scripts(
     apply_party_ops(entity_states, changes.party_ops)
     apply_respawn_point(entity_states, changes.respawn_point)
     apply_npc_memory_ops(entity_states, changes.npc_memory_ops)
+    apply_conversation_ops(entity_states, changes.conversation_ops)
     store_skip_narration(entity_states, changes.skip_narration)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)

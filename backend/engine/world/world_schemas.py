@@ -25,6 +25,11 @@ from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
     SwitchStateLabelSchema,
     SwitchTransitionSchema,
 )
+from backend.engine.world.world_conversation_schema import (
+    ConversationTopicSchema,
+    NpcConversationsSchema,
+    NpcRelationSchema,
+)
 from backend.engine.world.world_object_schema import WorldObjectSchema
 
 
@@ -468,6 +473,25 @@ class WorldNPCSchema(WorldBaseSchema):
             "monsters and extras."
         ),
     )
+    relations: Optional[list[NpcRelationSchema]] = Field(
+        None,
+        description=(
+            "How this NPC sees other NPCs it knows (family, friends, rivals, its boss). Give "
+            "relations to characters who share a scene, so their talk has direction; null else."
+        ),
+    )
+    chatty: Optional[bool] = Field(
+        None,
+        description="False keeps the NPC out of conversations NPCs start on their own (a guard on duty).",
+    )
+    conversation_topics: Optional[list[ConversationTopicSchema]] = Field(
+        None,
+        description=(
+            "Topics this NPC discusses with another NPC while the protagonist can overhear them, "
+            "e.g. two guards gossiping about a secret passage. Use must_convey for clues the "
+            "player should learn by listening. Null for most NPCs."
+        ),
+    )
     assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
         None,
         description=(
@@ -566,6 +590,7 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_narration_done",
         "on_time_reached",
         "on_respawn",
+        "on_conversation_heard",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -831,9 +856,10 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_narration_done",
         "on_time_reached",
         "on_respawn",
+        "on_conversation_heard",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None)",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None), on_conversation_heard (the protagonist overheard an NPC conversation topic; target = topic id)",
     )
     target_id: Optional[str] = Field(
         None,
@@ -910,6 +936,10 @@ class WorldManifesto(WorldBaseSchema):
     game_over_rules: Optional[GameOverRulesSchema] = Field(
         default=None,
         description="Optional: what happens at 0 HP (game over or respawn). Omit for game over.",
+    )
+    npc_conversations: Optional[NpcConversationsSchema] = Field(
+        default=None,
+        description="Optional: NPCs talk with each other on their own (chatter) and gossip.",
     )
     can_damage_npcs: bool = Field(
         True, description="Global flag: whether the protagonist can damage NPCs."

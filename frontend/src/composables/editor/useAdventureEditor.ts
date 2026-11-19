@@ -4,6 +4,7 @@
  * Further splitting into thematic composables happens in phases 3 and 4.
  */
 
+import { conversationFormDefaults, conversationFormFromNpc, conversationSavePayload } from '@/components/editor/entity/npcConversationTypes'
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adventureService } from '@/services/adventureService'
@@ -423,7 +424,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'memory' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -689,6 +690,7 @@ const form = ref({
   max_time_per_turn: null as number | null,
   gm_time_control: true,
   game_over_rules: null as Record<string, any> | null,
+  npc_conversations: null as Record<string, any> | null,
   max_memory_turns: 10,
   clock_enabled: false,
   time_system: 'calendar' as string,
@@ -880,6 +882,7 @@ async function fetchAdventure() {
     form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
     form.value.gm_time_control = data.gm_time_control ?? true
     form.value.game_over_rules = data.game_over_rules ?? null
+    form.value.npc_conversations = data.npc_conversations ?? null
     form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 10
     form.value.clock_enabled = data.clock_enabled ?? false
     form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'
@@ -1169,6 +1172,7 @@ function loadEntityEditor(type: string, id: string, currentName: string, current
     on_recruit_failure_text: selectedNpc?.on_recruit_failure_text || metadata?.on_recruit_failure_text || '',
     reveal_guard_expression: selectedNpc?.reveal_guard_expression || metadata?.reveal_guard_expression || '',
     memory_slots: Number(selectedNpc?.memory_slots ?? metadata?.memory_slots ?? 0) || 0,
+    ...(selectedNpc ? conversationFormFromNpc(selectedNpc, metadata) : conversationFormDefaults()),
     on_interact_script: selectedNpc?.on_interact_script || selectedObject?.on_interact_script || metadata?.on_interact_script || '',
     on_interact_text: selectedNpc?.on_interact_text || selectedObject?.on_interact_text || metadata?.on_interact_text || '',
     unlock_expression: selectedObject?.unlock_expression || metadata?.unlock_expression || '',
@@ -1327,7 +1331,10 @@ async function saveEntityText(data: any) {
           reveal_guard_expression: data.reveal_guard_expression || undefined,
           on_interact_script: data.on_interact_script || undefined,
           on_interact_text: data.on_interact_text || undefined,
-          metadata_json: Number(data.memory_slots) > 0 ? { memory_slots: Number(data.memory_slots) } : undefined,
+          metadata_json: {
+            ...(Number(data.memory_slots) > 0 ? { memory_slots: Number(data.memory_slots) } : {}),
+            ...conversationSavePayload(data),
+          },
         })
       } else {
         const itemType = String(data.item_type || 'DEFAULT').toUpperCase()
@@ -1591,6 +1598,7 @@ async function saveEntityText(data: any) {
       on_recruit_failure_text: editEntityContext.value.type === 'npc' ? data.on_recruit_failure_text : undefined,
       reveal_guard_expression: editEntityContext.value.type === 'npc' ? data.reveal_guard_expression : undefined,
       memory_slots: editEntityContext.value.type === 'npc' ? Number(data.memory_slots) || 0 : undefined,
+      ...(editEntityContext.value.type === 'npc' ? conversationSavePayload(data) : {}),
       on_interact_script: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_script : undefined,
       on_interact_text: ['npc', 'object'].includes(editEntityContext.value.type) ? data.on_interact_text : undefined,
       on_enter_scene_script: editEntityContext.value.type === 'scene' ? data.on_enter_scene_script : undefined,

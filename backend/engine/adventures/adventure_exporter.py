@@ -14,6 +14,7 @@ from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -540,6 +541,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "time_system": adv.time_system,
         "time_config": adv.time_config,
         "game_over_rules": adv.game_over_rules,
+        "npc_conversations": normalize_conversation_settings(adv.npc_conversations),
         "allow_dynamic_items": adv.allow_dynamic_items,
         "can_damage_npcs": adv.can_damage_npcs,
         "npcs_can_damage_protagonist": adv.npcs_can_damage_protagonist,

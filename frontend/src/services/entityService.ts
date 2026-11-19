@@ -1,3 +1,4 @@
+import type { ConversationTopic, NpcRelation } from '@/components/editor/entity/npcConversationTypes'
 import { API_BASE, authHeaders } from '@/services/http'
 
 export interface EntityEditData {
@@ -117,6 +118,9 @@ export interface EntityEditData {
   on_recruit_failure_text?: string | null
   reveal_guard_expression?: string | null
   memory_slots?: number | null
+  relations?: NpcRelation[]
+  chatty?: boolean
+  conversation_topics?: ConversationTopic[]
   on_interact_script?: string | null
   on_interact_text?: string | null
 }

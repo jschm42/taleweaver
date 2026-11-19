@@ -20,6 +20,7 @@ from backend.api.routes.adventures.turn_context_helpers import (
 )
 from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
+from backend.engine.conversations.relations import relations_prompt_block
 from backend.engine.party.party_prompt import companion_prompt_block
 from backend.engine.rules.crafting_recipes import is_recipe
 from backend.engine.rules.game_clock import gm_time_allowed, read_clock
@@ -340,6 +341,8 @@ class TurnLlmContextBuilder:
         narration_state_block += npc_memory_prompt_block(
             state.entity_states, visible, for_mechanics=False
         )
+        # How the present NPCs see each other, so their talk has direction.
+        narration_state_block += relations_prompt_block(visible, state.entity_states)
         session_memory_block = (
             self.manager._build_gm_notes_prompt_block()
             + self.manager._build_compressed_history_prompt_block()

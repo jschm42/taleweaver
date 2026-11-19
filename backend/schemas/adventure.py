@@ -40,6 +40,7 @@ class SequenceScriptSchema(BaseModel):
         "on_narration_done",
         "on_time_reached",
         "on_respawn",
+        "on_conversation_heard",
     ]
     target_id: Optional[str] = ""
     code: str = ""
@@ -113,6 +114,7 @@ class AdventureTemplateBase(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     game_over_rules: Optional[dict[str, Any]] = None
+    npc_conversations: Optional[dict[str, Any]] = None
     quests: Optional[list[QuestSchema]] = None
     awards: Optional[list[AwardSchema]] = None
     is_completed: bool = False
@@ -182,6 +184,7 @@ class AdventureTemplateUpdate(BaseModel):
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     game_over_rules: Optional[dict[str, Any]] = None
+    npc_conversations: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
     min_items: Optional[int] = None

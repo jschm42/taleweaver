@@ -15,6 +15,7 @@ from backend.core.script_validator import check_scripts_and_guards
 from backend.core.world_validation import (
     combat_groups,
     companions,
+    conversations,
     entities,
     hidden_npcs,
     npc_memory,
@@ -52,6 +53,8 @@ CHECKS: tuple[Check, ...] = (
     entities.check_reveal_targets,
     hidden_npcs.check_hidden_npc_reveal,
     npc_memory.check_hostile_npc_memory,
+    conversations.check_conversation_refs,
+    conversations.check_topic_ids,
     entities.check_protagonist_items,
     story.check_image_coverage,
     story.check_combat_needs_rpg_mode,

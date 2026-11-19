@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from backend.core.style_catalog import build_blueprint_image_styles, build_blueprint_tone
+from backend.engine.blueprint.conversation_converters import (
+    conversation_topic,
+    npc_relation,
+)
 from backend.engine.blueprint.converters import (
     STAT_ALIASES,
     ability_area,
@@ -123,6 +127,12 @@ WORLD_KEYS: dict[str, FieldSpec] = {
         choice("game_over", "respawn", aliases={"gameover": "game_over", "revive": "respawn"}),
     ),
     "respawn_hp": FieldSpec("game_over_rules.respawn_hp_percent", percent),
+    # NPC conversations: NPCs talk with each other on their own; gossip spreads memories.
+    "npc_chatter": FieldSpec(
+        "npc_conversations.chatter",
+        choice("OFF", "RARE", "NORMAL", "LIVELY", aliases={"none": "OFF", "often": "LIVELY"}),
+    ),
+    "gossip": FieldSpec("npc_conversations.gossip", boolean),
     "win_guard": _expr("completed_guard_expression"),
     "lose_guard": _expr("gameover_guard_expression"),
     "init_script": _script("init_script"),
@@ -330,6 +340,10 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "special_chance": FieldSpec("special_chance", integer),
     # NPC memory: lasting facts about the protagonist (0 = off).
     "memory": FieldSpec("memory_slots", integer),
+    # NPC conversations: how this NPC sees others, opt-out of chatter, overheard topics.
+    "relation": FieldSpec("relations", npc_relation, repeat=True),
+    "chatty": FieldSpec("chatty", boolean),
+    "topic": FieldSpec("conversation_topics", conversation_topic, repeat=True),
     # Companion (sidekick): any of these keys makes the NPC a companion.
     "companion": FieldSpec("companion.recruitable", boolean),
     "in_party": FieldSpec("companion.starts_in_party", boolean),
@@ -500,6 +514,7 @@ SCRIPT_TRIGGERS = (
     "on_narration_done",
     "on_time_reached",
     "on_respawn",
+    "on_conversation_heard",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),

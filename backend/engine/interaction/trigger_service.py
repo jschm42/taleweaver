@@ -9,6 +9,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.config import settings
 from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
+from backend.engine.conversations.ops import apply_conversation_ops
+from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
 from backend.engine.interaction.script_item_apply import (
     apply_player_inventory,
     insert_cloned_entities,
@@ -109,6 +111,7 @@ class TriggerService:
             party=session_overrides.get(PARTY_KEY),
             respawn=session_overrides.get(RESPAWN_KEY),
             npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
+            conversations=session_overrides.get(CONVERSATIONS_STATE_KEY),
             story_flags=story_flags,
             is_debug_enabled=cls.is_debug_mode(state),
             llm_asker=llm_asker,
@@ -324,6 +327,7 @@ class TriggerService:
         apply_party_ops(cur_states, changeset.party_ops)
         apply_respawn_point(cur_states, changeset.respawn_point)
         apply_npc_memory_ops(cur_states, changeset.npc_memory_ops)
+        apply_conversation_ops(cur_states, changeset.conversation_ops)
         store_skip_narration(cur_states, changeset.skip_narration)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")

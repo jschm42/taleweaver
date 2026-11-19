@@ -40,6 +40,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     time_system: Optional[str] = "calendar"
     time_config: Optional[dict[str, Any]] = None
     game_over_rules: Optional[dict[str, Any]] = None
+    npc_conversations: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     tts_director_notes: Optional[str] = None
@@ -327,6 +328,7 @@ class AdventureTemplateResponse(BaseModel):
     time_config: Optional[dict[str, Any]] = None
     starting_timestamp: int = 0
     game_over_rules: Optional[dict[str, Any]]
+    npc_conversations: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
@@ -716,6 +718,7 @@ class AdventureTemplateUpdate(BaseModel):
     creation_error: Optional[str] = None
     strict_rules: Optional[bool] = None
     game_over_rules: Optional[dict[str, Any]] = None
+    npc_conversations: Optional[dict[str, Any]] = None
     selected_style_id: Optional[str] = None
     selected_tone_id: Optional[str] = None
     time_system: Optional[str] = None

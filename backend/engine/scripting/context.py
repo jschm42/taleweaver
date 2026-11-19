@@ -28,6 +28,7 @@ from backend.engine.scripting.npc_combat_group import (
     NPCCombatGroupManagerMixin,
     NPCCombatGroupMixin,
 )
+from backend.engine.scripting.npc_conversation_proxy import NPCConversationManagerMixin
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
 from backend.engine.scripting.npc_memory_proxy import NPCMemoryManagerMixin, NPCMemoryMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
@@ -144,6 +145,8 @@ class ScriptChangeset:
     respawn_point: Optional[str] = None
     # Ordered tw.npcs memory operations, replayed by npc_memory.apply_npc_memory_ops.
     npc_memory_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.npcs conversation operations, replayed by conversations.ops.
+    conversation_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -204,6 +207,7 @@ class ScriptChangeset:
             or self.party_ops
             or self.respawn_point is not None
             or self.npc_memory_ops
+            or self.conversation_ops
             or self.skip_narration
         )
 
@@ -1180,6 +1184,7 @@ class NPCManagerProxy(
     NPCVitalsManagerMixin,
     NPCVisibilityManagerMixin,
     NPCMemoryManagerMixin,
+    NPCConversationManagerMixin,
     EntityManagerProxy,
 ):
     """``tw.npcs``: entity access plus the NPC persona, directed-speech and vitals shortcuts."""
@@ -1820,6 +1825,7 @@ class GameContext:
         party: Optional[dict[str, Any]] = None,
         respawn: Optional[dict[str, Any]] = None,
         npc_memory: Optional[dict[str, Any]] = None,
+        conversations: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1855,6 +1861,8 @@ class GameContext:
         self.items = self.objects
         # NPC memory (entity_states["__npc_memory__"]) for npc.remember / recall / forget.
         self.npcs.load_memories(npc_memory)
+        # Relations and overheard topics (entity_states["__conversations__"]).
+        self.npcs.load_conversations(conversations)
         mover = ItemMover(self.changeset, self.player, self.npcs, self.objects, current_scene_id)
         self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)

@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.party.party_state import PARTY_KEY
 from backend.engine.rules.game_clock import clock_view
@@ -209,6 +210,7 @@ class HardRuleEvaluator:
                 party=session_overrides.get(PARTY_KEY),
                 respawn=session_overrides.get(RESPAWN_KEY),
                 npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
+                conversations=session_overrides.get(CONVERSATIONS_STATE_KEY),
                 story_flags=story_flags,
             )
 

@@ -16,6 +16,12 @@ from backend.engine.audio.voice_casting import (
     resolve_voice_setup,
 )
 from backend.engine.combat.npc_attack import npc_stat_columns
+from backend.engine.conversations.npc_fields import (
+    CHATTY_KEY,
+    RELATIONS_KEY,
+    TOPICS_KEY,
+    normalize_conversation_metadata,
+)
 from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
@@ -59,6 +65,9 @@ _METADATA_FIELDS = (
     "on_recruit_failure_text",
     "reveal_guard_expression",
     MEMORY_SLOTS_KEY,
+    RELATIONS_KEY,
+    CHATTY_KEY,
+    TOPICS_KEY,
 )
 _METADATA_DEFAULTS: dict[str, Any] = {"special_actions": [], "attack_mode": "PASSIVE"}
 
@@ -91,6 +100,7 @@ def npc_metadata(npc: dict[str, Any]) -> dict[str, Any]:
         metadata[key] = value
     metadata[COMPANION_KEY] = normalize_companion(metadata.get(COMPANION_KEY))
     metadata[MEMORY_SLOTS_KEY] = normalize_memory_slots(metadata.get(MEMORY_SLOTS_KEY))
+    normalize_conversation_metadata(metadata)
     return metadata
 
 

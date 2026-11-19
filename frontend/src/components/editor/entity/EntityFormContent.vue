@@ -23,6 +23,7 @@ import ItemReadableSection from './ItemReadableSection.vue'
 import EntityDescriptionSection from './EntityDescriptionSection.vue'
 import NpcCombatPanel from './NpcCombatPanel.vue'
 import NpcCompanionPanel from './NpcCompanionPanel.vue'
+import NpcConversationsPanel from './NpcConversationsPanel.vue'
 import ItemTriggersPanel from './ItemTriggersPanel.vue'
 import SceneTriggersPanel from './SceneTriggersPanel.vue'
 import NpcTriggersPanel from './NpcTriggersPanel.vue'
@@ -43,6 +44,7 @@ const NPC_TABS = [
   { id: 'inventory' as const, label: 'Inventory' },
   { id: 'combat' as const, label: 'Combat' },
   { id: 'companion' as const, label: 'Companion' },
+  { id: 'conversations' as const, label: 'Conversations' },
 ]
 
 const tabs = computed(() => [
@@ -103,6 +105,10 @@ const tabs = computed(() => [
 
     <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'companion'">
       <NpcCompanionPanel />
+    </div>
+
+    <div v-if="ef.type === 'npc'" v-show="ef.activeTab === 'conversations'">
+      <NpcConversationsPanel />
     </div>
 
     <div v-show="ef.activeTab === 'advanced'" class="space-y-6">

@@ -88,6 +88,7 @@ const TRIGGER_OPTIONS = [
   { value: 'on_turn_end', label: 'On Turn End', desc: 'Runs after scene narrative and entity mutations' },
   { value: 'on_time_reached', label: 'On Time Reached', desc: 'Runs once when the in-game clock passes the target time (e.g. 90, 2h 30m, 1d)' },
   { value: 'on_respawn', label: 'On Respawn', desc: 'Respawn mode: runs after the fallen protagonist woke up at the revival point (penalties, healing enemies)' },
+  { value: 'on_conversation_heard', label: 'On Conversation Heard', desc: 'Runs once the protagonist overheard the target conversation topic (topic id; empty = any topic)' },
 ] as const
 
 function getTriggerBadgeClass(trigger: string): string {
@@ -110,6 +111,8 @@ function getTriggerBadgeClass(trigger: string): string {
       return 'bg-orange-500/15 text-orange-300 border-orange-500/30'
     case 'on_respawn':
       return 'bg-red-500/15 text-red-300 border-red-500/30'
+    case 'on_conversation_heard':
+      return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
     default:
       return 'bg-slate-500/15 text-slate-300 border-slate-500/30'
   }
@@ -831,7 +834,7 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.npcs</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.npcs.move(npc_id, target_scene_id)</code>, <code>tw.npcs.get(npc_id)</code>, <code>tw.npcs.say(npc_id, text)</code>, <code>tw.npcs.say_directed(npc_id, direction)</code>, <code>tw.npcs.consume(npc_id, item_id)</code>
+                    <code>tw.npcs.move(npc_id, target_scene_id)</code>, <code>tw.npcs.get(npc_id)</code>, <code>tw.npcs.say(npc_id, text)</code>, <code>tw.npcs.say_directed(npc_id, direction)</code>, <code>tw.npcs.converse(a, b, topic=...)</code>, <code>tw.npcs.set_relation(a, b, kind)</code>, <code>tw.npcs.topic_heard(topic_id)</code>, <code>tw.npcs.consume(npc_id, item_id)</code>
                   </p>
                 </div>
 

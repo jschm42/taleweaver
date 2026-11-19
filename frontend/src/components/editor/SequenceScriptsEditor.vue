@@ -46,7 +46,7 @@ const emit = defineEmits<{
 }>()
 
 // Same triggers as top-level scripts, except on_init (no sequence is active yet).
-type TargetKind = 'entity' | 'scene' | 'time' | null
+type TargetKind = 'entity' | 'scene' | 'time' | 'topic' | null
 
 const TRIGGERS: { value: string; label: string; target: TargetKind }[] = [
   { value: 'on_interact', label: 'On interact (item / character)', target: 'entity' },
@@ -57,6 +57,7 @@ const TRIGGERS: { value: string; label: string; target: TargetKind }[] = [
   { value: 'on_narration_done', label: 'On narration done (every message)', target: null },
   { value: 'on_time_reached', label: 'On time reached (elapsed in-game time)', target: 'time' },
   { value: 'on_respawn', label: 'On respawn (protagonist revived)', target: null },
+  { value: 'on_conversation_heard', label: 'On conversation heard (NPC topic overheard)', target: 'topic' },
 ]
 const TRIGGER_OPTIONS: SelectOption[] = TRIGGERS.map((t) => ({ value: t.value, label: t.label }))
 
@@ -193,6 +194,18 @@ function toggle(index: number): void {
               :model-value="script.target_id || ''"
               mono
               placeholder="e.g. 90, 2h 30m, 1d"
+              @update:model-value="(v) => updateScript(index, { target_id: String(v ?? '') })"
+            />
+          </UiField>
+          <UiField
+            v-else-if="targetKind(script.trigger) === 'topic'"
+            label="Conversation topic id"
+            hint="The id of an NPC conversation topic; empty = any topic."
+          >
+            <UiInput
+              :model-value="script.target_id || ''"
+              mono
+              placeholder="e.g. cellar_door"
               @update:model-value="(v) => updateScript(index, { target_id: String(v ?? '') })"
             />
           </UiField>

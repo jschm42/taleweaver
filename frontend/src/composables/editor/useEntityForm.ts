@@ -3,6 +3,7 @@
  * docs/specs/workbench_ui.md). EditEntityModal provides it; the section components in
  * components/editor/entity/ read it with useEntityFormContext().
  */
+import { conversationFormDefaults } from '@/components/editor/entity/npcConversationTypes'
 import { computed, nextTick, ref, watch } from 'vue'
 import {
   EDITOR_ID_PREFIXES,
@@ -114,8 +115,8 @@ export type EntityFormEmits = {
 export function useEntityForm(props: EntityFormProps, emit: EntityFormEmits) {
 
 
-type FormTab = 'simple' | 'stats' | 'movement' | 'inventory' | 'combat' | 'companion' | 'advanced'
-const FORM_TABS: FormTab[] = ['simple', 'stats', 'movement', 'inventory', 'combat', 'companion', 'advanced']
+type FormTab = 'simple' | 'stats' | 'movement' | 'inventory' | 'combat' | 'companion' | 'conversations' | 'advanced'
+const FORM_TABS: FormTab[] = ['simple', 'stats', 'movement', 'inventory', 'combat', 'companion', 'conversations', 'advanced']
 const activeTab = ref<FormTab>('simple')
 const isPage = computed(() => props.variant === 'page')
 
@@ -207,6 +208,7 @@ const localForm = ref({
   on_recruit_failure_text: '',
   reveal_guard_expression: '',
   memory_slots: 0,
+  ...conversationFormDefaults(),
   on_interact_script: '',
   on_interact_text: '',
   on_success_script: '',
@@ -573,6 +575,7 @@ watch(() => props.initialForm, (newVal) => {
     on_recruit_failure_text: '',
     reveal_guard_expression: '',
     memory_slots: 0,
+    ...conversationFormDefaults(),
     on_interact_script: '',
     on_interact_text: '',
     ...newVal
@@ -617,6 +620,7 @@ watch(() => props.show, (newVal) => {
       on_recruit_failure_text: '',
       reveal_guard_expression: '',
       memory_slots: 0,
+      ...conversationFormDefaults(),
       on_interact_script: '',
       on_interact_text: '',
       ...props.initialForm
@@ -864,6 +868,9 @@ function handleSave() {
     on_recruit_failure_text: localForm.value.on_recruit_failure_text,
     reveal_guard_expression: String(localForm.value.reveal_guard_expression || '').trim(),
     memory_slots: Number(localForm.value.memory_slots) || 0,
+    relations: localForm.value.relations,
+    chatty: localForm.value.chatty,
+    conversation_topics: localForm.value.conversation_topics,
     on_interact_script: localForm.value.on_interact_script,
     on_interact_text: localForm.value.on_interact_text,
   })

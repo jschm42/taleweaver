@@ -9,6 +9,9 @@ import type { NarrationStyle } from './narrationStyles'
 const narrationStyle = defineModel<NarrationStyle>('narrationStyle', { required: true })
 const turns = defineModel<number>('turns', { required: true })
 const enableCompression = defineModel<boolean>('enableCompression', { required: true })
+const npcChatter = defineModel<boolean>('npcChatter', { default: true })
+
+const props = defineProps<{ npcChatterAvailable?: boolean }>()
 
 const MIN_TURNS = 1
 const MAX_TURNS = 100
@@ -106,6 +109,17 @@ function handleInput(event: Event) {
     >
       <template #control>
         <SettingToggle v-model="enableCompression" label="Automatic history compression" />
+      </template>
+    </SettingCard>
+
+    <SettingCard
+      v-if="props.npcChatterAvailable"
+      title="NPC Chatter"
+      description="Characters in the scene talk with each other on their own now and then."
+      hint="Off: they only talk with each other when you listen (/listen). Conversations cost no extra AI call; they become part of the narration."
+    >
+      <template #control>
+        <SettingToggle v-model="npcChatter" label="NPC chatter" />
       </template>
     </SettingCard>
 

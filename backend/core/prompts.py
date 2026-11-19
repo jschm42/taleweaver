@@ -1073,6 +1073,7 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "   - To look around the whole scene: Use `/lookaround` or `/look`.\n"
     "   - To manipulate mechanisms: Use `/push <target>` or `/pull <target>` (e.g., `/push lever`, `/pull chain`).\n"
     "   - To recover when safe: Use `/rest`.\n"
+    "   - To overhear what two characters say to each other (clues, gossip): Use `/listen`.\n"
     "   - To drop an item: Use `/drop <item>`.\n"
     "   - To eat, drink or use up a consumable: Use `/consume <item>`.\n"
     "   - To craft from exact ingredients: Use `/craft <item_a> | <item_b>`.\n"

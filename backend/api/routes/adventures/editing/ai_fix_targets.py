@@ -14,6 +14,7 @@ from backend.api.routes.adventures.editing.ai_fix_scripts import (
     SEQUENCE_SCRIPT_FIELDS,
 )
 from backend.api.routes.adventures.editing.ai_fix_soft_rules import parse_soft_rule_key
+from backend.engine.conversations.npc_fields import CONVERSATION_FIELDS
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -88,6 +89,7 @@ _FIX_NPC_FIELDS = frozenset(
         "is_hidden",
         "spatial_position",
         "memory_slots",
+        *CONVERSATION_FIELDS,
         *NPC_SCRIPT_FIELDS,
     }
 )

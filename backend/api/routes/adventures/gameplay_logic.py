@@ -13,6 +13,12 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
+from backend.api.routes.adventures.npc_conversation_flow import (
+    LISTEN_PLAYER_ACTION,
+    conversation_reminder,
+    plan_conversation_beat,
+    spread_session_gossip,
+)
 from backend.api.routes.adventures.agent_commands import (
     AGENT_CONSOLE_COMMANDS,
     console_args,
@@ -77,6 +83,8 @@ from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.party.party_ops import apply_session_party_ops
 from backend.engine.party.party_state import PARTY_KEY
+from backend.engine.conversations.ops import apply_conversation_ops
+from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
 from backend.engine.rules.npc_memory import NPC_MEMORY_STATE_KEY, apply_npc_memory_ops
 from backend.engine.rules.respawn import RESPAWN_KEY, apply_respawn_point
 from backend.engine.rules.world_memories import add_world_memory, make_world_memory
@@ -861,6 +869,7 @@ class GameTurnManager:
                 user_msg = normalized_user_msg
                 actual_user_input = normalized_user_msg
         self.current_user_message = actual_user_input
+        self.listen_requested = False
 
         if user_msg.lower() in {"/shuffle", "/suggest", "/suggestions"}:
             last_response = await self._load_last_assistant_message()
@@ -1052,6 +1061,10 @@ class GameTurnManager:
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_LOOKAROUND]"):
                 user_msg = "Look around and describe all relevant details in the current area"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_LISTEN]"):
+                user_msg = LISTEN_PLAYER_ACTION
+                self.listen_requested = True
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_REST]"):
                 user_msg = "Take a short rest if it is safe and possible"
@@ -1752,6 +1765,7 @@ class GameTurnManager:
         # Entity interactions: scripted and inline on_interact triggers. Runs in every rule
         # mode; without the mechanics pass only entities named in the message count. An
         # arrival or opening narration only describes the scene: the player touched nothing.
+        interacted_ids: list[str] = []
         try:
             interacted_ids = (
                 []
@@ -1803,6 +1817,14 @@ class GameTurnManager:
             async for turn_event in advance_in_game_turn(self, script_runner, game_event):
                 yield turn_event
             self._turn_anchor = turn_anchor(self.state)
+            await spread_session_gossip(self)
+
+        # NPC conversations: whether present NPCs talk with each other in this narration.
+        try:
+            async for beat_event in plan_conversation_beat(self, interacted_ids):
+                yield beat_event
+        except GameOverError as goe:
+            await end_or_respawn(self, goe, game_event)
 
         # Rebuild narration context so any entity state mutations (such as revealing or hiding NPCs)
         # produced during the logic pass, interact triggers, or turn scripts take effect in Pass 2.
@@ -1889,6 +1911,9 @@ class GameTurnManager:
         if choice_note:
             # A trigger of this turn opened a choice dialog: its answer decides, not Pass 2.
             reminders.append(choice_note)
+        beat_note = conversation_reminder(self.state)
+        if beat_note:
+            reminders.append(beat_note)
         if language:
             reminders.append(
                 f"Respond in {language.upper()} only (except voice tags like [curious], which MUST always remain in English). "
@@ -2977,6 +3002,7 @@ class GameTurnManager:
             party=session_overrides.get(PARTY_KEY),
             respawn=session_overrides.get(RESPAWN_KEY),
             npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
+            conversations=session_overrides.get(CONVERSATIONS_STATE_KEY),
             story_flags=story_flags,
             is_debug_enabled=is_debug,
             llm_asker=make_script_llm_asker(
@@ -3149,10 +3175,15 @@ class GameTurnManager:
 
         # Party changes first, so a companion recruited by this script follows its teleport.
         apply_session_party_ops(self.state, changeset.party_ops)
-        if changeset.respawn_point is not None or changeset.npc_memory_ops:
+        if (
+            changeset.respawn_point is not None
+            or changeset.npc_memory_ops
+            or changeset.conversation_ops
+        ):
             states = dict(self.state.entity_states or {})
             apply_respawn_point(states, changeset.respawn_point)
             apply_npc_memory_ops(states, changeset.npc_memory_ops)
+            apply_conversation_ops(states, changeset.conversation_ops)
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
         if changeset.teleport_scene_id or getattr(changeset, "teleport_dynamic_request", None):

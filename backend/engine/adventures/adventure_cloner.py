@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -202,6 +203,7 @@ def _create_cloned_template_entity(
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
+        npc_conversations=normalize_conversation_settings(original.npc_conversations),
         quests=deepcopy(original.quests) if original.quests else None,
         is_completed=False,
         is_ready=original.is_ready,

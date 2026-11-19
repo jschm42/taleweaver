@@ -24,6 +24,7 @@ from backend.api.routes.adventures.session_items import backfill_avatar_items_fr
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.global_settings import apply_global_settings
+from backend.engine.conversations.npc_fields import conversation_fields
 from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.media.media_engine import MediaEngine
 from backend.engine.rules.npc_memory import memory_slots
@@ -188,6 +189,7 @@ def _entity_extras(entity: WorldEntity, _data: dict[str, Any]) -> dict[str, Any]
             "stats": {"hp": entity.hp, "mana": entity.mana, "stamina": entity.stamina},
             **_text_fields(dict(entity.metadata_json or {}), _NPC_METADATA_FIELDS),
             "memory_slots": memory_slots(entity.metadata_json),
+            **conversation_fields(entity.metadata_json),
         }
     if entity.entity_type == "OBJECT":
         return _object_extras(entity)

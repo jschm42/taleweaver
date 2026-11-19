@@ -81,6 +81,9 @@ class AdventureTemplate(Base, TimestampMixin):
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     game_over_rules: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # NPC conversations: {"chatter": "OFF|RARE|NORMAL|LIVELY", "gossip": bool}; None = all off
+    # (see engine/conversations/settings.py).
+    npc_conversations: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     quests: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

@@ -202,9 +202,13 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
       narration_style: payload.narrationStyle,
       ui_skin: payload.skin,
       tts_auto_speak: ttsAutoSpeak,
+      ...(sheet.value?.npc_chatter?.available ? { npc_chatter: payload.npcChatter } : {}),
     })
     if (sheet.value) {
       sheet.value.tts_auto_speak = ttsAutoSpeak
+      if (sheet.value.npc_chatter?.available) {
+        sheet.value.npc_chatter = { ...sheet.value.npc_chatter, enabled: payload.npcChatter }
+      }
       sheet.value.max_memory_turns = payload.turns
       sheet.value.enable_history_compression = payload.enableCompression
       sheet.value.narration_style = payload.narrationStyle
@@ -2272,6 +2276,8 @@ usePlayAgentAutoLoop()
       :initial-turns="sheet?.max_memory_turns ?? 10"
       :initial-narration-style="sheet?.narration_style"
       :initial-compression="sheet?.enable_history_compression ?? true"
+      :initial-npc-chatter="sheet?.npc_chatter?.enabled ?? true"
+      :npc-chatter-available="!!sheet?.npc_chatter?.available"
       :initial-auto-speech="audioService.autoSpeechEnabled.value"
       :initial-auto-speak-settings="autoSpeakSettings"
       :initial-language="language"

@@ -4,7 +4,7 @@
  */
 import { computed, defineAsyncComponent, type Component, type ComputedRef } from 'vue'
 import {
-  Award, BookOpen, Brain, Clock, Cog, Feather, Image, Map, MapPin, Music, Package, Palette, Scroll,
+  Award, BookOpen, Brain, Clock, Cog, Feather, Image, Map, MapPin, MessagesSquare, Music, Package, Palette, Scroll,
   ScrollText, ShieldCheck, Sparkles, User, Users, Workflow,
 } from 'lucide-vue-next'
 import type { WorkbenchNavGroup } from '@/components/workbench/WorkbenchNav.vue'
@@ -27,6 +27,7 @@ export const EDITOR_PAGES: Record<string, Component> = {
   triggers: page(() => import('@/components/editor/pages/TriggersPage.vue')),
   time: page(() => import('@/components/editor/pages/TimePage.vue')),
   memory: page(() => import('@/components/editor/pages/MemoryPage.vue')),
+  conversations: page(() => import('@/components/editor/pages/ConversationsPage.vue')),
   dynamic: page(() => import('@/components/editor/pages/DynamicPage.vue')),
   visuals: page(() => import('@/components/editor/pages/VisualsPage.vue')),
   tone: page(() => import('@/components/editor/pages/TonePage.vue')),
@@ -70,6 +71,7 @@ export function useEditorNavigation(editor: EditorContext): EditorNavigation {
         { id: 'triggers', label: 'Trigger overview', icon: Workflow },
         { id: 'time', label: 'Time & pacing', icon: Clock },
         { id: 'memory', label: 'Memory', icon: Brain },
+        { id: 'conversations', label: 'NPC conversations', icon: MessagesSquare },
         { id: 'dynamic', label: 'Dynamic generator', icon: Sparkles },
       ],
     },

@@ -22,6 +22,7 @@ from backend.core.config import settings
 from backend.core.narration_styles import DEFAULT_NARRATION_STYLE
 from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY
 from backend.core.ui_theme import UI_SKIN_AUTO, normalize_ui_theme
+from backend.engine.conversations.settings import chatter_sheet_fields
 from backend.engine.rules.item_logic import get_item_slot, normalize_equipment_keys
 from backend.engine.rules.quest_items import mark_carried_quest_items
 from backend.models.adventure_template import AdventureTemplate
@@ -370,6 +371,7 @@ async def build_sheet_snapshot(
         "narration_style": getattr(state, "narration_style", None) or DEFAULT_NARRATION_STYLE,
         "ui_skin": getattr(state, "ui_skin", None) or UI_SKIN_AUTO,
         "tts_auto_speak": (state.entity_states or {}).get(TTS_AUTO_SPEAK_KEY),
+        "npc_chatter": chatter_sheet_fields(ctx.get("npc_conversations"), state.entity_states),
         "compressed_history": getattr(state, "compressed_history", None),
         **_agent_fields(state),
         **access_fields(ctx.adventure, state),

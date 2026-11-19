@@ -439,6 +439,32 @@ memory: 4
 
 Bran keeps up to four short facts about the protagonist: the name once it was told, the room that is still unpaid, the insult from yesterday. When the hero comes back after three scenes, he greets them by name and asks for his money. Strangers without `memory` only know what happens in the current scene and never use the hero's name before they hear it. Leave `memory` off for enemies and extras: every slot costs prompt tokens while the character is present.
 
+### Two guards the hero can overhear
+
+```text
+[World]
+npc_chatter: normal
+gossip: yes
+
+[NPC: GERD] Gerd
+in: GATE
+character: Bored, talks too much
+relation: HANNO = colleague | shares night shifts with him
+topic: the cellar door | with: HANNO | convey: the cellar door stays unlocked after midnight | id: cellar_door
+
+[NPC: HANNO] Hanno
+in: GATE
+relation: GERD = colleague
+memory: 2
+
+[Script: CELLAR_CLUE]
+trigger: on_conversation_heard
+target: cellar_door
+code: tw.flags.set('knows_cellar', True)
+```
+
+With `npc_chatter: normal` Gerd and Hanno talk with each other now and then while the hero lingers at the gate; with `/listen` they do so right away. Their first talk is about the cellar door: the narration has to get the clue across, it is stored as a world memory, and the script sets a flag the cellar exit can be guarded on. With `gossip: yes` Hanno passes what he remembers about the hero to Gerd, his colleague. See [NPC conversations](world-builder-syntax.md#npc-conversations).
+
 ### A guard with a real weapon and armor (no items needed)
 
 ```text

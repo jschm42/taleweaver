@@ -383,6 +383,31 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
     return findings
 
 
+def _check_conversation_topics(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
+    """``on_heard_script`` and ``guard_expression`` of every NPC conversation topic."""
+    findings: list[ValidationFinding] = []
+    for ent in entities:
+        meta = ent.get("metadata_json") if isinstance(ent, dict) else None
+        topics = (ent.get("conversation_topics") if isinstance(ent, dict) else None) or (
+            meta.get("conversation_topics") if isinstance(meta, dict) else None
+        )
+        eid = _entity_id(ent) or "?"
+        for topic in topics if isinstance(topics, list) else []:
+            if not isinstance(topic, dict):
+                continue
+            extra = {"entity_id": eid, "topic_id": topic.get("id")}
+            loc = f"entity:{eid}"
+            findings.extend(
+                _validate_script_code(topic.get("on_heard_script"), "on_heard_script", loc, extra)
+            )
+            findings.extend(
+                _validate_guard_expression(
+                    topic.get("guard_expression"), "topic guard_expression", loc, extra
+                )
+            )
+    return findings
+
+
 def _check_protagonist(protagonist: Optional[dict[str, Any]]) -> list[ValidationFinding]:
     if not isinstance(protagonist, dict):
         return []
@@ -545,6 +570,7 @@ def check_scripts_and_guards(
     findings.extend(_check_scenes(scs))
     findings.extend(_check_exits(exs))
     findings.extend(_check_entities(ents))
+    findings.extend(_check_conversation_topics(ents))
     findings.extend(_check_protagonist(protagonist))
     findings.extend(_check_sequences(sequences))
     findings.extend(_check_quests(quests))

@@ -128,6 +128,8 @@ export interface CharacterSheet {
   narration_style?: 'terse' | 'dialogue' | 'balanced' | 'rich' | 'epic' | string
   /** Dialog skin the player picked for this session; "auto" follows the adventure. */
   ui_skin?: string | null
+  /** NPC chatter: adventure level, whether the adventure allows it, and the player switch. */
+  npc_chatter?: { level: string; available: boolean; enabled: boolean }
   compressed_history?: any
 }
 
@@ -605,6 +607,7 @@ export interface CreateAdventurePayload {
   gm_time_control?: boolean
   /** At 0 HP: `{ on_zero_hp: 'game_over' | 'respawn', respawn_hp_percent }`. */
   game_over_rules?: Record<string, unknown> | null
+  npc_conversations?: Record<string, unknown> | null
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean
