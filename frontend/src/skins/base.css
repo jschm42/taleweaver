@@ -196,6 +196,50 @@
   transform: scale(1.01);
 }
 
+/* The part text-to-speech is reading: its own frame lights up and pulses (narration in the
+   skin's accent, a dialogue bubble in its speaker color). The glow runs as an animation, so it
+   wins over the skins' own box-shadows (which used to hide the highlight); in skins without a
+   visible border the pulsing ring on the frame line takes the border's place. The [data-skin]
+   prefix outranks the skins' normal bubble rules; skins with their own speaking style
+   (pixel, sitcom, toon) load later and keep it. */
+.tw-narration.is-speaking {
+  --tw-speaking-ring: var(--tw-accent);
+}
+
+.tw-bubble.is-speaking {
+  --tw-speaking-ring: var(--tw-bubble-color);
+}
+
+[data-skin] .tw-narration.is-speaking,
+[data-skin] .tw-bubble.is-speaking {
+  border-color: var(--tw-speaking-ring);
+  animation: tw-speaking-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tw-speaking-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--tw-speaking-ring),
+      0 0 12px color-mix(in srgb, var(--tw-speaking-ring) 40%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--tw-speaking-ring),
+      0 0 28px color-mix(in srgb, var(--tw-speaking-ring) 75%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-skin] .tw-narration.is-speaking,
+  [data-skin] .tw-bubble.is-speaking {
+    animation: none;
+    box-shadow:
+      0 0 0 2px var(--tw-speaking-ring),
+      0 0 22px color-mix(in srgb, var(--tw-speaking-ring) 60%, transparent);
+  }
+}
+
 .tw-bubble-text {
   font-family: var(--tw-font-dialogue);
   letter-spacing: 0.02em;

@@ -142,10 +142,12 @@
 /* A soft colored ring instead of a glow on the light cards. */
 [data-skin='sitcom'] .tw-narration.is-speaking {
   box-shadow: 0 0 0 4px #f2b134, 0 14px 30px rgba(60, 20, 10, 0.35);
+  animation: none;
 }
 
 [data-skin='sitcom'] .tw-bubble.is-speaking {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tw-bubble-color) 35%, transparent), var(--tw-bubble-shadow);
+  animation: none;
 }
 
 [data-skin='sitcom'] .tw-speaker {

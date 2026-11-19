@@ -120,6 +120,8 @@
 [data-skin='pixel'] .tw-bubble.is-speaking {
   box-shadow: 0 0 0 3px var(--tw-accent), 7px 7px 0 rgba(0, 0, 0, 0.55);
   transform: none;
+  /* Keeps the hard gold frame instead of the base skin's soft pulse. */
+  animation: none;
 }
 
 [data-skin='pixel'] .tw-bubble {
