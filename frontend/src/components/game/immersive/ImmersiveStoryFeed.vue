@@ -5,7 +5,8 @@
  * Each scene is its own segment (see storyDividers.ts): entering another scene starts a new one,
  * and the pager browses earlier scenes. Within a scene the feed is endless: chapter changes are
  * thin dividers, and older messages of the scene load when the reader scrolls near the top
- * (useLoadOlderOnScroll). New content is followed down (useScrollToLatest).
+ * (useLoadOlderOnScroll). New content is followed down (useScrollToLatest), and the bubble
+ * that text-to-speech reads stays in view (useFollowSpeech).
  */
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { ComicTurn } from '@/composables/useComicTurns'
@@ -14,6 +15,7 @@ import ImmersiveStoryExchange from '@/components/game/immersive/ImmersiveStoryEx
 import ThinkingIndicator from '@/components/game/immersive/ThinkingIndicator.vue'
 import { Sparkles, ChevronLeft, ChevronRight, ChevronsDown, Compass, Loader2 } from 'lucide-vue-next'
 import { useScrollToLatest } from './useScrollToLatest'
+import { useFollowSpeech } from './useFollowSpeech'
 import { useLoadOlderOnScroll } from './useLoadOlderOnScroll'
 import { chapterStartingAt, groupSceneSegments, segmentSceneLabel, type SceneSegment, type StoryDivider } from './storyDividers'
 import ChapterBanner from './ChapterBanner.vue'
@@ -72,7 +74,7 @@ function latestExchangeElement(): HTMLElement | undefined {
 
 // Follow new content (streamed narration, engine events, choice dialogs) down the feed, but
 // never past the start of the newest exchange: a long narration stays readable from its top.
-const { hasContentBelow, isFollowing, scrollToLatest, scrollToTop: scrollToContainerTop, resumeFollowing } = useScrollToLatest(storyContainerRef, {
+const { hasContentBelow, isFollowing, scrollToLatest, scrollToTop: scrollToContainerTop, resumeFollowing, scrollToPosition } = useScrollToLatest(storyContainerRef, {
   canFollow: () => viewingKey.value === null,
   maxFollowTop: () => {
     const latest = latestExchangeElement()
@@ -81,6 +83,13 @@ const { hasContentBelow, isFollowing, scrollToLatest, scrollToTop: scrollToConta
     if (panelTop === null) return exchangeTop
     return exchangeTop === null ? panelTop : Math.max(exchangeTop, panelTop)
   },
+})
+
+// Text-to-speech: the bubble being read stays in view; the last one scrolls to the bottom.
+useFollowSpeech(storyContainerRef, {
+  canFollow: () => viewingKey.value === null,
+  scrollToPosition,
+  isFollowing: () => isFollowing.value,
 })
 
 // Older messages load only once the reader scrolled up themselves (auto-follow is off then),

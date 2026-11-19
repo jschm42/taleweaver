@@ -27,14 +27,38 @@ export function useScrollToLatest(container: Ref<HTMLElement | null>, options: S
   let lastScrollTop = 0
   let isProgrammaticScroll = false
   let touchStartY = 0
+  // Set when the app scrolled to the very end (scroll-down button, last spoken part): following
+  // then goes to the real bottom instead of stopping at maxFollowTop, which would otherwise cut
+  // a running smooth scroll short. Holds the maxFollowTop of that moment; a new exchange
+  // (a larger limit) or the reader scrolling up ends it.
+  let pinnedLimit: number | null | undefined = undefined
+
+  function unpin() {
+    pinnedLimit = undefined
+  }
+
+  function pinToBottom() {
+    pinnedLimit = options.maxFollowTop?.() ?? null
+  }
+
+  function isPinned(limit: number | null): boolean {
+    if (pinnedLimit === undefined) return false
+    if (limit !== null && pinnedLimit !== null && limit > pinnedLimit + 2) {
+      unpin()
+      return false
+    }
+    return true
+  }
 
   function followTop(el: HTMLElement): number {
     const bottom = el.scrollHeight - el.clientHeight
     const limit = options.maxFollowTop?.() ?? null
-    return limit === null ? bottom : Math.min(bottom, limit)
+    if (limit === null || isPinned(limit)) return bottom
+    return Math.min(bottom, limit)
   }
 
   function follow(el: HTMLElement) {
+    if (!isFollowing.value) unpin()
     if (!isFollowing.value || options.canFollow?.() === false) return
     const target = followTop(el)
     // Only ever move down: following must not yank the reader back up.
@@ -124,11 +148,31 @@ export function useScrollToLatest(container: Ref<HTMLElement | null>, options: S
   function scrollToLatest() {
     const el = container.value
     isFollowing.value = true
+    pinToBottom()
     if (el) {
       isProgrammaticScroll = true
       lastScrollTop = el.scrollHeight
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }
+  }
+
+  /**
+   * Smoothly scrolls to `top` (clamped) as the app, not the reader: following is kept when the
+   * target is the end of the feed. Used by TTS follow (useFollowSpeech).
+   */
+  function scrollToPosition(top: number) {
+    const el = container.value
+    if (!el) return
+    const bottom = el.scrollHeight - el.clientHeight
+    const target = Math.max(0, Math.min(bottom, Math.round(top)))
+    if (Math.abs(target - el.scrollTop) < 2) return
+    if (target >= bottom - AT_BOTTOM_THRESHOLD_PX) {
+      isFollowing.value = true
+      pinToBottom()
+    }
+    isProgrammaticScroll = true
+    lastScrollTop = target
+    el.scrollTo({ top: target, behavior: 'smooth' })
   }
 
   function scrollToTop() {
@@ -185,5 +229,5 @@ export function useScrollToLatest(container: Ref<HTMLElement | null>, options: S
     })
   }
 
-  return { hasContentBelow, isFollowing, scrollToLatest, scrollToTop, resumeFollowing }
+  return { hasContentBelow, isFollowing, scrollToLatest, scrollToTop, resumeFollowing, scrollToPosition }
 }
