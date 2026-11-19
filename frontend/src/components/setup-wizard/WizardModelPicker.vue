@@ -20,9 +20,11 @@ const props = defineProps<{
   baseUrlFor?: (provider: string) => string
   testKey: string
   testLabel: string
+  /** Shows a second button that runs the capability probes of the model's pass. */
+  capabilityLabel?: string
 }>()
 
-const emit = defineEmits<{ (e: 'test'): void }>()
+const emit = defineEmits<{ (e: 'test'): void; (e: 'testCapabilities'): void }>()
 
 const providerNeedsKey = computed((): boolean => needsKey(provider.value, props.configuredKeys))
 const baseUrl = computed((): string => props.baseUrlFor?.(provider.value) ?? '')
@@ -71,6 +73,15 @@ watch(provider, (next) => {
         @click="emit('test')"
       >
         {{ props.testLabel }}
+      </button>
+      <button
+        v-if="props.capabilityLabel"
+        type="button"
+        :class="wizardStyles.secondaryButton"
+        :disabled="!model || providerNeedsKey"
+        @click="emit('testCapabilities')"
+      >
+        {{ props.capabilityLabel }}
       </button>
       <WizardTestResult :test-key="props.testKey" />
     </div>

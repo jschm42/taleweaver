@@ -45,5 +45,6 @@ async def test_api_connection_uses_structured_path(auth_client, monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
-    assert response.json()["message"] == "ready"
+    assert response.json()["message"].startswith("ready")
+    assert response.json()["speed"]["rating"] in {"fast", "ok", "slow"}
     router.aexecute_complex_task.assert_awaited_once()

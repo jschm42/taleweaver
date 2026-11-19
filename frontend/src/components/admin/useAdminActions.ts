@@ -19,6 +19,8 @@ export interface LlmTestPayload {
   customOpenaiUrl?: string
   customOpenaiResponseFormat?: string
   customOpenaiTimeout?: number
+  /** Run the pass-specific capability probes instead of the plain connection test. */
+  capabilities?: boolean
 }
 
 const emptyCatalogItem = (): CatalogTile => ({ id: '', name: '', description: '', instruction: '', image_url: '' })
@@ -47,6 +49,7 @@ export function useSettingsActions() {
         p.customOpenaiUrl,
         p.customOpenaiResponseFormat,
         p.customOpenaiTimeout,
+        p.capabilities,
       ),
     testVision: (p: any) =>
       testService.testVision(

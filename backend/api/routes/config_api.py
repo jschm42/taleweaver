@@ -46,6 +46,8 @@ from backend.core.global_settings import (
     shared_game_settings,
 )
 from backend.core.llm_router import GameMasterLLM
+from backend.core.model_capability_probe import run_capability_probes
+from backend.core.model_speed_rating import speed_payload
 from backend.core.models_config import (
     IMAGE_PROVIDERS,
     LLM_PROVIDERS,
@@ -54,6 +56,7 @@ from backend.core.models_config import (
     PREDEFINED_TTS_MODELS,
     TTS_PROVIDERS,
 )
+from backend.core.openrouter_route_report import route_payload
 from backend.core.security import encryption_util
 from backend.core.turn_key_preflight import missing_turn_keys
 from backend.engine.audio.browser_tts import is_browser_provider
@@ -895,6 +898,8 @@ class TestLLMPayload(BaseModel):
     custom_openai_timeout: Optional[int] = None
     custom_openai_response_format: Optional[str] = None
     pass_key: Optional[str] = None
+    # Run the pass-specific capability probes instead of the plain connection test.
+    capabilities: bool = False
 
 
 def _build_test_llm_settings(old_settings: dict, payload: TestLLMPayload) -> dict:
@@ -968,6 +973,8 @@ async def test_llm_connection(
         )
         gm = GameMasterLLM(user, provider=payload.provider, model_category=model_cat)
         test_stage = "request_or_response"
+        if payload.capabilities:
+            return await run_capability_probes(gm, payload.model, model_cat)
         start_time = time.perf_counter()
         response = await _execute_test_probe(gm, payload)
         end_time = time.perf_counter()
@@ -981,7 +988,14 @@ async def test_llm_connection(
                     "Max Thinking Tokens."
                 ),
             }
-        return {"status": "success", "message": response, "response_time": latency}
+        speed = speed_payload(model_cat, latency)
+        return {
+            "status": "success",
+            "message": f"{response} · {speed['label']}.",
+            "response_time": latency,
+            "speed": speed,
+            "routing": route_payload(gm),
+        }
     except Exception as exc:
         diag = (
             connection_test_diagnostic(exc, stage=test_stage, model=payload.model)

@@ -31,6 +31,7 @@ interface TestPayload {
   customOpenaiUrl?: string
   customOpenaiResponseFormat?: string
   customOpenaiTimeout?: number
+  capabilities?: boolean
 }
 
 const emit = defineEmits<{

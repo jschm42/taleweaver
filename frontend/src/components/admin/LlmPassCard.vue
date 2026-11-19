@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { MessageSquare } from 'lucide-vue-next'
+import { ListChecks, MessageSquare } from 'lucide-vue-next'
 import ModelCombobox from '@/components/common/ModelCombobox.vue'
 import { getProviderModelsEntry, loadProviderModels, providerModelsKey } from '@/store/providerModels'
 import UiBadge from '@/components/ui/UiBadge.vue'
@@ -8,6 +8,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDisclosure from '@/components/ui/UiDisclosure.vue'
 import UiField from '@/components/ui/UiField.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiNotice from '@/components/ui/UiNotice.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
@@ -15,6 +16,7 @@ import UiToggle from '@/components/ui/UiToggle.vue'
 import { CONTROL_INPUT_CLASS } from '@/components/ui/fieldContext'
 import CustomOpenAIEndpoint from './CustomOpenAIEndpoint.vue'
 import TestResultNote from './TestResultNote.vue'
+import { MODEL_GUIDANCE } from './modelGuidance'
 
 export type PassKey = 'small' | 'complex' | 'generator' | 'play_agent' | 'compression'
 
@@ -62,6 +64,7 @@ const LIKELY_THINKING_MODEL_RE =
 const key = (field: string): string => `${props.pass}_${field}`
 const provider = computed(() => form.value[key('model_provider')] as string)
 const model = computed(() => form.value[key('model')] as string)
+const guidance = computed(() => MODEL_GUIDANCE[props.pass])
 const showAdvanced = ref(false)
 const hasAdvanced = computed(() => Boolean(props.maxTokens) || props.thinking)
 
@@ -113,8 +116,9 @@ watch(provider, (next, previous) => {
   }
 })
 
-function runTest(): void {
+function runTest(capabilities = false): void {
   emit('test', {
+    capabilities,
     key: props.pass,
     model: model.value,
     provider: provider.value,
@@ -130,8 +134,31 @@ function runTest(): void {
   <UiCard :title="title" :description="description">
     <template #actions>
       <UiBadge v-if="badge">{{ badge }}</UiBadge>
-      <UiButton size="sm" :icon="MessageSquare" :loading="testResult?.status === 'loading'" :disabled="!model" @click="runTest">
+      <UiInfoPopover icon="help" align="end" wide :title="`Choosing a model for ${title}`">
+        <div class="space-y-2 whitespace-normal">
+          <p><strong>Minimum:</strong> {{ guidance.minimum }}</p>
+          <div>
+            <strong>Must handle:</strong>
+            <ul class="list-disc pl-4">
+              <li v-for="need in guidance.needs" :key="need">{{ need }}</li>
+            </ul>
+          </div>
+          <p><strong>Too weak:</strong> {{ guidance.tooWeak }}</p>
+          <p><strong>Tip:</strong> {{ guidance.tip }}</p>
+          <p class="text-wb-muted">Details: docs/model-selection.md</p>
+        </div>
+      </UiInfoPopover>
+      <UiButton size="sm" :icon="MessageSquare" :loading="testResult?.status === 'loading'" :disabled="!model" @click="runTest()">
         Test model
+      </UiButton>
+      <UiButton
+        size="sm"
+        :icon="ListChecks"
+        :disabled="!model || testResult?.status === 'loading'"
+        title="Checks what this pass needs: JSON schema, exact IDs, rule following (several requests)"
+        @click="runTest(true)"
+      >
+        Test capabilities
       </UiButton>
     </template>
 

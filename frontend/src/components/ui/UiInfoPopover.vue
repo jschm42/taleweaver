@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, useId } from 'vue'
-import { Info } from 'lucide-vue-next'
+import { CircleHelp, Info } from 'lucide-vue-next'
 
-/** A small "i" button that shows help text in a popover. Closes on outside click and Esc. */
-withDefaults(defineProps<{ title?: string; text?: string }>(), { title: 'Help', text: '' })
+/**
+ * A small "i" (or "?") button that shows help text in a popover. Closes on outside click and Esc.
+ * `align="end"` opens the panel towards the left, for buttons at the right edge of a card.
+ */
+withDefaults(
+  defineProps<{ title?: string; text?: string; icon?: 'info' | 'help'; align?: 'start' | 'end'; wide?: boolean }>(),
+  { title: 'Help', text: '', icon: 'info', align: 'start', wide: false },
+)
 
 const open = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
@@ -43,14 +49,16 @@ onBeforeUnmount(() => {
       :aria-controls="panelId"
       @click="open = !open"
     >
-      <Info class="w-4 h-4" aria-hidden="true" />
+      <CircleHelp v-if="icon === 'help'" class="w-4 h-4" aria-hidden="true" />
+      <Info v-else class="w-4 h-4" aria-hidden="true" />
     </button>
     <div
       v-if="open"
       :id="panelId"
       role="dialog"
       :aria-label="title"
-      class="absolute left-0 top-7 z-50 w-[calc(100vw-2rem)] sm:w-72 max-w-sm rounded-xl border border-wb-line-strong bg-wb-overlay shadow-wb-float p-3 font-wb"
+      class="absolute top-7 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-wb-line-strong bg-wb-overlay shadow-wb-float p-3 font-wb"
+      :class="[align === 'end' ? 'right-0' : 'left-0', wide ? 'sm:w-96' : 'sm:w-72']"
     >
       <p class="wb-subheading mb-1">{{ title }}</p>
       <div class="wb-hint !text-wb-body break-words whitespace-pre-wrap">
