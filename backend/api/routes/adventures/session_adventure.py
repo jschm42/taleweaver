@@ -159,6 +159,16 @@ class SessionAdventure:
     def init_script(self) -> Optional[str]:
         return self.original_manifest.get("init_script")
 
+    @property
+    def sequence_progression_mode(self) -> str:
+        """'linear' or 'dynamic'. Like ``AdventureTemplate.sequence_progression_mode`` it lives in
+        the manifest, not in a column, so the column snapshot alone would lose it (every session
+        would read 'linear': numbered chapter banners in dynamic adventures)."""
+        manifest = self.original_manifest
+        mode = manifest.get("sequence_progression_mode") or manifest.get("sequence_progression")
+        cleaned = str(mode or "linear").strip().lower()
+        return cleaned if cleaned in {"linear", "dynamic"} else "linear"
+
 
 def session_adventure_from_snapshot(
     state: SessionState, snapshot: dict[str, Any]
