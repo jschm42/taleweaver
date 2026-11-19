@@ -31,7 +31,7 @@ from backend.engine.conversations.chatter import (
     can_chat,
     plan_beat,
 )
-from backend.engine.conversations.gossip import spread_gossip
+from backend.engine.conversations.gossip import append_gossip_log, spread_gossip
 from backend.engine.conversations.settings import conversation_settings
 from backend.engine.conversations.state import (
     heard_topics,
@@ -123,15 +123,20 @@ def _request(manager: Any, data: dict[str, Any], addressed: bool, arrival: bool)
     )
 
 
-async def _plan(manager: Any, speakers: list[WorldEntity], data: dict[str, Any]) -> Beat | None:
+async def _plan(
+    manager: Any, speakers: list[WorldEntity], data: dict[str, Any], listen: bool
+) -> Beat | None:
     planner = _BeatPlanner(manager)
     await planner.prepare_guards()
+    # Listening mode: a /listen right after a /listen beat continues that pair's talk.
+    continue_pair = data.get("last_pair") if listen and data.get("listen_streak") else None
     return plan_beat(
         speakers,
         manager.state.entity_states,
         heard_topics(manager.state.entity_states),
         planner.guard,
         data.get("last_pair") or [],
+        continue_pair,
     )
 
 
@@ -148,7 +153,7 @@ async def plan_conversation_beat(
     scene_id = str(manager.state.current_scene_id or "")
     arrival = data.get("scene") != scene_id
     if arrival:
-        data.update({"scene": scene_id, "quiet": 0})
+        data.update({"scene": scene_id, "quiet": 0, "listen_streak": 0})
     skip = _skip_reason(manager)
     if skip:
         _store(manager, data)
@@ -160,7 +165,12 @@ async def plan_conversation_beat(
     scene_npc_ids = {str(n.id).upper() for n in in_scene}
     addressed = any(str(i).upper() in scene_npc_ids for i in interacted_ids or [])
     request = _request(manager, data, addressed, arrival)
-    beat = await _plan(manager, speakers, data) if beat_due(request) else None
+    # The client's listening mode stops once nobody here can hold a conversation.
+    data["listen_possible"] = len(speakers) >= 2
+    beat = await _plan(manager, speakers, data, request.listen) if beat_due(request) else None
+    data["listen_streak"] = (
+        int(data.get("listen_streak") or 0) + 1 if beat and request.listen else 0
+    )
     if beat is None:
         _record_without_beat(data, request)
         _store(manager, data)
@@ -243,5 +253,7 @@ async def spread_session_gossip(manager: Any) -> None:
             event.listener_id,
             event.key,
         )
-    manager.state.entity_states = updated
+    data = read_conversations(updated)
+    data["gossip_log"] = append_gossip_log(data.get("gossip_log"), events, manager.state)
+    manager.state.entity_states = write_conversations(updated, data)
     flag_modified(manager.state, "entity_states")

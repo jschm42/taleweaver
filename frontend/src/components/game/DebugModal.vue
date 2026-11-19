@@ -19,7 +19,6 @@ import {
   Terminal,
   X,
   Search,
-  Heart,
   Zap,
   Flame,
   Shield,
@@ -44,6 +43,9 @@ import {
   Layers,
 } from 'lucide-vue-next'
 import DebugDownloadButton from '@/components/game/debug/DebugDownloadButton.vue'
+import DebugNpcTile from '@/components/game/debug/DebugNpcTile.vue'
+import DebugNpcDetailDialog from '@/components/game/debug/DebugNpcDetailDialog.vue'
+import DebugConversationStateBar from '@/components/game/debug/DebugConversationStateBar.vue'
 
 const props = defineProps<{
   open: boolean
@@ -148,6 +150,10 @@ const allNpcs = computed<any[]>(() => {
   }
   return []
 })
+
+// NPC details dialog: kept by ID so it shows fresh data after a debug command.
+const selectedNpcId = ref<string | null>(null)
+const selectedNpc = computed(() => allNpcs.value.find((npc: any) => npc.id === selectedNpcId.value) ?? null)
 
 const filteredNpcs = computed(() => {
   const q = npcSearchQuery.value.trim().toLowerCase()
@@ -790,180 +796,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                 </div>
               </div>
 
-              <!-- NPC Cards Grid -->
-              <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div
+              <DebugConversationStateBar v-if="sessionDebug?.conversations" :state="sessionDebug.conversations" />
+
+              <!-- NPC tiles: the essentials; a click opens the full NPC details. -->
+              <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 content-start">
+                <DebugNpcTile
                   v-for="npc in filteredNpcs"
                   :key="npc.id"
-                  class="rounded-2xl border bg-slate-900/90 p-4 flex flex-col justify-between gap-3.5 transition-all shadow-lg"
-                  :class="[
-                    npc.is_in_current_scene ? 'border-cyan-500/50 ring-1 ring-cyan-500/30' : 'border-slate-800',
-                    !npc.is_alive ? 'opacity-60 grayscale-[0.4]' : ''
-                  ]"
-                >
-                  <!-- Top: Avatar & Title -->
-                  <div class="flex items-start gap-3">
-                    <div class="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 shrink-0">
-                      <img
-                        v-if="npc.image_url"
-                        :src="getImageUrl(npc.image_url)"
-                        class="w-full h-full object-cover object-center"
-                        :alt="npc.name"
-                      />
-                      <div v-else class="w-full h-full flex items-center justify-center text-slate-600">
-                        <Users class="w-6 h-6" />
-                      </div>
-                      <span
-                        v-if="npc.is_in_current_scene"
-                        class="absolute bottom-0 inset-x-0 bg-cyan-500 text-slate-950 text-[8px] font-black uppercase text-center tracking-tighter"
-                      >
-                        Here
-                      </span>
-                    </div>
-
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between gap-2">
-                        <h4 class="text-sm font-black text-white truncate">{{ npc.name }}</h4>
-                        <span
-                          class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0"
-                          :class="npc.is_alive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'"
-                        >
-                          {{ npc.is_alive ? 'Alive' : 'Defeated' }}
-                        </span>
-                      </div>
-                      <div class="flex items-center gap-1.5 mt-0.5">
-                        <div class="text-[10px] text-slate-400 font-mono truncate">ID: {{ npc.id }}</div>
-                        <DebugDownloadButton v-if="debugGameId" :game-id="debugGameId" :entity-id="npc.id" compact />
-                      </div>
-
-                      <!-- Location & Movement Badges -->
-                      <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <div class="flex items-center gap-1 text-slate-300 font-semibold truncate">
-                          <Compass class="w-3 h-3 text-cyan-400 shrink-0" />
-                          <span class="truncate">{{ npc.current_scene_name || npc.current_scene_id }}</span>
-                        </div>
-                        <span
-                          class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0"
-                          :class="npc.moveable ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'"
-                        >
-                          {{ npc.moveable ? (npc.allowed_scenes?.length ? `Movable (${npc.allowed_scenes.length} scenes)` : 'Movable') : 'Stationary' }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Middle: Stats & Bars -->
-                  <div class="space-y-2 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <!-- Health Bar -->
-                    <div>
-                      <div class="flex items-center justify-between text-[11px] mb-1 font-mono">
-                        <span class="flex items-center gap-1 text-red-400 font-bold">
-                          <Heart class="w-3 h-3 fill-red-400" /> HP
-                        </span>
-                        <span class="text-slate-300 font-bold">{{ npc.hp }} / {{ npc.max_hp }}</span>
-                      </div>
-                      <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          class="h-full transition-all duration-300"
-                          :class="npc.hp > (npc.max_hp * 0.5) ? 'bg-emerald-500' : npc.hp > (npc.max_hp * 0.2) ? 'bg-amber-500' : 'bg-red-500'"
-                          :style="{ width: `${Math.min(100, Math.max(0, (npc.hp / (npc.max_hp || 100)) * 100))}%` }"
-                        ></div>
-                      </div>
-                    </div>
-
-                    <!-- Stamina & Mana mini bars if available -->
-                    <div class="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
-                      <div>
-                        <span>STA: {{ npc.stamina }}</span>
-                      </div>
-                      <div class="text-right">
-                        <span>MANA: {{ npc.mana }}</span>
-                      </div>
-                    </div>
-
-                    <!-- Attributes -->
-                    <div v-if="npc.stats" class="grid grid-cols-3 gap-1 text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800/60">
-                      <div>STR: <strong class="text-slate-200">{{ npc.stats.strength }}</strong></div>
-                      <div>DEX: <strong class="text-slate-200">{{ npc.stats.dexterity }}</strong></div>
-                      <div>AC: <strong class="text-slate-200">{{ npc.stats.armor_class }}</strong></div>
-                    </div>
-                  </div>
-
-                  <!-- Dynamic GM Status & Notes -->
-                  <div v-if="npc.notes" class="bg-amber-950/30 border border-amber-500/30 rounded-xl p-2.5 space-y-1">
-                    <div class="flex items-center justify-between text-[9px] font-black uppercase tracking-wider text-amber-400">
-                      <span class="flex items-center gap-1">
-                        <Sparkles class="w-3 h-3" /> GM Status & Notes
-                      </span>
-                    </div>
-                    <p class="text-[11px] text-amber-200/90 font-mono italic leading-snug break-words">
-                      "{{ npc.notes }}"
-                    </p>
-                  </div>
-
-                  <!-- Persona (character & goal) as fed to the GM prompt -->
-                  <div v-if="npc.character || npc.goal" class="bg-violet-950/30 border border-violet-500/30 rounded-xl p-2.5 space-y-1 text-[11px] font-mono leading-snug break-words">
-                    <div class="text-[9px] font-black uppercase tracking-wider text-violet-400">Persona</div>
-                    <p v-if="npc.character" class="text-violet-200/90">
-                      <span class="text-violet-400 font-bold">Character:</span> {{ npc.character }}
-                    </p>
-                    <p v-if="npc.goal" class="text-violet-200/90">
-                      <span class="text-violet-400 font-bold">Goal:</span> {{ npc.goal }}
-                    </p>
-                  </div>
-
-                  <!-- Allowed Scenes Restriction Info -->
-                  <div v-if="npc.moveable && npc.allowed_scenes?.length" class="text-[9px] text-slate-400 font-mono px-1">
-                    <span class="text-slate-500 font-bold uppercase">Allowed Scenes:</span> {{ npc.allowed_scenes.join(', ') }}
-                  </div>
-
-                  <!-- Inventory items if any -->
-                  <div v-if="npc.inventory?.length" class="space-y-1">
-                    <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      <Package class="w-3 h-3 text-cyan-400" />
-                      <span>Carrying ({{ npc.inventory.length }})</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1 max-h-16 overflow-y-auto custom-scrollbar">
-                      <span
-                        v-for="(itm, iIdx) in npc.inventory"
-                        :key="iIdx"
-                        class="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-300 truncate max-w-[140px]"
-                        :title="itm.description || itm.name"
-                      >
-                        {{ itm.name || itm.id }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Bottom: Action Buttons -->
-                  <div class="flex items-center gap-1.5 pt-2 border-t border-slate-800/80">
-                    <button
-                      type="button"
-                      @click="runCmd(`/debug heal ${npc.name}`)"
-                      class="flex-1 py-1 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                      title="Heal NPC to full health"
-                    >
-                      Heal
-                    </button>
-                    <button
-                      type="button"
-                      @click="runCmd(`/debug kill ${npc.name}`)"
-                      class="flex-1 py-1 px-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                      title="Instantly defeat this NPC"
-                    >
-                      Kill
-                    </button>
-                    <button
-                      v-if="npc.is_hidden"
-                      type="button"
-                      @click="runCmd(`/debug unhide ${npc.id}`)"
-                      class="py-1 px-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                      title="Make visible in scene"
-                    >
-                      Unhide
-                    </button>
-                  </div>
-                </div>
+                  :npc="npc"
+                  @open="selectedNpcId = npc.id"
+                />
 
                 <div v-if="!filteredNpcs.length" class="col-span-full py-16 text-center text-slate-500 font-semibold">
                   No NPCs match the active search or filters.
@@ -1553,6 +1395,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             </section>
           </main>
         </div>
+
+        <DebugNpcDetailDialog
+          v-if="selectedNpc"
+          :npc="selectedNpc"
+          :game-id="debugGameId"
+          :busy="commandBusy"
+          @close="selectedNpcId = null"
+          @command="runCmd"
+        />
 
         <!-- Dynamic Scene Inspector Popup Dialog -->
         <div

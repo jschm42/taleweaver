@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from backend.engine.conversations.state import player_chatter_enabled
+from backend.engine.conversations.state import player_chatter_enabled, read_conversations
 
 NPC_CONVERSATIONS_FIELD = "npc_conversations"
 CHATTER_OFF = "OFF"
@@ -62,4 +62,7 @@ def chatter_sheet_fields(raw_settings: Any, entity_states: Any) -> dict[str, Any
         "level": settings.chatter,
         "available": settings.chatter_enabled,
         "enabled": settings.chatter_enabled and player_chatter_enabled(entity_states),
+        # Two NPCs at the last message's place could talk (listening mode goes on); unknown
+        # before the first message counts as possible.
+        "listen_possible": read_conversations(entity_states).get("listen_possible") is not False,
     }

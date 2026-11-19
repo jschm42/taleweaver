@@ -8,6 +8,10 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.session_debug_npc_social import (
+    conversation_session_debug,
+    npc_social_debug,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -78,6 +82,7 @@ def _npc_role(ent: WorldEntity) -> str:
 def _build_npc_info(
     ent: WorldEntity, override: dict[str, Any], scene_names: dict[str, str], current_scene_id: str
 ) -> dict[str, Any]:
+    """One NPC card; ``npc_social_debug`` (memory, conversations) is added by the caller."""
     loc_id = _entity_scene_id(ent, override)
     resources = {
         field: _npc_resource(ent, override, field, default)
@@ -395,10 +400,16 @@ async def build_session_debug_payload(
     scene_names = {s.id: (s.label or s.id) for s in scene_lookup.values()}
     entity_overrides = state.entity_states or {}
 
+    npc_rows = [ent for ent in entity_lookup.values() if ent.entity_type == "NPC"]
+    npc_names = {str(ent.id).upper(): str(ent.name or ent.id) for ent in npc_rows}
     npcs_data = [
-        _build_npc_info(ent, entity_overrides.get(ent.id, {}), scene_names, state.current_scene_id)
-        for ent in entity_lookup.values()
-        if ent.entity_type == "NPC"
+        {
+            **_build_npc_info(
+                ent, entity_overrides.get(ent.id, {}), scene_names, state.current_scene_id
+            ),
+            **npc_social_debug(ent, entity_overrides, npc_names),
+        }
+        for ent in npc_rows
     ]
     scene_npcs: dict[str, list[dict[str, Any]]] = {s_id: [] for s_id in scene_lookup}
     for npc in npcs_data:
@@ -427,6 +438,7 @@ async def build_session_debug_payload(
         "session": _session_section(state, adventure, scene_names),
         "avatar": _avatar_section(avatar),
         "npcs": npcs_data,
+        "conversations": conversation_session_debug(adventure, entity_overrides, npc_names),
         "scene_npcs": scene_npcs,
         "items": items_data,
         "map": {

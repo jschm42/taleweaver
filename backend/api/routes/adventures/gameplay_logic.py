@@ -13,6 +13,10 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
+from backend.api.routes.adventures.listen_mode_command import (
+    handle_listen_mode_command,
+    is_listen_mode_command,
+)
 from backend.api.routes.adventures.npc_conversation_flow import (
     LISTEN_PLAYER_ACTION,
     conversation_reminder,
@@ -908,6 +912,13 @@ class GameTurnManager:
                 "quests, awards, walkthrough, and chat history, but no further actions can be taken."
             )
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': lock_message})}\n\n"
+            yield await self._command_final_event()
+            return
+
+        # /listen_mode <code>: the client's listening mode was switched (system message only)
+        if is_listen_mode_command(user_msg):
+            async for chunk in handle_listen_mode_command(self, user_msg):
+                yield chunk
             yield await self._command_final_event()
             return
 

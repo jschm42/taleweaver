@@ -9,7 +9,8 @@ gossip. Two NPCs in the same scene (with or without the protagonist) exchange fa
 
 The listener stores the fact under the same key, prefixed with its source ("Heard from
 Bram: ..."), so the narration knows it is hearsay. Facts that were heard themselves are not
-passed on again, and a listener never overwrites a fact it already has under that key.
+passed on again, and a listener never overwrites a fact it already has under that key. The
+flow keeps the newest events in ``gossip_log`` for the debug inspector.
 At most ``MAX_FACTS_PER_PAIR`` facts travel per pair and turn.
 """
 
@@ -25,6 +26,8 @@ from backend.engine.rules.npc_memory import memory_slots, read_memories, remembe
 
 HEARSAY_PREFIX = "Heard from "
 MAX_FACTS_PER_PAIR = 1
+# Newest gossip events kept in the conversation state (debug inspector).
+MAX_GOSSIP_LOG = 30
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,7 @@ class GossipEvent:
     teller_id: str
     listener_id: str
     key: str
+    scene_id: str = ""
 
 
 def _can_gossip(npc: Any) -> bool:
@@ -60,7 +64,8 @@ def _tell(
         text = f"{HEARSAY_PREFIX}{teller.name}: {fact.get('text')}"
         slots = memory_slots(listener.metadata_json)
         states = remember(states, str(listener.id), fact.get("key"), text, slots)
-        events.append(GossipEvent(str(teller.id), str(listener.id), str(fact.get("key"))))
+        scene_id = str(getattr(teller, "current_scene_id", "") or "")
+        events.append(GossipEvent(str(teller.id), str(listener.id), str(fact.get("key")), scene_id))
     return states, events
 
 
@@ -91,3 +96,19 @@ def spread_gossip(
                 states, told = _tell(states, teller, listener)
                 events.extend(told)
     return states, events
+
+
+def append_gossip_log(log: Any, events: list[GossipEvent], state: Any) -> list[dict[str, Any]]:
+    """``gossip_log`` of the conversation state with ``events`` added (newest last, bounded)."""
+    entries = [e for e in log if isinstance(e, dict)] if isinstance(log, list) else []
+    entries.extend(
+        {
+            "teller_id": event.teller_id,
+            "listener_id": event.listener_id,
+            "key": event.key,
+            "scene_id": event.scene_id,
+            "minute": int(getattr(state, "in_game_time", 0) or 0),
+        }
+        for event in events
+    )
+    return entries[-MAX_GOSSIP_LOG:]

@@ -63,6 +63,7 @@ import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
 import { waitForSpeechToFinish } from '@/services/speechWait'
+import { useListeningMode } from '@/composables/useListeningMode'
 import { type GameSettings } from '@/services/gameViewService'
 import { GIVE_TO_PREFIX, OPEN_COMPANION_SHEET_PREFIX, RECRUIT_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
@@ -386,6 +387,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  void listening.stop()
   audioService.stop()
 })
 
@@ -464,6 +466,12 @@ watch(isInlinePromptOpen, () => {
   hoveredEntity.value = null
 })
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || isDialogOpen.value)
+// Listening mode: NPCs present keep talking; each step waits until the last one was read aloud.
+const listening = useListeningMode({
+  sendMessage,
+  canListen: () => status.value === 'connected' && !isActionInputBlocked.value && !combat.value?.active,
+  listenPossible: () => sheet.value?.npc_chatter?.listen_possible !== false,
+})
 const dialogChoiceBusy = ref(false)
 const dialogChoiceError = ref('')
 
@@ -1392,6 +1400,14 @@ const submitContainerCode = async (code: string) => {
 
 const handlePlayerInput = async (content: string) => {
   const trimmed = String(content || '').trim()
+  // `/listen on|off` switches listening mode; any other action ends it first.
+  const listenSwitch = trimmed.toLowerCase().match(/^\/listen\s+(on|off)$/)
+  if (listenSwitch) {
+    if (listenSwitch[1] === 'on') listening.start()
+    else await listening.stop()
+    return
+  }
+  await listening.stop()
 
   if (awaitingContainerCodeInput.value && activeCodeContainer.value) {
     if (!trimmed) return
@@ -2062,7 +2078,9 @@ usePlayAgentAutoLoop()
       :active-sequence="activeSequence"
       :adventure-title="displayAdventureTitle"
       :has-inline-prompt="isChoicePanelOpen || isInlinePromptOpen"
+      :listening-active="listening.active.value"
       @send="handlePlayerInput"
+      @toggle-listening="listening.toggle()"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"
       @open-sheet="(tab?: SheetTabId) => { sheetInitialTab = tab ?? null; showSheet = true }"

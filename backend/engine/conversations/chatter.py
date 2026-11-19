@@ -47,6 +47,8 @@ class Beat:
     speaker_a: Any
     speaker_b: Any
     topic: ConversationTopic | None = None
+    # Listening mode: the pair goes on with the talk of the previous message.
+    continues: bool = False
 
 
 def beat_due(request: BeatRequest) -> bool:
@@ -97,11 +99,14 @@ def plan_beat(
     heard: set[str],
     guard: Callable[[str], bool],
     last_pair: list[str] | None = None,
+    continue_pair: list[str] | None = None,
 ) -> Beat | None:
     """Who talks about what; ``None`` with fewer than two speakers.
 
-    An open authored topic wins; otherwise two NPCs (preferably related ones, and not the
-    pair of the last conversation) talk about their own concerns.
+    An open authored topic wins. Otherwise ``continue_pair`` (listening mode: the pair of the
+    previous message) goes on with its talk while both are still there; else two NPCs
+    (preferably related ones, and not the pair of the last conversation) talk about their own
+    concerns.
     """
     present = list(speakers)
     if len(present) < 2:
@@ -110,6 +115,10 @@ def plan_beat(
     if picked:
         topic, owner, partner = picked
         return Beat(owner, partner, topic)
+    by_id = {str(n.id).upper(): n for n in present}
+    pair = [by_id.get(npc_id) for npc_id in continue_pair or []]
+    if len(pair) == 2 and all(pair):
+        return Beat(pair[0], pair[1], continues=True)
     a, b = _free_pair(present, entity_states, last_pair or [])
     return Beat(a, b)
 
@@ -122,6 +131,15 @@ def beat_direction(beat: Beat, *, listen: bool) -> str:
         if listen
         else "After the reaction to the player's action,"
     )
+    if beat.continues:
+        return (
+            f"CONVERSATION BEAT: The protagonist keeps quiet and listens. {a.name} ({a.id}) and "
+            f"{b.name} ({b.id}) go on with their conversation from where it stopped, in two to "
+            "four short dialogue lines: take it one step further (an answer, a new thought, a "
+            "disagreement, a change of subject), never start it over or repeat earlier lines. "
+            "They do not address the protagonist, and the protagonist does not speak. The talk "
+            "changes no game state."
+        )
     if beat.topic:
         subject = f"about {beat.topic.topic}"
         convey = (

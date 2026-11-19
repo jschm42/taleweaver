@@ -54,6 +54,18 @@ Scripting API: [scripting_engine.md](../scripting_engine.md#twnpcs).
    scene pass one own (non-hearsay) fact per pair to an NPC they have a sharing relation to
    (all kinds except `RIVAL`, `ENEMY`); the listener stores it as "Heard from <name>: …".
 
+## Listening mode (client)
+
+`frontend/src/composables/useListeningMode.ts`, toggled by the ear button of the play view's
+top bar or `/listen on|off`. Every switch is reported with `/listen_mode <on|off|nobody|
+interrupted|limit>` (`api/routes/adventures/listen_mode_command.py`), which saves a system
+message (no LLM call) and is hidden in the feed. It loops `/listen` → wait for TTS (`waitForSpeechToFinish`; without auto-speech a 7 s
+reading pause) → next `/listen`. The backend tracks `listen_streak`: a `/listen` right after a
+`/listen` beat continues `last_pair` (`Beat.continues`, "go on with their conversation") unless
+an open topic wins. `sheet.npc_chatter.listen_possible` (two speakers at the last message's
+place) ends the loop; so do a player action, a dialog, combat, locked input and
+`MAX_LISTEN_STEPS` (12, cost guard). `/listen` is hidden in the story feed.
+
 ## Limits
 
 * One beat per message, two to four lines, the protagonist only overhears.

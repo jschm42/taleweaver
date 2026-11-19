@@ -20,6 +20,7 @@ import {
   History,
   Scroll,
   AudioLines,
+  Ear,
   VolumeX,
   Sliders,
   LogOut,
@@ -40,6 +41,10 @@ const props = defineProps<{
   debugMode?: boolean
   hasSceneImage?: boolean
   progressionMode?: string | null
+  /** Listening mode is on: the NPCs present keep talking with each other. */
+  listeningActive?: boolean
+  /** Listening mode can be switched on now (game idle, no Play-Agent). */
+  canListen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +54,7 @@ const emit = defineEmits<{
   openDebug: []
   exitSession: []
   viewSceneImage: []
+  toggleListening: []
 }>()
 
 const { language } = useGameSocket()
@@ -235,6 +241,22 @@ const sequenceOrder = computed(() => {
         aria-label="Stop speech"
       >
         <VolumeX class="w-4 h-4" />
+      </button>
+
+      <!-- Listening mode: the hero keeps quiet and the characters here keep talking. -->
+      <button
+        v-if="props.listeningActive || props.canListen"
+        type="button"
+        @click="emit('toggleListening')"
+        class="flex items-center justify-center w-9 h-9 rounded-xl border transition-all shadow-lg active:scale-95 shrink-0 cursor-pointer"
+        :class="props.listeningActive
+          ? 'bg-sky-500/20 border-sky-400/60 text-sky-300 hover:bg-sky-500/30'
+          : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-sky-300 hover:border-sky-400/50 hover:bg-sky-500/10'"
+        :aria-pressed="!!props.listeningActive"
+        :title="props.listeningActive ? 'Listening — click to stop' : 'Listen: keep quiet while the characters here talk with each other'"
+        :aria-label="props.listeningActive ? 'Stop listening' : 'Start listening'"
+      >
+        <Ear class="w-4 h-4" />
       </button>
 
       <!-- Full Scene Artwork Viewer Button -->

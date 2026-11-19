@@ -129,7 +129,7 @@ export interface CharacterSheet {
   /** Dialog skin the player picked for this session; "auto" follows the adventure. */
   ui_skin?: string | null
   /** NPC chatter: adventure level, whether the adventure allows it, and the player switch. */
-  npc_chatter?: { level: string; available: boolean; enabled: boolean }
+  npc_chatter?: { level: string; available: boolean; enabled: boolean; listen_possible?: boolean }
   compressed_history?: any
 }
 

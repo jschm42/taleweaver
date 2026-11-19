@@ -280,7 +280,12 @@ async def test_listen_alone_and_player_switch(patched_npcs):
 
     # Assert
     assert alone == LISTEN_ALONE_DIRECTION
-    assert sheet == {"level": "NORMAL", "available": True, "enabled": False}
+    assert sheet == {
+        "level": "NORMAL",
+        "available": True,
+        "enabled": False,
+        "listen_possible": False,
+    }
 
 
 # --- Script API ----------------------------------------------------------------------------
@@ -417,3 +422,144 @@ def test_listen_command_maps_to_trigger():
 
     # Assert
     assert response == "[TRIGGER_LISTEN]"
+
+
+# --- Debug inspector -----------------------------------------------------------------------
+
+
+def test_debug_payload_shows_memory_relations_topics_and_session_state():
+    # Arrange
+    from backend.api.routes.adventures.session_debug_npc_social import (
+        conversation_session_debug,
+        npc_social_debug,
+    )
+
+    topic = {"id": "cellar", "topic": "the cellar", "must_convey": "open at night"}
+    bram = _npc(
+        "BRAM",
+        memory_slots=2,
+        chatty=False,
+        relations=[{"npc_id": "MARA", "kind": "RIVAL"}],
+        conversation_topics=[topic],
+    )
+    states = remember({}, "BRAM", "player_name", "The protagonist is Kael.", 2)
+    apply_conversation_ops(
+        states,
+        [
+            {"op": "set_relation", "npc_id": "BRAM", "other_id": "MARA", "kind": "FRIEND"},
+            {"op": "mark_heard", "topic_id": "cellar"},
+        ],
+    )
+    adventure = SimpleNamespace(npc_conversations={"chatter": "RARE"})
+
+    # Act
+    social = npc_social_debug(bram, states, {"MARA": "Mara"})
+    session = conversation_session_debug(adventure, states)
+
+    # Assert
+    assert social["memory"] == {
+        "slots": 2,
+        "facts": [{"key": "player_name", "text": "The protagonist is Kael.", "hearsay": False}],
+    }
+    relation = social["conversations"]["relations"][0]
+    assert relation["kind"] == "FRIEND" and relation["name"] == "Mara"
+    assert relation["changed_by_script"] is True
+    assert social["conversations"]["chatty"] is False
+    assert social["conversations"]["topics"][0]["heard"] is True
+    assert session["chatter"] == "RARE" and session["heard"] == ["cellar"]
+    assert session["player_enabled"] is True and session["pending_beat"] == ""
+
+
+@pytest.mark.asyncio
+async def test_listening_mode_continues_the_same_pair(patched_npcs):
+    # Arrange
+    bram = _npc("BRAM", relations=[{"npc_id": "MARA", "kind": "FRIEND"}])
+    manager = _FakeManager([bram, _npc("MARA"), _npc("TOM")], chatter="OFF")
+    patched_npcs(manager)
+    manager.listen_requested = True
+
+    # Act
+    await _run(manager)
+    first = take_pending_beat(manager.state)
+    await _run(manager)
+    second = take_pending_beat(manager.state)
+    manager.listen_requested = False
+    await _run(manager)  # a player action ends the streak
+    manager.listen_requested = True
+    await _run(manager)
+    third = take_pending_beat(manager.state)
+    sheet = chatter_sheet_fields(None, manager.state.entity_states)
+
+    # Assert
+    assert "talk with each other" in first and "Bram" in first and "Mara" in first
+    assert "go on with their conversation" in second and "Bram" in second and "Mara" in second
+    assert "go on with their conversation" not in third
+    assert sheet["listen_possible"] is True
+
+
+def test_gossip_log_and_hearsay_reach_the_debug_view():
+    # Arrange
+    from backend.api.routes.adventures.session_debug_npc_social import (
+        conversation_session_debug,
+        npc_social_debug,
+    )
+    from backend.engine.conversations.gossip import append_gossip_log
+    from backend.engine.conversations.state import write_conversations
+
+    bram = _npc("BRAM", memory_slots=4, relations=[{"npc_id": "MARA", "kind": "FRIEND"}])
+    mara = _npc("MARA", memory_slots=4)
+    states = remember({}, "BRAM", "player_name", "The protagonist is Kael.", 4)
+    states, events = spread_gossip(states, [bram, mara])
+    log = append_gossip_log([], events, SimpleNamespace(in_game_time=90))
+    states = write_conversations(states, {"gossip_log": log})
+    names = {"BRAM": "Bram", "MARA": "Mara"}
+
+    # Act
+    listener = npc_social_debug(mara, states, names)
+    teller = npc_social_debug(bram, states, names)
+    session = conversation_session_debug(SimpleNamespace(npc_conversations=None), states, names)
+
+    # Assert
+    assert listener["memory"]["facts"][0]["hearsay"] is True
+    assert listener["gossip"]["heard"] == [{"from": "Bram", "key": "player_name"}]
+    assert teller["gossip"]["told"] == [{"to": "Mara", "key": "player_name"}]
+    assert session["gossip_log"] == [
+        {
+            "teller": "Bram",
+            "listener": "Mara",
+            "key": "player_name",
+            "scene_id": "INN",
+            "minute": 90,
+        }
+    ]
+    assert session["gossip"] is False
+
+
+@pytest.mark.asyncio
+async def test_listen_mode_command_saves_a_system_message():
+    # Arrange
+    from backend.api.routes.adventures.listen_mode_command import (
+        LISTEN_MODE_MESSAGES,
+        handle_listen_mode_command,
+        is_listen_mode_command,
+    )
+
+    saved: list[tuple[str, str]] = []
+
+    class _Db:
+        async def commit(self) -> None:
+            return None
+
+    async def save(role: str, content: str) -> None:
+        saved.append((role, content))
+
+    manager = SimpleNamespace(_save_chat_message=save, db=_Db())
+
+    # Act
+    on = [e async for e in handle_listen_mode_command(manager, "/listen_mode on")]
+    unknown = [e async for e in handle_listen_mode_command(manager, "/listen_mode nonsense")]
+
+    # Assert
+    assert is_listen_mode_command("/listen_mode off") and not is_listen_mode_command("/listen")
+    assert saved == [("system", LISTEN_MODE_MESSAGES["on"])]
+    assert len(on) == 1 and unknown == []

@@ -20,6 +20,8 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/consume', label: '/consume', description: 'Use a consumable item', category: 'game' },
   { id: '/open', label: '/open', description: 'Open a container or door', category: 'game' },
   { id: '/read', label: '/read', description: 'Read a book, sign, or note', category: 'game' },
+  { id: '/listen', label: '/listen', description: 'Keep quiet and listen to what the characters here say to each other', category: 'game' },
+  { id: '/listen on', label: '/listen on|off', description: 'Listening mode: the characters keep talking until you act (waits for speech)', category: 'game' },
   { id: '/roll', label: '/roll [2-30]', description: 'Roll a die with 2-30 sides (default d6)', category: 'game' },
   { id: '/playagent', label: '/playagent [on/off]', description: 'Activate or deactivate the autonomous Play-Agent', category: 'game' },
   { id: '/playagent personality', label: '/playagent personality <type>', description: 'Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom)', category: 'game' },

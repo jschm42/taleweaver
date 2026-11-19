@@ -107,6 +107,8 @@ const props = defineProps<{
   adventureTitle?: string | null
   /** A choice dialog or unlock prompt waits for the player at the end of the story feed. */
   hasInlinePrompt?: boolean
+  /** Listening mode is on: the NPCs present keep talking with each other. */
+  listeningActive?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -121,6 +123,7 @@ const emit = defineEmits<{
   openSettings: [tab?: SettingsTabId]
   openDebug: []
   openWalkthrough: []
+  toggleListening: []
   npcHover: [entityOrName: any, event: MouseEvent]
   npcLeave: []
   itemHover: [item: any, event: MouseEvent]
@@ -384,7 +387,10 @@ defineExpose({
         :debug-mode="!!props.sheet?.debug_mode"
         :has-scene-image="Boolean(activeSceneImageUrl)"
         :progression-mode="props.sheet?.sequence_progression_mode || props.activeSequence?.progression_mode"
+        :listening-active="!!props.listeningActive"
+        :can-listen="props.status === 'connected' && !props.inputLocked && !props.sheet?.agent_active"
         @view-scene-image="showSceneImage = true"
+        @toggle-listening="emit('toggleListening')"
         @open-chronicles="emit('openChronicles')"
         @open-quests="emit('openQuests')"
         @open-memories="emit('openMemories')"
