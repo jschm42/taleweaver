@@ -27,6 +27,7 @@ import type {
   SpeechVoiceList,
   LeaderboardResponse,
   EarnedAward,
+  TravelOptions,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -584,6 +585,11 @@ export const api = {
     return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock`, {
       method: 'POST',
     })
+  },
+
+  /** Unlocked fast travel points with route time, or why travel is blocked. */
+  getTravelOptions(gameId: string): Promise<TravelOptions> {
+    return request(`/adventures/${gameId}/travel/options`)
   },
 
   /** Moves the player through an unlocked exit to the target scene. */

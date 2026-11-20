@@ -49,3 +49,11 @@ def section_links(raw: str) -> list[dict[str, Any]]:
     """``HARBOR_TOWN 8h, GLOOM_PEAKS`` -> planned links with optional travel minutes."""
     links = [_link(part) for part in _SEPARATORS.split(raw) if part.strip()]
     return [link for link in links if link]
+
+
+def travel_duration(raw: str) -> int:
+    """``2h 30m`` / ``1d`` / ``90`` -> travel minutes of an exit (more than zero)."""
+    minutes = to_minutes(raw.strip())
+    if minutes is None or minutes <= 0:
+        raise ValueError(f"expected a travel time like '2h 30m' or '1d', got '{raw.strip()}'")
+    return minutes

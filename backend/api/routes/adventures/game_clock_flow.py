@@ -120,10 +120,18 @@ async def stream_time_events(manager: Any, game_event: Any = None) -> AsyncGener
 
 
 async def tick_after_narration(manager: Any, game_event: Any = None) -> AsyncGenerator[str, None]:
-    """The player message's narration tick plus its time events (once per player message)."""
-    if not getattr(manager, "clock_tick_pending", False):
+    """The player message's narration tick plus its time events (once per player message).
+
+    A journey through an exit with travel time already moved the clock and replaces the tick
+    (``travel_flow.apply_exit_travel``); only its time events are left to fire here.
+    """
+    tick = bool(getattr(manager, "clock_tick_pending", False))
+    travelled = bool(getattr(manager, "travel_events_pending", False))
+    if not (tick or travelled):
         return
     manager.clock_tick_pending = False
-    apply_narration_tick(manager)
+    manager.travel_events_pending = False
+    if tick:
+        apply_narration_tick(manager)
     async for event in stream_time_events(manager, game_event):
         yield event

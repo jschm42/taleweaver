@@ -45,7 +45,9 @@ from backend.api.routes.adventures.editing.entity_update.protagonist import (
 from backend.api.routes.adventures.editing.section_crud import patched_section_id
 from backend.engine.audio.audio_library import track_id_or_none
 from backend.engine.conversations.npc_fields import CONVERSATION_FIELDS, store_conversation_fields
+from backend.engine.rules.fast_travel import normalize_unlock_mode
 from backend.engine.rules.npc_memory import store_memory_slots
+from backend.engine.rules.travel_time import normalize_travel_label, normalize_travel_minutes
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit
@@ -168,6 +170,7 @@ async def _patch_scene(
     if "section_id" in updates:
         adv = await db.get(AdventureTemplate, template_id)
         scene.section_id = patched_section_id(adv, updates["section_id"], scene.section_id)
+    _patch_travel_fields(scene, updates)
     set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 
@@ -185,6 +188,21 @@ def _patch_exit_lock(world_exit: WorldExit, updates: dict[str, Any]) -> None:
     world_exit.rule_to_unlock = rule or None
     if "locked" not in updates:
         world_exit.is_locked = bool(code or item or rule)
+
+
+_TRAVEL_NORMALIZERS = {
+    "travel_minutes": normalize_travel_minutes,
+    "travel_label": normalize_travel_label,
+    "is_fast_travel_point": lambda value: value is True,
+    "fast_travel_unlock": normalize_unlock_mode,
+}
+
+
+def _patch_travel_fields(row: Any, updates: dict[str, Any]) -> None:
+    """Travel time of an exit, fast travel point of a scene (normalized)."""
+    for key, normalize in _TRAVEL_NORMALIZERS.items():
+        if key in updates and hasattr(row, key):
+            setattr(row, key, normalize(updates[key]))
 
 
 async def _patch_exit(
@@ -205,6 +223,7 @@ async def _patch_exit(
         world_exit.is_locked = bool(updates["locked"])
     if any(k in updates for k in _LOCK_FIELDS):
         _patch_exit_lock(world_exit, updates)
+    _patch_travel_fields(world_exit, updates)
     set_columns(world_exit, EXIT_SCRIPT_FIELDS, updates)
     return f"exit:{world_exit.id}"
 

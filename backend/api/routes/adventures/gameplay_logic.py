@@ -29,6 +29,7 @@ from backend.api.routes.adventures.agent_commands import (
     handle_playagent_command,
 )
 from backend.api.routes.adventures.after_narration import run_after_narration
+from backend.api.routes.adventures.fast_travel import handle_fast_travel, is_fast_travel_command
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
 from backend.api.routes.adventures.history_compression_window import messages_to_compress
 from backend.api.routes.adventures.story_continuation import (
@@ -50,6 +51,7 @@ from backend.core.narration_styles import (
 from backend.core.narrator_voices import narrator_voice_rules
 from backend.core.prose_craft import PROSE_CRAFT_RULES
 from backend.core.voice_tags import vocal_tag_reminder
+from backend.engine.rules.fast_travel import TRAVEL_KEY, apply_travel_ops
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.debug_script_command import (
     handle_script_command,
@@ -408,6 +410,8 @@ class GameTurnManager:
         self._turn_anchor: tuple[Any, Any] | None = None
         # True while the player's message still owes its narration tick (game_clock_flow).
         self.clock_tick_pending = False
+        # True after a journey moved the clock: its time events fire after the narration.
+        self.travel_events_pending = False
 
     def _queue_checkpoint(
         self, reason: str, *, scene_label: str | None = None, label: str | None = None
@@ -934,6 +938,12 @@ class GameTurnManager:
             async for chunk in handle_script_command(self, user_msg):
                 yield chunk
             yield await self._command_final_event()
+            return
+
+        # /fast_travel <place>: walk the known route to a fast travel point, narrate once
+        if is_fast_travel_command(user_msg):
+            async for chunk in handle_fast_travel(self, user_msg, language=language):
+                yield chunk
             return
 
         # traverse_exit internal command: move scene, then run LLM narration pass
@@ -3012,6 +3022,7 @@ class GameTurnManager:
             audio_library=getattr(self.adventure, "audio_tracks", None),
             party=session_overrides.get(PARTY_KEY),
             respawn=session_overrides.get(RESPAWN_KEY),
+            travel=session_overrides.get(TRAVEL_KEY),
             npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
             conversations=session_overrides.get(CONVERSATIONS_STATE_KEY),
             story_flags=story_flags,
@@ -3190,11 +3201,13 @@ class GameTurnManager:
             changeset.respawn_point is not None
             or changeset.npc_memory_ops
             or changeset.conversation_ops
+            or changeset.travel_ops
         ):
             states = dict(self.state.entity_states or {})
             apply_respawn_point(states, changeset.respawn_point)
             apply_npc_memory_ops(states, changeset.npc_memory_ops)
             apply_conversation_ops(states, changeset.conversation_ops)
+            apply_travel_ops(states, changeset.travel_ops)
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
         if changeset.teleport_scene_id or getattr(changeset, "teleport_dynamic_request", None):

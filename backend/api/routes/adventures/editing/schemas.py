@@ -46,6 +46,12 @@ class EntityUpdateRequest(BaseModel):
     revealed: Optional[bool] = None
     # Exits: False makes it a solo passage (the companion stays behind).
     companions_allowed: Optional[bool] = None
+    # Exits: in-game minutes the way takes (0 = none) and the journey's description.
+    travel_minutes: Optional[int] = Field(default=None, ge=0, le=525600)
+    travel_label: Optional[str] = Field(default=None, max_length=100)
+    # Scenes: fast travel point and its unlock mode ("visit" or "script").
+    is_fast_travel_point: Optional[bool] = None
+    fast_travel_unlock: Optional[Literal["visit", "script"]] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
@@ -191,6 +197,9 @@ class ExitCreateRequest(BaseModel):
     is_revealed: bool = False
     # False: a solo passage, the companion stays behind.
     companions_allowed: bool = True
+    # In-game minutes the way takes and how the journey is described.
+    travel_minutes: Optional[int] = Field(default=None, ge=0, le=525600)
+    travel_label: Optional[str] = Field(default=None, max_length=100)
     lock_description: Optional[str] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None

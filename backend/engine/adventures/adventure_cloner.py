@@ -200,6 +200,7 @@ def _create_cloned_template_entity(
         narrator_voice=deepcopy(original.narrator_voice),
         audio_tracks=clone_audio_tracks(original.audio_tracks, original.id, new_id),
         world_sections=deepcopy(original.world_sections) if original.world_sections else None,
+        fast_travel_enabled=original.fast_travel_enabled is not False,
         audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
@@ -313,6 +314,8 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             dynamic_zone=deepcopy(s.dynamic_zone) if s.dynamic_zone else None,
             is_respawn_point=bool(s.is_respawn_point),
             section_id=s.section_id,
+            is_fast_travel_point=bool(s.is_fast_travel_point),
+            fast_travel_unlock=s.fast_travel_unlock or "visit",
         )
         db.add(cloned)
 
@@ -335,6 +338,8 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             is_locked=e.is_locked,
             is_revealed=bool(e.is_revealed),
             companions_allowed=e.companions_allowed is not False,
+            travel_minutes=e.travel_minutes,
+            travel_label=e.travel_label,
             lock_description=e.lock_description,
             code_to_unlock=e.code_to_unlock,
             item_to_unlock=e.item_to_unlock,

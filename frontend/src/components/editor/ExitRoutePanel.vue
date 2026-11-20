@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExitTravelFields from '@/components/editor/ExitTravelFields.vue'
 import { ref, watch, computed } from 'vue'
 import {
   entityService,
@@ -41,6 +42,8 @@ const exitEditForm = ref({
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
   is_revealed: false,
   companions_allowed: true,
+  travel_minutes: null as number | null,
+  travel_label: '',
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
@@ -57,6 +60,8 @@ watch(
         exit_type: 'one_way',
         is_revealed: false,
         companions_allowed: true,
+        travel_minutes: null,
+        travel_label: '',
         code_to_unlock: '',
         item_to_unlock: '',
         rule_to_unlock: '',
@@ -70,6 +75,8 @@ watch(
       exit_type: String(exitData.exit_type || 'one_way').toLowerCase() === 'bidirectional' ? 'bidirectional' : 'one_way',
       is_revealed: Boolean(exitData.is_revealed),
       companions_allowed: exitData.companions_allowed !== false,
+      travel_minutes: Number(exitData.travel_minutes) > 0 ? Number(exitData.travel_minutes) : null,
+      travel_label: String(exitData.travel_label || ''),
       code_to_unlock: String(exitData.code_to_unlock || ''),
       item_to_unlock: String(exitData.item_to_unlock || ''),
       rule_to_unlock: String(exitData.rule_to_unlock || ''),
@@ -131,6 +138,8 @@ async function saveRouteExit() {
     revealed: exitEditForm.value.is_revealed,
     dynamic_zone: exitEditForm.value.dynamic_zone ?? null,
     companions_allowed: exitEditForm.value.companions_allowed,
+    travel_minutes: exitEditForm.value.travel_minutes ?? 0,
+    travel_label: exitEditForm.value.travel_label.trim(),
     code_to_unlock: rawCode,
     item_to_unlock: rawItem,
     rule_to_unlock: rawRule,
@@ -252,6 +261,11 @@ async function saveRouteExit() {
         <input v-model="exitEditForm.companions_allowed" type="checkbox" class="accent-emerald-500" />
         <span>Companions may follow <span class="text-slate-500">(off = solo passage)</span></span>
       </label>
+
+      <ExitTravelFields
+        v-model:minutes="exitEditForm.travel_minutes"
+        v-model:label="exitEditForm.travel_label"
+      />
     </template>
 
     <template v-else-if="activeTab === 'lock'">

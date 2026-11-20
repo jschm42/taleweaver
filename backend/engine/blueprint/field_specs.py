@@ -47,7 +47,11 @@ from backend.engine.blueprint.converters import (
     weapon_cost,
     weapon_effects,
 )
-from backend.engine.blueprint.section_converters import section_links, section_position
+from backend.engine.blueprint.section_converters import (
+    section_links,
+    section_position,
+    travel_duration,
+)
 
 # Stats a d20 roll can use (attack rolls, saves); "ac" is not one of them.
 _ROLL_STATS = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
@@ -134,6 +138,8 @@ WORLD_KEYS: dict[str, FieldSpec] = {
         choice("OFF", "RARE", "NORMAL", "LIVELY", aliases={"none": "OFF", "often": "LIVELY"}),
     ),
     "gossip": FieldSpec("npc_conversations.gossip", boolean),
+    # Fast travel to unlocked fast travel points (default yes).
+    "fast_travel": FieldSpec("fast_travel_enabled", boolean),
     "win_guard": _expr("completed_guard_expression"),
     "lose_guard": _expr("gameover_guard_expression"),
     "init_script": _script("init_script"),
@@ -262,6 +268,10 @@ SCENE_KEYS: dict[str, FieldSpec] = {
     # World section ([Section: ID]) the scene belongs to.
     "section": _ref("section_id"),
     "region": _ref("section_id"),
+    # Fast travel point; unlocked on the first visit, or only by a script.
+    "fast_travel": FieldSpec("is_fast_travel_point", boolean),
+    "waypoint": FieldSpec("is_fast_travel_point", boolean),
+    "fast_travel_unlock": FieldSpec("fast_travel_unlock", choice("visit", "script")),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
     "dynamic": FieldSpec("dynamic_zone.enabled", boolean),
@@ -295,6 +305,10 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     # Solo passage: the protagonist's companion stays behind.
     "companions": FieldSpec("companions_allowed", boolean),
     "solo": FieldSpec("companions_allowed", one_way),
+    # Travel time of a long way ("8h", "2d") and how the journey is described.
+    "travel": FieldSpec("travel_minutes", travel_duration),
+    "travel_time": FieldSpec("travel_minutes", travel_duration),
+    "travel_label": FieldSpec("travel_label"),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")
@@ -473,6 +487,8 @@ SEQUENCE_KEYS: dict[str, FieldSpec] = {
     "solo": FieldSpec("companions_allowed", one_way),
     # Deadly chapter: 0 HP ends the adventure even in respawn mode.
     "respawn": FieldSpec("respawn_allowed", boolean),
+    # No fast travel while this chapter is active.
+    "fast_travel": FieldSpec("fast_travel_allowed", boolean),
 }
 for _alias in ("lore", "intro", "chapter_description"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]

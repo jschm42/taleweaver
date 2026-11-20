@@ -79,6 +79,10 @@ class AdventureTemplate(Base, TimestampMixin):
     )
     # World sections (regions) that group the scenes; None = no sections (engine/world/sections.py).
     world_sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Whether the player may fast travel to unlocked fast travel points (engine/rules/fast_travel.py).
+    fast_travel_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
     # Dialog skin chosen by the author: {"skin": <id>, "accent": "#rrggbb"} (see core/ui_theme.py)
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 

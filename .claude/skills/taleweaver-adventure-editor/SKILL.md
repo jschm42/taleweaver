@@ -77,7 +77,7 @@ fields are rejected (no silent typos).
 | `set_init_script` / `append_init_script` | Replace / extend the global init script (helpers, dialog handlers, dialogue trees) | `code` |
 | `create_quest` / `create_award` | Quest / award | see `ops` |
 | `set_start_scene` | Start scene | `scene_id` |
-| `update_adventure` | Adventure settings (plot, rules, sequences, ...; `game_over_rules: {on_zero_hp: "respawn", respawn_hp_percent: 25}` turns on respawning at 0 HP) | see `ops` |
+| `update_adventure` | Adventure settings (plot, rules, sequences, ...; `game_over_rules: {on_zero_hp: "respawn", respawn_hp_percent: 25}` turns on respawning at 0 HP; `fast_travel_enabled: false` switches fast travel off; a sequence's `fast_travel_allowed: false` forbids it in that chapter) | see `ops` |
 | `set_sections` | Replace the whole region (world section) list; scenes of regions left out lose their region | `sections` (`[{id, label, description, map_x, map_y, status: built/stub, brief, planned_links: [{to_section_id, travel_minutes, note}]}]`) |
 | `assign_section` | Move scenes into a region (`section_id: null` takes them out); a planned region becomes built | `section_id`, `scene_ids` |
 | `delete_scene` / `delete_exit` / `delete_entity` / `delete_script` / `delete_quest` / `delete_award` | Remove | the one ID field |
@@ -86,10 +86,10 @@ fields are rejected (no silent typos).
 
 - **scene**: `name` sets the label; `description`, `decorative_objects`, `audio_track_id` (a track id of
   the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab),
-  `dynamic_zone` (turn into a pre-mapped Dynamic Scene or clear with `null`), `is_respawn_point` (revival point for the respawn mode), `section_id` (region id, `""` = none), `on_enter_scene_script/_text`,
+  `dynamic_zone` (turn into a pre-mapped Dynamic Scene or clear with `null`), `is_respawn_point` (revival point for the respawn mode), `section_id` (region id, `""` = none), `is_fast_travel_point`, `fast_travel_unlock` (`visit`/`script`), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
-  `companions_allowed` (`false` = solo passage), `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
+  `companions_allowed` (`false` = solo passage), `travel_minutes` (in-game minutes of a long journey, `0` = none), `travel_label`, `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
   `dynamic_zone` (`zone_id`, `theme`, `instructions`, `instructions_scope`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`, `allowed_entity_types`, `return_exit_direction`, `on_after_generated_script`),
   `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`.
   A code/item/rule lock needs a lock description (set `description` in the same or an earlier update,

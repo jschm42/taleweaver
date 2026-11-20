@@ -626,6 +626,30 @@ section: HARBOR_TOWN
 
 Regions gate nothing: a route between two regions is an ordinary exit between their scenes, with the usual locks. Manage regions later on the editor's **Regions** page and filter the **Map** by region.
 
+### Long journeys and fast travel
+
+A way between distant places can cost in-game time: `travel` on an exit moves the clock when the player uses it. Mark central places with `fast_travel: yes`; once the player has been there, the map offers to travel back from anywhere (the route is walked with all its events and travel time). A waystone that must be activated first uses `fast_travel_unlock: script` and a script that unlocks it.
+
+```text
+[Scene: HARBOR_SQUARE] Harbor Square
+fast_travel: yes
+
+[Scene: WAYSTONE] Old Waystone
+fast_travel: yes
+fast_travel_unlock: script
+
+[Item: RUNE_STONE] Rune Stone
+type: switch
+on_interact: tw.game.unlock_fast_travel('WAYSTONE')
+
+[Exit: HARBOR_SQUARE -> WAYSTONE] the mountain road
+travel: 8h
+travel_label: a day's march uphill
+
+[Sequence: 3] The Siege
+fast_travel: no
+```
+
 ### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`) & Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]`)
 
 Combine author-designed map topology with on-demand AI generation in two complementary ways:

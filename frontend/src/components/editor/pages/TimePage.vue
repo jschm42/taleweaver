@@ -35,6 +35,13 @@ const system = computed({
   },
 })
 
+const fastTravel = computed({
+  get: (): boolean => (form as { fast_travel_enabled?: boolean }).fast_travel_enabled !== false,
+  set: (value) => {
+    ;(form as { fast_travel_enabled?: boolean }).fast_travel_enabled = value
+  },
+})
+
 const gmTimeControl = computed({
   get: (): boolean => form.gm_time_control ?? true,
   set: (value) => {
@@ -73,6 +80,14 @@ const gmTimeControl = computed({
         v-model="gmTimeControl"
         label="GM may change the time"
         description="The Game Master may add time for long actions (capped by the GM limit). Off: only the time per turn and scripts move the clock; scripts can override this with tw.time.allow_gm_time()."
+      />
+    </div>
+
+    <div class="border-t border-wb-line pt-6">
+      <UiToggle
+        v-model="fastTravel"
+        label="Fast travel"
+        description="Players can travel to unlocked fast travel points (marked on the scene) along the known route; exits with a travel time add it to the clock. Chapters and scripts (tw.game.set_fast_travel) can switch it off for a while."
       />
     </div>
   </div>

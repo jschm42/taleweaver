@@ -30,6 +30,7 @@ from backend.api.routes.adventures.editing.schemas import (
 from backend.api.routes.adventures.editing.section_crud import resolve_target_section
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.rules.travel_time import normalize_travel_label, normalize_travel_minutes
 from backend.engine.world.dynamic_scene_schemas import (
     build_dynamic_placeholder_scene_id,
     normalize_dynamic_zone,
@@ -245,6 +246,8 @@ async def create_editor_exit(
         ),
         is_revealed=bool(payload.is_revealed),
         companions_allowed=payload.companions_allowed is not False,
+        travel_minutes=normalize_travel_minutes(payload.travel_minutes),
+        travel_label=normalize_travel_label(payload.travel_label),
         lock_description=lock_description or None,
         code_to_unlock=code or None,
         item_to_unlock=item or None,
@@ -269,6 +272,8 @@ async def create_editor_exit(
                 "is_locked": world_exit.is_locked,
                 "is_revealed": world_exit.is_revealed,
                 "companions_allowed": world_exit.companions_allowed is not False,
+                "travel_minutes": world_exit.travel_minutes,
+                "travel_label": world_exit.travel_label,
                 "lock_description": world_exit.lock_description,
                 "code_to_unlock": world_exit.code_to_unlock,
                 "item_to_unlock": world_exit.item_to_unlock,

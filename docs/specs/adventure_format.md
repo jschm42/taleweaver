@@ -43,7 +43,7 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.5.0` (current) | Current format. Adds world sections (regions): top-level `sections` and scene `section_id`. |
+| `1.5.0` (current) | Current format. Adds world sections (regions: top-level `sections`, scene `section_id`), travel time on exits (`travel_minutes`, `travel_label`) and fast travel (scene `is_fast_travel_point` / `fast_travel_unlock`, adventure `fast_travel_enabled`, sequence `fast_travel_allowed`). |
 | `1.4.0` up to below `1.5.0` | Supported: importable and playable without restrictions (no world sections). Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, companions (NPC `companion`, exit and sequence `companions_allowed`), and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
 | `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions (predates optional `dynamic_generation` / `dynamic_zone` fields, companions, and respawning). |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
@@ -78,6 +78,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `audio_tracks` | `array` | Optional audio library: `[{"id", "name", "prompt", "url", "source", "reference_scene_id", "created_at"}]`. `id` is a slug (`A-Z a-z 0-9 _ -`, max 50, accepted on import); IDs set in the editor use upper-case letters, digits and underscores, max 30 (e.g. `CRYPT_THEME`). `url` is an `assets/` path in `.adz` bundles and a `/data/` URL into the adventure's own library folder in the database; anything else (other adventures' files, external URLs, `.adv` uploads without the file) is dropped, leaving a *planned* track that the editor can render from its `prompt`. `source`: `generated`, `uploaded` or `planned`. |
 | `title_track_id` | `string` \| `null` | Optional title track: `id` of a `audio_tracks` entry, played while the adventure's library tile is hovered. Without it the tile stays silent. |
 | `audio_enabled` | `boolean` | Default `true`. `false` switches scene audio off (script audio via `tw.audio` still plays). |
+| `fast_travel_enabled` | `boolean` | Default `true`. `false` switches fast travel off for the whole adventure (see [Fast travel](#fast-travel)). *(since 1.5.0)* |
 | `narrator_voice` | `object` \| `null` | Optional voice of the Game Master: how the narration is worded (diction, sentence rhythm, attitude), not how long it is. `{"id": "noir-detective", "name": "Hardboiled Noir Detective", "description": "...", "instruction": "Narrate like ...", "sample": "Rain hit the neon sign ..."}`. `instruction` is required (max. 1500 characters); `sample` is an optional style sample (max. 500). `id` is the catalog voice the author picked, or `"custom"` for a voice written in the editor. The full voice is stored, so an import works without the admin's voice catalog. Without it, the GM narrates in the neutral default voice. |
 | `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`, `starship`, `pixel`, `thriller`, `sitcom`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. The skin also styles the combat dialog (ability cards, item tiles, chronicle, and the arena's player/accent colors). |
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
@@ -144,6 +145,25 @@ from the file. A session copies the built regions into its adventure snapshot at
 
 ---
 
+### 2.2b Fast travel
+
+Scenes with `is_fast_travel_point: true` become destinations once unlocked: on first entry
+(`fast_travel_unlock: "visit"`, also for the start scene) or by a script
+(`tw.game.unlock_fast_travel`). The player then travels there from any scene with
+`/fast_travel <place>` or the map's travel strip. Fast travel walks the cheapest known route
+(open exits between visited scenes, least travel time, avoiding solo passages while a
+companion follows) exit by exit with every hook (`on_exit_used`, companion follow, travel
+time, `on_enter_scene`, due time events) and narrates once on arrival. It stops early when
+something happens on the way (a hook or time event writes a message, a choice opens, a fight
+starts, a script moves the player, the next exit is locked). It is refused during a fight, with
+an open choice, when `fast_travel_enabled` is `false`, while the active sequence has
+`fast_travel_allowed: false`, or after `tw.game.set_fast_travel(False, reason)`. The session
+record lives in `entity_states["__travel__"]` (`unlocked`, `disabled`, `reason`) and is part
+of every checkpoint. `GET /api/adventures/{game_id}/travel/options` lists the unlocked points
+with route time.
+
+---
+
 ### 2.3 Scenes (`scenes`)
 
 The physical locations composing the world map.
@@ -158,6 +178,8 @@ The physical locations composing the world map.
 | `audio_track_id` | `string` \| `null` | Optional `id` of the `adventure.audio_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the audio fades out. |
 | `is_respawn_point` | `boolean` | Optional, default `false`. A revival point: in respawn mode a protagonist who falls to 0 HP wakes up at the last one reached (see [Respawn](#respawn)). *(since 1.4.0)* |
 | `section_id` | `string` \| `null` | Optional `id` of the `sections` entry (region) the scene lies in. `null`: no region. A scene may not belong to a planned (`stub`) region. *(since 1.5.0)* |
+| `is_fast_travel_point` | `boolean` | Optional, default `false`. A fast travel point: once unlocked, the player can travel here from anywhere (see [Fast travel](#fast-travel)). *(since 1.5.0)* |
+| `fast_travel_unlock` | `"visit"` \| `"script"` | Optional, default `"visit"`: the point unlocks on first entry; `"script"`: only `tw.game.unlock_fast_travel(scene_id)` unlocks it. *(since 1.5.0)* |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
 | `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |
@@ -179,6 +201,8 @@ Connections and passageways between scenes.
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
 | `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
 | `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. *(since 1.4.0)* |
+| `travel_minutes` | `integer` \| `null` | Optional in-game minutes the way takes (a long road, a ship passage). Using the exit advances the clock by this time instead of the narration tick, uncapped by `max_time_per_turn`; a paused clock stays put. `null`/`0`: no travel time. *(since 1.5.0)* |
+| `travel_label` | `string` \| `null` | Optional description of the journey (max 100 chars), shown as "The journey (two days by ship) takes 2 d." *(since 1.5.0)* |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |

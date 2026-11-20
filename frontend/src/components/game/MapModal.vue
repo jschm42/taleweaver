@@ -14,6 +14,7 @@ import dagre from 'dagre'
 import type { WorldMapData } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
+import MapTravelPanel from '@/components/game/MapTravelPanel.vue'
 
 const { activeSkin, skinStyle } = useDialogSkin()
 
@@ -22,9 +23,11 @@ const props = defineProps<{
   mapData: WorldMapData | null
   nodes: Record<string, any>
   isDebug?: boolean
+  /** Session id; enables the regions and fast travel strip. */
+  gameId?: string
 }>()
 
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'travel', sceneId: string): void }>()
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 
@@ -1007,6 +1010,16 @@ onMounted(() => {
               </Transition>
             </Teleport>
           </div>
+
+          <!-- Regions and fast travel points -->
+          <MapTravelPanel
+            v-if="gameId"
+            :open="open"
+            :game-id="gameId"
+            :regions="mapData?.sections || []"
+            :current-region-id="mapData?.current_section_id || null"
+            @travel="(sceneId) => emit('travel', sceneId)"
+          />
 
           <!-- Footer hint -->
           <div class="tw-dialog-divider tw-muted px-4 sm:px-8 py-2 sm:py-3 border-t text-[11px] sm:text-xs flex justify-between items-center gap-2 shrink-0">

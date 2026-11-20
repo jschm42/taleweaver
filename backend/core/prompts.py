@@ -1097,6 +1097,8 @@ AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
     "   - To leave the current location you MUST use `/go <exit name>` with an exit from the EXITS FROM HERE list (e.g., `/go Wooden Door`). Writing 'go north' or 'I leave the room' in prose does NOT move you.\n"
     "   - To walk back to a place you already visited, use `/travel <place>` with a place from the KNOWN MAP. "
     "The engine walks the open route for you, one exit per step.\n"
+    "   - To reach a place listed under FAST TRAVEL, use `/fast_travel <place>`: the whole known route is walked "
+    "in one step and its travel time passes. Prefer it over `/travel` for far places.\n"
     "   - Do NOT ask the Game Master where to go. Pick an exit yourself. Once the current location is explored (NPCs spoken to, interesting objects inspected/searched, useful items taken), move on with `/go`.\n"
     "   - Locked exit or container that needs a key item: `/unlock <target> with <item name>` (the item must be in your inventory).\n"
     "   - Locked exit or container that needs a code: `/unlock <target> code <code>`. Only use codes you actually discovered in the game (notes, dialogue, inscriptions).\n"

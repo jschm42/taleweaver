@@ -52,6 +52,12 @@ export interface EntityEditData {
   is_respawn_point?: boolean
   /** Scenes: world section (region) id; '' takes the scene out of its section. */
   section_id?: string
+  /** Scenes: fast travel point and how it is unlocked. */
+  is_fast_travel_point?: boolean
+  fast_travel_unlock?: 'visit' | 'script'
+  /** Exits: in-game minutes the way takes (0 = none) and how the journey is described. */
+  travel_minutes?: number
+  travel_label?: string
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string

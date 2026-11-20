@@ -300,6 +300,11 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'respawn_point', kind: 'property', signature: 'str | None', doc: 'Respawn mode: scene the protagonist wakes up in after falling to 0 HP (None = start scene).' },
       { name: 'respawns', kind: 'property', signature: 'int', doc: 'How often the protagonist has been revived in this session.' },
       { name: 'set_respawn_point', kind: 'method', signature: '(scene_id: str = None)', snippet: 'set_respawn_point("${1:SCENE_ID}")', doc: 'Sets the revival point; None or "" falls back to the start scene.' },
+      { name: 'fast_travel_points', kind: 'property', signature: 'list[str]', doc: 'Scene ids of the unlocked fast travel points.' },
+      { name: 'fast_travel_enabled', kind: 'property', signature: 'bool', doc: 'False while a script switched fast travel off (the adventure setting is separate).' },
+      { name: 'unlock_fast_travel', kind: 'method', signature: '(scene_id: str)', snippet: 'unlock_fast_travel("${1:SCENE_ID}")', doc: 'Unlocks a fast travel point (the scene must be marked as one).' },
+      { name: 'lock_fast_travel', kind: 'method', signature: '(scene_id: str)', snippet: 'lock_fast_travel("${1:SCENE_ID}")', doc: 'Removes a fast travel point from the destinations again.' },
+      { name: 'set_fast_travel', kind: 'method', signature: '(enabled: bool, reason: str = None)', snippet: 'set_fast_travel(${1:False}, "${2:The roads are flooded.}")', doc: 'Switches fast travel off (with the reason players see) or on again.' },
     ],
   },
   quests: {

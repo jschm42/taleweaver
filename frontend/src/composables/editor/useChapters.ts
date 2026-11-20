@@ -83,6 +83,7 @@ export function useChapters(editor: EditorContext): Chapters {
       activation_scene_id: seq.activation_scene_id || '',
       companions_allowed: seq.companions_allowed !== false,
       respawn_allowed: seq.respawn_allowed !== false,
+      fast_travel_allowed: seq.fast_travel_allowed !== false,
       guard_expression: seq.guard_expression || seq.completion_guard_expression || '',
       exp_reward: seq.exp_reward ?? 50,
       on_start_sequence_script: seq.on_start_sequence_script || '',

@@ -669,6 +669,17 @@ tw.story.narrate("Mother Agnes patched you up. 'Mind that ogre next time.'")
 tw.npcs.get('OGRE').heal(999)
 ```
 
+- Fast travel (see *World sections* in `docs/specs/world_sections.md`): scenes marked as **fast travel points** become destinations once unlocked; the player then travels there from anywhere along the known route (`/fast_travel <place>`, or the map's travel strip). A point with the unlock mode *On first visit* unlocks itself on entry; a point with *By a script* waits for `unlock_fast_travel`.
+  - `tw.game.fast_travel_points`: Scene IDs of the unlocked points (includes this script's changes).
+  - `tw.game.unlock_fast_travel(scene_id: str)` / `tw.game.lock_fast_travel(scene_id: str)`: Adds or removes a destination (the scene must be marked as a fast travel point).
+  - `tw.game.set_fast_travel(enabled: bool, reason: str = None)`: Switches fast travel off for a while (players see `reason`) or on again. `tw.game.fast_travel_enabled` reads it. The adventure switch (**Time & pacing → Fast travel**) and a chapter's **Fast travel allowed** are separate and both must allow it.
+
+```python
+# on_interact of the waystone: activating it unlocks the point, a storm later closes the roads
+tw.game.unlock_fast_travel('WAYSTONE')
+tw.story.narrate("The runes glow. You will find your way back here.")
+```
+
 > [!NOTE]
 > **When finishing the last sequence ends the adventure** (linear and dynamic modes): if the adventure has a deterministic win guard (`completed_guard_expression`), completing the final sequence does **not** end it; only that guard or a script calling `tw.game.win()` / `tw.game.game_won()` does, and the player stays in the world until then (e.g. for a finale scripted at a later time). Without a win guard, completing every sequence ends the adventure in victory. The Game Master can additionally end it when the soft `completed_condition` is met.
 >
@@ -680,6 +691,7 @@ The in-game time is the number of minutes (units for the *units* time system) th
 **How time passes**
 - **Narration tick**: after every narrated player message the clock advances by the *minutes per tick* (the adventure's **Round Pacing** in the editor's **Time & Pacing** tab, `time_per_turn`, default 5). One player message is one tick, even when it chains a follow-up narration. The opening prologue, choice dialogs and script output (`tw.narrate`, dialog narration) do not tick.
 - **Game Master**: when **GM May Change Time** is enabled in the editor's **Time & Pacing** tab (`gm_time_control`, default on), the GM may add extra time for long actions ("the search took 20 minutes", `extra_time_minutes`) or jump the clock (`time_override_minutes`, `start_datetime_override`). Tick plus extra time of one message is capped by **Max Time per Turn (GM Limit)**. With the flag off, while the clock is paused, or after `tw.time.allow_gm_time(False)`, GM time requests are ignored and Pass 1 is told `TIME CONTROL: LOCKED`.
+- **Travel time**: an exit with a travel time (the exit's **Travel time** in the editor, `travel_minutes`) adds that time when the player uses it, instead of the narration tick, and is not capped by the GM limit. Fast travel adds the travel time of every exit on its route. A paused clock stays put. Timers and `on_time_reached` scripts that came due on the way fire on arrival, after the narration.
 - **Scripts and debug commands** can set or move the time at any moment, also while the clock is paused.
 
 **Reading**

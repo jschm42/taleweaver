@@ -16,6 +16,8 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
 )
 from backend.engine.media.image_prompt_context import build_scene_image_prompt
+from backend.engine.rules.fast_travel import normalize_unlock_mode
+from backend.engine.rules.travel_time import normalize_travel_label, normalize_travel_minutes
 from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.engine.world.sections import section_id_or_none
@@ -124,6 +126,8 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                 ),
                 is_respawn_point=scene.get("is_respawn_point") is True,
                 section_id=section_id_or_none(scene.get("section_id")),
+                is_fast_travel_point=scene.get("is_fast_travel_point") is True,
+                fast_travel_unlock=normalize_unlock_mode(scene.get("fast_travel_unlock")),
             )
         )
 
@@ -162,6 +166,8 @@ def persist_exits(db: AsyncSession, template_id: str, exits: list[dict[str, Any]
                 is_locked=bool(exit_def.get("is_locked", False)),
                 is_revealed=bool(exit_def.get("is_revealed", False)),
                 companions_allowed=exit_def.get("companions_allowed") is not False,
+                travel_minutes=normalize_travel_minutes(exit_def.get("travel_minutes")),
+                travel_label=normalize_travel_label(exit_def.get("travel_label")),
                 lock_description=exit_def.get("lock_description"),
                 code_to_unlock=code_to_unlock,
                 item_to_unlock=item_to_unlock,

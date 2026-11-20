@@ -38,6 +38,7 @@ from backend.engine.scripting.party_proxy import PartyProxy
 from backend.engine.scripting.player_inventory import InventoryProxy, PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
+from backend.engine.scripting.travel_proxy import FastTravelMixin
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,8 @@ class ScriptChangeset:
     npc_memory_ops: list[dict[str, Any]] = field(default_factory=list)
     # Ordered tw.npcs conversation operations, replayed by conversations.ops.
     conversation_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.game fast travel operations, replayed by fast_travel.apply_travel_ops.
+    travel_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -208,6 +211,7 @@ class ScriptChangeset:
             or self.respawn_point is not None
             or self.npc_memory_ops
             or self.conversation_ops
+            or self.travel_ops
             or self.skip_narration
         )
 
@@ -1445,7 +1449,7 @@ class MemoriesProxy:
         )
 
 
-class GameProxy:
+class GameProxy(FastTravelMixin):
     """Safe proxy for game outcome and victory/defeat criteria."""
 
     def __init__(
@@ -1454,8 +1458,10 @@ class GameProxy:
         in_game_time: int = 0,
         clock: Optional[TimeProxy] = None,
         respawn: Optional[dict[str, Any]] = None,
+        travel: Optional[dict[str, Any]] = None,
     ):
         self._changeset = changeset
+        self._init_travel(travel)
         self.in_game_time = in_game_time
         self._clock = clock
         record = respawn if isinstance(respawn, dict) else {}
@@ -1826,6 +1832,7 @@ class GameContext:
         respawn: Optional[dict[str, Any]] = None,
         npc_memory: Optional[dict[str, Any]] = None,
         conversations: Optional[dict[str, Any]] = None,
+        travel: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1885,7 +1892,9 @@ class GameContext:
         self.memories = MemoriesProxy(self.changeset)
         # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
         self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
-        self.game = GameProxy(self.changeset, in_game_time, clock=self.time, respawn=respawn)
+        self.game = GameProxy(
+            self.changeset, in_game_time, clock=self.time, respawn=respawn, travel=travel
+        )
         self.session = self.game
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)

@@ -15,6 +15,7 @@ from typing import Any, Optional
 from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.party.party_state import PARTY_KEY
+from backend.engine.rules.fast_travel import TRAVEL_KEY
 from backend.engine.rules.game_clock import clock_view
 from backend.engine.rules.npc_memory import NPC_MEMORY_STATE_KEY
 from backend.engine.rules.respawn import RESPAWN_KEY
@@ -209,6 +210,7 @@ class HardRuleEvaluator:
                 clock=clock_view(state),
                 party=session_overrides.get(PARTY_KEY),
                 respawn=session_overrides.get(RESPAWN_KEY),
+                travel=session_overrides.get(TRAVEL_KEY),
                 npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
                 conversations=session_overrides.get(CONVERSATIONS_STATE_KEY),
                 story_flags=story_flags,

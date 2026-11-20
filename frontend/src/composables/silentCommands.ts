@@ -27,6 +27,7 @@ const SILENT_COMMANDS = new Set([
   // World mechanics and movement
   '/switch',
   '/traverse_exit',
+  '/fast_travel',
   '/rule-pass',
   // Save state (only the "Game saved" system line is shown)
   '/save',

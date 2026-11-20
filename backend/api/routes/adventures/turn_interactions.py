@@ -10,6 +10,8 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.arrival_narration_flow import narrate_arrival
+from backend.api.routes.adventures.travel_flow import apply_exit_travel
 from backend.api.routes.adventures.container_detach import (
     carried_ids,
     detach_carried_items,
@@ -20,7 +22,6 @@ from backend.api.routes.adventures.container_put import (
     run_container_items_removed_trigger,
 )
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
-from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
 from backend.api.routes.adventures.companion_command import companion_order_command
 from backend.api.routes.adventures.companion_inventory import GIVE, TAKE, transfer_companion_items
 from backend.api.routes.adventures.companion_recruit import recruit_companion_command
@@ -38,10 +39,6 @@ from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
 from backend.engine.sessions.session_checkpoint_service import REASON_MANUAL_SAVE
-from backend.api.routes.adventures.gameplay_logic import (
-    _friendly_llm_error_message,
-    _friendly_llm_unexpected_error_message,
-)
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.sequence_hooks import (
     build_sequence_intro,
@@ -412,6 +409,10 @@ class TurnInteractionsManager:
         ):
             self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+        journey = apply_exit_travel(self.manager, world_exit)
+        for msg in journey:
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
         await self._record_map_traversal(current_scene_id, scene, world_exit)
         await drain_pending_dynamic_visuals(
             self.db,
@@ -436,41 +437,18 @@ class TurnInteractionsManager:
             role = getattr(m, "role", "system")
             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
-        # Signal frontend to clear old chat bubbles; audio switches to the new scene's track.
-        transition = {
-            "scene_id": scene.id,
-            "scene_label": scene.label,
-            "audio": await build_audio_snapshot(self.db, self.state, None, self.user),
-        }
-        yield f"event: scene_transition\ndata: {json.dumps(transition)}\n\n"
-
-        # Build a narration prompt for the new scene
+        # Narrate the new scene (the GM may not move the player on).
         exit_label = world_exit.label or "the exit"
         scene_label = scene.label or target_scene_id
+        journey_text = f" {journey[0]} Mention the journey in a sentence." if journey else ""
         narration_prompt = (
-            f"[SCENE_TRANSITION] The player moves through {exit_label} and enters {scene_label}. "
+            f"[SCENE_TRANSITION] The player moves through {exit_label} and enters {scene_label}."
+            f"{journey_text} "
             f"Describe the new location vividly: atmosphere, key details, and anything immediately notable. "
             f"Do not summarize previous events."
         )
-
-        yield f"event: status\ndata: {json.dumps({'content': f'Entering {scene_label}...'})}\n\n"
-
-        # Run full LLM cycle to narrate the new scene (the GM may not move the player on).
-        self.manager.arrival_narration = True
-        try:
-            async for chunk in self._run_llm_cycle(narration_prompt, False, language=language):
-                yield chunk
-        except Exception as exc:
-            user_safe_error = (
-                _friendly_llm_error_message(exc) or _friendly_llm_unexpected_error_message()
-            )
-            yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
-        finally:
-            self.manager.arrival_narration = False
-            pending_visuals = getattr(self.manager, "pending_dynamic_visuals", None)
-            if pending_visuals:
-                await drain_pending_dynamic_visuals(self.db, self.state, pending_visuals)
-                await self.db.commit()
+        async for chunk in narrate_arrival(self, scene, narration_prompt, language):
+            yield chunk
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()

@@ -84,6 +84,16 @@ const sheetInitialTab = ref<SheetTabId | null>(null)
 const sheetInitialSubject = ref<'hero' | 'companion'>('hero')
 const sheetDirty = ref(false)
 const showMap = ref(false)
+
+/** Fast travel chosen on the map: close it and walk the route as one player message. */
+async function handleFastTravel(sceneId: string): Promise<void> {
+  showMap.value = false
+  try {
+    await sendMessage(`/fast_travel ${sceneId}`)
+  } catch (error: unknown) {
+    addNotification(error instanceof Error ? error.message : 'Failed to travel.', 'error')
+  }
+}
 const showQuests = ref(false)
 const isQuestTrackerHidden = ref(localStorage.getItem('tw_quest_tracker_hidden') === 'true')
 watch(isQuestTrackerHidden, (val) => {
@@ -2261,7 +2271,15 @@ usePlayAgentAutoLoop()
       @inspect-item="handleInspectInventoryItem"
       @flip-switch="handleFlipInventorySwitch"
     />
-    <MapModal :open="showMap" :map-data="mapData" :nodes="nodes" :is-debug="!!sheet?.debug_mode" @close="showMap = false" />
+    <MapModal
+      :open="showMap"
+      :map-data="mapData"
+      :nodes="nodes"
+      :is-debug="!!sheet?.debug_mode"
+      :game-id="props.id"
+      @close="showMap = false"
+      @travel="handleFastTravel"
+    />
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 

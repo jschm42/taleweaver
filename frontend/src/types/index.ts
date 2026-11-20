@@ -447,6 +447,45 @@ export interface WorldMapData {
   nodes: Record<string, MapNode>
   edges: MapEdge[]
   current_scene_id: string | null
+  /** World sections (regions) the player discovered; empty without regions. */
+  sections?: MapRegion[]
+  /** Links between discovered regions (known exits between their scenes). */
+  section_links?: MapRegionLink[]
+  current_section_id?: string | null
+}
+
+export interface MapRegion {
+  id: string
+  label: string
+  description: string
+  map_x: number
+  map_y: number
+  /** visited: a scene of it was entered; revealed: only seen behind a revealed exit. */
+  discovery: 'visited' | 'revealed'
+}
+
+export interface MapRegionLink {
+  from: string
+  to: string
+  is_locked: boolean
+}
+
+/** A fast travel point as GET /adventures/{game}/travel/options returns it. */
+export interface TravelPoint {
+  scene_id: string
+  label: string
+  section_id: string | null
+  available: boolean
+  reason: string
+  minutes: number
+  hops: number
+  solo_passage: boolean
+}
+
+export interface TravelOptions {
+  /** Why fast travel is not possible right now; empty when it is. */
+  blocked: string
+  points: TravelPoint[]
 }
 
 /** Summary of a game session returned by GET /api/adventures. */

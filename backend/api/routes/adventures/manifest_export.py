@@ -44,6 +44,7 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     manifest["audio_tracks"] = adventure.audio_tracks or []
     manifest["sections"] = normalize_sections(adventure.world_sections)
     manifest["audio_enabled"] = adventure.audio_enabled
+    manifest["fast_travel_enabled"] = adventure.fast_travel_enabled is not False
     manifest["title_track_id"] = adventure.title_track_id
     manifest["npc_conversations"] = normalize_conversation_settings(adventure.npc_conversations)
 
@@ -174,6 +175,8 @@ def serialize_exit(world_exit: Any) -> dict[str, Any]:
         "is_locked": world_exit.is_locked,
         "is_revealed": bool(world_exit.is_revealed),
         "companions_allowed": world_exit.companions_allowed is not False,
+        "travel_minutes": world_exit.travel_minutes,
+        "travel_label": world_exit.travel_label,
         "lock_description": world_exit.lock_description,
         "code_to_unlock": world_exit.code_to_unlock,
         "item_to_unlock": world_exit.item_to_unlock,

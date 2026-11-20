@@ -59,6 +59,7 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("game_over_rules", None, False),
     ("npc_conversations", normalize_conversation_settings, False),
     ("audio_enabled", bool, False),
+    ("fast_travel_enabled", bool, False),
     ("selected_image_styles", None, True),
     ("selected_tone", None, True),
     ("sequence_progression_mode", None, True),

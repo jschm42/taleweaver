@@ -411,7 +411,11 @@ def _build_special_attack_requirement(
         "WORLD SECTIONS: leave `sections` empty unless the story idea or blueprint declares "
         "regions; then copy every declared section and set each scene's `section_id` to the "
         "region it lies in (a scene belongs to exactly one built region; planned 'stub' regions "
-        "have no scenes)."
+        "have no scenes). Give exits between distant places (another region, a long road) a "
+        "`travel_minutes` (e.g. 480 for a day's march) and optional `travel_label`; doors and "
+        "short paths get none. Mark one or two central scenes per region (a square, an inn, a "
+        "waystone) with `is_fast_travel_point: true`; players can later travel back there from "
+        "anywhere. Use `fast_travel_unlock: 'script'` only when a script unlocks the point."
     )
 
 

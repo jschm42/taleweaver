@@ -29,6 +29,7 @@ from backend.api.routes.adventures.session_debug_exports import (
 )
 from backend.api.routes.adventures.sessions import router as sessions_router
 from backend.api.routes.adventures.templates import router as templates_router
+from backend.api.routes.adventures.travel_routes import router as travel_router
 
 router = APIRouter(prefix="/adventures")
 
@@ -68,4 +69,5 @@ router.include_router(session_debug_exports_router)
 router.include_router(chat_history_router)
 router.include_router(dice_router)
 router.include_router(dialog_router)
+router.include_router(travel_router)
 router.include_router(agent_router)

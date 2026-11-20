@@ -524,6 +524,7 @@ class AdventureTemplateImporter:
                         else {},
                     },
                     "sections": manifest_sections(manifest_data),
+                    "fast_travel_enabled": adv_data.get("fast_travel_enabled"),
                     "scenes": manifest_data.get("scenes", []),
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),

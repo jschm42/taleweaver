@@ -24,6 +24,7 @@ from backend.core.world_validation import (
     sections,
     story,
     topology,
+    travel,
 )
 from backend.core.world_validation.context import ValidationContext
 from backend.schemas.validation import ValidationFinding
@@ -41,6 +42,8 @@ CHECKS: tuple[Check, ...] = (
     topology.check_npc_allowed_scenes,
     sections.check_scene_sections,
     sections.check_section_coverage,
+    travel.check_script_unlocked_points,
+    travel.check_region_travel,
     progression.check_key_progression,
     entities.check_item_references,
     entities.check_container_inventory,

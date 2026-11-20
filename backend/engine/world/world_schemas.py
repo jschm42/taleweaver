@@ -100,6 +100,20 @@ class WorldSceneSchema(WorldBaseSchema):
             "Use empty string when the adventure has no sections."
         ),
     )
+    is_fast_travel_point: bool = Field(
+        default=False,
+        description=(
+            "True for a fast travel point (a town square, an inn, a waystone): once unlocked "
+            "the player can travel here from anywhere. Usually False; one or two per region."
+        ),
+    )
+    fast_travel_unlock: Literal["visit", "script"] = Field(
+        default="visit",
+        description=(
+            "How the fast travel point is unlocked: 'visit' (on first entry) or 'script' "
+            "(only tw.game.unlock_fast_travel)."
+        ),
+    )
     helpers_script: Optional[str] = Field(
         default="",
         description=(
@@ -153,6 +167,17 @@ class WorldExitSchema(WorldBaseSchema):
             "False for a solo passage (a narrow vent, a guarded door only the protagonist may pass): "
             "the protagonist's companion stays behind. Usually True."
         ),
+    )
+    travel_minutes: Optional[int] = Field(
+        None,
+        description=(
+            "In-game minutes the way takes, only for long journeys between distant places "
+            "(e.g. 480 for a day's march to another region). Leave null for doors and paths."
+        ),
+    )
+    travel_label: Optional[str] = Field(
+        default="",
+        description="Optional short description of the journey, e.g. 'two days by ship'.",
     )
     lock_description: Optional[str] = Field(
         default="",
@@ -689,6 +714,10 @@ class SequenceSchema(WorldBaseSchema):
             "scenes while this sequence is active."
         ),
     )
+    fast_travel_allowed: bool = Field(
+        default=True,
+        description="False when fast travel must not be used while this sequence is active.",
+    )
     respawn_allowed: bool = Field(
         default=True,
         description=(
@@ -948,6 +977,9 @@ class WorldManifesto(WorldBaseSchema):
     npc_conversations: Optional[NpcConversationsSchema] = Field(
         default=None,
         description="Optional: NPCs talk with each other on their own (chatter) and gossip.",
+    )
+    fast_travel_enabled: bool = Field(
+        True, description="Whether the player may fast travel to unlocked fast travel points."
     )
     can_damage_npcs: bool = Field(
         True, description="Global flag: whether the protagonist can damage NPCs."

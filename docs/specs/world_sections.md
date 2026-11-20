@@ -1,7 +1,8 @@
 # World Sections, Travel Time and Fast Travel (Concept)
 
-Status (2026-11-20): **phase 1 implemented** (backend, editor, docs); the player's World tab
-moved to phase 2 together with fast travel.
+Status (2026-11-20): **phases 1 and 2 implemented.** The player's map shows the discovered
+regions and the fast travel points in a strip below the scene graph (`MapTravelPanel.vue`); a
+drawn world map for players (a World tab like the editor's) is still open.
 
 | Phase 1 piece | Where |
 | --- | --- |
@@ -196,11 +197,11 @@ Update `docs/specs/adventure_format.md`.
 
 ### 6.2 Travel time on exits (phase 2)
 
-New function `game_clock.apply_travel_time(state, adventure, minutes) -> int` (returns the
-minutes actually added):
+Implemented as `rules/travel_time.advance_travel_time(state, minutes) -> int` (returns the
+minutes actually added) and `travel_flow.apply_exit_travel(manager, world_exit)`:
 
-* Returns 0 when `clock_enabled` is off or the clock is paused. `travel_label` is still
-  shown.
+* Returns 0 while the clock is paused. Like the narration tick it does not depend on
+  `clock_enabled` (that switch only shows or hides the clock).
 * Not capped by `max_time_per_turn`; that cap is for GM-requested extra time only.
 * A message that applied travel time does not also get the narration tick
   (`clock_tick_pending` is cleared). Travel replaces the tick.
@@ -213,10 +214,11 @@ Call sites, right after `enter_scene` and before `on_enter_scene`:
 
 Script teleports and `/debug goto` add no travel time.
 
-After the time is applied, `run_due_time_events` runs, so `on_time_reached` scripts and
-timers that elapsed on the road fire on arrival. The arrival narration receives
-`travel: {minutes, label, from_section, to_section}` in the TURN RESOLUTION block and
-narrates the journey in a sentence or two.
+The clock moves at the traversal, so the arrival narration already sees the new time; the
+chat line "The journey (...) takes ..." and a hint in the arrival prompt make the narration
+mention the journey. Due `on_time_reached` scripts and timers fire after the narration,
+where the tick's events would have fired (`tick_after_narration`). The REST traverse
+endpoint has no turn: its time events fire with the next message.
 
 The exit tile and the map show the duration ("8 h") before the player commits.
 
@@ -259,11 +261,11 @@ New module `api/routes/adventures/fast_travel.py`.
 
 **Execution.** One player message, several hops:
 
-1. For each exit on the route, run the same traversal core as `/traverse_exit`:
-   `on_leave_scene`, `on_exit_used`, set `current_scene_id`, `enter_scene`, travel time,
-   due time events, `on_enter_scene`. No narration for intermediate hops. This requires
-   extracting the traversal core of `_handle_traverse_exit` into a function without SSE
-   and narration (a welcome reduction of that method).
+1. For each exit on the route, run the same steps as `/traverse_exit` (`fast_travel._hop`
+   reuses its trigger and map helpers): `on_leave_scene`, `on_exit_used`, set
+   `current_scene_id`, `enter_scene`, travel time, `on_enter_scene`, due time events. No
+   narration for intermediate hops; the arrival narration is shared with `/traverse_exit`
+   (`arrival_narration_flow.narrate_arrival`).
 2. After each hop, stop the trip when any of these is true: a choice dialog opened, a
    combat started, a script moved the player, the next exit is now locked, the protagonist
    went down, the session ended, or a hook or time event produced a chat message.

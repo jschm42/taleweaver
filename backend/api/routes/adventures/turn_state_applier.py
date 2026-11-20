@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.travel_flow import apply_exit_travel
 from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.container_detach import (
     detach_from_containers,
@@ -572,6 +573,9 @@ class TurnStateApplier:
                     world_exit=valid_exit,
                     adventure=self.adventure,
                 ):
+                    await self._save_chat_message("system", msg)
+                    system_messages.append(msg)
+                for msg in apply_exit_travel(self.manager, valid_exit):
                     await self._save_chat_message("system", msg)
                     system_messages.append(msg)
 
