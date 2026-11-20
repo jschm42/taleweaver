@@ -31,8 +31,8 @@
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "b494d2010b9c4e30a0fe25eea9615a172c0f86b0c789bbf781d1f130872f9013",
-      "size": 38894
+      "sha256": "30a6bce68cdf084c46b594e241d2d0e9075c8cb994d60e4d370dbab3f6d433ba",
+      "size": 38496
     },
     {
       "path": "package.json",

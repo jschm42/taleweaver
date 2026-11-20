@@ -132,7 +132,8 @@ async def test_trigger_script_changes_reach_the_gm_location_context(setup_test_d
         assert row.character == "Hostile; short, rude answers"
         assert state.entity_states["INNKEEPER"]["character"] == "Hostile; short, rude answers"
         prompt = build_location_context(scene_row, [row], [])
-        assert "[Character: Hostile; short, rude answers]" in prompt
+        # The narration context appends the NPC type's speech rule inside the annotation.
+        assert "[Character: Hostile; short, rude answers" in prompt
 
 
 @pytest.mark.asyncio
