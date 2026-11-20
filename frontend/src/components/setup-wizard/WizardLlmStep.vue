@@ -17,9 +17,11 @@ const models = computed(() => constants.value.predefined_llm_models)
 const story = reactive({ provider: '', model: '' })
 const fast = reactive({ provider: '', model: '' })
 const ollamaUrl = ref(llmForm.value.ollama_url || 'http://localhost:11434')
+const customOpenaiUrl = ref(llmForm.value.custom_openai_url || '')
 const errorMessage = ref('')
 
 const usesOllama = computed((): boolean => story.provider === 'ollama' || fast.provider === 'ollama')
+const usesCustomOpenai = computed((): boolean => story.provider === 'custom_openai' || fast.provider === 'custom_openai')
 
 function defaultProvider(): string {
   if (props.mode === 'local') {
@@ -38,6 +40,9 @@ function fastPreset(provider: string): string {
 }
 
 function hydrate(): void {
+  if (llmForm.value.custom_openai_url) {
+    customOpenaiUrl.value = llmForm.value.custom_openai_url
+  }
   if (configState.hasLlmConfig) {
     Object.assign(story, { provider: llmForm.value.complex_model_provider, model: llmForm.value.complex_model })
     Object.assign(fast, { provider: llmForm.value.small_model_provider, model: llmForm.value.small_model })
@@ -54,13 +59,14 @@ function baseUrlFor(provider: string): string {
     return ollamaUrl.value
   }
   if (provider === 'custom_openai') {
-    return llmForm.value.custom_openai_url
+    return customOpenaiUrl.value
   }
   return ''
 }
 
 function runTest(key: string, role: { provider: string; model: string }): void {
-  testService.testLlm(key, role.model, role.provider, ollamaUrl.value, undefined, baseUrlFor(role.provider))
+  const customUrl = role.provider === 'custom_openai' ? customOpenaiUrl.value : undefined
+  testService.testLlm(key, role.model, role.provider, ollamaUrl.value, undefined, customUrl)
 }
 
 /** The generator follows the story model unless an admin already picked a different one. */
@@ -94,16 +100,49 @@ async function save(): Promise<boolean> {
     errorMessage.value = 'Choose both models, or skip this page.'
     return false
   }
+  if (usesCustomOpenai.value && !customOpenaiUrl.value.trim()) {
+    errorMessage.value = 'Please enter the Base URL for your OpenAI-Compatible endpoint.'
+    return false
+  }
+  if (usesOllama.value && !ollamaUrl.value.trim()) {
+    errorMessage.value = 'Please enter the Ollama URL.'
+    return false
+  }
+  const generator = generatorRole()
+  const secondary = secondaryRoles()
+  const customUrl = usesCustomOpenai.value
+    ? customOpenaiUrl.value.trim()
+    : (llmForm.value.custom_openai_url || '')
+  const generatorProvider = generator.generator_model_provider ?? llmForm.value.generator_model_provider
+  const playAgentProvider = secondary.play_agent_model_provider ?? llmForm.value.play_agent_model_provider
+  const compressionProvider = secondary.compression_model_provider ?? llmForm.value.compression_model_provider
+
   await settingsService.saveLlmSettings({
     ...llmForm.value,
-    ...generatorRole(),
-    ...secondaryRoles(),
+    ...generator,
+    ...secondary,
     small_model: fast.model.trim(),
     small_model_provider: fast.provider,
     complex_model: story.model.trim(),
     complex_model_provider: story.provider,
     preferred_provider: story.provider,
-    ollama_url: ollamaUrl.value,
+    ollama_url: ollamaUrl.value.trim(),
+    custom_openai_url: customUrl,
+    small_custom_openai_url: fast.provider === 'custom_openai'
+      ? customUrl
+      : llmForm.value.small_custom_openai_url,
+    complex_custom_openai_url: story.provider === 'custom_openai'
+      ? customUrl
+      : llmForm.value.complex_custom_openai_url,
+    generator_custom_openai_url: generatorProvider === 'custom_openai'
+      ? (generator.generator_model_provider ? customUrl : (llmForm.value.generator_custom_openai_url || customUrl))
+      : llmForm.value.generator_custom_openai_url,
+    play_agent_custom_openai_url: playAgentProvider === 'custom_openai'
+      ? (secondary.play_agent_model_provider ? customUrl : (llmForm.value.play_agent_custom_openai_url || customUrl))
+      : llmForm.value.play_agent_custom_openai_url,
+    compression_custom_openai_url: compressionProvider === 'custom_openai'
+      ? (secondary.compression_model_provider ? customUrl : (llmForm.value.compression_custom_openai_url || customUrl))
+      : llmForm.value.compression_custom_openai_url,
   })
   if (settingsService.statusMessage.value?.type === 'error') {
     errorMessage.value = settingsService.statusMessage.value.text
@@ -162,6 +201,19 @@ defineExpose({ save })
     <div v-if="usesOllama">
       <label :class="wizardStyles.label" for="wizard-ollama-url">Ollama URL</label>
       <input id="wizard-ollama-url" v-model="ollamaUrl" :class="wizardStyles.input" />
+    </div>
+
+    <div v-if="usesCustomOpenai">
+      <label :class="wizardStyles.label" for="wizard-custom-openai-url">OpenAI-Compatible Base URL</label>
+      <input
+        id="wizard-custom-openai-url"
+        v-model="customOpenaiUrl"
+        :class="wizardStyles.input"
+        placeholder="http://localhost:8080/v1"
+      />
+      <p :class="[wizardStyles.hint, 'mt-1']">
+        Endpoint URL ending in /v1 (e.g. http://localhost:8080/v1 or https://api.openai.com/v1).
+      </p>
     </div>
 
     <p v-if="errorMessage" :class="wizardStyles.error">{{ errorMessage }}</p>

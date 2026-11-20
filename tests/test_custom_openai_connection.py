@@ -47,3 +47,35 @@ async def test_api_connection_uses_structured_path(auth_client, monkeypatch):
     assert response.json()["status"] == "success"
     assert response.json()["message"] == "ready"
     router.aexecute_complex_task.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_api_connection_wizard_llm_story_uses_prose_path(auth_client, monkeypatch):
+    from backend.api.routes import config_api
+
+    captured: dict = {}
+    router = SimpleNamespace(
+        aexecute_simple_task=AsyncMock(return_value="TaleWeaver connection test successful!"),
+        aexecute_complex_task=AsyncMock(),
+    )
+
+    def _fake_router(*args, **kwargs):
+        captured["kwargs"] = kwargs
+        return router
+
+    monkeypatch.setattr(config_api, "GameMasterLLM", _fake_router)
+    response = await auth_client.post(
+        "/api/settings/test-llm",
+        json={
+            "provider": "custom_openai",
+            "model": "vendor/model",
+            "pass_key": "wizard-llm-story",
+            "custom_openai_url": "http://127.0.0.1:8080/v1",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    assert response.json()["message"] == "TaleWeaver connection test successful!"
+    assert captured["kwargs"]["model_category"] == "complex"
+    router.aexecute_simple_task.assert_awaited_once()
+    router.aexecute_complex_task.assert_not_awaited()

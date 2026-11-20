@@ -903,29 +903,37 @@ def _build_test_llm_settings(old_settings: dict, payload: TestLLMPayload) -> dic
     return temp
 
 
+WIZARD_PASS_ROLES = {
+    "wizard-llm-story": "complex",
+    "wizard-llm-fast": "small",
+}
+
+
 def _apply_custom_openai_test_overrides(settings_dict: dict, payload: TestLLMPayload) -> None:
     """Apply per-pass and global overrides for a custom OpenAI test probe."""
+    override_keys = [payload.pass_key] if payload.pass_key else []
+    wizard_role = WIZARD_PASS_ROLES.get(payload.pass_key)
+    if wizard_role:
+        override_keys.append(wizard_role)
     if payload.custom_openai_url:
         settings_dict["custom_openai_url"] = payload.custom_openai_url
-        if payload.pass_key:
-            settings_dict[f"{payload.pass_key}_custom_openai_url"] = payload.custom_openai_url
+        for key in override_keys:
+            settings_dict[f"{key}_custom_openai_url"] = payload.custom_openai_url
     if payload.custom_openai_timeout:
         settings_dict["custom_openai_timeout"] = payload.custom_openai_timeout
-        if payload.pass_key:
-            settings_dict[f"{payload.pass_key}_custom_openai_timeout"] = (
-                payload.custom_openai_timeout
-            )
+        for key in override_keys:
+            settings_dict[f"{key}_custom_openai_timeout"] = payload.custom_openai_timeout
     if payload.custom_openai_response_format:
         settings_dict["custom_openai_response_format"] = payload.custom_openai_response_format
-        if payload.pass_key:
-            settings_dict[f"{payload.pass_key}_custom_openai_response_format"] = (
+        for key in override_keys:
+            settings_dict[f"{key}_custom_openai_response_format"] = (
                 payload.custom_openai_response_format
             )
 
 
 async def _execute_test_probe(gm: GameMasterLLM, payload: TestLLMPayload) -> str:
     """Execute a structured test for mechanics passes or a creative prose test for narration passes."""
-    is_prose_pass = payload.pass_key in ("complex", "compression")
+    is_prose_pass = payload.pass_key in ("complex", "compression", "wizard-llm-story")
     if payload.provider == "custom_openai":
         from backend.core.custom_openai import test_connection
 
@@ -956,7 +964,7 @@ async def test_llm_connection(
         model_cat = (
             payload.pass_key
             if payload.pass_key in ("small", "complex", "generator", "play_agent", "compression")
-            else "small"
+            else WIZARD_PASS_ROLES.get(payload.pass_key, "small")
         )
         gm = GameMasterLLM(user, provider=payload.provider, model_category=model_cat)
         test_stage = "request_or_response"
