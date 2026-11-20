@@ -27,6 +27,8 @@ IMAGE_PROVIDERS = [
 TTS_PROVIDERS = [
     {"id": "google", "name": "Google Cloud TTS"},
     {"id": "elevenlabs", "name": "ElevenLabs"},
+    {"id": "custom_openai", "name": "OpenAI-Compatible API"},
+    {"id": "browser", "name": "Browser Voice (free, local)"},
 ]
 
 PREDEFINED_LLM_MODELS = {

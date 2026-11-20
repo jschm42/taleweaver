@@ -15,6 +15,8 @@ from backend.engine.world.combat_profile_schemas import (
     SpecialEffectSchema,
     TalentSchema,
 )
+from backend.engine.world.companion_schema import CompanionSchema
+from backend.engine.world.defeat_schemas import GameOverRulesSchema
 from backend.engine.world.schema_base import WorldBaseSchema
 from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
     SwitchEffectSchema,
@@ -22,6 +24,11 @@ from backend.engine.world.switch_schemas import (  # noqa: F401 - re-exported
     SwitchOutcomeSchema,
     SwitchStateLabelSchema,
     SwitchTransitionSchema,
+)
+from backend.engine.world.world_conversation_schema import (
+    ConversationTopicSchema,
+    NpcConversationsSchema,
+    NpcRelationSchema,
 )
 from backend.engine.world.world_object_schema import WorldObjectSchema
 
@@ -77,6 +84,14 @@ class WorldSceneSchema(WorldBaseSchema):
             "Use empty string for a silent scene."
         ),
     )
+    is_respawn_point: bool = Field(
+        default=False,
+        description=(
+            "True for a revival point (a shrine, a camp, a healer's hut). Only matters when "
+            "`game_over_rules.on_zero_hp` is `respawn`: a protagonist who falls to 0 HP wakes "
+            "up at the last revival point reached. Usually False."
+        ),
+    )
     helpers_script: Optional[str] = Field(
         default="",
         description=(
@@ -85,6 +100,10 @@ class WorldSceneSchema(WorldBaseSchema):
             "dialog handlers. Loaded on every script run like init_script, wherever the player "
             "is. Any other statement never runs. Use empty string for none."
         ),
+    )
+    dynamic_zone: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional procedural generation profile for dynamic scenes materialized on first entry.",
     )
 
     model_config = {"extra": "forbid"}
@@ -118,6 +137,13 @@ class WorldExitSchema(WorldBaseSchema):
             "True when the player already knows where this exit leads before using it "
             "(a signposted door, a gate with a view into the courtyard): the target scene's "
             "name and image are shown from the start. Usually False."
+        ),
+    )
+    companions_allowed: bool = Field(
+        True,
+        description=(
+            "False for a solo passage (a narrow vent, a guarded door only the protagonist may pass): "
+            "the protagonist's companion stays behind. Usually True."
         ),
     )
     lock_description: Optional[str] = Field(
@@ -172,6 +198,10 @@ class WorldExitSchema(WorldBaseSchema):
         default="",
         description="Optional text output when unlocking this exit fails. Use empty string for none.",
     )
+    dynamic_zone: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional procedural expansion profile for dynamic exits generated on first traversal.",
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -200,6 +230,10 @@ class SpecialActionSchema(WorldBaseSchema):
     description: str = Field(..., description="Short explanation of the action")
     action_type: Literal["ATTACK", "HEAL", "UTILITY"] = Field(
         ..., description="Type of special action"
+    )
+    heal_target: Optional[Literal["self", "ally"]] = Field(
+        None,
+        description="HEAL without effects: 'ally' heals the caster's party partner instead of itself.",
     )
     category: Optional[Literal["MAGIC", "MELEE", "RANGED", "SOCIAL", "OTHER"]] = Field(
         None,
@@ -357,13 +391,13 @@ class WorldNPCSchema(WorldBaseSchema):
     source_asset_id: Optional[str] = Field(
         None, description="Optional source NPC ID to reuse an old portrait image."
     )
-    reveal_rule: Optional[str] = Field(
+    reveal_guard_expression: Optional[str] = Field(
         default="",
         description=(
-            "If is_hidden=True: the condition that reveals this NPC. "
-            "E.g. 'If the prot searches under the table', 'If the prot picks up BRASS_KEY', or 'If the NPC speaks'. "
-            "Use 'script' if only a script may reveal it (the GM never discovers it). "
-            "Use empty string if not hidden."
+            "If is_hidden=True: sandboxed Python condition; the engine reveals the NPC as soon as it "
+            "is True while the protagonist is in its scene, e.g. tw.player.has_item('LANTERN') or "
+            "tw.vars.get('bell_rung') == True. The Game Master never discovers hidden NPCs; without "
+            "a guard only scripts (tw.npcs.reveal) reveal it. Use empty string if not hidden."
         ),
     )
     inventory: list[str] = Field(
@@ -423,6 +457,41 @@ class WorldNPCSchema(WorldBaseSchema):
             "pulls the others in the same scene into the fight. Use null for none."
         ),
     )
+    companion: Optional[CompanionSchema] = Field(
+        None,
+        description=(
+            "Only for an NPC who can travel with the protagonist as a companion (sidekick). "
+            "Use null for every other NPC."
+        ),
+    )
+    memory_slots: Optional[int] = Field(
+        None,
+        description=(
+            "NPC memory (1-8): how many lasting facts about the protagonist (their name, deals, "
+            "how they were treated) this character remembers. Only for recurring characters the "
+            "player talks to (quest givers, allies, companions, rivals); null for enemies, "
+            "monsters and extras."
+        ),
+    )
+    relations: Optional[list[NpcRelationSchema]] = Field(
+        None,
+        description=(
+            "How this NPC sees other NPCs it knows (family, friends, rivals, its boss). Give "
+            "relations to characters who share a scene, so their talk has direction; null else."
+        ),
+    )
+    chatty: Optional[bool] = Field(
+        None,
+        description="False keeps the NPC out of conversations NPCs start on their own (a guard on duty).",
+    )
+    conversation_topics: Optional[list[ConversationTopicSchema]] = Field(
+        None,
+        description=(
+            "Topics this NPC discusses with another NPC while the protagonist can overhear them, "
+            "e.g. two guards gossiping about a secret passage. Use must_convey for clues the "
+            "player should learn by listening. Null for most NPCs."
+        ),
+    )
     assist_mode: Optional[Literal["GROUP", "ANYONE", "NEVER"]] = Field(
         None,
         description=(
@@ -462,6 +531,22 @@ class WorldNPCSchema(WorldBaseSchema):
     on_receive_item_text: Optional[str] = Field(
         default="",
         description="Optional text output when the protagonist gives this NPC items. Use empty string for none.",
+    )
+    on_recruit_success_script: Optional[str] = Field(
+        default="",
+        description="Companion NPCs with companion.recruit_mode INSTANT or ITEM only: script run when the player recruits it with the Recruit action; `offered_item_id` is in scope. Use empty string for none.",
+    )
+    on_recruit_success_text: Optional[str] = Field(
+        default="",
+        description="Companion NPCs only: narration shown when the player recruits it (without one, the GM narrates the greeting). Use empty string for none.",
+    )
+    on_recruit_failure_script: Optional[str] = Field(
+        default="",
+        description="Companion NPCs with companion.recruit_mode ITEM only: script run when the player offers the wrong item or none; `offered_item_id` is in scope. Use empty string for none.",
+    )
+    on_recruit_failure_text: Optional[str] = Field(
+        default="",
+        description="Companion NPCs with companion.recruit_mode ITEM only: narration shown when the offered item does not convince it. Use empty string for none.",
     )
 
     model_config = {"extra": "forbid"}
@@ -504,6 +589,8 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
+        "on_conversation_heard",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -520,10 +607,19 @@ class SequenceSchema(WorldBaseSchema):
     order: int = Field(..., description="The sequence order (1, 2, 3...)")
     title: str = Field(..., description="Title of the section")
     description: Optional[str] = Field(
-        default="", description="Narrative description for the AI Gamemaster"
+        default="",
+        description=(
+            "Atmospheric lore and narrative premise for this chapter, displayed to the player in the chapter banner. "
+            "It must ONLY describe the narrative situation, atmosphere, or premise. "
+            "It must NEVER reveal spoilers, puzzle solutions, walkthrough steps, codes, or secrets."
+        ),
     )
     walkthrough: Optional[str] = Field(
-        default="", description="The dedicated walkthrough/solution for this sequence"
+        default="",
+        description=(
+            "The dedicated step-by-step walkthrough and puzzle solutions for this sequence. "
+            "All puzzle answers, secret codes, item combinations, and action steps belong strictly here."
+        ),
     )
     end_condition: Optional[str] = Field(
         default="", description="Condition that must be met to proceed to the next sequence"
@@ -576,6 +672,20 @@ class SequenceSchema(WorldBaseSchema):
             "(NAME = literal) for this chapter's logic and dialog handlers. Loaded on every "
             "script run like init_script, whichever chapter is active. Any other statement "
             "never runs. Use empty string for none."
+        ),
+    )
+    companions_allowed: bool = Field(
+        default=True,
+        description=(
+            "False for a solo chapter: the protagonist's companion does not follow into new "
+            "scenes while this sequence is active."
+        ),
+    )
+    respawn_allowed: bool = Field(
+        default=True,
+        description=(
+            "False for a deadly chapter: falling to 0 HP while this sequence is active ends "
+            "the adventure even in respawn mode. Usually True."
         ),
     )
     soft_rules: list[SoftRuleSchema] = Field(
@@ -745,9 +855,11 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
+        "on_conversation_heard",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m')",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None), on_conversation_heard (the protagonist overheard an NPC conversation topic; target = topic id)",
     )
     target_id: Optional[str] = Field(
         None,
@@ -821,6 +933,14 @@ class WorldManifesto(WorldBaseSchema):
         default="",
         description="Deterministic Python boolean guard expression evaluated with tw for losing the adventure.",
     )
+    game_over_rules: Optional[GameOverRulesSchema] = Field(
+        default=None,
+        description="Optional: what happens at 0 HP (game over or respawn). Omit for game over.",
+    )
+    npc_conversations: Optional[NpcConversationsSchema] = Field(
+        default=None,
+        description="Optional: NPCs talk with each other on their own (chatter) and gossip.",
+    )
     can_damage_npcs: bool = Field(
         True, description="Global flag: whether the protagonist can damage NPCs."
     )
@@ -831,6 +951,10 @@ class WorldManifesto(WorldBaseSchema):
     sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = Field(
         default="linear",
         description="Sequence progression mode: 'linear' (default, advances in sequence order and completes adventure after last sequence) or 'dynamic' (sequences are activated/managed via scripts or scene entries, without auto-completion after last sequence).",
+    )
+    dynamic_generation: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional configuration for procedural dynamic scene image tiers, music mode, and NPC interlude quotes.",
     )
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]

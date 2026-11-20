@@ -311,6 +311,11 @@ async def test_openrouter_routing_funnel_rejection_retries_without_provider_filt
     assert calls[0]["extra_body"]["provider"]["order"] == ["NonExistentProvider"]
     # Second retry call removed the provider restriction
     assert "provider" not in calls[1].get("extra_body", {})
+    # The fallback is recorded for the admin model test instead of only being logged
+    assert router.route_fallback is not None
+    assert router.route_fallback.fallback == "unrestricted"
+    assert router.route_fallback.requested == ["NonExistentProvider"]
+    assert "does not serve this model" in router.route_fallback.note()
 
 
 def test_thinking_defaults_to_disabled_when_not_configured(monkeypatch):

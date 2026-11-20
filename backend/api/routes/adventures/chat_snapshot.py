@@ -129,7 +129,8 @@ async def apply_pending_sequence_progress(
 ) -> bool:
     """Evaluates sequence progress on load; returns True when new system messages were saved.
 
-    Completing the final sequence here also ends the adventure, like it does during a turn.
+    Completing the final sequence here also ends the adventure, like it does during a turn,
+    unless the adventure has its own win guard.
     """
     if not (adventure and avatar):
         return False
@@ -141,7 +142,10 @@ async def apply_pending_sequence_progress(
     for seq_msg in seq_messages:
         db.add(ChatMessage(session_id=state.session_id, role="system", content=seq_msg))
     session_status = state.session.status if state.session else None
-    if state.is_completed is True and session_status not in TERMINAL_STATUSES:
+    from backend.api.routes.adventures.out_of_turn_progress import last_sequence_ends_adventure
+
+    all_completed = last_sequence_ends_adventure(adventure, state)
+    if (state.is_completed is True or all_completed) and session_status not in TERMINAL_STATUSES:
         manager = GameTurnManager(
             db, state.session_id, user, state=state, adventure=adventure, avatar=avatar
         )

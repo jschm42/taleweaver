@@ -16,14 +16,26 @@ MAX_BANTER_CHARS = 160
 PERSONALITY_KEYS = ("character", "personality", "goal")
 
 BANTER_SYSTEM_PROMPT = (
-    "You write a single line of battle banter for a fantasy RPG fight. Speak as the given NPC, "
+    "You write a single line of battle banter for an RPG fight. Speak as the given NPC, "
     "in character, directly to the protagonist or about the fight. Comment on how the battle "
     "is going or mock the protagonist. At most 18 words, no quotation marks, no stage "
     "directions, no game mechanics or numbers."
 )
 
+OPENING_BANTER_SYSTEM_PROMPT = (
+    "You write a single cool, punchy opening battle line for an RPG encounter right as combat starts. "
+    "Speak as the given NPC, in character, directly to the protagonist and state or hint at why you are "
+    "attacking or confronting them. At most 18 words, no quotation marks, no stage directions, "
+    "no game mechanics or numbers."
+)
+
 # Used when no LLM is configured or the call fails, keyed by who is winning.
 FALLBACK_LINES = {
+    "opening": (
+        "You stepped into the wrong place. Your journey ends here!",
+        "No one crosses my path and walks away unscathed.",
+        "Stand and fight! Let us see what you are made of.",
+    ),
     "winning": (
         "Is that all you have? I expected more.",
         "Kneel now and I might make it quick.",
@@ -55,6 +67,19 @@ def battle_mood(speaker: dict[str, Any], player: dict[str, Any]) -> str:
     if diff < -0.2:
         return "losing"
     return "even"
+
+
+def highest_initiative_enemy(combat: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the engaged enemy NPC with the highest rolled initiative."""
+    engaged = engaged_enemies(combat)
+    if not engaged:
+        return None
+    by_id = {e["id"]: e for e in engaged}
+    for entry in combat.get("initiative") or []:
+        enemy = by_id.get(entry.get("id"))
+        if enemy is not None:
+            return enemy
+    return engaged[0]
 
 
 def clean_banter_line(raw: str) -> str:
@@ -96,10 +121,43 @@ class CombatBanterMixin:
         if not npc:
             return ""
         meta = npc.metadata_json if isinstance(npc.metadata_json, dict) else {}
-        traits = [str(meta[key]) for key in PERSONALITY_KEYS if meta.get(key)]
-        if npc.description:
-            traits.insert(0, str(npc.description))
+        traits: list[str] = []
+        for raw in (
+            npc.description,
+            getattr(npc, "goal", None),
+            getattr(npc, "character", None),
+            *(meta.get(key) for key in PERSONALITY_KEYS),
+        ):
+            text = str(raw or "").strip()
+            if text and text not in traits:
+                traits.append(text)
         return " ".join(traits)[:600]
+
+    async def _build_banter_prompts(
+        self, combat: dict[str, Any], speaker: dict[str, Any], mood: str
+    ) -> tuple[str, str]:
+        is_opening = mood == "opening"
+        system_prompt = OPENING_BANTER_SYSTEM_PROMPT if is_opening else BANTER_SYSTEM_PROMPT
+        if self.turn_language:
+            system_prompt += f" Respond only in {self.turn_language.upper()}."
+        profile = await self._speaker_profile(speaker) or "hostile opponent"
+        if is_opening:
+            adv_title = getattr(self.adventure, "title", "") or "Adventure"
+            user_prompt = (
+                f"Adventure: {adv_title}.\n"
+                f"NPC: {speaker['name']}. Personality & Goal: {profile}.\n"
+                f"Protagonist: {self.avatar.name}.\n"
+                f"Combat is just starting. Deliver a cool opening line explaining why you attack {self.avatar.name}."
+            )
+            return system_prompt, user_prompt
+        recent = [e.get("text", "") for e in (combat.get("log") or [])[-4:]]
+        user_prompt = (
+            f"NPC: {speaker['name']}. Personality: {profile}.\n"
+            f"Protagonist: {self.avatar.name}. Round {combat.get('round', 1)}. "
+            f"The NPC is currently {mood}.\n"
+            "Recent events:\n- " + "\n- ".join(t for t in recent if t)
+        )
+        return system_prompt, user_prompt
 
     async def _llm_banter_line(
         self, combat: dict[str, Any], speaker: dict[str, Any], mood: str
@@ -108,16 +166,8 @@ class CombatBanterMixin:
         if not llm_info:
             return ""
         llm, model = llm_info
-        system_prompt = BANTER_SYSTEM_PROMPT
-        if self.turn_language:
-            system_prompt += f" Respond only in {self.turn_language.upper()}."
-        recent = [e.get("text", "") for e in (combat.get("log") or [])[-4:]]
-        user_prompt = (
-            f"NPC: {speaker['name']}. Personality: {await self._speaker_profile(speaker) or 'unknown'}.\n"
-            f"Protagonist: {self.avatar.name}. Round {combat.get('round', 1)}. "
-            f"The NPC is currently {mood}.\n"
-            "Recent events:\n- " + "\n- ".join(t for t in recent if t)
-        )
+        system_prompt, user_prompt = await self._build_banter_prompts(combat, speaker, mood)
+        operation = "combat.opening_banter" if mood == "opening" else "combat.banter"
         try:
             raw = await llm.aexecute_simple_task(
                 system_prompt,
@@ -125,13 +175,27 @@ class CombatBanterMixin:
                 model,
                 adventure_id=self.state.template_id,
                 game_id=self.game_id,
-                operation="combat.banter",
+                operation=operation,
                 phase="narration",
             )
         except Exception as exc:
             logger.warning("[Turn %s] Combat banter LLM call failed: %s", self.game_id, exc)
             return ""
         return clean_banter_line(raw) if isinstance(raw, str) else ""
+
+    async def _emit_opening_banter(self, combat: dict[str, Any]) -> None:
+        """Called when combat starts; the highest-initiative engaged enemy speaks an opening line."""
+        speaker = highest_initiative_enemy(combat)
+        if not combat.get("active") or not speaker:
+            return
+        line = await self._llm_banter_line(combat, speaker, "opening")
+        line = line or gl.random.choice(FALLBACK_LINES["opening"])
+        self._append_combat_log(
+            combat,
+            f'{speaker["name"]}: "{line}"',
+            "banter",
+            {"kind": "banter", "actor": speaker["id"], "line": line},
+        )
 
     async def _maybe_round_banter(self, combat: dict[str, Any]) -> None:
         """Called when a round ends; adds a banter log entry when one is due."""

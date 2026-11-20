@@ -37,6 +37,9 @@ class WorldScene(Base, TimestampMixin):
     on_leave_scene_text = Column(String(5000), nullable=True)
     # Helper functions/constants (like init_script) available to every script run.
     helpers_script = Column(Text, nullable=True)
+    dynamic_zone = Column(JSON, nullable=True)
+    # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
+    is_respawn_point = Column(Boolean, nullable=False, default=False, server_default="0")
     adventure_id = synonym("template_id")
 
 
@@ -68,6 +71,8 @@ class WorldExit(Base, TimestampMixin):
     # The target scene is known from the start (name and image on the exit tile and map),
     # without the player having visited it.
     is_revealed = Column(Boolean, default=False, nullable=False, server_default="0")
+    # False: a solo passage; the active companion stays behind when the player uses it.
+    companions_allowed = Column(Boolean, default=True, nullable=False, server_default="1")
     lock_description = Column(
         String(255), nullable=True
     )  # e.g. "The door is bolted from the other side."
@@ -83,6 +88,7 @@ class WorldExit(Base, TimestampMixin):
     on_unlock_success_text = Column(String(5000), nullable=True)
     on_unlock_failure_script = Column(String(5000), nullable=True)
     on_unlock_failure_text = Column(String(5000), nullable=True)
+    dynamic_zone = Column(JSON, nullable=True)
     adventure_id = synonym("template_id")
 
 

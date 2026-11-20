@@ -33,6 +33,18 @@ export interface AgentLogEntry {
   action: string
 }
 
+export interface DynamicInterlude {
+  quote: string
+  speaker_name?: string
+  speaker_role?: string
+  speaker?: string
+  role?: string
+  npc_id?: string | null
+  voice?: string | null
+  image_url?: string | null
+  target_scene_name?: string | null
+}
+
 const AGENT_LOG_LIMIT = 50
 const AGENT_IDLE_TIMEOUT_MS = 180_000
 
@@ -45,6 +57,9 @@ export interface AgentSettingsPatch {
   monkey_mode?: boolean
   step_delay?: number
   wait_for_tts?: boolean
+  dialogue_level?: string
+  /** What the agent should do next; "" clears it. */
+  instruction?: string
 }
 
 export interface UseGameSocket {
@@ -88,6 +103,7 @@ export interface UseGameSocket {
   agentLog: Ref<AgentLogEntry[]>
   isCheckpointSaving: Ref<boolean>
   isSceneTransitioning: Ref<boolean>
+  dynamicInterlude: Ref<DynamicInterlude | null>
   /** Set when a turn ended in another scene without a travel event (script teleport, GM move). */
   sceneArrival: Ref<{ sceneId: string; at: number } | null>
   generatorProposal: Ref<any | null>
@@ -169,6 +185,7 @@ export function useGameSocket(): UseGameSocket {
   const agentLog = ref<AgentLogEntry[]>([])
   const isCheckpointSaving = ref(false)
   const isSceneTransitioning = ref(false)
+  const dynamicInterlude = ref<DynamicInterlude | null>(null)
   const sceneArrival = ref<{ sceneId: string; at: number } | null>(null)
   let checkpointPulseTimer: number | null = null
   const generatorProposal = ref<any | null>(null)
@@ -286,9 +303,18 @@ export function useGameSocket(): UseGameSocket {
     }
   }
 
+  /**
+   * Snapshot of `gameId`, or null when the player switched to another session while it loaded:
+   * a late answer must never overwrite the newly opened session (stale hero values, messages).
+   */
+  async function fetchSnapshotIfCurrent(gameId: string, messageLimit = HISTORY_PAGE_SIZE): Promise<any | null> {
+    if (!gameId) return null
+    const data = await fetchSessionSnapshot(gameId, messageLimit)
+    return gameId === currentGameId ? data : null
+  }
+
   async function refreshSession(includeMessages = false): Promise<void> {
-    if (!currentGameId) return
-    const data = await fetchSessionSnapshot(currentGameId)
+    const data = await fetchSnapshotIfCurrent(currentGameId)
     if (data) applySessionSnapshot(data, includeMessages)
   }
 
@@ -398,10 +424,8 @@ export function useGameSocket(): UseGameSocket {
       }
 
       // State only: the messages are not applied, so one is enough.
-      const snapshot = await fetchSessionSnapshot(currentGameId, 1)
-      if (currentGameId) {
-        applySessionSnapshot(snapshot, false)
-      }
+      const snapshot = await fetchSnapshotIfCurrent(currentGameId, 1)
+      if (snapshot) applySessionSnapshot(snapshot, false)
     }, 5000)
   }
 
@@ -437,6 +461,7 @@ export function useGameSocket(): UseGameSocket {
     
     try {
       const data = await fetchSessionSnapshot(gameId)
+      if (gameId !== currentGameId) return
       if (data) {
         applySessionSnapshot(data)
         if ((status.value as any) !== 'game_over' || !inputLocked.value) {
@@ -469,6 +494,7 @@ export function useGameSocket(): UseGameSocket {
       checkpointPulseTimer = null
     }
     isCheckpointSaving.value = false
+    dynamicInterlude.value = null
 
     // Clear all session-specific states
     messages.value = []
@@ -599,10 +625,14 @@ export function useGameSocket(): UseGameSocket {
     let receivedErrorEvent = false
     const controller = new AbortController()
     activeChatController = controller
+    // The stream keeps running server side after a session switch; its events then belong to
+    // the old session and are dropped (the turn itself still completes on the server).
+    const turnGameId = currentGameId
+    const isStale = (): boolean => turnGameId !== currentGameId
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
 
     try {
-      const res = await fetch(`${BASE}/adventures/${currentGameId}/chat`, {
+      const res = await fetch(`${BASE}/adventures/${turnGameId}/chat`, {
         method: 'POST',
         headers: authHeaders(true),
         signal: controller.signal,
@@ -679,7 +709,7 @@ export function useGameSocket(): UseGameSocket {
             }
           }
 
-          if (!data) continue
+          if (!data || isStale()) continue
 
           if (!backendStatus.online) {
             markOnline()
@@ -748,6 +778,9 @@ export function useGameSocket(): UseGameSocket {
               status.value = 'connected'
               statusText.value = ''
             }
+          } else if (event === 'dynamic_interlude') {
+            isSceneTransitioning.value = true
+            dynamicInterlude.value = data
           } else if (event === 'scene_transition') {
             // The story feed marks the new scene with a divider; earlier scenes stay above it.
             isSceneTransitioning.value = true
@@ -763,10 +796,12 @@ export function useGameSocket(): UseGameSocket {
         }
       }
 
+      if (isStale()) return
+
       if (receivedFinalEvent) {
         turnError.value = null
         lastUserAction.value = ''
-        const snapshot = await fetchSessionSnapshot(currentGameId)
+        const snapshot = await fetchSnapshotIfCurrent(turnGameId)
         if (snapshot) {
           // Reload the authoritative history (incl. scene/sequence per message).
           applySessionSnapshot(snapshot, true)
@@ -775,7 +810,7 @@ export function useGameSocket(): UseGameSocket {
 
       // Fallback for truncated streams without explicit final/error event.
       if (!receivedFinalEvent && !receivedErrorEvent && (status.value === 'connecting' || isAgentOff)) {
-        const snapshot = await fetchSessionSnapshot(currentGameId)
+        const snapshot = await fetchSnapshotIfCurrent(turnGameId)
         if (snapshot) {
           applySessionSnapshot(snapshot, false)
           if (status.value === 'connecting') {
@@ -805,6 +840,8 @@ export function useGameSocket(): UseGameSocket {
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log('Chat/deactivation fetch request was aborted.')
+      } else if (isStale()) {
+        console.warn('[Session] Turn of a session the player left failed:', err)
       } else {
         console.error('[Session] Chat error:', err)
         const errMsg = 'The Game Master did not respond in time. Please try again.'
@@ -821,10 +858,11 @@ export function useGameSocket(): UseGameSocket {
     } finally {
       clearTimeout(timeoutId)
       isSceneTransitioning.value = false
+      dynamicInterlude.value = null
       if (activeChatController === controller) {
         activeChatController = null
       }
-      if ((status.value as any) === 'connecting' || (status.value as any) === 'loading') {
+      if (!isStale() && ((status.value as any) === 'connecting' || (status.value as any) === 'loading')) {
         status.value = 'connected'
         statusText.value = ''
       }
@@ -850,9 +888,10 @@ export function useGameSocket(): UseGameSocket {
    * Updates play-agent settings for the current session and merges the result into the sheet.
    */
   async function updateAgentSettings(patch: AgentSettingsPatch): Promise<boolean> {
-    if (!currentGameId) return false
+    const gameId = currentGameId
+    if (!gameId) return false
     try {
-      const res = await fetch(`${BASE}/adventures/${currentGameId}/agent/settings`, {
+      const res = await fetch(`${BASE}/adventures/${gameId}/agent/settings`, {
         method: 'PATCH',
         headers: authHeaders(true),
         body: JSON.stringify(patch)
@@ -863,6 +902,7 @@ export function useGameSocket(): UseGameSocket {
         return false
       }
       const agentState = await res.json()
+      if (gameId !== currentGameId) return false
       if (sheet.value) sheet.value = { ...sheet.value, ...agentState }
       return true
     } catch (err) {
@@ -886,6 +926,8 @@ export function useGameSocket(): UseGameSocket {
     let receivedErrorEvent = false
     const controller = new AbortController()
     activeAgentController = controller
+    const turnGameId = currentGameId
+    const isStale = (): boolean => turnGameId !== currentGameId
     // Idle timeout: an agent turn (decision + full GM turn) can legitimately take long,
     // so only abort when the stream stays silent for too long.
     let timedOut = false
@@ -900,7 +942,7 @@ export function useGameSocket(): UseGameSocket {
     resetIdleTimeout()
 
     try {
-      const res = await fetch(`${BASE}/adventures/${currentGameId}/agent/turn`, {
+      const res = await fetch(`${BASE}/adventures/${turnGameId}/agent/turn`, {
         method: 'POST',
         headers: authHeaders(false),
         signal: controller.signal
@@ -952,7 +994,7 @@ export function useGameSocket(): UseGameSocket {
             }
           }
 
-          if (!data) continue
+          if (!data || isStale()) continue
 
           if (!backendStatus.online) {
             markOnline()
@@ -1013,8 +1055,10 @@ export function useGameSocket(): UseGameSocket {
         }
       }
 
+      if (isStale()) return receivedFinalEvent
+
       if (receivedFinalEvent) {
-        const snapshot = await fetchSessionSnapshot(currentGameId)
+        const snapshot = await fetchSnapshotIfCurrent(turnGameId)
         if (snapshot) {
           applySessionSnapshot(snapshot, true)
         }
@@ -1029,6 +1073,8 @@ export function useGameSocket(): UseGameSocket {
         _pushMessage('system', 'The Agent did not respond in time.')
       } else if (err.name === 'AbortError') {
         console.log('Agent request was aborted by user.')
+      } else if (isStale()) {
+        console.warn('[Session] Agent turn of a session the player left failed:', err)
       } else {
         console.error('[Session] Agent turn error:', err)
         _pushMessage('system', 'The Agent request failed. Please try again.')
@@ -1038,8 +1084,8 @@ export function useGameSocket(): UseGameSocket {
       return false
     } finally {
       clearTimeout(timeoutId)
-      activeAgentController = null
-      if (((status.value as any) === 'connecting' || (status.value as any) === 'loading') && sheet.value?.agent_active) {
+      if (activeAgentController === controller) activeAgentController = null
+      if (!isStale() && ((status.value as any) === 'connecting' || (status.value as any) === 'loading') && sheet.value?.agent_active) {
         status.value = 'connected'
         statusText.value = ''
       }
@@ -1047,9 +1093,10 @@ export function useGameSocket(): UseGameSocket {
   }
 
   async function createTerminalEpilogue(): Promise<void> {
-    if (!currentGameId) return
+    const gameId = currentGameId
+    if (!gameId) return
     try {
-      const res = await fetch(`${BASE}/adventures/${currentGameId}/terminal-epilogue`, {
+      const res = await fetch(`${BASE}/adventures/${gameId}/terminal-epilogue`, {
         method: 'POST',
         headers: authHeaders(true),
         body: JSON.stringify({ language: language.value || undefined })
@@ -1062,8 +1109,17 @@ export function useGameSocket(): UseGameSocket {
       if (!res.ok) return
 
       const data = await res.json()
+      if (gameId !== currentGameId) return
       if (data.content) {
         _pushMessage('assistant', data.content)
+      }
+      if (data.ending?.content) {
+        // The win / game-over card follows the epilogue in the story feed.
+        messages.value.push({
+          ...data.ending,
+          _key: newMessageKey(),
+          timestamp: new Date(),
+        } as ChatMessage)
       }
       applySessionSnapshot(data, false)
     } catch (err) {
@@ -1151,6 +1207,7 @@ export function useGameSocket(): UseGameSocket {
     agentLog,
     isCheckpointSaving,
     isSceneTransitioning,
+    dynamicInterlude,
     sceneArrival,
     generatorProposal,
     showGeneratorModal,

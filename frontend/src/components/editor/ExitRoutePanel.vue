@@ -7,6 +7,7 @@ import {
 import { notificationService } from '@/services/notificationService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
 import { ArrowLeft } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -32,14 +33,18 @@ const routeExitDetails = computed<any | null>(() => {
   return exits.find((worldExit: any) => String(worldExit.id) === exitId) || null
 })
 
+const activeTab = ref<'general' | 'lock' | 'dynamic'>('general')
+
 const exitEditForm = ref({
   label: '',
   lock_description: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
   is_revealed: false,
+  companions_allowed: true,
   code_to_unlock: '',
   item_to_unlock: '',
   rule_to_unlock: '',
+  dynamic_zone: null as DynamicZoneForm | null,
 })
 
 watch(
@@ -51,9 +56,11 @@ watch(
         lock_description: '',
         exit_type: 'one_way',
         is_revealed: false,
+        companions_allowed: true,
         code_to_unlock: '',
         item_to_unlock: '',
         rule_to_unlock: '',
+        dynamic_zone: null,
       }
       return
     }
@@ -62,9 +69,11 @@ watch(
       lock_description: String(exitData.lock_description || ''),
       exit_type: String(exitData.exit_type || 'one_way').toLowerCase() === 'bidirectional' ? 'bidirectional' : 'one_way',
       is_revealed: Boolean(exitData.is_revealed),
+      companions_allowed: exitData.companions_allowed !== false,
       code_to_unlock: String(exitData.code_to_unlock || ''),
       item_to_unlock: String(exitData.item_to_unlock || ''),
       rule_to_unlock: String(exitData.rule_to_unlock || ''),
+      dynamic_zone: exitData.dynamic_zone ? { ...exitData.dynamic_zone } : null,
     }
   },
   { immediate: true }
@@ -96,6 +105,7 @@ const isFormInvalid = computed(() => {
   if ((exitEditForm.value.code_to_unlock || '').length > 32) return true
   if ((exitEditForm.value.rule_to_unlock || '').length > 500) return true
   if (hasGate.value && !(exitEditForm.value.lock_description || '').trim()) return true
+  if (exitEditForm.value.dynamic_zone && !(exitEditForm.value.dynamic_zone.theme || '').trim()) return true
   return false
 })
 
@@ -119,6 +129,8 @@ async function saveRouteExit() {
     description: trimmedLockDesc,
     exit_type: exitEditForm.value.exit_type,
     revealed: exitEditForm.value.is_revealed,
+    dynamic_zone: exitEditForm.value.dynamic_zone ?? null,
+    companions_allowed: exitEditForm.value.companions_allowed,
     code_to_unlock: rawCode,
     item_to_unlock: rawItem,
     rule_to_unlock: rawRule,
@@ -165,82 +177,133 @@ async function saveRouteExit() {
       </p>
     </div>
 
-    <div class="grid md:grid-cols-2 gap-3 text-slate-200">
-      <label class="text-xs text-slate-300 space-y-1">
-        <div class="flex justify-between items-center">
-          <span>Label <span class="text-red-400">*</span></span>
-          <span :class="['text-[10px] font-mono', (exitEditForm.label || '').length > 100 || !(exitEditForm.label || '').trim() ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
-            {{ (exitEditForm.label || '').length }} / 100
-          </span>
-        </div>
-        <input
-          v-model="exitEditForm.label"
-          maxlength="100"
-          placeholder="e.g. an old rusty gate"
-          title="Name the passage itself, e.g. 'an old rusty gate'. A two-way exit shows the same label on both sides, so never name the destination ('Way to the lab'); the game adds the target once it was visited."
-          class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none"
-        />
-      </label>
-      <label class="text-xs text-slate-300 space-y-1">
-        <span>Type</span>
-        <select v-model="exitEditForm.exit_type" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none">
-          <option value="one_way">one_way</option>
-          <option value="bidirectional">bidirectional</option>
-        </select>
-      </label>
+    <div class="flex flex-wrap gap-2 border-b border-white/10">
+      <button
+        type="button"
+        :class="[
+          'px-3 py-1.5 text-xs font-bold rounded-t-lg border-b-2 transition-colors',
+          activeTab === 'general'
+            ? 'border-emerald-400 text-white bg-slate-900/70'
+            : 'border-transparent text-slate-400 hover:text-slate-200',
+        ]"
+        @click="activeTab = 'general'"
+      >
+        General
+      </button>
+      <button
+        type="button"
+        :class="[
+          'px-3 py-1.5 text-xs font-bold rounded-t-lg border-b-2 transition-colors',
+          activeTab === 'lock'
+            ? 'border-emerald-400 text-white bg-slate-900/70'
+            : 'border-transparent text-slate-400 hover:text-slate-200',
+        ]"
+        @click="activeTab = 'lock'"
+      >
+        Lock &amp; Access
+      </button>
+      <button
+        type="button"
+        :class="[
+          'px-3 py-1.5 text-xs font-bold rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5',
+          activeTab === 'dynamic'
+            ? 'border-emerald-400 text-white bg-slate-900/70'
+            : 'border-transparent text-slate-400 hover:text-slate-200',
+        ]"
+        @click="activeTab = 'dynamic'"
+      >
+        <span>Dynamic Zone</span>
+        <span v-if="exitEditForm.dynamic_zone" class="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+      </button>
     </div>
 
-    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="The target scene's name and image are shown on the exit tile and the map from the start, before the player has been there (e.g. a signposted door or a gate with a view).">
-      <input v-model="exitEditForm.is_revealed" type="checkbox" class="accent-emerald-500" />
-      <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
-    </label>
-
-    <label class="text-xs text-slate-300 space-y-1 block">
-      <div class="flex justify-between items-center">
-        <span>Lock Description<span v-if="hasGate" class="text-red-400"> *</span></span>
-        <span :class="['text-[10px] font-mono', (exitEditForm.lock_description || '').length > 255 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
-          {{ (exitEditForm.lock_description || '').length }} / 255
-        </span>
+    <template v-if="activeTab === 'general'">
+      <div class="grid md:grid-cols-2 gap-3 text-slate-200">
+        <label class="text-xs text-slate-300 space-y-1">
+          <div class="flex justify-between items-center">
+            <span>Label <span class="text-red-400">*</span></span>
+            <span :class="['text-[10px] font-mono', (exitEditForm.label || '').length > 100 || !(exitEditForm.label || '').trim() ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+              {{ (exitEditForm.label || '').length }} / 100
+            </span>
+          </div>
+          <input
+            v-model="exitEditForm.label"
+            maxlength="100"
+            placeholder="e.g. an old rusty gate"
+            title="Name the passage itself, e.g. 'an old rusty gate'. A two-way exit shows the same label on both sides, so never name the destination ('Way to the lab'); the game adds the target once it was visited."
+            class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none"
+          />
+        </label>
+        <label class="text-xs text-slate-300 space-y-1">
+          <span>Type</span>
+          <select v-model="exitEditForm.exit_type" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none">
+            <option value="one_way">one_way</option>
+            <option value="bidirectional">bidirectional</option>
+          </select>
+        </label>
       </div>
-      <ReferenceTextarea
-        v-model="exitEditForm.lock_description"
-        :rows="3"
-        :options="referenceOptions"
-        :maxlength="255"
-        class-name="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none"
-      />
-    </label>
 
-    <div class="grid md:grid-cols-2 gap-3 text-slate-200">
-      <label class="text-xs text-slate-300 space-y-1">
+      <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="The target scene's name and image are shown on the exit tile and the map from the start, before the player has been there (e.g. a signposted door or a gate with a view).">
+        <input v-model="exitEditForm.is_revealed" type="checkbox" class="accent-emerald-500" />
+        <span>Revealed <span class="text-slate-500">(target known from the start)</span></span>
+      </label>
+
+      <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none" title="Turn off for a solo passage (a narrow vent, a door only the protagonist may pass): the companion stays behind when the protagonist uses this exit.">
+        <input v-model="exitEditForm.companions_allowed" type="checkbox" class="accent-emerald-500" />
+        <span>Companions may follow <span class="text-slate-500">(off = solo passage)</span></span>
+      </label>
+    </template>
+
+    <template v-else-if="activeTab === 'lock'">
+      <label class="text-xs text-slate-300 space-y-1 block">
         <div class="flex justify-between items-center">
-          <span>Code To Unlock</span>
-          <span :class="['text-[10px] font-mono', (exitEditForm.code_to_unlock || '').length > 32 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
-            {{ (exitEditForm.code_to_unlock || '').length }} / 32
+          <span>Lock Description<span v-if="hasGate" class="text-red-400"> *</span></span>
+          <span :class="['text-[10px] font-mono', (exitEditForm.lock_description || '').length > 255 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+            {{ (exitEditForm.lock_description || '').length }} / 255
           </span>
         </div>
-        <input v-model="exitEditForm.code_to_unlock" maxlength="32" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" placeholder="e.g. 1234 or WORD" />
-      </label>
-      <label class="text-xs text-slate-300 space-y-1">
-        <span>Item ID To Unlock</span>
-        <EntityReferenceCombobox
-          v-model="exitEditForm.item_to_unlock"
-          :options="itemReferenceOptions"
-          placeholder="Select key item reference"
-          :enable-search="true"
+        <ReferenceTextarea
+          v-model="exitEditForm.lock_description"
+          :rows="3"
+          :options="referenceOptions"
+          :maxlength="255"
+          class-name="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none"
         />
       </label>
-    </div>
 
-    <label class="text-xs text-slate-300 space-y-1 block">
-      <div class="flex justify-between items-center">
-        <span>Rule To Unlock (Narrative Requirement)</span>
-        <span :class="['text-[10px] font-mono', (exitEditForm.rule_to_unlock || '').length > 500 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
-          {{ (exitEditForm.rule_to_unlock || '').length }} / 500
-        </span>
+      <div class="grid md:grid-cols-2 gap-3 text-slate-200">
+        <label class="text-xs text-slate-300 space-y-1">
+          <div class="flex justify-between items-center">
+            <span>Code To Unlock</span>
+            <span :class="['text-[10px] font-mono', (exitEditForm.code_to_unlock || '').length > 32 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+              {{ (exitEditForm.code_to_unlock || '').length }} / 32
+            </span>
+          </div>
+          <input v-model="exitEditForm.code_to_unlock" maxlength="32" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" placeholder="e.g. 1234 or WORD" />
+        </label>
+        <label class="text-xs text-slate-300 space-y-1">
+          <span>Item ID To Unlock</span>
+          <EntityReferenceCombobox
+            v-model="exitEditForm.item_to_unlock"
+            :options="itemReferenceOptions"
+            placeholder="Select key item reference"
+            :enable-search="true"
+          />
+        </label>
       </div>
-      <input v-model="exitEditForm.rule_to_unlock" maxlength="500" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" placeholder="e.g. Protagonist defeats NPC_2" />
-    </label>
+
+      <label class="text-xs text-slate-300 space-y-1 block">
+        <div class="flex justify-between items-center">
+          <span>Rule To Unlock (Narrative Requirement)</span>
+          <span :class="['text-[10px] font-mono', (exitEditForm.rule_to_unlock || '').length > 500 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+            {{ (exitEditForm.rule_to_unlock || '').length }} / 500
+          </span>
+        </div>
+        <input v-model="exitEditForm.rule_to_unlock" maxlength="500" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" placeholder="e.g. Protagonist defeats NPC_2" />
+      </label>
+    </template>
+
+    <DynamicZoneFields v-else v-model="exitEditForm.dynamic_zone" />
 
     <div class="flex justify-end">
       <button class="px-3 py-2 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50" :disabled="localIsSaving || isSaving || isFormInvalid" @click="saveRouteExit">

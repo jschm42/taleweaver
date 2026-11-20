@@ -28,14 +28,15 @@ from backend.engine.blueprint.markdown import (
     strip_inline_code,
 )
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock, BlueprintValue
+from backend.engine.world.dynamic_scene_schemas import build_dynamic_placeholder_scene_id
 
 MAX_SEQUENCES = 15
 
-_TAG_RE = re.compile(
-    r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[\s*([A-Za-z][A-Za-z_ ]*?)\s*(?::\s*([^\]]*))?\]\s*(.*)$"
-)
+# Tag and key patterns end in an unanchored ``(.*)`` (no ``$``) so a failing tail cannot
+# trigger polynomial backtracking (ReDoS); the captured value is stripped by the caller.
+_TAG_RE = re.compile(r"^(\s*)(?:(#{1,6})\s+|[-*]\s+)?\[([^:\]]+)(?::([^\]]*))?\](.*)")
 _KEY_RE = re.compile(
-    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_ \-]{0,40}?)(?:\*\*|__|`)?\s*:\s*(?:\*\*|__)?\s*(.*)$"
+    r"^(\s*)(?:[-*]\s+)?(?:\*\*|__|`)?([A-Za-z][A-Za-z0-9_\-]{0,40}(?:\s+[A-Za-z0-9_\-]+)*?)(?:\*\*|__|`)?\s*:(.*)"
 )
 _TRAILING_ID_RE = re.compile(r"^(.*?)\s*\(([A-Za-z][A-Za-z0-9_]*)\)\s*$")
 _EXIT_REF_RE = re.compile(r"^\s*([^<>\-]+?)\s*(<->|->)\s*([^<>\-]+?)\s*$")
@@ -46,6 +47,8 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "protagonist": ("protagonist", ""),
     "player": ("protagonist", ""),
     "scene": ("scene", ""),
+    "dynamic_scene": ("scene", "DYNAMIC"),
+    "dynamicscene": ("scene", "DYNAMIC"),
     "location": ("scene", ""),
     "exit": ("exit", ""),
     "path": ("exit", ""),
@@ -134,7 +137,7 @@ def _match_tag(
 ) -> tuple[str, str, str, str, int, int] | None:
     match = _TAG_RE.match(line)
     if match:
-        word = normalize_key(match.group(3))
+        word = normalize_key(match.group(3).strip())
         if word not in _KIND_ALIASES:
             return None
         kind, preset_type = _KIND_ALIASES[word]
@@ -181,6 +184,14 @@ def _consume_premise_line(state: _ParseState, line: str) -> None:
     state.premise.append(line)
 
 
+def _strip_value_markup(raw: str) -> str:
+    """Value after ``key:`` without a leading ``**`` / ``__`` (the bold key's closing marker)."""
+    value = raw.strip()
+    if value.startswith(("**", "__")):
+        value = value[2:].strip()
+    return value
+
+
 def _try_consume_key(
     state: _ParseState, target: BlueprintBlock, lines: list[str], index: int
 ) -> int | None:
@@ -190,7 +201,7 @@ def _try_consume_key(
     if not key_match or spec is None:
         return None
     raw_key = key_match.group(2)
-    raw_value = strip_inline_code(key_match.group(3).strip())
+    raw_value = strip_inline_code(_strip_value_markup(key_match.group(3)))
     next_has_fence = index + 1 < len(lines) and is_fence_open(lines[index + 1])
     if raw_value in ("|", "") and next_has_fence:
         block_text, next_index = read_fenced_block(lines, index + 2)
@@ -325,7 +336,9 @@ def _open_block(
             state.current = BlueprintBlock(kind="ignored", ref="", name=rest, line=line_no)
             return
     block = _new_block(blueprint, line_no, kind, raw_ref, rest, state.sequence_count)
-    if preset_type:
+    if preset_type == "DYNAMIC" and kind == "scene":
+        block.fields["dynamic_zone.enabled"] = BlueprintValue(True, "fixed", line_no)
+    elif preset_type:
         block.fields["item_type"] = BlueprintValue(preset_type, "fixed", line_no)
     _note_introduction(state, block)
     blueprint.blocks.append(block)
@@ -402,7 +415,9 @@ def _apply_exit_ref(blueprint: Blueprint, block: BlueprintBlock, raw_ref: str) -
     if not match:
         blueprint.add_issue(block.line, f"[Exit: {raw_ref}] must look like [Exit: FROM -> TO].")
         return
-    from_id, to_id = normalize_id(match.group(1)), normalize_id(match.group(3))
+    from_id = normalize_id(match.group(1))
+    raw_to = match.group(3).strip()
+    to_id = "?" if raw_to in {"?", "*"} else normalize_id(raw_to)
     block.ref = f"{from_id}->{to_id}"
     block.fields["from_scene_id"] = BlueprintValue(from_id, "fixed", block.line)
     block.fields["to_scene_id"] = BlueprintValue(to_id, "fixed", block.line)
@@ -427,8 +442,43 @@ _IMPLIED_ITEM_TYPES = (
 )
 
 
+def _derive_dynamic_exit_fields(block: BlueprintBlock) -> None:
+    from_id = str(block.fields.get("from_scene_id", BlueprintValue("")).value or "")
+    raw_to = str(block.fields.get("to_scene_id", BlueprintValue("")).value or "")
+    if "dynamic_zone.zone_id" not in block.fields:
+        fallback_name = normalize_id(block.name or "zone").lower() or "zone"
+        zone_id = raw_to.lower() if (raw_to and raw_to != "?") else fallback_name
+        block.fields["dynamic_zone.zone_id"] = BlueprintValue(zone_id, "fixed", block.line)
+    else:
+        zone_id = str(block.fields["dynamic_zone.zone_id"].value)
+    if "dynamic_zone.theme" not in block.fields and block.description:
+        block.fields["dynamic_zone.theme"] = BlueprintValue(block.description, "fixed", block.line)
+    placeholder_id = build_dynamic_placeholder_scene_id(
+        zone_id, 1, 1, f"{from_id}{block.name or ''}"
+    )
+    block.fields["to_scene_id"] = BlueprintValue(placeholder_id, "fixed", block.line)
+
+
+def _derive_dynamic_scene_fields(block: BlueprintBlock) -> None:
+    enabled_field = block.fields.get("dynamic_zone.enabled")
+    if enabled_field and enabled_field.value is False:
+        return
+    if "dynamic_zone.zone_id" not in block.fields:
+        fallback_zone = normalize_id(block.ref or block.name or "zone").lower() or "zone"
+        block.fields["dynamic_zone.zone_id"] = BlueprintValue(fallback_zone, "fixed", block.line)
+    if "dynamic_zone.theme" not in block.fields:
+        theme = block.description or block.name or "Uncharted area"
+        block.fields["dynamic_zone.theme"] = BlueprintValue(theme, "fixed", block.line)
+
+
 def _derive_implied_fields(block: BlueprintBlock) -> None:
+    if block.kind == "scene":
+        if any(k.startswith("dynamic_zone.") for k in block.fields):
+            _derive_dynamic_scene_fields(block)
+        return
     if block.kind == "exit":
+        if any(k.startswith("dynamic_zone.") for k in block.fields):
+            _derive_dynamic_exit_fields(block)
         lock_fields = ("code_to_unlock", "item_to_unlock", "rule_to_unlock", "unlock_expression")
         if "is_locked" not in block.fields and any(f in block.fields for f in lock_fields):
             block.fields["is_locked"] = BlueprintValue(True, "fixed", block.line)

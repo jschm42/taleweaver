@@ -333,7 +333,7 @@ async def test_agent_turn_retry_and_deactivation_on_failure(
         # Attempt 3 - Should deactivate agent
         resp3 = await auth_client.post(f"/api/adventures/{game_id}/agent/turn")
         assert "(Attempt 3/3)" in resp3.text
-        assert "Agent mode has been deactivated" in resp3.text
+        assert "The Play-Agent has stopped" in resp3.text
 
         async with TestSessionLocal() as verify_db:
             state_res = await verify_db.execute(

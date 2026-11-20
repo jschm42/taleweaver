@@ -29,7 +29,7 @@ function onVolume(event: Event): void {
 </script>
 
 <template>
-  <div class="group flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-2 py-1.5 backdrop-blur">
+  <div class="group flex items-center gap-1.5 h-9 px-2 rounded-xl bg-slate-900/80 border border-slate-700/60 shadow-lg shrink-0">
     <button
       type="button"
       class="p-1 text-slate-300 hover:text-aether-primary transition-colors"

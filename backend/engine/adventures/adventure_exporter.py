@@ -14,6 +14,7 @@ from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -122,6 +123,11 @@ _NPC_ENTITY_KEYS = {
     "on_interact_text",
     "on_receive_item_script",
     "on_receive_item_text",
+    "on_recruit_success_script",
+    "on_recruit_success_text",
+    "on_recruit_failure_script",
+    "on_recruit_failure_text",
+    "reveal_guard_expression",
 }
 
 _SYSTEM_ENTITY_KEYS = {"pk", "session_id", "created_at", "updated_at", "template_id"}
@@ -308,6 +314,8 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         metadata.pop("on_read_text", None)
 
     _export_container_metadata(filtered, metadata, item_type in {"CONTAINER", "CONTAINER_SWITCH"})
+    if metadata.pop("quest_item", None) is True:
+        filtered["quest_item"] = True
 
     if item_type == "CONSTRUCTABLE":
         for recipe_key in ("result_item_ids", "kept_ingredients"):
@@ -343,6 +351,11 @@ def _normalize_exported_npc_metadata(filtered: dict[str, Any]) -> None:
         "on_interact_text",
         "on_receive_item_script",
         "on_receive_item_text",
+        "on_recruit_success_script",
+        "on_recruit_success_text",
+        "on_recruit_failure_script",
+        "on_recruit_failure_text",
+        "reveal_guard_expression",
     ):
         val = metadata.pop(script_key, None)
         if val:
@@ -480,6 +493,8 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "original_prompt": adv.original_prompt,
         "image_url": adv.image_url,
         "rule_enforcement_mode": adv.rule_enforcement_mode,
+        "sequence_progression_mode": adv.sequence_progression_mode,
+        "dynamic_generation": adv.dynamic_generation,
         "time_per_turn": adv.time_per_turn,
         "pacing_minutes": adv.pacing_minutes,
         "max_time_per_turn": adv.max_time_per_turn,
@@ -526,6 +541,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "time_system": adv.time_system,
         "time_config": adv.time_config,
         "game_over_rules": adv.game_over_rules,
+        "npc_conversations": normalize_conversation_settings(adv.npc_conversations),
         "allow_dynamic_items": adv.allow_dynamic_items,
         "can_damage_npcs": adv.can_damage_npcs,
         "npcs_can_damage_protagonist": adv.npcs_can_damage_protagonist,
@@ -678,6 +694,7 @@ class AdventureExporter:
             "sequences": adv.sequences or [],
             "scripts": (adv.original_manifest or {}).get("scripts", []),
             "init_script": adv.init_script or "",
+            "dynamic_generation": adv.dynamic_generation,
         }
         # Fork-specific data is passed through untouched (docs/specs/adventure_format.md 2.10).
         extensions = manifest_extensions(adv.original_manifest)

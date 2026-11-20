@@ -26,12 +26,11 @@ CREATABLE_ITEM_TYPES = frozenset(
     {"DEFAULT", "CONSUMABLE", "READABLE", "WEARABLE", "WEAPON", "CONTAINER"}
 )
 
-_COMMON_FIELDS = frozenset(
-    {"name", "description", "current_scene_id", "appearance", "is_hidden", "reveal_rule"}
-)
+_COMMON_FIELDS = frozenset({"name", "description", "current_scene_id", "appearance", "is_hidden"})
+# Hidden NPCs are revealed by a guard (set with a regular "npc" patch), not by a reveal rule.
 _CREATE_FIELDS: dict[str, frozenset[str]] = {
     "new_npc": _COMMON_FIELDS | {"goal", "character", "is_killable", "hp"},
-    "new_object": _COMMON_FIELDS | {"item_type", "is_portable"},
+    "new_object": _COMMON_FIELDS | {"item_type", "is_portable", "reveal_rule"},
 }
 _REQUIRED_FIELDS = ("name", "description", "current_scene_id")
 
@@ -102,7 +101,7 @@ def _create_request(patch: FixProposalEntityPatch) -> EntityCreateRequest:
         is_killable=updates.get("is_killable"),
         hp=updates.get("hp"),
         is_hidden=updates.get("is_hidden"),
-        reveal_rule=updates.get("reveal_rule"),
+        reveal_rule=updates.get("reveal_rule") if is_object else None,
     )
 
 

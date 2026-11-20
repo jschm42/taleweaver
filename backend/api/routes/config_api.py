@@ -25,7 +25,14 @@ from backend.api.routes.settings_normalization import (
 from backend.api.routes.settings_normalization import (
     normalize_tts_settings as _normalize_tts_settings,
 )
-from backend.core.api_keys import PersonalKeyRequiredError, has_api_key, resolve_api_key
+from backend.api.routes.tts_api import test_tts_connection_v2
+from backend.core.api_keys import (
+    SPEECH_KEY_PROVIDERS,
+    PersonalKeyRequiredError,
+    has_api_key,
+    personal_key_message,
+    resolve_api_key,
+)
 from backend.core.auth import get_current_admin, get_current_user
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
 from backend.core.comfyui import ComfySettings, ComfyTestOptions, default_edge
@@ -39,6 +46,8 @@ from backend.core.global_settings import (
     shared_game_settings,
 )
 from backend.core.llm_router import GameMasterLLM
+from backend.core.model_capability_probe import run_capability_probes
+from backend.core.model_speed_rating import speed_payload
 from backend.core.models_config import (
     IMAGE_PROVIDERS,
     LLM_PROVIDERS,
@@ -47,8 +56,11 @@ from backend.core.models_config import (
     PREDEFINED_TTS_MODELS,
     TTS_PROVIDERS,
 )
+from backend.core.openrouter_route_report import route_payload
 from backend.core.security import encryption_util
 from backend.core.turn_key_preflight import missing_turn_keys
+from backend.engine.audio.browser_tts import is_browser_provider
+from backend.engine.audio.openai_compatible_tts import OPENAI_COMPATIBLE_PROVIDER
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
 from backend.engine.media.media_engine import MediaEngine
@@ -397,18 +409,12 @@ async def _build_available_constants(
 
 
 def _normalize_game_settings(game_settings: Optional[dict]) -> dict:
-    fallback = {
-        "clock_24h": False,
-        "date_format": "DD.MM.YY",
-        "whisper_model": "tiny",
+    # The clock format is a player preference now (User.game_settings["clock_format"]).
+    normalized = {
+        key: value
+        for key, value in (game_settings or {}).items()
+        if key not in ("clock_24h", "date_format")
     }
-    if not game_settings:
-        return fallback
-    normalized = dict(game_settings)
-    if "clock_24h" not in normalized:
-        normalized["clock_24h"] = False
-    if "date_format" not in normalized:
-        normalized["date_format"] = "DD.MM.YY"
     if "whisper_model" not in normalized:
         normalized["whisper_model"] = "tiny"
     return normalized
@@ -553,8 +559,6 @@ class T2ISettingsPayload(ComfySettings):
 
 
 class GameSettingsPayload(BaseModel):
-    clock_24h: bool = False
-    date_format: str = "DD.MM.YY"
     whisper_model: str = "tiny"
 
 
@@ -564,6 +568,12 @@ class TTSSettingsPayload(BaseModel):
     selected_model: str = "gemini-3.8-flash-tts"
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
+    custom_openai_url: str = Field(default="", max_length=500)
+    custom_openai_voice: str = Field(default="", max_length=200)
+    custom_openai_format: str = Field(default="mp3", max_length=8)
+    custom_openai_instructions: str = Field(default="", max_length=2000)
+    browser_voice: str = Field(default="", max_length=200)
+    browser_character_voices: list[str] = Field(default_factory=list, max_length=40)
     use_vocal_tags: bool = True
     use_streaming: bool = False
     auto_speak: bool = True
@@ -608,6 +618,7 @@ async def get_settings(
             {p["id"] for p in LLM_PROVIDERS}
             | {p["id"] for p in IMAGE_PROVIDERS}
             | {p["id"] for p in TTS_PROVIDERS}
+            | {p["id"] for p in SPEECH_KEY_PROVIDERS}
         )
         for p in all_providers:
             # Check environment first
@@ -887,6 +898,8 @@ class TestLLMPayload(BaseModel):
     custom_openai_timeout: Optional[int] = None
     custom_openai_response_format: Optional[str] = None
     pass_key: Optional[str] = None
+    # Run the pass-specific capability probes instead of the plain connection test.
+    capabilities: bool = False
 
 
 def _build_test_llm_settings(old_settings: dict, payload: TestLLMPayload) -> dict:
@@ -968,11 +981,29 @@ async def test_llm_connection(
         )
         gm = GameMasterLLM(user, provider=payload.provider, model_category=model_cat)
         test_stage = "request_or_response"
+        if payload.capabilities:
+            return await run_capability_probes(gm, payload.model, model_cat)
         start_time = time.perf_counter()
         response = await _execute_test_probe(gm, payload)
         end_time = time.perf_counter()
         latency = round(end_time - start_time, 2)
-        return {"status": "success", "message": response, "response_time": latency}
+        if not (response or "").strip():
+            return {
+                "status": "error",
+                "message": (
+                    f"Model '{payload.model}' returned no visible text (it likely spent its output "
+                    "budget on internal thinking). Enable Reasoning / Thinking Mode or increase "
+                    "Max Thinking Tokens."
+                ),
+            }
+        speed = speed_payload(model_cat, latency)
+        return {
+            "status": "success",
+            "message": f"{response} · {speed['label']}.",
+            "response_time": latency,
+            "speed": speed,
+            "routing": route_payload(gm),
+        }
     except Exception as exc:
         diag = (
             connection_test_diagnostic(exc, stage=test_stage, model=payload.model)
@@ -1013,7 +1044,10 @@ def _resolve_vision_api_key(
     try:
         api_key = resolve_api_key(user.encrypted_api_keys, provider_key)
     except PersonalKeyRequiredError as exc:
-        return None, {"status": "error", "message": str(exc)}
+        return None, {
+            "status": "error",
+            "message": personal_key_message(exc.provider, exc.reason),
+        }
     if not api_key:
         return None, {"status": "error", "message": f"No API key configured for {provider_name}."}
     return api_key, None
@@ -1091,16 +1125,27 @@ async def test_tts_connection(
     current_user: User = Depends(get_current_user),
 ):
     """Generates a short test sentence to verify TTS configuration."""
-    user = current_user
-    tts_settings = user.tts_settings or {}
+    provider = str((current_user.tts_settings or {}).get("provider", "google")).lower()
+    if provider == OPENAI_COMPATIBLE_PROVIDER:
+        return await test_tts_connection_v2(db=db, current_user=current_user)
+    if is_browser_provider(provider):
+        # The client plays the sample with its own speech synthesis.
+        return {"status": "success", "browser": True, "message": "Browser voice"}
+    return await _test_keyed_tts_provider(current_user, provider)
 
-    provider = tts_settings.get("provider", "google").lower()
+
+async def _test_keyed_tts_provider(user: User, provider: str) -> dict:
+    """Test sentence for the providers that need an API key (Gemini, ElevenLabs)."""
+    tts_settings = user.tts_settings or {}
     api_key = None
     if provider != "qwen":
         try:
             api_key = resolve_api_key(user.encrypted_api_keys, provider)
         except PersonalKeyRequiredError as exc:
-            return {"status": "error", "message": str(exc)}
+            return {
+                "status": "error",
+                "message": personal_key_message(exc.provider, exc.reason),
+            }
 
         if not api_key:
             return {

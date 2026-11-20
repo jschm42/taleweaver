@@ -63,6 +63,7 @@ Specific project rules are located in `.claude/rules/` and triggered contextuall
 
 * [architecture.md](.claude/rules/architecture.md) (`trigger: model_decision`) — Complete architectural breakdown of the Game Turn Loop (Pass 1, Pass 1.5, Pass 2), World Manifest (`adventure.adv`/`.adz`), state mutations, and scripting engine.
 * [typescript.md](.claude/rules/typescript.md) (`trigger: glob`, `**/*.ts, **/*.tsx`) — TypeScript code formatting, naming conventions, and strict typing.
+* [frontend-ui.md](.claude/rules/frontend-ui.md) (`trigger: glob`, `frontend/src/**/*.vue, *.css`) — Workbench UI rules for Admin, Editor/World-Builder, creation and setup wizard: design tokens, shared `Ui*` components, layout, one save model, feedback. Concept: [docs/specs/workbench_ui.md](docs/specs/workbench_ui.md).
 * [python.md](.claude/rules/python.md) (`trigger: glob`, `**/*.py`) — Python conventions, type hinting, error handling, and Alembic migrations.
 * [testing.md](.claude/rules/testing.md) (`trigger: glob`, `tests/**/*.py`) — AAA pattern, mocking requirements, and mandatory adventure lifecycle verification.
 * [gameplay-guardrails.md](.claude/rules/gameplay-guardrails.md) (`trigger: model_decision`) — No language-keyword gating, server-side visibility authority, fail-safe behavior, and state-based Pass 1.5 enforcement.
@@ -80,6 +81,7 @@ Each skill is a folder with a `SKILL.md` entry file. Read it before doing the ta
 * [taleweaver-adventure-editor](.claude/skills/taleweaver-adventure-editor/SKILL.md) — Modify an existing adventure in the DB (scenes, exits, entities, scripts, init script) via JSON change sets and `python scripts/edit_adventure.py` (dry run by default).
 * [taleweaver-telemetry](.claude/skills/taleweaver-telemetry/SKILL.md) — LLM telemetry, latency percentiles (p50/p90/p95), and token analysis.
 * [taleweaver-commit-message](.claude/skills/taleweaver-commit-message/SKILL.md) — Write a Conventional Commits message (project scopes, why + behavior, migration and breaking-change notes) for the current changes, or split mixed changes into several commits.
+* [second-brain](.claude/skills/second-brain/SKILL.md) — Access and manage notes, concepts, and project documentation in the Obsidian Second-Brain vault on Google Drive.
 
 ---
 

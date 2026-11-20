@@ -131,3 +131,17 @@ async def test_chat_snapshot_lists_entity_names_for_references(auth_client: Asyn
     # Assert
     assert resp.status_code == 200, resp.text
     assert resp.json()["entity_names"]["BRASS_ROD"] == "Brass Rod"
+
+
+def test_session_copy_keeps_dynamic_sequence_progression():
+    # Arrange: the mode lives in the manifest, not in a template column.
+    from backend.api.routes.adventures.session_adventure import SessionAdventure
+
+    dynamic = SessionAdventure({"title": "T"}, {"sequence_progression_mode": "dynamic"})
+    legacy_key = SessionAdventure({"title": "T"}, {"sequence_progression": "Dynamic"})
+    unset = SessionAdventure({"title": "T"}, {})
+
+    # Act / Assert
+    assert dynamic.sequence_progression_mode == "dynamic"
+    assert legacy_key.sequence_progression_mode == "dynamic"
+    assert unset.sequence_progression_mode == "linear"

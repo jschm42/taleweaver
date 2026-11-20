@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { FileUp, Sparkles } from 'lucide-vue-next'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
 import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
@@ -58,7 +58,7 @@ async function handleFileChange(event: Event) {
   <div class="space-y-4 sm:space-y-5">
     <div class="flex items-center justify-between gap-2">
       <h3 class="text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Story Foundation</h3>
-      <InfoPopoverButton
+      <UiInfoPopover
         title="Story Foundation"
         :text="CREATE_ADVENTURE_HELP_TEXTS.storyFoundation"
       />
@@ -83,9 +83,9 @@ async function handleFileChange(event: Event) {
         <div class="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
           <div class="flex items-center gap-2">
             <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Story Idea & Context</label>
-            <InfoPopoverButton title="Structured Syntax">
+            <UiInfoPopover title="Structured Syntax">
               <BlueprintSyntaxHelp />
-            </InfoPopoverButton>
+            </UiInfoPopover>
           </div>
           <div class="flex items-center gap-1.5">
             <input

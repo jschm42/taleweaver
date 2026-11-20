@@ -38,7 +38,10 @@ def test_choice_dialog_narration_asks_for_dialogue_lines():
 
     # Act / Assert
     assert 'Character Name: "Dialogue"' in _NARRATION_SYSTEM_PROMPT
-    assert "never quote speech inside a prose sentence" in _NARRATION_SYSTEM_PROMPT
+    assert (
+        "never quote speech inside a prose sentence" in _NARRATION_SYSTEM_PROMPT.lower()
+        or "never embed quotation marks" in _NARRATION_SYSTEM_PROMPT.lower()
+    )
 
 
 def test_say_directed_works_on_the_npc_proxy():

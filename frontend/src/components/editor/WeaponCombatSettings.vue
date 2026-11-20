@@ -10,12 +10,40 @@ import {
   WEAPON_CATEGORY_META,
   type WeaponConfig,
 } from '@/utils/weaponConfig'
+import type { SuccessStat } from '@/types'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiIconButton from '@/components/ui/UiIconButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSection from '@/components/ui/UiSection.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
-const props = withDefaults(defineProps<{ title?: string }>(), { title: 'Combat (Weapon Attack)' })
+const props = withDefaults(defineProps<{ title?: string }>(), { title: 'Weapon attack' })
 
 const config = defineModel<WeaponConfig>({ required: true })
 
-const inputClass = 'w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-white font-bold focus:border-cyan-500/50 outline-none transition-all'
+const CATEGORY_OPTIONS = WEAPON_CATEGORIES.map((c) => ({ value: c, label: WEAPON_CATEGORY_META[c].label }))
+const HIT_STAT_OPTIONS = [
+  { value: '', label: `${STAT_SHORT[DEFAULT_WEAPON_HIT_STAT]} (default)` },
+  ...SUCCESS_STATS.map((s) => ({ value: s, label: STAT_SHORT[s] })),
+]
+const COST_OPTIONS = [
+  { value: 'stamina', label: 'Stamina' },
+  { value: 'mana', label: 'Mana' },
+]
+const EFFECT_TARGET_OPTIONS = [
+  { value: 'target', label: 'Target' },
+  { value: 'self', label: 'Wielder' },
+]
+const EFFECT_STAT_OPTIONS = EFFECT_STATS.map((s) => ({ value: s, label: STAT_SHORT[s] }))
+
+/** The select works with '' for "default"; the config stores null. */
+const hitStat = computed({
+  get: (): string => config.value.hit_stat ?? '',
+  set: (value: string) => {
+    config.value.hit_stat = (value || null) as SuccessStat | null
+  },
+})
 const diceValid = computed(() => DICE_PATTERN.test(config.value.damage_dice.replace(/\s/g, '')))
 
 function addEffect(): void {
@@ -29,76 +57,49 @@ function validAmount(amount: string): boolean {
 </script>
 
 <template>
-  <div class="space-y-4 border border-white/5 bg-black/20 p-4 rounded-xl">
-    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ props.title }}</label>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <label class="space-y-1">
-        <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Category</span>
-        <select v-model="config.category" :class="inputClass">
-          <option v-for="c in WEAPON_CATEGORIES" :key="c" :value="c">{{ WEAPON_CATEGORY_META[c].label }}</option>
-        </select>
-      </label>
-      <label class="space-y-1">
-        <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Attack roll stat</span>
-        <select v-model="config.hit_stat" :class="inputClass">
-          <option :value="null">{{ STAT_SHORT[DEFAULT_WEAPON_HIT_STAT] }} (default)</option>
-          <option v-for="s in SUCCESS_STATS" :key="s" :value="s">{{ STAT_SHORT[s] }}</option>
-        </select>
-      </label>
-      <label class="space-y-1">
-        <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Damage (dice)</span>
-        <input
-          v-model="config.damage_dice"
-          placeholder="1d8+1"
-          :class="[inputClass, 'font-mono', diceValid ? '' : '!border-rose-500/70']"
-        />
-      </label>
-      <div class="flex gap-2">
-        <label class="space-y-1 flex-1">
-          <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cost per attack</span>
-          <input v-model.number="config.cost_value" type="number" min="0" :class="inputClass" />
-        </label>
-        <label class="space-y-1 flex-1">
-          <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Paid with</span>
-          <select v-model="config.cost_type" :class="inputClass">
-            <option value="stamina">Stamina</option>
-            <option value="mana">Mana</option>
-          </select>
-        </label>
+  <UiSection :title="props.title">
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <UiField label="Category">
+        <UiSelect v-model="config.category" :options="CATEGORY_OPTIONS" />
+      </UiField>
+      <UiField label="Attack roll stat">
+        <UiSelect :model-value="hitStat" :options="HIT_STAT_OPTIONS" @update:model-value="(value) => (hitStat = String(value ?? ''))" />
+      </UiField>
+      <UiField label="Damage (dice)" :error="diceValid ? null : 'Use dice notation, e.g. 1d8+1.'">
+        <UiInput v-model="config.damage_dice" mono placeholder="1d8+1" />
+      </UiField>
+      <div class="grid grid-cols-2 gap-3">
+        <UiField label="Cost per attack">
+          <UiInput
+            type="number"
+            min="0"
+            :model-value="config.cost_value"
+            @update:model-value="(value) => (config.cost_value = Number(value ?? 0))"
+          />
+        </UiField>
+        <UiField label="Paid with">
+          <UiSelect v-model="config.cost_type" :options="COST_OPTIONS" />
+        </UiField>
       </div>
     </div>
 
-    <div class="space-y-1.5">
-      <div class="flex items-center justify-between">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Extra effects on hit</span>
-        <button
-          type="button"
-          class="text-emerald-400 text-xs font-bold flex items-center gap-1 disabled:opacity-40"
-          :disabled="config.effects.length >= MAX_WEAPON_EFFECTS"
-          @click="addEffect"
-        ><Plus class="w-3 h-3" /> Effect</button>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between gap-3">
+        <p class="wb-label">Extra effects on hit</p>
+        <UiButton size="sm" variant="ghost" :icon="Plus" :disabled="config.effects.length >= MAX_WEAPON_EFFECTS" @click="addEffect">
+          Add effect
+        </UiButton>
       </div>
       <div v-for="(eff, idx) in config.effects" :key="idx" class="flex items-center gap-2">
-        <select v-model="eff.target" class="bg-black/40 border border-white/5 rounded-lg px-2 py-1 text-white text-xs">
-          <option value="target">Target</option>
-          <option value="self">Wielder</option>
-        </select>
-        <select v-model="eff.stat" class="bg-black/40 border border-white/5 rounded-lg px-2 py-1 text-white text-xs">
-          <option v-for="s in EFFECT_STATS" :key="s" :value="s">{{ STAT_SHORT[s] }}</option>
-        </select>
-        <input
-          v-model="eff.amount"
-          placeholder="-1d4"
-          class="w-28 bg-black/40 border rounded-lg px-2 py-1 text-white text-xs font-mono"
-          :class="validAmount(eff.amount) ? 'border-white/5' : 'border-rose-500/70'"
-        />
-        <button type="button" class="p-1 text-slate-500 hover:text-rose-400" @click="config.effects.splice(idx, 1)"><Trash2 class="w-3.5 h-3.5" /></button>
+        <UiSelect v-model="eff.target" size="sm" :options="EFFECT_TARGET_OPTIONS" class="w-32" aria-label="Effect target" />
+        <UiSelect v-model="eff.stat" size="sm" :options="EFFECT_STAT_OPTIONS" class="w-28" aria-label="Effect stat" />
+        <UiInput v-model="eff.amount" size="sm" class="w-28" mono placeholder="-1d4" :invalid="!validAmount(eff.amount)" aria-label="Effect amount" />
+        <UiIconButton :icon="Trash2" label="Remove effect" size="sm" variant="danger" @click="config.effects.splice(idx, 1)" />
       </div>
-      <p class="text-[10px] text-slate-500">
-        Applied in addition to the damage whenever the attack hits, e.g. poison (Target STA -1d4) or life drain (Wielder HP +2).
-        Negative amounts drain, positive amounts boost; attribute changes last until the fight ends.
+      <p class="wb-hint">
+        Applied on every hit, e.g. poison (Target STA -1d4) or life drain (Wielder HP +2). Negative amounts drain,
+        positive ones boost; attribute changes last until the fight ends.
       </p>
     </div>
-  </div>
+  </UiSection>
 </template>

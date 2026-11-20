@@ -17,11 +17,11 @@ defineEmits<{
 <template>
   <section class="space-y-3" aria-label="Create or find adventures">
     <h2 class="shelf-heading text-xs sm:text-sm uppercase">The Forge</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
       <ForgeTile
         class="tale-enter"
         style="--i: 0"
-        title="Start New"
+        title="Start new"
         subtitle="Write your legend from a blank page."
         accent-rgb="251 191 36"
         :image-src="quillIcon"
@@ -30,7 +30,7 @@ defineEmits<{
       <ForgeTile
         class="tale-enter"
         style="--i: 1"
-        title="Generate Adventure"
+        title="Generate adventure"
         subtitle="Let the AI weave a sandbox world for you."
         accent-rgb="192 132 252"
         :image-src="mapIcon"
@@ -39,8 +39,8 @@ defineEmits<{
       <ForgeTile
         class="tale-enter"
         style="--i: 2"
-        :title="isSeeding ? 'Importing Tales...' : 'Browse Library'"
-        subtitle="Discover and install published adventures."
+        :title="isSeeding ? 'Importing tales...' : 'Discover'"
+        subtitle="Install published adventures from the catalog."
         accent-rgb="96 165 250"
         icon="ra-book"
         :disabled="isSeeding"

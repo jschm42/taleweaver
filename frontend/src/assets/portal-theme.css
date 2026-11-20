@@ -281,6 +281,17 @@
   box-shadow: 0 0 18px -2px rgb(var(--accent-rgb) / 0.45);
 }
 
+/* Filled variant for the one primary action of a block (e.g. Continue in the hero) */
+.tale-action--solid {
+  background: rgb(var(--accent-rgb));
+  border-color: rgb(var(--accent-rgb));
+  color: #0b1120;
+}
+
+.tale-action--solid:hover:not(:disabled) {
+  background: color-mix(in srgb, rgb(var(--accent-rgb)) 85%, white);
+}
+
 /* ---------- Embers ---------- */
 
 .tale-embers span {
@@ -350,15 +361,15 @@
   animation: hero-kenburns 28s ease-in-out infinite alternate;
 }
 
+/* Gentle drift only: the 2:3 cover is shown whole, so a strong zoom would crop it again */
 @keyframes hero-kenburns {
-  from { transform: scale(1.04) translate(0, 0); }
-  to { transform: scale(1.14) translate(-2%, -3%); }
+  from { transform: scale(1); }
+  to { transform: scale(1.04); }
 }
 
-/* Portrait cover on the right edge, fading out to the left into the ambient backdrop */
-.hero-cover {
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgb(0 0 0 / 0.55) 30%, #000 60%);
-  mask-image: linear-gradient(to right, transparent 0%, rgb(0 0 0 / 0.55) 30%, #000 60%);
+/* Uncropped 2:3 cover in the Continue cards and the featured hero, lifted off the backdrop */
+.continue-cover {
+  box-shadow: 0 0 0 1px rgb(251 191 36 / 0.25), 0 12px 28px -8px rgb(0 0 0 / 0.8);
 }
 
 /* Blurred copy of the cover that tints the whole banner in its colors */

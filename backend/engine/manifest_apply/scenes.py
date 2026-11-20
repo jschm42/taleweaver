@@ -16,6 +16,7 @@ from backend.engine.manifest_apply.visuals import (
     t2i_config,
 )
 from backend.engine.media.image_prompt_context import build_scene_image_prompt
+from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.world_entity import WorldExit, WorldScene
 
@@ -44,9 +45,11 @@ def clean_decorative_objects(decorative: Any) -> list[str]:
 
 
 def _scene_prompt(scene: dict[str, Any]) -> str:
+    zone = scene.get("dynamic_zone") if isinstance(scene.get("dynamic_zone"), dict) else {}
+    desc = str(scene.get("description") or zone.get("theme") or "")
     return build_scene_image_prompt(
         scene["name"],
-        scene["description"],
+        desc,
         decorative_objects=clean_decorative_objects(scene.get("decorative_objects")),
     )
 
@@ -90,25 +93,35 @@ async def _scene_image(
 
 
 async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> None:
-    total = len(scenes)
-    for idx, scene in enumerate(scenes, start=1):
+    filtered_scenes = [
+        scene
+        for scene in scenes
+        if not str(scene.get("id") or "").strip().upper().startswith("DYN_")
+    ]
+    total = len(filtered_scenes)
+    for idx, scene in enumerate(filtered_scenes, start=1):
         if scene["id"] in ctx.seen_scene_ids:
             continue
         ctx.seen_scene_ids.add(scene["id"])
         image_url = await _scene_image(ctx, scene, (idx, total))
+        raw_zone = scene.get("dynamic_zone")
+        norm_zone = normalize_dynamic_zone(raw_zone) if isinstance(raw_zone, dict) else None
+        description = str(scene.get("description") or (norm_zone or {}).get("theme") or "")
         ctx.db.add(
             WorldScene(
                 id=scene["id"],
                 template_id=ctx.template_id,
                 label=scene.get("name") or scene.get("label") or "Unknown Scene",
-                description=scene.get("description") or "",
+                description=description,
                 image_url=image_url,
                 decorative_objects=clean_decorative_objects(scene.get("decorative_objects"))
                 or None,
+                dynamic_zone=norm_zone,
                 **{key: scene.get(key) or None for key in SCENE_SCRIPT_FIELDS},
                 audio_track_id=track_id_or_none(
                     scene.get("audio_track_id") or scene.get("music_track_id")
                 ),
+                is_respawn_point=scene.get("is_respawn_point") is True,
             )
         )
 
@@ -146,10 +159,12 @@ def persist_exits(db: AsyncSession, template_id: str, exits: list[dict[str, Any]
                 exit_type="bidirectional" if bidirectional else "one_way",
                 is_locked=bool(exit_def.get("is_locked", False)),
                 is_revealed=bool(exit_def.get("is_revealed", False)),
+                companions_allowed=exit_def.get("companions_allowed") is not False,
                 lock_description=exit_def.get("lock_description"),
                 code_to_unlock=code_to_unlock,
                 item_to_unlock=item_to_unlock,
                 rule_to_unlock=rule_to_unlock,
+                dynamic_zone=normalize_dynamic_zone(exit_def.get("dynamic_zone")),
                 **{field: exit_def.get(field) or None for field in _EXIT_SCRIPT_FIELDS},
             )
         )

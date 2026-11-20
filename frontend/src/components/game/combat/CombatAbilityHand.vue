@@ -25,6 +25,8 @@ const emit = defineEmits<{
   /** Weapon item id to attack with; null for the default weapon (Bare Fists). */
   attack: [weaponId: string | null]
   special: [id: string]
+  /** Mark the selected target for the companion; `true` lifts the current mark. */
+  mark: [lift: boolean]
   hover: [entity: Record<string, unknown>, event: MouseEvent]
   leave: []
 }>()
@@ -41,6 +43,17 @@ const TONE_HEX: Record<string, string> = {
 }
 
 const { resources, weapons, canAfford } = useCombatLoadout(toRef(props, 'combat'), toRef(props, 'playerSheet'))
+
+/** The companion fighting at the protagonist's side (Mark only exists with one). */
+const companion = computed(() =>
+  (props.combat.party ?? []).find((m) => !m.downed && Number(m.hp ?? 0) > 0) ?? null
+)
+const selectedIsMarked = computed(() => {
+  const markId = companion.value?.mark_id
+  if (!markId || !props.targetName) return false
+  const marked = (props.combat.enemies ?? []).find((e) => e.id === markId)
+  return marked?.name === props.targetName
+})
 
 const specials = computed<NormalizedSpecialAttack[]>(() => {
   const fromCombat = props.combat.player?.special_actions
@@ -93,10 +106,14 @@ function weaponTooltip(w: CombatWeapon): Record<string, unknown> {
     entity_type: 'ITEM',
     item_type: 'WEAPON',
     name: w.name,
+    image_url: w.imageUrl || null,
+    icon: WEAPON_CATEGORY_META[w.category].icon,
+    slot: w.slot,
+    damage_dice: w.dice,
+    weapon_cost_value: w.cost,
+    weapon_cost_type: w.costType,
     description: [
-      w.slot ? `Equipped: ${w.slot}` : 'No weapon equipped.',
-      `Cost: ${weaponCostLabel(w)} · Check: ${weaponCheckLabel(w.hitStat)}`,
-      `Damage: ${w.dice}`,
+      `Check: ${weaponCheckLabel(w.hitStat)}`,
       onHit ? `On hit: ${onHit}` : '',
     ].filter(Boolean).join('\n'),
   }
@@ -109,9 +126,13 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
     entity_type: 'ITEM',
     item_type: 'SPECIAL',
     name: `${action.name}${lockNote}`,
+    image_url: (action as any).image_url || null,
+    icon: CATEGORY_META[action.category].icon,
+    weapon_cost_value: action.cost,
+    weapon_cost_type: action.cost_type,
     description: [
       action.description,
-      `Cost: ${costLabel(action)} · Check: ${checkLabel(action)}`,
+      `Check: ${checkLabel(action)}`,
       isAreaAttack(action) ? `Area: ${areaLabel(action, props.targetName)}` : '',
       `Effects: ${describeEffects(action.effects) || 'narrative only'}`,
     ].filter(Boolean).join('\n'),
@@ -126,6 +147,7 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
       v-for="w in weapons"
       :key="w.id || 'bare-fists'"
       :icon="WEAPON_CATEGORY_META[w.category].icon"
+      :image-url="w.imageUrl"
       :type-line="weaponTypeLine(w)"
       :title="w.name"
       :cost="weaponCostLabel(w)"
@@ -138,11 +160,31 @@ function specialTooltip(action: NormalizedSpecialAttack): Record<string, unknown
       @hover="(event) => emit('hover', weaponTooltip(w), event)"
       @leave="emit('leave')"
     />
+    <!-- Order to the companion: attack only the selected target (free action). -->
+    <template v-if="companion">
+      <span class="tw-ability-divider" aria-hidden="true"></span>
+      <AbilityCard
+        icon="ra-targeted"
+        :type-line="'Order — free action'"
+        :title="selectedIsMarked ? 'Lift mark' : 'Mark target'"
+        cost="Free"
+        check="—"
+        :effects="selectedIsMarked
+          ? `${companion.name} fights by its tactics again`
+          : `${companion.name} attacks only this target`"
+        :footer="`→ ${targetName || 'no target'}`"
+        :tone="TONE_HEX.cyan"
+        :disabled="locked || !targetName"
+        @use="emit('mark', selectedIsMarked)"
+        @leave="emit('leave')"
+      />
+    </template>
     <span v-if="specials.length" class="tw-ability-divider" aria-hidden="true"></span>
     <AbilityCard
       v-for="action in specials"
       :key="action.id"
       :icon="CATEGORY_META[action.category].icon"
+      :image-url="(action as any).image_url"
       :type-line="`${CATEGORY_META[action.category].label} — ${actionKind(action)}`"
       :title="action.name"
       :cost="costLabel(action)"

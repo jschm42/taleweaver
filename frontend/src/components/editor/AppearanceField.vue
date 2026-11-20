@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const APPEARANCE_MAX_LENGTH = 100
 
@@ -19,28 +21,21 @@ const PLACEHOLDERS: Record<string, string> = {
   object: 'small brass key, ornate bow, tarnished green patina',
 }
 
-const length = computed(() => (props.modelValue || '').length)
-const label = computed(() => (props.targetType === 'cover' ? 'Cover Visual Keywords' : 'Appearance Keywords'))
+const value = computed({
+  get: () => props.modelValue || '',
+  set: (next: string) => emit('update:modelValue', next),
+})
+const label = computed(() => (props.targetType === 'cover' ? 'Cover visual keywords' : 'Appearance keywords'))
 const placeholder = computed(() => PLACEHOLDERS[props.targetType] || '')
 </script>
 
 <template>
-  <div class="space-y-3">
-    <div class="flex justify-between items-center">
-      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ label }}</label>
-      <span :class="['text-xs font-bold tracking-widest', length > APPEARANCE_MAX_LENGTH ? 'text-red-500' : 'text-emerald-500/50']">
-        {{ length }} / {{ APPEARANCE_MAX_LENGTH }}
-      </span>
-    </div>
-    <input
-      :value="modelValue || ''"
-      :maxlength="APPEARANCE_MAX_LENGTH"
-      :placeholder="placeholder"
-      class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 focus:border-emerald-500 outline-none transition-all shadow-inner"
-      @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
-    />
-    <p class="text-[10px] text-slate-500 uppercase tracking-wider">
-      Optional. Comma-separated visual keywords (English works best), added to the image generation prompt.
-    </p>
-  </div>
+  <UiField
+    :label="label"
+    hint="Optional comma-separated visual keywords (English works best) for the image prompt."
+    :count="value.length"
+    :max-length="APPEARANCE_MAX_LENGTH"
+  >
+    <UiInput :model-value="value" @update:model-value="(next) => (value = String(next ?? ''))" :maxlength="APPEARANCE_MAX_LENGTH" :placeholder="placeholder" />
+  </UiField>
 </template>

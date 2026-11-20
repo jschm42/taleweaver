@@ -30,6 +30,12 @@ from backend.core.llm_request_tuning import (
     apply_session_cache_routing,
 )
 from backend.core.llm_stream_filters import clean_stream_thinking, clean_stream_voice_tags
+from backend.core.openrouter_route_report import (
+    FALLBACK_AVAILABLE_ORDER,
+    FALLBACK_UNRESTRICTED,
+    RouteReport,
+    route_report,
+)
 from backend.core.voice_tags import VOICE_TAG_SET
 from backend.models.user import User
 
@@ -115,6 +121,9 @@ class GameMasterLLM:
     DEFAULT_COMPLEX_MAX_TOKENS = 8192
     DEFAULT_GENERATOR_MAX_TOKENS = 16384
     DEFAULT_COMPRESSION_MAX_TOKENS = 4096
+    # OpenRouter routing of the latest call and the first call that fell back (admin model test).
+    last_route: Optional[RouteReport] = None
+    route_fallback: Optional[RouteReport] = None
 
     @staticmethod
     def _is_transient_llm_error(exc: Exception) -> bool:
@@ -183,6 +192,16 @@ class GameMasterLLM:
         retry_kwargs["extra_body"] = extra_body
         return retry_kwargs
 
+    def _noted_route(self, kwargs: dict, response: Any, fallback: str = "") -> Any:
+        """Records which OpenRouter provider served the call (see openrouter_route_report)."""
+        if self.provider != "openrouter" and not self._uses_openrouter():
+            return response
+        report = route_report(kwargs, response, fallback)
+        self.last_route = report
+        if fallback and self.route_fallback is None:
+            self.route_fallback = report
+        return response
+
     def _completion_with_openrouter_fallback(self, kwargs: dict):
         """Call LiteLLM completion and retry for OpenRouter provider-order mismatches and transient connection drops (up to 3 retries)."""
         if self.provider == "custom_openai":
@@ -192,9 +211,10 @@ class GameMasterLLM:
         max_transient_retries = 4
         for attempt in range(max_transient_retries):
             try:
-                return self._get_litellm().completion(
+                response = self._get_litellm().completion(
                     **kwargs, request_timeout=self.request_timeout
                 )
+                return self._noted_route(kwargs, response)
             except Exception as exc:
                 if self.provider == "openrouter":
                     available_providers = self._extract_openrouter_available_providers(exc)
@@ -207,9 +227,10 @@ class GameMasterLLM:
                         retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(
                             kwargs, available_providers
                         )
-                        return self._get_litellm().completion(
+                        response = self._get_litellm().completion(
                             **retry_kwargs, request_timeout=self.request_timeout
                         )
+                        return self._noted_route(kwargs, response, FALLBACK_AVAILABLE_ORDER)
 
                     err_str = str(exc)
                     if "removed during routing" in err_str or "No endpoints found" in err_str:
@@ -223,9 +244,10 @@ class GameMasterLLM:
                             new_extra_body = dict(extra_body)
                             new_extra_body.pop("provider", None)
                             retry_kwargs["extra_body"] = new_extra_body
-                            return self._get_litellm().completion(
+                            response = self._get_litellm().completion(
                                 **retry_kwargs, request_timeout=self.request_timeout
                             )
+                            return self._noted_route(kwargs, response, FALLBACK_UNRESTRICTED)
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
                     backoff_delay = 0.75 * (attempt + 1)
@@ -260,9 +282,10 @@ class GameMasterLLM:
                     attempt + 1,
                     max_transient_retries,
                 )
-                return await self._get_litellm().acompletion(
+                response = await self._get_litellm().acompletion(
                     **kwargs, request_timeout=self.request_timeout
                 )
+                return self._noted_route(kwargs, response)
             except Exception as exc:
                 if self.provider == "openrouter":
                     available_providers = self._extract_openrouter_available_providers(exc)
@@ -280,9 +303,10 @@ class GameMasterLLM:
                             self.user.id,
                             kwargs.get("model"),
                         )
-                        return await self._get_litellm().acompletion(
+                        response = await self._get_litellm().acompletion(
                             **retry_kwargs, request_timeout=self.request_timeout
                         )
+                        return self._noted_route(kwargs, response, FALLBACK_AVAILABLE_ORDER)
 
                     err_str = str(exc)
                     if "removed during routing" in err_str or "No endpoints found" in err_str:
@@ -296,9 +320,10 @@ class GameMasterLLM:
                             new_extra_body = dict(extra_body)
                             new_extra_body.pop("provider", None)
                             retry_kwargs["extra_body"] = new_extra_body
-                            return await self._get_litellm().acompletion(
+                            response = await self._get_litellm().acompletion(
                                 **retry_kwargs, request_timeout=self.request_timeout
                             )
+                            return self._noted_route(kwargs, response, FALLBACK_UNRESTRICTED)
 
                 if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
                     backoff_delay = 0.75 * (attempt + 1)
@@ -814,6 +839,34 @@ class GameMasterLLM:
         kwargs["messages"] = deepcopy(messages)
         apply_prompt_cache_markers(kwargs["messages"], self.provider, normalized_model)
 
+    _GLM_THINKING_RE = re.compile(r"(?:^|/)glm-(?:4\.[5-9]|5\b|[5-9]\.)", re.I)
+    _GLM_MANDATORY_THINKING_RE = re.compile(r"(?:^|/)glm-[5-9](?:\.|\b|-)", re.I)
+
+    @classmethod
+    def _is_glm_thinking_model(cls, model: str) -> bool:
+        return bool(cls._GLM_THINKING_RE.search((model or "").strip()))
+
+    def _apply_glm_thinking(self, kwargs: dict, enable_thinking: bool) -> None:
+        model_name = str(kwargs.get("model") or "").strip()
+        mandatory = bool(self._GLM_MANDATORY_THINKING_RE.search(model_name))
+        if self._uses_openrouter():
+            extra_body = dict(kwargs.get("extra_body") or {})
+            if enable_thinking:
+                extra_body["reasoning"] = {"enabled": True}
+            elif mandatory:
+                # Endpoints with mandatory reasoning reject {"enabled": False} with HTTP 400.
+                extra_body["reasoning"] = {"effort": "low"}
+                if kwargs.get("max_tokens") is not None:
+                    kwargs["max_tokens"] = int(kwargs["max_tokens"]) + self.max_thinking_tokens
+            else:
+                extra_body["reasoning"] = {"enabled": False}
+            kwargs["extra_body"] = extra_body
+            return
+        if enable_thinking or not mandatory:
+            kwargs["thinking"] = {"type": "enabled" if enable_thinking else "disabled"}
+        elif kwargs.get("max_tokens") is not None:
+            kwargs["max_tokens"] = int(kwargs["max_tokens"]) + self.max_thinking_tokens
+
     def _apply_thinking_settings(self, kwargs: dict) -> None:
         """Inject thinking parameters based on user settings and provider."""
         # MiniMax defaults to thinking-on server-side, so we must explicitly opt-out
@@ -824,7 +877,8 @@ class GameMasterLLM:
             )
             return
 
-        profile = claude_thinking_profile(str(kwargs.get("model") or ""))
+        model_name = str(kwargs.get("model") or "")
+        profile = claude_thinking_profile(model_name)
         if profile is not None and not profile.budget_tokens:
             # Claude 5.x: thinks by default and rejects budget_tokens.
             apply_claude_thinking(
@@ -836,6 +890,10 @@ class GameMasterLLM:
             )
             return
 
+        if self._is_glm_thinking_model(model_name):
+            self._apply_glm_thinking(kwargs, self.enable_thinking)
+            return
+
         if not self.enable_thinking:
             return
 
@@ -843,8 +901,12 @@ class GameMasterLLM:
         kwargs["thinking"] = {"type": "enabled", "budget_tokens": self.max_thinking_tokens}
 
     def _suppress_default_thinking(self, kwargs: dict) -> None:
-        """JSON-mode requests run without thinking; Claude 5.x thinks unless told otherwise."""
-        profile = claude_thinking_profile(str(kwargs.get("model") or ""))
+        """JSON-mode requests run without thinking; Claude 5.x and GLM-4.5+/5 think unless told otherwise."""
+        model_name = str(kwargs.get("model") or "")
+        if self._is_glm_thinking_model(model_name):
+            self._apply_glm_thinking(kwargs, False)
+            return
+        profile = claude_thinking_profile(model_name)
         if profile is None or profile.budget_tokens or not profile.on_by_default:
             return
         apply_claude_thinking(

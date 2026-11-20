@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { Lock } from 'lucide-vue-next'
+import { getImageUrl } from '@/utils/game_icons'
 
-defineProps<{
+const props = defineProps<{
   icon: string
+  imageUrl?: string | null
   typeLine: string
   title: string
   cost: string
@@ -14,6 +17,15 @@ defineProps<{
   disabled: boolean
   locked?: boolean
 }>()
+
+const imageError = ref(false)
+
+watch(
+  () => props.imageUrl,
+  () => {
+    imageError.value = false
+  },
+)
 
 const emit = defineEmits<{
   use: []
@@ -40,8 +52,15 @@ const emit = defineEmits<{
       <span class="truncate">{{ title }}</span>
       <span class="tw-ability-cost">{{ cost }}</span>
     </span>
-    <span class="tw-ability-art">
+    <span class="tw-ability-art overflow-hidden relative">
       <Lock v-if="locked" class="w-8 h-8" />
+      <img
+        v-else-if="imageUrl && !imageError"
+        :src="getImageUrl(imageUrl)"
+        :alt="title"
+        class="w-full h-full object-cover"
+        @error="imageError = true"
+      />
       <i v-else :class="['ra', icon]"></i>
     </span>
     <span class="tw-ability-type">{{ typeLine }}</span>

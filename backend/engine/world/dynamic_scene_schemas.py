@@ -1,0 +1,576 @@
+"""Schemas and normalization helpers for procedural Dynamic Scenes and exits."""
+
+from __future__ import annotations
+
+import re
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, Field, model_validator
+
+from backend.engine.world.dynamic_pseudoname import (
+    build_dynamic_placeholder_scene_id,
+    generate_deterministic_pseudoname,
+)
+
+__all__ = [
+    "AudioMode",
+    "DangerLevel",
+    "DynamicGeneratedChildExit",
+    "DynamicGeneratedNpc",
+    "DynamicGeneratedObject",
+    "DynamicGeneratedScenePayload",
+    "DynamicGenerationConfig",
+    "DynamicGenerationModel",
+    "DynamicInterludeQuotePayload",
+    "DynamicNpcTypeCaps",
+    "DynamicNpcTypeCapsOverride",
+    "DynamicSpawnChances",
+    "DynamicSpawnChancesOverride",
+    "DynamicZoneConfig",
+    "InstructionScope",
+    "NpcImageMode",
+    "SceneImageMode",
+    "build_dynamic_placeholder_scene_id",
+    "generate_deterministic_pseudoname",
+    "is_dynamic_exit_dict",
+    "is_dynamic_scene_dict",
+    "normalize_dynamic_generation",
+    "normalize_dynamic_zone",
+    "normalize_generation_model",
+    "normalize_instructions_scope",
+    "resolve_effective_dynamic_rules",
+]
+
+SceneImageMode = Literal["off", "inherit", "simple", "hq"]
+NpcImageMode = Literal["off", "simple", "hq"]
+AudioMode = Literal["inherit", "empty", "generate"]
+DynamicGenerationModel = Literal["mechanics", "narration", "world_builder"]
+DangerLevel = Literal["peaceful", "low", "medium", "high", "deadly", "random"]
+# Deepest dynamic-zone cluster (depth 10 = 11 rooms: depth 2 has a side branch).
+MAX_ZONE_DEPTH = 10
+
+InstructionScope = Literal["once", "first_scene", "max_depth", "all_scenes"]
+
+_GENERATION_MODEL_ALIASES: dict[str, DynamicGenerationModel] = {
+    "mechanics": "mechanics",
+    "small": "mechanics",
+    "pass1": "mechanics",
+    "pass_1": "mechanics",
+    "fast": "mechanics",
+    "narration": "narration",
+    "narrative": "narration",
+    "complex": "narration",
+    "story": "narration",
+    "pass2": "narration",
+    "pass_2": "narration",
+    "world_builder": "world_builder",
+    "worldbuilder": "world_builder",
+    "generator": "world_builder",
+    "world": "world_builder",
+    "pass3": "world_builder",
+    "pass_3": "world_builder",
+}
+
+
+def normalize_generation_model(
+    raw: Any, *, allow_none: bool = False
+) -> Optional[DynamicGenerationModel]:
+    """Normalize dynamic generation model tier to mechanics, narration, or world_builder."""
+    key = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower()).strip("_")
+    if not key or key in {"inherit", "default", "global"}:
+        return None if allow_none else "mechanics"
+    resolved = _GENERATION_MODEL_ALIASES.get(key)
+    if resolved is not None:
+        return resolved
+    return None if allow_none else "mechanics"
+
+
+_INSTRUCTION_SCOPE_ALIASES: dict[str, InstructionScope] = {
+    "once": "once",
+    "once_in_cluster": "once",
+    "first_scene": "first_scene",
+    "first": "first_scene",
+    "entry": "first_scene",
+    "max_depth": "max_depth",
+    "final_depth": "max_depth",
+    "final": "max_depth",
+    "boss": "max_depth",
+    "all_scenes": "all_scenes",
+    "all": "all_scenes",
+    "cluster": "all_scenes",
+}
+
+
+def normalize_instructions_scope(raw: Any) -> InstructionScope:
+    """Normalize dynamic instruction scope aliases to a canonical value (default 'once')."""
+    key = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower()).strip("_")
+    return _INSTRUCTION_SCOPE_ALIASES.get(key, "once")
+
+
+DEFAULT_ALLOWED_ENTITY_TYPES: tuple[str, ...] = ("NPC", "OBJECT", "CONTAINER", "SWITCH")
+NPC_TYPE_CAP_KEYS: tuple[str, ...] = ("humanoid", "being", "animal", "monster")
+SPAWN_CHANCE_KEYS: tuple[str, ...] = (
+    "npc",
+    "enemy",
+    "humanoid",
+    "being",
+    "animal",
+    "monster",
+    "item",
+    "container",
+    "switch",
+)
+DEFAULT_SPAWN_CHANCES: dict[str, int] = {
+    "npc": 55,
+    "enemy": 35,
+    "humanoid": 50,
+    "being": 20,
+    "animal": 30,
+    "monster": 25,
+    "item": 75,
+    "container": 30,
+    "switch": 20,
+}
+
+_AUDIO_MODE_ALIASES: dict[str, AudioMode] = {
+    "off": "empty",
+    "disabled": "empty",
+    "none": "empty",
+    "silent": "empty",
+}
+
+
+class DynamicNpcTypeCaps(BaseModel):
+    """Per-NPC-type maximum spawn caps (0-5) for dynamic scenes."""
+
+    humanoid: int = Field(default=2, ge=0, le=5)
+    being: int = Field(default=2, ge=0, le=5)
+    animal: int = Field(default=2, ge=0, le=5)
+    monster: int = Field(default=2, ge=0, le=5)
+
+
+class DynamicNpcTypeCapsOverride(BaseModel):
+    """Optional exit-level overrides for per-NPC-type caps (None = inherit)."""
+
+    humanoid: Optional[int] = Field(default=None, ge=0, le=5)
+    being: Optional[int] = Field(default=None, ge=0, le=5)
+    animal: Optional[int] = Field(default=None, ge=0, le=5)
+    monster: Optional[int] = Field(default=None, ge=0, le=5)
+
+
+class DynamicSpawnChances(BaseModel):
+    """Percentage chances (0-100) controlling dynamic entity and object spawns."""
+
+    npc: int = Field(default=55, ge=0, le=100)
+    enemy: int = Field(default=35, ge=0, le=100)
+    humanoid: int = Field(default=50, ge=0, le=100)
+    being: int = Field(default=20, ge=0, le=100)
+    animal: int = Field(default=30, ge=0, le=100)
+    monster: int = Field(default=25, ge=0, le=100)
+    item: int = Field(default=75, ge=0, le=100)
+    container: int = Field(default=30, ge=0, le=100)
+    switch: int = Field(default=20, ge=0, le=100)
+
+
+class DynamicSpawnChancesOverride(BaseModel):
+    """Optional exit-level overrides for spawn chances (None = inherit)."""
+
+    npc: Optional[int] = Field(default=None, ge=0, le=100)
+    enemy: Optional[int] = Field(default=None, ge=0, le=100)
+    humanoid: Optional[int] = Field(default=None, ge=0, le=100)
+    being: Optional[int] = Field(default=None, ge=0, le=100)
+    animal: Optional[int] = Field(default=None, ge=0, le=100)
+    monster: Optional[int] = Field(default=None, ge=0, le=100)
+    item: Optional[int] = Field(default=None, ge=0, le=100)
+    container: Optional[int] = Field(default=None, ge=0, le=100)
+    switch: Optional[int] = Field(default=None, ge=0, le=100)
+
+
+class DynamicZoneConfig(BaseModel):
+    """Configuration attached to an exit that expands procedurally into dynamic scenes."""
+
+    enabled: bool = True
+    zone_id: str = Field(..., min_length=1, max_length=40)
+    theme: str = Field(..., min_length=1, max_length=1000)
+    depth: int = Field(default=1, ge=1, le=10)
+    max_depth: int = Field(default=3, ge=1, le=MAX_ZONE_DEPTH)
+    danger_level: DangerLevel = "medium"
+    max_npcs: int = Field(default=2, ge=0, le=5)
+    npc_type_caps: Optional[DynamicNpcTypeCapsOverride] = None
+    spawn_chances: Optional[DynamicSpawnChancesOverride] = None
+    audio_mode: Optional[AudioMode] = None
+    generation_model: Optional[DynamicGenerationModel] = None
+    allowed_entity_types: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_ALLOWED_ENTITY_TYPES)
+    )
+    cul_de_sac_on_max_depth: bool = True
+    instructions: Optional[str] = Field(default=None, max_length=8000)
+    instructions_scope: InstructionScope = "once"
+    cluster_consistency: bool = True
+    root_theme: Optional[str] = Field(default=None, max_length=1000)
+    on_after_generated_script: Optional[str] = Field(default=None, max_length=8000)
+
+    @model_validator(mode="after")
+    def normalize_dynamic_fields(self) -> DynamicZoneConfig:
+        raw_inst = str(self.instructions).strip() if self.instructions is not None else ""
+        self.instructions = raw_inst[:8000] if raw_inst else None
+        self.instructions_scope = normalize_instructions_scope(self.instructions_scope)
+        self.cluster_consistency = bool(self.cluster_consistency)
+        self.generation_model = normalize_generation_model(self.generation_model, allow_none=True)
+        raw_root = str(self.root_theme).strip() if self.root_theme is not None else ""
+        self.root_theme = raw_root[:1000] if raw_root else self.theme
+        return self
+
+
+class DynamicGenerationConfig(BaseModel):
+    """Adventure-level settings controlling how dynamic scenes render visuals and music."""
+
+    scene_image_mode: SceneImageMode = "simple"
+    npc_image_mode: NpcImageMode = "simple"
+    item_image_mode: NpcImageMode = "simple"
+    audio_mode: AudioMode = "inherit"
+    generation_model: DynamicGenerationModel = "mechanics"
+    max_npcs: int = Field(default=2, ge=0, le=5)
+    npc_type_caps: DynamicNpcTypeCaps = Field(default_factory=DynamicNpcTypeCaps)
+    spawn_chances: DynamicSpawnChances = Field(default_factory=DynamicSpawnChances)
+    interlude_quote_enabled: bool = True
+
+
+class DynamicGeneratedNpc(BaseModel):
+    """Scoped NPC generated inside a dynamic scene."""
+
+    id: str = Field(..., min_length=1, max_length=48)
+    name: str = Field(..., min_length=1, max_length=100)
+    npc_type: Literal["HUMANOID", "ANIMAL", "MONSTER", "BEING"] = "HUMANOID"
+    role: str = Field(default="Wanderer", max_length=100)
+    description: str = Field(..., min_length=1, max_length=1500)
+    visual_description: str = Field(default="", max_length=1000)
+    attitude: Literal["friendly", "neutral", "hostile"] = "neutral"
+    combat_role: Literal["none", "minion", "standard", "elite", "boss"] = "none"
+    attack_mode: Literal["PASSIVE", "ATTACK_ON_SIGHT"] = "PASSIVE"
+    dialogue_style: str = Field(default="Speaks naturally in plain full sentences.", max_length=200)
+    is_recruitable_companion: bool = False
+    companion_tactics: Literal["BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT"] = "BALANCED"
+    companion_banter: Literal["NORMAL", "QUIET", "CHATTY"] = "NORMAL"
+    clone_count: int = Field(
+        default=1,
+        ge=1,
+        le=5,
+        description="For hostile packs/minions: number of identical clones to spawn (1-5).",
+    )
+    inventory: list[str] = Field(
+        default_factory=list,
+        description="IDs of objects in this scene's objects list carried as loot/keys by this NPC.",
+    )
+    on_defeat_script: Optional[str] = Field(default=None, max_length=1500)
+
+    @model_validator(mode="after")
+    def normalize_npc_inventory_ids(self) -> DynamicGeneratedNpc:
+        seen: list[str] = []
+        for raw in self.inventory or []:
+            token = re.sub(r"[^A-Z0-9]+", "_", str(raw or "").strip().upper()).strip("_")[:24]
+            if token and token not in seen:
+                seen.append(token)
+        self.inventory = seen
+        return self
+
+
+class DynamicGeneratedObject(BaseModel):
+    """Scoped object, equipment, consumable, container, readable, or switch in a dynamic scene."""
+
+    id: str = Field(..., min_length=1, max_length=48)
+    name: str = Field(..., min_length=1, max_length=100)
+    item_type: Literal[
+        "STANDARD", "CONSUMABLE", "WEARABLE", "WEAPON", "CONTAINER", "READABLE", "SWITCH"
+    ] = "STANDARD"
+    description: str = Field(..., min_length=1, max_length=1500)
+    visual_description: str = Field(default="", max_length=1000)
+    is_takeable: bool = True
+    wearable_slots: list[str] = Field(default_factory=list)
+    stat_modifier_strength: int = Field(default=0, ge=-5, le=10)
+    stat_modifier_dexterity: int = Field(default=0, ge=-5, le=10)
+    stat_modifier_intelligence: int = Field(default=0, ge=-5, le=10)
+    stat_modifier_wisdom: int = Field(default=0, ge=-5, le=10)
+    stat_modifier_charisma: int = Field(default=0, ge=-5, le=10)
+    stat_modifier_armor_class: int = Field(default=0, ge=-5, le=10)
+    hp_change: int = Field(default=0, ge=-250, le=250)
+    stamina_change: int = Field(default=0, ge=-250, le=250)
+    mana_change: int = Field(default=0, ge=-250, le=250)
+    damage_dice: Optional[str] = Field(default=None, max_length=20)
+    effect_type: Optional[str] = Field(default=None, max_length=60)
+    effect_value: Optional[int] = Field(default=None)
+    text_log_content: Optional[str] = Field(default=None, max_length=1000)
+    inventory: list[str] = Field(
+        default_factory=list,
+        description="For CONTAINER objects: IDs of other objects in this scene's objects list that are placed inside this container.",
+    )
+    is_locked: bool = False
+    lock_description: Optional[str] = Field(default=None, max_length=300)
+    item_to_unlock: Optional[str] = Field(default=None, max_length=48)
+    on_interact_script: Optional[str] = Field(default=None, max_length=1500)
+    is_hidden: bool = False
+    is_zone_key: bool = Field(
+        default=False,
+        description="Set true when this object is the key/keycard/passkey/token carried by an enemy to unlock the zone's climax container.",
+    )
+
+    @model_validator(mode="after")
+    def normalize_inventory_ids(self) -> DynamicGeneratedObject:
+        seen: list[str] = []
+        for raw in self.inventory or []:
+            token = re.sub(r"[^A-Z0-9]+", "_", str(raw or "").strip().upper()).strip("_")[:24]
+            if token and token not in seen:
+                seen.append(token)
+        self.inventory = seen
+        return self
+
+
+class DynamicGeneratedChildExit(BaseModel):
+    """Deeper dynamic passage spawned from a non-terminal dynamic scene."""
+
+    label: str = Field(..., min_length=1, max_length=120)
+    theme_hint: str = Field(default="", max_length=400)
+
+
+class DynamicGeneratedScenePayload(BaseModel):
+    """Compact LLM output schema for a single procedurally generated dynamic scene."""
+
+    name: str = Field(..., min_length=1, max_length=120)
+    description: str = Field(..., min_length=1, max_length=2000)
+    visual_description: str = Field(default="", max_length=1000)
+    music_prompt: str = Field(default="", max_length=600)
+    npcs: list[DynamicGeneratedNpc] = Field(default_factory=list)
+    objects: list[DynamicGeneratedObject] = Field(default_factory=list)
+    forward_exits: list[DynamicGeneratedChildExit] = Field(default_factory=list)
+
+
+class DynamicInterludeQuotePayload(BaseModel):
+    """Short atmospheric NPC quote shown while a dynamic scene generates."""
+
+    speaker: str = Field(..., min_length=1, max_length=100)
+    role: str = Field(default="", max_length=100)
+    quote: str = Field(..., min_length=1, max_length=280)
+
+
+def _slugify_identifier(raw: Any, fallback: str = "dynamic_zone", max_len: int = 40) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", str(raw or "").strip().lower()).strip("_")
+    return (cleaned or fallback)[:max_len]
+
+
+def _clamp_int(value: Any, default: int, low: int, high: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, parsed))
+
+
+def _clamp_optional_int(value: Any, low: int, high: int) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(low, min(high, parsed))
+
+
+def _normalize_npc_type_caps(raw: Any, *, partial: bool = False) -> Optional[dict[str, Any]]:
+    data = raw if isinstance(raw, dict) else {}
+    if partial:
+        result = {key: _clamp_optional_int(data.get(key), 0, 5) for key in NPC_TYPE_CAP_KEYS}
+        return result if any(v is not None for v in result.values()) else None
+    return {key: _clamp_int(data.get(key), default=2, low=0, high=5) for key in NPC_TYPE_CAP_KEYS}
+
+
+def _normalize_spawn_chances(raw: Any, *, partial: bool = False) -> Optional[dict[str, Any]]:
+    data = raw if isinstance(raw, dict) else {}
+    if partial:
+        result = {key: _clamp_optional_int(data.get(key), 0, 100) for key in SPAWN_CHANCE_KEYS}
+        return result if any(v is not None for v in result.values()) else None
+    return {
+        key: _clamp_int(data.get(key), default=DEFAULT_SPAWN_CHANCES[key], low=0, high=100)
+        for key in SPAWN_CHANCE_KEYS
+    }
+
+
+def resolve_effective_dynamic_rules(
+    zone: dict[str, Any], generation_config: Optional[dict[str, Any]] = None
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Merge adventure dynamic_generation defaults with per-exit zone overrides."""
+    base_cfg = normalize_dynamic_generation(generation_config)
+    base_caps = dict(base_cfg.get("npc_type_caps") or {})
+    base_chances = dict(base_cfg.get("spawn_chances") or {})
+
+    zone_caps = zone.get("npc_type_caps") if isinstance(zone.get("npc_type_caps"), dict) else {}
+    zone_chances = zone.get("spawn_chances") if isinstance(zone.get("spawn_chances"), dict) else {}
+
+    eff_caps = {
+        key: _clamp_int(
+            zone_caps[key] if zone_caps.get(key) is not None else base_caps.get(key),
+            default=2,
+            low=0,
+            high=5,
+        )
+        for key in NPC_TYPE_CAP_KEYS
+    }
+    eff_chances = {
+        key: _clamp_int(
+            zone_chances[key] if zone_chances.get(key) is not None else base_chances.get(key),
+            default=DEFAULT_SPAWN_CHANCES[key],
+            low=0,
+            high=100,
+        )
+        for key in SPAWN_CHANCE_KEYS
+    }
+    return eff_caps, eff_chances
+
+
+def _attach_runtime_zone_flags(dumped: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    """Preserve runtime materialization, consumption, and cluster-node flags."""
+    if raw.get("materialized"):
+        dumped["materialized"] = True
+    if raw.get("instructions_consumed"):
+        dumped["instructions_consumed"] = True
+    if isinstance(raw.get("cluster_node"), dict):
+        dumped["cluster_node"] = dict(raw["cluster_node"])
+    for key in ("instructions_source", "root_instructions", "root_instructions_scope"):
+        if raw.get(key):
+            dumped[key] = raw[key]
+    return dumped
+
+
+def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
+    """Return a clean DynamicZoneConfig dict or None when disabled/empty."""
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("enabled") is False:
+        return None
+    theme = str(raw.get("theme") or "").strip()
+    if not theme:
+        return None
+
+    zone_id = _slugify_identifier(raw.get("zone_id") or theme[:24], fallback="dynamic_zone")
+    max_depth = _clamp_int(raw.get("max_depth"), default=3, low=1, high=MAX_ZONE_DEPTH)
+    depth = _clamp_int(raw.get("depth"), default=1, low=1, high=max_depth)
+    max_npcs = _clamp_int(raw.get("max_npcs"), default=2, low=0, high=5)
+
+    danger = str(raw.get("danger_level") or "medium").strip().lower()
+    if danger not in {"peaceful", "low", "medium", "high", "deadly", "random"}:
+        danger = "medium"
+
+    raw_audio = str(raw.get("audio_mode") or "").strip().lower()
+    raw_audio = _AUDIO_MODE_ALIASES.get(raw_audio, raw_audio)
+    zone_audio_mode: Optional[AudioMode] = (
+        raw_audio if raw_audio in {"inherit", "empty", "generate"} else None  # type: ignore[assignment]
+    )
+    zone_gen_model = normalize_generation_model(raw.get("generation_model"), allow_none=True)
+
+    raw_types = raw.get("allowed_entity_types")
+    if isinstance(raw_types, list) and raw_types:
+        allowed_types = [str(t).strip() for t in raw_types if str(t).strip()]
+    else:
+        allowed_types = list(DEFAULT_ALLOWED_ENTITY_TYPES)
+
+    cul_de_sac = raw.get("cul_de_sac_on_max_depth")
+    if cul_de_sac is None:
+        cul_de_sac = True
+
+    caps_override = _normalize_npc_type_caps(raw.get("npc_type_caps"), partial=True)
+    chances_override = _normalize_spawn_chances(raw.get("spawn_chances"), partial=True)
+    raw_instructions = raw.get("instructions")
+    instructions = str(raw_instructions).strip()[:8000] if raw_instructions is not None else ""
+    instructions_scope = normalize_instructions_scope(raw.get("instructions_scope"))
+    cluster_consistency = raw.get("cluster_consistency")
+    if cluster_consistency is None:
+        cluster_consistency = True
+    raw_root_theme = str(raw.get("root_theme") or "").strip()
+    root_theme = (raw_root_theme or theme)[:1000]
+    raw_after_script = raw.get("on_after_generated_script")
+    after_script = str(raw_after_script).strip() if raw_after_script is not None else ""
+
+    dumped = DynamicZoneConfig(
+        enabled=True,
+        zone_id=zone_id,
+        theme=theme[:1000],
+        depth=depth,
+        max_depth=max_depth,
+        danger_level=danger,  # type: ignore[arg-type]
+        max_npcs=max_npcs,
+        npc_type_caps=(
+            DynamicNpcTypeCapsOverride.model_validate(caps_override) if caps_override else None
+        ),
+        spawn_chances=(
+            DynamicSpawnChancesOverride.model_validate(chances_override)
+            if chances_override
+            else None
+        ),
+        audio_mode=zone_audio_mode,
+        generation_model=zone_gen_model,
+        allowed_entity_types=allowed_types,
+        cul_de_sac_on_max_depth=bool(cul_de_sac),
+        instructions=instructions or None,
+        instructions_scope=instructions_scope,
+        cluster_consistency=bool(cluster_consistency),
+        root_theme=root_theme,
+        on_after_generated_script=after_script[:8000] if after_script else None,
+    ).model_dump()
+    return _attach_runtime_zone_flags(dumped, raw)
+
+
+def normalize_dynamic_generation(raw: Any) -> dict[str, Any]:
+    """Return a clean DynamicGenerationConfig dict with safe defaults."""
+    data = raw if isinstance(raw, dict) else {}
+
+    scene_mode = str(data.get("scene_image_mode") or "simple").strip().lower()
+    if scene_mode not in {"off", "inherit", "simple", "hq"}:
+        scene_mode = "simple"
+
+    npc_mode = str(data.get("npc_image_mode") or "simple").strip().lower()
+    if npc_mode not in {"off", "simple", "hq"}:
+        npc_mode = "simple"
+
+    item_mode = str(data.get("item_image_mode") or "simple").strip().lower()
+    if item_mode not in {"off", "simple", "hq"}:
+        item_mode = "simple"
+
+    audio_mode = str(data.get("audio_mode") or "inherit").strip().lower()
+    audio_mode = _AUDIO_MODE_ALIASES.get(audio_mode, audio_mode)
+    if audio_mode not in {"inherit", "empty", "generate"}:
+        audio_mode = "inherit"
+
+    gen_model = normalize_generation_model(data.get("generation_model")) or "mechanics"
+
+    max_npcs = _clamp_int(data.get("max_npcs"), default=2, low=0, high=5)
+    npc_type_caps = _normalize_npc_type_caps(data.get("npc_type_caps"), partial=False)
+    spawn_chances = _normalize_spawn_chances(data.get("spawn_chances"), partial=False)
+
+    interlude = data.get("interlude_quote_enabled")
+    if interlude is None:
+        interlude = True
+
+    return DynamicGenerationConfig(
+        scene_image_mode=scene_mode,  # type: ignore[arg-type]
+        npc_image_mode=npc_mode,  # type: ignore[arg-type]
+        item_image_mode=item_mode,  # type: ignore[arg-type]
+        audio_mode=audio_mode,  # type: ignore[arg-type]
+        generation_model=gen_model,
+        max_npcs=max_npcs,
+        npc_type_caps=DynamicNpcTypeCaps.model_validate(npc_type_caps),
+        spawn_chances=DynamicSpawnChances.model_validate(spawn_chances),
+        interlude_quote_enabled=bool(interlude),
+    ).model_dump()
+
+
+def is_dynamic_exit_dict(ex: Any) -> bool:
+    """Return True if an exit dictionary defines an enabled dynamic zone."""
+    if not isinstance(ex, dict):
+        return False
+    return normalize_dynamic_zone(ex.get("dynamic_zone")) is not None
+
+
+def is_dynamic_scene_dict(scene: Any) -> bool:
+    """Return True if a scene dictionary defines an enabled dynamic scene profile."""
+    if not isinstance(scene, dict):
+        return False
+    return normalize_dynamic_zone(scene.get("dynamic_zone")) is not None

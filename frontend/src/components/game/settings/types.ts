@@ -7,6 +7,7 @@ export type SessionSettingsPayload = {
   turns: number
   narrationStyle: NarrationStyle
   enableCompression: boolean
+  npcChatter: boolean
   autoSpeech: boolean
   autoSpeakSettings: AutoSpeakSettings
   language: string

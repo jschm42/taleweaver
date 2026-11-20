@@ -40,26 +40,51 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 ## Tags and keys
 
 ### `[World]`
-`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)).
+`language`, `image_style`/`style`/`visual_style` (custom image style instruction or catalog ID/name), `tone`/`narrative_tone` (custom narrative tone instruction or catalog ID/name), `plot`, `rules`, `intro`, `teaser`, `cover` (English image keywords), `title_audio`/`title_song` (ID of a `[Audio]` track: the title track played on the adventure's library tile), `win`, `lose` (narrative conditions), `win_guard`, `lose_guard` (exact expressions), `at_zero_hp` (`game_over` default, or `respawn`: the protagonist wakes up at the last revival point instead of dying, see [Respawn](specs/adventure_format.md#respawn)), `respawn_hp` (share of max HP after waking up, e.g. `25%`), `npc_chatter` (`off` default / `rare` / `normal` / `lively`: NPCs talk with each other on their own, see [NPC conversations](#npc-conversations)), `gossip` (yes = NPCs with memory pass on what they know about the protagonist), `init_script` (script), `progression` (`linear` or `dynamic`, see [Sequence progression](#sequence-n-title)), `dynamic_scene_images` (`off`/`inherit`/`simple`/`hq`), `dynamic_npc_images` (`off`/`simple`/`hq`), `dynamic_item_images` (`off`/`simple`/`hq`), `dynamic_audio` (`inherit`/`empty`/`generate`), `dynamic_model` (`mechanics`/`narration`/`world_builder`, default `mechanics`), `dynamic_max_npcs` (`0`–`5`, default `2`), `dynamic_quotes` (`yes`/`no`).
 
 ### `[Protagonist] Name`
 `role`, `goal`, `character`, `appearance`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha`/`ac` (or the full stat names), `inventory` (item IDs), `weapon`, `offhand`, `armor` (item IDs), `on_hp_change`, `on_status_change` (+ `_text` variants).
 Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: ID] Name` blocks define non-combat talents (see below).
 
 ### `[Scene: ID] Name`
-`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
+`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `respawn` (yes = revival point: in respawn mode the protagonist wakes up at the last one reached; alias `revival_point`), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
+
+**Dynamic scenes (`[DynamicScene: ID] Name` or `[Scene: ID]` with `dynamic: yes`):**
+Creates a pre-mapped scene node whose authored exits and pre-placed static NPCs/objects stay intact, while its narrative description, ambience, visuals/audio, and procedural encounters are generated on first player entry. Supports `dynamic` (`yes`/`no`), `zone`/`dynamic_zone`/`zone_id` (slug, optional; defaults from scene ID), `theme`/`zone_theme` (atmospheric prompt; also fallback `description`), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`), `max_npcs` (`0`–`5`), `audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`), `generation_model`/`dynamic_model` (`mechanics`/`narration`/`world_builder`), `allowed_entities`, `instructions`/`prompt`/`zone_instructions` (optional freeform prompt or Blueprint blocks), `instructions_scope`/`scope` (`once`/`first_scene`/`max_depth`/`all_scenes`), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`), and `on_after_generated`/`on_after_generated_script`. Multiple `[DynamicScene]` nodes and dynamic `[Exit]` passages sharing a `zone_id` share cluster consistency. Unvisited pre-mapped Dynamic Scenes keep their details hidden in the player's travel overlay until entered.
+
+```text
+[DynamicScene: FOREST_CLEARING] Mossy Clearing
+theme: Mist-shrouded ancient oak glade with rune-carved standing stones
+danger: medium
+zone: whisper_woods
+cluster_consistency: yes
+```
 
 ### `[Exit: FROM -> TO] label`
 Use `->` for an exit (the AI decides the direction rules) or `<->` to force a two-way passage.
-`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
+`via`/`label`, `locked`, `revealed` (yes = the target scene is known from the start), `lock` (description), `code`, `key_item`, `rule` (soft narrative condition), `guard` (expression), `bidirectional`, `one_way`, `companions` (no = solo passage, the companion stays behind; `solo: yes` is the same), `on_unlock`, `on_unlock_fail`, `on_open`, `on_use` (+ `_text` variants).
 Setting `code`, `key_item`, `rule` or `guard` implies `locked: yes`.
+
+**Dynamic exits (procedural exploration zones):**
+Use `[Exit: FROM -> ZONE_ID] label` or `[Exit: FROM -> ?] label` with `theme:` to create an uncharted procedural zone that expands on entry without failing missing-scene validation:
+`dynamic_zone`/`zone`/`zone_id` (slug, optional if `TO` is the zone ID), `theme` (visual & atmospheric prompt, required for dynamic exits), `max_depth`/`depth` (1–10, default 3), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`, default `medium`), `max_npcs` (`0`–`5`, optional per-exit override), `audio`/`audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`, optional per-exit music override), `generation_model`/`dynamic_model` (`mechanics`/`narration`/`world_builder`, optional per-exit LLM tier override), `cul_de_sac`/`cul_de_sac_on_max_depth` (`yes`/`no`, default `yes`), `allowed_entities` (comma-separated: `hostile_npc`, `friendly_npc`, `scenery`, `container`, `consumable`), `return_direction`, `instructions`/`prompt`/`zone_instructions` (optional freeform generation prompt or fenced Blueprint blocks defining containers, weapons, NPCs, etc. for the cluster), `instructions_scope`/`scope` (`once` default — apply once per cluster so unique loot/NPCs are not duplicated in every depth; `first_scene` — depth 1 only; `max_depth` — climax depth only; `all_scenes` — apply at every depth; on entry the engine plans the cluster as a mini-adventure and turns these instructions into a separate brief and sub-theme per room), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`; passes the global adventure theme, root dynamic exit theme, and already-generated cluster scenes/NPCs/items to keep the cluster coherent — set `no` to reduce token usage), `on_after_generated` (script hook). Target scene IDs for dynamic exits use deterministic `DYN_*` pseudo-names and remain hidden in the player's travel overlay until visited.
+
+```text
+[Exit: TOWN_GATE -> ?] a collapsed iron mine shaft
+zone: iron_mines
+theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
+max_depth: 3
+danger: medium
+cul_de_sac: yes
+cluster_consistency: yes
+```
 
 Every exit has a label. Give it in the tag (`[Exit: HALL <-> CRYPT] a heavy oak door`), or leave it out and the AI writes one. The exit tile shows the label on both sides of a two-way exit, with `→ Target scene` below it only once the player has visited that scene; unexplored targets are not named on the tile. With `revealed: yes` the target counts as known from the start: the tile shows its image and `→ Target scene`, and the map shows the scene, before the player has been there (a signposted door, a gate with a view). Only locked exits carry a badge on the tile. Hovering a tile opens a popup with the label, the target's image and where the exit leads, once that is known.
 
 Write the label as the passage itself, not as the way: `an old rusty gate`, `a narrow spiral staircase`, not `Way to the Combat Lab` or `Back to the hall`. A two-way exit shows the same label in both scenes, and the game already adds the target. The World-Builder AI follows the same rule for the labels it writes.
 
 ### `[NPC: ID] Name`
-`in` (scene ID), `position`, `type` (HUMANOID, ANIMAL, MONSTER, BEING), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
+`in` (scene ID), `position`, `type` (`HUMANOID`, `BEING`, `ANIMAL`, `MONSTER` — `HUMANOID` and `BEING` speak intelligible full sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only), `goal`, `character`, `appearance`, `notes`, `hp`, `mana`, `stamina`, `str`/`dex`/`int`/`wis`/`cha` (or the full stat names, 1-30, default 10), `ac` (armor class, default 10), `main_attack` (see below), `moves` (yes/no), `allowed_scenes`, `attackable`, `killable`, `hidden`, `reveal_guard` (Python condition; the hidden NPC appears once it is True, see [Hidden entities](#hidden-entities-and-reveal)), `inventory`, `weapon`, `armor` (both **deprecated**, see below), `attack` (`passive` / `on_sight`), `attack_when_holding` (item), `attack_after_scene`, `attack_after_defeat`, `attack_guard`, `special_chance`, `group` (combat group), `assist` (`group` / `anyone` / `never`), `companion` (yes = can travel with the protagonist), `in_party` (yes = in the party from the start), `tactics` (`balanced` / `offensive` / `defensive` / `support`), `banter` (`normal` / `quiet` / `chatty`), `downed_recovery` (share of max HP after being downed, e.g. `0.25` or `25`), `memory` (NPC memory slots 1-8, see [NPC memory](#npc-memory)), `relation` (repeatable, `ID = kind | note`), `chatty` (no = stays out of NPC chatter), `topic` (repeatable conversation topic, see [NPC conversations](#npc-conversations)), `on_defeat`, `on_meet` (player enters the NPC's scene), `on_interact`, `on_receive_item` (the player gave the NPC items; `received_items` / `received_item_ids` in scope) (+ `_text` variants).
 
 **Main attack.** `main_attack: Name | dice | category | stat | cost: <resource> <n> | effects: <effects>` configures the NPC's standard attack without any item. Only the name is required; the other parts may come in any order: damage dice (default `1d6`), `melee` / `ranged` / `magic` (default melee), the attack-roll stat (`str`, `dex`, `int`, ...; default `dex`), `cost: stamina 5` (default free) and `effects:` in the weapon `hit_effects` format.
 
@@ -104,19 +129,69 @@ assist: anyone
 in: ROAD
 ```
 
-Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. In the World-Editor, every combat setting of an NPC (the **NPC can be damaged** switch, aggression, combat group, *Joins a fight*, attributes, main attack and special attacks) is in the **Combat** tab of the NPC dialog. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
+Varek attacks on sight, and Grim and the hound join in. Mira stays a bystander until the player attacks her. In the World-Editor, the **Stats** tab of a character holds HP, stamina, mana, the attributes and AC; every other combat setting (the **NPC can be damaged** switch, aggression, combat group, *Joins a fight*, main attack and special attacks) is in the **Combat** tab. Movement and inventory have their own tabs. Scripts can change both settings during a game (`tw.npcs.set_combat_group`, `tw.npcs.set_assist_mode`, see [scripting_engine.md](scripting_engine.md#twnpcs)).
+
+#### NPC memory
+
+```text
+[NPC: BRAN] Bran the Innkeeper
+in: INN
+memory: 4
+```
+
+`memory: <1-8>` lets a character keep that many short facts about the protagonist across scenes: the name the protagonist told it, a deal or promise, an important topic, how the protagonist treated it. The Game Master writes them while the protagonist talks to the character; a known topic is updated in place, and when all slots are full the oldest fact is forgotten. Each fact is one short English sentence (at most 120 characters), and at most 3 facts are stored per player message.
+
+The facts are only sent to the AI while the character is in the protagonist's scene, but every slot still costs prompt tokens. Give memory to recurring characters the player talks to more than once (quest givers, allies, rivals, companions: 2-4 slots, a companion up to 6) and leave it off for enemies, monsters and extras. The validator warns about memory on an NPC that attacks on sight (`npc_memory_on_hostile`). In the World-Editor the setting is **Memory** on the character's main tab. Scripts read and write the same facts with `tw.npcs.remember`, `recall`, `recalls`, `forget` and `memories` (see [scripting_engine.md](scripting_engine.md#twnpcs)), e.g. a guard `tw.npcs.recalls('BRAN', 'player_name')`.
+
+Characters without memory still remember the current scene's conversation. No character knows the protagonist's name, deeds or goals unless it witnessed them, has them in its memory, or the plot, the rules or its description establish that they know each other.
+
+#### NPC conversations
+
+```text
+[World]
+npc_chatter: normal
+gossip: yes
+
+[NPC: GUARD_A] Gerd
+in: GATE
+relation: GUARD_B = colleague | shares night shifts with him
+topic: the cellar door | with: GUARD_B | convey: the cellar door stays unlocked after midnight | id: cellar_door
+
+[NPC: GUARD_B] Hanno
+in: GATE
+relation: GUARD_A = colleague
+memory: 2
+```
+
+Present characters always react to each other inside a normal narration. Three settings add conversations between NPCs:
+
+- **Relations** (`relation: ID = kind | note`, repeatable): how this character sees another one: `friend`, `family`, `partner`, `ally`, `colleague`, `superior`, `subordinate`, `rival` or `enemy`, with an optional reason (max. 80 characters). Relations are one-sided. The narration gets them as NPC RELATIONS for characters present together.
+- **Chatter** (`npc_chatter` on `[World]`): with `rare`, `normal` or `lively` two present characters talk with each other on their own after five, three or two player actions in a scene that addressed no character; `normal` and `lively` also start a short talk when the protagonist enters a scene. The engine decides when (no extra AI call): the narration gets a CONVERSATION BEAT direction for two to four lines the protagonist overhears. Players switch chatter off in the in-game settings (Narrator tab). The command `/listen` always lets two present characters talk, even with chatter off. The **ear button** in the play view's top bar (or `/listen on` / `/listen off`) switches a listening mode on, announced with a system message in the story: the client sends `/listen` again and again, each time after the previous lines were read aloud (without auto-speech after a short reading pause), and the same two characters go on with their conversation instead of starting a new one. Every step is a normal turn (the clock ticks). The mode ends when the player types or clicks an action, a dialog or fight starts, nobody here can talk any more, after 12 steps, or with the button; a system message tells why it stopped. Only conscious, visible `HUMANOID` / `BEING` characters take part; `chatty: no` keeps a character out (a guard on duty), a companion with `banter: quiet` never starts one, and nothing happens during a fight, an open choice or the opening prologue.
+- **Topics** (`topic: <text> | with: ID | convey: <clue> | id: <id> | guard: <expr> | on_heard: <script> | on_heard_text: <text> | repeatable`, repeatable key): what this character discusses with another one. An open topic of a present character comes up first in a conversation. It counts as heard when the engine hands it to the narration: the clue becomes a world memory ("Overheard: ..."), `on_heard` runs, then the `on_conversation_heard` scripts with the topic id as target. A heard topic does not come back unless it is `repeatable`. Use topics for clues the player can learn by listening; the validator reports unknown characters (`conversation_unknown_npc`) and topic ids used twice (`conversation_topic_duplicate_id`).
+- **Gossip** (`gossip: yes` on `[World]`): at every in-game turn change, characters with [memory](#npc-memory) pass one fact about the protagonist to a related character in the same place (any relation except rival and enemy), marked as hearsay ("Heard from Gerd: ..."). Facts heard that way are not passed on again.
+
+In the World-Editor the adventure settings are on **Logic → NPC conversations**; relations, chatty and topics are on the character's **Conversations** tab. Scripts use `tw.npcs.converse`, `relation`, `set_relation`, `topic_heard` and `mark_topic_heard` (see [scripting_engine.md](scripting_engine.md#twnpcs)).
 
 #### Hidden entities and `reveal`
 
-`hidden: yes` makes an NPC or item start invisible. How it becomes visible depends on `reveal`:
+`hidden: yes` makes an NPC or item start invisible.
+
+**Items** become visible depending on `reveal`:
 
 - `reveal: <condition>`: the Game Master reveals it when the condition is met (e.g. `reveal: The player searches the keeper's coat.`).
-- no `reveal`: the default applies. The entity is revealed when the protagonist searches the scene (an NPC also when it starts speaking).
-- `reveal: script`: **only scripts** reveal it (`tw.npcs.reveal`, `tw.objects.reveal`, `.set_hidden(False)`); for items also crafting and another item's `reveals`. The Game Master is not told about the entity, and searching, narration or the discovery check never reveal it. Use this for things a console, a dialog or a puzzle script must bring in.
+- no `reveal`: the default applies. The item is revealed when the protagonist searches the scene.
+- `reveal: script`: **only scripts** reveal it (`tw.objects.reveal`, `.set_hidden(False)`), crafting and another item's `reveals`. The Game Master is not told about the item, and searching, narration or the discovery check never reveal it. Use this for things a console, a dialog or a puzzle script must bring in.
+
+**NPCs** are never discovered by the Game Master (not by searching, not by speaking). They appear in two ways:
+
+- `reveal_guard: <expression>`: a sandboxed Python condition. After every player message the engine checks it while the NPC is hidden in the protagonist's scene; as soon as it is True, the NPC appears (e.g. `reveal_guard: tw.player.has_item('LANTERN')` or `reveal_guard: tw.vars.get('bell_rung') == True`).
+- scripts: `tw.npcs.reveal(id)` or the NPC proxy's `reveal()` / `set_hidden(False)`.
+
+An NPC `reveal:` text from older adventures is kept on import and export but has no effect; the validator warns about it (`npc_reveal_rule_ignored`). In the World-Editor the guard is the **Reveal guard** field in the character's *Visibility* section.
 
 ### `[Item: ID] Name`
 Shortcuts that also set the type: `[Readable: ...]`, `[Container: ...]`, `[Switch: ...]`/`[Mechanism: ...]`, `[ContainerSwitch: ...]`, `[Weapon: ...]`, `[Recipe: ...]` (CONSTRUCTABLE). `portable` defaults to `no` for STATIC items, switches and container-switches and to `yes` for everything else; a `portable: yes` switch (e.g. a remote) can be taken and flipped from the inventory.
-`in` (scene ID), `position`, `type` (CONSUMABLE, WEARABLE, STATIC, CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH, CONTAINER_SWITCH), `appearance`, `slots`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `portable`, `locked` (for containers: requires unlocking to open; for all other items: **take-locked**, visible and inspectable in the scene or inside a container, but cannot be picked up until unlocked by a script), `code`, `unlock_item`, `unlock_rule`, `unlock_guard`, `contains` (item IDs), `min_items` / `max_items` (container / container-switch item slot bounds, e.g. `min_items: 3` and `max_items: 3` for a fuse box requiring 3 components, or `max_items: 1` for a microwave), `combine` (recipe ingredient IDs, `A + B`), `results`/`result` (item IDs the recipe produces), `keep` (ingredient IDs that are not consumed), `craft_guard`, `reveals` (item ID), `bonus` (`str+2, ac+1`), `heal`, `stamina`, `mana`, `damage` (dice, e.g. `1d8+2`), `cost` (`stamina 3` / `mana 5`), `category` (weapons: MELEE, RANGED, MAGIC), `hit` (weapons: attack-roll stat, default `dex`), `hit_effects` (weapons: extra effects on a hit, e.g. `target sta -1d4, self hp +2`), `text` (readable content, max 500 characters), `format` (DOCUMENT, SCROLL, BOOK, SIGN).
+`in` (scene ID), `position`, `type` (CONSUMABLE, WEARABLE, STATIC, CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH, CONTAINER_SWITCH), `appearance`, `slots`, `hidden`, `reveal` (reveal condition; `script` = only scripts reveal it, see [Hidden entities](#hidden-entities-and-reveal)), `portable`, `locked` (for containers: requires unlocking to open; for all other items: **take-locked**, visible and inspectable in the scene or inside a container, but cannot be picked up until unlocked by a script), `quest` / `quest_item` (yes = **quest item**: the player can never give it to an NPC or companion and the Game Master cannot take it away; scripts still move it, so a hand-in uses e.g. `tw.player.transfer_item('LETTER', 'MAYOR')` in the NPC's `on_interact`), `code`, `unlock_item`, `unlock_rule`, `unlock_guard`, `contains` (item IDs), `min_items` / `max_items` (container / container-switch item slot bounds, e.g. `min_items: 3` and `max_items: 3` for a fuse box requiring 3 components, or `max_items: 1` for a microwave), `combine` (recipe ingredient IDs, `A + B`), `results`/`result` (item IDs the recipe produces), `keep` (ingredient IDs that are not consumed), `craft_guard`, `reveals` (item ID), `bonus` (`str+2, ac+1`), `heal`, `stamina`, `mana`, `damage` (dice, e.g. `1d8+2`), `cost` (`stamina 3` / `mana 5`), `category` (weapons: MELEE, RANGED, MAGIC), `hit` (weapons: attack-roll stat, default `dex`), `hit_effects` (weapons: extra effects on a hit, e.g. `target sta -1d4, self hp +2`), `text` (readable content, max 500 characters), `format` (DOCUMENT, SCROLL, BOOK, SIGN).
 Hooks: `on_pickup`, `on_drop`, `on_equip`, `on_unequip`, `on_interact`/`on_use`, `on_unlock`, `on_unlock_fail`, `on_items_added` (container / container-switch: the player put items in; `added_items` / `added_item_ids` in scope), `on_items_removed` (container / container-switch: the player took or dropped items out; `removed_items` / `removed_item_ids` in scope), `on_read`, `on_craft`, `on_craft_fail` (+ `_text` variants).
 
 Switch keys:
@@ -131,10 +206,38 @@ A **CONTAINER_SWITCH** (`[ContainerSwitch: ID] Name` or `type: CONTAINER_SWITCH`
 
 A CONSTRUCTABLE is a **recipe**: a meta item that never appears in the game and therefore gets no image. It needs at least 2 `combine` ingredients and at least 1 `results` item. Results are regular items of any type; they are hidden automatically and revealed when the recipe is crafted. All ingredients are consumed except those listed in `keep`. The `craft_guard` and the `on_craft` / `on_craft_fail` hooks belong to the recipe.
 
+**Companions.** A companion (sidekick) travels with the protagonist. Any companion key (`companion`, `in_party`, `tactics`, `banter`, `downed_recovery`, `recruit`, `recruit_item`, `recruit_hint`) makes the NPC a companion; `in_party: yes` puts it into the party when the game starts, next to the protagonist in the first scene. One companion is active at a time; with several `in_party` NPCs the first one travels along and the others wait in their scenes. The active companion follows the protagonist into every new scene, unless the exit (`companions: no` / `solo: yes`) or the active sequence (`companions: no`) is a solo section; then it waits where it is and follows again once the protagonist is back. `tactics`, `banter` and `downed_recovery` are stored for the companion's combat and narration behaviour.
+
+How the player recruits a companion who is not in the party from the start is set with `recruit`: `script` (default; only a script recruits it, `tw.party.recruit`), `instant` (the NPC's **Recruit** context action makes it join at once) or `item` (the **Recruit** dialog asks for an item; only `recruit_item: <item ID>` convinces the NPC, which keeps the item; any other item, or none, fails and stays with the player). `recruit_hint` is the line the dialog shows. With `instant` or `item` the NPC card gets a softly glowing companion frame and an *Ally?* tag in the play view. Narrate the outcome with `on_recruit` / `on_recruit_text` (success; without either, the Game Master narrates how it joins) and `on_recruit_fail` / `on_recruit_fail_text` (wrong item); `offered_item_id` is in scope of both scripts. A companion that was in the party before rejoins through **Recruit** for free (no item, no recruit hooks): when another companion replaces it, it stays in its scene with the glowing frame, and an NPC that once accepted its item never asks again, even after being dismissed.
+
+```text
+[NPC: GRULL] Grull the Sellsword
+in: TAVERN
+companion: yes
+recruit: item
+recruit_item: RUM
+recruit_hint: Nobody hires me sober. Bring me a bottle.
+on_recruit_text: Grull uncorks the rum, takes a long pull and grabs his axe.
+on_recruit_fail_text: Grull sniffs it and pushes it back. "That's not drink, friend."
+```
+
+```text
+[NPC: LARA] Lara
+in: GATE
+companion: yes
+in_party: yes
+tactics: support
+
+[Exit: GATE -> VENT] a narrow air vent
+solo: yes
+```
+
+In the World-Editor, the companion settings and the On Recruit triggers are in the **Companion** tab of the NPC dialog, the solo switch is *Companions may follow* in the exit dialog and in the sequence dialog.
+
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough`, `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
-The free text becomes the chapter's description and walkthrough.
+`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `respawn` (no = deadly chapter: 0 HP ends the adventure even in respawn mode), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+The free text becomes the chapter's description or walkthrough. When `walkthrough:` is provided, free text is treated as the lore description. Keep `description` spoiler-free.
 
 **Sequence progression** is set with `progression:` in `[World]`:
 - `linear` (default): completing a sequence starts the next one by number.
@@ -157,7 +260,7 @@ Nested blocks (indent them for readability; they always belong to the **latest**
 - `[Script: ID] Name` (indented): a chapter script that only runs while this sequence is active. Keys: `trigger`, `target`, `at` (for `on_time_reached`), `code`.
 
 ### `[Script: ID] Name`
-A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`), `target` (entity ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
+A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`, `on_respawn`), `target` (entity ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
 
 ```
 [Script: NIGHTFALL] Night falls
@@ -179,7 +282,7 @@ A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the 
 Award keys of newly generated adventures are stored in upper case (`brass lever` becomes `BRASS_LEVER`). Granting matches keys case-insensitively, so `tw.awards.grant('brass_lever')` still finds `BRASS_LEVER`, and older adventures keep their stored keys.
 
 ### `[Ability: ID] Name` (inside an NPC or the Protagonist)
-`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
+`kind` (ATTACK, HEAL, UTILITY), `category` (MAGIC, MELEE, RANGED, SOCIAL, OTHER), `cost` (`mana 10`), `stat`, `dc`, `damage` (`2d6` or `12`), `heals` (`self` or `ally`: with `kind: HEAL`, `ally` heals the caster's party partner, i.e. the companion when the protagonist casts it and the protagonist when a companion casts it), `area` (`single`, `splash`, `splash 2`, `all`), `save` (`dex`, `wisdom`, ...), `spare_passive` (yes/no), `outcome`, `locked`, `unlock_item`, `unlock_scene`, `unlock_defeat`, `unlock_guard`, `unlock_text`, `on_success`, `on_fail` (+ `_text` variants).
 
 **Area abilities** (protagonist only; NPC abilities always hit one target): `area: all` hits every
 engaged enemy, `area: splash` (or `splash 2`) hits the target plus 1 (or 2) neighbours in the

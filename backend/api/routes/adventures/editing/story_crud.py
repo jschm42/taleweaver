@@ -155,6 +155,8 @@ async def validate_editor_script(
         "on_logic_pass_done",
         "on_narration_done",
         "on_time_reached",
+        "on_respawn",
+        "on_conversation_heard",
     }
     if payload.trigger and payload.trigger not in valid_triggers:
         errors.append(

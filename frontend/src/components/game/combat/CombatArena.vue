@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { CombatEnemyState, CombatLogEntry, CombatStat, CombatState } from '@/types'
+import type { CombatEnemyState, CombatLogEntry, CombatPartyMember, CombatStat, CombatState } from '@/types'
 import { getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import { ArenaRenderer, type ArenaView } from './arena/ArenaRenderer'
 import type { CardData, ResourceStat } from './arena/CombatantCard'
 import { ArenaEventPlayer } from './arena/eventPlayer'
 import { applySkinColors } from './arena/palette'
+import { CombatSounds } from './combatSounds'
 
 const PLAYER_ID = 'PLAYER'
 const EVENT_TIMEOUT_MS = 9000
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 const host = ref<HTMLElement | null>(null)
 const failed = ref(false)
 const bubble = ref<{ name: string; line: string; x: number; y: number; flip: boolean } | null>(null)
+const sounds = new CombatSounds()
 let arena: ArenaRenderer | null = null
 let player: ArenaEventPlayer | null = null
 let ready = false
@@ -103,6 +105,27 @@ function enemyCard(enemy: CombatEnemyState, info: ReturnType<typeof pendingInfo>
     engaged: !!enemy.engaged && !info.engageIds.has(enemy.id),
     out: isOut ? (enemy.fled ? 'fled' : 'defeated') : null,
     initiative: initiativeOf(enemy.id),
+    marked: (props.combat.party ?? []).some((m) => m.mark_id === enemy.id),
+  }
+}
+
+/** The companion's card on the protagonist's side; a downed companion is dimmed. */
+function allyCard(member: CombatPartyMember, info: ReturnType<typeof pendingInfo>): CardData {
+  const values = resourceValues(member.id, member as unknown as Record<string, unknown>, info.deltas)
+  return {
+    id: member.id,
+    name: member.name,
+    imageUrl: imageUrl(member.image_url),
+    side: 'player',
+    ally: true,
+    ...values,
+    maxHp: num(member.max_hp, values.hp),
+    maxMana: num(member.max_mana),
+    maxStamina: num(member.max_stamina),
+    modifiers: rewindModifiers(member.id, member.modifiers, info.deltas),
+    engaged: true,
+    out: member.downed ? 'defeated' : null,
+    initiative: initiativeOf(member.id),
   }
 }
 
@@ -135,6 +158,7 @@ function buildView(pending: CombatLogEntry[]): ArenaView {
       out: null,
       initiative: initiativeOf(PLAYER_ID),
     },
+    allies: (props.combat.party ?? []).map((m) => allyCard(m, info)),
     enemies: enemies.filter((e) => e && isOnStage(e, info)).map((e) => enemyCard(e, info)),
     selectedId: props.selectedTargetId,
     activeId: props.combat.active ? (props.combat.active_actor ?? null) : null,
@@ -168,6 +192,24 @@ async function speak(entityId: string, line: string): Promise<void> {
 function applySpeed(): void {
   if (!arena?.tween) return
   arena.tween.speed = props.reducedMotion ? 6 : props.fast ? 3 : 1
+  arena.calm = !!props.reducedMotion
+}
+
+/** Deals the cards in when a running fight opens; actions stay locked until it has played. */
+async function playIntro(): Promise<void> {
+  if (!arena || !props.combat.active || props.reducedMotion || document.hidden) return
+  playing = true
+  emit('playing', true)
+  sounds.play('fight_start')
+  try {
+    await withTimeout(arena.playIntro())
+  } catch (err) {
+    console.warn('Combat intro failed', err)
+  }
+  playing = false
+  emit('playing', false)
+  // Events that arrived during the intro were queued; play them now.
+  if (queue.length > 0) void drainQueue()
 }
 
 async function withTimeout(task: Promise<void>): Promise<void> {
@@ -229,7 +271,7 @@ function onLogChange(): void {
 
 watch(() => props.combat.log?.length ?? 0, onLogChange)
 watch(
-  () => [props.selectedTargetId, props.combat.active_actor, props.combat.enemies, props.combat.player, props.combat.initiative],
+  () => [props.selectedTargetId, props.combat.active_actor, props.combat.enemies, props.combat.party, props.combat.player, props.combat.initiative],
   () => {
     if (ready) arena?.sync(buildView(queue), !playing)
   },
@@ -237,10 +279,17 @@ watch(
 watch(() => [props.fast, props.reducedMotion], applySpeed)
 
 onMounted(async () => {
+  sounds.preload()
   if (host.value) applySkinColors(host.value)
   arena = new ArenaRenderer()
   arena.onSelect = (id) => emit('selectTarget', id)
-  arena.onHover = (id, event) => emit('hover', id, event)
+  arena.onHover = (id, event) => {
+    if (!props.combat?.active) {
+      emit('hover', null, null)
+      return
+    }
+    emit('hover', id, event)
+  }
   try {
     if (!host.value || !(await arena.init(host.value))) return
   } catch (err) {
@@ -249,17 +298,25 @@ onMounted(async () => {
     onLogChange()
     return
   }
-  player = new ArenaEventPlayer(arena, speak)
+  player = new ArenaEventPlayer(arena, speak, sounds)
   ready = true
   applySpeed()
-  seenCount = props.combat.log?.length ?? 0
-  arena.sync(buildView([]), true)
+  const logs = props.combat.log ?? []
+  seenCount = logs.length
+  if (props.combat.active && (props.combat.round ?? 1) === 1) {
+    const openingBanter = logs.find((e) => e.data?.kind === 'banter')
+    if (openingBanter) queue.push(openingBanter)
+  }
+  arena.sync(buildView(queue), true)
   emit('revealed', seenCount)
+  await playIntro()
+  if (queue.length > 0) void drainQueue()
 })
 
 onBeforeUnmount(() => {
   queue.length = 0
   player = null
+  sounds.dispose()
   arena?.destroy()
   arena = null
 })

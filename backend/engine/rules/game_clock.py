@@ -31,8 +31,6 @@ MAX_TIMERS = 50
 MAX_TIME = 10_000_000
 
 _DURATION_UNITS = {"w": 10080, "d": 1440, "h": 60, "m": 1}
-_DURATION_PART = re.compile(r"(\d+)\s*([wdhm])", re.IGNORECASE)
-_DURATION_FULL = re.compile(r"^(\s*\d+\s*[wdhm]\s*)+$", re.IGNORECASE)
 _HOURS_MINUTES = re.compile(r"^\s*(\d+):([0-5]\d)\s*$")
 
 
@@ -57,9 +55,44 @@ def _parse_time_text(text: str) -> Optional[int]:
     hours_minutes = _HOURS_MINUTES.match(text)
     if hours_minutes:
         return int(hours_minutes.group(1)) * 60 + int(hours_minutes.group(2))
-    if not _DURATION_FULL.match(text):
+
+    return _parse_duration(text)
+
+
+def _skip_spaces(text: str, idx: int) -> int:
+    while idx < len(text) and text[idx].isspace():
+        idx += 1
+    return idx
+
+
+def _read_duration_token(text: str, idx: int) -> tuple[int, int] | None:
+    """``(minutes, next index)`` for one ``<number><unit>`` token at ``idx``, or None."""
+    start = _skip_spaces(text, idx)
+    end = start
+    while end < len(text) and text[end].isdecimal():
+        end += 1
+    unit_at = _skip_spaces(text, end)
+    if end == start or unit_at >= len(text):
         return None
-    return sum(int(n) * _DURATION_UNITS[u.lower()] for n, u in _DURATION_PART.findall(text))
+    factor = _DURATION_UNITS.get(text[unit_at].lower())
+    if factor is None:
+        return None
+    return int(text[start:end]) * factor, unit_at + 1
+
+
+def _parse_duration(text: str) -> Optional[int]:
+    """Sum of tokens like ``1w 2d 3h 30m``; a hand-written scanner (no regex backtracking)."""
+    idx = _skip_spaces(text, 0)
+    total = 0
+    matched = False
+    while idx < len(text):
+        token = _read_duration_token(text, idx)
+        if token is None:
+            return None
+        total += token[0]
+        idx = _skip_spaces(text, token[1])
+        matched = True
+    return total if matched else None
 
 
 def to_minutes(value: Any) -> Optional[int]:

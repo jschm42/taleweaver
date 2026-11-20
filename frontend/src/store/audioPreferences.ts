@@ -42,6 +42,11 @@ function initialVolume(): number {
 /** Audio volume 0..1, relative to speech (which plays at 1). */
 export const audioVolume = ref(initialVolume())
 export const audioMuted = ref(readStored(MUTED_KEY) === '1')
+/**
+ * Temporary factor (0..1) on the background audio while something louder is on stage, e.g.
+ * the combat dialog with its sound effects. Not stored; 1 = normal volume.
+ */
+export const audioDuck = ref(1)
 
 watch(audioVolume, (value) => writeStored(VOLUME_KEY, String(clamp(value))))
 watch(audioMuted, (value) => writeStored(MUTED_KEY, value ? '1' : '0'))

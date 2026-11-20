@@ -20,34 +20,55 @@ const emit = defineEmits<{
 }>()
 
 const focusedIndex = ref(0)
+const selectedOptionIndex = ref<number | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 
 const scrollIntoView = (): void => {
   nextTick(() => panelRef.value?.scrollIntoView({ block: 'end', behavior: 'smooth' }))
 }
 
-watch(() => props.dialog?.id, () => {
-  focusedIndex.value = 0
-  scrollIntoView()
-})
+watch(
+  () => props.dialog?.id,
+  () => {
+    focusedIndex.value = 0
+    selectedOptionIndex.value = null
+    scrollIntoView()
+  }
+)
 
-watch(() => props.open, (isOpen) => {
-  if (isOpen) scrollIntoView()
-})
+watch(
+  () => props.open,
+  isOpen => {
+    if (isOpen) scrollIntoView()
+  }
+)
+
+watch(
+  () => props.busy,
+  isBusy => {
+    if (!isBusy) {
+      selectedOptionIndex.value = null
+    }
+  }
+)
 
 const choose = (index: number): void => {
   if (props.busy) return
+  selectedOptionIndex.value = index
   emit('choose', index)
 }
 
 const isTypingTarget = (target: EventTarget | null): boolean => {
   const element = target as HTMLElement | null
-  return !!element && (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName))
+  return (
+    !!element &&
+    (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName))
+  )
 }
 
 const onKeyDown = (event: KeyboardEvent): void => {
   const options = props.dialog?.options || []
-  if (!props.open || !options.length || isTypingTarget(event.target)) return
+  if (!props.open || !options.length || props.busy || isTypingTarget(event.target)) return
 
   const handled = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Enter', ' ']
   const digit = Number.parseInt(event.key, 10)
@@ -81,11 +102,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
 
 <template>
   <Transition name="dlg-slide">
-    <div v-if="open && dialog" ref="panelRef" class="tw-choice relative w-full max-w-2xl shrink-0" aria-live="polite">
+    <div
+      v-if="open && dialog"
+      ref="panelRef"
+      class="tw-choice relative w-full max-w-2xl shrink-0"
+      aria-live="polite"
+    >
       <section class="tw-narration space-y-3">
         <span class="tw-narration-label">{{ dialog.speaker || 'Your choice' }}</span>
 
-        <div class="tw-choice-prompt" v-html="renderChoiceHtml(dialog.prompt || 'What do you do?')"></div>
+        <div
+          class="tw-choice-prompt"
+          v-html="renderChoiceHtml(dialog.prompt || 'What do you do?')"
+        ></div>
 
         <div class="space-y-2">
           <button
@@ -94,20 +123,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
             type="button"
             :disabled="busy"
             class="tw-choice-option"
-            :class="{ 'is-focused': focusedIndex === idx }"
+            :class="{
+              'is-selected': busy && selectedOptionIndex === option.index,
+              'is-locked-out': busy && selectedOptionIndex !== option.index,
+              'is-focused': !busy && focusedIndex === idx
+            }"
             @click="choose(option.index)"
-            @mouseenter="focusedIndex = idx"
+            @mouseenter="!busy && (focusedIndex = idx)"
           >
             <span class="tw-choice-number">{{ idx + 1 }}</span>
-            <span class="tw-choice-label flex-1 min-w-0" v-html="renderChoiceHtml(option.label)"></span>
-            <i v-if="busy && focusedIndex === idx" class="ra ra-hourglass text-xs animate-spin opacity-60"></i>
+            <span
+              class="tw-choice-label flex-1 min-w-0"
+              v-html="renderChoiceHtml(option.label)"
+            ></span>
+            <i
+              v-if="busy && selectedOptionIndex === option.index"
+              class="ra ra-hourglass text-xs animate-spin opacity-80 text-accent"
+            ></i>
           </button>
         </div>
 
         <p v-if="errorMessage" class="tw-choice-error">{{ errorMessage }}</p>
 
         <p class="tw-choice-hint">
-          Press <kbd>1</kbd>–<kbd>{{ dialog.options.length }}</kbd> or use <kbd>↑ ↓</kbd> and <kbd>Enter</kbd>
+          Press <kbd>1</kbd>–<kbd>{{ dialog.options.length }}</kbd> or use <kbd>↑ ↓</kbd> and
+          <kbd>Enter</kbd>
         </p>
       </section>
     </div>
@@ -116,10 +156,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, { capture
 
 <style scoped>
 .dlg-slide-enter-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 .dlg-slide-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 .dlg-slide-enter-from {
   opacity: 0;

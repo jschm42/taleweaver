@@ -10,7 +10,8 @@ from backend.api.routes.adventures.editing.common import (
 )
 from backend.api.routes.adventures.editing.entity_update.item import hide_recipe_results
 from backend.api.routes.adventures.editing.entity_update.item_metadata import validated_switch
-from backend.api.routes.adventures.editing.schemas import EntityCreateRequest
+from backend.api.routes.adventures.editing.schemas import ITEM_STAT_MODIFIERS, EntityCreateRequest
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.models.world_entity import WorldEntity, WorldScene
@@ -82,6 +83,7 @@ async def create_template_entity(
         else default_portable,
         goal=str(payload.goal or "").strip() or None,
         character=str(payload.character or "").strip() or None,
+        npc_type=normalize_npc_type(payload.npc_type) if payload.entity_type == "NPC" else None,
         hp=payload.hp,
         max_hp=payload.hp,
         mana=payload.mana,
@@ -97,7 +99,7 @@ async def create_template_entity(
         inventory=list(payload.inventory or []),
         wearable_slots=payload.wearable_slots,
         combination_ingredients=payload.combination_ingredients,
-        stat_modifier_strength=payload.stat_modifier_strength,
+        **{field: getattr(payload, field) for field in ITEM_STAT_MODIFIERS},
     )
     db.add(entity)
     await hide_recipe_results(db, template_id, entity)

@@ -22,6 +22,9 @@ const props = defineProps<{
   initialTurns?: number
   initialNarrationStyle?: string | null
   initialCompression?: boolean
+  /** NPC chatter switch; only shown when the adventure enables chatter. */
+  initialNpcChatter?: boolean
+  npcChatterAvailable?: boolean
   initialAutoSpeech?: boolean
   initialAutoSpeakSettings?: AutoSpeakSettings
   initialLanguage?: string
@@ -54,6 +57,7 @@ const narrationStyle = ref<NarrationStyle>(
   isNarrationStyle(props.initialNarrationStyle) ? props.initialNarrationStyle : DEFAULT_NARRATION_STYLE
 )
 const enableCompression = ref(props.initialCompression ?? true)
+const npcChatter = ref(props.initialNpcChatter ?? true)
 const autoSpeech = ref(props.initialAutoSpeech ?? false)
 const autoSpeakSettings = ref<AutoSpeakSettings>({ ...(props.initialAutoSpeakSettings ?? DEFAULT_AUTO_SPEAK_SETTINGS) })
 const language = ref(props.initialLanguage ?? '')
@@ -92,6 +96,7 @@ function save() {
     turns: turns.value,
     narrationStyle: narrationStyle.value,
     enableCompression: enableCompression.value,
+    npcChatter: npcChatter.value,
     autoSpeech: autoSpeech.value,
     autoSpeakSettings: { ...autoSpeakSettings.value },
     language: language.value,
@@ -191,6 +196,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
           v-model:narration-style="narrationStyle"
           v-model:turns="turns"
           v-model:enable-compression="enableCompression"
+          v-model:npc-chatter="npcChatter"
+          :npc-chatter-available="!!props.npcChatterAvailable"
         />
         <SettingsVoiceTab
           v-else-if="activeTab === 'voice'"

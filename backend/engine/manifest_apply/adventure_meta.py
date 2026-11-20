@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
@@ -55,6 +56,7 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("can_damage_npcs", None, False),
     ("npcs_can_damage_protagonist", None, False),
     ("game_over_rules", None, False),
+    ("npc_conversations", normalize_conversation_settings, False),
     ("audio_enabled", bool, False),
     ("selected_image_styles", None, True),
     ("selected_tone", None, True),
@@ -296,3 +298,6 @@ def apply_final_adventure_fields(ctx: ApplyContext) -> None:
     )
     adventure.is_ready = False  # type: ignore[assignment]
     adventure.original_manifest = ctx.manifest  # type: ignore[assignment]
+    dyn_gen = adventure_field(ctx.manifest, "dynamic_generation")
+    if isinstance(dyn_gen, dict):
+        adventure.dynamic_generation = dyn_gen  # type: ignore[assignment]

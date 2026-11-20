@@ -95,6 +95,30 @@ def _ending(manager: GameTurnManager, script_context: Any) -> Optional[tuple[str
     return None
 
 
+def last_sequence_ends_adventure(adventure: Any, state: Any) -> bool:
+    """All sequences are done and the adventure has no deterministic win guard of its own.
+
+    With a ``completed_guard_expression`` only that guard (or ``tw.game.win``) ends the
+    adventure: finishing the last chapter then just leaves the player in the world.
+    """
+    from backend.api.routes.adventures.sequence_progress import (
+        _is_sequence_completed_in_state,
+        _ordered_sequences,
+    )
+
+    win_guard = getattr(state, "completed_guard_expression", None) or getattr(
+        adventure, "completed_guard_expression", None
+    )
+    if isinstance(win_guard, str) and win_guard.strip():
+        return False
+    sequences = _ordered_sequences(adventure)
+    if not sequences:
+        return False
+    return state.active_sequence_id is None and all(
+        _is_sequence_completed_in_state(state, s.get("id")) for s in sequences
+    )
+
+
 async def apply_out_of_turn_progress(manager: GameTurnManager) -> tuple[list[Any], Optional[str]]:
     """Completes quests and awards, advances sequences and ends the adventure if a guard holds.
 
@@ -106,8 +130,14 @@ async def apply_out_of_turn_progress(manager: GameTurnManager) -> tuple[list[Any
     messages = await _quests_and_awards(manager, context)
     messages.extend(await _advance_sequences(manager, context))
     ending = _ending(manager, await manager._build_script_context())
-    if ending is None:
-        return messages, None
-    status, note = ending
-    await manager._finalize_session(status, note)
-    return messages, status
+    if ending is not None:
+        status, note = ending
+        await manager._finalize_session(status, note)
+        return messages, status
+    if getattr(manager.state, "is_completed", False) is True or last_sequence_ends_adventure(
+        manager.adventure, manager.state
+    ):
+        status, note = "completed", "Victory achieved!"
+        await manager._finalize_session(status, note)
+        return messages, status
+    return messages, None

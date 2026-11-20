@@ -70,5 +70,5 @@ export function renderEntityRefsHtml(escapedHtml: string, tagClass: string): str
 /** In-game counterpart of formatObjectIds: escaped text with references shown by name. */
 export function formatEntityRefs(text: string | null | undefined): string {
   if (!text) return ''
-  return renderEntityRefsHtml(escapeHtml(text.replace(/\n/g, '\n')), 'object-id-tag')
+  return renderEntityRefsHtml(escapeHtml(text), 'object-id-tag')
 }

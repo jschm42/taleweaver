@@ -1,3 +1,5 @@
+from typing import Any
+
 from backend.models.avatar import Avatar
 
 # Canonical stat names for display
@@ -74,9 +76,17 @@ _ARG_TRIGGERS = {
     "/container_drop_scene": "[TRIGGER_CONTAINER_DROP_SCENE]",
     "/container_put_items": "[TRIGGER_CONTAINER_PUT_ITEMS]",
     "/give_items": "[TRIGGER_GIVE_ITEMS]",
+    "/companion": "[TRIGGER_COMPANION]",
+    "/recruit": "[TRIGGER_COMPANION_RECRUIT]",
+    "/companion_give": "[TRIGGER_COMPANION_GIVE]",
+    "/companion_take": "[TRIGGER_COMPANION_TAKE]",
+    "/companion_equip": "[TRIGGER_COMPANION_EQUIP]",
+    "/companion_unequip": "[TRIGGER_COMPANION_UNEQUIP]",
+    "/companion_ability": "[TRIGGER_COMPANION_ABILITY]",
     "/save": "[TRIGGER_SAVE]",
     "/say": "[TRIGGER_SAY]",
     "/speak": "[TRIGGER_SAY]",
+    "/greet": "[TRIGGER_GREET]",
     "/inspect": "[TRIGGER_INSPECT]",
     "/read": "[TRIGGER_READ]",
     "/push": "[TRIGGER_PUSH]",
@@ -92,6 +102,7 @@ _FIXED_TRIGGERS = {
     "/lookaround": "[TRIGGER_LOOKAROUND]",
     "/look": "[TRIGGER_LOOKAROUND]",
     "/rest": "[TRIGGER_REST]",
+    "/listen": "[TRIGGER_LISTEN]",
     "/rule-pass": "[RULE_PASS]",
 }
 
@@ -117,22 +128,67 @@ _OFFHAND_KEYWORDS = ("shield", "buckler", "torch")
 
 
 def _find_inventory_index(avatar: Avatar, item_name: str) -> int:
+    target = item_name.strip().lower()
     for idx, item in enumerate(avatar.inventory):
-        if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
+        if not isinstance(item, dict):
+            continue
+        if item.get("name", "").lower() == target:
+            return idx
+        if str(item.get("id", "")).lower() == target:
             return idx
     return -1
 
 
-def _resolve_equip_slot(item: dict) -> str | None:
-    """Determines the target slot for an item, guessing for weapons and generic hand items."""
+def _is_compatible_with_preferred_slot(item: dict, pref: str) -> bool:
+    norm_pref = _SLOT_ALIASES.get(pref, pref)
+    wearable = item.get("wearable_slots")
+    if isinstance(wearable, list):
+        norm_wearables = {_SLOT_ALIASES.get(s, s).lower() for s in wearable}
+        if norm_pref.lower() in norm_wearables:
+            return True
+    elif (
+        isinstance(wearable, str)
+        and norm_pref.lower() == _SLOT_ALIASES.get(wearable, wearable).lower()
+    ):
+        return True
+
+    item_slot = item.get("slot")
+    if item_slot and _SLOT_ALIASES.get(item_slot, item_slot).lower() == norm_pref.lower():
+        return True
+    if item.get("item_type") == "WEAPON" and norm_pref in ("MainHand", "OffHand"):
+        return True
+    return norm_pref in _DEFAULT_SLOTS
+
+
+def _resolve_wearable_slot(wearable: Any, avatar: Avatar | None) -> str | None:
+    if isinstance(wearable, str) and wearable:
+        return _SLOT_ALIASES.get(wearable, wearable)
+    if not (isinstance(wearable, list) and wearable):
+        return None
+    equipment = getattr(avatar, "equipment", None) or {}
+    for candidate in wearable:
+        cand_norm = _SLOT_ALIASES.get(candidate, candidate)
+        if equipment.get(cand_norm) is None:
+            return cand_norm
+    return _SLOT_ALIASES.get(wearable[0], wearable[0])
+
+
+def _resolve_equip_slot(
+    item: dict, preferred_slot: str | None = None, avatar: Avatar | None = None
+) -> str | None:
+    """Determines the target slot for an item, taking preferred_slot or wearable_slots into account."""
     from backend.engine.rules.item_logic import get_item_slot
 
-    slot = item.get("slot", "Hands")  # Fallback to hands if missing
-    slot = _SLOT_ALIASES.get(slot, slot)
-    if not slot or slot == "None":
-        slot = item.get("slot")
-    if slot and slot != "Hands":
-        return slot
+    if preferred_slot and _is_compatible_with_preferred_slot(item, preferred_slot):
+        return _SLOT_ALIASES.get(preferred_slot, preferred_slot)
+
+    wearable_res = _resolve_wearable_slot(item.get("wearable_slots"), avatar)
+    if wearable_res:
+        return wearable_res
+
+    slot = item.get("slot")
+    if slot and slot != "None":
+        return _SLOT_ALIASES.get(slot, slot)
 
     item_type = item.get("item_type")
     name = item.get("name", "").lower()
@@ -140,7 +196,6 @@ def _resolve_equip_slot(item: dict) -> str | None:
         return "MainHand"
     if item_type == "TOOL" and any(kw in name for kw in _OFFHAND_KEYWORDS):
         return "OffHand"
-    # Last resort: try guessing
     return get_item_slot(item.get("name", ""), item.get("item_type", "PICKABLE"))
 
 
@@ -215,6 +270,7 @@ class CommandParser:
             "- `/help`: Show this list.",
             "- `/map`: Toggle the world map.",
             "- `/say <text>`: Speak directly to NPCs (and others) in quoted/out-loud form.",
+            "- `/greet <target>`: Greet an NPC with a short, friendly greeting (counts as an interaction).",
             "- `/inspect <target>`: Inspect an NPC, object or the surroundings.",
             "- `/open <target>`: Open a container or mechanism.",
             "- `/read <target>`: Read a note, book, sign, scroll, or text log.",
@@ -225,6 +281,7 @@ class CommandParser:
             "- `/pull <target>`: Pull an object, lever, mechanism, or obstacle.",
             "- `/switch <target> <state> [code]`: Set a switch/mechanism to a target state.",
             "- `/rest`: Take a short rest if the situation allows it.",
+            "- `/listen`: Keep quiet and listen to what the people around you are saying.",
             "- `/equip <item>`: Equip an item from your inventory.",
             "- `/drop <item>`: Drop an item into the current room.",
             "- `/take <item>`: Pick up an item from the room.",
@@ -234,6 +291,11 @@ class CommandParser:
             "- `/container_drop_scene <container>`: Drop all container items into the scene.",
             "- `/container_put_items <container> | <item>[, <item> ...]`: Put inventory items into a container.",
             "- `/give_items <npc> | <item>[, <item> ...]`: Give inventory items to an NPC in the scene (typing `give <item> to <npc>` works too).",
+            "- `/companion wait` / `/companion follow`: Tell your companion to stay here or to come along (saying it in the chat works too).",
+            "- `/companion_give <item>[, <item> ...]` / `/companion_take <item>[, ...]`: Hand items to your companion or take items it carries.",
+            "- `/recruit <npc> [| <item>]`: Ask an NPC to join your party (some want an item first).",
+            "- `/companion_equip <item>[ | <slot>]` / `/companion_unequip <slot>`: Equip your companion with an item it carries.",
+            "- `/companion_ability <ability> on|off`: Choose which abilities your companion uses in combat.",
             "- `/unequip <slot>`: Remove an item from a slot.",
             "- `/consume <item>`: Use a consumable item.",
             "- `/combine <item1> <item2>`: Attempt to combine two objects.",
@@ -245,6 +307,8 @@ class CommandParser:
             "- `/sheet`: Open your character sheet.",
             "- `/playagent [on/off]`: Activate or deactivate the autonomous Play-Agent.",
             "- `/playagent personality <type>`: Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom).",
+            "- `/playagent dialogue <taciturn|normal|talkative|roleplay>`: How much the Play-Agent talks with characters.",
+            "- `/instruct <text>`: Tell the Play-Agent what to do next (`/instruct clear` removes it). While it plays, plain chat text works too.",
             "- `/playagent delay <seconds>`: Pause between two Play-Agent steps in Auto mode (0 = none).",
             "- `/playagent tts on/off`: Let the Play-Agent wait until text-to-speech has finished.",
         ]
@@ -262,14 +326,18 @@ class CommandParser:
     @staticmethod
     def _handle_equip(avatar: Avatar, item_name: str) -> str:
         if not item_name:
-            return "Usage: /equip <item name>"
+            return "Usage: /equip <item name> [| <slot>]"
+
+        preferred_slot: str | None = None
+        if " | " in item_name:
+            item_name, preferred_slot = [p.strip() for p in item_name.split(" | ", 1)]
 
         item_idx = _find_inventory_index(avatar, item_name)
         if item_idx == -1:
             return f"You don't have '{item_name}' in your inventory."
 
         item_to_equip = avatar.inventory[item_idx]
-        slot = _resolve_equip_slot(item_to_equip)
+        slot = _resolve_equip_slot(item_to_equip, preferred_slot=preferred_slot, avatar=avatar)
         if not slot:
             return f"'{item_to_equip.get('name')}' cannot be equipped."
         if not _ensure_equipment_slot(avatar, slot):
@@ -310,9 +378,18 @@ class CommandParser:
         if not slot_name:
             return "Usage: /unequip <slot name>"
 
-        # Normalize slot name
+        # Normalize slot name or find slot by equipped item name / ID
         slots = list(avatar.equipment.keys())
-        match = next((s for s in slots if s.lower() == slot_name.lower()), None)
+        target = slot_name.strip().lower()
+        match = next((s for s in slots if s.lower() == target), None)
+        if not match:
+            for s, eq_item in avatar.equipment.items():
+                if isinstance(eq_item, dict) and (
+                    eq_item.get("name", "").lower() == target
+                    or str(eq_item.get("id", "")).lower() == target
+                ):
+                    match = s
+                    break
         if not match:
             return f"Invalid slot: {slot_name}. Available: {', '.join(slots)}"
 

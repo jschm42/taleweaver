@@ -4,7 +4,7 @@
   --tw-accent: #c8102e;
   --tw-accent-soft: #c8102e;
   --tw-player: #d4a017;
-  --tw-target: #9fb7c9;
+  --tw-target: #b9cddc;
 
   --tw-font-body: 'Courier Prime', 'Courier New', monospace;
   --tw-font-dialogue: 'Newsreader', Georgia, serif;
@@ -21,16 +21,26 @@
   --tw-dropcap-shadow: none;
   /* Handwritten tags need dark ink on the cream case file. */
   --tw-narration-tag-ink: #8f0b21;
+  --tw-voice-tag-ink: #f0dc8c;
+  --tw-label-bg: transparent;
+  --tw-label-ink: #453f33;
+  --tw-speaker-ink: #ffffff;
+  --tw-speaker-bg: var(--tw-accent);
+  --tw-speaker-player-ink: #141414;
+  --tw-speaker-player-bg: #e6e2d7;
+  --tw-speaker-target-ink: #b9cddc;
 
-  --tw-bubble-bg: #0f0f10;
-  --tw-bubble-tail-fill: #0f0f10;
-  --tw-bubble-ink: #efe8d6;
-  --tw-bubble-color: #3a3a3a;
+  --tw-bubble-bg: #121213;
+  --tw-bubble-tail-fill: #121213;
+  --tw-bubble-ink: #f2ecdc;
+  --tw-bubble-color: #55524b;
   --tw-bubble-border-width: 1px;
   --tw-bubble-radius: 2px;
   --tw-bubble-shadow: 0 14px 40px rgba(0, 0, 0, 0.7);
 
   --tw-strong-ink: #8f0b21;
+  /* Red ink vanishes on the black dialogue cards: emphasis there is highlighter yellow. */
+  --tw-bubble-strong-ink: #f0dc8c;
 
   --tw-panel-bg: rgba(14, 14, 15, 0.94);
   --tw-panel-border: #333333;
@@ -43,10 +53,10 @@
   --tw-card-ink: #1d1b17;
   --tw-card-muted: #5b5547;
 
-  --tw-tab-bg: #8c7a58;
-  --tw-tab-ink: #141414;
+  --tw-tab-bg: #a8956d;
+  --tw-tab-ink: #17140e;
   --tw-tab-border: transparent;
-  --tw-tab-active-bg: #d8c79f;
+  --tw-tab-active-bg: #ebe0c2;
   --tw-tab-active-ink: #141414;
   --tw-tab-active-border: transparent;
   --tw-tab-radius: 6px 6px 0 0;
@@ -70,7 +80,6 @@
   border-radius: 0;
   border-bottom: 1px dashed #9b927c;
   background: none;
-  color: #4a4538;
   font-size: 0.75rem;
   font-weight: 400;
   letter-spacing: 0.16em;
@@ -97,21 +106,21 @@
 [data-skin='noir'] .tw-speaker {
   border: 0;
   border-radius: 0;
-  background: var(--tw-accent);
-  color: #ffffff;
+  background: var(--tw-speaker-bg);
+  color: var(--tw-speaker-ink);
   font-family: 'Special Elite', 'Courier New', monospace;
   font-weight: 400;
   letter-spacing: 0.14em;
 }
 
 [data-skin='noir'] .tw-speaker--player {
-  background: #e6e2d7;
-  color: #141414;
+  background: var(--tw-speaker-player-bg);
+  color: var(--tw-speaker-player-ink);
 }
 
 [data-skin='noir'] .tw-speaker--target {
   background: transparent;
-  color: var(--tw-target);
+  color: var(--tw-speaker-target-ink);
   border-bottom: 1px solid currentColor;
 }
 
@@ -119,7 +128,7 @@
   padding: 0 0.25rem;
   border: 0;
   background: none;
-  color: #e9d27a;
+  color: var(--tw-voice-tag-ink);
   font-family: 'Caveat', cursive;
   font-size: 1.3rem;
   font-weight: 600;

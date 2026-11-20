@@ -16,6 +16,7 @@ from backend.core.world_validation.context import (
     ref_ids,
     scene_id,
 )
+from backend.engine.world.dynamic_scene_schemas import is_dynamic_exit_dict
 from backend.schemas.validation import ValidationFinding
 
 _EXIT_KEY_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock", "unlock_expression")
@@ -83,7 +84,7 @@ def check_exit_targets_exist(ctx: ValidationContext) -> list[ValidationFinding]:
     for ex in ctx.exits:
         location = f"exit:{ex.get('id', '?')}"
         to_id, from_id = ex.get("to_scene_id"), ex.get("from_scene_id")
-        if to_id and to_id not in ctx.scene_ids:
+        if to_id and to_id not in ctx.scene_ids and not is_dynamic_exit_dict(ex):
             findings.append(
                 finding(
                     "error",

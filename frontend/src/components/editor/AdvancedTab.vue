@@ -39,7 +39,7 @@ const emit = defineEmits<{
       </div>
 
       <!-- Data Debug -->
-      <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6 md:col-span-2">
+      <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
         <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
           <i class="ra ra-crystal-ball text-cyan-500"></i> Adventure Data Debug
         </h4>

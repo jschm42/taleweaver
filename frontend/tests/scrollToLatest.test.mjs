@@ -118,3 +118,36 @@ test('useScrollToLatest auto-follows on initial content and allows scrolling up'
   assert.equal(containerEl.scrollTop, 1200)
 })
 
+
+test('scrolling to the very end pins following to the bottom until a new exchange starts', async () => {
+  const { ref } = await import('vue')
+  const { useScrollToLatest } = await loadTsModule(
+    '../src/components/game/immersive/useScrollToLatest.ts'
+  )
+
+  const containerEl = createMockContainer({ scrollHeight: 1200, clientHeight: 400, scrollTop: 0 })
+  // Smooth scrolling: the browser only gets halfway before the next measure runs.
+  containerEl.scrollTo = function () {
+    this.scrollTop = 100
+  }
+  let latestExchangeTop = 150
+  const { scrollToPosition, isFollowing } = useScrollToLatest(ref(containerEl), {
+    maxFollowTop: () => latestExchangeTop,
+  })
+  flushRaf()
+
+  // The last spoken part asks for the very end; a measure (streaming text) interrupts the scroll.
+  scrollToPosition(containerEl.scrollHeight)
+  containerEl.scrollHeight = 1400
+  containerEl.dispatchEvent('scroll')
+  flushRaf()
+  assert.equal(containerEl.scrollTop, 1000, 'pinned following goes to the real bottom, not to maxFollowTop')
+  assert.equal(isFollowing.value, true)
+
+  // A new exchange starts further down: the cap at its start applies again.
+  latestExchangeTop = 1100
+  containerEl.scrollHeight = 2000
+  containerEl.dispatchEvent('scroll')
+  flushRaf()
+  assert.equal(containerEl.scrollTop, 1100, 'a new exchange ends the pin')
+})

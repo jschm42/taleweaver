@@ -63,6 +63,8 @@ class GameSessionUpdate(BaseModel):
     ui_skin: Optional[str] = None
     # Auto-Speak flags of this session (enabled, gm, protagonist, npcs, system, readables)
     tts_auto_speak: Optional[dict[str, Any]] = None
+    # Player switch for NPC chatter (conversations the NPCs start by themselves)
+    npc_chatter: Optional[bool] = None
 
     @field_validator("ui_skin")
     @classmethod

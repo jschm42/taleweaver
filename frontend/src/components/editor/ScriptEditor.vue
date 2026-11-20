@@ -605,7 +605,8 @@ defineExpose({
       </div>
 
       <!-- Actions -->
-      <div v-if="showActions" class="flex items-center gap-1.5 shrink-0">
+      <!-- Wraps in narrow columns (dialogs, two-column forms) instead of overflowing. -->
+      <div v-if="showActions" class="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
         <!-- In-Editor Search Toggle -->
         <button
           v-if="allowSearch"

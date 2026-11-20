@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from backend.core.style_catalog import build_blueprint_image_styles, build_blueprint_tone
+from backend.engine.blueprint.conversation_converters import (
+    conversation_topic,
+    npc_relation,
+)
 from backend.engine.blueprint.converters import (
     STAT_ALIASES,
     ability_area,
@@ -21,12 +25,18 @@ from backend.engine.blueprint.converters import (
     ability_damage,
     boolean,
     choice,
+    dynamic_entity_types,
+    dynamic_instructions_scope,
+    dynamic_max_depth,
+    dynamic_max_npcs,
+    dynamic_zone_id,
     ident,
     ident_list,
     integer,
     main_attack,
     movement,
     one_way,
+    percent,
     stat_bonus,
     switch_outcome,
     switch_states,
@@ -75,6 +85,24 @@ def _hook(table: dict[str, FieldSpec], key: str, target: str) -> None:
     table[f"{key}_text"] = FieldSpec(f"{target}_text")
 
 
+_DYNAMIC_MODEL_CONVERT = choice(
+    "mechanics",
+    "narration",
+    "world_builder",
+    aliases={
+        "small": "mechanics",
+        "pass1": "mechanics",
+        "complex": "narration",
+        "narrative": "narration",
+        "story": "narration",
+        "pass2": "narration",
+        "worldbuilder": "world_builder",
+        "generator": "world_builder",
+        "world": "world_builder",
+        "pass3": "world_builder",
+    },
+)
+
 WORLD_KEYS: dict[str, FieldSpec] = {
     "language": FieldSpec("language"),
     "image_style": FieldSpec("selected_image_styles", build_blueprint_image_styles),
@@ -93,11 +121,78 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "title_music": _ref("title_track_id"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
+    # At 0 HP: game_over (default) or respawn at the last revival point with a share of max HP.
+    "at_zero_hp": FieldSpec(
+        "game_over_rules.on_zero_hp",
+        choice("game_over", "respawn", aliases={"gameover": "game_over", "revive": "respawn"}),
+    ),
+    "respawn_hp": FieldSpec("game_over_rules.respawn_hp_percent", percent),
+    # NPC conversations: NPCs talk with each other on their own; gossip spreads memories.
+    "npc_chatter": FieldSpec(
+        "npc_conversations.chatter",
+        choice("OFF", "RARE", "NORMAL", "LIVELY", aliases={"none": "OFF", "often": "LIVELY"}),
+    ),
+    "gossip": FieldSpec("npc_conversations.gossip", boolean),
     "win_guard": _expr("completed_guard_expression"),
     "lose_guard": _expr("gameover_guard_expression"),
     "init_script": _script("init_script"),
     "progression": FieldSpec("sequence_progression_mode", choice("linear", "dynamic")),
     "sequence_progression": FieldSpec("sequence_progression_mode", choice("linear", "dynamic")),
+    "dynamic_scene_images": FieldSpec(
+        "dynamic_generation.scene_image_mode", choice("off", "inherit", "simple", "hq")
+    ),
+    "dynamic_scene_image_mode": FieldSpec(
+        "dynamic_generation.scene_image_mode", choice("off", "inherit", "simple", "hq")
+    ),
+    "dynamic_npc_images": FieldSpec(
+        "dynamic_generation.npc_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_npc_image_mode": FieldSpec(
+        "dynamic_generation.npc_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_item_images": FieldSpec(
+        "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_item_image_mode": FieldSpec(
+        "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_object_images": FieldSpec(
+        "dynamic_generation.item_image_mode", choice("off", "simple", "hq")
+    ),
+    "dynamic_audio": FieldSpec(
+        "dynamic_generation.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "dynamic_audio_mode": FieldSpec(
+        "dynamic_generation.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "dynamic_music": FieldSpec(
+        "dynamic_generation.audio_mode",
+        choice(
+            "inherit",
+            "empty",
+            "generate",
+            aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+        ),
+    ),
+    "dynamic_model": FieldSpec("dynamic_generation.generation_model", _DYNAMIC_MODEL_CONVERT),
+    "dynamic_generation_model": FieldSpec(
+        "dynamic_generation.generation_model", _DYNAMIC_MODEL_CONVERT
+    ),
+    "dynamic_max_npcs": FieldSpec("dynamic_generation.max_npcs", dynamic_max_npcs),
+    "dynamic_quotes": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
+    "dynamic_interlude": FieldSpec("dynamic_generation.interlude_quote_enabled", boolean),
 }
 
 PROTAGONIST_KEYS: dict[str, FieldSpec] = {
@@ -118,13 +213,55 @@ for _alias, _stat in STAT_ALIASES.items():
 _hook(PROTAGONIST_KEYS, "on_hp_change", "on_hp_change")
 _hook(PROTAGONIST_KEYS, "on_status_change", "on_status_change")
 
+_DYNAMIC_DANGER_CONVERT = choice("peaceful", "low", "medium", "high", "deadly", "random")
+_DYNAMIC_AUDIO_CONVERT = choice(
+    "inherit",
+    "empty",
+    "generate",
+    aliases={"off": "empty", "disabled": "empty", "none": "empty", "silent": "empty"},
+)
+_DYNAMIC_COMMON_KEYS: dict[str, FieldSpec] = {
+    "dynamic_zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "zone": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "zone_id": FieldSpec("dynamic_zone.zone_id", dynamic_zone_id),
+    "theme": FieldSpec("dynamic_zone.theme"),
+    "zone_theme": FieldSpec("dynamic_zone.theme"),
+    "danger": FieldSpec("dynamic_zone.danger_level", _DYNAMIC_DANGER_CONVERT),
+    "danger_level": FieldSpec("dynamic_zone.danger_level", _DYNAMIC_DANGER_CONVERT),
+    "max_npcs": FieldSpec("dynamic_zone.max_npcs", dynamic_max_npcs),
+    "audio_mode": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "music_mode": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "dynamic_audio": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "dynamic_music": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "generation_model": FieldSpec("dynamic_zone.generation_model", _DYNAMIC_MODEL_CONVERT),
+    "dynamic_model": FieldSpec("dynamic_zone.generation_model", _DYNAMIC_MODEL_CONVERT),
+    "allowed_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "allowed_entities": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "allowed_entity_types": FieldSpec("dynamic_zone.allowed_entity_types", dynamic_entity_types),
+    "instructions": FieldSpec("dynamic_zone.instructions"),
+    "prompt": FieldSpec("dynamic_zone.instructions"),
+    "zone_instructions": FieldSpec("dynamic_zone.instructions"),
+    "instructions_scope": FieldSpec("dynamic_zone.instructions_scope", dynamic_instructions_scope),
+    "scope": FieldSpec("dynamic_zone.instructions_scope", dynamic_instructions_scope),
+    "cluster_consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "consistent_cluster": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "consistency": FieldSpec("dynamic_zone.cluster_consistency", boolean),
+    "on_after_generated": _script("dynamic_zone.on_after_generated_script"),
+    "on_after_generated_script": _script("dynamic_zone.on_after_generated_script"),
+}
+
 SCENE_KEYS: dict[str, FieldSpec] = {
     "decor": FieldSpec("decorative_objects", text_list),
     # Track of the audio library ([Audio: ID]) that plays in this scene.
     "audio": _ref("audio_track_id"),
     "music": _ref("audio_track_id"),
+    # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
+    "respawn": FieldSpec("is_respawn_point", boolean),
+    "revival_point": FieldSpec("is_respawn_point", boolean),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
+    "dynamic": FieldSpec("dynamic_zone.enabled", boolean),
+    **_DYNAMIC_COMMON_KEYS,
 }
 _hook(SCENE_KEYS, "on_enter", "on_enter_scene")
 _hook(SCENE_KEYS, "on_leave", "on_leave_scene")
@@ -142,6 +279,18 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     "guard": _expr("unlock_expression"),
     "bidirectional": FieldSpec("is_bidirectional", boolean),
     "one_way": FieldSpec("is_bidirectional", one_way),
+    **_DYNAMIC_COMMON_KEYS,
+    "max_depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
+    "depth": FieldSpec("dynamic_zone.max_depth", dynamic_max_depth),
+    "audio": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "music": FieldSpec("dynamic_zone.audio_mode", _DYNAMIC_AUDIO_CONVERT),
+    "cul_de_sac": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
+    "cul_de_sac_on_max_depth": FieldSpec("dynamic_zone.cul_de_sac_on_max_depth", boolean),
+    "return_direction": FieldSpec("dynamic_zone.return_exit_direction"),
+    "return_exit_direction": FieldSpec("dynamic_zone.return_exit_direction"),
+    # Solo passage: the protagonist's companion stays behind.
+    "companions": FieldSpec("companions_allowed", boolean),
+    "solo": FieldSpec("companions_allowed", one_way),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")
@@ -164,7 +313,7 @@ NPC_KEYS: dict[str, FieldSpec] = {
     "attackable": FieldSpec("is_attackable", boolean),
     "killable": FieldSpec("is_killable", boolean),
     "hidden": FieldSpec("is_hidden", boolean),
-    "reveal": FieldSpec("reveal_rule"),
+    "reveal_guard": _expr("reveal_guard_expression"),
     "inventory": _refs("inventory"),
     "main_attack": FieldSpec("main_attack", main_attack),
     # Deprecated: NPC equipment items (fallback only). Use main_attack and ac instead.
@@ -189,6 +338,23 @@ NPC_KEYS: dict[str, FieldSpec] = {
         ),
     ),
     "special_chance": FieldSpec("special_chance", integer),
+    # NPC memory: lasting facts about the protagonist (0 = off).
+    "memory": FieldSpec("memory_slots", integer),
+    # NPC conversations: how this NPC sees others, opt-out of chatter, overheard topics.
+    "relation": FieldSpec("relations", npc_relation, repeat=True),
+    "chatty": FieldSpec("chatty", boolean),
+    "topic": FieldSpec("conversation_topics", conversation_topic, repeat=True),
+    # Companion (sidekick): any of these keys makes the NPC a companion.
+    "companion": FieldSpec("companion.recruitable", boolean),
+    "in_party": FieldSpec("companion.starts_in_party", boolean),
+    "tactics": FieldSpec(
+        "companion.tactics", choice("BALANCED", "OFFENSIVE", "DEFENSIVE", "SUPPORT")
+    ),
+    "banter": FieldSpec("companion.banter", choice("NORMAL", "QUIET", "CHATTY")),
+    "downed_recovery": FieldSpec("companion.downed_recovery"),
+    "recruit": FieldSpec("companion.recruit_mode", choice("SCRIPT", "INSTANT", "ITEM")),
+    "recruit_item": FieldSpec("companion.recruit_item_id", ident),
+    "recruit_hint": FieldSpec("companion.recruit_hint"),
 }
 for _alias, _stat in STAT_ALIASES.items():
     NPC_KEYS[_alias] = FieldSpec(_stat, integer)
@@ -196,6 +362,8 @@ _hook(NPC_KEYS, "on_defeat", "on_defeat")
 _hook(NPC_KEYS, "on_meet", "on_protagonist_enters_scene")
 _hook(NPC_KEYS, "on_interact", "on_interact")
 _hook(NPC_KEYS, "on_receive_item", "on_receive_item")
+_hook(NPC_KEYS, "on_recruit", "on_recruit_success")
+_hook(NPC_KEYS, "on_recruit_fail", "on_recruit_failure")
 
 ITEM_TYPES = (
     "CONSUMABLE",
@@ -221,6 +389,8 @@ ITEM_KEYS: dict[str, FieldSpec] = {
     "reveal": FieldSpec("reveal_rule"),
     "portable": FieldSpec("is_portable", boolean),
     "locked": FieldSpec("locked", boolean),
+    "quest": FieldSpec("quest_item", boolean),
+    "quest_item": FieldSpec("quest_item", boolean),
     "code": FieldSpec("code_to_unlock"),
     "unlock_item": _ref("item_to_unlock"),
     "unlock_rule": FieldSpec("rule_to_unlock"),
@@ -289,11 +459,19 @@ _GOAL_KEYS: dict[str, FieldSpec] = {
 
 SEQUENCE_KEYS: dict[str, FieldSpec] = {
     **_GOAL_KEYS,
+    "description": FieldSpec("description"),
     "end": FieldSpec("end_condition"),
     "walkthrough": FieldSpec("walkthrough"),
     # Entering this scene starts the sequence (mainly for dynamic progression).
     "activation": _ref("activation_scene_id"),
+    # Solo chapter: the companion does not follow into new scenes.
+    "companions": FieldSpec("companions_allowed", boolean),
+    "solo": FieldSpec("companions_allowed", one_way),
+    # Deadly chapter: 0 HP ends the adventure even in respawn mode.
+    "respawn": FieldSpec("respawn_allowed", boolean),
 }
+for _alias in ("lore", "intro", "chapter_description"):
+    SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]
 for _alias in ("activation_scene", "activation_scene_id", "start_in"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["activation"]
 # Legacy line prefixes understood by the original sequence parser.
@@ -335,6 +513,8 @@ SCRIPT_TRIGGERS = (
     "on_logic_pass_done",
     "on_narration_done",
     "on_time_reached",
+    "on_respawn",
+    "on_conversation_heard",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),
@@ -370,6 +550,7 @@ ABILITY_KEYS: dict[str, FieldSpec] = {
     ),
     "dc": FieldSpec("difficulty", integer),
     "damage": FieldSpec("*", ability_damage),
+    "heals": FieldSpec("heal_target", choice("self", "ally")),
     "area": FieldSpec("*", ability_area),
     "save": FieldSpec("save_stat", choice(*_ROLL_STATS, aliases=_ROLL_STAT_ALIASES)),
     "spare_passive": FieldSpec("spares_passive", boolean),

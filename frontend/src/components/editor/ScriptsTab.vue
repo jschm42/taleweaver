@@ -16,6 +16,13 @@ import {
 import { adventureService } from '@/services/adventureService'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import InitScriptPanel from '@/components/editor/InitScriptPanel.vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 
 const props = defineProps<{
   adventure: any
@@ -80,6 +87,8 @@ const TRIGGER_OPTIONS = [
   { value: 'on_narration_done', label: 'On Narration Done', desc: 'Runs after narration generation completes' },
   { value: 'on_turn_end', label: 'On Turn End', desc: 'Runs after scene narrative and entity mutations' },
   { value: 'on_time_reached', label: 'On Time Reached', desc: 'Runs once when the in-game clock passes the target time (e.g. 90, 2h 30m, 1d)' },
+  { value: 'on_respawn', label: 'On Respawn', desc: 'Respawn mode: runs after the fallen protagonist woke up at the revival point (penalties, healing enemies)' },
+  { value: 'on_conversation_heard', label: 'On Conversation Heard', desc: 'Runs once the protagonist overheard the target conversation topic (topic id; empty = any topic)' },
 ] as const
 
 function getTriggerBadgeClass(trigger: string): string {
@@ -100,6 +109,10 @@ function getTriggerBadgeClass(trigger: string): string {
       return 'bg-purple-500/15 text-purple-300 border-purple-500/30'
     case 'on_time_reached':
       return 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+    case 'on_respawn':
+      return 'bg-red-500/15 text-red-300 border-red-500/30'
+    case 'on_conversation_heard':
+      return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
     default:
       return 'bg-slate-500/15 text-slate-300 border-slate-500/30'
   }
@@ -145,7 +158,11 @@ function openAddModal() {
   syntaxValidationResult.value = null
   showApiReference.value = false
   modalScript.value = {
-    id: `script_${Math.random().toString(36).substring(2, 8)}`,
+    id: generateEditorId({
+      prefix: EDITOR_ID_PREFIXES.SCRIPT,
+      takenIds: scripts.value.map((s) => String(s.id || '')),
+      maxLen: MAX_EDITOR_ID_LENGTH,
+    }),
     name: 'New Event Script',
     trigger: 'on_turn_start',
     target: '',
@@ -178,7 +195,12 @@ function closeModal() {
 }
 
 function duplicateScript(script: any) {
-  const newId = `script_${Math.random().toString(36).substring(2, 8)}`
+  const newId = generateEditorId({
+    prefix: EDITOR_ID_PREFIXES.SCRIPT,
+    sourceName: script.name || script.id || '',
+    takenIds: scripts.value.map((s) => String(s.id || '')),
+    maxLen: MAX_EDITOR_ID_LENGTH,
+  })
   const cloned = {
     ...script,
     id: newId,
@@ -260,20 +282,26 @@ async function checkSyntax() {
 // ---------------------------------------------------------------------------
 
 async function saveScript() {
-  const sId = (modalScript.value.id || '').trim()
+  const rawId = (modalScript.value.id || '').trim()
+  const sId = isNewScript.value ? rawId.toUpperCase() : rawId
   if (!sId) {
     emit('notify', 'Script ID is required.', 'error')
     return
   }
 
   // Validate ID format
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(sId)) {
+  if (isNewScript.value) {
+    if (!isValidEditorId(sId, MAX_EDITOR_ID_LENGTH)) {
+      emit('notify', `Script ID must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`, 'error')
+      return
+    }
+  } else if (!/^[A-Za-z0-9_-]{1,128}$/.test(sId)) {
     emit('notify', 'Script ID must only contain letters, numbers, underscores, and hyphens.', 'error')
     return
   }
 
   // Check duplicate ID if new
-  if (isNewScript.value && scripts.value.some((s) => s.id === sId)) {
+  if (isNewScript.value && scripts.value.some((s) => String(s.id || '').toUpperCase() === sId)) {
     emit('notify', `A script with ID '${sId}' already exists.`, 'error')
     return
   }
@@ -633,12 +661,18 @@ function handleTabKey(e: KeyboardEvent) {
               <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Script ID
               </label>
-              <input
+              <EditorIdInput
                 v-model="modalScript.id"
-                type="text"
+                :prefix="EDITOR_ID_PREFIXES.SCRIPT"
+                :source-name="modalScript.name"
+                :taken-ids="scripts.map((s) => String(s.id || ''))"
+                :original-id="isNewScript ? null : modalScript.id"
                 :disabled="!isNewScript"
-                placeholder="e.g. trap_chest_01"
-                class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500 disabled:opacity-60 transition-colors"
+                :max-length="MAX_EDITOR_ID_LENGTH"
+                :compact="true"
+                :required="true"
+                placeholder="SCR_TRAP_CHEST"
+                aria-label="Script ID"
               />
             </div>
 
@@ -786,7 +820,7 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.scene</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.scene.id</code>, <code>tw.scene.npcs</code> (NPCs here), <code>tw.scene.items</code>, <code>tw.scene.teleport(id)</code>
+                    <code>tw.scene.id</code>, <code>tw.scene.npcs</code> (NPCs here), <code>tw.scene.items</code>, <code>tw.scene.teleport(id)</code>, <code>tw.scene.teleport_dynamic(theme, ...)</code>
                   </p>
                 </div>
 
@@ -800,7 +834,7 @@ function handleTabKey(e: KeyboardEvent) {
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
                   <span class="font-bold text-emerald-400">tw.npcs</span>
                   <p class="text-[11px] text-slate-400 font-sans mt-0.5">
-                    <code>tw.npcs.move(npc_id, target_scene_id)</code>, <code>tw.npcs.get(npc_id)</code>, <code>tw.npcs.say(npc_id, text)</code>, <code>tw.npcs.say_directed(npc_id, direction)</code>, <code>tw.npcs.consume(npc_id, item_id)</code>
+                    <code>tw.npcs.move(npc_id, target_scene_id)</code>, <code>tw.npcs.get(npc_id)</code>, <code>tw.npcs.say(npc_id, text)</code>, <code>tw.npcs.say_directed(npc_id, direction)</code>, <code>tw.npcs.converse(a, b, topic=...)</code>, <code>tw.npcs.set_relation(a, b, kind)</code>, <code>tw.npcs.topic_heard(topic_id)</code>, <code>tw.npcs.consume(npc_id, item_id)</code>
                   </p>
                 </div>
 

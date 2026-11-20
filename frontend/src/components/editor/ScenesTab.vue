@@ -38,7 +38,58 @@ const scenes = computed<any[]>(() => {
   const source = Array.isArray(props.debugData?.scenes) && props.debugData.scenes.length > 0
     ? props.debugData.scenes
     : props.editorScenes
-  return Array.isArray(source) ? source : []
+  if (!Array.isArray(source)) return []
+  return source.filter((scene: any) => !String(scene?.id || '').trim().startsWith('DYN_'))
+})
+
+const sceneLabelById = computed<Map<string, string>>(() => {
+  const map = new Map<string, string>()
+  for (const scene of scenes.value) {
+    const id = String(scene?.id || '').trim()
+    if (!id) continue
+    map.set(id, String(scene?.label || scene?.name || id))
+  }
+  return map
+})
+
+interface DynamicPlaceholderCard {
+  key: string
+  targetId: string
+  fromSceneLabel: string
+  exitLabel: string
+  theme: string
+  maxDepth: number
+  dangerLevel: string
+  maxNpcs: number | null
+  audioMode: string | null
+}
+
+const dynamicPlaceholders = computed<DynamicPlaceholderCard[]>(() => {
+  const exits = Array.isArray(props.debugData?.exits) ? props.debugData.exits : []
+  const seen = new Set<string>()
+  const result: DynamicPlaceholderCard[] = []
+  for (const exit of exits) {
+    if (!exit?.is_dynamic) continue
+    const targetId = String(exit.to_scene_id || '').trim()
+    const key = targetId || String(exit.id || `${exit.from_scene_id}_${exit.label}`)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    const zone = exit.dynamic_zone && typeof exit.dynamic_zone === 'object' ? exit.dynamic_zone : {}
+    const fromId = String(exit.from_scene_id || '').trim()
+    const rawMaxNpcs = zone.max_npcs
+    result.push({
+      key,
+      targetId: targetId || 'DYN_ZONE',
+      fromSceneLabel: sceneLabelById.value.get(fromId) || fromId || 'Unknown scene',
+      exitLabel: String(exit.label || 'Dynamic Exit'),
+      theme: String(zone.theme || '').trim(),
+      maxDepth: Number(zone.max_depth ?? 1),
+      dangerLevel: String(zone.danger_level || 'medium'),
+      maxNpcs: rawMaxNpcs === null || rawMaxNpcs === undefined ? null : Number(rawMaxNpcs),
+      audioMode: zone.audio_mode ? String(zone.audio_mode) : null,
+    })
+  }
+  return result
 })
 
 const failedSceneImages = ref<Record<string, boolean>>({})
@@ -101,7 +152,9 @@ function isStartScene(scene: any): boolean {
 <template>
   <section class="space-y-6 animate-page-in">
     <div class="flex items-center justify-between">
-      <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ scenes.length }})</h3>
+      <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">
+        World Locations ({{ scenes.length }}{{ dynamicPlaceholders.length ? ` + ${dynamicPlaceholders.length} dynamic` : '' }})
+      </h3>
       <div class="flex items-center gap-4">
         <button @click="emit('create-new-scene')" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-2 uppercase tracking-widest transition-colors">
           <i class="ra ra-plus"></i> New Scene
@@ -118,7 +171,7 @@ function isStartScene(scene: any): boolean {
     </div>
 
     <!-- Empty State -->
-    <div v-if="!scenes.length" class="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/10 rounded-2xl bg-slate-900/30">
+    <div v-if="!scenes.length && !dynamicPlaceholders.length" class="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/10 rounded-2xl bg-slate-900/30">
       <i class="ra ra-map text-4xl text-slate-600 mb-4"></i>
       <p class="text-sm font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">No scenes yet</p>
       <p class="text-xs text-slate-600 mb-6">Create your first world location to get started.</p>
@@ -128,7 +181,7 @@ function isStartScene(scene: any): boolean {
     </div>
 
     <!-- Scene Grid -->
-    <div v-if="scenes.length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <div v-if="scenes.length || dynamicPlaceholders.length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
       <div
         v-for="(scene, idx) in scenes"
         :key="'scene_' + (scene.id || idx)"
@@ -193,6 +246,47 @@ function isStartScene(scene: any): boolean {
             <button @click.stop="emit('open-upload-picker', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>
             <button v-if="scene.image_url" @click.stop="emit('download-asset', scene.image_url, `${scene.label || scene.name || 'scene'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Runtime Placeholder Cards (Non-Editable, No Context Menu) -->
+      <div
+        v-for="dyn in dynamicPlaceholders"
+        :key="'dyn_placeholder_' + dyn.key"
+        class="relative aspect-[3/2] bg-gradient-to-br from-violet-950/35 via-slate-900/90 to-indigo-950/30 border-2 border-dashed border-violet-500/45 rounded-2xl shadow-xl p-4 flex flex-col justify-between overflow-hidden select-none cursor-default"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <span class="inline-flex items-center gap-1 rounded-full bg-violet-500/20 border border-violet-400/40 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-200">
+            <span>✦</span>
+            <span>Dynamic Scene</span>
+          </span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-violet-300/75">
+            Generated at Runtime
+          </span>
+        </div>
+
+        <div class="space-y-1.5 my-auto py-1">
+          <div class="text-xs font-black text-violet-100 tracking-wide uppercase truncate">
+            {{ dyn.fromSceneLabel }} → {{ dyn.exitLabel }}
+          </div>
+          <p class="text-[11px] text-slate-300/85 line-clamp-2 leading-snug">
+            {{ dyn.theme || 'Procedural scene generated on first entry.' }}
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-violet-200/90">
+          <span class="px-2 py-0.5 rounded-full bg-black/35 border border-violet-400/25">
+            Depth {{ dyn.maxDepth }}
+          </span>
+          <span class="px-2 py-0.5 rounded-full bg-black/35 border border-violet-400/25 uppercase">
+            {{ dyn.dangerLevel }}
+          </span>
+          <span v-if="dyn.maxNpcs !== null" class="px-2 py-0.5 rounded-full bg-black/35 border border-violet-400/25">
+            Max NPCs: {{ dyn.maxNpcs }}
+          </span>
+          <span v-if="dyn.audioMode" class="px-2 py-0.5 rounded-full bg-black/35 border border-violet-400/25">
+            Music: {{ dyn.audioMode }}
+          </span>
         </div>
       </div>
 

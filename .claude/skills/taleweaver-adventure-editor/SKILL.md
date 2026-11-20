@@ -67,35 +67,44 @@ fields are rejected (no silent typos).
 
 | op | Purpose | Key fields |
 |---|---|---|
-| `create_scene` | New scene | `scene_id`, `label`, `description`, `decorative_objects` |
-| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `ref` |
+| `create_scene` | New scene | `scene_id`, `label`, `description` (optional if `dynamic_zone` provides `theme`), `decorative_objects`, `dynamic_zone` (optional pre-mapped Dynamic Scene profile) |
+| `create_exit` | New exit | `from_scene_id`, `to_scene_id`, `label` (required; names the passage, e.g. `an old rusty gate`, not the destination), `exit_type` (`one_way`/`bidirectional`), `is_locked`, `is_revealed` (target known from the start), `companions_allowed` (default `true`; `false` = solo passage, the companion stays behind), `lock_description`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `dynamic_zone` (`zone_id`, `theme`, `instructions`, `instructions_scope`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`), `ref` |
 | `create_entity` | New NPC or object | `entity_id`, `entity_type` (`NPC`/`OBJECT`), `scene_id`, `name`, `description`, `item_type`, `is_portable`, `is_hidden`, `inventory`, `metadata_json`, ... |
 | `update` | Change any editor field (incl. all trigger scripts) | `target_type` (`scene`/`exit`/`npc`/`object`/`protagonist`/`cover`), `target_id`, fields |
 | `set_npc_combat` | NPC combat behaviour (the Aggression section in the NPC dialog's Combat tab) | `npc_id`, `attack_mode` (`PASSIVE`/`ATTACK_ON_SIGHT`), `attack_trigger`, `special_chance`, `combat_group`, `assist_mode` (`GROUP`/`ANYONE`/`NEVER`); omitted fields keep their current value |
+| `set_npc_companion` | Make an NPC a companion (sidekick) who travels with the protagonist (the NPC dialog's Companion tab) | `npc_id`, `companion` (`{recruitable, starts_in_party, tactics: BALANCED/OFFENSIVE/DEFENSIVE/SUPPORT, banter: NORMAL/QUIET/CHATTY, downed_recovery: 0.01-1, recruit_mode: SCRIPT/INSTANT/ITEM, recruit_item_id, recruit_hint}`; `null` = ordinary NPC again). Success/failure narration: NPC `update` fields `on_recruit_success_script/_text`, `on_recruit_failure_script/_text` |
 | `set_script` | Add/replace a global script | `id`, `name`, `trigger`, `target`, `code`, `priority`, `is_active` |
 | `set_init_script` / `append_init_script` | Replace / extend the global init script (helpers, dialog handlers, dialogue trees) | `code` |
 | `create_quest` / `create_award` | Quest / award | see `ops` |
 | `set_start_scene` | Start scene | `scene_id` |
-| `update_adventure` | Adventure settings (plot, rules, sequences, ...) | see `ops` |
+| `update_adventure` | Adventure settings (plot, rules, sequences, ...; `game_over_rules: {on_zero_hp: "respawn", respawn_hp_percent: 25}` turns on respawning at 0 HP) | see `ops` |
 | `delete_scene` / `delete_exit` / `delete_entity` / `delete_script` / `delete_quest` / `delete_award` | Remove | the one ID field |
 
 ### Field mapping of `update` (editor naming)
 
 - **scene**: `name` sets the label; `description`, `decorative_objects`, `audio_track_id` (a track id of
-  the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab), `on_enter_scene_script/_text`,
+  the adventure's audio library; tracks are generated or uploaded in the editor's Audio tab),
+  `dynamic_zone` (turn into a pre-mapped Dynamic Scene or clear with `null`), `is_respawn_point` (revival point for the respawn mode), `on_enter_scene_script/_text`,
   `on_leave_scene_script/_text`, `helpers_script`; `new_id` renames.
 - **exit**: `name` sets the label (must not be empty), `description` sets the **lock description**, `locked`, `revealed`,
-  `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
+  `companions_allowed` (`false` = solo passage), `exit_type`, `code_to_unlock`/`item_to_unlock`/`rule_to_unlock`, `unlock_expression`,
+  `dynamic_zone` (`zone_id`, `theme`, `instructions`, `instructions_scope`, `cluster_consistency`, `max_depth`, `danger_level`, `cul_de_sac_on_max_depth`, `allowed_entity_types`, `return_exit_direction`, `on_after_generated_script`),
   `on_open_exit_*`, `on_exit_used_*`, `on_unlock_success_*`, `on_unlock_failure_*`.
   A code/item/rule lock needs a lock description (set `description` in the same or an earlier update,
   or `lock_description` on `create_exit`).
-- **object**: `item_type` (`CONTAINER`, `SWITCH`, `CONTAINER_SWITCH`, ...), `locked` (locks a container/container-switch, or take-locks a regular item so it is visible/inspectable in the scene or container but cannot be picked up until unlocked), scripts such as `on_interact_*`, `on_pickup_*`, `on_read_*`, `unlock_expression`,
+- **object**: `item_type` (`CONTAINER`, `SWITCH`, `CONTAINER_SWITCH`, ...), `locked` (locks a container/container-switch, or take-locks a regular item so it is visible/inspectable in the scene or container but cannot be picked up until unlocked), `quest_item` (`true`: the player can never give it to an NPC or companion and the GM cannot take it away; scripts still can), scripts such as `on_interact_*`, `on_pickup_*`, `on_read_*`, `unlock_expression`,
   container `on_unlock_success_*`, `on_items_added_script/_text`, `inventory` (container contents),
-  switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it; npc too),
+  switch fields, `is_hidden`, `reveal_rule` (`"script"` = only scripts may reveal it),
   `current_scene_id`, ...
-- **npc**: `goal`, `character`, `inventory`, `on_interact_*`, `on_defeat_*`,
+  Weapons: `damage_dice`, `weapon_category` (`MELEE`/`RANGED`/`MAGIC`), `weapon_hit_stat`,
+  `weapon_cost_type`/`weapon_cost_value`, `weapon_effects`. Equipment bonuses while worn or held:
+  `stat_modifier_strength`, `_dexterity`, `_intelligence`, `_wisdom`, `_charisma`,
+  `_armor_class` (also accepted by `create_entity`), plus `wearable_slots` (`Head`, `Chest`,
+  `Arms`, `Legs`, `Hands`, `Feet`, `Ring_1`, `Ring_2`, `Neck`, `MainHand`, `OffHand`).
+- **npc**: `goal`, `character`, `inventory`, `reveal_guard_expression` (hidden NPC appears once it is True; the GM never discovers hidden NPCs), `memory_slots` (0-8: facts about the protagonist the character remembers; 0 = off, leave it off for enemies), `relations` (full list `[{npc_id, kind, note}]`, kind FRIEND/FAMILY/PARTNER/ALLY/COLLEAGUE/SUPERIOR/SUBORDINATE/RIVAL/ENEMY), `chatty` (false = stays out of NPC chatter), `conversation_topics` (full list `[{id, topic, with_npc_id, must_convey, guard_expression, repeatable, on_heard_script, on_heard_text}]`), `on_interact_*`, `on_defeat_*`,
   `on_protagonist_enters_scene_*`, `on_receive_item_*`, ... Combat behaviour (attack mode, attack
   trigger, special chance, combat group, assist mode) is not an `update` field: use `set_npc_combat`.
+  The companion block is not an `update` field either: use `set_npc_companion`.
   `strength`…`charisma` and `armor_class` in `update` apply to the protagonist only and are ignored
   for NPCs; NPC attributes and the main attack live in the editor's combat profile (a `main_attack`
   can also be passed in `metadata_json` on `create_entity`).

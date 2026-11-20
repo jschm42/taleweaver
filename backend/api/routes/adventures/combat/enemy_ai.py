@@ -162,6 +162,10 @@ class CombatEnemyMixin:
         rest = self._enemy_pay_weapon_cost(enemy, weapon)
         if rest:
             return rest
+        # The companion draws some of the attacks (more with DEFENSIVE tactics).
+        member = self._enemy_target_member(combat)
+        if member:
+            return self._enemy_attacks_member(enemy, member, weapon, combat)
 
         player = self._player_view(combat)
         if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
@@ -186,9 +190,12 @@ class CombatEnemyMixin:
             damage = hp_before - self.avatar.hp
             on_hit = self._apply_enemy_on_hit(combat, enemy, weapon)
         self._sync_combat_player_snapshot(combat)
-        data = attack_event_data(enemy, player, roll, player_ac, weapon["name"], damage)
+        data = attack_event_data(
+            enemy, player, roll, player_ac, weapon["name"], damage, weapon["category"]
+        )
         data["effects"].extend(on_hit)
-        return attack_log_text(enemy["name"], roll, player_ac) + on_hit_suffix(on_hit), data
+        text = attack_log_text(enemy["name"], roll, player_ac, weapon["name"], self.avatar.name)
+        return text + on_hit_suffix(on_hit), data
 
     def _apply_enemy_on_hit(
         self, combat: dict[str, Any], enemy: dict[str, Any], weapon: dict[str, Any]

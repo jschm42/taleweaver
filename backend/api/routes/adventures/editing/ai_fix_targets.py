@@ -14,6 +14,7 @@ from backend.api.routes.adventures.editing.ai_fix_scripts import (
     SEQUENCE_SCRIPT_FIELDS,
 )
 from backend.api.routes.adventures.editing.ai_fix_soft_rules import parse_soft_rule_key
+from backend.engine.conversations.npc_fields import CONVERSATION_FIELDS
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -59,6 +60,7 @@ _FIX_SCENE_FIELDS = frozenset(
         "description",
         "decorative_objects",
         "audio_track_id",
+        "is_respawn_point",
         *SCENE_SCRIPT_FIELDS,
     }
 )
@@ -85,8 +87,9 @@ _FIX_NPC_FIELDS = frozenset(
         "is_killable",
         "current_scene_id",
         "is_hidden",
-        "reveal_rule",
         "spatial_position",
+        "memory_slots",
+        *CONVERSATION_FIELDS,
         *NPC_SCRIPT_FIELDS,
     }
 )
@@ -98,6 +101,7 @@ _FIX_OBJECT_FIELDS = frozenset(
         "is_portable",
         "current_scene_id",
         "locked",
+        "quest_item",
         "code_to_unlock",
         "item_to_unlock",
         "rule_to_unlock",

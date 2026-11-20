@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from backend.core.comfyui import ComfySettings
 from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
+from backend.engine.audio.browser_tts import normalize_browser_voices
 
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
@@ -252,6 +253,14 @@ def _tts_fallback() -> dict[str, Any]:
         "voice_catalog": [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG],
         "selected_voice": "Puck",
         "elevenlabs_voice_id": "",
+        # OpenAI-compatible speech server (provider "custom_openai"); the model is selected_model.
+        "custom_openai_url": "",
+        "custom_openai_voice": "",
+        "custom_openai_format": "mp3",
+        "custom_openai_instructions": "",
+        # Browser speech (provider "browser"): voice names, empty = automatic choice.
+        "browser_voice": "",
+        "browser_character_voices": [],
         "use_vocal_tags": True,
         "use_streaming": False,
         # Speech starts on its own for players when TTS is configured (they can switch it off).
@@ -273,6 +282,13 @@ def _apply_legacy_tts_model(normalized: dict[str, Any]) -> None:
         normalized["selected_model"] = TTS_MODEL_ALIASES[selected_model]
 
 
+def _apply_openai_compatible_defaults(normalized: dict[str, Any], fallback: dict[str, Any]) -> None:
+    for key in ("custom_openai_url", "custom_openai_voice", "custom_openai_instructions"):
+        normalized[key] = str(normalized.get(key) or fallback[key]).strip()
+    fmt = str(normalized.get("custom_openai_format") or "").lower()
+    normalized["custom_openai_format"] = fmt if fmt in ("mp3", "wav", "pcm") else "mp3"
+
+
 def normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     """Return TTS settings with voice list, selected voice and style context."""
     fallback = _tts_fallback()
@@ -283,6 +299,8 @@ def normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     _apply_legacy_tts_model(normalized)
     normalized["provider"] = normalized.get("provider") or "google"
     normalized["elevenlabs_voice_id"] = normalized.get("elevenlabs_voice_id", "")
+    _apply_openai_compatible_defaults(normalized, fallback)
+    normalize_browser_voices(normalized)
 
     # Only fill flags that are missing entirely; explicit False values must survive.
     normalized.pop("use_text_chunking", None)  # retired: speech is split per speaker line

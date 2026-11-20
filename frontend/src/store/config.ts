@@ -64,12 +64,21 @@ export async function refreshConfig() {
     if (tts) {
       // The provider may have changed: find out again whether it streams.
       audioService.resetProviderCapabilities()
+      const provider = String(tts.provider || 'google')
+      audioService.setProvider(provider)
+      const { setBrowserVoicePreferences } = await import('@/services/browserTts')
+      setBrowserVoicePreferences({
+        narrator: typeof tts.browser_voice === 'string' ? tts.browser_voice : '',
+        characters: Array.isArray(tts.browser_character_voices) ? tts.browser_character_voices : [],
+      })
       if (typeof tts.speech_rate === 'number') {
         audioService.speechRate.value = tts.speech_rate
       }
       // Speech starts on its own when TTS is usable (enabled + provider key) and the admin
       // has "start automatically" on; players can still switch it off.
-      const ttsConfigured = !!tts.enabled && !!data.keys?.[String(tts.provider || 'google')]
+      // Browser speech and OpenAI-compatible speech servers (key optional) need no vault key.
+      const keyless = provider === 'browser' || provider === 'custom_openai'
+      const ttsConfigured = !!tts.enabled && (keyless || !!data.keys?.[provider])
       audioService.applyAutoSpeechDefault(ttsConfigured && tts.auto_speak !== false)
     }
     

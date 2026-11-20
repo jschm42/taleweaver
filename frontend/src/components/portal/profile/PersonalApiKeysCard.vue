@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api, type MyApiKeysResponse, type PersonalKeyProvider } from '@/composables/useApi'
 import { refreshConfig } from '@/store/config'
+import { confirmDialog } from '@/composables/useDialogs'
 
 /** The player's own provider keys; shown only when the server lets players bring a key. */
 const emit = defineEmits<{ (e: 'notify', message: string, type: 'success' | 'error'): void }>()
@@ -51,7 +52,12 @@ async function save(provider: PersonalKeyProvider): Promise<void> {
 }
 
 async function remove(provider: PersonalKeyProvider): Promise<void> {
-  if (!confirm(`Remove your ${provider.name} key?`)) return
+  const confirmed = await confirmDialog({
+    title: `Remove your ${provider.name} key?`,
+    confirmLabel: 'Remove key',
+    danger: true,
+  })
+  if (!confirmed) return
   busyProvider.value = provider.id
   try {
     state.value = await api.deleteMyApiKey(provider.id)

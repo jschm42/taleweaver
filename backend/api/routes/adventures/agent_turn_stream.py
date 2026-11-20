@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 
+from backend.api.routes.adventures.agent_access import is_debug_session
 from backend.api.routes.adventures.agent_actions import execute_agent_action
 from backend.api.routes.adventures.agent_change_log import (
     WorldSnapshot,
@@ -20,8 +21,10 @@ from backend.api.routes.adventures.agent_change_log import (
 )
 from backend.api.routes.adventures.agent_combat import decide_combat_turn
 from backend.api.routes.adventures.agent_dialog import decide_dialog_option
-from backend.api.routes.adventures.agent_logic import AgentService
+from backend.api.routes.adventures.agent_logic import AgentDecision, AgentService
+from backend.api.routes.adventures.agent_memory import apply_memory_updates
 from backend.api.routes.adventures.agent_settings import build_agent_snapshot
+from backend.api.routes.adventures.agent_travel import next_travel_step
 from backend.api.routes.adventures.dialog_service import (
     CHOICE_MESSAGE_PREFIX,
     DialogChoiceResolver,
@@ -29,6 +32,7 @@ from backend.api.routes.adventures.dialog_service import (
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import database as core_database
+from backend.core.global_settings import apply_global_settings
 from backend.engine.scripting.dialog import pending_dialog
 from backend.models.chat import ChatMessage
 from backend.models.user import User
@@ -62,6 +66,13 @@ async def _decide(db, game_id: str, current_user: User, manager: GameTurnManager
     try:
         if manager._has_combat_phase():
             return await decide_combat_turn(manager), False
+        travel_step = await next_travel_step(manager)
+        if travel_step:
+            # A running trip continues without asking the LLM.
+            thought, action = travel_step
+            return AgentDecision(
+                thoughts=thought, action=action, is_stuck_or_bug=False, issue_description=""
+            ), False
         decision = await AgentService.get_decision(
             db, game_id, current_user, manager.state, manager.avatar, manager.adventure, manager
         )
@@ -94,6 +105,21 @@ async def _recent_history_summary(db, game_id: str) -> str:
     return " | ".join(f"{m.role}: {m.content}" for m in recent_msgs)
 
 
+def _issue_message(state: Any, description: str, decision_failed: bool, failures: int) -> str:
+    """Technical details in debug mode; a short note for regular players."""
+    if is_debug_session(state):
+        msg = f"Agent issue detected: {description} (Attempt {failures}/{MAX_AGENT_FAILURES})"
+    elif decision_failed:
+        msg = (
+            f"The Play-Agent could not decide on a next step (try {failures}/{MAX_AGENT_FAILURES})."
+        )
+    else:
+        msg = f"The Play-Agent is stuck: {description} (try {failures}/{MAX_AGENT_FAILURES})"
+    if failures >= MAX_AGENT_FAILURES:
+        msg += " - The Play-Agent has stopped; you are back in control."
+    return msg
+
+
 async def _agent_issue_events(
     db, game_id: str, manager: GameTurnManager, decision: Any, decision_failed: bool
 ) -> AsyncGenerator[str, None]:
@@ -108,9 +134,7 @@ async def _agent_issue_events(
     AgentService.log_issue(state.session_id, thoughts, action, description, history_summary)
     await db.commit()
 
-    msg = f"Agent issue detected: {description} (Attempt {failures}/{MAX_AGENT_FAILURES})"
-    if failures >= MAX_AGENT_FAILURES:
-        msg += " - Agent mode has been deactivated."
+    msg = _issue_message(state, description, decision_failed, failures)
     await manager._save_chat_message("system", msg)
     yield _sse("system", {"role": "system", "content": msg})
     yield await _final_event(db, manager)
@@ -134,9 +158,11 @@ async def _final_event(db, manager: GameTurnManager) -> str:
 
 
 async def _change_log_events(
-    db, manager: GameTurnManager, before: WorldSnapshot
+    db, manager: GameTurnManager, before: WorldSnapshot | None = None
 ) -> AsyncGenerator[str, None]:
     """Posts what the agent's turn changed (items, switches, locks, location) as a system note."""
+    if before is None:
+        return
     msg = await describe_changes(db, manager.game_id, before)
     if not msg:
         return
@@ -156,6 +182,11 @@ async def _agent_action_events(
     yield _sse("status", {"content": f"Agent decides: {decision.action}"})
 
     AgentService.reset_failures(manager.state)
+    if decision.instruction_done:
+        # The action finishes the player's instruction; the next decision is the agent's own again.
+        AgentService.set_instruction(manager.state, "")
+    if getattr(decision, "remember", None) or getattr(decision, "forget", None):
+        apply_memory_updates(manager.state, decision.remember, decision.forget)
     await db.commit()
 
     outcome = await execute_agent_action(manager, decision.action)
@@ -184,7 +215,10 @@ async def _agent_action_events(
 
 
 async def _agent_dialog_events(
-    db, manager: GameTurnManager, dialog: dict[str, Any], before: WorldSnapshot
+    db,
+    manager: GameTurnManager,
+    dialog: dict[str, Any],
+    before: WorldSnapshot | None = None,
 ) -> AsyncGenerator[str, None]:
     """Answers an open choice dialog instead of playing a free-text turn."""
     thoughts, option = await decide_dialog_option(manager, dialog)
@@ -194,8 +228,8 @@ async def _agent_dialog_events(
     try:
         result = await DialogChoiceResolver(manager).resolve(dialog["id"], option["index"], None)
         messages = result["messages"]
-    except HTTPException as exc:
-        messages = [f"Choice failed: {exc.detail}"]
+    except HTTPException:
+        messages = ["Choice failed: Selected option is not available."]
     for msg in messages:
         yield _sse("system", {"role": "system", "content": msg})
     async for event in _change_log_events(db, manager, before):
@@ -217,14 +251,28 @@ async def _agent_finish_events(db, manager: GameTurnManager) -> AsyncGenerator[s
     msg = f"Play-Agent finished: the adventure was {outcome}. You are back in control."
     await manager._save_chat_message("system", msg)
     yield _sse("system", {"role": "system", "content": msg})
-    yield _sse("agent_state", build_agent_snapshot(manager.state))
+    yield _sse("agent_state", build_agent_snapshot(manager.state, manager.adventure))
+
+
+async def _user_in_session(db, current_user: User) -> User:
+    """The player loaded in the turn's own session, so changes to it (earned awards) persist.
+
+    ``current_user`` belongs to the request's session; the agent turn streams with its own
+    session, where changes to a foreign instance would never be committed.
+    """
+    user = await db.get(User, current_user.id)
+    if user is None:
+        return current_user
+    await apply_global_settings(db, user)
+    return user
 
 
 async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[str, None]:
     yield _sse("status", {"content": "Agent is thinking..."})
 
     async with core_database.AsyncSessionLocal() as db:
-        manager = GameTurnManager(db, game_id, current_user)
+        user = await _user_in_session(db, current_user)
+        manager = GameTurnManager(db, game_id, user)
         await manager.initialize()
         try:
             before = await take_snapshot(db, game_id, manager.avatar.id)
@@ -233,7 +281,7 @@ async def stream_agent_turn(game_id: str, current_user: User) -> AsyncGenerator[
                 async for event in _agent_dialog_events(db, manager, dialog, before):
                     yield event
                 return
-            decision, decision_failed = await _decide(db, game_id, current_user, manager)
+            decision, decision_failed = await _decide(db, game_id, user, manager)
             if not decision or decision.is_stuck_or_bug:
                 events = _agent_issue_events(db, game_id, manager, decision, decision_failed)
             else:

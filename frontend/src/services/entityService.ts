@@ -1,7 +1,30 @@
+import type { ConversationTopic, NpcRelation } from '@/components/editor/entity/npcConversationTypes'
 import { API_BASE, authHeaders } from '@/services/http'
 
 export interface EntityEditData {
   target_type: string
+  /** Items: the story depends on it (never given away or taken by the GM). */
+  quest_item?: boolean
+  switch_disabled_states?: string[]
+  switch_status_text?: string
+  on_success_script?: string
+  on_failure_script?: string
+  on_items_added_script?: string
+  on_items_added_text?: string
+  on_items_removed_script?: string
+  on_items_removed_text?: string
+  /** Containers: item count bounds. */
+  min_items?: number | null
+  max_items?: number | null
+  craft_guard_expression?: string
+  on_craft_success_script?: string
+  on_craft_success_text?: string
+  on_craft_failure_script?: string
+  on_craft_failure_text?: string
+  on_read_script?: string
+  on_read_text?: string
+  /** NPC kind (HUMANOID, BEING, ANIMAL, MONSTER). */
+  npc_type?: string
   target_id: string
   new_id?: string
   name?: string
@@ -23,10 +46,15 @@ export interface EntityEditData {
   locked?: boolean
   /** Exits: the target scene is known from the start. */
   revealed?: boolean
+  /** Exits: false makes a solo passage (the companion stays behind). */
+  companions_allowed?: boolean
+  /** Scenes: revival point for the respawn mode. */
+  is_respawn_point?: boolean
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
   exit_type?: 'one_way' | 'bidirectional'
+  dynamic_zone?: Record<string, any> | null
   inventory?: any[]
   text_log_content?: string
   text_log_format?: string
@@ -73,12 +101,26 @@ export interface EntityEditData {
   on_open_exit_text?: string | null
   on_exit_used_script?: string | null
   on_exit_used_text?: string | null
+  unlock_expression?: string | null
+  on_unlock_success_script?: string | null
+  on_unlock_success_text?: string | null
+  on_unlock_failure_script?: string | null
+  on_unlock_failure_text?: string | null
   on_defeat_script?: string | null
   on_defeat_text?: string | null
   on_protagonist_enters_scene_script?: string | null
   on_protagonist_enters_scene_text?: string | null
   on_receive_item_script?: string | null
   on_receive_item_text?: string | null
+  on_recruit_success_script?: string | null
+  on_recruit_success_text?: string | null
+  on_recruit_failure_script?: string | null
+  on_recruit_failure_text?: string | null
+  reveal_guard_expression?: string | null
+  memory_slots?: number | null
+  relations?: NpcRelation[]
+  chatty?: boolean
+  conversation_topics?: ConversationTopic[]
   on_interact_script?: string | null
   on_interact_text?: string | null
 }
@@ -89,6 +131,7 @@ export interface SceneCreateData {
   description: string
   image_url?: string
   decorative_objects?: string[]
+  dynamic_zone?: Record<string, any> | null
 }
 
 export interface ExitCreateData {
@@ -98,14 +141,30 @@ export interface ExitCreateData {
   exit_type?: 'one_way' | 'bidirectional'
   is_locked?: boolean
   is_revealed?: boolean
+  companions_allowed?: boolean
   lock_description?: string
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
+  unlock_expression?: string | null
+  on_open_exit_script?: string | null
+  on_open_exit_text?: string | null
+  on_exit_used_script?: string | null
+  on_exit_used_text?: string | null
+  on_unlock_success_script?: string | null
+  on_unlock_success_text?: string | null
+  on_unlock_failure_script?: string | null
+  on_unlock_failure_text?: string | null
+  dynamic_zone?: Record<string, any> | null
 }
 
 export interface EntityCreateData {
   entity_id: string
+  is_hidden?: boolean
+  reveal_rule?: string
+  spatial_position?: string
+  /** NPC kind (HUMANOID, BEING, ANIMAL, MONSTER). */
+  npc_type?: string
   entity_type: 'NPC' | 'OBJECT'
   scene_id: string
   name: string
@@ -144,6 +203,11 @@ export interface EntityCreateData {
   on_protagonist_enters_scene_text?: string
   on_receive_item_script?: string
   on_receive_item_text?: string
+  on_recruit_success_script?: string
+  on_recruit_success_text?: string
+  on_recruit_failure_script?: string
+  on_recruit_failure_text?: string
+  reveal_guard_expression?: string
   on_interact_script?: string
   on_interact_text?: string
 }

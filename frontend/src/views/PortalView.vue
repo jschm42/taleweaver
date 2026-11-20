@@ -16,7 +16,8 @@ import GameSessionsTable from '@/components/portal/GameSessionsTable.vue'
 import UserProfileContent from '@/components/portal/UserProfileContent.vue'
 import LeaderboardView from '@/components/portal/LeaderboardView.vue'
 import PortalFooter from '@/components/portal/PortalFooter.vue'
-import PortalHeroBanner from '@/components/portal/PortalHeroBanner.vue'
+import ContinueRow from '@/components/portal/ContinueRow.vue'
+import PortalForgeRow from '@/components/portal/PortalForgeRow.vue'
 import { ambientAccent } from '@/store/portalAmbient'
 import {
   usePortalFilters,
@@ -411,7 +412,8 @@ onUnmounted(() => {
         
         <SetupWarningBanner :active-section="activeSection" />
 
-        <PortalHeroBanner
+        <!-- Order: continue playing, create, then browse the library -->
+        <ContinueRow
           v-if="showHero && !isLoading"
           class="mb-6 sm:mb-8"
           :sessions="sessions"
@@ -419,6 +421,16 @@ onUnmounted(() => {
           :is-starting-session="isStartingSession"
           @resume="playSession"
           @start-session="startSession"
+          @show-sessions="pushSection('sessions')"
+        />
+
+        <PortalForgeRow
+          v-if="activeSection === 'templates' && templateFilters.viewMode.value === 'grid'"
+          class="mb-8 sm:mb-10"
+          :is-seeding="isSeeding"
+          @create="createEmptyAdventure"
+          @generate-world="openCreateModal"
+          @open-library="openAdventureLibrary"
         />
 
         <PortalLibraryToolbar

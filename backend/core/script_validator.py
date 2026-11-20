@@ -176,6 +176,16 @@ def _check_scenes(scenes: list[dict[str, Any]]) -> list[ValidationFinding]:
                     extra_context={"scene_id": sid},
                 )
             )
+        dyn_zone = scene.get("dynamic_zone")
+        if isinstance(dyn_zone, dict) and dyn_zone.get("on_after_generated_script"):
+            findings.extend(
+                _validate_script_code(
+                    dyn_zone.get("on_after_generated_script"),
+                    "dynamic_zone.on_after_generated_script",
+                    location=loc,
+                    extra_context={"scene_id": sid},
+                )
+            )
     return findings
 
 
@@ -211,6 +221,17 @@ def _check_exits(exits: list[dict[str, Any]]) -> list[ValidationFinding]:
                 _validate_script_code(
                     code,
                     script_field,
+                    location=loc,
+                    extra_context={"exit_id": eid},
+                )
+            )
+
+        dyn_zone = ex.get("dynamic_zone")
+        if isinstance(dyn_zone, dict) and dyn_zone.get("on_after_generated_script"):
+            findings.extend(
+                _validate_script_code(
+                    dyn_zone.get("on_after_generated_script"),
+                    "dynamic_zone.on_after_generated_script",
                     location=loc,
                     extra_context={"exit_id": eid},
                 )
@@ -277,6 +298,8 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                 "on_talk_script",
                 "on_interact_script",
                 "on_receive_item_script",
+                "on_recruit_success_script",
+                "on_recruit_failure_script",
             ):
                 code = ent.get(field) or meta_dict.get(field)
                 findings.extend(
@@ -287,6 +310,17 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
                         extra_context={"entity_id": eid, "kind": "NPC"},
                     )
                 )
+            reveal_guard = ent.get("reveal_guard_expression") or meta_dict.get(
+                "reveal_guard_expression"
+            )
+            findings.extend(
+                _validate_guard_expression(
+                    reveal_guard,
+                    "reveal_guard_expression",
+                    location=loc,
+                    extra_context={"entity_id": eid},
+                )
+            )
 
         if kind == "OBJECT":
             for field in (
@@ -346,6 +380,31 @@ def _check_entities(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
             )
             findings.extend(_check_switch_transitions(transitions, loc, eid))
 
+    return findings
+
+
+def _check_conversation_topics(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
+    """``on_heard_script`` and ``guard_expression`` of every NPC conversation topic."""
+    findings: list[ValidationFinding] = []
+    for ent in entities:
+        meta = ent.get("metadata_json") if isinstance(ent, dict) else None
+        topics = (ent.get("conversation_topics") if isinstance(ent, dict) else None) or (
+            meta.get("conversation_topics") if isinstance(meta, dict) else None
+        )
+        eid = _entity_id(ent) or "?"
+        for topic in topics if isinstance(topics, list) else []:
+            if not isinstance(topic, dict):
+                continue
+            extra = {"entity_id": eid, "topic_id": topic.get("id")}
+            loc = f"entity:{eid}"
+            findings.extend(
+                _validate_script_code(topic.get("on_heard_script"), "on_heard_script", loc, extra)
+            )
+            findings.extend(
+                _validate_guard_expression(
+                    topic.get("guard_expression"), "topic guard_expression", loc, extra
+                )
+            )
     return findings
 
 
@@ -511,6 +570,7 @@ def check_scripts_and_guards(
     findings.extend(_check_scenes(scs))
     findings.extend(_check_exits(exs))
     findings.extend(_check_entities(ents))
+    findings.extend(_check_conversation_topics(ents))
     findings.extend(_check_protagonist(protagonist))
     findings.extend(_check_sequences(sequences))
     findings.extend(_check_quests(quests))

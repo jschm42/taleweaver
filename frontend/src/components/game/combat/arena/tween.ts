@@ -23,6 +23,7 @@ export class Tweener {
   /** Playback speed multiplier (e.g. 4 for fast-forward). */
   speed = 1
   private readonly jobs = new Set<TweenJob>()
+  private frozenMs = 0
 
   constructor(private readonly ticker: Ticker) {
     ticker.add(this.tick, this)
@@ -56,8 +57,14 @@ export class Tweener {
     return this.run(ms, () => undefined)
   }
 
+  /** Hit-stop: holds every running tween for a moment so an impact has weight. */
+  freeze(ms: number): void {
+    this.frozenMs = Math.max(this.frozenMs, ms)
+  }
+
   /** Completes every running tween immediately. */
   finishAll(): void {
+    this.frozenMs = 0
     for (const job of this.jobs) {
       job.update(1)
       job.resolve()
@@ -71,6 +78,10 @@ export class Tweener {
   }
 
   private tick(ticker: Ticker): void {
+    if (this.frozenMs > 0) {
+      this.frozenMs -= ticker.deltaMS * this.speed
+      return
+    }
     for (const job of [...this.jobs]) {
       job.elapsed += ticker.deltaMS * this.speed
       const progress = Math.min(1, job.elapsed / job.duration)

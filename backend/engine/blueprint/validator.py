@@ -65,7 +65,12 @@ def _check_block_fields(
     blueprint: Blueprint, block: BlueprintBlock, referenced: dict[str, int]
 ) -> None:
     roles = _roles(block.kind)
+    is_dynamic_exit = block.kind == "exit" and any(
+        k.startswith("dynamic_zone.") for k in block.fields
+    )
     for target, value in block.fields.items():
+        if is_dynamic_exit and target == "to_scene_id":
+            continue
         role = "ref" if target in _SCENE_REF_FIELDS else roles.get(target, "text")
         for message in _check_value(role, value.value, referenced, value.line or block.line):
             blueprint.add_issue(value.line or block.line, f"{_label(block)} {target}: {message}")
@@ -109,7 +114,25 @@ def _check_transitions(
     return errors
 
 
+def _check_exit_required_parts(blueprint: Blueprint, block: BlueprintBlock) -> None:
+    has_dynamic = any(k.startswith("dynamic_zone.") for k in block.fields)
+    if has_dynamic:
+        if (
+            "dynamic_zone.theme" not in block.fields
+            and "dynamic_zone.theme" not in block.open_fields
+        ):
+            blueprint.add_issue(block.line, f"{_label(block)} dynamic exit needs a 'theme:'.")
+        return
+    if block.fields.get("to_scene_id") and block.fields["to_scene_id"].value == "?":
+        blueprint.add_issue(
+            block.line,
+            f"{_label(block)} target '?' requires dynamic exit keys ('zone:' / 'theme:').",
+        )
+
+
 def _check_required_parts(blueprint: Blueprint, block: BlueprintBlock) -> None:
+    if block.kind == "exit":
+        _check_exit_required_parts(blueprint, block)
     if block.kind == "script" and "code" not in block.fields:
         blueprint.add_issue(block.line, f"{_label(block)} has no 'code:'; it will be ignored.")
     if block.kind == "script" and "trigger" not in block.fields:

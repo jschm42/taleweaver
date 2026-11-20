@@ -7,12 +7,13 @@ the changeset never both adds and removes an ID (the engine applies additions fi
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Optional
 
 from backend.engine.scripting.item_transfer import ref_id
 
 if TYPE_CHECKING:
-    from backend.engine.scripting.context import ScriptChangeset
+    from backend.engine.scripting.context import PlayerProxy, ScriptChangeset
     from backend.engine.scripting.item_ops import ItemMover
 
 
@@ -83,5 +84,107 @@ class PlayerInventoryMixin:
         target = str(item_id).strip().upper()
         return any(ref_id(e) == target for e in self.inventory)
 
+    def has(self, item_id: str) -> bool:
+        """Alias for ``has_item()``."""
+        return self.has_item(item_id)
+
     def remove_item(self, item_id: str) -> None:
         self._take_entry(item_id)
+
+
+class InventoryProxy:
+    """Safe root proxy exposed as ``tw.inventory``, delegating to ``tw.player``."""
+
+    def __init__(self, player: PlayerProxy) -> None:
+        self._player = player
+
+    @property
+    def items(self) -> list[dict[str, Any]]:
+        """Items the protagonist carries right now."""
+        return self._player.inventory
+
+    @property
+    def item_ids(self) -> list[str]:
+        """IDs of items the protagonist carries right now."""
+        return self._player.item_ids
+
+    def all(self) -> list[dict[str, Any]]:
+        """Returns all carried inventory entries."""
+        return self._player.inventory
+
+    def count(self) -> int:
+        """Returns the number of carried inventory items."""
+        return len(self._player.inventory)
+
+    def has(self, item_id: str) -> bool:
+        """Returns True if the protagonist carries ``item_id`` (case-insensitive)."""
+        return self._player.has_item(item_id)
+
+    def has_item(self, item_id: str) -> bool:
+        """Alias for ``has()``."""
+        return self._player.has_item(item_id)
+
+    def take(self, item_id: str) -> bool:
+        """Moves an existing world item into the protagonist's inventory."""
+        return self._player.take_item(item_id)
+
+    def take_item(self, item_id: str) -> bool:
+        """Alias for ``take()``."""
+        return self._player.take_item(item_id)
+
+    def drop(self, item_id: str, scene_id: Optional[str] = None) -> bool:
+        """Drops a carried item into a scene (default: current scene)."""
+        return self._player.drop_item(item_id, scene_id)
+
+    def drop_item(self, item_id: str, scene_id: Optional[str] = None) -> bool:
+        """Alias for ``drop()``."""
+        return self._player.drop_item(item_id, scene_id)
+
+    def transfer(self, item_id: str, target_id: str) -> bool:
+        """Hands a carried item to an NPC or puts it into a container."""
+        return self._player.transfer_item(item_id, target_id)
+
+    def transfer_item(self, item_id: str, target_id: str) -> bool:
+        """Alias for ``transfer()``."""
+        return self._player.transfer_item(item_id, target_id)
+
+    def remove(self, item_id: str) -> None:
+        """Removes an item from the protagonist's inventory."""
+        self._player.remove_item(item_id)
+
+    def remove_item(self, item_id: str) -> None:
+        """Alias for ``remove()``."""
+        self._player.remove_item(item_id)
+
+    def give(
+        self, item_id: str, name: Optional[str] = None, description: Optional[str] = None
+    ) -> None:
+        """Adds a custom non-world item entry to the protagonist's inventory."""
+        self._player.give_item(item_id, name, description)
+
+    def give_item(
+        self, item_id: str, name: Optional[str] = None, description: Optional[str] = None
+    ) -> None:
+        """Alias for ``give()``."""
+        self._player.give_item(item_id, name, description)
+
+    def add(
+        self, item_id: str, name: Optional[str] = None, description: Optional[str] = None
+    ) -> None:
+        """Alias for ``give()``."""
+        self._player.give_item(item_id, name, description)
+
+    def add_item(
+        self, item_id: str, name: Optional[str] = None, description: Optional[str] = None
+    ) -> None:
+        """Alias for ``give()``."""
+        self._player.give_item(item_id, name, description)
+
+    def __contains__(self, item_id: object) -> bool:
+        return self._player.has_item(str(item_id))
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        return iter(self._player.inventory)
+
+    def __len__(self) -> int:
+        return len(self._player.inventory)

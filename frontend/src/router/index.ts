@@ -43,11 +43,22 @@ const router = createRouter({
       props: true,
     },
     {
+      // Detail page of a character or item (docs/specs/workbench_ui.md, 6.2).
+      path: '/adventures/:adventureId/editor/entities/:entityId',
+      name: 'adventure-editor-entity',
+      component: () => import('@/views/AdventureEditorView.vue'),
+      props: true,
+    },
+    {
       path: '/adventures/:adventureId/editor/exits/:exitId',
       name: 'adventure-editor-exit',
       component: () => import('@/views/AdventureEditorView.vue'),
       props: true,
     },
+    // Workbench component showcase (docs/specs/workbench_ui.md); dev server only.
+    ...(import.meta.env.DEV
+      ? [{ path: '/dev/ui', name: 'dev-ui', component: () => import('@/views/dev/UiShowcaseView.vue') }]
+      : []),
     {
       path: '/login',
       name: 'login',

@@ -31,7 +31,11 @@ export interface User {
   total_xp?: number
   recovery_codes_remaining?: number
   tts_preferences?: Partial<TtsPreferences> | null
+  /** Clock display in day-clock adventures; "adventure" keeps the adventure's own format. */
+  clock_format?: ClockFormat
 }
+
+export type ClockFormat = 'adventure' | '24h' | '12h'
 
 export const authState = reactive({
   user: null as User | null,

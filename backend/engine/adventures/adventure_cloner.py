@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -202,6 +203,7 @@ def _create_cloned_template_entity(
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
+        npc_conversations=normalize_conversation_settings(original.npc_conversations),
         quests=deepcopy(original.quests) if original.quests else None,
         is_completed=False,
         is_ready=original.is_ready,
@@ -307,6 +309,8 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_leave_scene_text=s.on_leave_scene_text,
             helpers_script=s.helpers_script,
             audio_track_id=s.audio_track_id,
+            dynamic_zone=deepcopy(s.dynamic_zone) if s.dynamic_zone else None,
+            is_respawn_point=bool(s.is_respawn_point),
         )
         db.add(cloned)
 
@@ -328,6 +332,7 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             exit_type=e.exit_type,
             is_locked=e.is_locked,
             is_revealed=bool(e.is_revealed),
+            companions_allowed=e.companions_allowed is not False,
             lock_description=e.lock_description,
             code_to_unlock=e.code_to_unlock,
             item_to_unlock=e.item_to_unlock,
@@ -341,6 +346,7 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             on_unlock_success_text=e.on_unlock_success_text,
             on_unlock_failure_script=e.on_unlock_failure_script,
             on_unlock_failure_text=e.on_unlock_failure_text,
+            dynamic_zone=deepcopy(e.dynamic_zone) if e.dynamic_zone else None,
         )
         db.add(cloned)
 

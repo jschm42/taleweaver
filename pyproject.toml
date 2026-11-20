@@ -1,6 +1,6 @@
 [project]
 name = "taleweaver"
-version = "0.7.0-beta"
+version = "0.7.1-beta"
 description = "AI-powered text and role-playing adventure game engine"
 authors = [
     {name = "Jean Schmitz"}

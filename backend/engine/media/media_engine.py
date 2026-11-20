@@ -254,11 +254,13 @@ def _write_binary_file(filepath: str, payload: bytes) -> None:
     safe_filepath = ensure_within_base_dir(
         os.path.join(safe_parent_dir, safe_filename), safe_parent_dir
     )
-    # Re-verify containment at the sink so the taint analysis trusts the path.
-    data_root = os.path.realpath(settings.DATA_DIR)
-    if os.path.commonpath([os.path.realpath(safe_filepath), data_root]) != data_root:
+    # Re-verify containment at the sink so the taint analysis trusts the path; the parent
+    # folder is derived from the checked file path, never created from an unchecked one.
+    data_root = os.path.abspath(os.path.realpath(settings.DATA_DIR))
+    safe_filepath = os.path.abspath(os.path.realpath(safe_filepath))
+    if not safe_filepath.startswith(data_root + os.sep):
         raise ValueError("Invalid filepath: escapes DATA_DIR.")
-    os.makedirs(safe_parent_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(safe_filepath), exist_ok=True)
     with open(safe_filepath, "wb") as file_handle:
         file_handle.write(payload)
 

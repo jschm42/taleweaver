@@ -45,7 +45,8 @@ async def test_api_connection_uses_structured_path(auth_client, monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
-    assert response.json()["message"] == "ready"
+    assert response.json()["message"].startswith("ready")
+    assert response.json()["speed"]["rating"] in {"fast", "ok", "slow"}
     router.aexecute_complex_task.assert_awaited_once()
 
 
@@ -75,7 +76,8 @@ async def test_api_connection_wizard_llm_story_uses_prose_path(auth_client, monk
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
-    assert response.json()["message"] == "TaleWeaver connection test successful!"
+    assert response.json()["message"].startswith("TaleWeaver connection test successful!")
+    assert response.json()["speed"]["rating"] in {"fast", "ok", "slow"}
     assert captured["kwargs"]["model_category"] == "complex"
     router.aexecute_simple_task.assert_awaited_once()
     router.aexecute_complex_task.assert_not_awaited()

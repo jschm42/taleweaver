@@ -60,6 +60,8 @@ async def test_owner_reads_own_session(client, setup_test_db):
         ("get", "/api/adventures/{game}/chat/history?before=x", None),
         ("patch", "/api/adventures/{game}/agent/settings", {"active": False}),
         ("post", "/api/adventures/{game}/dialog/choice", {"dialog_id": "d", "index": 0}),
+        ("get", "/api/adventures/{game}/session-debug/images.zip", None),
+        ("get", "/api/adventures/{game}/session-debug/export/HALL_LAMP", None),
     ],
 )
 async def test_foreign_user_cannot_use_session(client, setup_test_db, method, path, body):

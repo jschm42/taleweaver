@@ -1,6 +1,7 @@
 import { API_BASE, authHeaders } from '@/services/http'
 import { isNpcEntity, isObjectEntity, mergeUniqueById } from '@/utils/editor_utils'
 import type { NarratorVoice } from '@/services/narratorVoiceService'
+import type { DynamicGenerationConfig } from '@/components/editor/DynamicGenerationSection.vue'
 
 export interface Adventure {
   id: string
@@ -11,12 +12,15 @@ export interface Adventure {
   creator?: string
   copyright?: string
   license?: string
+  license_url?: string
   original_prompt?: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number
   pacing_minutes?: number
   max_time_per_turn?: number | null
   gm_time_control?: boolean
+  game_over_rules?: Record<string, unknown> | null
+  npc_conversations?: Record<string, unknown> | null
   max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string
@@ -61,6 +65,7 @@ export interface Adventure {
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
   start_scene_id?: string
+  dynamic_generation?: DynamicGenerationConfig | null
 }
 
 export interface AdventureFormData {
@@ -76,6 +81,8 @@ export interface AdventureFormData {
   pacing_minutes?: number
   max_time_per_turn?: number | null
   gm_time_control?: boolean
+  game_over_rules?: Record<string, unknown> | null
+  npc_conversations?: Record<string, unknown> | null
   max_memory_turns?: number
   clock_enabled?: boolean
   time_system?: string
@@ -114,6 +121,7 @@ export interface AdventureFormData {
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
   ui_theme?: { skin?: string | null; accent?: string | null } | null
+  dynamic_generation?: DynamicGenerationConfig | null
 }
 
 export interface CatalogData {

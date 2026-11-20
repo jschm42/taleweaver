@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.engine.rules.rule_engine import GameEvent, GameOverException, RuleEngine
 
 logger = logging.getLogger(__name__)
@@ -59,8 +60,13 @@ async def run_guardrail_chain(
     for message in await manager.guardrails._enforce_soft_rules(game_event, active_sequence):
         yield sse_system(message)
     await manager.guardrails._block_script_only_reveals(game_event)
+    # Handovers first: a handed item is moved by the engine, never removed by the GM.
+    await manager.guardrails._enforce_item_handovers(game_event, user_msg)
     # Before crafting, which adds its own (legitimate) ingredient removals.
-    await manager.guardrails._enforce_inventory_removals(game_event, user_msg)
+    kept_quest_items = await manager.guardrails._enforce_inventory_removals(game_event, user_msg)
+    rule_violations.extend(kept_quest_items)
+    # Pass 1 sometimes books a handover as a plain removal: let the small model sort it out.
+    await manager.guardrails._recover_handovers_from_removals(game_event, user_msg)
 
     for method_name, takes_user_msg in _GUARDRAIL_STEPS:
         enforce = getattr(manager, method_name)
@@ -146,7 +152,4 @@ async def advance_in_game_turn(
             async for event in _run_turn_script(manager, script_runner, "on_turn_start"):
                 yield event
     except GameOverException as goe:
-        await manager._finalize_session("game_over", str(goe))
-        if isinstance(game_event, GameEvent):
-            game_event.game_over = True
-            game_event.status_note = str(goe)
+        await end_or_respawn(manager, goe, game_event)

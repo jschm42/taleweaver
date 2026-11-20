@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.world_entity import WorldEntity
@@ -67,9 +67,9 @@ def mentioned_entity_ids(user_msg: str, candidates: list[tuple[str, str]]) -> li
     ]
 
 
-async def _reachable_entities(db: AsyncSession, state: Any) -> list[tuple[str, str]]:
+async def _reachable_entities(db: AsyncSession, state: Any) -> list[tuple[str, str, str]]:
     res = await db.execute(
-        select(WorldEntity.id, WorldEntity.name).where(
+        select(WorldEntity.id, WorldEntity.name, WorldEntity.entity_type).where(
             WorldEntity.session_id == state.session_id,
             or_(
                 (WorldEntity.current_scene_id == state.current_scene_id)
@@ -78,7 +78,26 @@ async def _reachable_entities(db: AsyncSession, state: Any) -> list[tuple[str, s
             ),
         )
     )
-    return [(row.id, row.name or "") for row in res.all() if row.id]
+    return [
+        (row.id, row.name or "", str(row.entity_type or "").upper()) for row in res.all() if row.id
+    ]
+
+
+async def _absent_npc_ids(
+    db: AsyncSession, state: Any, reported_ids: list[str], reachable: dict[str, str]
+) -> set[str]:
+    """Upper-case IDs of reported NPCs that are not in the current scene."""
+    unreachable = [r for r in reported_ids if r and r.upper() not in reachable]
+    if not unreachable:
+        return set()
+    res = await db.execute(
+        select(WorldEntity.id).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id.in_(unreachable),
+            func.upper(WorldEntity.entity_type) == "NPC",
+        )
+    )
+    return {str(row_id).upper() for row_id in res.scalars().all()}
 
 
 async def interacted_entity_ids(
@@ -89,8 +108,28 @@ async def interacted_entity_ids(
     IDs use the entity's stored spelling: script targets are matched case-sensitively.
     """
     candidates = await _reachable_entities(db, state)
-    canonical = {entity_id.upper(): entity_id for entity_id, _name in candidates}
+    canonical = {entity_id.upper(): entity_id for entity_id, _name, _type in candidates}
+    npc_ids = {entity_id.upper() for entity_id, _name, ent_type in candidates if ent_type == "NPC"}
+    name_tuples = [(entity_id, name) for entity_id, name, _type in candidates]
+    mentioned = mentioned_entity_ids(user_msg, name_tuples)
+    # A character elsewhere was not interacted with, whatever the GM updated about it
+    # (e.g. a rejected move into this scene).
+    absent_npcs = await _absent_npc_ids(db, state, reported_ids, canonical)
+    reported_ids = [r for r in reported_ids if r and r.upper() not in absent_npcs]
+
+    ordered_ids: list[str] = []
+    # If the player explicitly named entities in their message, those take priority.
+    # Unmentioned NPCs that the GM merely updated in the background (e.g. reacting or speaking)
+    # were not interacted with by the player and must not have their on_interact triggers fired.
+    if mentioned:
+        ordered_ids.extend(mentioned)
+        for r_id in reported_ids:
+            if r_id and r_id.upper() not in npc_ids:
+                ordered_ids.append(r_id)
+    else:
+        ordered_ids.extend(reported_ids)
+
     unique: dict[str, str] = {}
-    for entity_id in (i for i in [*reported_ids, *mentioned_entity_ids(user_msg, candidates)] if i):
+    for entity_id in (i for i in ordered_ids if i):
         unique.setdefault(entity_id.upper(), canonical.get(entity_id.upper(), entity_id))
     return list(unique.values())

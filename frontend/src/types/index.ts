@@ -2,7 +2,8 @@ export interface ChatMessage {
   id?: string
   /** Client-side render key; stays the same when the history is reloaded after a turn. */
   _key?: string
-  role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info'
+  /** `adventure_ending`: the win / game-over card (JSON content, see AdventureEndingCard). */
+  role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info' | 'adventure_ending'
   content: string
   timestamp: Date
   itemIds?: string[]
@@ -14,6 +15,47 @@ export interface ChatMessage {
 }
 
 /** Character sheet snapshot pushed by the server after every action. */
+/** One of the companion's abilities; `enabled: false` means it is not used in combat. */
+export interface CompanionAbility {
+  id: string
+  name: string
+  description?: string
+  category: string
+  cost_type: string
+  cost: number
+  enabled: boolean
+}
+
+/** The active companion as the hero dialog shows it (backend: companion_sheet.py). */
+export interface CompanionSheet {
+  id: string
+  name: string
+  description?: string | null
+  npc_type?: string | null
+  image_url?: string | null
+  hp?: number | null
+  max_hp?: number | null
+  mana?: number | null
+  max_mana?: number | null
+  stamina?: number | null
+  max_stamina?: number | null
+  stats: Record<string, number | null>
+  /** Carried items that are not equipped. */
+  inventory: InventoryItem[]
+  /** Only HUMANOID and BEING companions have equipment slots; animals and monsters do not. */
+  can_equip?: boolean
+  /** Slot -> equipped item (the protagonist's slots); empty without equipment slots. */
+  equipment: Record<string, InventoryItem | null>
+  /** Special actions from the editor with the player's on/off switch. */
+  abilities: CompanionAbility[]
+  /** Stands in the protagonist's scene. */
+  present: boolean
+  following: boolean
+  is_defeated: boolean
+  tactics: string
+  banter: string
+}
+
 export interface CharacterSheet {
   name: string
   adventure_title?: string | null
@@ -42,6 +84,8 @@ export interface CharacterSheet {
   stats: Record<string, number>
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
+  /** The active companion's page of the hero dialog (null without a companion). */
+  companion?: CompanionSheet | null
   status_effects: string[]
   in_game_time: number  // minutes or units elapsed in-game
   start_datetime?: string | null
@@ -69,6 +113,14 @@ export interface CharacterSheet {
   agent_step_delay?: number
   /** In Auto mode, the next Play-Agent step waits until text-to-speech has finished. */
   agent_wait_for_tts?: boolean
+  /** The Play-Agent may use the current chapter's walkthrough (unlocked with XP, or debug). */
+  agent_walkthrough_unlocked?: boolean
+  /** Debug-only Play-Agent options (Monkey mode) are available. */
+  agent_debug_tools?: boolean
+  /** How much the Play-Agent talks with characters: taciturn, normal, talkative, roleplay. */
+  agent_dialogue_level?: string
+  /** The player's current instruction for the Play-Agent ("" = none). */
+  agent_instruction?: string
   agent_personality?: string
   agent_custom_personality?: string
   max_memory_turns?: number
@@ -76,6 +128,8 @@ export interface CharacterSheet {
   narration_style?: 'terse' | 'dialogue' | 'balanced' | 'rich' | 'epic' | string
   /** Dialog skin the player picked for this session; "auto" follows the adventure. */
   ui_skin?: string | null
+  /** NPC chatter: adventure level, whether the adventure allows it, and the player switch. */
+  npc_chatter?: { level: string; available: boolean; enabled: boolean; listen_possible?: boolean }
   compressed_history?: any
 }
 
@@ -112,7 +166,8 @@ export interface AreaTargetOutcome {
 
 /** One stat change of a special attack, e.g. `{ target: 'target', stat: 'hp', amount: '-2d6' }`. */
 export interface SpecialEffect {
-  target: 'target' | 'self'
+  /** `ally`: the caster's party partner (companion for the protagonist, and vice versa). */
+  target: 'target' | 'self' | 'ally'
   stat: CombatStat
   amount: string
 }
@@ -215,7 +270,7 @@ export interface AppliedEffect {
 export interface CombatEventData {
   kind:
     | 'attack' | 'special' | 'initiative' | 'turn' | 'rest' | 'consume' | 'run'
-    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'banter'
+    | 'event' | 'engage' | 'defeat' | 'fled' | 'victory' | 'game_over' | 'knocked_out' | 'banter'
   actor?: string | null
   /** Spoken line of a `banter` event (without the speaker name). */
   line?: string
@@ -226,6 +281,7 @@ export interface CombatEventData {
   entity?: string
   label?: string
   action_name?: string
+  /** Special attacks: their category. Weapon attacks: MELEE, RANGED or MAGIC (animation and sounds). */
   category?: SpecialCategory
   stat?: string
   rolled?: boolean
@@ -292,6 +348,14 @@ export interface CombatPlayerState extends CombatantState {
   special_actions?: NormalizedSpecialAttack[]
 }
 
+/** A companion on the protagonist's side; `downed` at 0 HP until the fight ends. */
+export interface CombatPartyMember extends CombatEnemyState {
+  downed?: boolean
+  tactics?: string
+  /** Enemy the protagonist marked: the companion attacks only this one. */
+  mark_id?: string | null
+}
+
 export interface CombatState {
   active: boolean
   round: number
@@ -301,6 +365,8 @@ export interface CombatState {
   /** Current target (kept for single-enemy consumers). */
   enemy: CombatEnemyState
   enemies?: CombatEnemyState[]
+  /** The protagonist's companion fighting on their side (backend: combat/party.py). */
+  party?: CombatPartyMember[]
   target_id?: string | null
   initiative?: InitiativeEntry[]
   turn_index?: number
@@ -539,6 +605,9 @@ export interface CreateAdventurePayload {
   pacing_minutes?: number
   max_time_per_turn?: number | null
   gm_time_control?: boolean
+  /** At 0 HP: `{ on_zero_hp: 'game_over' | 'respawn', respawn_hp_percent }`. */
+  game_over_rules?: Record<string, unknown> | null
+  npc_conversations?: Record<string, unknown> | null
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean
@@ -709,11 +778,64 @@ export interface TtsVoice {
   accent: string
   description: string
   good_for: string[]
+  /** Suggested voices for Google TTS / OpenAI-compatible servers (voice list defaults). */
+  google_voice?: string
+  openai_compatible_voice?: string
+}
+
+/** Model ids of an OpenAI-compatible speech server (GET {base}/models). */
+export interface SpeechModelList {
+  base_url: string
+  models: string[]
+}
+
+/**
+ * Voices of an OpenAI-compatible speech server. `suggested` = OpenAI's voice names (OpenAI
+ * models only); `none` = no list, leave the voice empty for the model's default voice.
+ */
+export interface SpeechVoiceList {
+  base_url: string
+  source: 'server' | 'model' | 'suggested' | 'none'
+  voices: string[]
 }
 
 export interface TtsVoiceList {
   provider: string
-  /** Only ElevenLabs gives characters their own voices; Gemini uses the narrator voice. */
+  /** ElevenLabs always; Google / OpenAI-compatible once the admin mapped at least one voice. */
   supports_npc_voices: boolean
+  /** List voice id -> voice the provider speaks; missing voices use the narrator voice. */
+  provider_voices?: Record<string, string>
   voices: TtsVoice[]
 }
+
+/** One row of the admin voice mapping table (empty cell = narrator voice). */
+export interface VoiceMapRow {
+  id: string
+  name: string
+  gender: string | null
+  age: string
+  accent: string
+  description: string
+  good_for?: string[]
+  best_for?: string[]
+  elevenlabs: string
+  google: string
+  custom_openai: string
+  /** The voice list's suggestion for the cell ("" = none). */
+  suggested_google: string
+  suggested_custom_openai: string
+}
+
+export interface VoiceMapTable {
+  items: VoiceMapRow[]
+  google_voices: Array<{ name: string; gender?: string | null; description?: string | null }>
+}
+
+export interface VoiceMapImportResult {
+  items: VoiceMapRow[]
+  matched: number
+  unknown: string[]
+  errors: string[]
+}
+
+export type VoiceMapFileFormat = 'csv' | 'json'

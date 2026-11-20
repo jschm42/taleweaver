@@ -28,7 +28,7 @@ const emit = defineEmits<{
            </div>
            <div>
               <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Narrative Tone</h3>
-              <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Choose the narrative voice and mood</p>
+              <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Choose the narrative tone and mood</p>
            </div>
         </div>
         <div v-if="form.selected_tone_id !== (adventure?.selected_tone || '')" class="flex items-center gap-2 animate-fade-in">

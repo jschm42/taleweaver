@@ -1,839 +1,172 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import { Plus, Trash2, Hammer, Sparkles, HeartPulse, Activity } from 'lucide-vue-next'
-import { formatObjectIds } from '@/utils/editor_utils'
-import InlineEditableField from '@/components/editor/InlineEditableField.vue'
-import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
-import ScriptEditor from '@/components/editor/ScriptEditor.vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Download, Upload, UserX } from 'lucide-vue-next'
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
-import TalentsEditor from '@/components/editor/TalentsEditor.vue'
-import EditorImageLightbox from '@/components/editor/EditorImageLightbox.vue'
-import NpcVoicePicker from '@/components/editor/NpcVoicePicker.vue'
+import ProtagonistEquipmentPanel from '@/components/editor/protagonist/ProtagonistEquipmentPanel.vue'
+import ProtagonistGeneralPanel from '@/components/editor/protagonist/ProtagonistGeneralPanel.vue'
+import ProtagonistInventoryPanel from '@/components/editor/protagonist/ProtagonistInventoryPanel.vue'
+import ProtagonistStatsPanel from '@/components/editor/protagonist/ProtagonistStatsPanel.vue'
+import ProtagonistTriggersPanel from '@/components/editor/protagonist/ProtagonistTriggersPanel.vue'
+import type { CreateItemTarget, ProtagonistData, ReferenceOption } from '@/components/editor/protagonist/protagonistTypes'
+import PageHeader from '@/components/workbench/PageHeader.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTabs from '@/components/ui/UiTabs.vue'
 import type { TtsVoiceList } from '@/types'
 
+/** Protagonist page: one tab per part (tab in `?panel=`). Fields save as they change. */
 const props = defineProps<{
-  debugData: any
+  protagonist: ProtagonistData | null
   isQuickGenerating: Record<string, boolean>
-  activeMenuId: string | null
   visualsCacheVersion: number
   ruleEnforcementMode: string
   isSavingText: boolean
-  referenceOptions: any[]
+  referenceOptions: ReferenceOption[]
   adventureId?: string
   voiceList?: TtsVoiceList | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'quick-regen', kind: string, id: string): void
-  (e: 'open-regen-dialog', kind: string, id: string, label: string): void
-  (e: 'open-upload-picker', kind: string, id: string, label: string): void
-  (e: 'download-asset', path: string, label: string): void
-  (e: 'toggle-menu', id: string, event: MouseEvent): void
-  (e: 'save-field', field: string, value: any): void
-  (e: 'create-new-item', target: { type: 'equipment' | 'inventory'; key?: string; index?: number }): void
-  (e: 'special-attacks-saved'): void
-  (e: 'export-entity', kind: 'protagonist', id: null, label: string): void
-  (e: 'import-entity', kind: 'protagonist'): void
+  'quick-regen': [kind: string, id: string]
+  'open-regen-dialog': [kind: string, id: string, label: string]
+  'open-upload-picker': [kind: string, id: string, label: string]
+  'download-asset': [path: string, label: string]
+  'save-field': [field: string | Record<string, unknown>, value?: unknown]
+  'create-new-item': [target: CreateItemTarget]
+  'special-attacks-saved': []
+  'export-entity': [kind: 'protagonist', id: null, label: string]
+  'import-entity': [kind: 'protagonist']
 }>()
 
-const activeEditId = ref<string | null>(null)
-const enlargedPortraitUrl = ref<string | null>(null)
-const activeSubTab = ref<'general' | 'advanced'>('general')
+type PanelId = 'general' | 'stats' | 'equipment' | 'inventory' | 'combat' | 'triggers'
 
-const localHpScript = ref(props.debugData?.protagonist?.on_hp_change_script || '')
-const localHpText = ref(props.debugData?.protagonist?.on_hp_change_text || '')
-const localStatusScript = ref(props.debugData?.protagonist?.on_status_change_script || '')
-const localStatusText = ref(props.debugData?.protagonist?.on_status_change_text || '')
+const route = useRoute()
+const router = useRouter()
 
-watch(() => props.debugData?.protagonist, (p) => {
-  if (!p) return
-  localHpScript.value = p.on_hp_change_script || ''
-  localHpText.value = p.on_hp_change_text || ''
-  localStatusScript.value = p.on_status_change_script || ''
-  localStatusText.value = p.on_status_change_text || ''
-}, { deep: true, immediate: true })
+const hasRules = computed(() => props.ruleEnforcementMode !== 'chat')
 
-function saveProtagonistTrigger(field: string, val: any) {
-  emit('save-field', field, val)
-}
+const tabs = computed(() => [
+  { id: 'general' as const, label: 'General' },
+  ...(hasRules.value
+    ? [
+        { id: 'stats' as const, label: 'Stats' },
+        { id: 'equipment' as const, label: 'Equipment' },
+        { id: 'inventory' as const, label: 'Inventory', count: props.protagonist?.inventory?.length ?? null },
+        ...(props.adventureId ? [{ id: 'combat' as const, label: 'Combat' }] : []),
+      ]
+    : []),
+  { id: 'triggers' as const, label: 'Triggers' },
+])
 
-function buildVisualImageUrl(imagePath?: string | null) {
-  if (!imagePath) return ''
-  return `${imagePath}?v=${props.visualsCacheVersion}`
-}
-
-const objectOptions = computed(() => {
-  return (props.referenceOptions || []).filter((opt: any) => opt.type === 'OBJECT')
+const panel = computed<PanelId>({
+  get: () => {
+    const wanted = route.query.panel
+    return tabs.value.find((tab) => tab.id === wanted)?.id ?? 'general'
+  },
+  set: (value) => {
+    void router.replace({ query: { ...route.query, panel: value === 'general' ? undefined : value } })
+  },
 })
 
-const equipmentSlots = [
-  { key: 'Head', label: 'Head Gear', icon: 'ra ra-knight-helmet' },
-  { key: 'Neck', label: 'Necklace / Amulet', icon: 'ra ra-gem-pendant' },
-  { key: 'Chest', label: 'Armor / Chest', icon: 'ra ra-vest' },
-  { key: 'Arms', label: 'Bracers / Arms', icon: 'ra ra-muscle-up' },
-  { key: 'Hands', label: 'Gloves / Hands', icon: 'ra ra-hand' },
-  { key: 'Legs', label: 'Greaves / Legs', icon: 'ra ra-player' },
-  { key: 'Feet', label: 'Boots / Feet', icon: 'ra ra-boot-stomp' },
-  { key: 'Ring_1', label: 'Left Ring', icon: 'ra ra-diamond' },
-  { key: 'Ring_2', label: 'Right Ring', icon: 'ra ra-diamond' },
-  { key: 'MainHand', label: 'Main Hand Weapon', icon: 'ra ra-sword' },
-  { key: 'OffHand', label: 'Off Hand Shield/Weapon', icon: 'ra ra-shield' },
-]
+const name = computed(() => props.protagonist?.name || 'protagonist')
 
-const localInventory = ref<string[]>([])
-
-watch(() => props.debugData?.protagonist?.inventory, (newVal) => {
-  if (newVal) {
-    localInventory.value = newVal.map((item: any) => {
-      if (typeof item === 'string') return item
-      return item?.id || ''
-    })
-  } else {
-    localInventory.value = []
-  }
-}, { immediate: true })
-
-function addInventoryItem() {
-  localInventory.value.push('')
+function openRegenDialog(): void {
+  if (props.protagonist) emit('open-regen-dialog', 'protagonist', props.protagonist.id, name.value)
 }
 
-function updateInventoryItem(index: number, itemId: string) {
-  localInventory.value[index] = itemId
-  saveInventory()
+function openUploadPicker(): void {
+  if (props.protagonist) emit('open-upload-picker', 'protagonist', props.protagonist.id, name.value)
 }
 
-function removeInventoryItem(index: number) {
-  localInventory.value.splice(index, 1)
-  saveInventory()
-}
-
-function saveInventory() {
-  emit('save-field', 'inventory', localInventory.value.filter(id => id !== ''))
-}
-
-function getEquipmentSlotItemId(slotKey: string): string {
-  const item = props.debugData?.protagonist?.equipment?.[slotKey]
-  if (!item) return ''
-  if (typeof item === 'string') return item
-  return item.id || ''
-}
-
-function saveEquipmentSlot(slotKey: string, itemId: string) {
-  const currentEquipment = props.debugData?.protagonist?.equipment || {}
-  const updatedEquipment = Object.entries(currentEquipment).reduce((acc: any, [k, v]: [string, any]) => {
-    acc[k] = v ? (typeof v === 'string' ? v : (v?.id || null)) : null
-    return acc
-  }, {})
-  updatedEquipment[slotKey] = itemId || null
-  emit('save-field', 'equipment', updatedEquipment)
+function downloadPortrait(): void {
+  const image = props.protagonist?.profile_image
+  if (image) emit('download-asset', image, `${name.value}_portrait`)
 }
 </script>
 
 <template>
-  <div class="space-y-8 animate-page-in">
-    <!-- Subtabs -->
-    <div v-if="debugData?.protagonist" class="flex gap-6 border-b border-white/10 pb-2">
-      <button
-        type="button"
-        @click="activeSubTab = 'general'"
-        :class="['text-xs font-black uppercase tracking-widest pb-2 transition-colors border-b-2', activeSubTab === 'general' ? 'text-emerald-400 border-emerald-400' : 'text-slate-500 border-transparent hover:text-white']"
-      >
-        General
-      </button>
-      <button
-        type="button"
-        @click="activeSubTab = 'advanced'"
-        :class="['text-xs font-black uppercase tracking-widest pb-2 transition-colors border-b-2 flex items-center gap-1.5', activeSubTab === 'advanced' ? 'text-emerald-400 border-emerald-400' : 'text-slate-500 border-transparent hover:text-white']"
-      >
-        <Sparkles class="w-3.5 h-3.5" />
-        <span>Advanced Triggers</span>
-        <span v-if="debugData.protagonist.on_hp_change_script || debugData.protagonist.on_status_change_script" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-      </button>
-    </div>
+  <div class="space-y-6">
+    <PageHeader title="Protagonist" description="The hero the player controls: who they are, what they can do and what they carry.">
+      <template #actions>
+        <UiButton size="sm" :icon="Upload" @click="emit('import-entity', 'protagonist')">Import</UiButton>
+        <UiButton
+          v-if="protagonist"
+          size="sm"
+          :icon="Download"
+          @click="emit('export-entity', 'protagonist', null, name)"
+        >
+          Export
+        </UiButton>
+      </template>
+    </PageHeader>
 
-    <!-- General Subtab -->
-    <div v-show="activeSubTab === 'general'" class="space-y-8">
-      <section v-if="debugData?.protagonist" class="space-y-4 bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
-          <div class="flex items-center gap-4">
-            <button @click="emit('import-entity', 'protagonist')" class="text-xs font-bold text-sky-500 hover:text-sky-400 flex items-center gap-1.5 uppercase tracking-widest transition-colors" title="Replace the protagonist with one from a .twe file">
-              <i class="ra ra-load"></i> Import
-            </button>
-            <button @click="emit('export-entity', 'protagonist', null, debugData.protagonist.name)" class="text-xs font-bold text-teal-500 hover:text-teal-400 flex items-center gap-1.5 uppercase tracking-widest transition-colors" title="Export the protagonist incl. portrait as a .twe file">
-              <i class="ra ra-save"></i> Export
-            </button>
-          </div>
-        </div>
+    <UiEmptyState
+      v-if="!protagonist"
+      :icon="UserX"
+      title="No protagonist yet"
+      description="Import one from a .twe file or let the World-Builder create it."
+    />
 
-        <div class="bg-black/20 border border-white/5 rounded-3xl p-6 flex flex-col md:flex-row gap-6 backdrop-blur-md shadow-inner">
-        <div class="shrink-0 relative group">
-          <div class="w-full md:w-56 h-72 md:h-80 rounded-2xl overflow-hidden bg-slate-800 border border-white/10 shadow-lg relative">
-            <img
-              v-if="debugData.protagonist.profile_image"
-              :src="buildVisualImageUrl(debugData.protagonist.profile_image)"
-              title="View portrait in full size"
-              class="absolute inset-0 w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform duration-700"
-              @click="enlargedPortraitUrl = buildVisualImageUrl(debugData.protagonist.profile_image)"
-            />
-            <div v-else class="absolute inset-0 flex items-center justify-center text-slate-600">
-              <i class="ra ra-person text-4xl"></i>
-            </div>
-            <div v-if="isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-10">
-              <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
-            </div>
-          </div>
-          <div class="absolute top-1.5 right-1.5 z-40">
-            <button @click="emit('toggle-menu', debugData.protagonist.id, $event)" class="w-6 h-6 rounded-full bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg">
-              <div class="flex flex-col gap-[3px]">
-                <div class="w-[3px] h-[3px] bg-white rounded-full"></div>
-                <div class="w-[3px] h-[3px] bg-white rounded-full"></div>
-                <div class="w-[3px] h-[3px] bg-white rounded-full"></div>
-              </div>
-            </button>
-            <div v-if="activeMenuId === debugData.protagonist.id" class="absolute right-0 mt-1.5 w-52 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
-              <button @click="emit('quick-regen', 'protagonist', debugData.protagonist.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate Portrait</button>
-              <button @click="emit('open-regen-dialog', 'protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
-              <button @click="emit('open-upload-picker', 'protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Portrait</button>
-              <button v-if="debugData.protagonist.profile_image" @click="emit('download-asset', debugData.protagonist.profile_image, `${debugData.protagonist.name || 'protagonist'}_portrait`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Portrait</button>
-            </div>
-          </div>
-        </div>
+    <template v-else>
+      <UiTabs v-model="panel" :tabs="tabs" label="Protagonist sections" />
 
-        <div class="flex-grow min-w-0 space-y-4">
-          <div class="space-y-1">
-            <InlineEditableField
-              :value="debugData.protagonist.name"
-              type="text"
-              :maxlength="50"
-              required
-              :is-saving="isSavingText"
-              edit-id="name"
-              :active-edit-id="activeEditId"
-              display-class="group cursor-pointer bg-black/10 hover:bg-black/30 border border-white/5 hover:border-emerald-500/30 rounded-xl px-3 py-1.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[40px]"
-              @save="emit('save-field', 'name', $event)"
-              @start-edit="activeEditId = $event"
-            >
-              <template #default="{ value }">
-                <h4 class="text-xl font-black text-white tracking-tight">{{ value }}</h4>
-              </template>
-            </InlineEditableField>
-            <p class="text-sm font-bold text-emerald-400/70 uppercase tracking-widest mt-0.5 px-3">{{ debugData.protagonist.role || 'Protagonist' }}</p>
-          </div>
+      <ProtagonistGeneralPanel
+        v-show="panel === 'general'"
+        :protagonist="protagonist"
+        :is-saving-text="isSavingText"
+        :is-generating="!!isQuickGenerating['protagonist_' + protagonist.id]"
+        :visuals-cache-version="visualsCacheVersion"
+        :reference-options="referenceOptions"
+        :adventure-id="adventureId"
+        :voice-list="voiceList"
+        @save-field="(field, value) => emit('save-field', field, value)"
+        @quick-regen="emit('quick-regen', 'protagonist', protagonist.id)"
+        @open-regen-dialog="openRegenDialog"
+        @open-upload-picker="openUploadPicker"
+        @download-asset="downloadPortrait"
+        @talents-saved="emit('special-attacks-saved')"
+      />
 
-          <!-- RPG & Status Stats Grid -->
-          <div v-if="ruleEnforcementMode !== 'chat'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-            <!-- HP -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Hit Points</span>
-              <InlineEditableField
-                :value="debugData.protagonist.hp ?? 20"
-                type="number"
-                :min="0"
-                :max="999"
-                required
-                :is-saving="isSavingText"
-                edit-id="hp"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'hp', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-red-400">
-                      <i class="ra ra-heart text-[14px]"></i>
-                      <span class="text-xs font-black">HP</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- STM -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Stamina</span>
-              <InlineEditableField
-                :value="debugData.protagonist.stamina ?? 20"
-                type="number"
-                :min="0"
-                :max="999"
-                required
-                :is-saving="isSavingText"
-                edit-id="stamina"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'stamina', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-emerald-400">
-                      <i class="ra ra-muscle-up text-[14px]"></i>
-                      <span class="text-xs font-black">STM</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- MAN -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Mana</span>
-              <InlineEditableField
-                :value="debugData.protagonist.mana ?? 20"
-                type="number"
-                :min="0"
-                :max="999"
-                required
-                :is-saving="isSavingText"
-                edit-id="mana"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'mana', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-blue-400">
-                      <i class="ra ra-crystal-ball text-[14px]"></i>
-                      <span class="text-xs font-black">MAN</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- STR -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Strength</span>
-              <InlineEditableField
-                :value="debugData.protagonist.strength ?? 10"
-                type="number"
-                :min="1"
-                :max="99"
-                required
-                :is-saving="isSavingText"
-                edit-id="strength"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'strength', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-amber-400">
-                      <i class="ra ra-sword text-[14px]"></i>
-                      <span class="text-xs font-black">STR</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- DEX -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Dexterity</span>
-              <InlineEditableField
-                :value="debugData.protagonist.dexterity ?? 10"
-                type="number"
-                :min="1"
-                :max="99"
-                required
-                :is-saving="isSavingText"
-                edit-id="dexterity"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'dexterity', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-teal-400">
-                      <i class="ra ra-arrow-flight text-[14px]"></i>
-                      <span class="text-xs font-black">DEX</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- INT -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Intelligence</span>
-              <InlineEditableField
-                :value="debugData.protagonist.intelligence ?? 10"
-                type="number"
-                :min="1"
-                :max="99"
-                required
-                :is-saving="isSavingText"
-                edit-id="intelligence"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'intelligence', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-indigo-400">
-                      <i class="ra ra-brain text-[14px]"></i>
-                      <span class="text-xs font-black">INT</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- WIS -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Wisdom</span>
-              <InlineEditableField
-                :value="debugData.protagonist.wisdom ?? 10"
-                type="number"
-                :min="1"
-                :max="99"
-                required
-                :is-saving="isSavingText"
-                edit-id="wisdom"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'wisdom', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-fuchsia-400">
-                      <i class="ra ra-eye-shield text-[14px]"></i>
-                      <span class="text-xs font-black">WIS</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- CHA -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Charisma</span>
-              <InlineEditableField
-                :value="debugData.protagonist.charisma ?? 10"
-                type="number"
-                :min="1"
-                :max="99"
-                required
-                :is-saving="isSavingText"
-                edit-id="charisma"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'charisma', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-rose-400">
-                      <i class="ra ra-crowned-heart text-[14px]"></i>
-                      <span class="text-xs font-black">CHA</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- AC -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Armor Class</span>
-              <InlineEditableField
-                :value="debugData.protagonist.armor_class ?? 10"
-                type="number"
-                :min="1"
-                :max="99"
-                required
-                :is-saving="isSavingText"
-                edit-id="armor_class"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-slate-500/10 hover:bg-slate-500/20 border border-slate-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'armor_class', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-slate-400">
-                      <i class="ra ra-shield text-[14px]"></i>
-                      <span class="text-xs font-black">AC</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <!-- EXP -->
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Experience</span>
-              <InlineEditableField
-                :value="debugData.protagonist.exp ?? 0"
-                type="number"
-                :min="0"
-                required
-                :is-saving="isSavingText"
-                edit-id="exp"
-                :active-edit-id="activeEditId"
-                display-class="group cursor-pointer bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
-                @save="emit('save-field', 'exp', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <div class="flex items-center justify-between w-full">
-                    <div class="flex items-center gap-1.5 text-yellow-400">
-                      <i class="ra ra-player-king text-[14px]"></i>
-                      <span class="text-xs font-black">EXP</span>
-                    </div>
-                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
-                  </div>
-                </template>
-              </InlineEditableField>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 gap-3">
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Bio</span>
-              <InlineEditableField
-                :value="debugData.protagonist.description ?? ''"
-                type="textarea"
-                :maxlength="1000"
-                required
-                :use-references="true"
-                :reference-options="referenceOptions"
-                :is-saving="isSavingText"
-                edit-id="description"
-                :active-edit-id="activeEditId"
-                empty-text="No biography set. Click to describe your character."
-                display-class="group cursor-pointer bg-black/10 hover:bg-black/30 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start w-full min-h-[50px]"
-                @save="emit('save-field', 'description', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <p class="text-sm text-slate-200 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
-                </template>
-              </InlineEditableField>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Motivation</span>
-                <InlineEditableField
-                  :value="debugData.protagonist.goal ?? ''"
-                  type="textarea"
-                  :maxlength="200"
-                  :use-references="true"
-                  :reference-options="referenceOptions"
-                  :is-saving="isSavingText"
-                  edit-id="goal"
-                  :active-edit-id="activeEditId"
-                  empty-text="No motivation set. Click to add details."
-                  display-class="group cursor-pointer bg-black/10 hover:bg-black/30 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start w-full min-h-[50px]"
-                  @save="emit('save-field', 'goal', $event)"
-                  @start-edit="activeEditId = $event"
-                >
-                  <template #default="{ value }">
-                    <p class="text-sm text-slate-200 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
-                  </template>
-                </InlineEditableField>
-              </div>
-
-              <div class="space-y-1">
-                <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Traits</span>
-                <InlineEditableField
-                  :value="debugData.protagonist.character ?? ''"
-                  type="textarea"
-                  :maxlength="200"
-                  :use-references="true"
-                  :reference-options="referenceOptions"
-                  :is-saving="isSavingText"
-                  edit-id="character"
-                  :active-edit-id="activeEditId"
-                  empty-text="No traits set. Click to add details."
-                  display-class="group cursor-pointer bg-black/10 hover:bg-black/30 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start w-full min-h-[50px]"
-                  @save="emit('save-field', 'character', $event)"
-                  @start-edit="activeEditId = $event"
-                >
-                  <template #default="{ value }">
-                    <p class="text-sm text-slate-200 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
-                  </template>
-                </InlineEditableField>
-              </div>
-            </div>
-
-            <!-- Voice of the player's own lines (ElevenLabs); saved as soon as it changes. -->
-            <NpcVoicePicker
-              :model-value="debugData.protagonist.voice || ''"
-              :voice-list="voiceList ?? null"
-              :npc-name="debugData.protagonist.name"
-              :adventure-id="adventureId"
-              @update:model-value="emit('save-field', 'voice', $event)"
-            />
-
-            <div class="space-y-1">
-              <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Appearance Keywords</span>
-              <InlineEditableField
-                :value="debugData.protagonist.appearance ?? ''"
-                type="text"
-                :maxlength="100"
-                placeholder="lean young woman, short red hair, leather coat, brass goggles"
-                :is-saving="isSavingText"
-                edit-id="appearance"
-                :active-edit-id="activeEditId"
-                empty-text="No appearance keywords set. Click to add visual keywords for image generation."
-                @save="emit('save-field', 'appearance', $event)"
-                @start-edit="activeEditId = $event"
-              >
-                <template #default="{ value }">
-                  <p class="text-sm text-slate-200 leading-relaxed">{{ value }}</p>
-                </template>
-              </InlineEditableField>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Equipment & Starting Inventory Sections -->
-    <section v-if="debugData?.protagonist && ruleEnforcementMode !== 'chat'" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 animate-page-in">
-      <!-- Starting Equipment Slots -->
-      <div class="bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl flex flex-col space-y-4">
-        <div class="flex items-center gap-2 border-b border-white/5 pb-3">
-          <i class="ra ra-knight-helmet text-xl text-emerald-400"></i>
-          <h4 class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Starting Equipment Slots</h4>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div v-for="slot in equipmentSlots" :key="slot.key" class="bg-black/20 p-4 rounded-2xl border border-white/5 flex flex-col space-y-2">
-            <div class="flex items-center gap-2 text-xs font-bold text-slate-400">
-              <i :class="[slot.icon, 'text-emerald-500/80 text-sm']"></i>
-              <span>{{ slot.label }}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <div class="flex-grow min-w-0">
-                <EntityReferenceCombobox
-                  :model-value="getEquipmentSlotItemId(slot.key)"
-                  :options="objectOptions"
-                  placeholder="Empty Slot"
-                  @update:model-value="saveEquipmentSlot(slot.key, $event)"
-                />
-              </div>
-              <button
-                type="button"
-                @click="emit('create-new-item', { type: 'equipment', key: slot.key })"
-                class="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 rounded-xl transition-all shrink-0 flex items-center justify-center"
-                title="Create a Brand New Item Template for this Slot"
-              >
-                <Hammer class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Starting Inventory Backpack -->
-      <div class="bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl flex flex-col space-y-4">
-        <div class="flex items-center justify-between border-b border-white/5 pb-3">
-          <div class="flex items-center gap-2">
-            <i class="ra ra-backpack text-xl text-emerald-400"></i>
-            <h4 class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Starting Inventory</h4>
-          </div>
-          <div class="flex gap-2">
-            <button
-              @click="addInventoryItem"
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs font-bold text-emerald-400 transition-all"
-              title="Add a slot to select an existing item"
-            >
-              <Plus class="w-3.5 h-3.5" />
-              <span>Select Item</span>
-            </button>
-            <button
-              @click="emit('create-new-item', { type: 'inventory' })"
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs font-bold text-emerald-400 transition-all"
-              title="Create a brand new item template and add to inventory"
-            >
-              <Hammer class="w-3.5 h-3.5" />
-              <span>Create New</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-          <div
-            v-for="(itemId, index) in localInventory"
-            :key="index"
-            class="bg-black/20 p-4 rounded-2xl border border-white/5 flex items-center gap-3"
-          >
-            <span class="text-xs font-bold text-slate-500 w-6 shrink-0">#{{ index + 1 }}</span>
-            <div class="flex-grow min-w-0 flex items-center gap-2">
-              <div class="flex-grow min-w-0">
-                <EntityReferenceCombobox
-                  :model-value="itemId"
-                  :options="objectOptions"
-                  placeholder="Select item to add..."
-                  @update:model-value="updateInventoryItem(index, $event)"
-                />
-              </div>
-              <button
-                type="button"
-                @click="emit('create-new-item', { type: 'inventory', index })"
-                class="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 rounded-xl transition-all shrink-0 flex items-center justify-center"
-                title="Create a Brand New Item Template and assign to this Slot"
-              >
-                <Hammer class="w-4 h-4" />
-              </button>
-            </div>
-            <button
-              @click="removeInventoryItem(index)"
-              class="p-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-red-400 rounded-xl transition-all"
-              title="Remove from Inventory"
-            >
-              <Trash2 class="w-4 h-4" />
-            </button>
-          </div>
-
-          <div v-if="localInventory.length === 0" class="text-center py-12 text-slate-500 text-xs italic">
-            Backpack is empty. Click "Select Item" or "Create New" to add starting items.
-          </div>
-        </div>
-      </div>
-      </section>
-
-      <section
-        v-if="debugData?.protagonist && adventureId && ruleEnforcementMode !== 'chat'"
-        class="mt-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5"
-      >
-        <SpecialAttacksEditor
-          :adventure-id="adventureId"
-          target-type="protagonist"
-          :target-id="debugData.protagonist.id"
-          :owner-name="debugData.protagonist.name"
-          :attacks="debugData.protagonist.stats?.special_actions ?? []"
-          :reference-options="referenceOptions"
-          @saved="emit('special-attacks-saved')"
+      <template v-if="hasRules">
+        <ProtagonistStatsPanel
+          v-show="panel === 'stats'"
+          :protagonist="protagonist"
+          @save-field="(field, value) => emit('save-field', field, value)"
         />
-      </section>
-
-      <section
-        v-if="debugData?.protagonist && adventureId"
-        class="mt-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5"
-      >
-        <TalentsEditor
-          :adventure-id="adventureId"
-          :owner-name="debugData.protagonist.name"
-          :talents="debugData.protagonist.stats?.talents ?? []"
+        <ProtagonistEquipmentPanel
+          v-show="panel === 'equipment'"
+          :protagonist="protagonist"
           :reference-options="referenceOptions"
-          @saved="emit('special-attacks-saved')"
+          @save-field="(field, value) => emit('save-field', field, value)"
+          @create-new-item="emit('create-new-item', $event)"
         />
-      </section>
-      </div> <!-- End general subtab -->
-
-      <!-- Advanced Tab: Protagonist Status Change Triggers -->
-      <div v-show="activeSubTab === 'advanced'" class="space-y-6 pt-2">
-        <div class="space-y-1">
-          <p class="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-            <Sparkles class="w-4 h-4" /> Protagonist Status Triggers
-          </p>
-          <p class="text-[11px] text-slate-400">
-            Define transition scripts and cues executed when protagonist stats change (e.g. taking damage or gaining/losing status effects).
-          </p>
-        </div>
-
-        <!-- On HP Change Trigger -->
-        <div class="space-y-4 border border-white/5 bg-black/30 p-6 rounded-3xl">
-          <div class="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
-            <HeartPulse class="w-4 h-4" /> On HP Change Trigger
-          </div>
-          <ScriptEditor
-            v-model="localHpScript"
-            label="On HP Change Script"
-            help-text="Executed immediately when protagonist HP changes (e.g. check if HP <= 0, trigger low-health event, etc.)."
-            context="protagonist_hp_change"
-            min-height="120px"
-            @blur="saveProtagonistTrigger('on_hp_change_script', localHpScript)"
+        <ProtagonistInventoryPanel
+          v-show="panel === 'inventory'"
+          :protagonist="protagonist"
+          :reference-options="referenceOptions"
+          @save-field="(field, value) => emit('save-field', field, value)"
+          @create-new-item="emit('create-new-item', $event)"
+        />
+        <div v-if="adventureId" v-show="panel === 'combat'">
+          <SpecialAttacksEditor
+            :adventure-id="adventureId"
+            target-type="protagonist"
+            :target-id="protagonist.id"
+            :owner-name="protagonist.name ?? ''"
+            :attacks="protagonist.stats?.special_actions ?? []"
+            :reference-options="referenceOptions"
+            @saved="emit('special-attacks-saved')"
           />
-          <div class="space-y-1">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On HP Change Text</label>
-            <textarea
-              v-model="localHpText"
-              rows="3"
-              placeholder="e.g. Your vision flashes red as agonizing pain shoots through your body."
-              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500/50 outline-none resize-y"
-              @blur="saveProtagonistTrigger('on_hp_change_text', localHpText)"
-            ></textarea>
-          </div>
-          <div class="flex justify-end">
-            <button
-              type="button"
-              @click="saveProtagonistTrigger('on_hp_change_script', localHpScript); saveProtagonistTrigger('on_hp_change_text', localHpText)"
-              class="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-            >
-              Save HP Trigger
-            </button>
-          </div>
         </div>
+      </template>
 
-        <!-- On Status Change Trigger -->
-        <div class="space-y-4 border border-white/5 bg-black/30 p-6 rounded-3xl">
-          <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
-            <Activity class="w-4 h-4" /> On Status Change Trigger
-          </div>
-          <ScriptEditor
-            v-model="localStatusScript"
-            label="On Status Change Script"
-            help-text="Executed immediately when protagonist status effects or conditions change."
-            context="protagonist_status_change"
-            min-height="120px"
-            @blur="saveProtagonistTrigger('on_status_change_script', localStatusScript)"
-          />
-          <div class="space-y-1">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">On Status Change Text</label>
-            <textarea
-              v-model="localStatusText"
-              rows="3"
-              placeholder="e.g. A tingling sensation spreads across your skin as your condition shifts."
-              class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500/50 outline-none resize-y"
-              @blur="saveProtagonistTrigger('on_status_change_text', localStatusText)"
-            ></textarea>
-          </div>
-          <div class="flex justify-end">
-            <button
-              type="button"
-              @click="saveProtagonistTrigger('on_status_change_script', localStatusScript); saveProtagonistTrigger('on_status_change_text', localStatusText)"
-              class="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-            >
-              Save Status Trigger
-            </button>
-          </div>
-        </div>
-      </div>
-
-    <EditorImageLightbox :image-url="enlargedPortraitUrl" @close="enlargedPortraitUrl = null" />
+      <ProtagonistTriggersPanel
+        v-show="panel === 'triggers'"
+        :protagonist="protagonist"
+        :is-saving="isSavingText"
+        @save-fields="emit('save-field', $event)"
+      />
+    </template>
   </div>
 </template>
-
-<style scoped>
-.animate-page-in { animation: pageIn 0.6s cubic-bezier(0.16,1,0.3,1) forwards; }
-@keyframes pageIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-</style>

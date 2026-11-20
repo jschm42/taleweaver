@@ -20,8 +20,11 @@ from backend.api.routes.adventures.turn_context_helpers import (
 )
 from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
+from backend.engine.conversations.relations import relations_prompt_block
+from backend.engine.party.party_prompt import companion_prompt_block
 from backend.engine.rules.crafting_recipes import is_recipe
 from backend.engine.rules.game_clock import gm_time_allowed, read_clock
+from backend.engine.rules.npc_memory import npc_memory_prompt_block
 from backend.engine.rules.soft_rules import (
     build_soft_rules_prompt_block,
     fired_counts,
@@ -58,6 +61,8 @@ class TurnLlmContext:
     complex_model_provider: str
     small_model: str
     complex_model: str
+    generator_model_provider: str = "openai"
+    generator_model: str = "gpt-4o"
     compression_model_provider: str = "openai"
     compression_model: str = ""
     compression_max_tokens: int = 4096
@@ -320,10 +325,30 @@ class TurnLlmContextBuilder:
             other_npcs=None,
             **state_kwargs,
         )
+        scene_labels = {str(s.id): str(s.label or s.id) for s in world.all_scenes}
+        companion_args = (state.entity_states or {}, world.all_entities, state.current_scene_id)
+        mechanics_state_block += companion_prompt_block(
+            *companion_args, scene_labels, for_mechanics=True
+        )
+        narration_state_block += companion_prompt_block(
+            *companion_args, scene_labels, for_mechanics=False
+        )
+        # Chat mode has no npc_memories field: it only narrates what earlier turns stored.
+        if adventure.strict_rules:
+            mechanics_state_block += npc_memory_prompt_block(
+                state.entity_states, visible, for_mechanics=True
+            )
+        narration_state_block += npc_memory_prompt_block(
+            state.entity_states, visible, for_mechanics=False
+        )
+        # How the present NPCs see each other, so their talk has direction.
+        narration_state_block += relations_prompt_block(visible, state.entity_states)
         session_memory_block = (
             self.manager._build_gm_notes_prompt_block()
             + self.manager._build_compressed_history_prompt_block()
-            + self.manager._build_world_memories_prompt_block()
+            + self.manager._build_world_memories_prompt_block(
+                [str(e.id) for e in visible if str(e.entity_type or "").upper() == "NPC"]
+            )
         )
         soft_rules_block = build_soft_rules_prompt_block(
             sequence_soft_rules(AdventureLogic.resolve_active_sequence(adventure, state)),

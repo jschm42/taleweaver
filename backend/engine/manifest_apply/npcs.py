@@ -16,6 +16,13 @@ from backend.engine.audio.voice_casting import (
     resolve_voice_setup,
 )
 from backend.engine.combat.npc_attack import npc_stat_columns
+from backend.engine.conversations.npc_fields import (
+    CHATTY_KEY,
+    RELATIONS_KEY,
+    TOPICS_KEY,
+    normalize_conversation_metadata,
+)
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.manifest_apply.assets import find_duplicate_image_url, needs_image
 from backend.engine.manifest_apply.context import ApplyContext
 from backend.engine.manifest_apply.visuals import (
@@ -26,6 +33,8 @@ from backend.engine.manifest_apply.visuals import (
     uses_advanced_model,
 )
 from backend.engine.media.image_prompt_context import build_npc_image_prompt, clean_appearance
+from backend.engine.party.companion_config import COMPANION_KEY, normalize_companion
+from backend.engine.rules.npc_memory import MEMORY_SLOTS_KEY, normalize_memory_slots
 from backend.models.world_entity import WorldEntity
 
 # NPC settings that may appear at the top level (generated manifests) or inside
@@ -41,6 +50,7 @@ _METADATA_FIELDS = (
     "special_chance",
     "combat_group",
     "assist_mode",
+    "companion",
     "on_defeat_script",
     "on_defeat_text",
     "on_protagonist_enters_scene_script",
@@ -49,6 +59,15 @@ _METADATA_FIELDS = (
     "on_interact_text",
     "on_receive_item_script",
     "on_receive_item_text",
+    "on_recruit_success_script",
+    "on_recruit_success_text",
+    "on_recruit_failure_script",
+    "on_recruit_failure_text",
+    "reveal_guard_expression",
+    MEMORY_SLOTS_KEY,
+    RELATIONS_KEY,
+    CHATTY_KEY,
+    TOPICS_KEY,
 )
 _METADATA_DEFAULTS: dict[str, Any] = {"special_actions": [], "attack_mode": "PASSIVE"}
 
@@ -79,6 +98,9 @@ def npc_metadata(npc: dict[str, Any]) -> dict[str, Any]:
         if value in (None, "", []):
             value = _METADATA_DEFAULTS.get(key)
         metadata[key] = value
+    metadata[COMPANION_KEY] = normalize_companion(metadata.get(COMPANION_KEY))
+    metadata[MEMORY_SLOTS_KEY] = normalize_memory_slots(metadata.get(MEMORY_SLOTS_KEY))
+    normalize_conversation_metadata(metadata)
     return metadata
 
 
@@ -161,7 +183,7 @@ def _casting_candidate(npc: dict[str, Any], voices: list[VoiceOption]) -> Castin
 
 
 def _stored_voice(npc: dict[str, Any], cast: dict[str, Optional[str]]) -> Optional[str]:
-    """What to store: a custom voice as written, else the cast voice (imports keep theirs under Gemini)."""
+    """What to store: a custom voice as written, else the cast voice (or the written one)."""
     if custom_voice_id(npc.get("voice")):
         return npc["voice"]
     return cast.get(npc["id"]) or npc.get("voice")
@@ -191,7 +213,7 @@ def _npc_entity(
         spatial_position=npc.get("spatial_position"),
         image_url=image_url,
         voice=voice,
-        npc_type=npc.get("npc_type"),
+        npc_type=normalize_npc_type(npc.get("npc_type")),
         movement_type="MOVABLE"
         if (npc.get("moveable") is True or declared_movable)
         else "STATIONARY",

@@ -1,11 +1,9 @@
 import { api } from '@/composables/useApi'
 import { API_BASE, authHeaders } from '@/services/http'
 
-export type GameDateFormat = 'DD.MM.YY' | 'MM/DD/YY' | 'YY-MM-DD'
-
+/** Shared game settings of the server (the clock format is a player preference on the user). */
 export interface GameSettings {
-  clock_24h: boolean
-  date_format?: GameDateFormat
+  whisper_model?: string
 }
 
 export interface WalkthroughData {

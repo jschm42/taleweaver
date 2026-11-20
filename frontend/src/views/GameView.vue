@@ -12,15 +12,14 @@ import MapModal from '@/components/game/MapModal.vue'
 import GameAudioToggle from '@/components/game/GameAudioToggle.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
-import GameOverScreen from '@/components/game/GameOverScreen.vue'
-import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import ImmersiveGameView from '@/components/game/ImmersiveGameView.vue'
 import { usePlayAgentAutoLoop } from '@/composables/usePlayAgent'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
-import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerPanel from '@/components/game/prompts/ContainerPanel.vue'
 import GivePanel from '@/components/game/prompts/GivePanel.vue'
+import RecruitPanel from '@/components/game/prompts/RecruitPanel.vue'
 import { useGivePanel } from '@/composables/useGivePanel'
+import { useRecruitPanel } from '@/composables/useRecruitPanel'
 import LockUnlockPanel from '@/components/game/prompts/LockUnlockPanel.vue'
 import SwitchStatePanel from '@/components/game/prompts/SwitchStatePanel.vue'
 import DialogChoicePanel from '@/components/game/DialogChoicePanel.vue'
@@ -64,8 +63,9 @@ import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { exitDisplayName as exitNameOf } from '@/utils/exitLabel'
 import { audioService } from '@/services/audioService'
 import { waitForSpeechToFinish } from '@/services/speechWait'
+import { useListeningMode } from '@/composables/useListeningMode'
 import { type GameSettings } from '@/services/gameViewService'
-import { GIVE_TO_PREFIX, gameCommandService } from '@/services/gameCommandService'
+import { GIVE_TO_PREFIX, OPEN_COMPANION_SHEET_PREFIX, RECRUIT_PREFIX, gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 import type { SheetTabId } from '@/components/game/sheet/types'
@@ -80,6 +80,8 @@ const route = useRoute()
 const showSheet = ref(false)
 /** Tab the hero dialog opens on (the hero portrait asks for 'hero'); null keeps the last tab. */
 const sheetInitialTab = ref<SheetTabId | null>(null)
+/** Whose page the hero dialog opens on: the protagonist or the active companion. */
+const sheetInitialSubject = ref<'hero' | 'companion'>('hero')
 const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
@@ -201,9 +203,13 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
       narration_style: payload.narrationStyle,
       ui_skin: payload.skin,
       tts_auto_speak: ttsAutoSpeak,
+      ...(sheet.value?.npc_chatter?.available ? { npc_chatter: payload.npcChatter } : {}),
     })
     if (sheet.value) {
       sheet.value.tts_auto_speak = ttsAutoSpeak
+      if (sheet.value.npc_chatter?.available) {
+        sheet.value.npc_chatter = { ...sheet.value.npc_chatter, enabled: payload.npcChatter }
+      }
       sheet.value.max_memory_turns = payload.turns
       sheet.value.enable_history_compression = payload.enableCompression
       sheet.value.narration_style = payload.narrationStyle
@@ -218,15 +224,12 @@ const saveSessionSettings = async (payload: SessionSettingsPayload) => {
   }
 }
 const { notifications, removeNotification, addNotification } = useNotifications()
-const gameSettings = ref<GameSettings>({
-  clock_24h: false,
-})
+const gameSettings = ref<GameSettings>({})
 
 const {
   sheet,
   status,
   messages,
-  gameOverReason,
   statusNote,
   adventureImage,
   entities,
@@ -253,6 +256,7 @@ const {
   questGlow,
   isCheckpointSaving,
   isSceneTransitioning: socketIsSceneTransitioning,
+  dynamicInterlude,
   sceneArrival,
   generatorProposal,
   showGeneratorModal,
@@ -349,14 +353,12 @@ const confirmRestoreCheckpoint = async () => {
   }
 }
 
+// Set from showCombatDialog further down: a lost fight is shown before the ending is written.
+const combatDialogOpen = ref(false)
 const {
-  showSuccess,
-  showGameOver,
   trackedQuestId,
   clockTick,
   gameTime,
-  continueCompletedGame,
-  continueGameOverReadOnly,
   setTrackedQuest,
 } = useGameProgressState({
   sheet,
@@ -367,6 +369,7 @@ const {
   gameSettings,
   createTerminalEpilogue,
   refreshUser,
+  holdEnding: combatDialogOpen,
 })
 
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
@@ -384,6 +387,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  void listening.stop()
   audioService.stop()
 })
 
@@ -403,13 +407,24 @@ const { showGivePanel, giveTarget, giveBusy, openGivePanel, closeGivePanel, subm
     closeSheetForInlinePrompt()
   },
 })
+const {
+  showRecruitPanel, recruitTarget, recruitBusy, openRecruitPanel, closeRecruitPanel, submitRecruit,
+} = useRecruitPanel({
+  npcs: () => npcs.value,
+  sendMessage,
+  beforeOpen: () => {
+    closeInlinePrompts()
+    closeSheetForInlinePrompt()
+  },
+})
 const isInlinePromptOpen = computed(() => showUnlockModal.value || showExitUnlockModal.value
   || showSwitchStateModal.value || showSwitchUnlockModal.value || showTextLogModal.value
-  || showContainerModal.value || showCombinePanel.value || showGivePanel.value)
+  || showContainerModal.value || showCombinePanel.value || showGivePanel.value || showRecruitPanel.value)
 const closeInlinePrompts = (): void => {
   showContainerModal.value = false
   showCombinePanel.value = false
   closeGivePanel()
+  closeRecruitPanel()
   showUnlockModal.value = false
   showExitUnlockModal.value = false
   showSwitchStateModal.value = false
@@ -451,6 +466,12 @@ watch(isInlinePromptOpen, () => {
   hoveredEntity.value = null
 })
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || isDialogOpen.value)
+// Listening mode: NPCs present keep talking; each step waits until the last one was read aloud.
+const listening = useListeningMode({
+  sendMessage,
+  canListen: () => status.value === 'connected' && !isActionInputBlocked.value && !combat.value?.active,
+  listenPossible: () => sheet.value?.npc_chatter?.listen_possible !== false,
+})
 const dialogChoiceBusy = ref(false)
 const dialogChoiceError = ref('')
 
@@ -1080,6 +1101,39 @@ const formatSceneIdToTitle = (rawId?: string | null): string => {
   return trimmed
 }
 
+const findMapNode = (sceneId?: string | null): any | null => {
+  if (!sceneId) return null
+  const raw = String(sceneId).trim()
+  if (!raw) return null
+  const upper = raw.toUpperCase()
+  const safe = raw.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+  const rawNodes = mapData.value?.nodes
+  if (!rawNodes) return null
+  if (Array.isArray(rawNodes)) {
+    return (
+      rawNodes.find((n: any) => {
+        const nid = String(n?.id || n?.key || '').trim().toUpperCase()
+        return nid === upper || nid === safe
+      }) || null
+    )
+  }
+  if (typeof rawNodes === 'object') {
+    const dict = rawNodes as Record<string, any>
+    return dict[safe] || dict[upper] || dict[raw] || null
+  }
+  return null
+}
+
+const isDynamicSceneId = (sceneId?: string | null): boolean => {
+  const raw = String(sceneId || '').trim()
+  if (!raw) return false
+  if (/^DYN_/i.test(raw)) return true
+  const safe = raw.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+  const metaNode = nodes.value?.[safe] || nodes.value?.[raw.toUpperCase()] || nodes.value?.[raw]
+  if (metaNode?.is_dynamic) return true
+  return Boolean(findMapNode(raw)?.is_dynamic)
+}
+
 const resolveSceneName = (sceneId?: string | null): string => {
   if (!sceneId) return ''
   const raw = String(sceneId).trim()
@@ -1089,20 +1143,18 @@ const resolveSceneName = (sceneId?: string | null): string => {
 
   // 1. Check in nodes dictionary (AdventureLogic.get_all_scene_metadata)
   const node = nodes.value?.[safe] || nodes.value?.[upper] || nodes.value?.[raw]
-  if (node?.label && String(node.label).trim()) return String(node.label).trim()
-  if (node?.name && String(node.name).trim()) return String(node.name).trim()
+  const nodeLabel = String(node?.label || node?.name || '').trim()
+  if (nodeLabel && nodeLabel !== '?' && !node?.is_unknown) return nodeLabel
 
-  // 2. Check in mapData.nodes
-  const mapNodes = Array.isArray(mapData.value?.nodes) ? mapData.value.nodes : []
-  const found = mapNodes.find((n: any) => {
-    const nid = String(n.id || n.key || '').trim().toUpperCase()
-    return nid === upper || nid === safe
-  })
-  if (found?.label && String(found.label).trim() && found.label !== '?') {
-    return String(found.label).trim()
-  }
+  // 2. Check in mapData.nodes (supports both dict and array forms)
+  const found = findMapNode(raw)
+  const foundLabel = found && !found.is_unknown ? String(found.label || '').trim() : ''
+  if (foundLabel && foundLabel !== '?') return foundLabel
 
-  // 3. Fallback: Format the ID to Title Case
+  // Never display raw/generated DYN_* IDs in travel UI before materialization
+  if (isDynamicSceneId(raw)) return ''
+
+  // 3. Fallback: Format static scene ID to Title Case
   return formatSceneIdToTitle(raw)
 }
 
@@ -1116,24 +1168,48 @@ const resolveSceneImage = (sceneId?: string | null): string | null => {
   const node = nodes.value?.[safe] || nodes.value?.[upper] || nodes.value?.[raw]
   if (node?.image_url) return String(node.image_url)
 
-  const mapNodes = Array.isArray(mapData.value?.nodes) ? mapData.value.nodes : []
-  const found = mapNodes.find((n: any) => {
-    const nid = String(n.id || n.key || '').trim().toUpperCase()
-    return nid === upper || nid === safe
-  })
+  const found = findMapNode(raw)
   return found?.image_url ? String(found.image_url) : null
 }
 
 const currentSceneName = computed(() => {
   const curId = sheet.value?.scene_id || sheet.value?.current_scene_id || sheet.value?.current_scene
   if (!curId) return 'Unknown Location'
-  return resolveSceneName(curId)
+  return resolveSceneName(curId) || 'New Location'
 })
+
+watch(
+  nodes,
+  () => {
+    const active = sceneTransitionTarget.value
+    if (!active?.targetSceneId) return
+    const resolvedName = resolveSceneName(active.targetSceneId)
+    const resolvedImage = resolveSceneImage(active.targetSceneId)
+    if (resolvedName && resolvedName !== active.targetSceneName) {
+      sceneTransitionTarget.value = {
+        ...active,
+        targetSceneName: resolvedName,
+        targetSceneImage: resolvedImage ?? active.targetSceneImage,
+      }
+    } else if (resolvedImage && resolvedImage !== active.targetSceneImage) {
+      sceneTransitionTarget.value = {
+        ...active,
+        targetSceneImage: resolvedImage,
+      }
+    }
+  },
+  { deep: true },
+)
 
 const traverseSceneExit = async (exit: any, exitRef: string) => {
   exitTraversalBusy.value = exitRef
   const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim()
-  const targetSceneName = exit?.target_scene_name || resolveSceneName(targetId) || 'New Location'
+  const knownName = resolveSceneName(targetId)
+  const safeTargetName =
+    (exit?.target_known && exit?.target_scene_name && !/^DYN_/i.test(String(exit.target_scene_name).trim())
+      ? exit.target_scene_name
+      : '') || knownName
+  const targetSceneName = safeTargetName || 'New Location'
   sceneTransitionTarget.value = {
     label: exitDisplayName(exit),
     targetSceneName,
@@ -1324,6 +1400,14 @@ const submitContainerCode = async (code: string) => {
 
 const handlePlayerInput = async (content: string) => {
   const trimmed = String(content || '').trim()
+  // `/listen on|off` switches listening mode; any other action ends it first.
+  const listenSwitch = trimmed.toLowerCase().match(/^\/listen\s+(on|off)$/)
+  if (listenSwitch) {
+    if (listenSwitch[1] === 'on') listening.start()
+    else await listening.stop()
+    return
+  }
+  await listening.stop()
 
   if (awaitingContainerCodeInput.value && activeCodeContainer.value) {
     if (!trimmed) return
@@ -1536,7 +1620,6 @@ watch(sceneExits, (exits) => {
     void refreshSession()
   }
 })
-const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => {
   if (isClosingCombat.value) return false
@@ -1544,33 +1627,16 @@ const showCombatDialog = computed(() => {
 })
 const combatActionInFlight = ref(false)
 const isClosingCombat = ref(false)
-const showLootPopup = ref(false)
-const lootPopupShownForCombat = ref(false)
+watch(showCombatDialog, (open) => { combatDialogOpen.value = open }, { immediate: true })
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
   const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
   return mode === 'rpg' || mode === 'story' || mode === 'strict'
 })
 
-watch(combat, (newCombat, oldCombat) => {
+watch(combat, (newCombat) => {
   if (!newCombat) {
     isClosingCombat.value = false
-    showLootPopup.value = false
-    lootPopupShownForCombat.value = false
-    return
-  }
-
-  const hadLootPhase = !!oldCombat?.loot_pending
-  const enteredLootPhase = !!newCombat.loot_pending && !hadLootPhase
-  const hasLootItems = (newCombat.loot_items || []).length > 0
-  if (enteredLootPhase && hasLootItems && !lootPopupShownForCombat.value) {
-    showLootPopup.value = true
-    lootPopupShownForCombat.value = true
-  }
-
-  if (!newCombat.loot_pending) {
-    showLootPopup.value = false
-    lootPopupShownForCombat.value = false
   }
 })
 
@@ -1632,6 +1698,7 @@ const {
   fullWorldDebug,
   goBack,
   openDebugInspector,
+  runDebugCommand,
   openWalkthroughPanel,
   revealWalkthrough,
   handlePlayerInput: handlePlayerInputBase,
@@ -1668,6 +1735,29 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   speechHeld: gameAudio.speechHeld,
   playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
 })
+
+watch(
+  dynamicInterlude,
+  (interlude) => {
+    if (!interlude?.quote) return
+    if (!audioService.autoSpeechEnabled.value || !audioService.isUnlocked.value) return
+    if (!autoSpeakSettings.value.npcs || gameAudio.speechHeld.value) return
+    const rawTone = sheet.value?.adventure_tone
+    const toneText = typeof rawTone === 'string' ? rawTone : rawTone?.id || rawTone?.name || undefined
+    const speakerName = interlude.speaker_name || interlude.speaker || undefined
+    void audioService.enqueueSpeak(interlude.quote, {
+      adventureId: sheet.value?.adventure_id || undefined,
+      sessionId: props.id,
+      title: sheet.value?.adventure_title || undefined,
+      sceneName: sheet.value?.current_scene || undefined,
+      tone: toneText,
+      npcMetadata: npcMetadata.value,
+      voiceOverride: interlude.voice || speakerName,
+      speaker: speakerName,
+    })
+  },
+  { flush: 'post' },
+)
 
 const handleTrackQuest = (questId: string | null) => {
   setTrackedQuest(questId)
@@ -1741,6 +1831,16 @@ const {
       return openCombinePanel(action.replace(COMBINE_WITH_PREFIX, '').trim())
     }
 
+    if (action.startsWith(OPEN_COMPANION_SHEET_PREFIX)) {
+      sheetInitialSubject.value = 'companion'
+      sheetInitialTab.value = 'hero'
+      showSheet.value = true
+      return true
+    }
+
+    if (action.startsWith(RECRUIT_PREFIX)) {
+      return openRecruitPanel(action.replace(RECRUIT_PREFIX, '').trim())
+    }
     if (action.startsWith(GIVE_TO_PREFIX)) {
       return openGivePanel(action.replace(GIVE_TO_PREFIX, '').trim())
     }
@@ -1761,9 +1861,10 @@ const {
 
 
 
-const handleEquipFromSheet = async (name: string) => {
+const handleEquipFromSheet = async (name: string, slot?: string) => {
   sheetDirty.value = true
-  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/equip ${name}`)
+  const cmd = slot ? `/equip ${name} | ${slot}` : `/equip ${name}`
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, cmd)
 }
 
 const handleUnequipFromSheet = async (slot: string) => {
@@ -1774,6 +1875,12 @@ const handleUnequipFromSheet = async (slot: string) => {
 const handleConsumeFromSheet = async (name: string) => {
   sheetDirty.value = true
   await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/consume ${name}`)
+}
+
+/** Orders and handovers from the companion page of the hero dialog. */
+const handleSheetCommand = async (cmd: string) => {
+  sheetDirty.value = true
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, cmd)
 }
 
 const handleSheetChanged = async () => {
@@ -1830,6 +1937,12 @@ const handleCombatSpecial = async (actionId: string, targetId: string | null = n
   }
 }
 
+/** Mark: the companion attacks only this target (free action); null lifts the mark. */
+const handleCombatMark = async (targetId: string | null) => {
+  const command = targetId ? `mark ${targetId}` : 'mark'
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, command)
+}
+
 const handleCombatDebugWin = async () => {
   await sendMessage('/debug win_fight')
 }
@@ -1851,12 +1964,13 @@ const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
     combatActionInFlight,
     sendMessage,
     () => {
-      showLootPopup.value = false
       isClosingCombat.value = true
     },
     () => {
-      // Ensure the guard resets eventually once the combat state is truly gone
-      if (!combat.value) {
+      // Reset the guard once the fight is gone, and also when the loot phase is still open
+      // (the /loot request failed or was cut off): otherwise the dialog stays hidden while the
+      // server keeps rejecting every message with "Loot phase active".
+      if (!combat.value || combat.value.loot_pending || combat.value.active) {
         isClosingCombat.value = false
       }
     },
@@ -1864,8 +1978,17 @@ const handleLootDone = async (action: 'done' | 'take_all' = 'done') => {
   )
 }
 
-const closeLootPopup = () => {
-  showLootPopup.value = false
+/**
+ * The protagonist fell: the adventure is over. Closing the dialog releases the ending (epilogue
+ * and ending card in the story feed); the server clears the fight when it writes the ending.
+ * A debug "Lose fight" does not end the adventure, so that fight is closed the normal way.
+ */
+const handleCombatDefeatDismissed = async () => {
+  if (status.value !== 'game_over') {
+    await handleLootDone('done')
+    return
+  }
+  isClosingCombat.value = true
 }
 
 watch(showCombatDialog, (visible) => {
@@ -1908,19 +2031,6 @@ usePlayAgentAutoLoop()
       </div>
     </div>
 
-    <GameAudioToggle
-      v-if="hasAudio"
-      class="absolute top-16 right-4 sm:right-6 z-40"
-      :muted="audioMuted"
-      :volume="audioVolume"
-      :generating="isAudioGenerating"
-      :error="audioError"
-      :playing="isAudioPlaying"
-      @toggle="gameAudio.toggleMuted()"
-      @stop="gameAudio.stopCurrent()"
-      @volume="gameAudio.setVolume"
-    />
-
     <ImmersiveGameView
       ref="dialogPanel"
       :messages="messages"
@@ -1961,13 +2071,16 @@ usePlayAgentAutoLoop()
       :is-checkpoint-saving="isCheckpointSaving"
       :exit-traversal-busy="exitTraversalBusy"
       :is-scene-transitioning="isSceneTransitioning"
+      :dynamic-interlude="dynamicInterlude"
       :scene-transition-target="sceneTransitionTarget || arrivalTarget"
       :exit-unlock-busy="exitUnlockBusy"
       :turn-error="turnError"
       :active-sequence="activeSequence"
       :adventure-title="displayAdventureTitle"
       :has-inline-prompt="isChoicePanelOpen || isInlinePromptOpen"
+      :listening-active="listening.active.value"
       @send="handlePlayerInput"
+      @toggle-listening="listening.toggle()"
       @retry-turn="retryLastAction"
       @cancel-turn-error="cancelTurnError"
       @open-sheet="(tab?: SheetTabId) => { sheetInitialTab = tab ?? null; showSheet = true }"
@@ -1990,7 +2103,21 @@ usePlayAgentAutoLoop()
       @traverse-exit="handleExitClick"
       @switch-flip="openSwitchStateModal"
       @exit-session="showExitModal = true"
+      @back-to-menu="goBack"
     >
+      <template #header-audio>
+        <GameAudioToggle
+          v-if="hasAudio"
+          :muted="audioMuted"
+          :volume="audioVolume"
+          :generating="isAudioGenerating"
+          :error="audioError"
+          :playing="isAudioPlaying"
+          @toggle="gameAudio.toggleMuted()"
+          @stop="gameAudio.stopCurrent()"
+          @volume="gameAudio.setVolume"
+        />
+      </template>
       <template #story-end>
         <DialogChoicePanel
           :open="isChoicePanelOpen"
@@ -2043,6 +2170,18 @@ usePlayAgentAutoLoop()
           @drop-to-scene="handleContainerDropToScene"
           @put-items="handleContainerPutItems"
           @select-switch-state="handleContainerSwitchStateSelect"
+          @item-hover="(item, event) => handleHover(item, event)"
+          @item-leave="hoveredEntity = null"
+        />
+        <RecruitPanel
+          :open="showRecruitPanel"
+          :npc-name="recruitTarget?.name || ''"
+          :npc-image-url="recruitTarget?.imageUrl || null"
+          :hint="recruitTarget?.hint || ''"
+          :inventory-items="inventoryItems"
+          :busy="recruitBusy || isActionInputBlocked"
+          @close="closeRecruitPanel"
+          @offer="submitRecruit"
           @item-hover="(item, event) => handleHover(item, event)"
           @item-leave="hoveredEntity = null"
         />
@@ -2107,7 +2246,9 @@ usePlayAgentAutoLoop()
       :sheet="sheet" 
       :is-debug="!!sheet?.debug_mode"
       :initial-tab="sheetInitialTab"
-      @close="() => { showSheet = false; if (sheetDirty) handleSheetChanged(); }"
+      :initial-subject="sheetInitialSubject"
+      @close="() => { showSheet = false; sheetInitialSubject = 'hero'; if (sheetDirty) handleSheetChanged(); }"
+      @command="handleSheetCommand"
       @equip="handleEquipFromSheet"
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"
@@ -2153,6 +2294,8 @@ usePlayAgentAutoLoop()
       :initial-turns="sheet?.max_memory_turns ?? 10"
       :initial-narration-style="sheet?.narration_style"
       :initial-compression="sheet?.enable_history_compression ?? true"
+      :initial-npc-chatter="sheet?.npc_chatter?.enabled ?? true"
+      :npc-chatter-available="!!sheet?.npc_chatter?.available"
       :initial-auto-speech="audioService.autoSpeechEnabled.value"
       :initial-auto-speak-settings="autoSpeakSettings"
       :initial-language="language"
@@ -2189,19 +2332,6 @@ usePlayAgentAutoLoop()
       @close="closeRestoreConfirmModal"
       @confirm="confirmRestoreCheckpoint"
     />
-    <SuccessScreen 
-      :show="showSuccess" 
-      :total-exp="sheet?.exp || 0" 
-      :note="gameOverReason"
-      @continue="continueCompletedGame"
-      @close="goBack" 
-    />
-    <GameOverScreen 
-      :show="showGameOver" 
-      :reason="gameOverReason" 
-      @continue="continueGameOverReadOnly"
-      @close="goBack" 
-    />
     <DebugModal 
       :open="showDebug" 
       :data="{ 
@@ -2218,7 +2348,7 @@ usePlayAgentAutoLoop()
       }" 
       :map-data="mapData"
       :nodes="nodes"
-      @execute-command="sendMessage"
+      :execute-command="runDebugCommand"
       @close="showDebug = false" 
     />
 
@@ -2235,28 +2365,17 @@ usePlayAgentAutoLoop()
       @run="handleCombatRun"
       @rest="handleCombatRest"
       @special="handleCombatSpecial"
+      @mark="handleCombatMark"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
       @loot-done="handleLootDone('done')"
       @loot-take-all="handleLootDone('take_all')"
+      @defeat-dismissed="handleCombatDefeatDismissed"
       @debug-win="handleCombatDebugWin"
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
       @entity-leave="hoveredEntity = null"
-    />
-
-    <CombatLootPopup
-      :open="showLootPopup && !!combat?.loot_pending"
-      :items="lootPopupItems"
-      :busy="combatActionInFlight"
-      @close="closeLootPopup"
-      @confirm="handleLootDone('done')"
-      @take-all="handleLootDone('take_all')"
-      @take="handleLootTake"
-      @drop="handleLootLeave"
-      @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
-      @item-leave="hoveredEntity = null"
     />
 
     <AdventureGeneratorModal

@@ -7,6 +7,11 @@ import httpx
 
 from backend.core.config import settings
 from backend.engine.audio.elevenlabs_stream import synthesize_elevenlabs_bytes
+from backend.engine.audio.openai_compatible_tts import (
+    OPENAI_COMPATIBLE_PROVIDER,
+    SpeechEndpoint,
+    synthesize_speech,
+)
 from backend.engine.audio.tts_helpers import (
     TTSModelSwitchSuggestionError,
     TTSProviderError,
@@ -61,7 +66,7 @@ def _parse_sse_audio_response(response: httpx.Response) -> dict:
 
 class TTSEngine:
     """
-    Handles speech generation using Google Gemini TTS or ElevenLabs.
+    Handles speech generation using Google Gemini TTS, ElevenLabs or an OpenAI-compatible server.
     """
 
     @staticmethod
@@ -77,6 +82,7 @@ class TTSEngine:
         model_name: str = "gemini-3.8-flash-tts",
         language: Optional[str] = None,
         use_streaming: bool = False,
+        speech_endpoint: Optional[SpeechEndpoint] = None,
         **_unused_kwargs: object,
     ) -> Optional[str]:
         """
@@ -87,15 +93,24 @@ class TTSEngine:
             provider,
             len(text or ""),
         )
-        if not api_key:
-            logger.error("No API key provided for %s TTS.", provider)
-            return None
-
         safe_session_id = sanitize_path_component(session_id)
         if session_id and not safe_session_id:
             logger.warning(
                 "Invalid session_id for TTS output path; using adventure-level fallback."
             )
+
+        if provider == OPENAI_COMPATIBLE_PROVIDER:
+            # The key is optional here (local servers); it travels inside the endpoint.
+            return await TTSEngine._synthesize_openai_compatible(
+                text=_strip_vocal_tags(text or ""),
+                endpoint=speech_endpoint,
+                adventure_id=adventure_id,
+                session_id=safe_session_id,
+            )
+
+        if not api_key:
+            logger.error("No API key provided for %s TTS.", provider)
+            return None
 
         if provider == "elevenlabs":
             # ElevenLabs model ids use underscores, but some might be sent with dots
@@ -153,6 +168,28 @@ class TTSEngine:
             return _write_audio_file(audio, adventure_id, session_id, "mp3")
         except (OSError, ValueError):
             logger.exception("Failed to store ElevenLabs audio")
+            return None
+
+    @staticmethod
+    async def _synthesize_openai_compatible(
+        text: str,
+        endpoint: Optional[SpeechEndpoint],
+        adventure_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """A whole clip from an OpenAI-compatible speech server, stored as a file."""
+        if endpoint is None:
+            raise TTSProviderError("The OpenAI-compatible speech server is not configured.")
+        if not text.strip():
+            return None
+        audio, ext = await synthesize_speech(text, endpoint)
+        if not audio:
+            logger.error("OpenAI-compatible TTS returned zero audio bytes.")
+            return None
+        try:
+            return _write_audio_file(audio, adventure_id, session_id, ext)
+        except (OSError, ValueError):
+            logger.exception("Failed to store OpenAI-compatible TTS audio")
             return None
 
     @staticmethod

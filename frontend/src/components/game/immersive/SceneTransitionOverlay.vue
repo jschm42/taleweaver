@@ -7,7 +7,7 @@
  * and layered gradient vignettes. Colors and fonts follow the active dialog skin
  * (--tw-overlay-* tokens, see src/skins/overlays.css).
  */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import handPointingRightUrl from '@/assets/svg/hand-pointing-right.svg'
 
 const props = defineProps<{
@@ -16,10 +16,21 @@ const props = defineProps<{
   exitLabel?: string | null
   statusText?: string | null
   backgroundImageUrl?: string | null
+  interlude?: {
+    quote: string
+    speaker_name?: string
+    speaker_role?: string
+    speaker?: string
+    image_url?: string | null
+  } | null
 }>()
 
 const imageLoaded = ref(false)
 const imageFailed = ref(false)
+
+const interludeSpeaker = computed((): string => {
+  return (props.interlude?.speaker_name || props.interlude?.speaker || '').trim()
+})
 
 watch(
   () => props.backgroundImageUrl,
@@ -32,6 +43,7 @@ watch(
 function formatSceneTitle(name?: string | null): string {
   if (!name) return ''
   const trimmed = String(name).trim()
+  if (!trimmed || /^DYN(?:_|\s|$)/i.test(trimmed)) return ''
   if (trimmed.includes('_') || trimmed.includes('-') || /^[A-Z0-9\s_-]+$/.test(trimmed)) {
     return trimmed
       .replace(/[_-]+/g, ' ')
@@ -106,6 +118,21 @@ function formatSceneTitle(name?: string | null): string {
             <span>The path unfolds into the unknown...</span>
           </template>
         </p>
+
+        <!-- Atmospheric NPC Interlude Quote (Dynamic Scenes) -->
+        <blockquote
+          v-if="props.interlude?.quote"
+          class="mt-5 px-5 py-4 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md text-left shadow-xl max-w-md w-full"
+        >
+          <p class="tw-overlay-highlight text-sm sm:text-base italic leading-relaxed">
+            “{{ props.interlude.quote }}”
+          </p>
+          <footer v-if="interludeSpeaker" class="mt-2.5 flex items-baseline justify-end text-right">
+            <cite class="interlude-signature not-italic tw-overlay-ink text-xl sm:text-2xl leading-none">
+              — {{ interludeSpeaker }}
+            </cite>
+          </footer>
+        </blockquote>
 
         <!-- Shimmering Progress Bar -->
         <div class="tw-overlay-progress w-44 sm:w-60 h-1 rounded-full overflow-hidden mt-6 relative">
@@ -203,5 +230,14 @@ function formatSceneTitle(name?: string | null): string {
   .light-sweep {
     animation: none;
   }
+}
+
+.interlude-signature {
+  font-family: 'Caveat', 'Segoe Script', 'Brush Script MT', cursive;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  display: inline-block;
+  transform: rotate(-1.5deg);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
 }
 </style>

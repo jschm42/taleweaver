@@ -8,6 +8,10 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.session_debug_npc_social import (
+    conversation_session_debug,
+    npc_social_debug,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -78,6 +82,7 @@ def _npc_role(ent: WorldEntity) -> str:
 def _build_npc_info(
     ent: WorldEntity, override: dict[str, Any], scene_names: dict[str, str], current_scene_id: str
 ) -> dict[str, Any]:
+    """One NPC card; ``npc_social_debug`` (memory, conversations) is added by the caller."""
     loc_id = _entity_scene_id(ent, override)
     resources = {
         field: _npc_resource(ent, override, field, default)
@@ -229,9 +234,11 @@ def _build_exits_data(
                 "from_scene_id": ex.from_scene_id,
                 "to_scene_id": ex.to_scene_id,
                 "label": ex.label or "Passage",
+                "exit_type": getattr(ex, "exit_type", None) or "one_way",
                 "is_locked": bool(override.get("is_locked", ex.is_locked)),
                 "is_secret": bool(override.get("is_secret", getattr(ex, "is_secret", False))),
                 "lock_description": ex.lock_description,
+                "dynamic_zone": getattr(ex, "dynamic_zone", None),
             }
         )
     return exits
@@ -327,6 +334,23 @@ async def _load_blueprint(db: AsyncSession, template_id: str) -> dict[str, Any] 
         return None
 
 
+def _resolve_node_dynamic_zone(
+    scene: WorldScene, dynamic_zones_override: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Merge scene-level and runtime dynamic-zone metadata and preserve materialized status."""
+    raw_scene_zone = getattr(scene, "dynamic_zone", None)
+    raw_override = dynamic_zones_override.get(scene.id)
+    scene_zone = raw_scene_zone if isinstance(raw_scene_zone, dict) else {}
+    override_zone = raw_override if isinstance(raw_override, dict) else {}
+    if not scene_zone and not override_zone:
+        return None
+    merged = {**scene_zone, **override_zone}
+    # Legacy dynamic_scene_flow persisted runtime entries in __dynamic_zones__ without a materialized flag.
+    if override_zone and merged.get("materialized") is not False:
+        merged["materialized"] = True
+    return merged
+
+
 async def _load_world(db: AsyncSession, state: SessionState):
     scenes = (
         (
@@ -376,10 +400,16 @@ async def build_session_debug_payload(
     scene_names = {s.id: (s.label or s.id) for s in scene_lookup.values()}
     entity_overrides = state.entity_states or {}
 
+    npc_rows = [ent for ent in entity_lookup.values() if ent.entity_type == "NPC"]
+    npc_names = {str(ent.id).upper(): str(ent.name or ent.id) for ent in npc_rows}
     npcs_data = [
-        _build_npc_info(ent, entity_overrides.get(ent.id, {}), scene_names, state.current_scene_id)
-        for ent in entity_lookup.values()
-        if ent.entity_type == "NPC"
+        {
+            **_build_npc_info(
+                ent, entity_overrides.get(ent.id, {}), scene_names, state.current_scene_id
+            ),
+            **npc_social_debug(ent, entity_overrides, npc_names),
+        }
+        for ent in npc_rows
     ]
     scene_npcs: dict[str, list[dict[str, Any]]] = {s_id: [] for s_id in scene_lookup}
     for npc in npcs_data:
@@ -388,6 +418,9 @@ async def build_session_debug_payload(
     objects = [ent for ent in entity_lookup.values() if ent.entity_type != "NPC"]
     items_data = _build_items_matrix(avatar, objects, npcs_data, entity_overrides, scene_names)
 
+    dynamic_zones_override = entity_overrides.get("__dynamic_zones__", {})
+    if not isinstance(dynamic_zones_override, dict):
+        dynamic_zones_override = {}
     nodes_data = {
         s.id: {
             "id": s.id,
@@ -396,6 +429,7 @@ async def build_session_debug_payload(
             "image_url": s.image_url,
             "is_current": s.id == state.current_scene_id,
             "npcs": scene_npcs.get(s.id, []),
+            "dynamic_zone": _resolve_node_dynamic_zone(s, dynamic_zones_override),
         }
         for s in scene_lookup.values()
     }
@@ -404,6 +438,7 @@ async def build_session_debug_payload(
         "session": _session_section(state, adventure, scene_names),
         "avatar": _avatar_section(avatar),
         "npcs": npcs_data,
+        "conversations": conversation_session_debug(adventure, entity_overrides, npc_names),
         "scene_npcs": scene_npcs,
         "items": items_data,
         "map": {

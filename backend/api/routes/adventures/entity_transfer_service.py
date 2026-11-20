@@ -31,9 +31,9 @@ from backend.engine.adventures.entity_bundle import (
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldScene
+from backend.utils.image_files import local_image_file
 from backend.utils.path_security import (
     assert_within_data_dir,
-    data_url_to_local_path,
 )
 
 KIND_BY_ENTITY_TYPE = {"NPC": "npc", "OBJECT": "item"}
@@ -133,10 +133,10 @@ def export_protagonist_bundle(adv: AdventureTemplate, avatar: Avatar) -> bytes:
 
 
 def _read_local_image(url: Optional[str]) -> tuple[Optional[bytes], Optional[str]]:
-    local_path = data_url_to_local_path(url)
-    if not local_path or not os.path.isfile(local_path):
+    """Image bytes for the bundle; only real image files inside DATA_DIR qualify."""
+    safe_path = local_image_file(url)
+    if not safe_path:
         return None, None
-    safe_path = assert_within_data_dir(local_path)
     ext = os.path.splitext(safe_path)[1].lstrip(".").lower()
     if ext not in IMAGE_EXTENSIONS:
         return None, None

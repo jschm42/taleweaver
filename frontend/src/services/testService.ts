@@ -1,5 +1,8 @@
 import { ref } from 'vue'
 import { api } from '@/composables/useApi'
+import { speakWithBrowser } from '@/services/browserTts'
+
+const BROWSER_TTS_SAMPLE = 'Welcome, traveller. This is the browser voice of TaleWeaver.'
 
 /**
  * TestService manages API connectivity and model tests:
@@ -26,6 +29,39 @@ function extractErrorMessage(err: any, defaultMsg = 'Test failed.'): string {
   return defaultMsg
 }
 
+/** One capability check of the admin model test (`backend/core/model_capability_probe.py`). */
+export interface CapabilityCheck {
+  id: string
+  label: string
+  passed: boolean
+  detail?: string
+}
+
+/** Speed rating of a model test (`backend/core/model_speed_rating.py`). */
+export interface SpeedRating {
+  rating: 'fast' | 'ok' | 'slow'
+  seconds: number
+  label: string
+  note: string
+}
+
+/** OpenRouter routing of a model test (`backend/core/openrouter_route_report.py`). */
+export interface RouteInfo {
+  requested: string[]
+  served: string
+  /** Set when the configured provider could not serve the model and another one was used. */
+  fallback: string
+  note: string
+}
+
+/** True when the configured OpenRouter provider was not the one that answered. */
+export function routeMissed(route?: RouteInfo | null): boolean {
+  if (!route) return false
+  if (route.fallback) return true
+  const served = route.served.trim().toLowerCase()
+  return Boolean(served) && route.requested.length > 0 && !route.requested.some((p) => p.trim().toLowerCase() === served)
+}
+
 class TestService {
   // ============ STATE ============
   testResults = ref<
@@ -35,6 +71,9 @@ class TestService {
         status: 'loading' | 'success' | 'error'
         message: string
         image_url?: string
+        checks?: CapabilityCheck[]
+        speed?: SpeedRating
+        routing?: RouteInfo
       }
     >
   >({})
@@ -51,7 +90,14 @@ class TestService {
     try {
       const data = await api.testTTS()
 
-      if (data.status === 'success' && data.audio_url) {
+      if (data.status === 'success' && data.browser) {
+        // Browser speech: the server creates no audio, this browser reads the sample itself.
+        await speakWithBrowser(BROWSER_TTS_SAMPLE)
+        this.testResults.value['tts'] = {
+          status: 'success',
+          message: 'Browser voice played. Each player hears the voices of their own browser.',
+        }
+      } else if (data.status === 'success' && data.audio_url) {
         // Attempt to play the generated audio
         const audio = new Audio(data.audio_url)
         await audio.play()
@@ -80,9 +126,15 @@ class TestService {
     openrouterProvider?: string,
     customOpenaiUrl?: string,
     customOpenaiResponseFormat?: string,
-    customOpenaiTimeout?: number
+    customOpenaiTimeout?: number,
+    capabilities = false,
+    /** Pass to test as (`small`, `complex`, ...); defaults to `key`. Needed when `key` is only a result slot. */
+    passKey?: string,
   ) {
-    this.testResults.value[key] = { status: 'loading', message: 'Testing connection...' }
+    this.testResults.value[key] = {
+      status: 'loading',
+      message: capabilities ? 'Testing capabilities (several requests)...' : 'Testing connection...',
+    }
 
     try {
       const data = await api.testLlm({
@@ -93,12 +145,16 @@ class TestService {
         custom_openai_url: customOpenaiUrl || undefined,
         custom_openai_response_format: customOpenaiResponseFormat || undefined,
         custom_openai_timeout: customOpenaiTimeout || undefined,
-        pass_key: key,
+        pass_key: passKey ?? key,
+        capabilities,
       })
 
       this.testResults.value[key] = {
         status: data.status === 'success' ? 'success' : 'error',
         message: data.response_time ? `${data.message} (${data.response_time}s)` : data.message,
+        checks: Array.isArray(data.checks) ? data.checks : undefined,
+        speed: data.speed ?? undefined,
+        routing: data.routing ?? undefined,
       }
     } catch (err) {
       console.error(`[TestService] LLM test (${key}) failed:`, err)

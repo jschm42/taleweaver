@@ -21,6 +21,19 @@ from backend.api.routes.adventures.container_put import (
 )
 from backend.api.routes.adventures.game_clock_flow import stream_time_events
 from backend.api.routes.adventures.audio_snapshot import build_audio_snapshot
+from backend.api.routes.adventures.companion_command import companion_order_command
+from backend.api.routes.adventures.companion_inventory import GIVE, TAKE, transfer_companion_items
+from backend.api.routes.adventures.companion_recruit import recruit_companion_command
+from backend.api.routes.adventures.companion_loadout import (
+    equip_companion,
+    toggle_companion_ability,
+    unequip_companion,
+)
+from backend.api.routes.adventures.dynamic_scene_flow import (
+    prepare_dynamic_traversal_sse,
+    sync_dynamic_scene_audio,
+)
+from backend.api.routes.adventures.dynamic_scene_media import drain_pending_dynamic_visuals
 from backend.api.routes.adventures.npc_give import give_items_to_npc
 from backend.api.routes.adventures.walkthrough_reveal import reveal_current_walkthrough
 from backend.engine.rules.walkthrough_unlocks import mark_revealed, walkthrough_status
@@ -34,11 +47,15 @@ from backend.api.routes.adventures.sequence_hooks import (
     build_sequence_intro,
     run_sequence_transition_hooks,
 )
+from backend.api.routes.adventures.debug_arrival import stream_debug_arrival
+from backend.api.routes.adventures.scene_scripts import run_global_scene_scripts
 from backend.engine.debug_commands.debug_engine import DebugEngine
+from backend.engine.debug_commands.navigation_commands import DEBUG_GOTO_MARKER
 from backend.engine.debug_commands.time_commands import TIME_CHANGED_MARKER
 from backend.engine.interaction.map_engine import MapEngine
 from backend.engine.interaction.switch_service import SwitchService
 from backend.engine.interaction.trigger_service import TriggerService
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.interaction.switch_states import state_label
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -47,6 +64,20 @@ if TYPE_CHECKING:
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 
 logger = logging.getLogger(__name__)
+
+# Party commands that chain a Game Master reaction turn: companion orders and recruiting.
+_PARTY_REACTION_TAGS = {
+    "[TRIGGER_COMPANION]": companion_order_command,
+    "[TRIGGER_COMPANION_RECRUIT]": recruit_companion_command,
+}
+# Hero dialog handovers between the protagonist and the companion (companion_inventory.py).
+_COMPANION_TRANSFER_TAGS = {"[TRIGGER_COMPANION_GIVE]": GIVE, "[TRIGGER_COMPANION_TAKE]": TAKE}
+# Hero dialog loadout of the companion: equipment and ability switches (companion_loadout.py).
+_COMPANION_LOADOUT_TAGS = {
+    "[TRIGGER_COMPANION_EQUIP]": equip_companion,
+    "[TRIGGER_COMPANION_UNEQUIP]": unequip_companion,
+    "[TRIGGER_COMPANION_ABILITY]": toggle_companion_ability,
+}
 
 
 class TurnInteractionsManager:
@@ -268,6 +299,9 @@ class TurnInteractionsManager:
                 narrative_text=old_scene.on_leave_scene_text,
             )
             messages.extend(msgs)
+        messages.extend(
+            await run_global_scene_scripts(self.manager, "on_leave_scene", current_scene_id)
+        )
 
         if world_exit.on_open_exit_script or world_exit.on_open_exit_text:
             msgs = await TriggerService.execute_trigger(
@@ -328,6 +362,18 @@ class TurnInteractionsManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
+        loot_note = await self.manager.combat.settle_loot_on_scene_exit()
+        if loot_note:
+            self.db.add(
+                ChatMessage(session_id=self.state.session_id, role="system", content=loot_note)
+            )
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': loot_note})}\n\n"
+
+        async for chunk in prepare_dynamic_traversal_sse(
+            interactions=self, exit_ref=exit_ref, language=language
+        ):
+            yield chunk
+
         scene_res = await self.db.execute(
             select(WorldScene)
             .where(
@@ -352,10 +398,27 @@ class TurnInteractionsManager:
             return
 
         for m in await self._fire_traversal_triggers(current_scene_id, world_exit):
-            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+            role = getattr(m, "role", "system")
+            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         self.state.current_scene_id = scene.id
+        sync_dynamic_scene_audio(self.state, scene.id)
+        for msg in await enter_scene(
+            self.db,
+            self.state,
+            current_scene_id,
+            world_exit=world_exit,
+            adventure=self.manager.adventure,
+        ):
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
         await self._record_map_traversal(current_scene_id, scene, world_exit)
+        await drain_pending_dynamic_visuals(
+            self.db,
+            self.state,
+            getattr(self.manager, "pending_dynamic_visuals", None),
+            only_done=True,
+        )
         await self.db.commit()
 
         if scene.on_enter_scene_script or scene.on_enter_scene_text:
@@ -369,6 +432,9 @@ class TurnInteractionsManager:
             )
             for m in msgs:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
+        for m in await run_global_scene_scripts(self.manager, "on_enter_scene", scene.id):
+            role = getattr(m, "role", "system")
+            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 
         # Signal frontend to clear old chat bubbles; audio switches to the new scene's track.
         transition = {
@@ -401,6 +467,10 @@ class TurnInteractionsManager:
             yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
         finally:
             self.manager.arrival_narration = False
+            pending_visuals = getattr(self.manager, "pending_dynamic_visuals", None)
+            if pending_visuals:
+                await drain_pending_dynamic_visuals(self.db, self.state, pending_visuals)
+                await self.db.commit()
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()
@@ -430,6 +500,11 @@ class TurnInteractionsManager:
             async for chunk in self._handle_debug_gen_item(prompt):
                 yield chunk
             return
+        elif debug_info.startswith(DEBUG_GOTO_MARKER):
+            scene_id = debug_info[len(DEBUG_GOTO_MARKER) :].strip()
+            async for chunk in stream_debug_arrival(self.manager, scene_id):
+                yield chunk
+            debug_info = f"DEBUG: Teleported to '{scene_id}'."
         elif debug_info.startswith(TIME_CHANGED_MARKER):
             debug_info = debug_info[len(TIME_CHANGED_MARKER) :].strip()
             async for chunk in stream_time_events(self.manager):
@@ -826,7 +901,6 @@ class TurnInteractionsManager:
                     key = str(effect.get("key") or "").strip()
                     if key:
                         self._set_switch_story_flag(key)
-                        messages.append(f"Story flag set: {key}.")
                 elif effect_type == "unlock_exit":
                     target_id = str(effect.get("target_id") or "").strip()
                     if not target_id:
@@ -1309,6 +1383,31 @@ class TurnInteractionsManager:
             for role, content in outcome.events:
                 yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
+        for tag, party_command in _PARTY_REACTION_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            outcome = await party_command(self.manager, response.replace(tag, "", 1).strip())
+            for role, content in outcome.events:
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            self.pending_reaction_prompt = outcome.reaction_prompt
+            response = ""
+
+        for tag, direction in _COMPANION_TRANSFER_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            item_args = response.replace(tag, "").strip()
+            for role, content in await transfer_companion_items(self.manager, direction, item_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
+            response = ""
+
+        for tag, loadout_handler in _COMPANION_LOADOUT_TAGS.items():
+            if not response.startswith(tag):
+                continue
+            loadout_args = response.replace(tag, "").strip()
+            for role, content in await loadout_handler(self.manager, loadout_args):
+                yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': content})}\n\n"
             response = ""
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ITEM]"):

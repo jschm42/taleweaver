@@ -129,5 +129,7 @@ async def import_entity(
         "entity_id": result.entity_id,
         "name": result.name,
         "has_image": bool(bundle.image_bytes),
+        # Manifest spec version the bundle was exported with (validated on unpack).
+        "format_version": bundle.version,
         "warnings": result.warnings,
     }

@@ -52,6 +52,10 @@ from backend.api.routes.adventures.editor_npc_combat import (
     NpcCombatUpdateRequest,
     update_npc_combat,
 )
+from backend.api.routes.adventures.editor_npc_companion import (
+    NpcCompanionUpdateRequest,
+    update_npc_companion,
+)
 from backend.api.routes.adventures.schemas import AdventureTemplateUpdate
 from backend.api.routes.adventures.templates import update_adventure
 from backend.core.global_settings import apply_global_settings
@@ -209,6 +213,14 @@ async def _set_npc_combat(ctx: _OpContext, fields: dict[str, Any]) -> str:
     return f"{npc_id}: {', '.join(changed)}"
 
 
+async def _set_npc_companion(ctx: _OpContext, fields: dict[str, Any]) -> str:
+    """Companion settings of an NPC; ``companion: null`` makes it an ordinary NPC again."""
+    payload = _build(NpcCompanionUpdateRequest, fields)
+    await update_npc_companion(ctx.template_id, payload, db=ctx.db, current_user=ctx.user)
+    state = "companion" if payload.companion else "no companion"
+    return f"{payload.npc_id}: {state}"
+
+
 async def _update_adventure(ctx: _OpContext, fields: dict[str, Any]) -> str:
     payload = _build(AdventureTemplateUpdate, fields)
     await update_adventure(ctx.template_id, payload, db=ctx.db, current_user=ctx.user)
@@ -237,6 +249,7 @@ OPERATIONS: dict[str, _Handler] = {
     "create_entity": _payload_op(EntityCreateRequest, create_editor_entity),
     "update": _update,
     "set_npc_combat": _set_npc_combat,
+    "set_npc_companion": _set_npc_companion,
     "set_script": _payload_op(ScriptCreateRequest, save_editor_script),
     "set_init_script": _init_script_op(append=False),
     "append_init_script": _init_script_op(append=True),
@@ -259,6 +272,7 @@ OPERATION_MODELS: dict[str, Optional[type[BaseModel]]] = {
     "create_entity": EntityCreateRequest,
     "update": EntityUpdateRequest,
     "set_npc_combat": NpcCombatUpdateRequest,
+    "set_npc_companion": NpcCompanionUpdateRequest,
     "set_script": ScriptCreateRequest,
     "create_quest": QuestCreateRequest,
     "create_award": AwardCreateRequest,

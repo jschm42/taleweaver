@@ -25,6 +25,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.game](#twgame)
    - [tw.time (In-Game Clock)](#twtime-in-game-clock)
    - [tw.audio (Generated Background Audio)](#twaudio-generated-background-audio)
+   - [tw.party (Companions)](#twparty-companions)
    - [tw.quests](#twquests)
    - [tw.awards](#twawards)
    - [tw.dice](#twdice)
@@ -133,6 +134,8 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_logic_pass_done` | After game mechanics and state mutations finish, before narration is generated. | Global (`*` or empty). |
 | `on_narration_done` | After narration generation completes, before final turn persistence. | Global (`*` or empty). |
 | `on_turn_end` | When the current in-game turn ends, i.e. when the player's scene or the active sequence changed (before `on_turn_start` of the next turn). | Global (`*` or empty). |
+| `on_respawn` | Respawn mode only (`game_over_rules.on_zero_hp: "respawn"`): after a protagonist who fell to 0 HP woke up at the revival point, after the revival scene's `on_enter_scene` scripts. Use it for penalties (e.g. `tw.player.add_xp(-25)`), a healer's line, or to heal the enemies. A `tw.game.game_over()` here ends the adventure. | Global (`*` or empty). |
+| `on_conversation_heard` | Once the protagonist overheard an NPC [conversation topic](world-builder-syntax.md#npc-conversations): right after the engine handed the topic to the narration (chatter or `/listen`), after the topic's own `on_heard_script`. | Topic id, or empty for any topic. |
 | `on_time_reached` | Once, when the in-game clock reaches the target time (elapsed time since the adventure started). It fires again only after the time was set back below the target. See [tw.time](#twtime-in-game-clock). | **Required**: the elapsed time, e.g. `90`, `2h 30m`, `1d 4h`, `1:30`. |
 
 > **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Status-effect ticks and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. The **clock** is different: it advances once per narrated player message (see [tw.time](#twtime-in-game-clock)). Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
@@ -162,8 +165,10 @@ In addition to standalone script assets, TaleWeaver allows configuring short inl
 | | `on_craft_failure_script`, `..._text` | Executes when crafting fails or is blocked by guard. |
 | **NPCs** | `on_defeat_script`, `on_defeat_text` | Executes when the NPC is defeated. Use to spawn loot or change state. |
 | | `on_protagonist_enters_scene_script` | Executes when the player enters the room containing this NPC. |
-| | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. |
-| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, or typing `give <item> to <npc>`). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction, unless the script opened a choice dialog (`tw.dialog.choose` / `tw.dialog.tree`): then the player's answer drives what happens next and no GM reaction runs. |
+| | `on_interact_script`, `on_interact_text` | Executes whenever the player talks to, inspects or otherwise interacts with this NPC. The NPC context menu's **Greet** entry also counts as an interaction and fires it. |
+| | `on_receive_item_script`, `..._text` | Executes once after the player gave this NPC one or more items (NPC context menu → **Give**, `/give_items <npc> \| A, B`, typing `give <item> to <npc>`, or handing it over in any other words, e.g. `/say Here, take my drink!`, which the mechanics pass reports as a handover). The items are already in the NPC's inventory. `received_items` (list of dicts) and `received_item_ids` (list of IDs) are in scope. Afterwards the Game Master narrates the NPC's reaction, unless the script opened a choice dialog (`tw.dialog.choose` / `tw.dialog.tree`): then the player's answer drives what happens next and no GM reaction runs. |
+| | `on_recruit_success_script`, `..._text` | Companions whose `companion.recruit_mode` is `INSTANT` or `ITEM`: executes after the player recruited the NPC with its **Recruit** action (`/recruit <npc> [| <item>]`). The NPC is already in the party; in `ITEM` mode it already holds the offered item. `offered_item_id` is in scope (empty in `INSTANT` mode). Without a success script or text, the Game Master narrates how the NPC joins. |
+| | `on_recruit_failure_script`, `..._text` | Companions in `ITEM` mode: executes when the player offers the wrong item or none. The item stays with the player; `offered_item_id` is in scope. Without a failure script or text the player sees "<NPC> is not convinced and stays where they are." |
 | **Scenes** | `on_enter_scene_script`, `..._text` | Executes when the player enters this specific scene. |
 | | `on_leave_scene_script`, `..._text` | Executes immediately when the player leaves this specific scene. |
 | | `helpers_script` *(definitions)* | Not a trigger: functions and constants every script can call. See [Scene Helpers](#scene-helpers-helpers_script). |
@@ -389,12 +394,13 @@ Inspects and modifies the avatar's state:
 - `tw.player.damage(amount: int)`: Inflicts `amount` direct damage to the avatar.
 - `tw.player.xp` *(int)*: The protagonist's experience points, including changes made earlier in the same script.
 - `tw.player.add_xp(amount: int)` (also `modify_xp(delta)`): Gives the protagonist `amount` XP; a negative amount takes XP away (never below 0). The player sees `You gain 25 XP (Script).`
-- `tw.player.has_item(item_id: str) -> bool`: Returns `True` if `item_id` is in the inventory (case-insensitive).
+- `tw.player.has_item(item_id: str) -> bool` (alias `tw.player.has(item_id)`): Returns `True` if `item_id` is in the inventory (case-insensitive).
 - `tw.player.take_item(item_id: str) -> bool`: Moves an existing world item into the inventory, wherever it is (scene, container, NPC inventory). The entry keeps the item's world data (name, description, image, effects). Returns `False` for an unknown ID.
 - `tw.player.drop_item(item_id: str, scene_id: str = None) -> bool`: Drops a carried item into a scene (default: the protagonist's scene).
-- `tw.player.transfer_item(item_id: str, target_id: str) -> bool`: Hands a carried item to an NPC or puts it into a container.
+- `tw.player.transfer_item(item_id: str, target_id: str) -> bool`: Hands a carried item to an NPC or puts it into a container. This also works for quest items (`quest_item: true`), which the player cannot give away themselves; use it for hand-in quests.
 - `tw.player.remove_item(item_id: str)`: Takes an item out of the inventory without placing it anywhere.
 - `tw.player.give_item(item_id: str, name: str = None, description: str = None)`: Adds a *new* inventory entry that is not a world item (no image, no effects). To hand over an item that exists in the world, use `take_item` instead.
+- **`tw.inventory` shortcut**: Shorthand namespace delegating to `tw.player` (`tw.inventory.has(item_id)` / `has_item`, `take` / `take_item`, `drop` / `drop_item`, `transfer` / `transfer_item`, `remove` / `remove_item`, `give` / `give_item` / `add` / `add_item`, `items`, `item_ids`, `all()`, `count()`, `'ITEM_ID' in tw.inventory`).
 - To move the protagonist to another scene, use `tw.scene.teleport(scene_id)` (see [`tw.scene`](#twscene)).
 
 ### `tw.scene`
@@ -402,7 +408,23 @@ Inspects the current scene:
 - `tw.scene.id` *(str)*: ID of the current scene (the target scene once the script called `tw.scene.teleport`).
 - `tw.scene.npcs` *(list[NPCProxy])*: All NPCs in the current scene, as the same proxies `tw.npcs.get()` returns. Includes NPCs that are hidden (`.is_hidden`) or defeated (`.is_defeated`) and NPCs moved here earlier in the same script; filter them yourself if needed.
 - `tw.scene.items` *(list[ObjectProxy])*: All objects and items lying in the current scene.
-- `tw.scene.teleport(target_scene_id: str)`: Moves the protagonist directly into another scene, whether or not an exit connects the two. Works in every script, including scene and exit triggers (`on_enter_scene`, `on_leave_scene`, exit scripts). After the call, `tw.scene.id`, `tw.scene.npcs`, `tw.scene.items` and `"current"` targets (e.g. `tw.npcs.move_to_player`) refer to the target scene. A teleport does **not** fire the target scene's `on_enter_scene` or the old scene's `on_leave_scene` script, and no "You have entered" message is shown, so describe the jump yourself (e.g. with `tw.story.direct`). The player sees the travel overlay with the target scene, just like after walking through an exit, whether the teleport happens during a turn or in a script fired by a pickup, a dialog choice or an unlock.
+- `tw.scene.teleport(target_scene_id: str)`: Moves the protagonist directly into another scene, whether or not an exit connects the two. If `target_scene_id` matches an unmaterialized dynamic exit placeholder (`to_scene_id`), exit ID, dynamic `zone_id`, or an unmaterialized pre-mapped Dynamic Scene (`WorldScene.dynamic_zone`), that scene is generated and materialized automatically before moving the protagonist there. Works in every script, including scene and exit triggers (`on_enter_scene`, `on_leave_scene`, exit scripts). After the call, `tw.scene.id`, `tw.scene.npcs`, `tw.scene.items` and `"current"` targets (e.g. `tw.npcs.move_to_player`) refer to the target scene. A teleport does **not** fire the target scene's `on_enter_scene` or the old scene's `on_leave_scene` script, and no "You have entered" message is shown, so describe the jump yourself (e.g. with `tw.story.direct`). The player sees the travel overlay with the target scene, just like after walking through an exit, whether the teleport happens during a turn or in a script fired by a pickup, a dialog choice or an unlock.
+- `tw.scene.teleport_dynamic(theme_or_zone_id: str = "", theme: str | None = None, *, zone_id: str | None = None, max_depth: int | None = None, danger_level: str | None = None, max_npcs: int | None = None, audio_mode: str | None = None, cul_de_sac: bool | None = None, instructions: str | None = None, instructions_scope: str | None = None, cluster_consistency: bool | None = None, return_exit: bool = True, label: str = "Teleporter", fresh: bool = False) -> str`: Materializes a procedural dynamic scene on the fly and teleports the protagonist into it, returning the target scene ID (`str`) and updating `tw.scene.id` immediately. Can be called either with a freeform `theme` description (e.g. `tw.scene.teleport_dynamic("Shifting astral nexus of floating obelisks", danger_level="random", fresh=True)`) or by referencing an existing dynamic exit's `zone_id`, `id`, or `to_scene_id` with optional overrides.
+  - `max_depth` (`1..10`, default `3`), `danger_level` (`"peaceful"`, `"low"`, `"medium"`, `"high"`, `"deadly"`, `"random"`), `max_npcs` (`0..5`), `audio_mode` (`"inherit"`, `"empty"`, `"generate"`), `cul_de_sac` (whether reaching `max_depth` terminates in a cul-de-sac), `instructions` (optional freeform prompt or Blueprint blocks guiding generation within the cluster), `instructions_scope` (`"once"` default, `"first_scene"`, `"max_depth"`, `"all_scenes"`), `cluster_consistency` (`True`/`False`, default `True`; passes global theme, base exit theme, and already-generated cluster scenes/NPCs/items), `return_exit` (default `True`; adds an unlocked return exit back to the origin scene), `label` (display name for the virtual passage / return context), and `fresh` (default `False`; `True` generates a brand-new dynamic scene instance on every activation instead of reusing the previously materialized scene).
+  - Ideal for interactive teleporters, portals, or switches:
+    ```python
+    # On a teleporter pad's on_interact script:
+    dest_id = tw.scene.teleport_dynamic(
+        "Ancient clockwork vault pulsing with golden gears",
+        zone_id="clockwork_vault",
+        danger_level="random",
+        max_depth=2,
+        return_exit=True,
+        label="Brass Teleporter",
+    )
+    tw.story.narrate("Arcane runes flare beneath your boots, folding space around you.")
+    ```
+- **Dynamic Zone `on_after_generated_script` & `generated_scene`** *(also `tw.generated_scene`)*: Optional trigger script on a dynamic exit's `dynamic_zone` configuration, executed immediately after the procedural scene, its NPCs, objects, and forward exits are persisted. Both top-level `generated_scene` and `tw.generated_scene` provide a read-only dictionary with `id`, `origin_scene_id`, `zone_id`, `theme`, `depth`, `max_depth`, `danger_level`, `name`, `description`, `visual_description`, `music_prompt`, `npcs`, `objects`, and `forward_exits`, allowing scripts to inspect the generated scene and add items or NPCs (e.g., `tw.items.clone("RELIC_KEY", scene_id=generated_scene["id"])` or `tw.npcs.clone("GUARD", scene_id=generated_scene["id"])`).
 - `tw.scene.get_attribute(name, default=None)` / `tw.scene.set_attribute(name, value)`: A script-defined value stored per scene.
 
 ```python
@@ -447,6 +469,14 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
 - `tw.npcs.attack(npc_id: str)`: Makes an NPC attack the protagonist. Turn-based combat starts right after the current turn if the NPC is in the protagonist's scene, alive and attackable (ignored while a fight is already running). Example (`on_turn_end`): `if tw.player.has_item('IDOL') and not tw.vars.get('alarm'): tw.vars.set('alarm', True); tw.npcs.attack('TEMPLE_GUARD')`.
 - `tw.npcs.hide(npc_id: str) -> bool` / `tw.npcs.reveal(npc_id: str) -> bool`: Takes an NPC out of the story or brings it back. A hidden NPC disappears from its scene: it is not listed, cannot be talked to, attacked, given items or targeted by talents, and the Game Master no longer sees it as present. Unless its reveal rule is `script`, the Game Master still knows it as a *hidden* NPC and may reveal it again when the player searches the scene (or by its reveal condition); set the reveal rule to `script` (`reveal: script` in a blueprint) when only scripts may bring it back. `reveal` brings it back where it stands; call `tw.npcs.move(npc_id, scene_id)` first to make it reappear somewhere else. Returns `False` (and changes nothing) for an unknown NPC ID. Also available as `tw.npcs.get(npc_id).hide()` / `.reveal()`; `.is_hidden` reads the current state.
 - `tw.npcs.set_character(npc_id: str, text: str)`: Replaces the NPC's personality (the `character` field). The GM reads it on every turn, so the NPC talks and acts differently from then on (friendlier, aggressive, funny, frightened, …). An empty text clears it. Whitespace is collapsed to a single line and the text is cut at 1,000 characters.
+- `tw.npcs.remember(npc_id: str, key: str, text: str)`: Stores a fact the NPC keeps about the protagonist in its [NPC memory](world-builder-syntax.md#npc-memory), the same store the Game Master writes (e.g. `tw.npcs.remember('BRAN', 'deal', 'Kael owes him 5 gold.')`). The key is a short topic (normalized to `lower_snake_case`, max. 24 characters); the same key replaces its fact, an empty text forgets it, and beyond the NPC's memory slots the oldest fact is dropped. Text is one line of at most 120 characters. An NPC without memory slots ignores it (debug note in debug mode). The facts reach the GM only while the NPC is in the protagonist's scene.
+- `tw.npcs.recall(npc_id: str, key: str) -> str` / `tw.npcs.recalls(npc_id: str, key: str) -> bool`: The fact stored under `key` (`""` when unknown) / whether there is one. Good in guards and dialogs: `tw.npcs.recalls('BRAN', 'player_name')`.
+- `tw.npcs.forget(npc_id: str, key: str = None)`: Forgets one fact, or every fact of the NPC without a key.
+- `tw.npcs.memories(npc_id: str) -> list[dict]`: All facts of the NPC, oldest first: `[{"key": "player_name", "text": "..."}]`.
+- `tw.npcs.converse(npc_a: str, npc_b: str, topic: str = "", must_convey: str = "", lines=None, after=None, after_args=None)`: Lets two NPCs talk with each other (see [NPC conversations](world-builder-syntax.md#npc-conversations)). With `lines=[(npc_id, text), ...]` the lines are printed as fixed dialogue, each in its speaker's voice, like `tw.npcs.say`. Without `lines` the next narration writes two to four lines about `topic`; `must_convey` is the clue a listener must learn. Both NPCs must be in the protagonist's scene, otherwise nothing is said (the `after` callback, an init-script function, still runs after the narration, as with `say_directed`). Example: `tw.npcs.converse('GUARD_A', 'GUARD_B', topic='the open cellar door', must_convey='it is unlocked after midnight')`.
+- `tw.npcs.relation(npc_id: str, other_id: str) -> dict | None`: How `npc_id` sees `other_id`: `{"kind": "RIVAL", "note": "..."}` or `None`.
+- `tw.npcs.set_relation(npc_id: str, other_id: str, kind: str, note: str = "")`: Changes how `npc_id` sees `other_id` for the rest of the session (`FRIEND`, `FAMILY`, `PARTNER`, `ALLY`, `COLLEAGUE`, `SUPERIOR`, `SUBORDINATE`, `RIVAL`, `ENEMY`; `""` removes the relation). An unknown kind raises an error.
+- `tw.npcs.topic_heard(topic_id: str) -> bool` / `tw.npcs.mark_topic_heard(topic_id: str, heard: bool = True)`: Whether the protagonist overheard a conversation topic / mark it as heard (or open again with `heard=False`). Good in guards: `tw.npcs.topic_heard('cellar_door')`.
 - `tw.npcs.set_goal(npc_id: str, text: str)`: Replaces what the NPC wants (the `goal` field), with the same rules.
 - `tw.npcs.add_trait(npc_id: str, trait: str)` / `tw.npcs.remove_trait(npc_id: str, trait: str)`: Adds or removes a single trait in the comma-separated `character` text (case-insensitive; adding an existing trait does nothing). Handy for temporary states such as `"drunk"` or `"frightened"`.
 - `tw.npcs.clone(npc_id: str, scene_id: str = None, hidden: bool = None) -> NPCProxy | None`: Creates a copy of the NPC with a new ID (`<ID>_1`, `<ID>_2`, ...; cloning a clone counts on from the original). The copy has the original's name, description, portrait, combat profile, combat group, special attacks and scripts, but starts fresh: full HP (`max_hp`), not defeated, empty inventory (so loot is not duplicated). Without `scene_id` it stands in the original's scene; `"current"` puts it in the protagonist's scene. It keeps the original's hidden flag unless `hidden` is given, so a hidden template NPC can spawn visible copies: `for i in range(10): tw.npcs.clone('ARENA_RAT', hidden=False)`. Clones of the same template share its `combat_group`, so attacking one pulls the whole pack into the fight. At most 20 clones (NPCs and items together) per script run; returns `None` for an unknown ID or past the limit. The copy exists in the current game only and is usable right away in the same script (`.get_attribute('cloned_from')` names the original). A fight holds at most 20 NPCs besides the protagonist; allies of the attacked NPC get the slots first.
@@ -472,6 +502,7 @@ Inspects, dialogues with, moves, and manages Non-Player Characters:
   - `.consume(item_id: str) -> dict | None` (see `tw.npcs.consume`)
   - `.character`, `.goal` *(read/write)*: assigning (`npc.character = "Gruff, impatient"`) is the same as calling `.set_character()` / `.set_goal()`
   - `.set_character(text)`, `.set_goal(text)`, `.add_trait(trait)`, `.remove_trait(trait)`, `.has_trait(trait) -> bool`
+  - `.remember(key, text)`, `.recall(key) -> str`, `.recalls(key) -> bool`, `.forget(key=None)`, `.memories` *(list[dict])*, `.memory_slots` *(int, 0 = no memory)* (see `tw.npcs.remember`)
   - `.clone(scene_id=None, hidden=None) -> NPCProxy | None` (see `tw.npcs.clone`)
   - `.combat_group` *(str, `""` without a group)*, `.assist_mode` *(effective mode: `GROUP`, `ANYONE` or `NEVER`)*, `.set_combat_group(group)`, `.set_assist_mode(mode)` (see `tw.npcs.set_combat_group`)
 
@@ -482,10 +513,10 @@ Manages world objects and inventory items. Every world item is held by exactly *
 
 **Moving items**
 - `tw.objects.move_item(item_id: str, target: str) -> bool`: Moves an item to `"player"`, an NPC ID, a container ID, `"current"`/`"here"` (the protagonist's scene) or a scene ID.
-- `tw.objects.add_to_player(item_id: str) -> bool`: Same as `tw.player.take_item(item_id)`.
+- `tw.objects.add_to_player(item_id: str) -> bool` (alias `to_player`): Same as `tw.player.take_item(item_id)`.
 - `tw.objects.remove_from_player(item_id: str) -> bool`: Same as `tw.player.remove_item(item_id)`; `False` if the protagonist does not carry it.
-- `tw.objects.add_to_scene(item_id: str, scene_id: str = None) -> bool`: Moves an item into a scene (default: the protagonist's scene).
-- `tw.objects.put_in_container(item_id: str, container_id: str) -> bool`: Moves an item into a container. Only containers that stand in a scene accept items (not one the protagonist carries), and a container never goes into itself.
+- `tw.objects.add_to_scene(item_id: str, scene_id: str = None) -> bool` (alias `to_scene`): Moves an item into a scene (default: the protagonist's scene).
+- `tw.objects.put_in_container(item_id: str, container_id: str) -> bool` (alias `to_container`): Moves an item into a container. Only containers that stand in a scene accept items (not one the protagonist carries), and a container never goes into itself.
 - `tw.objects.take_from_container(container_id: str, item_id: str, to: str = "player") -> bool`: Moves an item out of a container; `False` if the container does not hold it. `to` accepts the same targets as `move_item`.
 - `tw.objects.move_to_scene(item_id: str, scene_id: str, spatial_position: str = "")` and `tw.objects.give_to_npc(item_id: str, npc_id: str)`: Older shortcuts, kept for existing adventures.
 
@@ -617,17 +648,31 @@ A save holds the full session state: the protagonist (vitals, stats, inventory, 
 Besides `tw.save()`, checkpoints are created automatically when a turn changes the **scene** (any way: exit, map, script teleport, Game Master) or the **active sequence**, on quest updates and awards, and when the player types `/save [name]`.
 
 ### `tw.memories`
-Directly writes into the avatar's episodic memory bank:
-- `tw.memories.add(memory_text: str)`: Injects a factual memory into the avatar context that the Game Master LLM references in subsequent turns.
+World memories: lasting consequences the Game Master keeps in mind (the GM records them too).
+- `tw.memories.add(description: str, scope: str = "global", emotion: str = "neutral", npc_id: str = None)`: Records a consequence. `scope="local"` ties it to the protagonist's current scene; `emotion` is `"positive"`, `"negative"` or `"neutral"`; with `npc_id` it is only shown while that NPC is in the scene. The text is cut at 160 characters, duplicates are skipped, and a session keeps the newest 24 memories. The GM sees at most the 8 newest that apply to the current scene. For facts one character keeps about the protagonist, prefer `tw.npcs.remember`.
 
 ### `tw.game`
 Controls session outcome conditions (alias: `tw.session`):
 - `tw.game.win(message: str = None)` / `tw.game.game_won(message: str = None)`: Ends the adventure in victory and displays `message`.
 - `tw.game.game_over(reason: str = None)`: Ends the adventure in defeat with `reason`.
+- What the player sees: once the current turn (or dialog step) is done, the Game Master tells a short epilogue and an ending card follows in the story feed (**Victory** or **Game Over**, with `message` / `reason`, EXP, quests and awards). After a win the player can keep playing in the world; after a game over the input is locked and the card offers **Load a Save** (Chronicles). To let a character react before the end, end the game in an `after=` callback of a direction (see [Running code after the narration](#running-code-after-the-narration-after)).
 - `tw.game.time`: Elapsed in-game minutes (same as `tw.time.now`).
+- Respawn mode (`game_over_rules.on_zero_hp: "respawn"`, see *Respawn* in `docs/specs/adventure_format.md`): a protagonist who falls to 0 HP wakes up at the revival point instead of dying; `tw.game.game_over()` stays final.
+  - `tw.game.respawn_point`: Scene ID the protagonist wakes up in (`None` = the start scene). Entering a scene marked as revival point sets it.
+  - `tw.game.set_respawn_point(scene_id: str = None)`: Moves the revival point, e.g. after resting at a camp; `None` or `""` falls back to the start scene.
+  - `tw.game.respawns`: How often the protagonist has been revived in this session (read it in `on_respawn` for growing penalties).
+
+```python
+# on_respawn: every knockout costs more experience, and the ogre recovers too
+tw.player.add_xp(-10 * tw.game.respawns)
+tw.story.narrate("Mother Agnes patched you up. 'Mind that ogre next time.'")
+tw.npcs.get('OGRE').heal(999)
+```
 
 > [!NOTE]
-> In both linear and dynamic modes, completing the final sequence does **not** automatically end the adventure in victory. The session concludes only when the adventure's winning condition (`completed_guard_expression` or `completed_condition`) evaluates to true or when a script explicitly calls `tw.game.win()` / `tw.game.game_won()`.
+> **When finishing the last sequence ends the adventure** (linear and dynamic modes): if the adventure has a deterministic win guard (`completed_guard_expression`), completing the final sequence does **not** end it; only that guard or a script calling `tw.game.win()` / `tw.game.game_won()` does, and the player stays in the world until then (e.g. for a finale scripted at a later time). Without a win guard, completing every sequence ends the adventure in victory. The Game Master can additionally end it when the soft `completed_condition` is met.
+>
+> A sequence completes when its hard rules hold (`required_item_id`, `required_scene_id`, `required_defeated_npc_id`, and its guard). `completion_guard_expression` is an alias of `guard_expression`; set only one of them. If both are set, `guard_expression` is the one that counts.
 
 ### `tw.time` (In-Game Clock)
 The in-game time is the number of minutes (units for the *units* time system) that passed since the adventure started.
@@ -717,6 +762,42 @@ tw.audio.release()
 
 **Limits and storage**: the admin sets the number of tracks a play session may render (further requests fail and keep the old audio). The audio state (what plays, the named tracks, the volume) is part of every save; restoring a checkpoint restores the audio. The rendered files live in the session folder (`adventures/sessions/<session>/audio/`); a track whose file is missing (e.g. after a session import) is rendered again.
 
+### `tw.party` (Companions)
+The protagonist's companions (sidekicks). An NPC becomes a companion when a script recruits it, or when its `companion` settings say `starts_in_party` (see *Companions* in `docs/specs/adventure_format.md`). One companion is **active** at a time: while it follows, the engine moves it into every scene the protagonist enters, unless it waits, is defeated, is not in the scene the protagonist left, or the exit or active sequence is marked solo (`companions_allowed: false`). NPC arguments accept an ID, an exact name or an NPC proxy (`tw.npcs.get(...)`). Changes are visible to the same script at once and saved with every checkpoint.
+
+**Changing the party**
+- `tw.party.recruit(npc, tactics=None)`: adds the NPC and makes it the active companion that follows. It stays where it is and travels along from the next scene change on, so recruit it in the scene the player is in. `tactics`: `BALANCED`, `OFFENSIVE`, `DEFENSIVE` or `SUPPORT`; default is the NPC's companion setting. Returns `False` for an unknown NPC or unknown tactics (with a script error in the chat), and for an NPC whose companion settings have `recruitable: false`. Any NPC can be recruited; one without companion settings uses the defaults.
+- `tw.party.dismiss(npc=None)`: removes a member (default: the active companion). It stays in its current scene.
+- `tw.party.wait()` / `tw.party.follow()`: the active companion stays behind until `follow()`; after `follow()` it travels along again from the scene it waits in.
+- `tw.party.set_active(npc)`: makes another recruited member the active companion.
+- `tw.party.set_tactics(tactics, npc=None)`: changes a member's combat tactics (default: the active companion).
+
+**Reading**
+- `tw.party.active`: ID of the active companion, else `None`. `tw.party.companion`: the same NPC as a proxy (`tw.party.companion.current_scene_id`, `.hp`, ...), else `None`.
+- `tw.party.members`: IDs of all recruited companions. `tw.party.is_empty`: `True` when nobody is in the party.
+- `tw.party.following`: `False` while the companion waits.
+- `tw.party.is_member(npc)`, `tw.party.is_active(npc)`, `tw.party.tactics_of(npc=None)`.
+
+The player gives the same orders without a script: **Stay here** / **Follow me** in the companion's context menu, `/companion wait|follow`, or in their own words ("Lara, wait here"); they switch `tw.party.following` and only reach a companion standing in the player's scene.
+
+`tw.party` also works in guard expressions, e.g. an exit `unlock_expression` of `tw.party.is_member("NPC_LARA")`.
+
+```python
+# init_script: Lara joins after the player helped her.
+def on_lara_choice(index):
+    if index == 0:
+        tw.party.recruit("NPC_LARA")
+        tw.story.narrate("Lara shoulders her pack. 'Lead the way.'")
+
+# on_enter_scene of the vault: she keeps watch outside.
+if tw.party.is_active("NPC_LARA"):
+    tw.party.wait()
+    tw.story.narrate("Lara stays at the entrance to keep watch.")
+
+# on_leave_scene of the vault: she comes along again.
+tw.party.follow()
+```
+
 ### `tw.quests`
 Directly manipulates adventure quest entries:
 - `tw.quests.complete(quest_id: str)`: Marks `quest_id` as completed.
@@ -755,7 +836,7 @@ Controls adventure story chapters and sequences. In TaleWeaver, **only one seque
 
 #### Progression Modes: Linear vs. Dynamic
 Adventures configure `sequence_progression_mode` in their manifest or template:
-- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence does not end the adventure (see the note under `tw.game`).
+- **`"linear"` (default)**: Classic story chapters. Completing sequence $N$ automatically unlocks sequence $N+1$. Completing the final sequence ends the adventure only when it has no win guard (see the note under `tw.game`).
 - **`"dynamic"`**: Ideal for hubs, sandboxes, QA workbenches, and open-world investigations:
   - Sequences do not auto-advance to the next array index on completion.
   - Completing a sequence clears `active_sequence_id = None` without finishing the entire adventure.

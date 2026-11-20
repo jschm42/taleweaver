@@ -11,6 +11,12 @@ class GameOverError(Exception):
     pass
 
 
+class ProtagonistDownError(GameOverError):
+    """The protagonist fell to 0 HP. Adventures with respawn mode revive them instead."""
+
+    pass
+
+
 # Backward-compatible alias for modules not yet migrated to GameOverError
 GameOverException = GameOverError
 
@@ -70,6 +76,13 @@ class EntityMovement(BaseModel):
     entity_id: str = Field(..., validation_alias=AliasChoices("entity_id", "id"))
     to_scene_id: Optional[str] = None
     to_spatial_position: Optional[str] = None
+
+
+class ItemHandover(BaseModel):
+    """A carried item the player hands to a character in the scene (see ``given_items``)."""
+
+    item_id: str = Field(..., validation_alias=AliasChoices("item_id", "id", "item"))
+    npc_id: str = Field(..., validation_alias=AliasChoices("npc_id", "npc", "to", "recipient"))
 
 
 class ExitUpdate(BaseModel):
@@ -203,6 +216,16 @@ class WorldMemoryUpdate(BaseModel):
     scene_id: Optional[str] = None
 
 
+class NpcMemoryUpdate(BaseModel):
+    """One lasting fact a character with NPC MEMORY keeps about the protagonist."""
+
+    npc_id: str
+    key: str = Field(
+        "", description="Short topic slug, e.g. player_name, deal, treatment; reuse to update."
+    )
+    text: str = Field("", description="One short English sentence; empty forgets the key.")
+
+
 class AdventureGeneratorToolIntent(BaseModel):
     """Lightweight intent payload for adventure-generator tools in chat mode."""
 
@@ -220,6 +243,15 @@ class AdventureGeneratorToolIntent(BaseModel):
     removed_inventory_item_ids: Optional[list[str]] = None
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
+    given_items: Optional[list[ItemHandover]] = Field(
+        None,
+        description=(
+            "Carried items the player hands to a character present in the scene this turn, "
+            "in any wording or language (gives, hands over, offers and the character takes "
+            "it). The engine moves each item into that character's inventory and runs its "
+            "receive trigger; do not also list it in removed_inventory_item_ids or move it."
+        ),
+    )
     completed_quest_ids: Optional[list[str]] = None
     sequence_completed: bool = False
     earned_award_keys: Optional[list[str]] = None
@@ -246,6 +278,13 @@ class AdventureGeneratorToolIntent(BaseModel):
     deleted_entities: Optional[list[str]] = None
 
     extra_time_minutes: int = 0
+    companion_order: Optional[Literal["wait", "follow"]] = Field(
+        None,
+        description=(
+            "Only when the player tells the COMPANION (see CURRENT STATE) to stay behind here "
+            "('wait') or to come along again ('follow'), in any words or language. Else null."
+        ),
+    )
 
     tool_results: Optional[ToolResults] = None
     narrative_description: str = ""
@@ -271,6 +310,15 @@ class GameEvent(BaseModel):
     )
     updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
+    given_items: Optional[list[ItemHandover]] = Field(
+        None,
+        description=(
+            "Carried items the player hands to a character present in the scene this turn, "
+            "in any wording or language (gives, hands over, offers and the character takes "
+            "it). The engine moves each item into that character's inventory and runs its "
+            "receive trigger; do not also list it in removed_inventory_item_ids or move it."
+        ),
+    )
 
     # Mapping & Navigation
     new_scene_id: Optional[str] = Field(
@@ -332,6 +380,14 @@ class GameEvent(BaseModel):
         description="IDs from ACTIVE SOFT RULES whose condition the player's action fulfilled this message.",
     )
 
+    companion_order: Optional[Literal["wait", "follow"]] = Field(
+        None,
+        description=(
+            "Only when the player tells the COMPANION (see CURRENT STATE) to stay behind here "
+            "('wait') or to come along again ('follow'), in any words or language. Else null."
+        ),
+    )
+
     combination_intent: bool = Field(
         False,
         description="Set to true if the player's message indicates they are attempting to combine, craft, mix, assemble, or use multiple items together (in any language).",
@@ -342,6 +398,13 @@ class GameEvent(BaseModel):
     forget_notes: Optional[NoteTexts] = None
     clear_notes: bool = False
     new_world_memories: Optional[list[WorldMemoryUpdate]] = None
+    npc_memories: Optional[list[NpcMemoryUpdate]] = Field(
+        None,
+        description=(
+            "Lasting facts a character listed under NPC MEMORY (CURRENT STATE) will remember "
+            "about the protagonist. Usually null."
+        ),
+    )
 
     # Status Updates
     game_over: bool = False
@@ -448,7 +511,7 @@ class RuleEngine:
 
         if avatar.hp <= 0:
             avatar.hp = 0
-            raise GameOverError(f"{avatar.name} has fallen! Game Over.")
+            raise ProtagonistDownError(f"{avatar.name} has fallen! Game Over.")
 
         avatar.stamina = max(avatar.stamina, 0)
         avatar.mana = max(avatar.mana, 0)

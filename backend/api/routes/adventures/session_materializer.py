@@ -58,10 +58,12 @@ _EXIT_COPY_FIELDS = (
     "exit_type",
     "is_locked",
     "is_revealed",
+    "companions_allowed",
     "lock_description",
     "code_to_unlock",
     "item_to_unlock",
     "rule_to_unlock",
+    "dynamic_zone",
 )
 
 

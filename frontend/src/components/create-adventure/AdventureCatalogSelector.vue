@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { CatalogTile } from '@/types'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import { Search, X, Check, ChevronRight, Sparkles } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -87,7 +87,7 @@ onBeforeUnmount(() => {
           <p class="text-[10px] sm:text-xxs text-white/40 uppercase tracking-widest truncate">{{ subtitle }}</p>
         </div>
       </div>
-      <InfoPopoverButton v-if="helpText" :title="title" :text="helpText" />
+      <UiInfoPopover v-if="helpText" :title="title" :text="helpText" />
     </div>
 
     <!-- Selected Element Card (Clickable to open dialog) -->

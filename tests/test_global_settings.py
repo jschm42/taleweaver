@@ -26,7 +26,7 @@ async def _seed(*users: User) -> None:
             db,
             encrypted_api_keys=dict(SERVER_KEYS),
             llm_settings=dict(SERVER_LLM),
-            game_settings={"clock_24h": True},
+            game_settings={"whisper_model": "base"},
         )
         db.add_all(users)
         await db.commit()
@@ -84,12 +84,12 @@ async def test_admin_writes_go_to_the_server_row(client, setup_test_db):
 
     res = await client.post(
         "/api/settings/game",
-        json={"clock_24h": False, "date_format": "YYYY-MM-DD", "whisper_model": "tiny"},
+        json={"whisper_model": "small"},
         headers=_headers("admin"),
     )
 
     assert res.status_code == 200
-    assert (await _server_row()).game_settings["date_format"] == "YYYY-MM-DD"
+    assert (await _server_row()).game_settings["whisper_model"] == "small"
 
 
 async def test_settings_survive_deleting_every_former_admin(client, setup_test_db):
@@ -131,6 +131,32 @@ async def test_player_preferences_store_only_personal_keys(client, setup_test_db
     async with TestSessionLocal() as db:
         player = (await db.execute(select(User).where(User.username == "player"))).scalar_one()
         assert set(player.game_settings) == {"tts_preferences"}
+
+
+async def test_player_clock_format_is_personal(client, setup_test_db):
+    await _seed(User(username="player", hashed_password="x", role="user"))
+
+    res = await client.put(
+        "/api/users/me/preferences",
+        json={"clock_format": "12h"},
+        headers=_headers("player"),
+    )
+
+    assert res.status_code == 200
+    assert res.json()["clock_format"] == "12h"
+    assert "clock_format" not in ((await _server_row()).game_settings or {})
+
+
+async def test_player_clock_format_rejects_unknown_values(client, setup_test_db):
+    await _seed(User(username="player", hashed_password="x", role="user"))
+
+    res = await client.put(
+        "/api/users/me/preferences",
+        json={"clock_format": "36h"},
+        headers=_headers("player"),
+    )
+
+    assert res.status_code == 422
 
 
 async def test_reading_without_a_row_returns_empty_settings(setup_test_db):

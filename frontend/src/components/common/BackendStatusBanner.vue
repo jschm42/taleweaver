@@ -1,8 +1,13 @@
 <script setup lang="ts">
 /** Shows that the backend is unreachable (and when it is back), instead of a seemingly frozen UI. */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { WifiOff, RefreshCw, CheckCircle2 } from 'lucide-vue-next'
 import { backendStatus, probeBackend } from '@/services/backendStatus'
+
+const route = useRoute()
+/** The login page shows its own "Engine starting up..." status, so the banner stays hidden there. */
+const hiddenOnRoute = computed((): boolean => route.name === 'login')
 
 const now = ref(Date.now())
 let ticker: ReturnType<typeof setInterval> | undefined
@@ -30,7 +35,7 @@ onBeforeUnmount(() => {
 <template>
   <Transition name="backend-banner">
     <div
-      v-if="!backendStatus.online"
+      v-if="!hiddenOnRoute && !backendStatus.online"
       class="fixed top-3 left-1/2 -translate-x-1/2 z-[400] w-[min(92vw,34rem)] rounded-2xl border border-rose-500/40 bg-rose-950/90 px-4 py-3 text-rose-100 shadow-2xl backdrop-blur-xl"
       role="alert"
       aria-live="assertive"
@@ -62,7 +67,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div
-      v-else-if="backendStatus.justRestored"
+      v-else-if="!hiddenOnRoute && backendStatus.justRestored"
       class="fixed top-3 left-1/2 -translate-x-1/2 z-[400] inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-950/90 px-4 py-2 text-xs font-bold text-emerald-100 shadow-2xl backdrop-blur-xl"
       role="status"
       aria-live="polite"

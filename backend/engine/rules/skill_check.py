@@ -40,12 +40,12 @@ def roll_dice_detailed(dice_str: str) -> dict:
     """
     import re
 
-    match = re.match(r"(\d+)d(\d+)([+-]\d+)?", dice_str.lower().replace(" ", ""))
+    match = re.match(r"(\d+)d(\d*)([+-]\d+)?", dice_str.lower().replace(" ", ""))
     if not match:
         return {"total": 0, "dice_total": 0, "rolls": [], "bonus": 0, "dice_str": dice_str}
 
     num_dice = int(match.group(1))
-    sides = int(match.group(2))
+    sides = max(1, int(match.group(2) or 6))
     bonus = int(match.group(3)) if match.group(3) else 0
 
     rolls = [random.randint(1, sides) for _ in range(num_dice)]

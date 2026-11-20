@@ -37,7 +37,8 @@ All debug commands are prefixed with `/debug`.
 | `/debug exp [amount]` | Grants the specified amount of XP to the avatar. |
 | `/debug kill [NPC_NAME\|ID]` | Removes an NPC from the world. |
 | `/debug delete_item [ITEM_KEY\|ID]` | Removes an item from the world or inventory. |
-| `/debug open_exit [EXIT_ID]` | Unlocks a specific exit. |
+| `/debug open_exit [EXIT_ID]` | Unlocks a specific exit for this session (route override, session exit row and map edge, like `tw.exits.unlock`). No unlock hooks fire. |
+| `/debug goto [SCENE_ID]` | Teleports the hero into the scene, ignoring exits and locks. The scene's `on_enter_scene` script/text fires as on a normal arrival, but there is no arrival narration. |
 | `/debug szene` | Shows technical details of the current scene. |
 | `/debug map` | Shows summary counts of world elements. |
 | `/debug log on/off` | Toggles detailed engine logging in the console. |
@@ -74,7 +75,29 @@ If you need to force open a door but don't know the ID:
 (Then use the ID found)
 `user: /debug open_exit exit_42`
 
-### 4. Checking a Script Value
+### 4. Using the Debug World Map
+The **World Map** tab of the debug inspector (bug icon) shows every scene, unmasked by fog-of-war:
+- **Click a scene** to teleport there (`/debug goto`). Clicking the current scene only opens its details; dragging the map does not count as a click.
+- **Click the red lock badge** on a locked passage to unlock it (`/debug open_exit`).
+The inspector reloads its data after each action.
+
+### Inspecting NPCs
+The **NPCs** tab of the debug inspector lists every character as a compact tile: portrait, name, ID, alive or defeated, hidden marker, current scene and HP. "Here" marks characters in the protagonist's scene. The search field and the filters (current scene, alive, hidden) narrow the list.
+
+**Click a tile** to open the character's details: HP, stamina, mana and attributes, the persona (character, goal, description) and GM notes, movement and allowed scenes, the inventory, the `.twe` export, and the actions *Heal*, *Kill* and *Unhide*. Esc or a click outside closes the details; the inspector stays open. The details also show what the engine keeps for [NPC memory](world-builder-syntax.md#npc-memory) and [NPC conversations](world-builder-syntax.md#npc-conversations):
+- **NPC Memory**: every stored fact as `key: text` and the used / available slots. Facts picked up by gossip are marked `gossip` (their text starts with "Heard from ...").
+- **Gossip**: which facts the character heard from whom, and whom it told what.
+- **Conversations**: the relations as the game sees them now (`[script]` marks a change by `tw.npcs.set_relation`), "No chatter" for `chatty: no`, and each conversation topic with its partner, clue, guard and whether it is `heard` or still `open`.
+
+A bar above the tiles shows the session-wide state: the adventure's chatter level, the player's chatter switch, gossip, the quiet messages counted in the current scene, the last pair that talked, the heard topic ids, a conversation direction still waiting for the next narration (`pending`) and the **gossip log** (newest first: who told whom what, where and at which minute). When gossip is off, the bar says so: a session keeps the adventure settings it started with, so switching gossip on in the editor only affects new sessions.
+
+### Downloading Images and Entities
+- **Images ZIP** (inspector header) downloads every image of the session in one archive: scenes (template and dynamically generated), NPCs and items (including dynamic spawns) and the protagonist portrait, sorted into `scenes/`, `npcs/`, `items/` and `protagonist/`. Only real image files are packed (PNG, JPEG, WebP, GIF, checked by content); remote URLs, missing files and anything that is not an image are listed in `missing.txt`.
+- The **download icon** next to an NPC's or item's ID exports that entity with its current session values and image as a `.twe` bundle, the same format as the editor's *Export (.twe)*, so it can be imported into any adventure (editor: *Import NPC* / *Import Item*).
+
+Both need debug mode and only work for your own session (`GET /adventures/{game_id}/session-debug/images.zip`, `GET /adventures/{game_id}/session-debug/export/{entity_id}`).
+
+### 5. Checking a Script Value
 To see whether a variable was set and how many HP an NPC has left:
 `user: /script tw.vars.get('alarm')`
 `user: /script tw.npcs.get('TEMPLE_GUARD').hp`

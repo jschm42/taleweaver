@@ -23,6 +23,7 @@ from backend.engine.interaction.switch_states import (
 )
 from backend.engine.rules.crafting_recipes import KEPT_FIELD, RESULT_FIELD, normalize_ids
 from backend.models.world_entity import WorldEntity
+from backend.utils.text_utils import unescape_line_breaks
 
 _LOCK_FIELDS = ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
 _UNLOCK_SCRIPT_FIELDS = (
@@ -38,6 +39,7 @@ _UNLOCK_SCRIPT_FIELDS = (
 )
 _CONTAINER_CAPACITY_FIELDS = ("min_items", "max_items")
 _CONTAINER_KEYS = (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, *_CONTAINER_CAPACITY_FIELDS, "locked")
+_CONTAINER_KEYS_WITHOUT_LOCK = tuple(key for key in _CONTAINER_KEYS if key != "locked")
 _READABLE_SCRIPT_FIELDS = ("on_read_script", "on_read_text")
 _READABLE_KEYS = ("text_log_content", "text_log_format", *_READABLE_SCRIPT_FIELDS)
 _TEXT_LOG_FORMATS = {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}
@@ -114,10 +116,17 @@ def _update_container_capacity(metadata_json: dict[str, Any], payload: EntityUpd
 
 
 def update_container(
-    ent: WorldEntity, metadata_json: dict[str, Any], payload: EntityUpdateRequest, active: bool
+    ent: WorldEntity,
+    metadata_json: dict[str, Any],
+    payload: EntityUpdateRequest,
+    active: bool,
+    type_changed: bool = False,
 ) -> None:
     if not active:
-        _drop(metadata_json, (*_LOCK_FIELDS, *_UNLOCK_SCRIPT_FIELDS, *_CONTAINER_CAPACITY_FIELDS))
+        # On a regular item `locked` is its take-lock and must survive unrelated edits; only a
+        # type change drops it (a former container's lock is no take-lock).
+        keys = _CONTAINER_KEYS if type_changed else _CONTAINER_KEYS_WITHOUT_LOCK
+        _drop(metadata_json, keys)
         if given(payload, "locked"):
             metadata_json["locked"] = bool(payload.locked)
         return
@@ -145,7 +154,9 @@ def update_readable(
             raise HTTPException(
                 status_code=400, detail="text_log_content must be at most 1000 characters."
             )
-        metadata_json["text_log_content"] = (payload.text_log_content or "").strip()
+        metadata_json["text_log_content"] = unescape_line_breaks(
+            payload.text_log_content or ""
+        ).strip()
     if given(payload, "text_log_format"):
         normalized_format = str(payload.text_log_format).strip().upper()
         if normalized_format not in _TEXT_LOG_FORMATS:
@@ -346,3 +357,13 @@ def update_consumable(
         metadata_json.pop("effects", None)
     elif given(payload, "effects"):
         metadata_json["effects"] = payload.effects
+
+
+def update_quest_item(metadata_json: dict[str, Any], payload: EntityUpdateRequest) -> None:
+    """Sets or clears the quest-item flag (stored only when true)."""
+    if not given(payload, "quest_item"):
+        return
+    if payload.quest_item:
+        metadata_json["quest_item"] = True
+        return
+    metadata_json.pop("quest_item", None)

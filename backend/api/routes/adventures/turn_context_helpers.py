@@ -126,19 +126,28 @@ def resolve_sequence_guidance(adventure: Any, state: Any) -> tuple[str, str]:
 
 
 def resolve_model_settings(llm_settings: dict[str, Any]) -> dict[str, Any]:
-    """Resolves providers/models for the small, complex, and compression categories."""
+    """Resolves providers/models for the small, complex, generator, and compression categories."""
     get = llm_settings.get
+    complex_provider = (
+        get("complex_model_provider")
+        or get("small_model_provider")
+        or get("preferred_provider")
+        or "openai"
+    )
+    complex_model = get("complex_model") or "gpt-4o"
     return {
         "small_model_provider": get("small_model_provider")
         or get("complex_model_provider")
         or get("preferred_provider")
         or "openai",
-        "complex_model_provider": get("complex_model_provider")
-        or get("small_model_provider")
-        or get("preferred_provider")
-        or "openai",
+        "complex_model_provider": complex_provider,
         "small_model": get("small_model") or "gpt-4o-mini",
-        "complex_model": get("complex_model") or "gpt-4o",
+        "complex_model": complex_model,
+        "generator_model_provider": get("generator_model_provider") or complex_provider,
+        "generator_model": get("generator_model")
+        or get("complex_model")
+        or get("small_model")
+        or "gpt-4o",
         "compression_model_provider": get("compression_model_provider")
         or get("small_model_provider")
         or "openai",

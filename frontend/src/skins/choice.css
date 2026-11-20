@@ -61,13 +61,32 @@
   font-family: var(--tw-font-body);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .tw-choice-option.is-focused {
   border-color: var(--tw-accent);
   background: color-mix(in srgb, var(--tw-accent) 12%, transparent);
   box-shadow: 0 0 0 1px var(--tw-accent);
+}
+
+.tw-choice-option.is-selected,
+.tw-choice-option.is-selected:disabled {
+  border-color: var(--tw-accent);
+  background: color-mix(in srgb, var(--tw-accent) 16%, transparent);
+  box-shadow: 0 0 0 1px var(--tw-accent);
+  opacity: 1;
+  cursor: wait;
+}
+
+.tw-choice-option.is-locked-out,
+.tw-choice-option.is-locked-out:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .tw-choice-option:disabled {

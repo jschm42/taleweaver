@@ -21,9 +21,18 @@
   --tw-font-dropcap: 'Cinzel', Georgia, serif;
   --tw-dropcap-size: 3.4em;
   --tw-dropcap-weight: 700;
-  --tw-dropcap-ink: var(--tw-accent);
+  --tw-dropcap-ink: #dd7f45;
   --tw-dropcap-shadow: 0 0 10px rgba(217, 120, 40, 0.3);
   --tw-narration-tag-ink: #e8b86a;
+  --tw-voice-tag-ink: #e8b86a;
+  --tw-label-bg: transparent;
+  --tw-label-ink: var(--tw-accent-soft);
+  --tw-speaker-ink: #f8eed9;
+  --tw-speaker-bg: #9a4320;
+  --tw-speaker-player-ink: #2a1a0e;
+  --tw-speaker-player-bg: var(--tw-player);
+  --tw-speaker-target-ink: #2a1a0e;
+  --tw-speaker-target-bg: var(--tw-target);
 
   --tw-bubble-bg: linear-gradient(170deg, #2e2822 0%, #221d18 100%);
   --tw-bubble-tail-fill: #241f1a;
@@ -38,7 +47,7 @@
   --tw-panel-bg: rgba(24, 17, 11, 0.94);
   --tw-panel-border: rgba(181, 83, 43, 0.35);
   --tw-panel-ink: #ecdfc6;
-  --tw-panel-muted: #a8957a;
+  --tw-panel-muted: #b5a288;
   --tw-panel-radius: 4px;
   --tw-card-bg: #2a2016;
   --tw-card-border: rgba(160, 110, 60, 0.35);
@@ -93,7 +102,7 @@
   /* NPC entrances */
   --tw-arrival-sweep: rgba(232, 184, 106, 0.4);
   --tw-arrival-glow: rgba(217, 120, 40, 0.7);
-  --tw-arrival-tag-bg: #b5532b;
+  --tw-arrival-tag-bg: #9a4320;
   --tw-arrival-tag-ink: #f5ead4;
   --tw-arrival-tag-font: 'Cinzel', Georgia, serif;
   --tw-arrival-animation: tw-npc-arrive-firelight;
@@ -105,7 +114,6 @@
   margin: 0 0 0.6rem;
   padding: 0;
   background: none;
-  color: var(--tw-accent-soft);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.3em;
@@ -126,8 +134,8 @@
 [data-skin='ancient'] .tw-speaker {
   border: 0;
   border-radius: 0;
-  background: var(--tw-speaker-color);
-  color: #f5ead4;
+  background: var(--tw-speaker-bg);
+  color: var(--tw-speaker-ink);
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -135,20 +143,27 @@
 }
 
 [data-skin='ancient'] .tw-speaker:hover {
-  background: color-mix(in srgb, var(--tw-speaker-color) 85%, #000000);
+  filter: brightness(0.88);
 }
 
 /* The player's sand and the target's sage daubs are light: dark soot-brown ink keeps the name readable. */
-[data-skin='ancient'] .tw-speaker--player,
+[data-skin='ancient'] .tw-speaker--player {
+  background: var(--tw-speaker-player-bg);
+  color: var(--tw-speaker-player-ink);
+  text-shadow: 0 1px 0 rgba(255, 245, 225, 0.35);
+}
+
 [data-skin='ancient'] .tw-speaker--target {
-  color: #2a1a0e;
+  background: var(--tw-speaker-target-bg);
+  color: var(--tw-speaker-target-ink);
   text-shadow: 0 1px 0 rgba(255, 245, 225, 0.35);
 }
 
 [data-skin='ancient'] .comic-voice-tag {
   border: 0;
   background: none;
-  color: #e8b86a;
+  color: var(--tw-voice-tag-ink);
+  font-size: 0.8rem;
   font-family: 'Newsreader', Georgia, serif;
   font-style: italic;
   font-weight: 400;

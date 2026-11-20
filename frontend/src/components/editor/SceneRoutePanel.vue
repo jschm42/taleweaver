@@ -4,18 +4,25 @@ import { entityService } from '@/services/entityService'
 import { visualService } from '@/services/visualService'
 import { notificationService } from '@/services/notificationService'
 import { 
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
   isNpcEntity, 
   isObjectEntity, 
+  isValidEditorId,
   mergeUniqueById, 
   formatObjectIds,
   hasAnyScript,
+  sanitizeEditorId,
 } from '@/utils/editor_utils'
 import { Save, X, Trash2, ArrowLeft, Sparkles, Brain } from 'lucide-vue-next'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 import EntityImagePreview from '@/components/editor/EntityImagePreview.vue'
 import SceneConstructablesGroup from '@/components/editor/SceneConstructablesGroup.vue'
 import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
 import SceneAudioSelect from '@/components/editor/SceneAudioSelect.vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
+import SceneRespawnToggle from '@/components/editor/SceneRespawnToggle.vue'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -140,8 +147,9 @@ const isSavingSceneId = ref(false)
 const sceneIdError = computed(() => {
   const val = editingSceneIdValue.value.trim().toUpperCase()
   if (!val) return 'ID is required.'
-  if (!/^[A-Z0-9_]+$/.test(val)) return 'Only uppercase letters, digits and underscores allowed.'
-  if (val.length > 50) return 'Max 50 characters.'
+  if (!isValidEditorId(val, MAX_EDITOR_ID_LENGTH)) {
+    return `Only uppercase A-Z, 0-9, and _ allowed (max ${MAX_EDITOR_ID_LENGTH} chars).`
+  }
   const currentId = String(routeSceneDetails.value?.id || props.sceneId || '').toUpperCase()
   const taken = (props.referenceOptions || [])
     .map((e: any) => String(e.id || '').toUpperCase())
@@ -193,7 +201,10 @@ async function saveSceneId() {
 }
 
 watch(() => editingSceneIdValue.value, (val) => {
-  editingSceneIdValue.value = val.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+  const sanitized = sanitizeEditorId(val, MAX_EDITOR_ID_LENGTH)
+  if (sanitized !== val) {
+    editingSceneIdValue.value = sanitized
+  }
 })
 
 // Filtering
@@ -413,6 +424,56 @@ async function saveSceneDesc(newDesc: any) {
   }
 }
 
+const sceneDynamicDraft = ref<DynamicZoneForm | null>(null)
+const isSceneDynamicDirty = ref(false)
+
+watch(
+  () => routeSceneDetails.value,
+  (scene) => {
+    sceneDynamicDraft.value = scene?.dynamic_zone
+      ? JSON.parse(JSON.stringify(scene.dynamic_zone))
+      : null
+    isSceneDynamicDirty.value = false
+  },
+  { immediate: true },
+)
+
+function onSceneDynamicDraftChange(val: DynamicZoneForm | null) {
+  sceneDynamicDraft.value = val
+  isSceneDynamicDirty.value = true
+}
+
+const isSceneDynamicInvalid = computed(() =>
+  Boolean(sceneDynamicDraft.value && !String(sceneDynamicDraft.value.theme || '').trim()),
+)
+
+async function saveSceneDynamicZone() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  if (isSceneDynamicInvalid.value) {
+    notificationService.add('Zone Theme is required when Dynamic Scene is enabled.', 'error')
+    return
+  }
+  localIsSavingText.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: String(scene.id),
+      dynamic_zone: sceneDynamicDraft.value,
+    })
+    isSceneDynamicDirty.value = false
+    emit('refresh')
+    notificationService.add(
+      sceneDynamicDraft.value ? 'Dynamic scene settings saved.' : 'Dynamic scene disabled.',
+      'success',
+    )
+  } catch (error: any) {
+    notificationService.add(error?.message || 'Failed to save dynamic scene settings.', 'error')
+  } finally {
+    localIsSavingText.value = false
+  }
+}
+
 async function handleGenerateSceneDesc() {
   const sceneName = routeSceneDetails.value?.label || routeSceneDetails.value?.name
   if (!props.adventureId || !sceneName) return
@@ -535,18 +596,24 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           <!-- Inline Scene ID Editor -->
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <template v-if="isEditingSceneId">
-              <div class="flex-1 min-w-0 space-y-1">
-                <div class="flex items-center gap-2">
-                  <input
-                    v-model="editingSceneIdValue"
-                    maxlength="50"
-                    class="flex-1 min-w-0 bg-slate-950/80 border rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-amber-300 focus:outline-none uppercase tracking-wider transition-all"
-                    :class="sceneIdError ? 'border-red-500/70 focus:border-red-500' : 'border-emerald-500/50 focus:border-emerald-400'"
-                    placeholder="SCENE_ID"
-                    @keydown.enter="saveSceneId"
-                    @keydown.esc="cancelEditSceneId"
-                    autofocus
-                  />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start gap-2">
+                  <div class="flex-1 min-w-0">
+                    <EditorIdInput
+                      v-model="editingSceneIdValue"
+                      :prefix="EDITOR_ID_PREFIXES.SCENE"
+                      :source-name="String(routeSceneDetails?.label || routeSceneDetails?.name || '')"
+                      :taken-ids="(referenceOptions || []).map((e: any) => String(e.id || ''))"
+                      :original-id="String(routeSceneDetails?.id || props.sceneId || '')"
+                      :max-length="MAX_EDITOR_ID_LENGTH"
+                      :compact="true"
+                      :required="true"
+                      placeholder="SCENE_VILLAGE"
+                      aria-label="Scene ID"
+                      @keydown.enter="saveSceneId"
+                      @keydown.esc="cancelEditSceneId"
+                    />
+                  </div>
                   <button
                     @click="saveSceneId"
                     :disabled="!!sceneIdError || isSavingSceneId"
@@ -565,7 +632,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                     <X class="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p v-if="sceneIdError" class="text-[10px] text-red-400 font-bold pl-1">{{ sceneIdError }}</p>
               </div>
             </template>
             <template v-else>
@@ -577,6 +643,12 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                 {{ routeSceneDetails?.id || sceneId }}
               </button>
               <h4 class="text-xs font-black text-slate-400 uppercase tracking-[0.25em]">Scene Editor</h4>
+              <span
+                v-if="routeSceneDetails?.dynamic_zone?.theme"
+                class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0"
+              >
+                Dynamic Scene
+              </span>
             </template>
           </div>
         </div>
@@ -740,6 +812,40 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           :track-id="routeSceneDetails.audio_track_id"
           @refresh="emit('refresh')"
           @open-library="emit('open-audio-library')"
+        />
+
+        <!-- Pre-mapped Dynamic Scene Profile -->
+        <div v-if="routeSceneDetails" class="space-y-2.5">
+          <DynamicZoneFields
+            :model-value="sceneDynamicDraft"
+            mode="scene"
+            @update:model-value="onSceneDynamicDraftChange"
+          />
+          <div v-if="isSceneDynamicDirty" class="flex items-center justify-between gap-3">
+            <span v-if="isSceneDynamicInvalid" class="text-[11px] font-semibold text-amber-400">
+              Zone Theme is required before saving.
+            </span>
+            <span v-else class="text-[11px] text-slate-400">
+              Unsaved Dynamic Scene changes.
+            </span>
+            <button
+              type="button"
+              :disabled="localIsSavingText || isSavingText || isSceneDynamicInvalid"
+              class="px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 transition-colors cursor-pointer"
+              @click="saveSceneDynamicZone"
+            >
+              Save Dynamic Scene
+            </button>
+          </div>
+        </div>
+
+        <!-- Respawn mode: a fallen protagonist wakes up at the last revival point reached -->
+        <SceneRespawnToggle
+          v-if="routeSceneDetails"
+          :adventure-id="adventureId"
+          :scene-id="String(routeSceneDetails.id)"
+          :value="routeSceneDetails.is_respawn_point"
+          @refresh="emit('refresh')"
         />
       </div>
     </div>

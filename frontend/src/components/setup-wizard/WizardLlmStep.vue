@@ -64,9 +64,20 @@ function baseUrlFor(provider: string): string {
   return ''
 }
 
-function runTest(key: string, role: { provider: string; model: string }): void {
-  const customUrl = role.provider === 'custom_openai' ? customOpenaiUrl.value : undefined
-  testService.testLlm(key, role.model, role.provider, ollamaUrl.value, undefined, customUrl)
+/** `passKey` is the pass the role runs in play (story = Pass 2 narration, fast = Pass 1 mechanics). */
+function runTest(key: string, role: { provider: string; model: string }, passKey: string, capabilities = false): void {
+  testService.testLlm(
+    key,
+    role.model,
+    role.provider,
+    ollamaUrl.value,
+    undefined,
+    baseUrlFor(role.provider),
+    undefined,
+    undefined,
+    capabilities,
+    passKey,
+  )
 }
 
 /** The generator follows the story model unless an admin already picked a different one. */
@@ -179,7 +190,9 @@ defineExpose({ save })
       :base-url-for="baseUrlFor"
       test-key="wizard-llm-story"
       test-label="Test connection"
-      @test="runTest('wizard-llm-story', story)"
+      capability-label="Test capabilities"
+      @test="runTest('wizard-llm-story', story, 'complex')"
+      @test-capabilities="runTest('wizard-llm-story', story, 'complex', true)"
     />
 
     <WizardModelPicker
@@ -195,7 +208,9 @@ defineExpose({ save })
       :base-url-for="baseUrlFor"
       test-key="wizard-llm-fast"
       test-label="Test connection"
-      @test="runTest('wizard-llm-fast', fast)"
+      capability-label="Test capabilities"
+      @test="runTest('wizard-llm-fast', fast, 'small')"
+      @test-capabilities="runTest('wizard-llm-fast', fast, 'small', true)"
     />
 
     <div v-if="usesOllama">

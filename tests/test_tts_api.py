@@ -294,7 +294,7 @@ async def test_tts_invalid_session_id_falls_back_to_global_audio_folder(tmp_path
 async def test_gemini_always_uses_the_narrator_voice(
     auth_client: AsyncClient, monkeypatch, voice_override
 ):
-    """Per-character voices are an ElevenLabs feature; Gemini ignores NPC voice overrides."""
+    """Without a voice mapping Gemini speaks every character in the narrator voice."""
     # Arrange
     await _enable_tts_for_test_user()
     captured: dict = {}
@@ -352,7 +352,7 @@ async def test_elevenlabs_applies_npc_voice_ids(
 
 @pytest.mark.asyncio
 async def test_voices_endpoint_always_lists_voices_but_flags_elevenlabs(auth_client: AsyncClient):
-    """Voices can be assigned under Gemini too; only ElevenLabs speaks them."""
+    """Voices can be assigned under Gemini too; Google speaks the suggested or mapped voices."""
     # Arrange
     await _enable_tts_for_test_user()
 
@@ -360,9 +360,10 @@ async def test_voices_endpoint_always_lists_voices_but_flags_elevenlabs(auth_cli
     gemini = await auth_client.get("/api/tts/voices")
     eleven = await auth_client.get("/api/tts/voices", params={"provider": "elevenlabs"})
 
-    # Assert
+    # Assert (the bundled list suggests Google voices until an admin saves a mapping)
     assert gemini.json()["provider"] == "google"
-    assert gemini.json()["supports_npc_voices"] is False
+    assert gemini.json()["supports_npc_voices"] is True
+    assert gemini.json()["provider_voices"]
     assert gemini.json()["voices"] == eleven.json()["voices"]
     assert eleven.json()["supports_npc_voices"] is True
     assert eleven.json()["voices"]

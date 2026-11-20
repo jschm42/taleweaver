@@ -37,6 +37,17 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
         "once, when the in-game clock reaches the target time (elapsed since the start)",
         "Elapsed in-game time, e.g. '90' or '2h 30m' (required)",
     ),
+    (
+        "on_respawn",
+        "respawn mode only: after a protagonist who fell to 0 HP woke up at the revival point "
+        "(penalties, a healer's line, healing the enemies)",
+        "None (global)",
+    ),
+    (
+        "on_conversation_heard",
+        "once the protagonist overheard an NPC conversation topic (conversation_topics)",
+        "Topic id (or None for any topic)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a
@@ -95,6 +106,16 @@ INLINE_TRIGGERS: dict[str, tuple[tuple[str, str], ...]] = {
             "the protagonist gives this NPC one or more items; `received_items` and "
             "`received_item_ids` are in scope",
         ),
+        (
+            "on_recruit_success",
+            "the player recruited this companion NPC with its Recruit action (recruit_mode "
+            "INSTANT or ITEM); `offered_item_id` is in scope",
+        ),
+        (
+            "on_recruit_failure",
+            "the player offered a recruit-mode ITEM companion the wrong item or none; "
+            "`offered_item_id` is in scope",
+        ),
     ),
     "PROTAGONIST": (
         ("on_hp_change", "the protagonist HP changes (e.g. damaged or healed)"),
@@ -122,7 +143,7 @@ TW_API_REFERENCE = (
     "inventory (list of item dicts), item_ids, take_item(item_id) (moves an existing item from "
     "wherever it is into the inventory), drop_item(item_id, scene_id=None), "
     "transfer_item(item_id, target_id) (to an NPC or a container in the scene)\n"
-    "- tw.scene: id, npcs, items | teleport(scene_id)\n"
+    "- tw.scene: id, npcs, items | teleport(scene_id) | teleport_dynamic(theme_or_zone_id, theme=None, *, zone_id=None, max_depth=3, danger_level='medium', max_npcs=None, audio_mode=None, cul_de_sac=True, instructions=None, instructions_scope=None, cluster_consistency=None, return_exit=True, label='Teleporter', fresh=False)\n"
     "- tw.exits: is_locked(from_scene_id, to_scene_id), lock(from_scene_id, to_scene_id, reason), "
     "unlock(from_scene_id, to_scene_id)  (ALWAYS pass the two scene IDs of the exit)\n"
     "- tw.npcs / tw.objects (alias tw.items): get(id), exists(id), say(id, text), move(id, scene_id), "
@@ -136,6 +157,9 @@ TW_API_REFERENCE = (
     "init_script function with after_args as keyword arguments once that narration is done)\n"
     "- tw.npcs persona (changes how the GM plays the NPC from then on, this session only): "
     "set_character(npc_id, text), set_goal(npc_id, text), add_trait(npc_id, trait), remove_trait(npc_id, trait)\n"
+    "- tw.npcs memory (NPCs with memory_slots only; the same facts the GM keeps about the protagonist): "
+    "remember(npc_id, key, text) (same key = update, '' = forget), recall(npc_id, key) -> str, "
+    "recalls(npc_id, key) -> bool, forget(npc_id, key=None), memories(npc_id)\n"
     "- tw.npcs combat allies: set_combat_group(npc_id, group) (NPCs sharing a group fight together; "
     "'' removes the group), set_assist_mode(npc_id, 'GROUP'|'ANYONE'|'NEVER') (when the NPC joins a "
     "fight it was not attacked in; '' = automatic)\n"
@@ -156,6 +180,9 @@ TW_API_REFERENCE = (
     "- tw.objects.lock(item_id) / unlock(item_id) / is_locked(item_id): a locked CONTAINER or "
     "CONTAINER_SWITCH cannot be opened; any other locked item is TAKE-LOCKED (visible, cannot be "
     "picked up until unlocked; moving it to the player by script unlocks it)\n"
+    "- quest items (item field quest_item: true) cannot be given to NPCs or companions by the "
+    "player and the GM cannot remove them; scripts still move them, so a hand-in quest uses "
+    "e.g. tw.player.transfer_item('LETTER', 'NPC_MAYOR') in the NPC's on_interact_script\n"
     "- item operations on tw.objects (every item has exactly one holder: player, NPC, container "
     "or scene; moves take it from the old holder): clone(item_id, scene_id=None, hidden=None) -> "
     "proxy of a new copy with id <ITEM>_<n> for this game only (e.g. a dispenser: "
@@ -176,7 +203,7 @@ TW_API_REFERENCE = (
     "set_status_text(text), clear_status_text(). All of this also works on CONTAINER_SWITCH items.\n"
     "- tw.vars: get(key, default), set(key, value)  (persistent story flags)\n"
     "- tw.story: narrate(text), narrate_raw(text), direct(text, after=None, after_args=None)  (soft hint for the GM's next narration; after='fn' runs that init_script function once it is done), skip_narration() (no GM narration next pass, e.g. while audio plays), system_message(text), reject_action(reason)\n"
-    "- tw.memories.add(description, scope='global'|'local', emotion='positive'|'negative'|'neutral')\n"
+    "- tw.memories.add(description, scope='global'|'local', emotion='positive'|'negative'|'neutral', npc_id=None)\n"
     "- tw.quests: complete(quest_id), fail(quest_id), is_completed(quest_id)\n"
     "- tw.awards.grant(award_key) | tw.dice.d20()\n"
     "- tw.sequences (alias tw.sequence; only ONE sequence is active at a time): start(seq_id), "
@@ -193,6 +220,8 @@ TW_API_REFERENCE = (
     "'correct_index': {'type': 'int', 'min': 0, 'max': 3}}). Returns None on error or invalid JSON.\n"
     "- tw.json: loads(text, schema=None, default=None), dumps(value) -> str, validate(data, schema) -> bool\n"
     "- tw.game (alias tw.session): time | win(reason) / game_won(reason), game_over(reason). "
+    "Respawn mode: respawn_point (scene id or None), respawns (count), "
+    "set_respawn_point(scene_id); on_respawn scripts run after a revival. "
     "Completing the last sequence does NOT win the adventure; use completed_guard_expression or tw.game.win()\n"
     "- tw.time: now, day, hour, minute, format() | set(t), advance(t), rewind(t), pause(), resume(), "
     "set_minutes_per_tick(t), allow_gm_time(bool) | at(t, handler), after(t, handler), "
@@ -208,6 +237,13 @@ TW_API_REFERENCE = (
     "playing meanwhile. Always pass a name for audio that repeats (scene themes, battle music): "
     "calling generate again with the same name replays the stored track instead of rendering a "
     "new one. Typical place: on_enter_scene or on_start_sequence.\n"
+    "- tw.party (companions): recruit(npc, tactics=None) (joins and becomes the active "
+    "companion that follows the protagonist through scene changes; recruit it in the "
+    "player's scene), dismiss(npc=None), wait(), follow(), set_active(npc), "
+    "set_tactics(tactics, npc=None) | active (id or None), companion (NPC proxy), members, "
+    "following, is_member(npc), is_active(npc), tactics_of(npc=None). tactics: BALANCED, "
+    "OFFENSIVE, DEFENSIVE, SUPPORT. Typical place: the on_choice handler of a recruitment "
+    "dialog.\n"
     "- tw.dialog.choose(prompt, options, on_choice, speaker=None, narrate=False): shows the player a "
     "multiple-choice dialog (NPC conversation, riddle, dilemma). `options` is a list of labels or "
     "{'label': ..., 'visible_if': '<guard expression>'} dicts (max 8). The call does NOT wait: once "

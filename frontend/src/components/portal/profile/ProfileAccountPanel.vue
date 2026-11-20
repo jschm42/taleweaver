@@ -4,6 +4,7 @@ import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
 import ChangeCredentialsModal from '@/components/portal/ChangeCredentialsModal.vue'
 import AutoSpeakPreferencesCard from './AutoSpeakPreferencesCard.vue'
+import ClockFormatCard from './ClockFormatCard.vue'
 import PersonalApiKeysCard from './PersonalApiKeysCard.vue'
 import RecoveryCodesCard from './RecoveryCodesCard.vue'
 
@@ -75,6 +76,8 @@ async function saveLanguage(): Promise<void> {
           <i v-if="isSavingLanguage" class="ra ra-cycle animate-spin text-cyan-300"></i>
         </div>
       </div>
+
+      <ClockFormatCard @notify="(message, type) => emit('notify', message, type)" />
 
       <AutoSpeakPreferencesCard @notify="(message, type) => emit('notify', message, type)" />
 

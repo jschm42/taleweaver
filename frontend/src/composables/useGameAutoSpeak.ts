@@ -10,6 +10,8 @@ const AUTO_SPEAK_DEBOUNCE_MS = 350
 /** Lets the travel overlay finish fading out before the new scene's narration starts. */
 const DEFERRED_SPEECH_DELAY_MS = 500
 const MAX_TRACKED_SIGNATURES = 200
+/** Speech fades out this fast when a fight opens. */
+const COMBAT_SPEECH_FADE_SECONDS = 0.4
 
 type AutoSpeakOptions = {
   messages: Ref<any[]>
@@ -357,6 +359,12 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
       speakLatestAssistantMessage()
     }
   )
+
+  // A fight takes over the screen: the narration still being read ends (short fade, queue
+  // dropped). No new line starts while the fight runs, see the isCombatActive guards above.
+  watch(isCombatActive, (active) => {
+    if (active) void audioService.fadeOutAndStop(COMBAT_SPEECH_FADE_SECONDS)
+  })
 
   watch(() => options.speechSuppressed?.value, (suppressed) => {
     if (!suppressed) return

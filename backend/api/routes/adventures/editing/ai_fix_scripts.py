@@ -24,8 +24,16 @@ EXIT_SCRIPT_FIELDS = (
     "unlock_expression",
     *_hooks("on_open_exit", "on_exit_used", "on_unlock_success", "on_unlock_failure"),
 )
-NPC_SCRIPT_FIELDS = _hooks(
-    "on_defeat", "on_protagonist_enters_scene", "on_interact", "on_receive_item"
+NPC_SCRIPT_FIELDS = (
+    "reveal_guard_expression",
+    *_hooks(
+        "on_defeat",
+        "on_protagonist_enters_scene",
+        "on_interact",
+        "on_receive_item",
+        "on_recruit_success",
+        "on_recruit_failure",
+    ),
 )
 ITEM_EVENT_FIELDS = _hooks("on_pickup", "on_drop", "on_equip", "on_unequip", "on_interact")
 OBJECT_SCRIPT_FIELDS = (
@@ -68,6 +76,16 @@ def script_violations(target_type: str, field_updates: dict[str, Any]) -> list[s
     """Readable syntax problems of every script / guard value in ``field_updates``."""
     violations: list[str] = []
     for field, value in field_updates.items():
+        if str(field) == "dynamic_zone" and isinstance(value, dict):
+            dyn_errors = _syntax_errors(
+                "on_after_generated_script", value.get("on_after_generated_script")
+            )
+            if dyn_errors:
+                violations.append(
+                    f"{target_type}.dynamic_zone.on_after_generated_script "
+                    f"has invalid syntax ({dyn_errors[0]})"
+                )
+            continue
         errors = _syntax_errors(str(field), value)
         if errors:
             violations.append(f"{target_type}.{field} has invalid syntax ({errors[0]})")

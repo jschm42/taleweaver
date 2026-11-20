@@ -6,7 +6,20 @@
  * `tw-*` classes, so adding a skin never requires touching component markup.
  */
 
-export const SKIN_IDS = ['classic', 'chronicle', 'noir', 'terminal', 'grimoire', 'eldritch', 'toon', 'ancient'] as const
+export const SKIN_IDS = [
+  'classic',
+  'chronicle',
+  'noir',
+  'terminal',
+  'grimoire',
+  'eldritch',
+  'toon',
+  'ancient',
+  'starship',
+  'pixel',
+  'thriller',
+  'sitcom',
+] as const
 
 export type SkinId = (typeof SKIN_IDS)[number]
 
@@ -76,19 +89,71 @@ export const SKINS: SkinDefinition[] = [
     description: 'Ochre on tanned hide, carved capitals and firelight.',
     swatch: ['#2a1c11', '#ecdfc6', '#b5532b'],
   },
+  {
+    id: 'starship',
+    label: 'Starship',
+    description: 'A clean bridge console in deep indigo and ice blue.',
+    swatch: ['#111936', '#e8eefc', '#38bdf8'],
+  },
+  {
+    id: 'pixel',
+    label: 'Pixel Quest',
+    description: '16-bit RPG message windows, gold labels and hard shadows.',
+    swatch: ['#24339c', '#ffffff', '#ffd23f'],
+  },
+  {
+    id: 'thriller',
+    label: 'Thriller',
+    description: 'Cold steel briefing sheets with a warning-red rule.',
+    swatch: ['#12171f', '#e9edf2', '#ff5a3c'],
+  },
+  {
+    id: 'sitcom',
+    label: 'Sitcom',
+    description: 'Warm studio light, soft rounded cards and sticky notes.',
+    swatch: ['#fff7ec', '#33261f', '#14746f'],
+  },
 ]
 
 /** Keyword (lower case) found in the adventure tone → skin. First match wins. */
 const TONE_KEYWORDS: [string, SkinId][] = [
   ['cyberpunk', 'terminal'],
+  // Before the generic sci-fi keywords: "Sci-Fi Space Opera" is Starship, plain sci-fi stays Terminal.
+  ['space', 'starship'],
+  ['starship', 'starship'],
+  ['galactic', 'starship'],
+  ['interstellar', 'starship'],
   ['sci-fi', 'terminal'],
   ['scifi', 'terminal'],
   ['science', 'terminal'],
-  ['space', 'terminal'],
+  ['pixel', 'pixel'],
+  ['retro', 'pixel'],
+  ['8-bit', 'pixel'],
+  ['16-bit', 'pixel'],
+  ['jrpg', 'pixel'],
+  ['arcade', 'pixel'],
   ['noir', 'noir'],
-  ['mystery', 'noir'],
   ['detective', 'noir'],
+  // Before mystery/crime: a "crime thriller" is Thriller, a plain crime story is Noir.
+  ['thriller', 'thriller'],
+  ['suspense', 'thriller'],
+  ['espionage', 'thriller'],
+  ['spy', 'thriller'],
+  ['heist', 'thriller'],
+  ['conspiracy', 'thriller'],
+  ['mystery', 'noir'],
   ['crime', 'noir'],
+  // Before the comedy keywords: a "romantic comedy" is Sitcom, slapstick stays Toon.
+  ['sitcom', 'sitcom'],
+  ['rom-com', 'sitcom'],
+  ['romcom', 'sitcom'],
+  ['romantic', 'sitcom'],
+  ['romance', 'sitcom'],
+  ['slice of life', 'sitcom'],
+  ['cozy', 'sitcom'],
+  ['cosy', 'sitcom'],
+  ['feel-good', 'sitcom'],
+  ['wholesome', 'sitcom'],
   ['slapstick', 'toon'],
   ['comedy', 'toon'],
   ['satir', 'toon'],
@@ -121,6 +186,8 @@ const TONE_KEYWORDS: [string, SkinId][] = [
   ['whimsical', 'chronicle'],
   ['fairy', 'chronicle'],
   ['epic', 'chronicle'],
+  // Checked after the fantasy keywords: "Fantasy RPG" stays Chronicle, a plain RPG tone is Pixel Quest.
+  ['rpg', 'pixel'],
   // Checked after the fantasy keywords: "medieval fantasy" stays Chronicle, plain medieval is Ancient.
   ['medieval', 'ancient'],
 ]

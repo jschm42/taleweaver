@@ -11,6 +11,8 @@ from backend.api.routes.adventures.combat.context import (
     find_enemy,
     system_event,
 )
+from backend.api.routes.adventures.combat.party import is_member_standing, party_members
+from backend.api.routes.adventures.respawn_flow import can_respawn, respawn_protagonist
 from backend.engine.combat.initiative import PLAYER_ID, describe_initiative, roll_initiative
 from backend.models.world_entity import WorldEntity
 
@@ -33,6 +35,10 @@ class CombatRoundMixin:
                 (enemy.get("modifiers") or {}).get("dexterity", 0)
             )
             participants.append({"id": enemy["id"], "name": enemy["name"], "dexterity": dex})
+        for member in party_members(combat):
+            if is_member_standing(member):
+                dex = int(member.get("dexterity_mod") or 0)
+                participants.append({"id": member["id"], "name": member["name"], "dexterity": dex})
         return participants
 
     def _roll_round_initiative(self, combat: dict[str, Any]) -> None:
@@ -84,6 +90,10 @@ class CombatRoundMixin:
             if self._enemy_can_act(combat, actor):
                 self._set_turn_marker(combat)
                 async for chunk in self._resolve_enemy_turn(actor, combat):
+                    yield chunk
+            elif self._party_can_act(combat, actor):
+                self._set_turn_marker(combat)
+                async for chunk in self._resolve_companion_turn(actor, combat):
                     yield chunk
             combat["turn_index"] = int(combat.get("turn_index") or 0) + 1
 
@@ -172,6 +182,7 @@ class CombatRoundMixin:
         combat["active"] = False
         combat["outcome"] = "victory"
         combat["loot_pending"] = True
+        self._recover_party(combat)
         combat["turn"] = "player"
         if len(out) == 1:
             verb = "flees in panic! You won the battle." if out[0].get("fled") else "is defeated."
@@ -186,11 +197,32 @@ class CombatRoundMixin:
     async def _handle_player_defeat(
         self, combat: dict[str, Any], note: str, log_outcome: bool = True
     ) -> None:
-        await self._finalize_session("game_over", f"{self.avatar.name} has fallen in battle.")
+        """Ends fight and adventure. The defeat card and the Game Over screen show the same note.
+
+        In respawn mode the protagonist is knocked out instead: the fight ends without loot,
+        the enemies keep their HP, and the protagonist wakes up at the revival point.
+        """
+        if can_respawn(self.manager):
+            await self._knock_out_player(combat)
+            return
+        fallen = f"{self.avatar.name} has fallen in battle."
+        await self._finalize_session("game_over", fallen if log_outcome else note)
         self._sync_combat_player_snapshot(combat)
         combat["active"] = False
         combat["outcome"] = "defeat"
-        combat["status_note"] = "Game Over" if log_outcome else note
+        combat["status_note"] = fallen if log_outcome else note
         if log_outcome:
             self._append_combat_log(combat, note, "outcome", {"kind": "game_over"})
         self._set_combat_state(combat)
+
+    async def _knock_out_player(self, combat: dict[str, Any]) -> None:
+        """Respawn mode: the fight ends with ``knocked_out`` and the protagonist is revived."""
+        note = f"{self.avatar.name} is knocked out."
+        self._sync_combat_player_snapshot(combat)
+        combat["active"] = False
+        combat["outcome"] = "knocked_out"
+        combat["status_note"] = note
+        self._recover_party(combat)
+        self._append_combat_log(combat, note, "outcome", {"kind": "knocked_out"})
+        self._set_combat_state(combat)
+        await respawn_protagonist(self.manager)

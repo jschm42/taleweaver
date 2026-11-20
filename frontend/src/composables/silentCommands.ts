@@ -42,13 +42,15 @@ const SILENT_COMMANDS = new Set([
   '/suggestions',
   // The scene goes on by itself after a dialog choice (sent by the client, not the player)
   '/continue_story',
+  // Listening mode switched on or off (only its system message is shown)
+  '/listen_mode',
 ])
 
 /**
  * Commands the backend saves (the GM needs them as the player's action) but that the story feed
  * hides: they are mostly sent by clicks, and the GM's narration already tells what happened.
  */
-const HIDDEN_NARRATED_COMMANDS = new Set(['/inspect'])
+const HIDDEN_NARRATED_COMMANDS = new Set(['/inspect', '/greet', '/companion', '/listen'])
 
 /** True when a player message must not be shown in the story feed (live or reloaded). */
 export function isHiddenPlayerMessage(content: string): boolean {

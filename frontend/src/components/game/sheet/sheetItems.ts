@@ -10,6 +10,9 @@ export function isReadableItem(item: any): boolean {
 }
 
 export function isEquippable(item: any): boolean {
+  if (!item) return false
+  const itemType = String(item.item_type || item.metadata_json?.item_type || '').toUpperCase()
+  if (itemType === 'WEAPON' || itemType === 'WEARABLE') return true
   return !!item?.slot || (Array.isArray(item?.wearable_slots) && item.wearable_slots.length > 0)
 }
 

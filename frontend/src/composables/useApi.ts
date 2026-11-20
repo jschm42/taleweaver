@@ -19,6 +19,12 @@ import type {
   GeneratorSurprisePresetPayload,
   GeneratorSurprisePresetResponse,
   TtsVoiceList,
+  VoiceMapFileFormat,
+  VoiceMapImportResult,
+  VoiceMapRow,
+  VoiceMapTable,
+  SpeechModelList,
+  SpeechVoiceList,
   LeaderboardResponse,
   EarnedAward,
 } from '@/types'
@@ -418,6 +424,10 @@ export const GENERATION_SAYINGS: string[] = [
   "Measuring the depth of the rabbit hole..."
 ]
 
+function toVoiceMapCells(items: VoiceMapRow[]): Array<Pick<VoiceMapRow, 'id' | 'google' | 'custom_openai'>> {
+  return items.map(({ id, google, custom_openai }) => ({ id, google, custom_openai }))
+}
+
 export const api = {
   /** Fetches all players ranked by XP, awards and quest outcomes. */
   getLeaderboard(): Promise<LeaderboardResponse> {
@@ -812,7 +822,7 @@ export const api = {
     return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 120000 })
   },
 
-  testTTS(): Promise<{ status: string; audio_url?: string; message?: string }> {
+  testTTS(): Promise<{ status: string; audio_url?: string; message?: string; browser?: boolean }> {
     return request('/tts/test-connection', { method: 'POST', timeoutMs: 60000 })
   },
 
@@ -825,6 +835,49 @@ export const api = {
   getTtsVoices(provider?: string): Promise<TtsVoiceList> {
     const query = provider ? `?provider=${encodeURIComponent(provider)}` : ''
     return request(`/tts/voices${query}`, { method: 'GET' })
+  },
+
+  /** Admin table: Google / OpenAI-compatible voice per voice of the voice list. */
+  getVoiceMap(): Promise<VoiceMapTable> {
+    return request('/settings/voice-map', { method: 'GET' })
+  },
+
+  saveVoiceMap(items: VoiceMapRow[]): Promise<{ status: string; items: VoiceMapRow[] }> {
+    return request('/settings/voice-map', { method: 'PUT', body: JSON.stringify({ items: toVoiceMapCells(items) }) })
+  },
+
+  resetVoiceMap(): Promise<{ status: string; items: VoiceMapRow[] }> {
+    return request('/settings/voice-map', { method: 'DELETE' })
+  },
+
+  /** Lays an import file over the edited table; nothing is saved until `saveVoiceMap`. */
+  importVoiceMap(content: string, format: VoiceMapFileFormat, items: VoiceMapRow[]): Promise<VoiceMapImportResult> {
+    return request('/settings/voice-map/import', {
+      method: 'POST',
+      body: JSON.stringify({ content, format, items: toVoiceMapCells(items) }),
+    })
+  },
+
+  exportVoiceMap(format: VoiceMapFileFormat, items: VoiceMapRow[]): Promise<{ filename: string; content: string }> {
+    return request('/settings/voice-map/export', {
+      method: 'POST',
+      body: JSON.stringify({ format, items: toVoiceMapCells(items) }),
+    })
+  },
+
+  /** Models of the OpenAI-compatible speech server (admin); `baseUrl` checks one before saving. */
+  getSpeechModels(baseUrl?: string): Promise<SpeechModelList> {
+    const query = baseUrl ? `?base_url=${encodeURIComponent(baseUrl)}` : ''
+    return request(`/tts/openai-compatible/models${query}`, { method: 'GET', timeoutMs: 20000 })
+  },
+
+  /** Voices of the OpenAI-compatible speech server for `model` (admin). */
+  getSpeechVoices(baseUrl?: string, model?: string): Promise<SpeechVoiceList> {
+    const params = new URLSearchParams()
+    if (baseUrl) params.set('base_url', baseUrl)
+    if (model) params.set('model', model)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return request(`/tts/openai-compatible/voices${query}`, { method: 'GET', timeoutMs: 20000 })
   },
 
   getElevenLabsModels(): Promise<Array<{ model_id: string, name: string }>> {
@@ -921,7 +974,11 @@ export const api = {
     })
   },
 
-  updateMyPreferences(payload: { default_language?: string | null; tts_preferences?: TtsPreferences }): Promise<any> {
+  updateMyPreferences(payload: {
+    default_language?: string | null
+    tts_preferences?: TtsPreferences
+    clock_format?: 'adventure' | '24h' | '12h'
+  }): Promise<any> {
     return request('/users/me/preferences', { method: 'PUT', body: JSON.stringify(payload) })
   },
 
@@ -1038,7 +1095,7 @@ export const api = {
   },
 
   /** Updates a session note, status, memory turn limit, or compression toggle. */
-  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number; enable_history_compression?: boolean; narration_style?: string; ui_skin?: string; tts_auto_speak?: TtsPreferences }): Promise<GameSession> {
+  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null; max_memory_turns?: number; enable_history_compression?: boolean; narration_style?: string; ui_skin?: string; tts_auto_speak?: TtsPreferences; npc_chatter?: boolean }): Promise<GameSession> {
     return request(`/adventures/sessions/${gameId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),

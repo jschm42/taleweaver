@@ -15,6 +15,10 @@ from backend.api.routes.adventures.editing.common import (
     _sanitize_object_id,
 )
 from backend.api.routes.adventures.editing.entity_create import create_template_entity
+from backend.api.routes.adventures.editing.entity_update.fields import (
+    EXIT_SCRIPT_FIELDS,
+    copy_scripts,
+)
 from backend.api.routes.adventures.editing.image_clone import _clone_entity_image
 from backend.api.routes.adventures.editing.payload import _serialize_model
 from backend.api.routes.adventures.editing.schemas import (
@@ -25,12 +29,33 @@ from backend.api.routes.adventures.editing.schemas import (
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.engine.world.dynamic_scene_schemas import (
+    build_dynamic_placeholder_scene_id,
+    normalize_dynamic_zone,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Editor"])
+
+
+def _clean_decorative_objects(decorative_objects: list[str] | None) -> list[str]:
+    """Validate, trim, and cap decorative objects to at most 7 items."""
+    if not decorative_objects:
+        return []
+    cleaned: list[str] = []
+    for item in decorative_objects:
+        text = item.strip()
+        if not text:
+            continue
+        if len(text) > 100:
+            raise HTTPException(
+                status_code=400, detail="Each decorative object must be at most 100 characters."
+            )
+        cleaned.append(text)
+    return cleaned[:7]
 
 
 @router.post("/{template_id}/editor/scene")
@@ -43,25 +68,26 @@ async def create_editor_scene(
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
     scene_id = _sanitize_object_id(payload.scene_id, "scene_id")
+    if scene_id.upper().startswith("DYN_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Scene IDs starting with 'DYN_' are reserved for dynamic scene placeholders.",
+        )
+    norm_zone = (
+        normalize_dynamic_zone(payload.dynamic_zone)
+        if isinstance(payload.dynamic_zone, dict)
+        else None
+    )
     label = str(payload.label or "").strip()
-    description = str(payload.description or "").strip()
+    description = str(payload.description or "").strip() or (
+        norm_zone["theme"] if norm_zone else ""
+    )
     if not label:
         raise HTTPException(status_code=400, detail="label is required")
     if not description:
         raise HTTPException(status_code=400, detail="description is required")
 
-    clean_decor: list[str] = []
-    if payload.decorative_objects:
-        for d in payload.decorative_objects:
-            s = d.strip()
-            if not s:
-                continue
-            if len(s) > 100:
-                raise HTTPException(
-                    status_code=400, detail="Each decorative object must be at most 100 characters."
-                )
-            clean_decor.append(s)
-        clean_decor = clean_decor[:7]
+    clean_decor = _clean_decorative_objects(payload.decorative_objects)
 
     existing_scene = await db.execute(
         select(WorldScene).where(
@@ -91,6 +117,7 @@ async def create_editor_scene(
         description=description,
         image_url=str(payload.image_url or "").strip() or None,
         decorative_objects=clean_decor or None,
+        dynamic_zone=norm_zone,
     )
     db.add(scene)
     await db.commit()
@@ -164,12 +191,19 @@ async def create_editor_exit(
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
     from_scene_id = _sanitize_object_id(payload.from_scene_id, "from_scene_id")
-    to_scene_id = _sanitize_object_id(payload.to_scene_id, "to_scene_id")
-    if from_scene_id == to_scene_id:
-        raise HTTPException(status_code=400, detail="from_scene_id and to_scene_id must differ")
-
     await _ensure_template_scene_exists(db, template_id, from_scene_id)
-    await _ensure_template_scene_exists(db, template_id, to_scene_id)
+
+    dynamic_zone = normalize_dynamic_zone(payload.dynamic_zone)
+    raw_to = str(payload.to_scene_id or "").strip()
+    if dynamic_zone:
+        to_scene_id = build_dynamic_placeholder_scene_id(
+            dynamic_zone["zone_id"], dynamic_zone.get("depth", 1)
+        )
+    else:
+        to_scene_id = _sanitize_object_id(raw_to, "to_scene_id")
+        if from_scene_id == to_scene_id:
+            raise HTTPException(status_code=400, detail="from_scene_id and to_scene_id must differ")
+        await _ensure_template_scene_exists(db, template_id, to_scene_id)
 
     # The label names the passage itself ("an old rusty gate"), the same from both sides.
     label = str(payload.label or "").strip()
@@ -198,13 +232,22 @@ async def create_editor_exit(
         to_scene_id=to_scene_id,
         label=label,
         exit_type=payload.exit_type,
-        is_locked=bool(payload.is_locked or code or item or rule),
+        is_locked=bool(
+            payload.is_locked
+            or code
+            or item
+            or rule
+            or str(payload.unlock_expression or "").strip()
+        ),
         is_revealed=bool(payload.is_revealed),
+        companions_allowed=payload.companions_allowed is not False,
         lock_description=lock_description or None,
         code_to_unlock=code or None,
         item_to_unlock=item or None,
         rule_to_unlock=rule or None,
+        dynamic_zone=dynamic_zone,
     )
+    copy_scripts(world_exit, payload, EXIT_SCRIPT_FIELDS)
     db.add(world_exit)
     await db.flush()  # assigns the generated id before it is mirrored into the manifest
     if isinstance(adv.original_manifest, dict) and isinstance(
@@ -221,10 +264,13 @@ async def create_editor_exit(
                 "is_bidirectional": (world_exit.exit_type == "bidirectional"),
                 "is_locked": world_exit.is_locked,
                 "is_revealed": world_exit.is_revealed,
+                "companions_allowed": world_exit.companions_allowed is not False,
                 "lock_description": world_exit.lock_description,
                 "code_to_unlock": world_exit.code_to_unlock,
                 "item_to_unlock": world_exit.item_to_unlock,
                 "rule_to_unlock": world_exit.rule_to_unlock,
+                "dynamic_zone": world_exit.dynamic_zone,
+                **{f: getattr(world_exit, f) for f in EXIT_SCRIPT_FIELDS},
             }
         )
         adv.original_manifest = manifest
@@ -425,6 +471,11 @@ async def update_editor_start_scene(
     scene_id = str(payload.scene_id or "").strip()
     if not scene_id:
         raise HTTPException(status_code=400, detail="scene_id is required")
+    if scene_id.upper().startswith("DYN_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Dynamic scene placeholders cannot be set as the start scene.",
+        )
 
     sc_res = await db.execute(
         select(WorldScene).where(

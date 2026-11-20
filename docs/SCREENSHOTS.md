@@ -81,7 +81,7 @@ This document provides concise overviews and explanations for each screenshot lo
 * **Filename**: [`docs/screenshots/loot-dialog.jpg`](screenshots/loot-dialog.jpg)
 * **View**: Container Inspection & Spoils Modal
 * **Description**:
-  An interaction modal displayed when searching environmental containers, chests, or fallen adversaries. Features rich item cards with rarity tiers, descriptive lore, and quick-action buttons allowing players to inspect specific items, retrieve individual relics, or transfer all contents into their backpack. After a won fight, the combat reward dialog lets the player decide per item: **Take** puts it into the inventory, **Drop** leaves it lying in the scene. **Take All & Close** keeps everything that is left (`/loot take_all`), **Drop All & Close** drops it into the scene (`/loot done`); both end the fight. The battle dialog's *Spoils of Battle* panel offers the same choices.
+  An interaction modal displayed when searching environmental containers, chests, or fallen adversaries. Features rich item cards with rarity tiers, descriptive lore, and quick-action buttons allowing players to inspect specific items, retrieve individual relics, or transfer all contents into their backpack. After a won fight, the combat reward dialog lets the player decide per item: **Take** puts it into the inventory, **Drop** leaves it lying in the scene. **Take All & Close** keeps everything that is left (`/loot take_all`), **Drop All & Close** drops it into the scene (`/loot done`); both end the fight. Leaving the scene through an exit while loot is still open drops the remaining items in the fight scene and ends the fight too. The battle dialog's *Spoils of Battle* panel offers the same choices.
 
 ---
 

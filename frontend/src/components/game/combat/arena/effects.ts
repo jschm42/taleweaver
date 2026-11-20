@@ -104,7 +104,9 @@ export class ArenaEffects {
     motes.forEach((m) => m.g.destroy())
   }
 
-  async banner(center: Point, text: string, color: number, hold = 650, size = 52): Promise<void> {
+  /** Big centred caption. `bandWidth` adds a dark band behind it (fight start, victory, defeat). */
+  async banner(center: Point, text: string, color: number, hold = 650, size = 52, bandWidth = 0): Promise<void> {
+    const band = bandWidth > 0 ? this.bannerBand(center, bandWidth, size * 2.1, color) : null
     const label = new Text({
       text,
       style: {
@@ -124,10 +126,26 @@ export class ArenaEffects {
     await Promise.all([
       this.tween.to(label, { alpha: 1 }, 200),
       this.tween.to(label.scale, { x: 1, y: 1 }, 320, easeOutBack),
+      band ? this.tween.to(band.scale, { y: 1 }, 220) : Promise.resolve(),
     ])
     await this.tween.wait(hold)
-    await this.tween.to(label, { alpha: 0 }, 260)
+    await Promise.all([
+      this.tween.to(label, { alpha: 0 }, 260),
+      band ? this.tween.to(band, { alpha: 0 }, 260) : Promise.resolve(),
+    ])
     label.destroy()
+    band?.destroy()
+  }
+
+  private bannerBand(center: Point, width: number, height: number, color: number): Graphics {
+    const band = new Graphics()
+      .rect(-width / 2, -height / 2, width, height).fill({ color: COLORS.ink, alpha: 0.72 })
+      .rect(-width / 2, -height / 2, width, 2).fill({ color, alpha: 0.8 })
+      .rect(-width / 2, height / 2 - 2, width, 2).fill({ color, alpha: 0.8 })
+    band.position.set(center.x, center.y)
+    band.scale.set(1, 0)
+    this.layer.addChild(band)
+    return band
   }
 
   async shake(target: Container, strength = 10, duration = 380): Promise<void> {

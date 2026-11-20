@@ -182,7 +182,11 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
   const openInventoryContextMenu = (item: any, event: MouseEvent) => {
     if (isActionInputBlocked.value) return
 
-    const menu = gameCommandService.buildInventoryContextMenu(item, ruleMode.value)
+    const menu = gameCommandService.buildInventoryContextMenu(
+      item,
+      ruleMode.value,
+      playerSheet?.value?.companion ?? null,
+    )
     if (!menu) return
 
     contextMenu.value = {

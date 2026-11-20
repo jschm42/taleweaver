@@ -7,6 +7,8 @@ export interface GameCommand {
 
 export const GAME_COMMANDS: GameCommand[] = [
   { id: '/say', label: '/say <text>', description: 'Direct Speech (default)', category: 'game' },
+  { id: '/greet', label: '/greet <npc>', description: 'Greet an NPC briefly (counts as an interaction)', category: 'game' },
+  { id: '/companion', label: '/companion wait|follow', description: 'Tell your companion to stay here or to come along', category: 'game' },
   { id: '/sheet', label: '/sheet', description: 'Open your character sheet', category: 'game' },
   { id: '/talent', label: '/talent <talent> | <target>', description: 'Use one of your talents (or type "use <talent> on <target>")', category: 'game' },
   { id: '/inventory', label: '/inventory', description: 'View your items and equipment', category: 'game' },
@@ -18,9 +20,13 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/consume', label: '/consume', description: 'Use a consumable item', category: 'game' },
   { id: '/open', label: '/open', description: 'Open a container or door', category: 'game' },
   { id: '/read', label: '/read', description: 'Read a book, sign, or note', category: 'game' },
+  { id: '/listen', label: '/listen', description: 'Keep quiet and listen to what the characters here say to each other', category: 'game' },
+  { id: '/listen on', label: '/listen on|off', description: 'Listening mode: the characters keep talking until you act (waits for speech)', category: 'game' },
   { id: '/roll', label: '/roll [2-30]', description: 'Roll a die with 2-30 sides (default d6)', category: 'game' },
   { id: '/playagent', label: '/playagent [on/off]', description: 'Activate or deactivate the autonomous Play-Agent', category: 'game' },
   { id: '/playagent personality', label: '/playagent personality <type>', description: 'Set Play-Agent personality (Casual, Bureaucrat, Powerplayer, Custom)', category: 'game' },
+  { id: '/instruct', label: '/instruct <text>', description: 'Tell the Play-Agent what to do next (/instruct clear removes it)', category: 'game' },
+  { id: '/playagent dialogue', label: '/playagent dialogue <level>', description: 'How much the Play-Agent talks with characters (taciturn, normal, talkative, roleplay)', category: 'game' },
   { id: '/playagent delay', label: '/playagent delay <seconds>', description: 'Pause between two Play-Agent steps in Auto mode (0 = none)', category: 'game' },
   { id: '/playagent tts', label: '/playagent tts [on/off]', description: 'Let the Play-Agent wait until text-to-speech has finished', category: 'game' },
   // Debug Commands
@@ -38,6 +44,7 @@ export const GAME_COMMANDS: GameCommand[] = [
   { id: '/debug heal', label: '/debug heal [npc_name] [amount]', description: 'Restore health of player or target NPC', category: 'debug' },
   { id: '/debug kill', label: '/debug kill <npc_name>', description: 'Instantly defeat an NPC', category: 'debug' },
   { id: '/debug open_exit', label: '/debug open_exit <exit_id>', description: 'Unlock a passage or door', category: 'debug' },
+  { id: '/debug goto', label: '/debug goto <scene_id>', description: 'Teleport the hero into a scene (ignores exits and locks)', category: 'debug' },
   { id: '/debug exp', label: '/debug exp <amount>', description: 'Grant experience points to the hero', category: 'debug' },
   { id: '/debug awards', label: '/debug awards', description: 'Instantly claim all adventure awards', category: 'debug' },
   { id: '/debug game_won', label: '/debug game_won', description: 'Trigger the adventure victory condition', category: 'debug' },

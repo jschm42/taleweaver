@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Save, Swords } from 'lucide-vue-next'
+import { Save } from 'lucide-vue-next'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiRange from '@/components/ui/UiRange.vue'
+import UiSection from '@/components/ui/UiSection.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
+import UiToggle from '@/components/ui/UiToggle.vue'
 import type { SpecialAttack } from '@/types'
 import HardRuleTriggersEditor, { type HardRule } from '@/components/editor/HardRuleTriggersEditor.vue'
 import SpecialAttacksEditor from '@/components/editor/SpecialAttacksEditor.vue'
 import NpcCombatProfile from '@/components/editor/NpcCombatProfile.vue'
 import { specialAttackService, type NpcAssistMode } from '@/services/specialAttackService'
+import { useEntitySubform } from '@/components/editor/entity/entitySubforms'
+import type { NpcCombatProfileState } from '@/composables/editor/useNpcCombatProfile'
 
 type NpcLike = {
   id: string
@@ -33,6 +42,8 @@ const props = defineProps<{
   adventureId: string
   npc: NpcLike
   referenceOptions?: Array<{ id: string; name?: string; type?: string }>
+  /** Profile kept by the entity form (attributes on its Stats tab); omitted: own profile. */
+  profile?: NpcCombatProfileState | null
 }>()
 
 const emit = defineEmits<{
@@ -55,6 +66,20 @@ const saving = ref(false)
 const note = ref('')
 const error = ref('')
 
+function behaviourPayload() {
+  const hasRule = Object.values(trigger.value).some((v) => !!String(v ?? '').trim())
+  return {
+    attack_mode: attackOnSight.value ? 'ATTACK_ON_SIGHT' : 'PASSIVE',
+    attack_trigger: hasRule ? trigger.value : null,
+    special_chance: specialChance.value,
+    combat_group: combatGroup.value.trim() || null,
+    assist_mode: assistMode.value || null,
+  } as const
+}
+
+// Last loaded state, to tell whether the settings changed.
+const loaded = ref('')
+
 watch(() => [props.npc.id, JSON.stringify(props.npc.metadata_json ?? {})], () => {
   const meta = props.npc.metadata_json ?? {}
   attackOnSight.value = meta.attack_mode === 'ATTACK_ON_SIGHT'
@@ -62,21 +87,28 @@ watch(() => [props.npc.id, JSON.stringify(props.npc.metadata_json ?? {})], () =>
   specialChance.value = typeof meta.special_chance === 'number' ? meta.special_chance : 40
   combatGroup.value = meta.combat_group ?? ''
   assistMode.value = meta.assist_mode ?? ''
+  loaded.value = JSON.stringify(behaviourPayload())
 }, { immediate: true })
+
+async function persist(): Promise<void> {
+  await specialAttackService.saveNpcCombat(props.adventureId, props.npc.id, behaviourPayload())
+  loaded.value = JSON.stringify(behaviourPayload())
+}
+
+// Inside the entity form, "Save changes" saves these settings; elsewhere the own button does.
+const embedded = useEntitySubform({
+  label: 'Aggression',
+  isDirty: () => JSON.stringify(behaviourPayload()) !== loaded.value,
+  error: () => null,
+  save: persist,
+})
 
 async function saveBehaviour(): Promise<void> {
   saving.value = true
   note.value = ''
   error.value = ''
   try {
-    const hasRule = Object.values(trigger.value).some((v) => !!String(v ?? '').trim())
-    await specialAttackService.saveNpcCombat(props.adventureId, props.npc.id, {
-      attack_mode: attackOnSight.value ? 'ATTACK_ON_SIGHT' : 'PASSIVE',
-      attack_trigger: hasRule ? trigger.value : null,
-      special_chance: specialChance.value,
-      combat_group: combatGroup.value.trim() || null,
-      assist_mode: assistMode.value || null,
-    })
+    await persist()
     note.value = 'Saved.'
     emit('saved')
   } catch (err) {
@@ -88,89 +120,64 @@ async function saveBehaviour(): Promise<void> {
 </script>
 
 <template>
-  <div class="space-y-5">
-    <section class="space-y-3">
-      <h4 class="text-xs font-black text-rose-400 uppercase tracking-[0.2em] flex items-center gap-2">
-        <Swords class="w-4 h-4" /> Aggression · {{ npc.name }}
-      </h4>
-
-      <div class="flex items-center justify-between p-4 bg-black/30 border border-white/10 rounded-2xl">
-        <div class="space-y-1 pr-4">
-          <p class="text-xs font-black text-red-400 uppercase tracking-widest">Attack on sight</p>
-          <p class="text-[11px] text-slate-400">The NPC starts a fight as soon as the protagonist enters its scene.</p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          :aria-checked="attackOnSight"
-          :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1 shrink-0', attackOnSight ? 'bg-red-600' : 'bg-slate-700']"
-          @click="attackOnSight = !attackOnSight"
-        >
-          <span :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', attackOnSight ? 'translate-x-6' : 'translate-x-0']"></span>
-        </button>
-      </div>
+  <div class="space-y-8">
+    <UiSection title="Aggression" description="When this character starts or joins a fight.">
+      <UiToggle
+        v-model="attackOnSight"
+        label="Attack on sight"
+        description="Starts a fight as soon as the protagonist enters its scene."
+      />
 
       <HardRuleTriggersEditor
         v-model="trigger"
         :reference-options="referenceOptions"
-        title="Attack Trigger (Hard Rules)"
-        description="Optional: the NPC attacks once when all configured conditions are met while the protagonist is in its scene, e.g. when a certain item is picked up."
-        guard-label="Attack Guard (Python Expression)"
+        title="Attack trigger"
+        description="Optional: attacks once when all conditions are met while the protagonist is in its scene, e.g. when a certain item is picked up."
+        guard-label="Attack guard (Python expression)"
         guard-help="Optional sandboxed Python condition, e.g. tw.player.has_item('IDOL') and not tw.vars.get('bribed_guard')."
         item-hint="Protagonist holds item X"
         scene-hint="Protagonist has reached scene X"
         npc-hint="Protagonist has defeated NPC X"
       />
 
-      <div class="grid gap-3 sm:grid-cols-2 p-4 bg-black/30 border border-white/10 rounded-2xl">
-        <label class="block space-y-1.5">
-          <span class="block text-xs font-bold text-slate-300">Combat group</span>
-          <input
-            v-model="combatGroup"
-            type="text"
+      <div class="grid gap-4 sm:grid-cols-2">
+        <UiField label="Combat group" hint="Characters of one group fight together.">
+          <UiInput
+            :model-value="combatGroup"
             maxlength="64"
+            class="uppercase placeholder:normal-case" mono
             placeholder="e.g. BANDITS"
-            class="w-full px-3 py-2 rounded-xl bg-slate-950/60 border border-white/10 text-sm text-white font-mono uppercase"
+            @update:model-value="(value) => (combatGroup = String(value ?? ''))"
           />
-          <span class="block text-[10px] text-slate-500">NPCs with the same group fight together: attacking one pulls the others in its scene into the fight.</span>
-        </label>
-        <label class="block space-y-1.5">
-          <span class="block text-xs font-bold text-slate-300">Joins a fight</span>
-          <select v-model="assistMode" class="w-full px-3 py-2 rounded-xl bg-slate-950/60 border border-white/10 text-sm text-white">
-            <option v-for="opt in ASSIST_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-          <span class="block text-[10px] text-slate-500">Bystanders are listed apart in the battle dialog and only fight when the protagonist attacks them.</span>
-        </label>
+        </UiField>
+        <UiField label="Joins a fight" hint="Bystanders only fight when attacked themselves.">
+          <UiSelect
+            :model-value="assistMode"
+            :options="ASSIST_OPTIONS"
+            @update:model-value="(value) => (assistMode = (value || '') as NpcAssistMode | '')"
+          />
+        </UiField>
       </div>
 
-      <label class="block space-y-1.5 p-4 bg-black/30 border border-white/10 rounded-2xl">
-        <span class="flex items-center justify-between text-xs font-bold text-slate-300">
-          Special attack chance per turn
-          <span class="font-mono text-rose-300">{{ specialChance }}%</span>
-        </span>
-        <input v-model.number="specialChance" type="range" min="0" max="100" step="5" class="w-full accent-rose-500" />
-        <span class="block text-[10px] text-slate-500">How often the NPC picks one of its special attacks at random instead of a weapon attack. Badly hurt NPCs prefer healing specials.</span>
-      </label>
+      <UiField
+        label="Special attack chance per turn"
+        hint="How often it picks a special attack instead of a weapon attack. Badly hurt characters prefer healing."
+      >
+        <UiRange v-model="specialChance" :min="0" :max="100" :step="5" unit="%" />
+      </UiField>
 
-      <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-40"
-          :disabled="saving"
-          @click="saveBehaviour"
-        >
-          <Save class="w-3.5 h-3.5" /> {{ saving ? 'Saving…' : 'Save Aggression' }}
-        </button>
-        <span v-if="note" class="text-xs text-emerald-400">{{ note }}</span>
-        <span v-if="error" class="text-xs text-rose-400">{{ error }}</span>
+      <div v-if="!embedded" class="flex items-center gap-3">
+        <UiButton :icon="Save" :loading="saving" @click="saveBehaviour">Save aggression</UiButton>
+        <span v-if="note" class="wb-hint !text-wb-accent-text" role="status">{{ note }}</span>
+        <span v-if="error" class="wb-hint !text-wb-danger-text" role="alert">{{ error }}</span>
       </div>
-    </section>
+    </UiSection>
 
-    <section class="pt-4 border-t border-white/5">
-      <NpcCombatProfile :adventure-id="adventureId" :npc="npc" @saved="emit('saved')" />
-    </section>
+    <div class="border-t border-wb-line pt-6">
+      <NpcCombatProfile :adventure-id="adventureId" :npc="npc" :profile="profile" @saved="emit('saved')" />
+    </div>
 
-    <section class="pt-4 border-t border-white/5">
+    <div class="border-t border-wb-line pt-6">
       <SpecialAttacksEditor
         :adventure-id="adventureId"
         target-type="npc"
@@ -180,6 +187,6 @@ async function saveBehaviour(): Promise<void> {
         :reference-options="referenceOptions"
         @saved="emit('saved')"
       />
-    </section>
+    </div>
   </div>
 </template>

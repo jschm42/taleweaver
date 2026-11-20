@@ -43,6 +43,7 @@ This document provides transparency regarding the creation, licensing, and origi
 ## 🎵 Audio & Music
 
 - **Ambient Music:** Background tracks in `frontend/public/assets/audio/` were generated with [Suno](https://suno.com) under a paid subscription, which grants commercial use rights per Suno's Terms of Service. Distributed with TaleWeaver under the MIT License; feel free to reuse them.
+- **Combat Sound Effects:** Sound effects in `frontend/public/assets/audio/combat/` were generated with [Stable Audio](https://stability.ai) (Stable Audio Open / Stability AI Community License) via local ComfyUI inference, with prompt conditioning aided by Qwen, and post-processed with FFmpeg (silence trimming & EBU R128 loudness normalization). Distributed with TaleWeaver under the MIT License / Public Domain equivalent.
 
 ---
 
@@ -52,3 +53,4 @@ This document provides transparency regarding the creation, licensing, and origi
 - Bundled adventure blueprints and packages are licensed under [CC BY-NC 4.0](LICENSE-CC-BY-NC-4.0).
 - Visual assets generated via Black Forest Labs FLUX / OpenAI API are distributed under MIT License / Public Domain equivalent.
 - Ambient music generated with Suno (paid subscription) is distributed under the MIT License.
+- Combat sound effects generated with Stable Audio Open are distributed under the MIT License / Public Domain equivalent.

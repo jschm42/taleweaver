@@ -14,6 +14,34 @@ from backend.engine.interaction.switch_states import state_label
 from backend.engine.rules.reveal_policy import entity_is_script_only
 from backend.engine.world.exit_labels import exit_display_name
 
+VALID_NPC_TYPES = {"HUMANOID", "BEING", "ANIMAL", "MONSTER"}
+SPEAKING_NPC_TYPES = {"HUMANOID", "BEING"}
+SPEECH_NOTE_SPEAKING = "Speaks in plain, intelligible full sentences."
+SPEECH_NOTE_NON_VERBAL = (
+    "Non-verbal creature sounds and body language only; does NOT speak sentences."
+)
+
+
+def normalize_npc_type(raw: Any) -> str:
+    """Normalize an NPC type token to one of HUMANOID, BEING, ANIMAL, MONSTER."""
+    val = str(raw or "HUMANOID").strip().upper()
+    return val if val in VALID_NPC_TYPES else "HUMANOID"
+
+
+def format_npc_character_with_speech_rule(
+    npc_type: str, character: Optional[str], *, include_speech_rule: bool = True
+) -> str:
+    """Build the [Character: ...] annotation, appending the type's speech rule for narration."""
+    raw_char = str(character or "").strip()
+    if not include_speech_rule:
+        return f" [Character: {raw_char}]" if raw_char else ""
+    note = SPEECH_NOTE_SPEAKING if npc_type in SPEAKING_NPC_TYPES else SPEECH_NOTE_NON_VERBAL
+    if note.lower() in raw_char.lower() or "full sentences" in raw_char.lower():
+        combined = raw_char
+    else:
+        combined = f"{raw_char} ({note})" if raw_char else note
+    return f" [Character: {combined}]"
+
 
 def _format_item_refs(items: Optional[list]) -> list[str]:
     refs: list[str] = []
@@ -55,9 +83,13 @@ def _describe_npc(e: Any, detail: str) -> str:
         stats.append(f"Stamina:{e.stamina}/{e.max_stamina or e.stamina}")
 
     stat_str = f" [{' '.join(stats)}]" if stats else ""
+    npc_type = normalize_npc_type(getattr(e, "npc_type", None))
+    type_str = f" [Type: {npc_type}]"
     pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
     goal_str = f" [Goal: {e.goal}]" if e.goal else ""
-    char_str = f" [Character: {e.character}]" if e.character else ""
+    char_str = format_npc_character_with_speech_rule(
+        npc_type, getattr(e, "character", None), include_speech_rule=(detail != "concise")
+    )
     looks = getattr(e, "appearance", None)
     looks_str = f" [Looks: {looks}]" if looks else ""
     hidden_str = " [HIDDEN]" if getattr(e, "is_hidden", False) else ""
@@ -68,7 +100,7 @@ def _describe_npc(e: Any, detail: str) -> str:
     notes_str = f' [Status/Notes: "{e.notes}"]' if getattr(e, "notes", None) else ""
     move_str = f" [{_movement_label(e, '').strip()}]"
     return (
-        f"{e.name} (ID: {e.id}){stat_str}{pos_str}{goal_str}{char_str}{looks_str}{hidden_str}"
+        f"{e.name} (ID: {e.id}){type_str}{stat_str}{pos_str}{goal_str}{char_str}{looks_str}{hidden_str}"
         f"{defeated_str}{notes_str}{move_str}{inv_str}{desc_str}"
     )
 
@@ -337,8 +369,9 @@ def build_world_npcs_context(
         inv_str = f", Inventory: {', '.join(inv_refs)}" if inv_refs else ""
         notes_str = f', Status: "{npc.notes}"' if getattr(npc, "notes", None) else ""
         move_str = _movement_label(npc, ", ")
+        npc_type = normalize_npc_type(getattr(npc, "npc_type", None))
         lines.append(
-            f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{looks_str}"
+            f"- {npc.name} [Type: {npc_type}]: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{looks_str}"
             f"{hidden_str}{notes_str}{move_str}{inv_str}"
         )
 

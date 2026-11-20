@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { AlertTriangle, Shield, ShieldOff } from 'lucide-vue-next'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 type RuleMode = 'rpg' | 'story' | 'chat'
@@ -49,7 +49,7 @@ function toggleNpcsCanDamageProtagonist() {
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <InfoPopoverButton title="Combat Permissions" :text="CREATE_ADVENTURE_HELP_TEXTS.combatPermissions" />
+        <UiInfoPopover title="Combat Permissions" :text="CREATE_ADVENTURE_HELP_TEXTS.combatPermissions" />
         <span
           class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border"
           :class="isRpgMode ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'"

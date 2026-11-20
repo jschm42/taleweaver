@@ -14,7 +14,7 @@ assets/image.<ext>  # optional image (png, jpg, webp)
 ```json
 {
   "format": "TaleWeaverEntity",
-  "version": 1,
+  "version": "1.4.0",
   "kind": "npc",
   "exported_at": "2026-10-18T12:00:00+00:00",
   "source": { "adventure_title": "The Alchemist's Folly" },
@@ -25,13 +25,14 @@ assets/image.<ext>  # optional image (png, jpg, webp)
 
 | Field    | Description |
 |----------|-------------|
+| `version` | The [adventure manifest spec version](adventure_format.md) the entity data follows (the engine's current version on export, e.g. `"1.4.0"`). Import rejects a missing or malformed version, a version below the minimum supported manifest version, and a version newer than the importing server (it would silently drop the fields it does not know). Bundles exported before this rule carry the integer `1` and are read as `1.4.0`. The import response reports the version as `format_version`. |
 | `kind`   | `protagonist`, `npc`, or `item`. |
 | `entity` | NPC/item: the `WorldEntity` columns (without `template_id`, `session_id`, `image_url`), so an NPC's combat profile travels along: attributes in `stat_modifier_*` (absolute values), armor class as offset in `stat_modifier_armor_class` (AC = 10 + value), and `metadata_json.main_attack`, `special_actions` and scripts. Protagonist: profile, vitals, attributes, `stats` (incl. scripts, special actions and `talents`), and `status_effects`. |
 | `image`  | Path of the image entry inside the ZIP, or `null`. |
 
 ## Import Behaviour
 
-Endpoints: `GET /api/adventures/{id}/editor/transfer/protagonist`, `GET /api/adventures/{id}/editor/transfer/entity/{entity_id}`, `POST /api/adventures/{id}/editor/transfer/import`.
+Endpoints: `GET /api/adventures/{id}/editor/transfer/protagonist`, `GET /api/adventures/{id}/editor/transfer/entity/{entity_id}`, `POST /api/adventures/{id}/editor/transfer/import`. The debug inspector exports session NPCs and items (including dynamic spawns) in the same format: `GET /api/adventures/{game_id}/session-debug/export/{entity_id}`.
 
 - **NPC / item**: always created as a new entity (to copy one inside the same adventure, use **Duplicate** in its editor menu instead). On an ID clash a suffix is added (`SWORD` → `SWORD_2`). If the original scene does not exist, the entity is placed in the start scene. The optional form field `target_scene_id` places the entity in that scene instead; the scene editor sends it, so an NPC or item imported there (**Import** in the NPCs or Items section) lands in the open scene. An unknown `target_scene_id` is rejected with HTTP 400. Every NPC and item menu in the Inhabitants tab, the Items tab and the scene editor offers **Export (.twe)**. References to scenes/items that do not exist in the target adventure (`allowed_scenes`, `inventory`, `reveals_item_id`) are removed; missing crafting ingredients are only reported. All adjustments are returned as `warnings`.
 - **Protagonist**: replaces the profile, stats, and portrait of the current protagonist. Inventory and equipment stay unchanged, as they reference adventure-specific items.

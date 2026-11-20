@@ -97,15 +97,16 @@ def test_cast_voices_is_deterministic():
     assert cast_voices(candidates, VOICES) == cast_voices(candidates, VOICES)
 
 
-def test_gemini_has_no_npc_voices():
+def test_gemini_casts_list_voices_too():
+    """Voices are cast for every provider; Google speaks the ones the admin mapped."""
     # Arrange
-    setup = VoiceSetup("google", "Puck", [])
+    setup = VoiceSetup("google", "Puck", VOICES)
 
     # Act
     cast = cast_npc_voices(setup, [CastingCandidate("GUARD", "He grunts.", "M" * 20)])
 
     # Assert
-    assert cast == {"GUARD": None}
+    assert cast == {"GUARD": "M" * 20}
 
 
 def test_resolve_voice_reference_accepts_id_or_name():

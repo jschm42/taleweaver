@@ -14,6 +14,9 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 from backend.engine.audio.elevenlabs_voices import storable_voice_or_none
+from backend.engine.conversations.npc_fields import CONVERSATION_FIELDS, store_conversation_fields
+from backend.engine.interaction.location_context import normalize_npc_type
+from backend.engine.rules.npc_memory import store_memory_slots
 from backend.models.world_entity import WorldEntity
 
 _NPC_SCRIPT_FIELDS = (
@@ -25,6 +28,11 @@ _NPC_SCRIPT_FIELDS = (
     "on_interact_text",
     "on_receive_item_script",
     "on_receive_item_text",
+    "on_recruit_success_script",
+    "on_recruit_success_text",
+    "on_recruit_failure_script",
+    "on_recruit_failure_text",
+    "reveal_guard_expression",
 )
 INVENTORY_LOCATION = "INVENTORY"
 
@@ -63,6 +71,8 @@ async def update_npc(
     db: AsyncSession, template_id: str, npc: WorldEntity, payload: EntityUpdateRequest
 ) -> None:
     copy_given(npc, payload, ("goal", "character", "is_killable"))
+    if given(payload, "npc_type"):
+        npc.npc_type = normalize_npc_type(payload.npc_type)
     if given(payload, "inventory"):
         await _update_inventory(db, template_id, npc, payload)
     _update_movement(npc, payload)
@@ -70,6 +80,11 @@ async def update_npc(
 
     metadata_json = dict(npc.metadata_json or {})
     put_metadata(metadata_json, payload, _NPC_SCRIPT_FIELDS, empty_as_none=False)
+    if given(payload, "memory_slots"):
+        store_memory_slots(metadata_json, payload.memory_slots)
+    store_conversation_fields(
+        metadata_json, {key: getattr(payload, key) for key in CONVERSATION_FIELDS}
+    )
     npc.metadata_json = metadata_json
     flag_modified(npc, "metadata_json")
 

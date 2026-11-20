@@ -123,7 +123,7 @@ Wet stone stairs, a smashed oil lantern.
 [NPC: KEEPER] Old Haldor
 in: LAMP_ROOM
 hidden: yes
-reveal: The apprentice searches behind the lamp housing.
+reveal_guard: tw.player.has_item('OIL_CAN')
 Unconscious, a bruise on his temple.
 
 [Item: OIL_CAN] Can of Lamp Oil
@@ -243,6 +243,24 @@ goal_item: OFFICE_KEY
   max: 1
 ```
 
+### A quest item that cannot be given away
+
+Mark the items the story cannot do without with `quest: yes`. The player can never hand them to an NPC or companion (`/give_items`, typed "give X to Y", the companion page), and the Game Master cannot take them away, so nobody can break the story by trading the MacGuffin to a random merchant. In the inventory and in the scene they carry a gold frame and a *Quest* tag. A real hand-in runs through a script:
+
+```text
+[Item: SEALED_LETTER] Sealed letter
+in: HARBOR
+quest: yes
+The duke's seal, unbroken.
+
+[NPC: MAYOR] Mayor Ilse Varn
+in: TOWN_HALL
+on_interact: |
+  if tw.player.has_item('SEALED_LETTER'):
+      tw.player.transfer_item('SEALED_LETTER', 'MAYOR')
+      tw.story.narrate('Ilse breaks the seal and goes pale.')
+```
+
 ### A lever that opens a door
 
 Switch outcomes can set flags but cannot unlock exits directly, so the exit checks the flag:
@@ -297,7 +315,6 @@ A raised metal platform hums next to a control console.
 in: PAD_ROOM
 position: standing on the raised metal platform
 hidden: yes
-reveal: script
 
 [Item: PAD_CONSOLE] Teleporter Console
 in: PAD_ROOM
@@ -307,7 +324,7 @@ on_use: |
   tw.story.narrate('With a pop, a bewildered stowaway materializes on the platform.')
 ```
 
-Without `reveal: script`, the hidden stowaway could already turn up when the player looks at the platform, because a hidden entity without a reveal condition is revealed by searching. With `reveal: script` the Game Master is not told about it, and only the console script brings it in.
+Hidden NPCs are never discovered by the Game Master, so the stowaway needs no extra key: without a `reveal_guard` only the console script brings it in. A hidden item, by contrast, would turn up when the player searches the scene; give it `reveal: script` to keep it for scripts only.
 
 ### An ally who turns hostile after the twist
 
@@ -339,6 +356,63 @@ in: ROAD
 
 Varek attacks on sight and Grim joins him, because they share the combat group `BANDITS`. Mira has no group, so she is a bystander: the battle dialog lists her apart from the enemies, and she only fights if the player attacks her. Use `assist: anyone` for an NPC who joins every fight in its scene (a guard dog) and `assist: never` for a group member who stays out until attacked. To make the gang turn on one of its own after a twist, move him out of the group in a script: `tw.npcs.set_combat_group('GRIM', '')`.
 
+### A companion who travels with the hero, and a solo passage
+
+```text
+[NPC: LARA] Lara the Thief
+in: GATE
+character: cynical, observant, quiet on her feet
+companion: yes
+in_party: yes
+tactics: support
+
+[Exit: GATE -> VENT] a narrow air vent
+solo: yes
+
+[Sequence: 3] Alone in the Tower
+companions: no
+```
+
+Lara starts in the party and follows the protagonist into every scene. She waits at the gate when the protagonist crawls through the vent, and she stays behind in every scene the protagonist leaves during chapter 3. Once the protagonist returns to her, she follows again.
+
+### A companion who joins for a price
+
+```text
+[Item: RUM] Bottle of dark rum
+in: CELLAR
+
+[NPC: GRULL] Grull the Sellsword
+in: TAVERN
+companion: yes
+recruit: item
+recruit_item: RUM
+recruit_hint: Nobody hires me sober. Bring me a bottle.
+on_recruit_text: Grull uncorks the rum, takes a long pull and grabs his axe.
+on_recruit_fail_text: Grull sniffs it and pushes it back. "That's not drink, friend."
+```
+
+Grull's card gets a softly glowing companion frame and an *Ally?* tag, and his context menu offers **Recruit**. The dialog shows his hint and lets the player offer one item: the rum makes him join (he keeps the bottle); anything else runs the failure text and stays in the inventory. With `recruit: instant` he joins at once; without `recruit` only a script recruits him (`tw.party.recruit('GRULL')`).
+
+### Waking up at the camp instead of dying
+
+```text
+[World]
+at_zero_hp: respawn
+respawn_hp: 30%
+
+[Scene: CAMP] The Ranger Camp
+respawn: yes
+
+[Sequence: 5] The Dragon's Lair
+respawn: no
+
+[Script: FEE] The healer's fee
+trigger: on_respawn
+code: tw.player.add_xp(-10 * tw.game.respawns)
+```
+
+A protagonist who falls to 0 HP wakes up at the ranger camp (once reached; before that at the start scene) with 30 % of their max HP, and every knockout costs a little more EXP. Only in the dragon's lair is 0 HP still the end. Scripted defeats (`lose_guard`, `tw.game.game_over()`) always end the adventure.
+
 ### An NPC whose mood changes with the player's behavior
 
 ```text
@@ -353,6 +427,43 @@ character: Grieving, polite, talkative
 ```
 
 The GM reads `character` on every turn, so from then on Tobin talks like a bitter man, in this game only. Use `tw.npcs.add_trait('CLERK', 'drunk')` / `remove_trait(...)` for a single trait, or `set_goal(...)` to change what the NPC wants. The change affects dialogue, not combat: pair it with `attack_guard` (see above) if the NPC should also fight.
+
+### An innkeeper who remembers the hero
+
+```text
+[NPC: BRAN] Bran the Innkeeper
+in: INN
+character: Gruff, fair, never forgets a debt
+memory: 4
+```
+
+Bran keeps up to four short facts about the protagonist: the name once it was told, the room that is still unpaid, the insult from yesterday. When the hero comes back after three scenes, he greets them by name and asks for his money. Strangers without `memory` only know what happens in the current scene and never use the hero's name before they hear it. Leave `memory` off for enemies and extras: every slot costs prompt tokens while the character is present.
+
+### Two guards the hero can overhear
+
+```text
+[World]
+npc_chatter: normal
+gossip: yes
+
+[NPC: GERD] Gerd
+in: GATE
+character: Bored, talks too much
+relation: HANNO = colleague | shares night shifts with him
+topic: the cellar door | with: HANNO | convey: the cellar door stays unlocked after midnight | id: cellar_door
+
+[NPC: HANNO] Hanno
+in: GATE
+relation: GERD = colleague
+memory: 2
+
+[Script: CELLAR_CLUE]
+trigger: on_conversation_heard
+target: cellar_door
+code: tw.flags.set('knows_cellar', True)
+```
+
+With `npc_chatter: normal` Gerd and Hanno talk with each other now and then while the hero lingers at the gate; with `/listen` they do so right away. Their first talk is about the cellar door: the narration has to get the clue across, it is stored as a world memory, and the script sets a flag the cellar exit can be guarded on. With `gossip: yes` Hanno passes what he remembers about the hero to Gerd, his colleague. See [NPC conversations](world-builder-syntax.md#npc-conversations).
 
 ### A guard with a real weapon and armor (no items needed)
 
@@ -492,6 +603,48 @@ audio: CRYPT_DRONE
 
 The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
+### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`) & Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]`)
+
+Combine author-designed map topology with on-demand AI generation in two complementary ways:
+
+1. **Dynamic Exits (`[Exit: FROM -> ZONE]`)**: generate an uncharted multi-scene tree (`max_depth` 1–10) on first traversal.
+2. **Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]` or `[Scene: ID]` with `dynamic: yes`)**: you define the exact map connections (`Scene A <-> Dynamic Scene B <-> Dynamic Scene C`), locks, keys, and any pre-placed static NPCs or items. On first player entry, the scene is materialized in-place while preserving all authored exits and static entities. A pre-mapped Dynamic Scene can even have a dynamic exit attached to branch into an open procedural cluster afterward.
+
+```text
+[World]
+dynamic_scene_images: simple
+dynamic_npc_images: simple
+dynamic_item_images: simple
+dynamic_audio: inherit
+dynamic_max_npcs: 2
+dynamic_quotes: yes
+
+[DynamicScene: FOREST_FORK] Whispering Trailhead
+zone: whisper_woods
+theme: Ancient pine clearing choked with ferns and mossy milestones
+danger: low
+cluster_consistency: yes
+
+[Exit: HALL <-> FOREST_FORK] an overgrown stone stile
+
+[Exit: FOREST_FORK -> IRON_MINES] Collapsed Mine Shaft
+theme: Abandoned dwarven iron mine, flooded ore tracks, spider webs, decaying timber
+max_depth: 3
+danger: medium        # peaceful | low | medium | high | deadly | random
+max_npcs: 2           # optional per-exit override (0..5)
+audio: generate       # optional per-exit override: inherit | empty | generate
+cul_de_sac: yes
+cluster_consistency: yes # optional: keep scenes/NPCs/items consistent across the cluster (default yes)
+instructions_scope: once # once (default) | first_scene | max_depth | all_scenes
+instructions: |         # optional: freeform prompt or Blueprint blocks inside a fenced block
+  Generate a loot chest in the first alcove holding an iron sword (1d+2 damage).
+allowed_entities: hostile_npc, container, consumable, scenery
+```
+
+You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster. With `instructions_scope: once` (the default), freeform instructions run only on the first generated scene in a cluster and Blueprint blocks automatically skip entities that were already spawned (with optional per-block `depth: 1` or `depth: max` inside Blueprint instructions).
+
+When the player enters a dynamic cluster, the engine first plans the whole cluster as a small in-game adventure (one LLM call): story arc, antagonist, key item, and for every room a label, a room-specific sub-theme and concrete generation instructions (which NPCs, items, puzzles, where the key lies and what it opens). Every room is then generated from its own brief, so the rooms follow one red thread instead of repeating the same theme and prompt. Your freeform `instructions` are the premise of this cluster adventure (e.g. `Alex fights through the dungeon to free Edgar from his cell; goblins captured him.`): the arc, antagonist, key item and climax are built around them. `instructions_scope` only limits where entities or loot named in the premise are spawned; the story always spans the whole cluster. The in-game debug inspector shows each room's brief.
+
 ## 7. Strict Adherence or Creative Expansion
 
 Choose the builder mode below the Story Idea field:
@@ -534,6 +687,6 @@ When you click **Generate**:
 - **Start small.** Write the chapter outline first and generate. Then fix only the parts that came out wrong.
 - **Give explicit IDs** to everything that is referenced. `[NPC: TOBIN] Tobin` is safer than `[NPC: 1] Tobin`.
 - **One fact per readable.** Put clues in different scenes, so the player has to combine them.
-- **Write the solution into the chapter text.** It becomes the Game Master's walkthrough and keeps hints consistent.
+- **Write the solution into `walkthrough:`.** It becomes the Game Master's walkthrough and keeps hints consistent. Keep sequence descriptions focused on atmosphere and lore without spoiling puzzles.
 - **Let the AI write the atmosphere.** Your free text should say *what matters*; the AI is good at *how it looks*.
 - **Use the adventure-concept-creator skill.** Ask Claude to "create a TaleWeaver adventure about ...". The `taleweaver-adventure-concept-creator` skill writes complete blueprints with a twist and enforceable puzzles in this syntax.

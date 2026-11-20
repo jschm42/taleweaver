@@ -1,7 +1,7 @@
 """Self-service account endpoints: credentials, recovery codes, preferences, session history."""
 
 import logging
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -20,7 +20,11 @@ from backend.core.auth import (
 )
 from backend.core.database import get_db
 from backend.core.global_settings import personal_game_settings
-from backend.core.tts_preferences import DEFAULT_TTS_PREFERENCES, TTS_PREFERENCES_KEY
+from backend.core.tts_preferences import (
+    CLOCK_FORMAT_KEY,
+    DEFAULT_TTS_PREFERENCES,
+    TTS_PREFERENCES_KEY,
+)
 from backend.crud.crud_player_sessions import (
     MAX_PAGE_SIZE,
     PlayerSessionPage,
@@ -61,6 +65,7 @@ class RecoveryCodesResponse(BaseModel):
 class PreferencesUpdateRequest(BaseModel):
     default_language: Optional[str] = Field(default=None, max_length=20)
     tts_preferences: Optional[dict[str, Any]] = None
+    clock_format: Optional[Literal["adventure", "24h", "12h"]] = None
 
 
 def _clean_tts_preferences(raw: dict[str, Any]) -> dict[str, bool]:
@@ -165,6 +170,12 @@ async def update_my_preferences(
         current_user.game_settings = {
             **personal_game_settings(current_user.game_settings),
             TTS_PREFERENCES_KEY: _clean_tts_preferences(request.tts_preferences),
+        }
+        flag_modified(current_user, "game_settings")
+    if request.clock_format is not None:
+        current_user.game_settings = {
+            **personal_game_settings(current_user.game_settings),
+            CLOCK_FORMAT_KEY: request.clock_format,
         }
         flag_modified(current_user, "game_settings")
     await db.commit()

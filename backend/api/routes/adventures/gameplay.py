@@ -75,6 +75,7 @@ from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.rules.walkthrough_unlocks import walkthrough_payload, walkthrough_status
 from backend.engine.scripting.dialog import client_dialog, pending_dialog
 from backend.engine.scripting.llm_proxy import LlmAsker
+from backend.engine.sessions.scene_entry import enter_scene
 from backend.engine.world.exit_labels import exit_sentence_name
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -189,7 +190,9 @@ async def get_chat_history(
         sequence_titles=await visited_sequence_titles(db, state.session_id, adventure),
         sequence_details=await visited_sequence_details(db, state.session_id, adventure),
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
-        combat=AdventureLogic.get_combat_snapshot(state),
+        # A locked (finished) story shows no fight, also for sessions saved before the
+        # terminal epilogue cleared it.
+        combat=None if input_locked else AdventureLogic.get_combat_snapshot(state),
         map_data=map_dict,
         nodes=await AdventureLogic.get_all_scene_metadata(
             db, state.template_id, session_id=state.session_id
@@ -940,6 +943,8 @@ async def traverse_exit(
     await _fire_gameplay_exit_triggers(db, state, world_exit, current_scene_id, llm_asker)
 
     state.current_scene_id = target_scene_id
+    for msg in await enter_scene(db, state, current_scene_id, world_exit=world_exit):
+        db.add(ChatMessage(session_id=state.session_id, role="system", content=msg))
 
     db.add(
         ChatMessage(

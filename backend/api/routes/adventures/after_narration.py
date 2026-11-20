@@ -12,6 +12,7 @@ import logging
 import re
 from typing import Any
 
+from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.engine.rules.rule_engine import GameOverError
 from backend.engine.scripting.gm_directions import take_after_narration
 from backend.engine.scripting.runner import SCRIPT_ERROR_PREFIX
@@ -63,6 +64,6 @@ async def run_after_narration(manager: Any) -> tuple[list[Any], bool]:
         try:
             messages.extend(await manager._apply_script_changeset(context.changeset))
         except GameOverError as goe:
-            await manager._finalize_session("game_over", str(goe))
-            return messages, True
+            if await end_or_respawn(manager, goe):
+                return messages, True
     return messages, False

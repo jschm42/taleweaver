@@ -2,6 +2,7 @@
 
 from typing import Any, Optional
 
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.models.adventure_template import AdventureTemplate
 
 _LEGACY_EQUIPMENT_SLOTS = (
@@ -42,6 +43,7 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     manifest["audio_tracks"] = adventure.audio_tracks or []
     manifest["audio_enabled"] = adventure.audio_enabled
     manifest["title_track_id"] = adventure.title_track_id
+    manifest["npc_conversations"] = normalize_conversation_settings(adventure.npc_conversations)
 
 
 def _register_object(objects: list[dict[str, Any]], obj_dict: Any) -> None:
@@ -169,6 +171,7 @@ def serialize_exit(world_exit: Any) -> dict[str, Any]:
         "is_bidirectional": str(world_exit.exit_type or "").strip().lower() == "bidirectional",
         "is_locked": world_exit.is_locked,
         "is_revealed": bool(world_exit.is_revealed),
+        "companions_allowed": world_exit.companions_allowed is not False,
         "lock_description": world_exit.lock_description,
         "code_to_unlock": world_exit.code_to_unlock,
         "item_to_unlock": world_exit.item_to_unlock,

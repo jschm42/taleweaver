@@ -29,6 +29,7 @@ from backend.engine.adventures.adventure_import_support import (
 )
 from backend.engine.audio.audio_assets import map_imported_audio
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
+from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
@@ -427,6 +428,9 @@ class AdventureTemplateImporter:
                     time_config=adv_data.get("time_config") or manifest_data.get("time_config"),
                     game_over_rules=adv_data.get("game_over_rules")
                     or manifest_data.get("game_over_rules"),
+                    npc_conversations=normalize_conversation_settings(
+                        adv_data.get("npc_conversations") or manifest_data.get("npc_conversations")
+                    ),
                     allow_dynamic_items=adv_data.get("allow_dynamic_items", False)
                     if "allow_dynamic_items" in adv_data
                     else (manifest_data.get("allow_dynamic_items", False)),
@@ -686,6 +690,7 @@ class AdventureTemplateImporter:
             clock_enabled=old_adv.get("clock_enabled", False),
             ui_theme=normalize_ui_theme(old_adv.get("ui_theme")),
             game_over_rules=old_adv.get("game_over_rules"),
+            npc_conversations=normalize_conversation_settings(old_adv.get("npc_conversations")),
             quests=old_adv.get("quests", []),
             awards=old_adv.get("awards", []),
             original_manifest=old_adv.get("original_manifest"),
@@ -932,6 +937,10 @@ class AdventureTemplateImporter:
             max_time_per_turn=adv_meta.get("max_time_per_turn")
             or manifest.get("max_time_per_turn"),
             gm_time_control=_gm_time_control(adv_meta, manifest),
+            game_over_rules=adv_meta.get("game_over_rules") or manifest.get("game_over_rules"),
+            npc_conversations=normalize_conversation_settings(
+                adv_meta.get("npc_conversations") or manifest.get("npc_conversations")
+            ),
             max_memory_turns=adv_meta.get("max_memory_turns")
             or manifest.get("max_memory_turns")
             or 10,

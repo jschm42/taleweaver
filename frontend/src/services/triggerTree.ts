@@ -63,10 +63,13 @@ const EXIT_FIELDS: FieldSpec[] = [
 ]
 
 const NPC_FIELDS: FieldSpec[] = [
+  ['reveal_guard_expression', 'Reveal guard', 'guard'],
   ...SCRIPT_TEXT('on_interact', 'On interact'),
   ...SCRIPT_TEXT('on_defeat', 'On defeat'),
   ...SCRIPT_TEXT('on_protagonist_enters_scene', 'On protagonist enters'),
   ...SCRIPT_TEXT('on_receive_item', 'On receive item'),
+  ...SCRIPT_TEXT('on_recruit_success', 'On recruit success'),
+  ...SCRIPT_TEXT('on_recruit_failure', 'On recruit failure'),
 ]
 
 const OBJECT_FIELDS: FieldSpec[] = [

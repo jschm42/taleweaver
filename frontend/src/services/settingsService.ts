@@ -111,8 +111,6 @@ class SettingsService {
   })
 
   gameForm = ref({
-    clock_24h: false,
-    date_format: 'DD.MM.YY',
     whisper_model: 'tiny',
   })
 
@@ -121,6 +119,13 @@ class SettingsService {
     provider: 'google',
     selected_model: 'gemini-3.8-flash-tts',
     elevenlabs_voice_id: '',
+    custom_openai_url: '',
+    custom_openai_voice: '',
+    custom_openai_format: 'mp3',
+    custom_openai_instructions: '',
+    /** Browser speech: narrator voice name ('' = automatic) and voices for characters. */
+    browser_voice: '',
+    browser_character_voices: [] as string[],
     use_vocal_tags: true,
     use_streaming: false,
     auto_speak: true,
@@ -329,13 +334,9 @@ class SettingsService {
 
   /**
    * Delete an API key for a provider.
-   * Requires user confirmation before deletion.
+   * The caller (ProviderKeysSection) has already asked the user.
    */
   async deleteApiKey(provider: string) {
-    if (!confirm(`Are you sure you want to remove the API key for ${provider}? This will stop related AI services from functioning.`)) {
-      return
-    }
-
     this.isSubmitting.value = true
 
     try {

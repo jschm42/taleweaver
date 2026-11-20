@@ -2,9 +2,9 @@
 
 [data-skin='grimoire'] {
   --tw-accent: #b91c1c;
-  --tw-accent-soft: #dc2626;
+  --tw-accent-soft: #ef4444;
   --tw-player: #d6c7a1;
-  --tw-target: #a8a29e;
+  --tw-target: #bdb7b2;
 
   --tw-font-body: 'Newsreader', Georgia, serif;
   --tw-font-dialogue: 'IM Fell English', Georgia, serif;
@@ -19,7 +19,13 @@
   --tw-dropcap-weight: 700;
   --tw-dropcap-ink: var(--tw-accent-soft);
   --tw-dropcap-shadow: 0 0 14px rgba(185, 28, 28, 0.45);
-  --tw-narration-tag-ink: #f87171;
+  --tw-narration-tag-ink: #fca5a5;
+  --tw-voice-tag-ink: #fca5a5;
+  --tw-label-bg: transparent;
+  --tw-label-ink: #f87171;
+  --tw-speaker-ink: #f87171;
+  --tw-speaker-player-ink: var(--tw-player);
+  --tw-speaker-target-ink: #bdb7b2;
 
   --tw-bubble-bg: #1d1412;
   --tw-bubble-tail-fill: #1d1412;
@@ -34,7 +40,7 @@
   --tw-panel-bg: rgba(18, 12, 10, 0.94);
   --tw-panel-border: color-mix(in srgb, var(--tw-accent) 35%, transparent);
   --tw-panel-ink: #e8dccb;
-  --tw-panel-muted: #a8998a;
+  --tw-panel-muted: #b3a595;
   --tw-panel-radius: 2px;
   --tw-card-bg: #1d1412;
   --tw-card-border: rgba(120, 90, 70, 0.4);
@@ -50,7 +56,7 @@
   --tw-tab-font: 'Cinzel', Georgia, serif;
 
   --tw-scene-tint: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.75) 100%);
-  --tw-scene-filter: saturate(0.6) brightness(0.7) contrast(1.1);
+  --tw-scene-filter: saturate(0.6) brightness(0.74) contrast(1.1);
 }
 
 [data-skin='grimoire'] .tw-narration-label {
@@ -58,8 +64,7 @@
   margin: 0 0 0.6rem;
   padding: 0;
   background: none;
-  color: var(--tw-accent-soft);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.35em;
 }
@@ -79,24 +84,25 @@
   border-bottom: 1px solid currentColor;
   border-radius: 0;
   background: transparent;
-  color: var(--tw-accent-soft);
+  color: var(--tw-speaker-ink);
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
   letter-spacing: 0.18em;
 }
 
 [data-skin='grimoire'] .tw-speaker--player {
-  color: var(--tw-player);
+  color: var(--tw-speaker-player-ink);
 }
 
 [data-skin='grimoire'] .tw-speaker--target {
-  color: var(--tw-target);
+  color: var(--tw-speaker-target-ink);
 }
 
 [data-skin='grimoire'] .comic-voice-tag {
   border: 0;
   background: none;
-  color: #f87171;
+  color: var(--tw-voice-tag-ink);
+  font-size: 0.8rem;
   font-family: 'IM Fell English', Georgia, serif;
   font-style: italic;
   font-weight: 400;

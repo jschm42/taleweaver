@@ -40,6 +40,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     time_system: Optional[str] = "calendar"
     time_config: Optional[dict[str, Any]] = None
     game_over_rules: Optional[dict[str, Any]] = None
+    npc_conversations: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     tts_director_notes: Optional[str] = None
@@ -315,6 +316,7 @@ class AdventureTemplateResponse(BaseModel):
 
     rule_enforcement_mode: str
     sequence_progression_mode: str = "linear"
+    dynamic_generation: Optional[dict[str, Any]] = None
     strict_rules: bool = True
     time_per_turn: int
     pacing_minutes: int
@@ -326,6 +328,7 @@ class AdventureTemplateResponse(BaseModel):
     time_config: Optional[dict[str, Any]] = None
     starting_timestamp: int = 0
     game_over_rules: Optional[dict[str, Any]]
+    npc_conversations: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
@@ -504,6 +507,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     can_start: bool = True
     rule_enforcement_mode: Optional[str] = "rpg"
     sequence_progression_mode: Optional[str] = "linear"
+    dynamic_generation: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
 
     @field_validator("selected_tone", mode="before")
@@ -550,6 +554,8 @@ class TerminalEpilogueRequest(BaseModel):
 
 class TerminalEpilogueResponse(BaseModel):
     content: Optional[str] = None
+    # The ending card chat message (role ``adventure_ending``), saved after the epilogue.
+    ending: Optional[dict[str, Any]] = None
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
@@ -674,6 +680,7 @@ class AdventureTemplateUpdate(BaseModel):
     original_prompt: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
     sequence_progression_mode: Optional[Literal["linear", "dynamic"]] = None
+    dynamic_generation: Optional[dict[str, Any]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None
@@ -711,6 +718,7 @@ class AdventureTemplateUpdate(BaseModel):
     creation_error: Optional[str] = None
     strict_rules: Optional[bool] = None
     game_over_rules: Optional[dict[str, Any]] = None
+    npc_conversations: Optional[dict[str, Any]] = None
     selected_style_id: Optional[str] = None
     selected_tone_id: Optional[str] = None
     time_system: Optional[str] = None

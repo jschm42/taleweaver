@@ -24,7 +24,10 @@ from backend.api.routes.adventures.session_items import backfill_avatar_items_fr
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.global_settings import apply_global_settings
+from backend.engine.conversations.npc_fields import conversation_fields
+from backend.engine.interaction.location_context import normalize_npc_type
 from backend.engine.media.media_engine import MediaEngine
+from backend.engine.rules.npc_memory import memory_slots
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -89,6 +92,11 @@ _NPC_METADATA_FIELDS = (
     "on_protagonist_enters_scene_text",
     "on_receive_item_script",
     "on_receive_item_text",
+    "on_recruit_success_script",
+    "on_recruit_success_text",
+    "on_recruit_failure_script",
+    "on_recruit_failure_text",
+    "reveal_guard_expression",
 )
 _OBJECT_STAT_LABELS = (
     ("stat_modifier_strength", "STR"),
@@ -111,12 +119,16 @@ def _scene_extras(scene: WorldScene, data: dict[str, Any]) -> dict[str, Any]:
     decor = decor if isinstance(decor, list) else []
     return {
         "decorative_objects": [str(d) for d in decor if isinstance(d, (str, int, float))],
+        "dynamic_zone": getattr(scene, "dynamic_zone", None),
         **_text_fields(scene, SCENE_SCRIPT_FIELDS),
     }
 
 
 def _exit_extras(world_exit: WorldExit, _data: dict[str, Any]) -> dict[str, Any]:
-    return _text_fields(world_exit, _EXIT_SCRIPT_FIELDS)
+    return {
+        **_text_fields(world_exit, _EXIT_SCRIPT_FIELDS),
+        "dynamic_zone": getattr(world_exit, "dynamic_zone", None),
+    }
 
 
 def _avatar_extras(avatar: Avatar, _data: dict[str, Any]) -> dict[str, Any]:
@@ -127,6 +139,7 @@ def _adventure_extras(adventure: AdventureTemplate, _data: dict[str, Any]) -> di
     return {
         "scripts": list(getattr(adventure, "scripts", []) or []),
         "init_script": getattr(adventure, "init_script", None),
+        "dynamic_generation": getattr(adventure, "dynamic_generation", None),
     }
 
 
@@ -161,6 +174,7 @@ def _object_extras(entity: WorldEntity) -> dict[str, Any]:
         },
         **_text_fields(metadata_json, _OBJECT_METADATA_FIELDS),
         "locked": locked,
+        "quest_item": metadata_json.get("quest_item") is True,
         "min_items": metadata_json.get("min_items"),
         "max_items": metadata_json.get("max_items"),
         **_switch_fields(metadata_json),
@@ -171,8 +185,11 @@ def _entity_extras(entity: WorldEntity, _data: dict[str, Any]) -> dict[str, Any]
     """Group stats for easier frontend access."""
     if entity.entity_type == "NPC":
         return {
+            "npc_type": normalize_npc_type(entity.npc_type),
             "stats": {"hp": entity.hp, "mana": entity.mana, "stamina": entity.stamina},
             **_text_fields(dict(entity.metadata_json or {}), _NPC_METADATA_FIELDS),
+            "memory_slots": memory_slots(entity.metadata_json),
+            **conversation_fields(entity.metadata_json),
         }
     if entity.entity_type == "OBJECT":
         return _object_extras(entity)
@@ -322,7 +339,11 @@ async def _build_adventure_editor_assets(
 
     protagonist_payload = _serialize_protagonist_with_items(avatar, entities)
 
-    db_scenes = [_serialize_model(s) for s in scenes]
+    db_scenes = [
+        _serialize_model(s)
+        for s in scenes
+        if not str(getattr(s, "id", "") or "").strip().upper().startswith("DYN_")
+    ]
     db_npcs = [_serialize_model(ent) for ent in entities if _is_npc_entity(ent)]
     db_objects = [_serialize_model(ent) for ent in entities if _is_object_entity(ent)]
     db_exits = [_serialize_model(ex) for ex in exits]

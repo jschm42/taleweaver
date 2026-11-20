@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import select
 
 from backend.api.routes.adventures.guardrails.base import inventory_ids_upper
 from backend.engine.interaction.switch_service import SwitchService
+from backend.engine.party.party_state import read_party
 from backend.engine.rules.rule_engine import GameEvent
 from backend.models.world_entity import WorldEntity
+
+logger = logging.getLogger(__name__)
 
 
 def _switch_flag_keys(metadata: dict[str, Any]) -> set[str]:
@@ -170,8 +174,20 @@ class WorldRulesMixin:
             )
         return None
 
+    def _moves_party_follower(self, ent: WorldEntity | None, move: Any) -> bool:
+        """The following companion only changes scenes with the player (engine-driven)."""
+        if ent is None or not move.to_scene_id:
+            return False
+        if read_party(self.state.entity_states).follower_id() != ent.id:
+            return False
+        override = (self.state.entity_states or {}).get(ent.id, {})
+        return move.to_scene_id != (override.get("current_scene_id") or ent.current_scene_id)
+
     async def _enforce_npc_movement_guardrails(self, event: GameEvent) -> list[str]:
-        """NPCs only change scenes if moveable and the destination is in allowed_scenes."""
+        """NPCs only change scenes if moveable and the destination is in allowed_scenes.
+
+        Scene moves of the following companion are dropped silently: it follows the player.
+        """
         if not event.moved_entities:
             return []
         entities = await self._session_entities()
@@ -182,6 +198,9 @@ class WorldRulesMixin:
         for move in event.moved_entities:
             raw_id = str(move.entity_id or "").strip()
             ent = by_id.get(raw_id.upper()) or by_name.get(raw_id.lower())
+            if self._moves_party_follower(ent, move):
+                logger.info("Dropped GM scene move of companion %s", ent.id)
+                continue
             violation = None
             if ent and ent.entity_type == "NPC" and move.to_scene_id:
                 violation = self._npc_move_violation(ent, move)

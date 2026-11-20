@@ -1,12 +1,16 @@
 import { Application, Container, Graphics, type FederatedPointerEvent } from 'pixi.js'
+import { CardMoves } from './cardMoves'
 import { CombatantCard, type CardData } from './CombatantCard'
 import { DiceRoller } from './DiceRoller'
 import { ArenaEffects, type Point } from './effects'
+import { ImpactEffects } from './impactFx'
 import { COLORS } from './palette'
-import { easeOutBack, easeOutCubic, Tweener } from './tween'
+import { easeOutBack, Tweener } from './tween'
 
 export interface ArenaView {
   player: CardData
+  /** Companions: smaller cards behind the protagonist's card. */
+  allies: CardData[]
   enemies: CardData[]
   selectedId: string | null
   activeId: string | null
@@ -18,6 +22,10 @@ const STACK_X = 0.62
 const STACK_ROTATION = 0.07
 const STACK_SCALE_STEP = 0.07
 const EDGE_MARGIN = 12
+const INTRO_STAGGER_MS = 90
+/** Companion cards stand behind and beside the protagonist, a little smaller. */
+const ALLY_SCALE = 0.72
+const ALLY_OFFSET_X = 0.62
 
 /** Owns the Pixi application and lays out the protagonist card and the enemy card stack. */
 export class ArenaRenderer {
@@ -25,7 +33,11 @@ export class ArenaRenderer {
   readonly cards = new Map<string, CombatantCard>()
   tween!: Tweener
   effects!: ArenaEffects
+  impact!: ImpactEffects
+  moves!: CardMoves
   dice!: DiceRoller
+  /** Reduced motion: no screen flashes, shakes or hit-stops. */
+  calm = false
   readonly stage = new Container()
   onSelect: ((id: string) => void) | null = null
   onHover: ((id: string | null, event: MouseEvent | null) => void) | null = null
@@ -58,6 +70,8 @@ export class ArenaRenderer {
     host.appendChild(this.app.canvas)
     this.tween = new Tweener(this.app.ticker)
     this.effects = new ArenaEffects(this.fxLayer, this.tween)
+    this.impact = new ImpactEffects(this.fxLayer, this.tween)
+    this.moves = new CardMoves(this.tween, (id) => this.card(id))
     this.dice = new DiceRoller(this.tween)
     this.stage.addChild(this.backdrop, this.cardLayer, this.fxLayer, this.dice)
     this.app.stage.addChild(this.stage)
@@ -108,7 +122,7 @@ export class ArenaRenderer {
   sync(view: ArenaView, snapDisplayed: boolean): void {
     this.view = view
     if (!this.ready) return
-    const all = [view.player, ...view.enemies]
+    const all = [view.player, ...view.allies, ...view.enemies]
     const ids = new Set(all.map((d) => d.id))
     for (const [id, card] of this.cards) {
       if (!ids.has(id)) {
@@ -129,23 +143,6 @@ export class ArenaRenderer {
     this.relayout(true)
   }
 
-  /** Moves the actor card toward the target and back. */
-  async lunge(actorId: string | null | undefined, targetId: string | null | undefined): Promise<void> {
-    await this.advance(actorId, targetId)
-    await this.retreat(actorId)
-  }
-
-  /** Brings the actor card in front and toward the target; it stays there until `retreat`. */
-  async advance(actorId: string | null | undefined, targetId: string | null | undefined): Promise<void> {
-    const actor = this.card(actorId)
-    const target = this.card(targetId)
-    if (!actor || !target) return
-    const dx = (target.home.x - actor.home.x) * 0.22
-    const dy = (target.home.y - actor.home.y) * 0.22
-    actor.zIndex = 500
-    await this.tween.to(actor, { x: actor.home.x + dx, y: actor.home.y + dy }, 180, easeOutCubic)
-  }
-
   /** Returns an advanced actor card to its place in the layout. */
   async retreat(actorId: string | null | undefined): Promise<void> {
     const actor = this.card(actorId)
@@ -154,11 +151,56 @@ export class ArenaRenderer {
     this.relayout(false)
   }
 
+  /** Stage-wide flash; left out when the player asked for reduced motion. */
+  async flash(color: number, strength = 0.35): Promise<void> {
+    if (this.calm) return
+    await this.impact.screenFlash(this.width, this.height, color, strength)
+  }
+
+  /** Shakes the whole stage (heavy hits); left out when the player asked for reduced motion. */
+  async quake(strength = 12): Promise<void> {
+    if (this.calm) return
+    await this.effects.shake(this.stage, strength)
+  }
+
+  /** Hit-stop: freezes the action for a few frames at the moment of impact. */
+  hitStop(ms: number): void {
+    if (!this.calm) this.tween.freeze(ms)
+  }
+
+  /** Fight opening: the cards are dealt in from both sides, then the banner drops. */
+  async playIntro(): Promise<void> {
+    if (!this.ready || !this.view) return
+    const order = [this.view.player, ...this.view.allies, ...this.stackOrder(this.view)]
+    const entrances = order.map((data, index) => this.dealIn(this.cards.get(data.id), index * INTRO_STAGGER_MS))
+    await Promise.all(entrances)
+    await this.effects.banner(this.center(), 'FIGHT!', COLORS.gold, 420, 60, this.width)
+  }
+
+  private async dealIn(card: CombatantCard | undefined, delay: number): Promise<void> {
+    if (!card) return
+    const offstage = card.data.side === 'player' ? -card.cardWidth : this.width + card.cardWidth
+    card.position.x = offstage
+    card.alpha = 0
+    await this.tween.wait(delay)
+    await Promise.all([
+      this.tween.to(card, { x: card.home.x }, 420, easeOutBack),
+      this.tween.to(card, { alpha: card.home.alpha }, 260),
+    ])
+  }
+
   destroy(): void {
     this.destroyed = true
     if (!this.ready) return
     this.ready = false
     this.tween.destroy()
+    try {
+      this.app.ticker?.stop()
+      this.app.renderer?.render({ container: new Container() })
+      this.app.renderer?.reset?.()
+    } catch {
+      // Ignore if renderer already down
+    }
     this.app.destroy(true, { children: true })
     this.cards.clear()
   }
@@ -170,8 +212,14 @@ export class ArenaRenderer {
     card.on('pointertap', () => {
       if (card.data.side === 'enemy' && !card.data.out) this.onSelect?.(card.entityId)
     })
-    card.on('pointerover', (e: FederatedPointerEvent) => this.onHover?.(card.entityId, e.nativeEvent as MouseEvent))
-    card.on('pointermove', (e: FederatedPointerEvent) => this.onHover?.(card.entityId, e.nativeEvent as MouseEvent))
+    card.on('pointerover', (e: FederatedPointerEvent) => {
+      if (card.data.out) return
+      this.onHover?.(card.entityId, e.nativeEvent as MouseEvent)
+    })
+    card.on('pointermove', (e: FederatedPointerEvent) => {
+      if (card.data.out) return
+      this.onHover?.(card.entityId, e.nativeEvent as MouseEvent)
+    })
     card.on('pointerout', () => this.onHover?.(null, null))
     this.cardLayer.addChild(card)
     return card
@@ -205,6 +253,14 @@ export class ArenaRenderer {
       playerCard.resize(w, h)
       this.place(playerCard, { x: this.width * PLAYER_X, y: this.height * 0.5, rotation: -0.03, scale: 1, alpha: 1 }, 50, animate)
     }
+    this.view.allies.forEach((data, k) => {
+      const card = this.cards.get(data.id)
+      if (!card) return
+      card.resize(w, h)
+      const x = Math.max(w * ALLY_SCALE * 0.5 + EDGE_MARGIN, this.width * PLAYER_X - w * ALLY_OFFSET_X * (k + 1))
+      const home = { x, y: this.height * 0.5 + h * 0.12, rotation: -0.08, scale: ALLY_SCALE, alpha: data.out ? 0.55 : 1 }
+      this.place(card, home, 40 - k, animate)
+    })
 
     const order = this.stackOrder(this.view)
     const stackX = this.width * STACK_X
@@ -228,14 +284,16 @@ export class ArenaRenderer {
   private place(card: CombatantCard, home: CombatantCard['home'], z: number, animate: boolean): void {
     card.home = home
     card.zIndex = z
+    // A shattered card keeps its place in the layout but stays invisible.
+    const alpha = card.gone ? 0 : home.alpha
     if (!animate) {
       card.position.set(home.x, home.y)
       card.rotation = home.rotation
       card.scale.set(home.scale)
-      card.alpha = home.alpha
+      card.alpha = alpha
       return
     }
-    void this.tween.to(card, { x: home.x, y: home.y, rotation: home.rotation, alpha: home.alpha }, 380)
+    void this.tween.to(card, { x: home.x, y: home.y, rotation: home.rotation, alpha }, 380)
     void this.tween.to(card.scale, { x: home.scale, y: home.scale }, 380)
   }
 

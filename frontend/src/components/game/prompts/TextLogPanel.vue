@@ -53,9 +53,12 @@ const resolvedImageUrl = computed(() => {
   return getImageUrl(props.imageUrl, { thumbnail: true }) || props.imageUrl || null
 })
 
+/** Older readables may hold literal "\n" sequences (double-escaped generator output). */
+const sourceContent = computed(() => String(props.content || '').replace(/\\r\\n|\\n|\\r/g, '\n'))
+
 const activeContent = computed(() => {
   const translated = String(translatedContent.value || '').trim()
-  return translated || String(props.content || '')
+  return translated || sourceContent.value
 })
 
 const targetLanguage = computed(() => String(language.value || '').trim())
@@ -71,7 +74,7 @@ const handleTranslateTextLog = async () => {
   isTranslating.value = true
   try {
     const result = await api.translateSessionText(props.gameId, {
-      text: props.content,
+      text: sourceContent.value,
       language: targetLanguage.value,
     })
     translatedContent.value = String(result.translated_text || '').trim()

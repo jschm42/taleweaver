@@ -43,10 +43,13 @@ from backend.api.routes.adventures.editing.entity_update.protagonist import (
     update_protagonist_scripts,
 )
 from backend.engine.audio.audio_library import track_id_or_none
+from backend.engine.conversations.npc_fields import CONVERSATION_FIELDS, store_conversation_fields
+from backend.engine.rules.npc_memory import store_memory_slots
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit
 from backend.schemas.validation import FixProposalEntityPatch
+from backend.utils.text_utils import unescape_line_breaks
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +162,8 @@ async def _patch_scene(
         flag_modified(scene, "decorative_objects")
     if "audio_track_id" in updates:
         scene.audio_track_id = track_id_or_none(updates["audio_track_id"])
+    if "is_respawn_point" in updates:
+        scene.is_respawn_point = updates["is_respawn_point"] is True
     set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 
@@ -229,6 +234,16 @@ def _patch_npc_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     if "notes" in updates:
         ent.notes = str(updates["notes"]).strip() or None
     set_metadata(ent, NPC_SCRIPT_FIELDS, updates)
+    if "memory_slots" in updates:
+        metadata_json = dict(ent.metadata_json or {})
+        store_memory_slots(metadata_json, updates["memory_slots"])
+        ent.metadata_json = metadata_json
+        flag_modified(ent, "metadata_json")
+    if any(key in updates for key in CONVERSATION_FIELDS):
+        metadata_json = dict(ent.metadata_json or {})
+        store_conversation_fields(metadata_json, updates)
+        ent.metadata_json = metadata_json
+        flag_modified(ent, "metadata_json")
 
 
 def _patch_container_lock(
@@ -249,7 +264,7 @@ def _patch_container_lock(
 
 def _patch_text_log(metadata_json: dict[str, Any], updates: dict[str, Any]) -> None:
     if "text_log_content" in updates:
-        text = str(updates["text_log_content"]).strip()
+        text = unescape_line_breaks(str(updates["text_log_content"])).strip()
         if len(text) > TEXT_LOG_CONTENT_MAX:
             raise HTTPException(
                 status_code=400,
@@ -269,6 +284,11 @@ def _patch_object_fields(ent: WorldEntity, updates: dict[str, Any]) -> None:
     _patch_container_lock(metadata_json, updates, item_type in {"CONTAINER", "CONTAINER_SWITCH"})
     if item_type == "READABLE":
         _patch_text_log(metadata_json, updates)
+    if "quest_item" in updates:
+        if updates["quest_item"] is True:
+            metadata_json["quest_item"] = True
+        else:
+            metadata_json.pop("quest_item", None)
     ent.metadata_json = metadata_json
     flag_modified(ent, "metadata_json")
     set_metadata(ent, OBJECT_SCRIPT_FIELDS, updates)

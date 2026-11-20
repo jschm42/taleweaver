@@ -7,9 +7,11 @@ within a declarative ScriptChangeset.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -26,11 +28,14 @@ from backend.engine.scripting.npc_combat_group import (
     NPCCombatGroupManagerMixin,
     NPCCombatGroupMixin,
 )
+from backend.engine.scripting.npc_conversation_proxy import NPCConversationManagerMixin
 from backend.engine.scripting.npc_directions import NPCDirectionManagerMixin, NPCDirectionMixin
+from backend.engine.scripting.npc_memory_proxy import NPCMemoryManagerMixin, NPCMemoryMixin
 from backend.engine.scripting.npc_persona import NPCPersonaManagerMixin, NPCPersonaMixin
 from backend.engine.scripting.npc_visibility import NPCVisibilityManagerMixin, NPCVisibilityMixin
 from backend.engine.scripting.npc_vitals import NPCVitalsManagerMixin, NPCVitalsMixin
-from backend.engine.scripting.player_inventory import PlayerInventoryMixin
+from backend.engine.scripting.party_proxy import PartyProxy
+from backend.engine.scripting.player_inventory import InventoryProxy, PlayerInventoryMixin
 from backend.engine.scripting.switch_proxy import SwitchesProxy, SwitchProxy
 from backend.engine.scripting.time_proxy import TimeProxy, default_clock_view
 
@@ -92,6 +97,7 @@ class ScriptChangeset:
     player_status_effects_remove: list[str] = field(default_factory=list)
 
     teleport_scene_id: Optional[str] = None
+    teleport_dynamic_request: Optional[dict[str, Any]] = None
     entity_movements: list[dict[str, Any]] = field(default_factory=list)
     entity_updates: list[dict[str, Any]] = field(default_factory=list)
     exit_updates: list[dict[str, Any]] = field(default_factory=list)
@@ -133,6 +139,14 @@ class ScriptChangeset:
     skip_narration: bool = False
     # Ordered tw.audio operations, replayed by audio_state.apply_audio_ops.
     audio_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.party operations, replayed by party_ops.apply_party_ops.
+    party_ops: list[dict[str, Any]] = field(default_factory=list)
+    # tw.game.set_respawn_point: new revival point ("" = back to the start scene).
+    respawn_point: Optional[str] = None
+    # Ordered tw.npcs memory operations, replayed by npc_memory.apply_npc_memory_ops.
+    npc_memory_ops: list[dict[str, Any]] = field(default_factory=list)
+    # Ordered tw.npcs conversation operations, replayed by conversations.ops.
+    conversation_ops: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -159,6 +173,7 @@ class ScriptChangeset:
             or self.player_status_effects_add
             or self.player_status_effects_remove
             or self.teleport_scene_id
+            or self.teleport_dynamic_request
             or self.entity_movements
             or self.entity_updates
             or self.exit_updates
@@ -189,6 +204,10 @@ class ScriptChangeset:
             or self.cloned_entities
             or self.clock_ops
             or self.audio_ops
+            or self.party_ops
+            or self.respawn_point is not None
+            or self.npc_memory_ops
+            or self.conversation_ops
             or self.skip_narration
         )
 
@@ -329,7 +348,72 @@ class SceneProxy:
         return [obj for obj in self._objects_mgr.all() if obj.current_scene_id == self.id]
 
     def teleport(self, target_scene_id: str) -> None:
+        self._changeset.teleport_dynamic_request = None
         self._changeset.teleport_scene_id = target_scene_id
+
+    def teleport_dynamic(
+        self,
+        theme_or_zone_id: str = "",
+        theme: Optional[str] = None,
+        *,
+        zone_id: Optional[str] = None,
+        max_depth: Optional[int] = None,
+        danger_level: Optional[str] = None,
+        max_npcs: Optional[int] = None,
+        audio_mode: Optional[str] = None,
+        cul_de_sac: Optional[bool] = None,
+        instructions: Optional[str] = None,
+        instructions_scope: Optional[str] = None,
+        cluster_consistency: Optional[bool] = None,
+        return_exit: bool = True,
+        label: str = "Teleporter",
+        fresh: bool = False,
+    ) -> str:
+        """Schedule a runtime transition into a generated dynamic scene and return its scene ID."""
+        from backend.engine.world.dynamic_scene_schemas import build_dynamic_placeholder_scene_id
+
+        origin_scene_id = self._current_scene_id
+        if theme is not None:
+            resolved_zone_id = str(zone_id or theme_or_zone_id or label or "teleporter").strip()
+            resolved_theme = str(theme).strip()
+            reference_key = str(zone_id or theme_or_zone_id or "").strip()
+        elif zone_id is not None:
+            resolved_zone_id = str(zone_id).strip() or "teleporter"
+            resolved_theme = str(theme_or_zone_id or "").strip()
+            reference_key = resolved_zone_id
+        else:
+            raw_arg = str(theme_or_zone_id or "").strip()
+            resolved_zone_id = str(label or raw_arg or "teleporter").strip()
+            resolved_theme = raw_arg
+            reference_key = raw_arg
+
+        if fresh:
+            suffix = uuid.uuid4().hex[:4]
+        else:
+            digest_src = f"{origin_scene_id}:{resolved_zone_id}:{resolved_theme}".encode()
+            suffix = hashlib.sha256(digest_src).hexdigest()[:4]
+
+        target_scene_id = build_dynamic_placeholder_scene_id(resolved_zone_id, 1, 1, suffix=suffix)
+        self._changeset.teleport_scene_id = target_scene_id
+        self._changeset.teleport_dynamic_request = {
+            "origin_scene_id": origin_scene_id,
+            "target_scene_id": target_scene_id,
+            "reference_key": reference_key,
+            "zone_id": str(zone_id).strip() if zone_id is not None else "",
+            "theme": resolved_theme,
+            "max_depth": max_depth,
+            "danger_level": danger_level,
+            "max_npcs": max_npcs,
+            "audio_mode": audio_mode,
+            "cul_de_sac": cul_de_sac,
+            "instructions": instructions,
+            "instructions_scope": instructions_scope,
+            "cluster_consistency": cluster_consistency,
+            "return_exit": bool(return_exit),
+            "label": str(label or "Teleporter").strip()[:100] or "Teleporter",
+            "fresh": bool(fresh),
+        }
+        return target_scene_id
 
     def get_attribute(self, attr_name: str, default: Any = None) -> Any:
         k = f"__scene_attr_{self.id}_{attr_name}"
@@ -493,6 +577,7 @@ class NPCProxy(
     NPCDirectionMixin,
     NPCVitalsMixin,
     NPCVisibilityMixin,
+    NPCMemoryMixin,
     ItemHolderMixin,
 ):
     """Safe proxy for Non-Player Characters."""
@@ -1098,6 +1183,8 @@ class NPCManagerProxy(
     NPCDirectionManagerMixin,
     NPCVitalsManagerMixin,
     NPCVisibilityManagerMixin,
+    NPCMemoryManagerMixin,
+    NPCConversationManagerMixin,
     EntityManagerProxy,
 ):
     """``tw.npcs``: entity access plus the NPC persona, directed-speech and vitals shortcuts."""
@@ -1340,12 +1427,20 @@ class MemoriesProxy:
     def __init__(self, changeset: ScriptChangeset):
         self._changeset = changeset
 
-    def add(self, description: str, scope: str = "global", emotion: str = "neutral") -> None:
+    def add(
+        self,
+        description: str,
+        scope: str = "global",
+        emotion: str = "neutral",
+        npc_id: Optional[str] = None,
+    ) -> None:
+        """Records a lasting consequence; with ``npc_id`` it is only shown while that NPC is present."""
         self._changeset.new_memories.append(
             {
                 "description": str(description).strip(),
                 "scope": scope if scope in ("local", "global") else "global",
                 "emotion": emotion if emotion in ("positive", "negative", "neutral") else "neutral",
+                "npc_id": str(npc_id).strip().upper() if npc_id else None,
             }
         )
 
@@ -1358,10 +1453,30 @@ class GameProxy:
         changeset: ScriptChangeset,
         in_game_time: int = 0,
         clock: Optional[TimeProxy] = None,
+        respawn: Optional[dict[str, Any]] = None,
     ):
         self._changeset = changeset
         self.in_game_time = in_game_time
         self._clock = clock
+        record = respawn if isinstance(respawn, dict) else {}
+        self._respawn_point = record.get("point") or None
+        self._respawns = int(record.get("count") or 0)
+
+    @property
+    def respawn_point(self) -> Optional[str]:
+        """Scene the protagonist wakes up in after falling to 0 HP (None = the start scene)."""
+        if self._changeset.respawn_point is not None:
+            return self._changeset.respawn_point or None
+        return self._respawn_point
+
+    @property
+    def respawns(self) -> int:
+        """How often the protagonist has been revived in this session (respawn mode)."""
+        return self._respawns
+
+    def set_respawn_point(self, scene_id: Optional[str] = None) -> None:
+        """Sets the revival point (respawn mode); None or "" falls back to the start scene."""
+        self._changeset.respawn_point = str(scene_id or "").strip().upper()
 
     @property
     def time(self) -> int:
@@ -1637,8 +1752,13 @@ class SequencesProxy:
 class DiceProxy:
     """Safe proxy for dice rolls."""
 
-    def roll(self, dice_str: str) -> int:
-        match = re.match(r"^(\d+)?d(\d+)(?:([+-])(\d+))?$", dice_str.strip().lower())
+    def roll(self, dice_spec: Any = 20) -> int:
+        if isinstance(dice_spec, int):
+            return random.randint(1, max(1, dice_spec))
+        target_str = str(dice_spec or "20").strip().lower()
+        if target_str.isdigit():
+            return random.randint(1, max(1, int(target_str)))
+        match = re.match(r"^(\d+)?d(\d+)(?:([+-])(\d+))?$", target_str)
         if not match:
             return random.randint(1, 20)
         num = int(match.group(1) or 1)
@@ -1652,8 +1772,29 @@ class DiceProxy:
             total -= mod
         return total
 
+    def d4(self) -> int:
+        return random.randint(1, 4)
+
+    def d6(self) -> int:
+        return random.randint(1, 6)
+
+    def d8(self) -> int:
+        return random.randint(1, 8)
+
+    def d10(self) -> int:
+        return random.randint(1, 10)
+
+    def d12(self) -> int:
+        return random.randint(1, 12)
+
     def d20(self) -> int:
         return random.randint(1, 20)
+
+    def d100(self) -> int:
+        return random.randint(1, 100)
+
+    def random(self) -> float:
+        return random.random()
 
 
 class GameContext:
@@ -1681,6 +1822,10 @@ class GameContext:
         sequence_progression_mode: str = "linear",
         audio: Optional[dict[str, Any]] = None,
         audio_library: Optional[list[dict[str, Any]]] = None,
+        party: Optional[dict[str, Any]] = None,
+        respawn: Optional[dict[str, Any]] = None,
+        npc_memory: Optional[dict[str, Any]] = None,
+        conversations: Optional[dict[str, Any]] = None,
         player_message: str = "",
         language: Optional[str] = None,
     ):
@@ -1690,6 +1835,7 @@ class GameContext:
         self.turn = TurnProxy(player_message=player_message, language=language)
         self.player_turn = self.turn
         self.player = PlayerProxy(avatar_data or {}, self.changeset)
+        self.inventory = InventoryProxy(self.player)
         entity_dict = entities or {}
         npc_entities = {
             k: v
@@ -1713,10 +1859,15 @@ class GameContext:
             current_player_scene_id=current_scene_id,
         )
         self.items = self.objects
+        # NPC memory (entity_states["__npc_memory__"]) for npc.remember / recall / forget.
+        self.npcs.load_memories(npc_memory)
+        # Relations and overheard topics (entity_states["__conversations__"]).
+        self.npcs.load_conversations(conversations)
         mover = ItemMover(self.changeset, self.player, self.npcs, self.objects, current_scene_id)
         self.player._mover = self.npcs.mover = self.objects.mover = mover
         self.switches = SwitchesProxy(entity_dict, self.changeset, context=self)
         self.scene = SceneProxy(current_scene_id, self.changeset, self.npcs, self.objects)
+        self.generated_scene: Optional[dict[str, Any]] = None
         self.exits = ExitProxy(exit_states or {}, self.changeset)
         self.vars = VarsProxy(raw_vars, self.changeset, story_flags=story_flags)
         self.flags = StoryFlagsProxy(story_flags or {}, self.changeset)
@@ -1730,10 +1881,11 @@ class GameContext:
         )
         self.log = LogProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.console = self.log
+        self.npcs.debug = lambda message: self.log.debug(message, in_game=True)
         self.memories = MemoriesProxy(self.changeset)
         # tw.time: the clock view comes from game_clock.clock_view(); without one, defaults.
         self.time = TimeProxy(self.changeset, clock or default_clock_view(in_game_time), self)
-        self.game = GameProxy(self.changeset, in_game_time, clock=self.time)
+        self.game = GameProxy(self.changeset, in_game_time, clock=self.time, respawn=respawn)
         self.session = self.game
         self.quests = QuestsProxy(quests or [], self.changeset)
         self.awards = AwardsProxy(self.changeset)
@@ -1751,6 +1903,8 @@ class GameContext:
         self.audio = AudioProxy(self.changeset, audio, self, library=audio_library)
         # Former name, kept so scripts written before the rename keep working.
         self.music = self.audio
+        # tw.party: the session party (entity_states["__party__"]), else empty.
+        self.party = PartyProxy(self.changeset, party, npc_entities, self.npcs, self)
         # Without an asker (guards, hard rules, session init) tw.llm.ask returns "".
         self.llm = LlmProxy(llm_asker, self.changeset, is_debug_enabled=self.is_debug_enabled)
         self.json = JsonProxy(self.changeset, is_debug_enabled=self.is_debug_enabled)

@@ -249,7 +249,17 @@ def object_metadata(obj: dict[str, Any], numbers: dict[str, Optional[int]]) -> d
     elif obj.get("locked") is not None or metadata.get("locked") is not None:
         raw_locked = obj.get("locked") if obj.get("locked") is not None else metadata.get("locked")
         metadata["locked"] = bool(raw_locked)
+    _quest_item_metadata(obj, metadata)
     return metadata
+
+
+def _quest_item_metadata(obj: dict[str, Any], metadata: dict[str, Any]) -> None:
+    """Stores the quest-item flag (top-level manifest field or metadata) only when true."""
+    raw = obj.get("quest_item") if obj.get("quest_item") is not None else metadata.get("quest_item")
+    if raw is True:
+        metadata["quest_item"] = True
+        return
+    metadata.pop("quest_item", None)
 
 
 def _item_slot(obj: dict[str, Any]) -> Optional[str]:

@@ -20,7 +20,7 @@ The manifest represents the complete blueprint of a generated or exported world.
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "adventure": { ... },
   "protagonist": { ... },
   "scenes": [ ... ],
@@ -42,7 +42,8 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.3.1` (current) | Current format. |
+| `1.4.0` (current) | Current format. Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, companions (NPC `companion`, exit and sequence `companions_allowed`), and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
+| `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions (predates optional `dynamic_generation` / `dynamic_zone` fields, companions, and respawning). |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
 | below `1.0` | Rejected on import. |
@@ -76,7 +77,7 @@ General configuration, narrative constraints, and gameplay settings.
 | `title_track_id` | `string` \| `null` | Optional title track: `id` of a `audio_tracks` entry, played while the adventure's library tile is hovered. Without it the tile stays silent. |
 | `audio_enabled` | `boolean` | Default `true`. `false` switches scene audio off (script audio via `tw.audio` still plays). |
 | `narrator_voice` | `object` \| `null` | Optional voice of the Game Master: how the narration is worded (diction, sentence rhythm, attitude), not how long it is. `{"id": "noir-detective", "name": "Hardboiled Noir Detective", "description": "...", "instruction": "Narrate like ...", "sample": "Rain hit the neon sign ..."}`. `instruction` is required (max. 1500 characters); `sample` is an optional style sample (max. 500). `id` is the catalog voice the author picked, or `"custom"` for a voice written in the editor. The full voice is stored, so an import works without the admin's voice catalog. Without it, the GM narrates in the neutral default voice. |
-| `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. The skin also styles the combat dialog (ability cards, item tiles, chronicle, and the arena's player/accent colors). |
+| `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`, `starship`, `pixel`, `thriller`, `sitcom`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. The skin also styles the combat dialog (ability cards, item tiles, chronicle, and the arena's player/accent colors). |
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
 | `min_scenes` / `max_scenes` | `number` | Constraints defining world generation scope. |
 | `container_generation_enabled` | `boolean` | Enables generation of containers with nested loot. |
@@ -87,6 +88,15 @@ General configuration, narrative constraints, and gameplay settings.
 | `copyright` | `string` | Optional copyright notice (max 100 chars). |
 | `license` | `string` | Optional license string or identifier (max 100 chars). |
 | `init_script` | `string \| null` | Optional global Python initialization script executed when a new game session starts. Sets up starting variables, narrative messages, and shared helper functions. |
+| `dynamic_generation` | `object \| null` | Optional configuration for Dynamic Scenes: `{"scene_image_mode": "off" \| "inherit" \| "simple" \| "hq", "npc_image_mode": "off" \| "simple" \| "hq", "item_image_mode": "off" \| "simple" \| "hq", "audio_mode": "inherit" \| "empty" \| "generate", "generation_model": "mechanics" \| "narration" \| "world_builder", "max_npcs": 0..5, "npc_type_caps": {"humanoid": 0..5, "being": 0..5, "animal": 0..5, "monster": 0..5}, "spawn_chances": {"npc": 0..100, "enemy": 0..100, "humanoid": 0..100, "being": 0..100, "animal": 0..100, "monster": 0..100, "item": 0..100, "container": 0..100, "switch": 0..100}, "interlude_quote_enabled": boolean}`. Defaults to `simple` scene/NPC/item images, `inherit` audio, `mechanics` LLM tier (`small_model`), `2` max NPCs, per-type caps `2`, balanced spawn percentages, and `true` for interlude quotes (a short line of a known HUMANOID / BEING NPC while a dynamic scene is generated, spoken in that NPC's cast TTS voice). *(since 1.4.0)* |
+| `game_over_rules` | `object \| null` | Optional. What happens when the protagonist falls to 0 HP: `{on_zero_hp: "game_over" \| "respawn", respawn_hp_percent: 1-100}`. Default (`null` or `game_over`): the adventure ends. See [Respawn](#respawn). *(respawn since 1.4.0)* |
+| `npc_conversations` | `object \| null` | Optional. NPCs talking with each other: `{chatter: "OFF" \| "RARE" \| "NORMAL" \| "LIVELY", gossip: bool}`. `null` = chatter off, no gossip. Session state (player switch, quiet counter, heard topics, script relation changes) lives in `entity_states["__conversations__"]`. See [NPC conversations](../world-builder-syntax.md#npc-conversations). *(since 1.4.0)* |
+
+#### Respawn
+
+With `game_over_rules.on_zero_hp: "respawn"` a protagonist who falls to 0 HP is knocked out instead of dying. They wake up at the last **revival point** they reached (a scene with `is_respawn_point: true`), or at the start scene when they have not reached one yet, with `respawn_hp_percent` (default `25`) of their max HP. All status effects are cleared; inventory, quests, the clock and the world stay as they are. In a fight the battle ends with the outcome `knocked_out` (no loot); the enemies keep their HP, and a downed companion gets its `downed_recovery` back and follows if it was at the protagonist's side. The revival scene's `on_enter_scene` scripts run, then the global and sequence scripts with the trigger `on_respawn` (the place for penalties, e.g. losing EXP, or for healing the enemies). The draft narration of the turn is replaced, so the Game Master tells of the knockout and the awakening.
+
+Only falling to 0 HP respawns. `tw.game.game_over()`, the defeat condition (`gameover_condition` / `gameover_guard_expression`) and a Game Master `game_over` always end the adventure. A sequence with `respawn_allowed: false` keeps 0 HP deadly while it is active. Scripts read and move the revival point with `tw.game.respawn_point` / `tw.game.set_respawn_point(scene_id)` and read the count with `tw.game.respawns`. The session record lives in `entity_states["__respawn__"]` (`point`, `count`) and is part of every checkpoint.
 
 ---
 
@@ -120,9 +130,11 @@ The physical locations composing the world map.
 | `image_url` | `string` | Path or URL to the background scenery image. |
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `audio_track_id` | `string` \| `null` | Optional `id` of the `adventure.audio_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the audio fades out. |
+| `is_respawn_point` | `boolean` | Optional, default `false`. A revival point: in respawn mode a protagonist who falls to 0 HP wakes up at the last one reached (see [Respawn](#respawn)). *(since 1.4.0)* |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
 | `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |
+| `dynamic_zone` | `object \| null` | Optional pre-mapped Dynamic Scene configuration using the same schema as exit `dynamic_zone` (`zone_id`, `theme`, `instructions`, `instructions_scope`, `cluster_consistency`, `danger_level`, `max_npcs`, `npc_type_caps`, `spawn_chances`, `audio_mode`, `generation_model`, `allowed_entity_types`, `on_after_generated_script`). When present, the scene keeps all authored exits and static entities, while narrative details, visuals/audio, and procedural entities are materialized in-place on first player entry. *(since 1.4.0)* |
 
 ---
 
@@ -139,10 +151,12 @@ Connections and passageways between scenes.
 | `is_bidirectional` | `boolean` | Whether the passage can be traversed in both directions (convenience boolean, matches `exit_type == "bidirectional"`). |
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
 | `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
+| `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. *(since 1.4.0)* |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
 | `lock_description` | `string` | Narrative clue or description when encountering the lock. |
+| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "instructions": string \| null, "instructions_scope": "once" \| "first_scene" \| "max_depth" \| "all_scenes", "cluster_consistency": boolean, "depth": number, "max_depth": number, "danger_level": "peaceful" \| "low" \| "medium" \| "high" \| "deadly" \| "random", "max_npcs": number \| null, "npc_type_caps": object \| null, "spawn_chances": object \| null, "audio_mode": "inherit" \| "empty" \| "generate" \| null, "generation_model": "mechanics" \| "narration" \| "world_builder" \| null, "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean, "on_after_generated_script": string \| null}`. Optional `npc_type_caps`, `spawn_chances`, and `generation_model` override the adventure-level `dynamic_generation` defaults per exit (`null` inherits), `instructions_scope` (default `"once"`) controls whether freeform/Blueprint instructions run once per cluster or per depth, `cluster_consistency` (default `true`) passes global theme, root exit theme, instructions, and existing cluster scenes/NPCs/items into subsequent cluster scene generation, and `on_after_generated_script` runs right after materialization with access to `generated_scene` / `tw.generated_scene`. When set, entering the exit plans the whole cluster once as a small in-game adventure: a session-scoped cluster blueprint (mini-story arc, antagonist, key item, room nodes, and converging passage graph) in which every room gets its own sub-theme and generation instructions. Each room's session `dynamic_zone` then carries that room's `theme` and `instructions` (`instructions_source: "cluster_blueprint"`); the authored values stay in `root_theme` / `root_instructions` / `root_instructions_scope`. Loose author instructions are folded into the room instructions according to `instructions_scope`; Blueprint-block instructions stay unchanged and the room brief is added to the prompt. Scenes are materialized in-place as they are visited without mutating the base manifest. *(since 1.4.0)* |
 
 ---
 
@@ -157,13 +171,23 @@ Non-Player Characters inhabiting the world.
 | `description` | `string` | Appearance, demeanor, and dialogue style. |
 | `current_scene_id` | `string` | Initial location scene ID where the NPC is positioned. |
 | `spatial_position` | `string` | Placement in scene (e.g., `"behind the counter"`, `"near the fireplace"`). |
-| `npc_type` | `string` | `"HUMANOID"`, `"ANIMAL"`, `"MONSTER"`, or `"BEING"`. |
+| `npc_type` | `string` | `"HUMANOID"`, `"BEING"`, `"ANIMAL"`, or `"MONSTER"`. `HUMANOID` and `BEING` speak intelligible sentences in narration and can deliver dynamic transition quotes; `ANIMAL` and `MONSTER` use non-verbal sounds and gestures only. |
 | `movement_type` | `string` | `"STATIONARY"` or `"MOVABLE"`. |
 | `voice` | `string \| null` | Google / ElevenLabs TTS voice identifier for dialogue. |
 | `hp` / `mana` / `stamina` | `number` | NPC combat and interaction resources. |
 | `inventory` | `array` | Items currently held or dropped by the NPC. |
 | `is_hidden` | `boolean` | If true, NPC is not immediately visible without inspecting/searching. |
-| `reveal_rule` | `string \| null` | Condition under which the Game Master reveals the hidden NPC. Empty: revealed when the protagonist searches the scene or the NPC starts speaking. The reserved value `script` means only scripts reveal it. |
+| `reveal_guard_expression` | `string \| null` | Optional (top level or inside `metadata_json`). Sandboxed Python condition; while the NPC is hidden in the protagonist's scene the engine checks it after every player message and reveals the NPC once it is True. Hidden NPCs are never discovered by the Game Master; without a guard only scripts reveal them. |
+| `memory_slots` | `number \| null` | Optional (top level or inside `metadata_json`). NPC memory: how many facts about the protagonist the character keeps (1-8; `null`/`0` = no memory; `true` = 4). The Game Master stores them during play in `entity_states["__npc_memory__"]` (`{npc_id: [{key, text}]}`, oldest first, part of every checkpoint); both passes see them only while the character is in the protagonist's scene. *(since 1.4.0)* |
+| `relations` | `array \| null` | Optional (top level or inside `metadata_json`). How this NPC sees other NPCs: `[{npc_id, kind, note?}]`, `kind` one of `FRIEND`, `FAMILY`, `PARTNER`, `ALLY`, `COLLEAGUE`, `SUPERIOR`, `SUBORDINATE`, `RIVAL`, `ENEMY`, note max. 80 characters. Script changes live in `entity_states["__conversations__"]["relations"]`. *(since 1.4.0)* |
+| `chatty` | `boolean \| null` | Optional. `false` keeps the NPC out of conversations NPCs start on their own; only `false` is stored. *(since 1.4.0)* |
+| `conversation_topics` | `array \| null` | Optional. Topics the NPC discusses with another NPC while the protagonist can overhear them: `[{id, topic, with_npc_id?, must_convey?, guard_expression?, repeatable?, on_heard_script?, on_heard_text?}]`. Heard topic ids are stored in `entity_states["__conversations__"]["heard"]`. *(since 1.4.0)* |
+| `reveal_rule` | `string \| null` | Legacy, kept for round trips only: hidden NPCs ignore it (the validator warns, `npc_reveal_rule_ignored`). |
+| `companion` | `object \| null` | Optional (top level or inside `metadata_json`). Makes the NPC a companion (sidekick) who can travel with the protagonist: `{recruitable, starts_in_party, tactics, banter, downed_recovery, recruit_mode, recruit_item_id, recruit_hint}`. `recruit_mode`: `SCRIPT` (default; only `tw.party.recruit`), `INSTANT` (the player's **Recruit** action, `/recruit <npc>`) or `ITEM` (the Recruit dialog wants `recruit_item_id`, which the NPC keeps; `ITEM` without an item is stored as `INSTANT`); `recruit_hint`: text of the Recruit dialog (max. 300 characters). NPC hooks `on_recruit_success_script` / `_text` and `on_recruit_failure_script` / `_text` narrate the outcome. `tactics`: `BALANCED` (default), `OFFENSIVE`, `DEFENSIVE`, `SUPPORT`; `banter`: `NORMAL` (default), `QUIET`, `CHATTY`; `downed_recovery`: share of max HP (0.01-1, default `0.25`) after being downed. `starts_in_party: true` puts the NPC into the party when a session starts; with several such NPCs the first one is the active companion. `null` (default): an ordinary NPC. See [Companions](#companions). *(since 1.4.0)* |
+
+#### Companions
+
+One companion can be active at a time. While it follows, the engine moves it into every scene the protagonist enters (exit, Game Master transition or script teleport), before `on_enter_scene` runs. It stays behind when it is not in the scene the protagonist left, when it is defeated, or when the exit or the active sequence has `companions_allowed: false`; once the protagonist returns, it follows again from there. The Game Master cannot move the active companion to another scene. The player tells it to stay behind or to come along again (context menu **Stay here** / **Follow me**, `/companion wait|follow`, or in their own words, reported by Pass 1 as `companion_order`); both passes get a COMPANION line in the CURRENT STATE, so the narration knows who travels along and how talkative it is (`banter`). The hero dialog switches between the protagonist and the companion (its **Inspect** opens the companion's page): there the player sees its vitals, attributes and the items it carries, and hands items over with **Give to <companion>** / **Take from <companion>** (`/companion_give`, `/companion_take`; no Game Master turn, no `on_receive_item` trigger). Only `HUMANOID` and `BEING` companions have equipment slots; `ANIMAL` and `MONSTER` companions fight with their main attack and special actions, only carry items, and their page has no **Equipped** tab (`can_equip: false`; equipment stored for them is ignored). A humanoid or being companion has the protagonist's equipment slots: on its **Equipped** tab the player equips items it carries (`/companion_equip <item>[ | <slot>]`, `/companion_unequip <slot>`); equipped items stay in its inventory (`entity_states[<npc>]["equipment"]`, slot -> item ID), add their attribute and armor bonuses, and the `MainHand` item is its weapon in combat. Its abilities are the NPC's `special_actions`; on its **Abilities** tab the player switches each one on or off for combat (`/companion_ability <id> on|off`, stored in `__party__.disabled_abilities`). **Combat** (`rpg` mode): a companion standing in the fight scene fights on the protagonist's side (`combat["party"]`, its own initiative turn) and is never an enemy or a fight target. `tactics`: `OFFENSIVE` attacks the weakest enemy, `DEFENSIVE` draws more enemy attacks (60 % instead of 30 %), `SUPPORT` heals a protagonist below half HP with a healing consumable it carries, `BALANCED` attacks the current target. The protagonist can **Mark** an enemy (free action, only with a fighting companion; `mark <enemy>`, `mark` lifts it): the companion then attacks only that enemy until it falls or flees. It uses its active single-target and self abilities on its own (heals the protagonist below half HP with an `ally` ability, itself below 40 % HP, others with the NPC's `special_chance`). Special-action effects take `target: "target" | "self" | "ally"`: `ally` is the caster's party partner (the companion when the protagonist casts, the protagonist when the companion casts; nothing without one). A `HEAL` action without `effects` can use `heal_target: "ally"` (blueprint `heals: ally`). Weapon on-hit effects only take `target` / `self`. At 0 HP it is downed, not killed, and gets `downed_recovery` of its max HP back after the fight; the fight is lost when the protagonist falls. The session party lives in `entity_states["__party__"]` (`active_id`, `recruited`, `following`, `tactics`) and is part of every checkpoint. **Recruiting**: NPCs whose `recruit_mode` is `INSTANT` or `ITEM` carry `is_recruitable`, `recruit_mode` and `recruit_hint` in the scene payload (never the wanted item); the play view frames their card and offers **Recruit** in the context menu. `/recruit <npc> [| <item>]` (`api/routes/adventures/companion_recruit.py`) recruits through the scripting changeset (`tw.party.recruit`; in `ITEM` mode the item moves into the NPC's inventory first), then runs `on_recruit_success_*`; without a success hook it chains a `[COMPANION_RECRUITED]` Game Master turn. A wrong or missing item runs `on_recruit_failure_*` (default line: the NPC is not convinced). Former party members rejoin for free (`engine/party/recruit_state.py`): a companion replaced by another one stays in `recruited`, and an NPC that accepted its item gets `entity_states[<npc>]["recruit_paid"] = true`; both are offered **Recruit** as `INSTANT`, also script-recruited ones, and rejoin without hooks.
 
 ---
 
@@ -183,6 +207,7 @@ Interactive elements, items, containers, and state machines.
 | `stat_modifiers` | `object` | Attribute buffs/debuffs (e.g., `{"strength": 2, "armor_class": 1}`). |
 | `inventory` | `array` | Nested items contained inside `CONTAINER` objects. |
 | `is_locked` | `boolean` | Lock state for `CONTAINER` objects. |
+| `quest_item` | `boolean` | `true` marks an item the story depends on: the player can never give it to an NPC or companion, and the Game Master cannot take it away (scripts still can). Stored as `metadata_json.quest_item`; exported only when `true`. Shown with a gold frame and a *Quest* tag in-game. |
 | `unlock_code` | `string \| null` | Secret code or combination required to open the container. |
 | `unlock_item` | `string \| null` | Item ID required to unlock the container. |
 | `unlock_rule` | `string \| null` | Narrative condition or requirement to open the container. |
@@ -250,34 +275,43 @@ Custom sandboxed event scripts reacting to game hooks and global initialization 
 
 ### 2.10 Extensions (`extensions`)
 
-An optional top-level object where forks and external tools store their own data without
-changing the core format. TaleWeaver never interprets it. It keeps the block on import,
-keeps it while the adventure is edited, and writes it back on export, so data from other
-forks is not lost.
+An optional top-level object where forks, feature runtimes, and external tools store their
+own data without changing the core format. TaleWeaver never interprets it. It keeps the
+block on import, keeps it while the adventure is edited, and writes it back on export, so
+data from other forks and shared runtimes is not lost.
 
 ```json
 "extensions": {
+  "agent_runtime": {
+    "schema_version": 1,
+    "archetype": "reactive_npc",
+    "memory_depth": 5
+  },
+  "comfyui-scenes": {
+    "schema_version": 1,
+    "checkpoint": "illustrious-xl"
+  },
   "my_fork": {
     "presentation": "visual_novel",
     "portraits": { "NPC_GUARD": "assets/guard_vn.png" }
-  },
-  "comfyui-scenes": { "checkpoint": "illustrious-xl" }
+  }
 }
 ```
 
 | Rule | Detail |
 | :--- | :--- |
-| Namespaces | Each key is a namespace you own: your fork or tool name. It must be lower case, 1-64 characters, and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Do not write into another fork's namespace. |
+| Namespaces | Each key is a lower-case namespace identifying a specific fork, tool, or shared feature runtime (e.g. `agent_runtime`, `visual_novel`, `my_fork`). It must be 1-64 characters and start with a letter or digit; it may contain `a-z`, `0-9`, `_`, `.` and `-`. Shared feature namespaces should be chosen neutrally so multiple implementations can adopt the same schema. |
 | Values | Each namespace value must be a JSON object. Inside it, any JSON is allowed. |
+| Schema Versioning | It is recommended that extension objects declare an explicit `schema_version` (e.g. `"schema_version": 1`) so consuming runtimes can detect schema evolutions reliably. |
 | Limits | At most 32 namespaces and 256 KB (UTF-8 JSON) in total. |
 | Invalid entries | Namespaces with an invalid key, a non-object value, or past the limits are dropped on import and export. The rest of the manifest is not affected. |
 | Assets | Asset paths inside `extensions` are passed through as plain strings. They are not packed into or extracted from `.adz` bundles. |
 | Export | The key is omitted when there are no valid namespaces. |
 
-Implementations that do not recognize the block ignore it. Put fork-specific data here
-rather than adding new top-level keys: unknown top-level keys are ignored on import but are
-not written back on export. For per-entity data, NPCs and objects also accept a free-form
-`metadata_json` object that survives import and export.
+Implementations that do not recognize an extension namespace ignore it. Put fork- or
+feature-specific data here rather than adding new top-level keys: unknown top-level keys
+are ignored on import but are not written back on export. For per-entity data, NPCs and
+objects also accept a free-form `metadata_json` object that survives import and export.
 
 ---
 

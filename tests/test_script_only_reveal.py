@@ -23,14 +23,20 @@ from tests.conftest import TestSessionLocal
 SCENE = "PAD_ROOM"
 
 
-def _npc(entity_id: str, session_id: str, adv_id: str, reveal_rule: str | None) -> WorldEntity:
+def _npc(
+    entity_id: str,
+    session_id: str,
+    adv_id: str,
+    reveal_rule: str | None,
+    entity_type: str = "NPC",
+) -> WorldEntity:
     return WorldEntity(
         id=entity_id,
         session_id=session_id,
         template_id=adv_id,
         name=entity_id.title(),
         description="Stands on the raised metal platform.",
-        entity_type="NPC",
+        entity_type=entity_type,
         current_scene_id=SCENE,
         spatial_position="standing on the raised metal platform",
         reveal_rule=reveal_rule,
@@ -58,7 +64,8 @@ async def _manager(db, suffix: str) -> GameTurnManager:
             state,
             avatar,
             _npc("STOWAWAY", state.session_id, adv.id, "Script"),
-            _npc("LURKER", state.session_id, adv.id, None),
+            # A hidden item: still discoverable by searching (hidden NPCs never are).
+            _npc("LURKER", state.session_id, adv.id, None, entity_type="OBJECT"),
         ]
     )
     await db.commit()
@@ -93,7 +100,7 @@ def test_gm_hidden_context_omits_script_only_entities():
             entity_type="NPC",
         ),
         SimpleNamespace(
-            id="LURKER", name="Lurker", spatial_position="", reveal_rule="", entity_type="NPC"
+            id="LOCKET", name="Locket", spatial_position="", reveal_rule="", entity_type="OBJECT"
         ),
     ]
 
@@ -102,7 +109,7 @@ def test_gm_hidden_context_omits_script_only_entities():
     only_script = build_hidden_entities_context(hidden[:1])
 
     # Assert
-    assert "LURKER" in block
+    assert "LOCKET" in block
     assert "STOWAWAY" not in block
     assert only_script == ""
 

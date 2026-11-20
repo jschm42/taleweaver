@@ -8,6 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes.adventures.agent_access import access_fields
 from backend.api.routes.adventures.asset_url_healing import (
     heal_template_avatar_profile_image,
     resolve_existing_data_asset_url,
@@ -21,7 +22,9 @@ from backend.core.config import settings
 from backend.core.narration_styles import DEFAULT_NARRATION_STYLE
 from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY
 from backend.core.ui_theme import UI_SKIN_AUTO, normalize_ui_theme
+from backend.engine.conversations.settings import chatter_sheet_fields
 from backend.engine.rules.item_logic import get_item_slot, normalize_equipment_keys
+from backend.engine.rules.quest_items import mark_carried_quest_items
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -38,7 +41,7 @@ _AGENT_FLAGS = {
     "agent_monkey_mode": ("monkey_mode", False),
     "agent_allow_walkthrough": ("allow_walkthrough", True),
     "agent_step_by_step": ("step_by_step", False),
-    "agent_wait_for_tts": ("wait_for_tts", False),
+    "agent_wait_for_tts": ("wait_for_tts", True),
 }
 
 
@@ -70,6 +73,9 @@ def entity_to_item_dict(entity: WorldEntity) -> dict:
     """Minimal item dict from a WorldEntity for character sheet display."""
     metadata = entity.metadata_json or {}
     effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+    wearables = entity.wearable_slots or []
+    if isinstance(wearables, str):
+        wearables = [wearables]
     return {
         "id": entity.id,
         "name": entity.name,
@@ -77,6 +83,7 @@ def entity_to_item_dict(entity: WorldEntity) -> dict:
         "image_url": entity.image_url,
         "item_type": entity.item_type or "PICKABLE",
         "slot": _entity_slot(entity),
+        "wearable_slots": list(wearables),
         "metadata_json": dict(metadata),
         **{field: _as_int(getattr(entity, field)) for field in _STAT_MODIFIERS},
         "hp_change": _as_int(metadata.get("hp_change"), effects.get("hp")),
@@ -159,9 +166,17 @@ async def _item_entities(db: AsyncSession, avatar: Avatar, session_id: str) -> d
 def _sheet_item(item: dict, image_map: dict[str, str]) -> dict:
     item_copy = dict(item)
     if not item_copy.get("slot"):
-        item_copy["slot"] = get_item_slot(
-            item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE")
-        )
+        wearables = item_copy.get("wearable_slots")
+        if isinstance(wearables, list) and wearables:
+            item_copy["slot"] = wearables[0]
+        elif isinstance(wearables, str) and wearables:
+            item_copy["slot"] = wearables
+        else:
+            item_copy["slot"] = get_item_slot(
+                item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE")
+            )
+    if "wearable_slots" not in item_copy and item_copy.get("slot"):
+        item_copy["wearable_slots"] = [item_copy["slot"]]
     item_id = item_copy.get("id")
     if item_id in image_map and not item_copy.get("image_url"):
         item_copy["image_url"] = image_map[item_id]
@@ -257,6 +272,8 @@ def _agent_fields(state: SessionState) -> dict[str, Any]:
     fields["agent_personality"] = str(agent.get("personality", "casual"))
     fields["agent_custom_personality"] = str(agent.get("custom_personality", ""))
     fields["agent_step_delay"] = _as_int(agent.get("step_delay")) or 0
+    fields["agent_dialogue_level"] = str(agent.get("dialogue_level") or "normal")
+    fields["agent_instruction"] = str(agent.get("instruction") or "")
     return fields
 
 
@@ -324,6 +341,8 @@ async def build_sheet_snapshot(
     session_profile_image: Optional[str],
 ) -> dict:
     """Builds a serialisable character-sheet snapshot."""
+    # companion_sheet imports this module (entity_to_item_dict), so it is imported here.
+    from backend.api.routes.adventures.companion_sheet import build_companion_sheet
     from backend.engine.rules.stat_aggregator import calculate_total_stats
 
     ctx = _SheetContext(
@@ -334,13 +353,15 @@ async def build_sheet_snapshot(
     image_map = await _entity_image_map(db, state, asset_snapshot)
     entity_lookup = await _item_entities(db, avatar, state.session_id)
     current_scene = await _current_scene(db, state)
+    inventory = _sync_inventory(avatar, entity_lookup, image_map, dict(state.entity_states or {}))
+    await mark_carried_quest_items(db, state.session_id, inventory)
     return {
         **_avatar_fields(avatar, calculate_total_stats(avatar)),
         "profile_image": await _profile_image(db, state, session_manifest, session_profile_image),
-        "inventory": _sync_inventory(
-            avatar, entity_lookup, image_map, dict(state.entity_states or {})
-        ),
+        "inventory": inventory,
         "equipment": _sync_equipment(avatar, entity_lookup, image_map),
+        # The hero dialog's switch to the active companion (None without one).
+        "companion": await build_companion_sheet(db, state, image_map),
         "in_game_time": state.in_game_time,
         "start_datetime": await _start_datetime(state, ctx),
         "current_scene": current_scene.label if current_scene else state.current_scene_id,
@@ -350,8 +371,10 @@ async def build_sheet_snapshot(
         "narration_style": getattr(state, "narration_style", None) or DEFAULT_NARRATION_STYLE,
         "ui_skin": getattr(state, "ui_skin", None) or UI_SKIN_AUTO,
         "tts_auto_speak": (state.entity_states or {}).get(TTS_AUTO_SPEAK_KEY),
+        "npc_chatter": chatter_sheet_fields(ctx.get("npc_conversations"), state.entity_states),
         "compressed_history": getattr(state, "compressed_history", None),
         **_agent_fields(state),
+        **access_fields(ctx.adventure, state),
         "is_debug_enabled": bool(state.is_debug_enabled),
         "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled),
     }

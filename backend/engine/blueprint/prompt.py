@@ -38,6 +38,11 @@ _RULES = (
     "descriptions, walkthroughs and puzzles.\n"
     "- Fixed scripts and guard expressions are deterministic engine code. Do not rewrite them; "
     "build the world so they work (create every ID, variable and flag they use).\n"
+    "- Exits with `dynamic_zone` expand procedurally at runtime; their `to_scene_id` (`DYN_*`) "
+    "is a virtual placeholder. NEVER create an entry in `scenes` for a `DYN_*` target.\n"
+    "- Pre-mapped scenes with `dynamic_zone` ARE real entries in `scenes` whose exits and fixed "
+    "entities already exist on the map, while narrative description and dynamic encounters are "
+    "generated on first player entry; keep their `dynamic_zone` verbatim.\n"
 )
 _STRICT_TEXT = (
     "- STRICT ADHERENCE: keep the blueprint's structure. Only add scenes, NPCs or items that are "
@@ -105,14 +110,17 @@ def blueprint_sequences(blueprint: Blueprint) -> list[dict[str, Any]]:
     for block in blueprint.of_kind("sequence"):
         order = int(block.ref)
         values = {**block.hints(), **block.fixed()}
-        description = block.description or "Follow the sequence blueprint."
+        explicit_desc = str(values.get("description") or "").strip()
+        explicit_walkthrough = str(values.get("walkthrough") or "").strip()
+        description = explicit_desc or block.description or "Follow the sequence blueprint."
+        walkthrough = explicit_walkthrough or (block.description if not explicit_desc else "")
         sequences.append(
             {
                 "id": f"SEQ_{order}",
                 "order": order,
                 "title": values.get("title") or f"Sequence {order}",
                 "description": description[:500],
-                "walkthrough": values.get("walkthrough") or description,
+                "walkthrough": walkthrough or description,
                 "end_condition": values.get("end_condition") or "Complete the sequence objectives.",
                 "required_item_id": values.get("required_item_id", ""),
                 "required_scene_id": values.get("required_scene_id", ""),

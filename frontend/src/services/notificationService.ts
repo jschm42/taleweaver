@@ -1,4 +1,5 @@
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
+import { dismissToast, showToast, toastState } from '@/composables/useToast'
 
 export interface Notification {
   id: number
@@ -7,34 +8,31 @@ export interface Notification {
 }
 
 /**
- * Notification service for managing toast notifications
+ * Notification service kept for existing callers (editor, portal, entity transfer).
+ * Messages go to the app-wide toasts (`useToast`, rendered by UiToastHost in App.vue), so they
+ * show on every page, not only where a page renders its own toast component.
  */
 class NotificationService {
-  private notifications = ref<Notification[]>([])
-  private nextId = 0
-  private readonly DURATION_MS = 5000
-
   get all() {
-    return computed(() => this.notifications.value)
+    return computed<Notification[]>(() =>
+      toastState.items.map((item) => ({
+        id: item.id,
+        message: item.message,
+        type: item.tone === 'error' ? 'error' : item.tone === 'success' ? 'success' : 'info',
+      })),
+    )
   }
 
   add(message: string, type: 'error' | 'success' | 'info' = 'info'): number {
-    const id = this.nextId++
-    this.notifications.value.push({ id, message, type })
-
-    setTimeout(() => {
-      this.remove(id)
-    }, this.DURATION_MS)
-
-    return id
+    return showToast(message, { tone: type })
   }
 
   remove(id: number): void {
-    this.notifications.value = this.notifications.value.filter(n => n.id !== id)
+    dismissToast(id)
   }
 
   clear(): void {
-    this.notifications.value = []
+    toastState.items.splice(0)
   }
 
   success(message: string): number {

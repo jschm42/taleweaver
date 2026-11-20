@@ -167,7 +167,8 @@ Write "title", "summary", "rationale" and every patch "description" in English.
 FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, exit, protagonist, adventure, sequence.
 - Allowed `field_updates` keys MUST match the editor's patch payload exactly:
     - scene: label, description, decorative_objects, audio_track_id, on_enter_scene_script,
-      on_enter_scene_text, on_leave_scene_script, on_leave_scene_text, helpers_script
+      on_enter_scene_text, on_leave_scene_script, on_leave_scene_text, helpers_script,
+      is_respawn_point
     - object (every item type): name, description, is_portable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_pickup_script, on_pickup_text, on_drop_script,
       on_drop_text, on_interact_script, on_interact_text
@@ -177,15 +178,26 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
       on_items_added_text, on_items_removed_script, on_items_removed_text
     - object `locked`: on a CONTAINER / CONTAINER_SWITCH it must be unlocked to open; on any
       other item it is take-locked (visible, cannot be picked up until unlocked by a script)
+    - object `quest_item` (true/false, every item type except CONSTRUCTABLE): the story needs
+      it, so the player can never give it to an NPC and the Game Master cannot take it away
     - object (READABLE only): text_log_content, text_log_format, on_read_script, on_read_text
     - object (WEAPON/WEARABLE only): on_equip_script, on_equip_text, on_unequip_script,
       on_unequip_text
     - object (CONSTRUCTABLE only): craft_guard_expression, on_craft_success_script,
       on_craft_success_text, on_craft_failure_script, on_craft_failure_text
     - npc: name, description, goal, character, is_killable, current_scene_id, is_hidden,
-      reveal_rule, spatial_position, on_defeat_script, on_defeat_text,
+      reveal_guard_expression (Python condition; the engine reveals the hidden NPC once it is
+      True, the Game Master never discovers hidden NPCs), spatial_position, on_defeat_script, on_defeat_text,
       on_protagonist_enters_scene_script, on_protagonist_enters_scene_text,
-      on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text
+      on_interact_script, on_interact_text, on_receive_item_script, on_receive_item_text,
+      on_recruit_success_script, on_recruit_success_text, on_recruit_failure_script,
+      on_recruit_failure_text (companions with a Recruit action only), memory_slots (0-8;
+      how many facts about the protagonist the character remembers, 0 = off; only for
+      recurring characters the player talks to, never enemies), relations (full list of
+      {npc_id, kind: FRIEND|FAMILY|PARTNER|ALLY|COLLEAGUE|SUPERIOR|SUBORDINATE|RIVAL|ENEMY,
+      note}), chatty (false keeps the NPC out of NPC chatter), conversation_topics (full list
+      of {id, topic, with_npc_id, must_convey, guard_expression, repeatable, on_heard_script,
+      on_heard_text}; topics two NPCs discuss while the protagonist can overhear them)
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
       rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
       on_exit_used_script, on_exit_used_text, on_unlock_success_script,

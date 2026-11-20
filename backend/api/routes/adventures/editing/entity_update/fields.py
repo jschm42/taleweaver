@@ -13,6 +13,17 @@ from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
 _ID_RE = re.compile(r"^[A-Z0-9_]+$")
 _MAX_SCENE_REF_LENGTH = 50
 _VITALS = (("hp", "max_hp"), ("mana", "max_mana"), ("stamina", "max_stamina"))
+EXIT_SCRIPT_FIELDS = (
+    "unlock_expression",
+    "on_open_exit_script",
+    "on_open_exit_text",
+    "on_exit_used_script",
+    "on_exit_used_text",
+    "on_unlock_success_script",
+    "on_unlock_success_text",
+    "on_unlock_failure_script",
+    "on_unlock_failure_text",
+)
 
 
 def ref_id(item: Any) -> Optional[str]:
@@ -37,7 +48,7 @@ def copy_given(target: Any, payload: EntityUpdateRequest, fields: tuple[str, ...
             setattr(target, field, getattr(payload, field))
 
 
-def copy_scripts(target: Any, payload: EntityUpdateRequest, fields: tuple[str, ...]) -> None:
+def copy_scripts(target: Any, payload: Any, fields: tuple[str, ...]) -> None:
     """Script/text columns: stripped, empty becomes NULL."""
     for field in fields:
         value = getattr(payload, field)

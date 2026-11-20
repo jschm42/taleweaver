@@ -109,7 +109,11 @@ def _backfill(state: SessionState, snapshot: dict[str, Any], template: Adventure
 
 def _state_fallbacks(state: SessionState) -> dict[str, Any]:
     """Session values for keys an old snapshot of a deleted template does not have."""
-    session = getattr(state, "session", None)
+    session = (
+        state.__dict__.get("session")
+        if isinstance(state, SessionState)
+        else getattr(state, "session", None)
+    )
     return {
         "id": state.template_id or "deleted-template",
         "title": getattr(session, "adventure_title", None) or "Deleted Adventure",
@@ -154,6 +158,16 @@ class SessionAdventure:
     @property
     def init_script(self) -> Optional[str]:
         return self.original_manifest.get("init_script")
+
+    @property
+    def sequence_progression_mode(self) -> str:
+        """'linear' or 'dynamic'. Like ``AdventureTemplate.sequence_progression_mode`` it lives in
+        the manifest, not in a column, so the column snapshot alone would lose it (every session
+        would read 'linear': numbered chapter banners in dynamic adventures)."""
+        manifest = self.original_manifest
+        mode = manifest.get("sequence_progression_mode") or manifest.get("sequence_progression")
+        cleaned = str(mode or "linear").strip().lower()
+        return cleaned if cleaned in {"linear", "dynamic"} else "linear"
 
 
 def session_adventure_from_snapshot(

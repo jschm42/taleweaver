@@ -14,6 +14,11 @@ from typing import Any
 
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock
 from backend.engine.blueprint.prompt import COLLECTIONS
+from backend.engine.world.dynamic_scene_schemas import (
+    build_dynamic_placeholder_scene_id,
+    normalize_dynamic_generation,
+    normalize_dynamic_zone,
+)
 
 _ID_KEYS = {"award": "key", "sequence": "order"}
 
@@ -119,7 +124,45 @@ def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]
             entry = _find_or_insert(entries, block, violations)
             if entry is not None:
                 _apply_children(entry, block, violations)
+    _strip_virtual_dynamic_scenes(manifest, blueprint)
     return violations
+
+
+def _strip_virtual_dynamic_scenes(manifest: dict[str, Any], blueprint: Blueprint) -> None:
+    """Remove LLM-fabricated DYN_* or dynamic-target scenes unless explicitly declared as [Scene]."""
+    scenes = manifest.get("scenes")
+    if not isinstance(scenes, list):
+        return
+    declared_scenes = {b.ref.upper() for b in blueprint.of_kind("scene") if b.ref}
+    dynamic_targets: set[str] = set()
+    for ex in manifest.get("exits") or []:
+        if not isinstance(ex, dict) or not isinstance(ex.get("dynamic_zone"), dict):
+            continue
+        to_id = str(ex.get("to_scene_id") or "").strip().upper()
+        zone_id = str(ex["dynamic_zone"].get("zone_id") or "").strip().upper()
+        if to_id:
+            dynamic_targets.add(to_id)
+        if zone_id:
+            dynamic_targets.add(zone_id)
+
+    manifest["scenes"] = [
+        s
+        for s in scenes
+        if not (
+            isinstance(s, dict)
+            and (
+                (sid := str(s.get("id") or "").strip().upper()).startswith("DYN_")
+                or (sid in dynamic_targets and sid not in declared_scenes)
+            )
+        )
+    ]
+
+
+def _is_dynamic_exit_block(block: BlueprintBlock) -> bool:
+    fixed = block.fixed()
+    return block.kind == "exit" and any(
+        k == "dynamic_zone" or k.startswith("dynamic_zone.") for k in fixed
+    )
 
 
 def _exit_scenes_exist(
@@ -127,6 +170,13 @@ def _exit_scenes_exist(
 ) -> bool:
     scene_ids = {str(scene.get("id") or "").upper() for scene in manifest.get("scenes") or []}
     ends = (block.fixed().get("from_scene_id"), block.fixed().get("to_scene_id"))
+    if _is_dynamic_exit_block(block):
+        if ends[0] in scene_ids:
+            return True
+        violations.append(
+            f"exit {ends[0]} -> {ends[1]} skipped: origin scene missing in the generated world."
+        )
+        return False
     if all(end in scene_ids for end in ends):
         return True
     violations.append(f"exit {ends[0]} -> {ends[1]} skipped: scene missing in the generated world.")
@@ -164,9 +214,20 @@ def _find_entry(entries: list[Any], block: BlueprintBlock) -> dict[str, Any] | N
 
 def _matches(entry: dict[str, Any], block: BlueprintBlock) -> bool:
     if block.kind == "exit":
-        pair = (block.fixed().get("from_scene_id"), block.fixed().get("to_scene_id"))
+        fixed = block.fixed()
+        pair = (fixed.get("from_scene_id"), fixed.get("to_scene_id"))
         found = (entry.get("from_scene_id"), entry.get("to_scene_id"))
-        return found in (pair, pair[::-1])
+        if found in (pair, pair[::-1]):
+            return True
+        fixed_zone = str(fixed.get("dynamic_zone.zone_id") or "").strip().lower()
+        entry_zone = entry.get("dynamic_zone")
+        if (
+            fixed_zone
+            and isinstance(entry_zone, dict)
+            and entry.get("from_scene_id") == fixed.get("from_scene_id")
+        ):
+            return str(entry_zone.get("zone_id") or "").strip().lower() == fixed_zone
+        return False
     if block.kind == "sequence":
         return str(entry.get("order")) == block.ref
     key = _ID_KEYS.get(block.kind, "id")
@@ -193,11 +254,50 @@ def _apply_world_hints(manifest: dict[str, Any], world: BlueprintBlock) -> None:
             manifest.setdefault(key, hints[key])
 
 
+def _apply_dynamic_exit_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
+    raw_zone = dict(entry["dynamic_zone"])
+    raw_zone.setdefault("zone_id", "zone")
+    raw_zone.setdefault("theme", block.description or entry.get("label") or "Uncharted zone")
+    zone = normalize_dynamic_zone(raw_zone)
+    if zone is None:
+        entry["dynamic_zone"] = None
+        return
+    entry["dynamic_zone"] = zone
+    entry["to_scene_id"] = build_dynamic_placeholder_scene_id(
+        zone["zone_id"],
+        1,
+        1,
+        f"{entry.get('from_scene_id') or ''}{entry.get('label') or ''}",
+    )
+
+
+def _apply_dynamic_scene_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
+    raw_zone = dict(entry["dynamic_zone"])
+    if raw_zone.get("enabled") is False:
+        entry["dynamic_zone"] = None
+        return
+    raw_zone.setdefault("zone_id", str(entry.get("id") or "zone").lower())
+    raw_zone.setdefault(
+        "theme",
+        block.description or entry.get("description") or entry.get("name") or "Uncharted area",
+    )
+    zone = normalize_dynamic_zone(raw_zone)
+    entry["dynamic_zone"] = zone
+    if zone and not str(entry.get("description") or "").strip():
+        entry["description"] = zone["theme"]
+
+
 def _apply_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
     for path, value in block.fixed().items():
         _set_path(entry, path, value)
     if block.kind == "sequence" and "guard_expression" in block.fixed():
         entry["completion_guard_expression"] = block.fixed()["guard_expression"]
+    if block.kind == "exit" and isinstance(entry.get("dynamic_zone"), dict):
+        _apply_dynamic_exit_fixed(entry, block)
+    if block.kind == "scene" and isinstance(entry.get("dynamic_zone"), dict):
+        _apply_dynamic_scene_fixed(entry, block)
+    if block.kind == "world" and isinstance(entry.get("dynamic_generation"), dict):
+        entry["dynamic_generation"] = normalize_dynamic_generation(entry["dynamic_generation"])
 
 
 def _set_path(target: dict[str, Any], path: str, value: Any) -> None:

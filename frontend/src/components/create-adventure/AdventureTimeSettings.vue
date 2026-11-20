@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Clock, Sun, Hourglass, Timer } from 'lucide-vue-next'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 export interface TimeConfigData {
@@ -144,7 +144,7 @@ function toggleAutoMode() {
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <InfoPopoverButton title="Time & Pacing" :text="CREATE_ADVENTURE_HELP_TEXTS.timeSystem || CREATE_ADVENTURE_HELP_TEXTS.pacing" />
+        <UiInfoPopover title="Time & Pacing" :text="CREATE_ADVENTURE_HELP_TEXTS.timeSystem || CREATE_ADVENTURE_HELP_TEXTS.pacing" />
         <!-- Auto / Manual Toggle Button -->
         <button
           type="button"

@@ -5,8 +5,12 @@ import type { Talent } from '@/types'
 import TalentForm, { type TalentDraft } from '@/components/editor/TalentForm.vue'
 import { specialAttackService } from '@/services/specialAttackService'
 import { MAX_TALENTS, TALENT_TARGET_LABELS, normalizeTalent, talentCostLabel } from '@/utils/talents'
-
-const ID_PATTERN = /^[A-Z0-9_-]{1,50}$/
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  generateEditorId,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 // Fields accepted by the backend schema (extra fields are rejected there).
 const SCHEMA_KEYS: Array<keyof Talent> = [
   'id', 'name', 'description', 'target_type', 'cost_type', 'cost', 'max_uses', 'gm_hint',
@@ -71,24 +75,18 @@ watch(() => JSON.stringify(props.talents ?? []), () => {
   expanded.value = null
 }, { immediate: true })
 
-function slugify(name: string): string {
-  return name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 50) || 'TALENT'
-}
-
-function uniqueId(base: string): string {
-  const taken = new Set(drafts.value.map((d) => d.id))
-  let candidate = base
-  for (let n = 2; taken.has(candidate); n += 1) candidate = `${base}_${n}`
-  return candidate
-}
-
 function addTalent(presetName?: string): void {
   if (drafts.value.length >= MAX_TALENTS) return
   const preset = presetName ? PRESETS[presetName] : null
   const base: Talent = preset
     ? { ...preset, id: '' }
     : { id: '', name: 'New Talent', description: '', target_type: 'NONE', cost_type: 'mana', cost: 5 }
-  base.id = uniqueId(slugify(base.name))
+  base.id = generateEditorId({
+    prefix: EDITOR_ID_PREFIXES.TALENT,
+    sourceName: base.name,
+    takenIds: drafts.value.map((d) => d.id),
+    maxLen: MAX_EDITOR_ID_LENGTH,
+  })
   drafts.value.push(toDraft(base))
   expanded.value = drafts.value[drafts.value.length - 1]._key
 }
@@ -105,7 +103,9 @@ const problems = computed(() => {
     const name = d.name.trim().toLowerCase()
     if (!name) issues.push('Every talent needs a name.')
     if (!d.description?.trim()) issues.push(`"${d.name}": add a description.`)
-    if (!ID_PATTERN.test(d.id.toUpperCase())) issues.push(`"${d.name}": ID may only use A-Z, 0-9, _ and -.`)
+    if (!isValidEditorId(d.id.toUpperCase(), MAX_EDITOR_ID_LENGTH)) {
+      issues.push(`"${d.name}": ID must use A-Z, 0-9, and _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`)
+    }
     if (ids.has(d.id.toUpperCase())) issues.push(`Duplicate ID ${d.id}.`)
     if (name && names.has(name)) issues.push(`Two talents are called "${d.name}".`)
     ids.add(d.id.toUpperCase())
@@ -197,7 +197,12 @@ function summary(d: TalentDraft): string {
           <Trash2 class="w-4 h-4" />
         </button>
       </header>
-      <TalentForm v-if="expanded === d._key" v-model="drafts[idx]" :reference-options="referenceOptions" />
+      <TalentForm
+        v-if="expanded === d._key"
+        v-model="drafts[idx]"
+        :reference-options="referenceOptions"
+        :taken-ids="drafts.filter((o) => o._key !== d._key).map((o) => o.id)"
+      />
     </article>
 
     <div class="flex flex-wrap items-center gap-3">

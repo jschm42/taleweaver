@@ -52,6 +52,14 @@ def integer(raw: str) -> int:
         raise ValueError(f"expected a whole number, got '{raw.strip()}'") from exc
 
 
+def percent(raw: str) -> int:
+    """A share in percent (1-100); accepts "25" and "25%"."""
+    value = integer(raw.strip().rstrip("%"))
+    if not 1 <= value <= 100:
+        raise ValueError(f"expected a percentage from 1 to 100, got '{raw.strip()}'")
+    return value
+
+
 def boolean(raw: str) -> bool:
     word = raw.strip().lower()
     if word in _TRUE_WORDS:
@@ -318,3 +326,74 @@ def switch_outcome(raw: str) -> dict[str, Any]:
         slot = "key" if effect_type == "story_flag" else "target_id"
         effects.append({"type": effect_type, "target_id": "", "key": "", slot: value.strip()})
     return {"on_state": state.strip().upper(), "effects": effects}
+
+
+_DYNAMIC_ENTITY_TYPES = ("hostile_npc", "friendly_npc", "scenery", "container", "consumable")
+
+
+def dynamic_zone_id(raw: str) -> str:
+    """Normalize a dynamic zone ID to lower_snake_case."""
+    cleaned = normalize_id(raw).lower()
+    if not cleaned:
+        raise ValueError(f"expected a zone ID, got '{raw.strip()}'")
+    return cleaned
+
+
+def dynamic_max_depth(raw: str) -> int:
+    """Parse max_depth for a dynamic zone (1..10)."""
+    val = integer(raw)
+    if not 1 <= val <= 10:
+        raise ValueError(f"expected a max_depth between 1 and 10, got '{raw.strip()}'")
+    return val
+
+
+def dynamic_max_npcs(raw: str) -> int:
+    """Parse max_npcs for dynamic scenes (0..5)."""
+    val = integer(raw)
+    if not 0 <= val <= 5:
+        raise ValueError(f"expected max_npcs between 0 and 5, got '{raw.strip()}'")
+    return val
+
+
+_INSTRUCTION_SCOPE_ALIASES: dict[str, str] = {
+    "once": "once",
+    "first": "first_scene",
+    "first_scene": "first_scene",
+    "root": "first_scene",
+    "max_depth": "max_depth",
+    "climax": "max_depth",
+    "final": "max_depth",
+    "end": "max_depth",
+    "all": "all_scenes",
+    "all_scenes": "all_scenes",
+    "every_scene": "all_scenes",
+}
+
+
+def dynamic_instructions_scope(raw: str) -> str:
+    """Normalize dynamic instructions scope (once, first_scene, max_depth, all_scenes)."""
+    cleaned = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower())
+    resolved = _INSTRUCTION_SCOPE_ALIASES.get(cleaned)
+    if resolved is None:
+        raise ValueError(
+            f"expected once, first_scene, max_depth, or all_scenes, got '{str(raw or '').strip()}'"
+        )
+    return resolved
+
+
+def dynamic_entity_types(raw: str) -> list[str]:
+    """Parse comma-separated allowed_entity_types for a dynamic zone."""
+    items = [
+        re.sub(r"[\s\-]+", "_", part.strip().lower()) for part in raw.split(",") if part.strip()
+    ]
+    if not items:
+        raise ValueError(
+            f"expected one or more of {', '.join(_DYNAMIC_ENTITY_TYPES)}, got '{raw.strip()}'"
+        )
+    allowed = set(_DYNAMIC_ENTITY_TYPES)
+    for item in items:
+        if item not in allowed:
+            raise ValueError(
+                f"unknown allowed entity type '{item}' (expected {', '.join(_DYNAMIC_ENTITY_TYPES)})"
+            )
+    return list(dict.fromkeys(items))

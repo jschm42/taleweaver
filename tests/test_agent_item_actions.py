@@ -190,3 +190,49 @@ async def test_agent_settings_store_step_delay_and_tts_wait(auth_client, setup_t
     assert resp.json()["agent_step_delay"] == 10
     assert resp.json()["agent_wait_for_tts"] is True
     assert too_long.status_code == 422
+
+
+async def test_use_and_insert_on_unlocked_container_route_to_container_put(
+    auth_client, setup_test_db
+):
+    game_id = await _seed_room(auth_client)
+    async with TestSessionLocal() as db:
+        manager = await _manager(db, game_id)
+        manager.avatar.inventory = [{"id": "FUSE", "name": "Ceramic Fuse"}]
+        flag_modified(manager.avatar, "inventory")
+        await db.commit()
+
+        used = await execute_agent_action(manager, "/use Ceramic Fuse on Old Chest")
+        inserted = await execute_agent_action(manager, "/insert Ceramic Fuse in Old Chest")
+
+    assert used.turn_command == "/container_put_items Old Chest | Ceramic Fuse"
+    assert inserted.turn_command == "/container_put_items Old Chest | Ceramic Fuse"
+
+
+async def test_format_room_objects_shows_disabled_switch_states_and_capacity():
+    entities = [
+        {
+            "id": "FUSE_BOX",
+            "entity_type": "OBJECT",
+            "item_type": "CONTAINER_SWITCH",
+            "name": "Main Fuse Box",
+            "locked": False,
+            "inventory": [{"id": "FUSE", "name": "Ceramic Fuse"}],
+            "metadata_json": {
+                "max_items": 2,
+                "switch": {
+                    "states": ["OFF", "ON"],
+                    "initial_state": "OFF",
+                    "disabled_states": ["ON"],
+                    "state_labels": {"OFF": "Power Off", "ON": "Power On"},
+                },
+            },
+        }
+    ]
+
+    closed_text = format_room_objects(entities, set())
+    opened_text = format_room_objects(entities, {"FUSE_BOX"})
+
+    assert "/put <item> in Main Fuse Box" in closed_text
+    assert "(1/2 items)" in opened_text
+    assert "currently disabled: ON (Power On)" in opened_text

@@ -8,6 +8,10 @@ the move with the best expected value instead:
 3. Otherwise focus the enemy that can be defeated in the fewest turns, using the
    attack (weapon or special) with the highest expected damage.
 4. Out of resources: restore them with a consumable, rest for stamina, or run.
+
+With a companion at its side it also heals the companion with an "ally" ability when the
+companion is badly wounded, and marks the focus target (a free action) so both fight the
+same enemy.
 """
 
 from __future__ import annotations
@@ -21,9 +25,11 @@ from backend.api.routes.adventures.agent_combat_math import (
     expected_weapon_damage,
 )
 from backend.api.routes.adventures.agent_logic import AgentDecision
+from backend.engine.combat.special_attacks import heals_ally
 
 HEAL_HP_RATIO = 0.4
 FLEE_HP_RATIO = 0.15
+COMPANION_HEAL_RATIO = 0.4
 RESOURCES = ("hp", "mana", "stamina")
 
 
@@ -188,14 +194,60 @@ def _hp_ratio(player: dict[str, Any]) -> float:
     return int(player.get("hp") or 0) / max_hp if max_hp > 0 else 1.0
 
 
+def _standing_companion(combat: dict[str, Any]) -> dict[str, Any] | None:
+    """The companion still fighting at the protagonist's side (``combat["party"]``)."""
+    members = [m for m in combat.get("party") or [] if isinstance(m, dict)]
+    return next((m for m in members if not m.get("downed") and int(m.get("hp") or 0) > 0), None)
+
+
+def _companion_heal(situation: CombatSituation) -> tuple[str, str] | None:
+    """Heals a badly wounded companion with the strongest affordable "ally" ability."""
+    member = _standing_companion(situation.combat)
+    if member is None or _hp_ratio(member) > COMPANION_HEAL_RATIO:
+        return None
+    player = situation.player
+    options = [
+        (action, expected_special_effect(action, player, None, "ally"))
+        for action in _usable_specials(player)
+        if heals_ally(action)
+    ]
+    options = [o for o in options if o[1] > 0]
+    if not options:
+        return None
+    action, heal = max(options, key=lambda o: o[1])
+    reason = (
+        f"{member.get('name')} is at {_hp_ratio(member):.0%} HP; "
+        f"healing it with {action['name']} (~{heal:.0f} HP)."
+    )
+    return f"/special {action['id']}", reason
+
+
+def _heal_choice(situation: CombatSituation, hp_ratio: float) -> tuple[str, str] | None:
+    """Heals the badly wounded hero first, else a badly wounded companion."""
+    heal = _best_heal(situation) if hp_ratio <= HEAL_HP_RATIO else None
+    if heal:
+        return heal[0], f"HP at {hp_ratio:.0%}; healing with {heal[1]} (~{heal[2]:.0f} HP)."
+    return _companion_heal(situation)
+
+
+def _mark_choice(situation: CombatSituation, enemy: dict[str, Any]) -> tuple[str, str] | None:
+    """Marks the focus target for the companion unless it already attacks that enemy."""
+    member = _standing_companion(situation.combat)
+    if member is None or not enemy.get("engaged") or member.get("mark_id") == enemy.get("id"):
+        return None
+    ref = _enemy_ref(situation.combat, enemy)
+    reason = f"Marking {enemy.get('name')} so {member.get('name')} attacks the same target."
+    return f"Mark {ref}", reason
+
+
 def _active_combat_choice(situation: CombatSituation) -> tuple[str, str]:
     if not situation.can_damage:
         return "Run", "Enemies cannot be damaged in this adventure; trying to escape."
 
     hp_ratio = _hp_ratio(situation.player)
-    heal = _best_heal(situation) if hp_ratio <= HEAL_HP_RATIO else None
+    heal = _heal_choice(situation, hp_ratio)
     if heal:
-        return heal[0], f"HP at {hp_ratio:.0%}; healing with {heal[1]} (~{heal[2]:.0f} HP)."
+        return heal
     if hp_ratio <= FLEE_HP_RATIO:
         return "Run", f"HP at {hp_ratio:.0%} and no healing available; trying to escape."
 
@@ -203,6 +255,9 @@ def _active_combat_choice(situation: CombatSituation) -> tuple[str, str]:
     if not best:
         return _restore_resources(situation)
     enemy, option = best
+    mark = _mark_choice(situation, enemy)
+    if mark:
+        return mark
     reason = (
         f"Focusing {enemy.get('name')} ({enemy.get('hp')}/{enemy.get('max_hp')} HP) with "
         f"{option.label}: ~{option.damage:.1f} expected damage for {option.cost} cost."

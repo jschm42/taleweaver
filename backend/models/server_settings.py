@@ -38,3 +38,8 @@ class ServerSettings(Base, TimestampMixin):
     game_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # Audio generation (experimental ComfyUI workflow); see backend/core/audio_settings.py.
     audio_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # Voice ids of the voice list per speech provider ({elevenlabs_id: {provider: voice}});
+    # see backend/engine/audio/voice_provider_map.py.
+    voice_provider_map: Mapped[Optional[dict[str, dict[str, str]]]] = mapped_column(
+        JSON, nullable=True
+    )

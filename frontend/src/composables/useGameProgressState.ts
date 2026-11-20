@@ -1,5 +1,6 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import type { GameSettings } from '@/services/gameViewService'
+import { authState } from '@/store/auth'
 
 type UseGameProgressStateOptions = {
   sheet: Ref<any>
@@ -10,6 +11,8 @@ type UseGameProgressStateOptions = {
   gameSettings: Ref<GameSettings>
   createTerminalEpilogue: () => Promise<void>
   refreshUser: () => Promise<any>
+  /** While true the ending waits, e.g. until the combat dialog showed the lost fight. */
+  holdEnding?: Ref<boolean>
 }
 
 export function useGameProgressState(options: UseGameProgressStateOptions) {
@@ -19,13 +22,11 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     status,
     isCompleted,
     pendingTerminalEpilogue,
-    gameSettings,
     createTerminalEpilogue,
     refreshUser,
+    holdEnding,
   } = options
 
-  const showSuccess = ref(false)
-  const showGameOver = ref(false)
   const trackedQuestId = ref<string | null>(null)
   const clockTick = ref(false)
 
@@ -73,7 +74,10 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     const currentMin = remDayMins % 60
 
     let timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`
-    if (timeConfig.time_format === '12h') {
+    // The player's profile choice wins over the adventure's format (day clocks only).
+    const playerFormat = authState.user?.clock_format
+    const timeFormat = playerFormat && playerFormat !== 'adventure' ? playerFormat : timeConfig.time_format
+    if (timeFormat === '12h') {
       const h12 = currentHour % 12 || 12
       const ampm = currentHour >= 12 ? 'PM' : 'AM'
       timeStr = `${h12.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')} ${ampm}`
@@ -112,62 +116,35 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     }
   }, { immediate: true })
 
-  watch(isCompleted, (val) => {
-    if (val && pendingTerminalEpilogue.value) {
-      showSuccess.value = true
-    }
-  })
+  // The end of the adventure is told in the story: once the last stream is done, the epilogue
+  // narration and the ending card (win / game over) are created right away, no modal.
+  const isCreatingEpilogue = ref(false)
 
-  watch(status, async (val) => {
-    if (val === 'game_over' && pendingTerminalEpilogue.value) {
-      showGameOver.value = true
+  async function finishAdventure(): Promise<void> {
+    if (!pendingTerminalEpilogue.value || isCreatingEpilogue.value || holdEnding?.value) return
+    if (status.value !== 'game_over' && !isCompleted.value) return
+    if (status.value === 'connecting' || status.value === 'loading') return
+    isCreatingEpilogue.value = true
+    try {
+      await createTerminalEpilogue()
       await refreshUser()
-    } else if (isCompleted.value && pendingTerminalEpilogue.value) {
-      showSuccess.value = true
-      await refreshUser()
+    } finally {
+      isCreatingEpilogue.value = false
     }
-  })
-
-  watch(pendingTerminalEpilogue, async (pending) => {
-    if (!pending) {
-      showSuccess.value = false
-      showGameOver.value = false
-      return
-    }
-
-    if (status.value === 'game_over') {
-      showGameOver.value = true
-    } else if (isCompleted.value) {
-      showSuccess.value = true
-    }
-
-    await refreshUser()
-  })
-
-  async function continueCompletedGame(): Promise<void> {
-    showSuccess.value = false
-    await createTerminalEpilogue()
-    await refreshUser()
   }
 
-  async function continueGameOverReadOnly(): Promise<void> {
-    showGameOver.value = false
-    await createTerminalEpilogue()
-    await refreshUser()
-  }
+  watch([pendingTerminalEpilogue, status, isCompleted, () => !!holdEnding?.value], () => {
+    void finishAdventure()
+  }, { immediate: true })
 
   function setTrackedQuest(questId: string | null): void {
     trackedQuestId.value = questId
   }
 
   return {
-    showSuccess,
-    showGameOver,
     trackedQuestId,
     clockTick,
     gameTime,
-    continueCompletedGame,
-    continueGameOverReadOnly,
     setTrackedQuest,
   }
 }

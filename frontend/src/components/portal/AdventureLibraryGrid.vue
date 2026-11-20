@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
 import { Loader2, BookOpen } from 'lucide-vue-next'
-import PortalForgeRow from './PortalForgeRow.vue'
 import { setAmbientAccent } from '@/store/portalAmbient'
-import { lastPlayedMs } from '@/utils/relativeTime'
 import PendingAdventureCard from './PendingAdventureCard.vue'
 import AdventureTemplateCard from './AdventureTemplateCard.vue'
 
@@ -40,17 +38,6 @@ const emit = defineEmits<{
   (e: 'click-pending', pending: any): void
   (e: 'load-more'): void
 }>()
-
-/**
- * One card per adventure that has actually been played; it continues the adventure's most
- * recently played session (the backend resolves active_game_id to that session).
- * The archive below always lists every adventure, played or not.
- */
-const inProgressTemplates = computed(() =>
-  props.visibleTemplates
-    .filter((t) => t.has_active_session && t.last_played_at)
-    .sort((a, b) => lastPlayedMs(b) - lastPlayedMs(a))
-)
 
 const sentinelRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
@@ -95,45 +82,6 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-8 sm:space-y-10">
-    <PortalForgeRow
-      :is-seeding="isSeeding"
-      @create="$emit('create')"
-      @generate-world="$emit('generate-world')"
-      @open-library="$emit('open-library')"
-    />
-
-    <!-- Shelf: adventures with a running session -->
-    <section v-if="inProgressTemplates.length > 0" class="space-y-3" aria-label="In progress">
-      <h2 class="shelf-heading text-xs sm:text-sm uppercase">In Progress</h2>
-      <div class="shelf-grid gap-3 sm:gap-4 xl:gap-5 pt-2">
-        <div
-          v-for="(entry, index) in inProgressTemplates"
-          :key="`active-${entry.template_id}`"
-          class="tale-enter"
-          :style="{ '--i': index }"
-        >
-          <AdventureTemplateCard
-            :template="entry"
-            resumable
-            :is-starting-session="isStartingSession"
-            :is-starting-this-template="startingSessionTemplateId === entry.template_id"
-            :is-updating="props.updatingTemplateIds ? props.updatingTemplateIds.has(entry.template_id) : false"
-            @start-session="(id) => $emit('start-session', id)"
-            @resume-session="(id) => $emit('resume-session', id)"
-            @update-adventure="(id) => $emit('update-adventure', id)"
-            @migrate="(tpl) => $emit('migrate', tpl)"
-            @cover="(id) => $emit('cover', id)"
-            @edit="(id) => $emit('edit', id)"
-            @duplicate="(id) => $emit('duplicate', id)"
-            @export-adz="(id, title) => $emit('export-adz', id, title)"
-            @export-adv="(id, title) => $emit('export-adv', id, title)"
-            @delete="(id, title) => $emit('delete', id, title)"
-            @dismiss-warning="(id) => $emit('dismiss-warning', id)"
-          />
-        </div>
-      </div>
-    </section>
-
     <!-- Shelf: every adventure, including those in progress -->
     <section class="space-y-3" aria-label="The archive">
       <h2 class="shelf-heading text-xs sm:text-sm uppercase">The Archive</h2>

@@ -7,7 +7,7 @@ from packaging.version import parse as parse_version
 
 FORMAT_NAME = "TaleWeaver"
 LEGACY_FORMAT_NAME = "taleweaver.adz"
-CURRENT_VERSION = "1.3.1"
+CURRENT_VERSION = "1.4.0"
 MIN_SUPPORTED_VERSION = "1.0"
 # Manifests below this version are still playable but shown as deprecated.
 DEPRECATED_BELOW_VERSION = "1.3.1"

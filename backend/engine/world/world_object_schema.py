@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 from pydantic import Field
 
-from backend.engine.world.combat_profile_schemas import SpecialEffectSchema
+from backend.engine.world.combat_profile_schemas import WeaponEffectSchema
 from backend.engine.world.schema_base import WorldBaseSchema
 from backend.engine.world.switch_schemas import (
     SwitchOutcomeSchema,
@@ -69,6 +69,15 @@ class WorldObjectSchema(WorldBaseSchema):
             "opens (normally derived from the unlock fields, so leave null). Any other item type: "
             "true = TAKE-LOCKED, visible and inspectable but cannot be picked up until a script "
             "(tw.objects.unlock) or a switch outcome (unlock_item) releases it. Use null if not needed."
+        ),
+    )
+    quest_item: Optional[bool] = Field(
+        default=None,
+        description=(
+            "true = QUEST ITEM: the story depends on it, so the player can never give it to an "
+            "NPC or companion and the Game Master cannot take it away (scripts still can, e.g. "
+            "tw.player.transfer_item for a hand-in). Use for MacGuffins and plot keys. Use null "
+            "otherwise."
         ),
     )
     min_items: Optional[int] = Field(
@@ -175,7 +184,7 @@ class WorldObjectSchema(WorldBaseSchema):
         None,
         description="Only for WEAPON items: stat added to the d20 attack roll (default dexterity).",
     )
-    weapon_effects: list[SpecialEffectSchema] = Field(
+    weapon_effects: list[WeaponEffectSchema] = Field(
         default=[],
         description=(
             "Only for WEAPON items: up to 4 extra effects applied on a hit, e.g. "

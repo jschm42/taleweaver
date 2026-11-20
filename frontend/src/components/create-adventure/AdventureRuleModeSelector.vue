@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 type RuleMode = 'rpg' | 'story' | 'chat'
@@ -28,7 +28,7 @@ const ruleModeHelp = computed(() => {
   <div class="space-y-2.5 sm:space-y-3">
     <div class="flex items-center justify-between gap-2">
       <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Rule Enforcement Mode</label>
-      <InfoPopoverButton title="Rule Enforcement" :text="CREATE_ADVENTURE_HELP_TEXTS.ruleEnforcement" />
+      <UiInfoPopover title="Rule Enforcement" :text="CREATE_ADVENTURE_HELP_TEXTS.ruleEnforcement" />
     </div>
 
     <div class="grid grid-cols-3 gap-2 sm:gap-2.5">

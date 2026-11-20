@@ -268,8 +268,10 @@ def test_npc_speech_movement_item_transfer_and_kill():
 
     runner = ScriptRunner([])
 
-    # 1. NPC speech test
+    # 1. NPC speech test (NPCs must be in player's scene to speak)
     speech_code = """
+tw.npcs.move("NPC_MARA", "current")
+tw.npcs.move("NPC_GOBLIN", "current")
 tw.npcs.say("NPC_MARA", "Greetings, traveler!")
 tw.npcs.get("NPC_GOBLIN").say("Get away from me!")
 """
@@ -705,3 +707,25 @@ tw.story.narrate("Standard narration step 4")
     assert ordered[3] == "Standard narration step 4"
     assert ordered[3].role == "assistant"
     assert ordered[3].raw is False
+
+
+def test_dice_proxy_methods():
+    ctx = GameContext(
+        avatar_data={"name": "Kaelen", "hp": 100},
+        current_scene_id="LIBRARY",
+        entities={},
+        exit_states={},
+        quests=[],
+        script_vars={},
+        in_game_time=0,
+    )
+    assert 1 <= ctx.dice.d4() <= 4
+    assert 1 <= ctx.dice.d6() <= 6
+    assert 1 <= ctx.dice.d8() <= 8
+    assert 1 <= ctx.dice.d10() <= 10
+    assert 1 <= ctx.dice.d12() <= 12
+    assert 1 <= ctx.dice.d20() <= 20
+    assert 1 <= ctx.dice.d100() <= 100
+    assert 0.0 <= ctx.dice.random() <= 1.0
+    assert 1 <= ctx.dice.roll("1d6") <= 6
+    assert 1 <= ctx.dice.roll(6) <= 6

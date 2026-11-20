@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
+import EditorIdInput from '@/components/editor/EditorIdInput.vue'
+import {
+  EDITOR_ID_PREFIXES,
+  MAX_EDITOR_ID_LENGTH,
+  isValidEditorId,
+} from '@/utils/editor_utils'
 
 const props = defineProps<{
   isSaving: boolean
@@ -8,33 +15,36 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'create', payload: { sceneId: string; name: string; description: string }): void
+  (
+    e: 'create',
+    payload: {
+      sceneId: string
+      name: string
+      description: string
+      dynamicZone?: DynamicZoneForm | null
+    },
+  ): void
 }>()
 
 const sceneId = ref('')
 const name = ref('')
 const description = ref('')
+const dynamicZone = ref<DynamicZoneForm | null>(null)
 const formError = ref('')
 const sceneNameInputRef = ref<HTMLInputElement | null>(null)
 
-watch(sceneId, (newVal) => {
-  sceneId.value = newVal.toUpperCase()
-})
+const existingSceneIds = computed(() =>
+  (props.editorScenes || []).map((scene) => String(scene.id || '').toUpperCase()),
+)
 
 const idError = computed(() => {
   const val = sceneId.value.trim()
   if (!val) return ''
-  
-  const idRegex = /^[A-Z0-9_]+$/
-  if (!idRegex.test(val)) {
-    return 'ID must contain only uppercase letters, digits, and underscores.'
+  if (!isValidEditorId(val, MAX_EDITOR_ID_LENGTH)) {
+    return `ID must use uppercase A-Z, 0-9, or _ only (max ${MAX_EDITOR_ID_LENGTH} chars).`
   }
 
-  if (val.length > 30) {
-    return 'ID must be 30 characters or less.'
-  }
-
-  const takenIds = new Set((props.editorScenes || []).map((scene) => String(scene.id || '').toUpperCase()))
+  const takenIds = new Set(existingSceneIds.value)
   if (takenIds.has(val.toUpperCase())) {
     return `ID "${val}" already exists in this adventure.`
   }
@@ -52,7 +62,8 @@ function cancel() {
 function submit() {
   const sId = sceneId.value.trim()
   const sName = name.value.trim()
-  const sDesc = description.value.trim()
+  let sDesc = description.value.trim()
+  const dynTheme = dynamicZone.value?.theme?.trim() || ''
 
   if (!sId) {
     formError.value = 'Scene ID is required.'
@@ -71,6 +82,13 @@ function submit() {
     formError.value = 'Scene name must be 100 characters or less.'
     return
   }
+  if (dynamicZone.value && !dynTheme) {
+    formError.value = 'Zone Theme is required when Dynamic Scene is enabled.'
+    return
+  }
+  if (!sDesc && dynamicZone.value) {
+    sDesc = dynTheme
+  }
   if (!sDesc) {
     formError.value = 'Scene description is required.'
     return
@@ -81,7 +99,12 @@ function submit() {
   }
 
   formError.value = ''
-  emit('create', { sceneId: sId, name: sName, description: sDesc })
+  emit('create', {
+    sceneId: sId,
+    name: sName,
+    description: sDesc,
+    dynamicZone: dynamicZone.value,
+  })
 }
 </script>
 
@@ -95,26 +118,22 @@ function submit() {
     </div>
 
     <div class="space-y-4">
-      <!-- Scene ID (Pflichtfeld) -->
+      <!-- Scene ID (required) -->
       <div>
-        <div class="flex justify-between items-center mb-1.5">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
-            Scene ID <span class="text-red-400">*</span>
-          </label>
-          <span :class="['text-[10px] font-bold tracking-widest', (sceneId || '').length > 30 ? 'text-red-500' : 'text-emerald-500/50']">
-            {{ (sceneId || '').length }} / 30
-          </span>
-        </div>
-        <input
+        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
+          Scene ID <span class="text-red-400">*</span>
+        </label>
+        <EditorIdInput
           v-model="sceneId"
-          type="text"
-          maxlength="30"
-          placeholder="e.g. DARK_FOREST"
-          class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-sm text-white font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-2 transition-all uppercase"
-          :class="idError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/10 focus:ring-emerald-500/50 focus:border-emerald-500'"
+          :prefix="EDITOR_ID_PREFIXES.SCENE"
+          :source-name="name"
+          :taken-ids="existingSceneIds"
+          :max-length="MAX_EDITOR_ID_LENGTH"
+          :required="true"
+          placeholder="SCENE_DARK_FOREST"
+          aria-label="Scene ID"
           @keydown.enter="submit"
         />
-        <p v-if="idError" class="text-xs font-bold text-red-400 mt-1.5">{{ idError }}</p>
       </div>
 
       <!-- Scene Name (Pflichtfeld) -->
@@ -138,11 +157,15 @@ function submit() {
         />
       </div>
 
-      <!-- Scene Description (Pflichtfeld) -->
+      <!-- Scene Description -->
       <div>
         <div class="flex justify-between items-center mb-1.5">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
-            Description <span class="text-red-400">*</span>
+            Description
+            <span v-if="!dynamicZone" class="text-red-400">*</span>
+            <span v-else class="ml-1 text-[10px] font-normal normal-case tracking-normal text-slate-400">
+              (optional — defaults to Zone Theme)
+            </span>
           </label>
           <span :class="['text-[10px] font-bold tracking-widest', (description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
             {{ (description || '').length }} / 1000
@@ -152,10 +175,13 @@ function submit() {
           v-model="description"
           rows="4"
           maxlength="1000"
-          placeholder="A brief description of this scene..."
+          :placeholder="dynamicZone ? 'Optional author notes for generation (defaults to Zone Theme)...' : 'A brief description of this scene...'"
           class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
         ></textarea>
       </div>
+
+      <!-- Optional Dynamic Scene Configuration -->
+      <DynamicZoneFields v-model="dynamicZone" mode="scene" />
 
       <!-- Error -->
       <p v-if="formError" class="text-xs font-bold text-red-400">{{ formError }}</p>

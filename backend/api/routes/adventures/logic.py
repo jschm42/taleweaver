@@ -22,6 +22,9 @@ from backend.api.routes.adventures.session_start_settings import (
 from backend.api.routes.adventures.sheet_snapshot import build_sheet_snapshot
 from backend.engine.audio.voice_casting import PROTAGONIST_VOICE_KEY, cast_adventure_voices
 from backend.engine.interaction.map_engine import MapEngine
+from backend.engine.party.party_view import mark_active_companion, mark_recruitable_npcs
+from backend.engine.rules.quest_items import mark_scene_quest_items
+from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -380,6 +383,9 @@ class AdventureLogic:
                 ent.get("inventory"), entity_lookup
             )
             entities.append({**ent, "inventory": inventory})
+        mark_active_companion(entities, overrides)
+        mark_recruitable_npcs(entities, overrides)
+        mark_scene_quest_items(entities)
         return entities
 
     @staticmethod
@@ -530,7 +536,12 @@ class AdventureLogic:
             return {}
         metadata = {}
         for s in scene_res.scalars().all():
-            metadata[MapEngine._safe_id(s.id)] = {
+            raw_zone = getattr(s, "dynamic_zone", None)
+            norm_zone = normalize_dynamic_zone(raw_zone) if isinstance(raw_zone, dict) else None
+            is_unmaterialized = bool(
+                session_id and norm_zone and (raw_zone or {}).get("materialized") is not True
+            )
+            entry = {
                 "id": s.id,
                 "label": s.label,
                 "description": s.description or "",
@@ -538,7 +549,12 @@ class AdventureLogic:
                 "decorative_objects": [
                     str(d) for d in (s.decorative_objects or []) if isinstance(d, (str, int, float))
                 ],
+                "dynamic_zone": norm_zone,
+                "is_dynamic": bool(norm_zone),
             }
+            if is_unmaterialized:
+                entry["is_unknown"] = True
+            metadata[MapEngine._safe_id(s.id)] = entry
         return metadata
 
     @staticmethod

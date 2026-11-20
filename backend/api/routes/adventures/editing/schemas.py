@@ -8,6 +8,17 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+# Attribute and armor class bonuses of a WEAPON / WEARABLE item, applied while it is equipped.
+ITEM_STAT_MODIFIERS = (
+    "stat_modifier_strength",
+    "stat_modifier_dexterity",
+    "stat_modifier_intelligence",
+    "stat_modifier_wisdom",
+    "stat_modifier_charisma",
+    "stat_modifier_armor_class",
+)
+
+
 class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist", "exit"]
     target_id: str
@@ -24,12 +35,17 @@ class EntityUpdateRequest(BaseModel):
     voice: Optional[str] = None
     # Visual keywords for image prompts; maps to ``cover_appearance`` for the cover.
     appearance: Optional[str] = Field(default=None, max_length=100)
+    npc_type: Optional[str] = None
     is_killable: Optional[bool] = None
     item_type: Optional[str] = None
     is_portable: Optional[bool] = None
     locked: Optional[bool] = None
+    # Items: a quest item can never be given to NPCs or taken away by the Game Master.
+    quest_item: Optional[bool] = None
     # Exits: the target scene is known from the start.
     revealed: Optional[bool] = None
+    # Exits: False makes it a solo passage (the companion stays behind).
+    companions_allowed: Optional[bool] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
@@ -56,6 +72,11 @@ class EntityUpdateRequest(BaseModel):
     on_failure_script: Optional[str] = None
     effects: Optional[dict[str, Any]] = None
     stat_modifier_strength: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
+    stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
+    stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
     current_scene_id: Optional[str] = None
     strength: Optional[int] = None
     intelligence: Optional[int] = None
@@ -67,6 +88,7 @@ class EntityUpdateRequest(BaseModel):
     equipment: Optional[dict[str, Any]] = None
     decorative_objects: Optional[list[str]] = None
     audio_track_id: Optional[str] = Field(default=None, max_length=50)
+    is_respawn_point: Optional[bool] = None
     on_pickup_script: Optional[str] = None
     on_pickup_text: Optional[str] = None
     on_drop_script: Optional[str] = None
@@ -83,6 +105,16 @@ class EntityUpdateRequest(BaseModel):
     on_protagonist_enters_scene_text: Optional[str] = None
     on_receive_item_script: Optional[str] = None
     on_receive_item_text: Optional[str] = None
+    on_recruit_success_script: Optional[str] = None
+    on_recruit_success_text: Optional[str] = None
+    on_recruit_failure_script: Optional[str] = None
+    on_recruit_failure_text: Optional[str] = None
+    reveal_guard_expression: Optional[str] = None
+    memory_slots: Optional[int] = Field(default=None, ge=0, le=8)
+    # NPC conversations (engine/conversations/npc_fields.py)
+    relations: Optional[list[dict[str, Any]]] = None
+    chatty: Optional[bool] = None
+    conversation_topics: Optional[list[dict[str, Any]]] = None
     on_enter_scene_script: Optional[str] = None
     on_enter_scene_text: Optional[str] = None
     on_leave_scene_script: Optional[str] = None
@@ -128,6 +160,7 @@ class EntityUpdateRequest(BaseModel):
     moveable: Optional[bool] = None
     allowed_scenes: Optional[list[str]] = None
     notes: Optional[str] = None
+    dynamic_zone: Optional[dict[str, Any]] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -137,24 +170,37 @@ class StartSceneUpdateRequest(BaseModel):
 class SceneCreateRequest(BaseModel):
     scene_id: str
     label: str
-    description: str
+    description: str = ""
     image_url: Optional[str] = None
     decorative_objects: Optional[list[str]] = None
+    dynamic_zone: Optional[dict[str, Any]] = None
 
 
 class ExitCreateRequest(BaseModel):
     from_scene_id: str
-    to_scene_id: str
+    to_scene_id: str = ""
     # Required: names the passage itself ("an old rusty gate"), the same from both sides.
     label: str
     exit_type: Literal["one_way", "bidirectional"] = "one_way"
     is_locked: bool = False
     # The target scene is known from the start (shown on the exit tile and map).
     is_revealed: bool = False
+    # False: a solo passage, the companion stays behind.
+    companions_allowed: bool = True
     lock_description: Optional[str] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
     rule_to_unlock: Optional[str] = None
+    unlock_expression: Optional[str] = None
+    on_open_exit_script: Optional[str] = None
+    on_open_exit_text: Optional[str] = None
+    on_exit_used_script: Optional[str] = None
+    on_exit_used_text: Optional[str] = None
+    on_unlock_success_script: Optional[str] = None
+    on_unlock_success_text: Optional[str] = None
+    on_unlock_failure_script: Optional[str] = None
+    on_unlock_failure_text: Optional[str] = None
+    dynamic_zone: Optional[dict[str, Any]] = None
 
 
 class EntityCreateRequest(BaseModel):
@@ -169,6 +215,7 @@ class EntityCreateRequest(BaseModel):
     is_portable: Optional[bool] = None
     goal: Optional[str] = None
     character: Optional[str] = None
+    npc_type: Optional[str] = None
     hp: Optional[int] = None
     stamina: Optional[int] = None
     mana: Optional[int] = None
@@ -179,6 +226,11 @@ class EntityCreateRequest(BaseModel):
     result_item_ids: Optional[list[str]] = None
     kept_ingredients: Optional[list[str]] = None
     stat_modifier_strength: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
+    stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
+    stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
     inventory: Optional[list] = None
     min_items: Optional[int] = None
     max_items: Optional[int] = None
