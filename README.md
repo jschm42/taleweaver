@@ -138,8 +138,8 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 
 ### Recent Feature Highlights
 
-#### 🌟 What's New in v0.8.0-beta
-Full notes: [RELEASE_NOTES_v0.8.0-beta.md](RELEASE_NOTES_v0.8.0-beta.md)
+#### 🌟 What's New in v0.8.1-beta
+Full notes: [RELEASE_NOTES_v0.8.1-beta.md](RELEASE_NOTES_v0.8.1-beta.md)
 * **Companions & Party**: Recruitable sidekicks who follow the protagonist, take orders ("stay here", "follow me"), carry and equip items, and fight at the hero's side with their own tactics. Quest items can't be given away, and scripts steer the party with `tw.party`.
 * **Dynamic Scenes & Zones**: Exits that generate whole mini-adventures on the fly (story arc, antagonist, key item, climax, up to 11 rooms), with spawn rules, danger levels, pre-mapped dynamic scenes and `tw.scene.teleport_dynamic`.
 * **Living NPCs**: NPC memory of the protagonist, world memories, NPC conversations with relations, overheard topics and gossip, a listening mode, speech rules per NPC type, and handovers inside dialogue.
@@ -457,7 +457,7 @@ Inspect the internal engine workflows through Mermaid diagrams in the repository
 </details>
 
 <details>
-<summary><b>🌟 What's New in v0.8.0-beta</b></summary>
+<summary><b>🌟 What's New in v0.8.1-beta</b></summary>
 
 - **Companions & Party**: Recruitable sidekicks who follow, take orders, carry and equip items, and fight at the protagonist's side.
 - **Dynamic Scenes & Zones**: Procedural mini-adventures behind dynamic exits, generated on the fly.
